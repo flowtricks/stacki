@@ -1,7 +1,7 @@
 // The audit model's sentences, in the language on screen. `shared/page` cannot call a hook, so a check, a finding and a fix
 // carry their English beside an optional message reference (docs/i18n-playbook.md section 7); this hook shows the translation
 // when the catalog knows the key and the English the model produced otherwise. One place, so every row says the same thing.
-import { AUDIT_CHECKS, type AuditCheckId, type AuditFinding, type AuditFix } from '../../../shared/page/auditFindings';
+import { AUDIT_CHECKS, type AuditCheckId, type AuditCustomRef, type AuditFinding, type AuditFix } from '../../../shared/page/auditFindings';
 import { useTranslateDescribed } from '../../lib/i18n/useTranslate';
 
 export interface AuditText {
@@ -15,6 +15,10 @@ export interface AuditText {
   readonly measure: (finding: Pick<AuditFinding, 'measure' | 'measureRef'>) => string | undefined;
   /** A fix's button words: "Add lang". */
   readonly fixLabel: (fix: Pick<AuditFix, 'label' | 'labelRef'>) => string;
+  /** A rule row's name: its check's title, or the name the project gave its custom audit (written by people, so shown as written). */
+  readonly ruleTitle: (rule: { readonly check: AuditCheckId; readonly custom: AuditCustomRef | undefined }) => string;
+  /** A rule's reason: its check's, or its custom audit's message, or the custom check's own reason when it has none. */
+  readonly ruleWhy: (rule: { readonly check: AuditCheckId; readonly custom: AuditCustomRef | undefined }) => string;
 }
 
 export function useAuditText(): AuditText {
@@ -25,5 +29,7 @@ export function useAuditText(): AuditText {
     detail: (finding) => translateDescribed({ message: finding.detail, messageRef: finding.detailRef }),
     measure: (finding) => (finding.measure === undefined ? undefined : translateDescribed({ message: finding.measure, messageRef: finding.measureRef })),
     fixLabel: (fix) => translateDescribed({ message: fix.label, messageRef: fix.labelRef }),
+    ruleTitle: (rule) => rule.custom?.name ?? translateDescribed({ message: AUDIT_CHECKS[rule.check].title, messageRef: AUDIT_CHECKS[rule.check].titleRef }),
+    ruleWhy: (rule) => rule.custom?.message ?? translateDescribed({ message: AUDIT_CHECKS[rule.check].why, messageRef: AUDIT_CHECKS[rule.check].whyRef }),
   };
 }

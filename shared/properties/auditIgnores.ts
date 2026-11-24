@@ -9,8 +9,11 @@
 //     "ignoredPages": [{ "file": "src/pages/legal.astro", "reason": "Copy comes from the lawyers" }],
 //     "checks": { "token-value": { "enabled": false }, "token-color": { "priority": "high" } },
 //     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": true, "remOutsideVariables": true, "sizes": true, "allowed": ["1px", "100%"], "allowedUnits": ["em"] },
-//     "placeholders": ["lorem ipsum", "button text"]
+//     "placeholders": ["lorem ipsum", "button text"],
+//     "customAudits": [{ "id": "hard-coded-text-align", "name": "Hard-coded text-align", "icon": "text", "category": "tokens", "scope": "declaration", "match": { "property": "^text-align$", "valueMustNotMatch": "var\\(" }, "enabled": true }]
 //   }
+//
+// `customAudits` (shared/properties/customAudits.ts) is the project's own checks; it is optional and written only when there is one.
 //
 // One file, not a second `.stacki/lint.json`: ignores and settings are both "how
 // this project's audit behaves", are edited from the same panel and Settings tab,
@@ -30,6 +33,7 @@
 // checked in full, bounds included, before the panel reads a single entry.
 import { assert } from '../core/assert';
 import { toArray, toRecord } from '../core/record';
+import { parseCustomAudits, serializedCustomAudits, type CustomAudit } from './customAudits';
 
 export const AUDIT_IGNORES_FILE = '.stacki/audits.json';
 
@@ -148,6 +152,8 @@ export interface AuditFile {
   readonly tokens: AuditTokenSettings;
   /** Phrases that mark copy as placeholder: one word must be the whole text, several may be part of it. */
   readonly placeholders: readonly string[];
+  /** The project's own audits, in the order they were added. */
+  readonly customAudits: readonly CustomAudit[];
 }
 
 /** Kept for callers that only read and write ignores. */
@@ -193,9 +199,10 @@ export const EMPTY_AUDIT_IGNORES: AuditFile = {
   checks: {},
   tokens: DEFAULT_TOKEN_SETTINGS,
   placeholders: DEFAULT_PLACEHOLDERS,
+  customAudits: [],
 };
 
-const TOP_FIELDS = ['version', 'ignored', 'ignoredPages', 'checks', 'tokens', 'placeholders'] as const;
+const TOP_FIELDS = ['version', 'ignored', 'ignoredPages', 'checks', 'tokens', 'placeholders', 'customAudits'] as const;
 const TOKEN_FIELDS = ['properties', 'colors', 'px', 'remOutsideVariables', 'sizes', 'allowed', 'allowedUnits'] as const;
 
 /** The file's value, or a throw naming the first field that is wrong. */
@@ -213,7 +220,10 @@ export function parseAuditIgnores(input: unknown): AuditFile {
   if (version !== 1 && version !== 2) {
     throw new Error('Audit ignores: unsupported version');
   }
-  if (version === 1 && (value['checks'] !== undefined || value['tokens'] !== undefined || value['placeholders'] !== undefined)) {
+  if (
+    version === 1 &&
+    (value['checks'] !== undefined || value['tokens'] !== undefined || value['placeholders'] !== undefined || value['customAudits'] !== undefined)
+  ) {
     throw new Error('Audit ignores: settings need version 2');
   }
   const list = toArray(value['ignored']);
@@ -235,6 +245,7 @@ export function parseAuditIgnores(input: unknown): AuditFile {
     checks: value['checks'] === undefined ? {} : parseChecks(value['checks']),
     tokens: value['tokens'] === undefined ? DEFAULT_TOKEN_SETTINGS : parseTokens(value['tokens']),
     placeholders: value['placeholders'] === undefined ? DEFAULT_PLACEHOLDERS : parseList(value['placeholders'], 'Audit settings.placeholders'),
+    customAudits: value['customAudits'] === undefined ? [] : parseCustomAudits(value['customAudits']),
   };
 }
 
@@ -429,6 +440,7 @@ export function serializeAuditIgnores(value: AuditFile): string {
     ...(Object.keys(value.checks).length === 0 ? {} : { checks: serializedChecks(value.checks) }),
     ...(same(value.tokens, DEFAULT_TOKEN_SETTINGS) ? {} : { tokens: serializedTokens(value.tokens) }),
     ...(same(value.placeholders, DEFAULT_PLACEHOLDERS) ? {} : { placeholders: value.placeholders }),
+    ...(value.customAudits.length === 0 ? {} : { customAudits: serializedCustomAudits(value.customAudits) }),
   };
   const text = `${JSON.stringify(body, undefined, 2)}\n`;
   assert(parseAuditIgnoresSource(text).ignored.length === value.ignored.length, 'serializeAuditIgnores: what is written reads back');

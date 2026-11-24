@@ -2735,13 +2735,28 @@ version 2; settings at their defaults are left out of the file.
 - `tokens`: `properties` (names, `padding*` matching a prefix), `colors`, `px`, `remOutsideVariables`
   (booleans), `allowed` (raw values, compared lower-cased).
 - `placeholders`: phrases; one word must be the whole text, several may be part of it.
+- `customAudits` (`shared/properties/customAudits.ts`): the project's own audits, at most 50, each
+  `{ "id", "name", "icon", "category", "severity"?, "scope", "match", "exclude"?, "message"?, "enabled" }`. `id` is
+  `^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$` and unique; `icon` is one of `CUSTOM_AUDIT_ICONS` (icons the panel already
+  draws); `category` a built-in id (`accessibility`, `seo`, `content`, `tokens`, `performance`) or a name of the project's
+  own (at most 40 characters); `severity` `high`/`medium`/`low` (default medium, left out when medium). `scope` is
+  `declaration` (`match: { property, valueMustMatch?, valueMustNotMatch? }`, regular expressions on the property name and
+  the value) or `css`, `markup`, `rendered` (`match: { pattern }`). `exclude` drops a match whose declaration, or for a
+  text scope whose line, also matches. Patterns are at most 300 characters, case-insensitive. The parser checks shape and
+  bounds and ignores an entry's unknown keys; it does not compile patterns, so a hand-edited unsafe pattern never makes the
+  file unreadable: the run reports that audit (`AuditReport.custom.problems`) and skips it. Every writer (the panel's
+  editor, `stacki audits`) refuses a pattern `checkPattern` refuses: invalid, a backreference, a repeat inside a repeated
+  group, more than 3 open-ended repeats, or (for a pattern that finds) one that matches empty text. The matcher
+  (`shared/page/auditCustom.ts`) reads at most 2,000,000 characters per text, 1,000 per value or line, 200 matches per
+  file, 2,000 per run and 1.5 s per audit per run, and says when it stopped early. Written only when non-empty.
+  Findings are check `custom` with `custom: { id, name, icon, category, message }`; their id is `custom:<id>|file|path|detail`.
 - Lists hold at most 200 items of at most 120 characters; ignores at most 2,000 entries, ids at
   most 1,024 and reasons at most 500 characters. Unknown fields, a reason that is present but blank
   or not a string, a repeated id and settings under version 1 are refused.
 
 It travels as the `audits` metadata kind through `project:metadata` / `project:writeMetadata`
 (writes need `panel:audits` or `settings:audits`). An id is `findingId`
-(`shared/page/auditFindings.ts`): check, file, structural path and detail.
+(`shared/page/auditFindings.ts`): check (`custom:<id>` for a custom audit), file, structural path and detail.
 
 `audit:measure` loads one route of the loopback dev server in a hidden, sandboxed window with its
 own session and answers `{ ok: true, measurement }` or `{ ok: false, message }`. The measurement is

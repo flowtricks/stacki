@@ -46,6 +46,7 @@ import type { ScanResult } from '../../../shared/properties/projectScan';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
 import { auditPlan, importedTargets, IMPORT_DEPTH_MAX, relativeTo, type AuditScope, type AuditTarget } from './auditScope';
 import type { RenderedHtml } from './auditsBridge';
+import { runCustomAudits, type CustomAuditOutcome, type CustomAuditSource } from './customAuditRun';
 
 /** A file as the runner reads it: its tree, imports and text, or why it has none. */
 export type AuditRead =
@@ -136,6 +137,8 @@ export interface AuditReport {
   readonly checkedAt: number;
   /** Each read file's tree, so an occurrence row names its element as the Navigator does. */
   readonly trees: ReadonlyMap<string, readonly PageNode[]>;
+  /** The custom audits that did not run (a pattern the guard refused) or stopped early at a cap; absent from older reports. */
+  readonly custom?: Pick<CustomAuditOutcome, 'problems' | 'stopped'>;
 }
 
 /** Candidate modules for the site constants a fix may write, in the order Astro starters use them. */
@@ -173,8 +176,19 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
   const known = await withRenderedComponents(input, inputs, io);
   const resolve = componentResolver(input);
   findings.push(...instanceLinkFindings({ files: known, resolve, facts: linkFacts(facts) }));
-  const rendered = await renderedPass(input, plan.routes, { facts, copyAt: copyHolding(inputs) }, io, (finding, pageFile) =>
-    relocated(finding, { pageFile, inputs, input, io }),
+  // Rendered custom audits read each served page as it is fetched; the HTML is not kept past that.
+  const renderedSources: CustomAuditSource[] = [];
+  const wantsRendered = input.settings.customAudits.some((audit) => audit.enabled && audit.match.scope === 'rendered');
+  const rendered = await renderedPass(
+    input,
+    plan.routes,
+    {
+      facts,
+      copyAt: copyHolding(inputs),
+      onHtml: wantsRendered ? (page) => renderedSources.push({ kind: 'rendered', file: page.file, route: page.route, html: page.html }) : undefined,
+    },
+    io,
+    (finding, pageFile) => relocated(finding, { pageFile, inputs, input, io }),
   );
   const headings = headingComponents(input.scan);
   findings.push(...renderedPlaceholdersNew(rendered.findings, findings).map((finding) => retagged(repaired(finding, inputs, headings), inputs)));
@@ -196,6 +210,8 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
   if (plan.site || input.scope === 'components') {
     findings.push(...(await stylesheetFindings(input, facts, io)));
   }
+  const custom = await customAuditFindings(input, { inputs, rendered: renderedSources, stylesheets: plan.site || input.scope === 'components' }, io);
+  findings.push(...custom.findings);
   if (plan.site || input.scope === 'pages') {
     findings.push(...(await socialImageFindings(rendered.pages, io)));
   }
@@ -213,6 +229,7 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
     rendered: rendered.status,
     checkedAt: Date.now(),
     trees,
+    custom: { problems: custom.problems, stopped: custom.stopped },
   };
 }
 
@@ -375,7 +392,16 @@ async function configFacts(input: AuditRunInput, io: AuditIO): Promise<{ readonl
 async function renderedPass(
   input: AuditRunInput,
   routes: readonly { readonly route: string; readonly file: string }[],
-  { facts, copyAt }: { readonly facts: AuditFacts; readonly copyAt: RenderedOptions['copyAt'] },
+  {
+    facts,
+    copyAt,
+    onHtml,
+  }: {
+    readonly facts: AuditFacts;
+    readonly copyAt: RenderedOptions['copyAt'];
+    /** Hears each page's served HTML, for the rendered custom audits; undefined when none is enabled. */
+    readonly onHtml: ((page: { readonly file: string; readonly route: string; readonly html: string }) => void) | undefined;
+  },
   io: AuditIO,
   relocate: (finding: AuditFinding, pageFile: string) => Promise<AuditFinding>,
 ): Promise<{
@@ -410,6 +436,7 @@ async function renderedPass(
     // (title, description, canonical), outline, names and ids. The laid-out frame only adds
     // colours for contrast; a frame that loaded late or not at all can never report a head missing.
     input.onProgress?.({ stage: 'pages', done: pages.length + 1, total: routes.length });
+    onHtml?.({ file, route, html: html.html.slice(0, AUDIT_LIMITS.renderedHtmlCharsMax) });
     const audit = await renderedAudit(input, { file, route, html: html.html }, { facts, copyAt }, io);
     if (audit === undefined) {
       continue;
@@ -933,6 +960,40 @@ async function stylesheetFindings(input: AuditRunInput, facts: AuditFacts, io: A
   }
   assert(input.projectPath.length > 0, 'stylesheetFindings: a project');
   return findings;
+}
+
+// The project's custom audits over what the run read: the .astro files in scope (their `<style>` blocks and templates), the
+// project's stylesheets when the run covers them, and the rendered pages a rendered audit heard. With no enabled audit, nothing is read.
+async function customAuditFindings(
+  input: AuditRunInput,
+  read: { readonly inputs: ReadonlyMap<string, AuditFileInput>; readonly rendered: readonly CustomAuditSource[]; readonly stylesheets: boolean },
+  io: AuditIO,
+): Promise<CustomAuditOutcome> {
+  const audits = input.settings.customAudits.filter((audit) => audit.enabled);
+  if (audits.length === 0) {
+    return { findings: [], problems: [], stopped: [] };
+  }
+  const sources: CustomAuditSource[] = [];
+  for (const fileInput of read.inputs.values()) {
+    if (fileInput.source !== undefined && fileInput.file.endsWith('.astro')) {
+      sources.push({ kind: 'astro', file: fileInput.file, fileKind: fileInput.kind, source: fileInput.source, nodes: fileInput.nodes });
+    }
+  }
+  const wantsCss = audits.some((audit) => audit.match.scope === 'declaration' || audit.match.scope === 'css');
+  if (read.stylesheets && wantsCss) {
+    const files = (await io.styleFiles().catch(() => []))
+      .filter((entry) => !/(^|\/)(node_modules|dist|\.astro|\.stacki)\//.test(entry.rel))
+      .slice(0, STYLESHEETS_MAX);
+    for (const entry of files) {
+      const text = await io.readStyle(entry.path).catch(() => undefined);
+      if (text !== undefined && text.length <= STYLESHEET_CHARS_MAX) {
+        sources.push({ kind: 'stylesheet', file: entry.rel, text });
+      }
+    }
+  }
+  sources.push(...read.rendered);
+  assert(sources.length <= AUDIT_LIMITS.filesMax + STYLESHEETS_MAX + AUDIT_LIMITS.renderedPagesMax, 'customAuditFindings: the sources are bounded');
+  return runCustomAudits(audits, sources, () => performance.now());
 }
 
 // The launch checklist's facts: what the rendered pages link and run, the public folder, the pages, the config.

@@ -21,7 +21,8 @@ import {
 // a hash for ids, a half-filled circle for contrast. Existing icons
 // (src/ui/Icons.tsx) are reused where one says the same thing.
 import type { ComponentType } from 'react';
-import type { AuditCheckId } from '../../../shared/page/auditFindings';
+import type { AuditCheckId, AuditCustomRef } from '../../../shared/page/auditFindings';
+import type { CustomAuditIcon } from '../../../shared/properties/customAudits';
 import type { IconProps } from '../../ui/IconBase';
 import {
   ArrowDownIcon,
@@ -134,4 +135,46 @@ export const AUDIT_ICONS: Readonly<Record<AuditCheckId, Icon>> = {
   'perf-fetchpriority': ImageIcon,
   'perf-font-display': TextIcon,
   'perf-third-party': ExternalIcon,
+  custom: StarIcon,
 };
+
+/**
+ * The icons a custom audit can choose, by the name `.stacki/audits.json` stores (shared/properties/customAudits.ts). Total over
+ * CUSTOM_AUDIT_ICONS, and every one is an icon this panel already draws: a custom audit never brings an icon of its own.
+ */
+export const CUSTOM_AUDIT_ICON_COMPONENTS: Readonly<Record<CustomAuditIcon, Icon>> = {
+  droplet: DropletIcon,
+  text: TextIcon,
+  ruler: RulerIcon,
+  variable: VariableIcon,
+  layers: LayersIcon,
+  tag: TagIcon,
+  braces: BracesIcon,
+  image: ImageIcon,
+  link: LinkIcon,
+  globe: GlobeIcon,
+  hash: HashIcon,
+  heading: HeadingIcon,
+  contrast: ContrastIcon,
+  form: FormIcon,
+  accessibility: AccessibilityIcon,
+  placeholder: PlaceholderIcon,
+  star: StarIcon,
+  chart: ChartIcon,
+  gauge: GaugeIcon,
+  block: BlockIcon,
+  file: FileIcon,
+  hide: HideIcon,
+  clock: ClockIcon,
+  target: CrosshairIcon,
+};
+
+/** A rule row's icon: its check's, or the one its custom audit chose (an unknown name, from a newer file, falls back to the star). */
+export function ruleIcon(rule: { readonly check: AuditCheckId; readonly custom: AuditCustomRef | undefined }): Icon {
+  if (rule.custom === undefined) {
+    return AUDIT_ICONS[rule.check];
+  }
+  const name = rule.custom.icon;
+  const known = Object.entries(CUSTOM_AUDIT_ICON_COMPONENTS).find(([key]) => key === name);
+  return known === undefined ? StarIcon : known[1];
+}

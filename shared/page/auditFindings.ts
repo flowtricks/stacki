@@ -110,6 +110,7 @@ export const AUDIT_CHECK_IDS = [
   'perf-fetchpriority',
   'perf-font-display',
   'perf-third-party',
+  'custom',
 ] as const;
 export type AuditCheckId = (typeof AUDIT_CHECK_IDS)[number];
 
@@ -623,7 +624,29 @@ export const AUDIT_CHECKS: Readonly<Record<AuditCheckId, AuditCheckInfo>> = {
     whyRef: checkRef('audits.check.perfThirdParty.why'),
     reference: 'Audit third-party scripts',
   },
+  // Every custom audit's findings carry this check and name the audit itself in `custom`: the row shows the audit's own name,
+  // icon, category and message (shared/properties/customAudits.ts). This entry is the fallback, and Settings' switch for all of them.
+  custom: {
+    title: 'Custom audits',
+    titleRef: checkRef('customAudits.check.title'),
+    category: 'tokens',
+    priority: 'medium',
+    why: 'Audits this project defined for itself in .stacki/audits.json.',
+    whyRef: checkRef('customAudits.check.why'),
+    reference: 'Custom audit from .stacki/audits.json',
+  },
 };
+
+/** The custom audit a finding came from: what its row shows in place of a built-in check's title, icon and category. */
+export interface AuditCustomRef {
+  readonly id: string;
+  readonly name: string;
+  /** An icon name from shared/properties/customAudits.ts CUSTOM_AUDIT_ICONS. */
+  readonly icon: string;
+  /** A built-in category id (`tokens`) or the project's own category name. */
+  readonly category: string;
+  readonly message: string | undefined;
+}
 
 /** Where in a file a finding is: the element's structural path, its tag and its line. */
 export interface AuditElementRef {
@@ -733,6 +756,8 @@ export interface AuditFinding {
   readonly priority?: AuditPriority;
   /** For a finding in a component's own markup seen on rendered pages: the routes it shows on. One finding, many occurrences. */
   readonly routes?: readonly string[];
+  /** For check `custom`: the project's audit that found it. */
+  readonly custom?: AuditCustomRef;
 }
 
 /** Where a raw CSS value is: its rule's selector, the declaration, the token, the file's line, and what kind of value it is. */
@@ -776,12 +801,18 @@ export function measureText(key: AuditTextKey, params?: MessageParams): { readon
   return { measure: sentence.text, measureRef: sentence.ref };
 }
 
-/** The id a finding is ignored by: the check, the file, the element's path and the detail. */
-export function findingId(input: Pick<AuditFinding, 'check' | 'file' | 'element' | 'detail'>): string {
+/** The id a finding is ignored by: the check (a custom audit's own id, `custom:<id>`), the file, the element's path and the detail. */
+export function findingId(input: Pick<AuditFinding, 'check' | 'file' | 'element' | 'detail' | 'custom'>): string {
   assert(input.file.length > 0, 'findingId: a finding names a file');
   assert(AUDIT_CHECK_IDS.includes(input.check), 'findingId: the check is a known one');
+  assert((input.check === 'custom') === (input.custom !== undefined), 'findingId: a custom finding names its audit, and only it does');
   const where = input.element === undefined ? '-' : input.element.path.join('.');
-  return `${input.check}|${input.file}|${where}|${input.detail}`;
+  return `${ruleKey(input)}|${input.file}|${where}|${input.detail}`;
+}
+
+/** The rule a finding is listed under: its check, or `custom:<id>` for a custom audit's, so each custom audit is its own row. */
+export function ruleKey(finding: Pick<AuditFinding, 'check' | 'custom'>): string {
+  return finding.custom === undefined ? finding.check : `custom:${finding.custom.id}`;
 }
 
 /** A finding built from its parts, its id derived and its detail bounded. */
@@ -877,14 +908,41 @@ export function uniqueFindings(findings: readonly AuditFinding[]): readonly Audi
 /** One rule's findings, for a row that groups its occurrences. */
 export interface AuditRuleGroup {
   readonly check: AuditCheckId;
+  /** The row's identity: the check, or `custom:<id>` (ruleKey). */
+  readonly key: string;
+  /** The custom audit the row is, when it is one. */
+  readonly custom: AuditCustomRef | undefined;
   readonly findings: readonly AuditFinding[];
 }
 
-/** Findings by rule, in AUDIT_CHECK_IDS order, each rule's findings in file then path order. */
+/** Findings by rule, in AUDIT_CHECK_IDS order with each custom audit in name order after them, each rule's findings in file then path order. */
 export function findingsByRule(findings: readonly AuditFinding[]): readonly AuditRuleGroup[] {
-  const groups = AUDIT_CHECK_IDS.map((check) => ({ check, findings: findings.filter((finding) => finding.check === check).sort(compareFindings) })).filter(
-    (group) => group.findings.length > 0,
-  );
+  const builtin = AUDIT_CHECK_IDS.filter((check) => check !== 'custom').map((check): AuditRuleGroup => ({
+    check,
+    key: check,
+    custom: undefined,
+    findings: findings.filter((finding) => finding.check === check).sort(compareFindings),
+  }));
+  const customs = new Map<string, { custom: AuditCustomRef; findings: AuditFinding[] }>();
+  for (const finding of findings) {
+    if (finding.check === 'custom' && finding.custom !== undefined) {
+      const known = customs.get(finding.custom.id);
+      if (known === undefined) {
+        customs.set(finding.custom.id, { custom: finding.custom, findings: [finding] });
+      } else {
+        known.findings.push(finding);
+      }
+    }
+  }
+  const custom = [...customs.values()]
+    .sort((left, right) => left.custom.name.localeCompare(right.custom.name))
+    .map((entry): AuditRuleGroup => ({
+      check: 'custom',
+      key: `custom:${entry.custom.id}`,
+      custom: entry.custom,
+      findings: entry.findings.sort(compareFindings),
+    }));
+  const groups = [...builtin, ...custom].filter((group) => group.findings.length > 0);
   assert(groups.reduce((total, group) => total + group.findings.length, 0) === findings.length, 'findingsByRule: every finding in one group');
   return groups;
 }

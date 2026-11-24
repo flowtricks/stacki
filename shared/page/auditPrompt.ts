@@ -50,7 +50,7 @@ export function auditPrompt(findings: readonly AuditFinding[], projectName: stri
   );
   const first = findings[0];
   assert(first !== undefined, 'auditPrompt: the first finding exists');
-  const title = findings.length === 1 ? `Fix: ${AUDIT_CHECKS[first.check].title}` : `Fix ${findings.length} audit findings`;
+  const title = findings.length === 1 ? `Fix: ${first.custom?.name ?? AUDIT_CHECKS[first.check].title}` : `Fix ${findings.length} audit findings`;
   const prompt = [
     `Fix these accessibility and SEO findings from Stacki's Audits panel in the Astro project "${projectName}".`,
     '',
@@ -88,13 +88,17 @@ function findingLines(finding: AuditFinding, number: number): string {
     element === undefined
       ? 'the file as a whole'
       : `<${element.tag}>${element.line === undefined ? '' : ` on line ${element.line}`}, element path ${element.path.join('.')}`;
+  // A custom audit speaks for itself: the project's name for it and its message; the reference says where it is defined.
+  const title = finding.custom?.name ?? check.title;
+  const why = finding.custom === undefined ? check.why : (finding.custom.message ?? check.why);
+  const reference = finding.custom === undefined ? check.reference : `Custom audit "${finding.custom.id}" in .stacki/audits.json`;
   return [
-    `${number}. ${check.title} — ${finding.detail}`,
+    `${number}. ${title} — ${finding.detail}`,
     `   Where: ${where}${finding.source === 'rendered' ? ' (seen in the rendered page)' : ''}`,
     ...(finding.excerpt === undefined ? [] : [`   Current text: "${finding.excerpt}"`]),
     ...(finding.routes === undefined ? [] : [`   Seen on: ${finding.routes.join(', ')}`]),
-    `   Why: ${check.why}`,
-    `   Reference: ${check.reference}`,
+    `   Why: ${why}`,
+    `   Reference: ${reference}`,
     `   Finding id: ${finding.id}`,
   ].join('\n');
 }
