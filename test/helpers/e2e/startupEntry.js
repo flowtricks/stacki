@@ -33,6 +33,8 @@ if (distRoot.length === 0 || userData.length === 0 || outFile.length === 0) {
 const processStartEpochMs = Date.now() - process.uptime() * 1000;
 const sinceStartMs = () => Date.now() - processStartEpochMs;
 app.setPath('userData', userData);
+// A test run never touches the person's login keychain.
+app.commandLine.appendSwitch('use-mock-keychain');
 if (project.length > 0) {
   fs.writeFileSync(path.join(userData, 'dev-reopen.json'), JSON.stringify({ path: project }), 'utf8');
 }

@@ -101,7 +101,7 @@ async function orchestrateVersion(version) {
     assert.equal(installed.status, 0, 'fixture dependencies install');
     const electron = require('electron');
     return await new Promise((resolve, reject) => {
-      const child = childProcess.spawn(electron, [__filename, '--electron'], {
+      const child = childProcess.spawn(electron, [__filename, '--electron', '--use-mock-keychain'], {
         cwd: ROOT,
         env,
         stdio: 'inherit',

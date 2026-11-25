@@ -119,7 +119,7 @@ function orchestrate() {
   env.SHELL = process.platform === 'win32' ? env.SHELL : '/usr/bin/false';
   env.PATH = `${path.dirname(process.execPath)}${path.delimiter}${env.PATH || ''}`;
   const electron = require('electron');
-  const child = childProcess.spawn(electron, [__filename, '--electron'], { cwd: ROOT, env, stdio: 'inherit' });
+  const child = childProcess.spawn(electron, [__filename, '--electron', '--use-mock-keychain'], { cwd: ROOT, env, stdio: 'inherit' });
   child.on('exit', (code) => {
     const cli = path.join(project, 'node_modules', 'astro', 'bin', 'astro.mjs');
     if (fs.existsSync(cli)) {
