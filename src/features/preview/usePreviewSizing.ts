@@ -2,9 +2,9 @@
 import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
-import { activeDeviceFor, deviceForShortcut, deviceForWidth, deviceWidth, type PreviewDevice } from './breakpointDevices';
+import { activeDeviceFor, deviceForShortcut, deviceWidth, type PreviewDevice } from './breakpointDevices';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
-import { fluidFrameWidthPx, PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+import { FILL_UNBOUNDED, fluidFrameStyle, fluidFrameWidthPx, PREVIEW_WIDTH_LIMITS, previewViewport, type FillBounds } from './previewViewport';
 import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
@@ -53,9 +53,10 @@ export function usePreviewSizing(
     }
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
-  const viewport = previewViewport(width, available, customHeight);
+  const fill = previewFillBounds(device, breakpoints);
+  const viewport = previewViewport(width, available, customHeight, fill);
   // A filling Desktop frame has no width of its own: the pane's less its gutters (0 before the first measure, which keeps Desktop pressed) is the one it draws at.
-  const activeDevice = activeDeviceFor(device, width ?? fluidFrameWidthPx(available.width), breakpoints);
+  const activeDevice = activeDeviceFor(device, width ?? fluidFrameWidthPx(available.width, fill), breakpoints);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
     onDevice('custom');
@@ -73,11 +74,14 @@ export function usePreviewSizing(
     customHeight,
     device,
   });
+  // A filling frame's CSS, for it and its overlay layer.
+  const fillStyle = fluidFrameStyle(fill);
   return {
     wrapRef,
     frameRef,
     wrapWidth: available.width,
     viewport,
+    fillStyle,
     setWidth,
     customHeight,
     resizing,
@@ -115,20 +119,35 @@ export function previewFrameWidth(
   return deviceWidth(device, breakpoints);
 }
 
-// Desktop fills a pane that has room for the project's Desktop width and still reads as Desktop. Otherwise it is that width, drawn
-// as a typed one is (framed and scaled to fit): a narrower pane would lay the page out as a laptop or phone under the Desktop
-// button, and a pane that reaches a wider (`up`) breakpoint would lay it out as that one. An unmeasured pane fills until measured.
+// "Desktop" is a range of widths: everything above the widest smaller-screen (`down`) breakpoint, up to the first
+// wider (`up`) one. A pane that wide is filled, at 100% and with no frame. Only a narrower one, which filled would
+// lay the page out as a laptop or phone under the Desktop button, draws the project's Desktop width instead, as a
+// typed width is drawn (framed and scaled to fit). The pane is judged by its own width, before any gutter. An
+// unmeasured pane fills until measured.
 function desktopWidth(breakpoints: readonly ResolvedBreakpoint[], room: DesktopRoom): number | undefined {
   assert(Number.isSafeInteger(room.desktopFramePx), 'The Desktop width is whole pixels');
   assert(room.desktopFramePx > 0, 'The Desktop width is positive');
   if (room.paneWidthPx === 0) {
     return undefined;
   }
-  const fillWidthPx = fluidFrameWidthPx(room.paneWidthPx);
-  if (fillWidthPx < room.desktopFramePx) {
-    return room.desktopFramePx;
+  return room.paneWidthPx < previewFillBounds('desktop', breakpoints).widthPxMin ? room.desktopFramePx : undefined;
+}
+
+/**
+ * The widths a filling frame may draw at. Desktop's run from one pixel past the widest `down` canvas (a `width < X`
+ * canvas is the last whole pixel inside it) to one pixel short of the narrowest `up` one, so a pane that reaches a
+ * wider breakpoint still shows the Desktop layout, centred. Any other filling device takes the whole pane.
+ */
+export function previewFillBounds(device: PreviewDevice, breakpoints: readonly ResolvedBreakpoint[]): FillBounds {
+  if (device !== 'desktop') {
+    return FILL_UNBOUNDED;
   }
-  return deviceForWidth(fillWidthPx, breakpoints) === 'desktop' ? undefined : room.desktopFramePx;
+  const downs = breakpoints.filter((breakpoint) => breakpoint.direction === 'down').map((breakpoint) => breakpoint.widthPx);
+  const ups = breakpoints.filter((breakpoint) => breakpoint.direction === 'up').map((breakpoint) => breakpoint.widthPx);
+  return {
+    widthPxMin: downs.length === 0 ? 0 : Math.max(...downs) + 1,
+    widthPxMax: ups.length === 0 ? undefined : Math.min(...ups) - 1,
+  };
 }
 
 // Measures the canvas. During a side-panel drag the canvas follows the panel live, by CSS

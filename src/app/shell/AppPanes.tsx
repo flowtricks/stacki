@@ -66,6 +66,7 @@ import { ImagePropFields } from '../../features/props/ImagePropFields';
 import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
+import { pressWasForEditor, type CanvasPress } from '../../features/preview/canvasEditorPress';
 import { componentCanvasShown } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
 
@@ -243,6 +244,7 @@ export function selectCanvasPath(
         readonly occurrence?: number;
         readonly copies?: number | undefined;
         readonly iterations?: readonly { readonly path: string; readonly index: number }[] | undefined;
+        readonly press?: CanvasPress | undefined;
       }
     | undefined,
 ): void {
@@ -286,8 +288,16 @@ export function selectCanvasPath(
     if (componentCanvasShown() && app.editStack.length <= 2) {
       return;
     }
-    // Opening the parent file reports its own failures.
-    void app.closeComponent();
+    if (app.defaultsCanvas.state.kind !== 'idle') {
+      // Close defaults' own path: it saves first, and a refused save keeps the editor open and says why. A press
+      // that only closed a menu, or landed on one of the editor's tags, is not a press on the dimmed page.
+      if (!pressWasForEditor(info?.press)) {
+        void app.defaultsCanvas.run('done');
+      }
+    } else {
+      // Opening the parent file reports its own failures.
+      void app.closeComponent();
+    }
     return;
   }
   const { model } = app;
@@ -320,8 +330,8 @@ export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, target: Pseudo
 // the layout, so open the layout, matching what a single click there selects.
 export function openCanvasPath(app: ShellView, path: string | undefined, occurrence: number): void {
   const root = defaultsRootPath(app);
-  if (root !== undefined && canvasClickAction({ path, ownedRoot: root }).kind === 'nothing') {
-    return; // A double click on the dimmed page around the defaults instance opens nothing, the layout included.
+  if (root !== undefined && canvasClickAction({ path, ownedRoot: root }).kind !== 'select') {
+    return; // On the dimmed page the first click of a double click has already closed the editor: nothing opens.
   }
   if (!path) {
     if (app.layoutNode?.name) {

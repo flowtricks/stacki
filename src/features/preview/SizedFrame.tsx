@@ -14,7 +14,6 @@ import type { CSSProperties, ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { PreviewSizing } from './usePreviewSizing';
 import { CanvasScrollbar } from './CanvasScrollbar';
-import { FLUID_FRAME_WIDTH } from './previewViewport';
 import './previewViewport.css';
 
 export interface SizedFrameProps {
@@ -39,7 +38,7 @@ export function SizedFrame({ sizing, children }: SizedFrameProps) {
       // without a render (usePreviewSizing puts off its measure until release).
       style={
         sizing.width === undefined
-          ? { width: FLUID_FRAME_WIDTH, height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
+          ? { ...sizing.fillStyle, height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
           : { width: sizing.viewport.width, height: sizing.viewport.height, bottom: 'auto', transform: `translateX(-50%) scale(${scale})` }
       }
     >

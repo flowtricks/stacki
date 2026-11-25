@@ -1,4 +1,5 @@
 import { frameContextPoint, type ContextPoint } from './contextPosition';
+import type { CanvasPress } from './canvasEditorPress';
 import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
@@ -94,6 +95,8 @@ export interface CanvasSelectInfo {
   readonly copies: number | undefined;
   /** The pass of each loop around the node the clicked copy is in, when the page marks them. */
   readonly iterations: readonly PreviewIteration[] | undefined;
+  /** Where and when the press was made; undefined for a selection the editor made itself. */
+  readonly press?: CanvasPress | undefined;
 }
 
 // Why bounded: a pending selection is a picture drawn while main judges a click, and a judgement
@@ -756,12 +759,16 @@ export function canvasSelectInfoOf(message: ClickedNodeMessage): CanvasSelectInf
     occurrence: message.occurrence,
     copies: message.boxes?.length,
     iterations: message.iterations,
+    press: { x: message.x, y: message.y, atMs: message.pressedAtMs },
   };
 }
 
 type ClickedNodeMessage = Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'> & {
   readonly boxes?: readonly unknown[] | undefined;
   readonly iterations?: readonly PreviewIteration[] | undefined;
+  readonly x?: number | undefined;
+  readonly y?: number | undefined;
+  readonly pressedAtMs?: number | undefined;
 };
 
 function applyClick(message: ClickedNodeMessage, refs: RuntimeRefs, setters: RuntimeSetters): void {

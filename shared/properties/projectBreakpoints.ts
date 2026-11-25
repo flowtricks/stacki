@@ -10,7 +10,7 @@
 //
 // Desktop is the base of the bar. Its value here is NOT a media query and is never written into one: it is the width of the
 // Desktop frame in the side-by-side (all breakpoints) view, 90rem (1440px) by default, the width the single canvas's Desktop
-// button draws (scaled to fit) when the pane has no room for it (usePreviewSizing previewFrameWidth), and the line that decides
+// button draws (scaled to fit) when the pane is too narrow for the desktop layout (usePreviewSizing previewFrameWidth), and the line that decides
 // on which side of Desktop a breakpoint falls.
 //
 // A breakpoint has no direction to choose: it is DERIVED from its number against Desktop's. Wider than Desktop it is an `up`

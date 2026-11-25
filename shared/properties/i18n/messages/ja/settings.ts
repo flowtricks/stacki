@@ -82,7 +82,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': '特大',
   'settings.breakpoints.defaultName.up2': 'ウルトラ',
   'settings.breakpoints.desktop': 'デスクトップ',
-  'settings.breakpoints.desktopNote': 'デスクトップキャンバスの幅です。ウインドウが小さい場合は縮小して表示します。メディアクエリには使用されません。',
+  'settings.breakpoints.desktopNote': 'ウインドウがデスクトップレイアウトには狭いときに、この幅を縮小して表示します。メディアクエリには使用されません。',
   'settings.breakpoints.error.desktopFlips': '{name}（{limit}）がデスクトップの反対側になってしまいます。',
   'settings.breakpoints.error.file': 'ブレークポイントのファイルを使用できないため、デフォルトを表示し、ファイルはそのままにしています。{message}',
   'settings.breakpoints.error.name': '名前は1〜{maximum}文字で、それぞれ異なる必要があります。',
