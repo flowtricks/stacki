@@ -53,6 +53,8 @@ export type PreviewMessage =
       /** Where the pointer was and the box of the copy it hit, for an app capturing clicks; undefined from an older frame. */
       readonly x: number | undefined;
       readonly y: number | undefined;
+      /** When the press was made, on the frame's epoch clock; undefined from a frame that does not stamp it. */
+      readonly pressedAtMs: number | undefined;
       readonly box: CanvasClickBox | undefined;
       /** The editor's click query this answers (`avb:click-query`), or undefined for a click the person made. */
       readonly replay: number | undefined;
@@ -254,6 +256,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         pseudo: parseLocatedPseudo(value),
         x: coordinateOf(value['x']),
         y: coordinateOf(value['y']),
+        pressedAtMs: pressStamp(value['pressedAtMs']),
         box: canvasClickBox(value['box']),
         replay: optional(parseReplayId)(value['replay']),
         boxes: parseSentBoxes(value['boxes']),
@@ -486,6 +489,11 @@ function parseBox(input: unknown): Box {
   }
   const box = { x: finite(value['x']), y: finite(value['y']), w: width, h: height };
   return value['hidden'] === true ? { ...box, hidden: true } : box;
+}
+
+// The stamp only decides whether the press also closed a popup, so a bad one is dropped, never the click.
+function pressStamp(input: unknown): number | undefined {
+  return typeof input === 'number' && Number.isFinite(input) ? input : undefined;
 }
 
 function parseTextMarkBox(input: unknown): TextMarkBox {

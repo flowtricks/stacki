@@ -12,8 +12,19 @@ interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'keepOnScroll'
 // the popup's focus handling (Popup.tsx) when it closes. Escape and a pick carry none, and do restore it.
 export const DISMISSED_BY_ATTRIBUTE = 'data-popup-dismissed';
 
+// When an outside press or the page moving last closed a popup, in the canvas's clock (epochNowMs).
+let outsideDismissedAtMs: number | undefined;
+// The window loses focus on the press down, which can read a moment before the frame stamps that press.
+const DISMISS_PRESS_SLACK_MS = 50;
+
+/** Whether the press made at `pressedAtMs` (or something since) closed a popup from outside it. */
+export function outsideDismissedSince(pressedAtMs: number): boolean {
+  return outsideDismissedAtMs !== undefined && outsideDismissedAtMs >= pressedAtMs - DISMISS_PRESS_SLACK_MS;
+}
+
 function dismissedBy(surface: RefObject<HTMLDivElement>, close: () => void): () => void {
   return () => {
+    outsideDismissedAtMs = epochNowMs();
     surface.current?.setAttribute(DISMISSED_BY_ATTRIBUTE, 'outside');
     close();
   };

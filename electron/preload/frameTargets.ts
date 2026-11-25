@@ -5,11 +5,12 @@
 import { assert } from '../../shared/core/assert';
 import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
-import { isElement, type Rect } from './frameBasics';
+import { PRELOAD_LIMITS, isElement, type Rect } from './frameBasics';
 import {
   PATH_ATTR,
   announceMapped,
   collectRegions,
+  focusPath,
   inFocus,
   inScope,
   pathsOf,
@@ -74,6 +75,24 @@ function rehover(): void {
   reportHover(nodeAt(target, pointer.x, pointer.y), target);
 }
 
+// Whether the target belongs to the focused instance though it renders outside it: content a script moved
+// elsewhere (a modal or a menu appended to the body), still named by a path under the instance. It is not a click
+// away from the instance. Only while the instance has one copy: with several, an element so named outside the
+// focused one is another copy of it.
+const movedOutOfFocus = (target: Node | undefined): boolean => {
+  if (focusPath === '' || (regions.get(focusPath)?.length ?? 0) > 1) {
+    return false;
+  }
+  let element = target instanceof Element ? (target.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
+  for (let depth = 0; element !== undefined && depth < PRELOAD_LIMITS.domDepthMax; depth += 1) {
+    if (!inFocus(element) && pathsOf(element).some((nodePath) => nodePath === focusPath || nodePath.startsWith(`${focusPath}.`))) {
+      return true;
+    }
+    element = taggedAncestor(element);
+  }
+  return false;
+};
+
 // Deepest marked node whose rendered DOM contains the target, plus which
 // instance of it was hit — the app outlines only that one.
 const nodeAt = (
@@ -129,7 +148,7 @@ const nodeAt = (
   return {
     path: best,
     occurrence: best ? occurrenceOf(best, target) : 0,
-    outside: !best && !!anyTag,
+    outside: !best && !!anyTag && !movedOutOfFocus(target),
     pseudo: undefined,
   };
 };
