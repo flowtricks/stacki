@@ -1,11 +1,23 @@
 /* A prop whose value a host locks (propFieldExtras.ts): greyed out and closed to the pointer, all but the host's own
-   control in the label row, which stays as clickable and as bright as the {} button beside it. */
+   toggle in the label row, which stays as clickable and as bright as the {} button beside it. */
 .prop-field-locked .props-field > *:not(label),
-.prop-field-locked .props-field > label > *:not(.prop-field-extra) {
+.prop-field-locked .props-field > label > *:not(.prop-field-actions),
+.prop-field-locked .props-field > label > .prop-field-actions > *:not(.prop-field-extra) {
   opacity: 0.45;
   pointer-events: none;
 }
-.prop-field-extra {
-  display: inline-flex;
-  align-items: center;
+/* The host's toggle is a {} button (styles.css .prop-expr-toggle) in all but its pressed colour: the accent, since
+   the {}'s purple is the colour of a binding. Colour only, so its box, centre and hover stay the {}'s own. */
+.prop-expr-toggle.prop-field-extra.on,
+.props-field:hover > label > .prop-field-actions > .prop-expr-toggle.prop-field-extra.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.prop-expr-toggle.prop-field-extra.on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+/* The {} and the host's toggle as one group (PropFieldLabel.tsx PropFieldActions): inline, so each button sits on the
+   label's line exactly as a lone {} does, and unbreakable, so the two never part across lines. */
+.prop-field-actions {
+  white-space: nowrap;
 }

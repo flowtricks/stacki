@@ -148,19 +148,6 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
-/* The own-frames toggle beside a prop's {} (src/app/shell/canvasFrameSettings.tsx): the {}'s size and hover, and the
-   accent fill while the prop is split, since purple is the colour of a binding. */
-.props-field:hover > label > .prop-field-extra > .prop-expr-toggle {
-  color: var(--text-dim);
-}
-.prop-expr-toggle.component-canvas-split.on,
-.props-field:hover > label > .prop-field-extra > .prop-expr-toggle.component-canvas-split.on {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.prop-expr-toggle.component-canvas-split[aria-disabled='true'] {
-  opacity: 0.45;
-}
 /* An inherited background's label: the Style panel's orange, in the popover's own label type and pill, so every field
    title in Frame settings is one size and sits the same distance above its control. */
 .prop-label.component-canvas-inherited {

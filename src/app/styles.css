@@ -4716,7 +4716,8 @@ body > .embed-editor_provenance {
   background: transparent;
   color: var(--text-faint);
 }
-.props-field:hover > label > .prop-expr-toggle {
+.props-field:hover > label > .prop-expr-toggle,
+.props-field:hover > label > .prop-field-actions > .prop-expr-toggle {
   color: var(--text-dim);
 }
 .prop-expr-toggle:hover:not(:disabled) {
@@ -4724,7 +4725,8 @@ body > .embed-editor_provenance {
   color: var(--text);
 }
 .prop-expr-toggle.on,
-.props-field:hover > label > .prop-expr-toggle.on {
+.props-field:hover > label > .prop-expr-toggle.on,
+.props-field:hover > label > .prop-field-actions > .prop-expr-toggle.on {
   color: #9274ff;
   background: rgba(146, 116, 255, 0.16);
 }
