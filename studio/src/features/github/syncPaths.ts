@@ -24,6 +24,8 @@ export const INCOMING_METADATA = {
   breakpoints: { file: '.stacki/breakpoints.json', sync: 'live' },
   // Which media-query places each breakpoint's sync leaves alone (breakpointSyncRecord.ts).
   breakpointSync: { file: '.stacki/breakpoint-sync.json', sync: 'live' },
+  // The component canvas's frames and preview values, read when a component canvas opens (componentCanvas.ts).
+  componentCanvas: { file: '.stacki/component-canvas.json', sync: 'live' },
   // Package component sources, read on each component scan (componentSources.ts).
   componentSources: { file: '.stacki/component-sources.json', sync: 'live' },
   // Insertion defaults, read on each defaults load (loadDefaults.ts).

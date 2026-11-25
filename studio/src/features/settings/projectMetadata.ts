@@ -28,6 +28,7 @@ export async function readMetadataSource(root: string, kind: MetadataKind) {
 export async function metadataFiles(root: string): Promise<readonly string[]> {
   const kinds: readonly MetadataKind[] = [
     'components',
+    'componentCanvas',
     'guide',
     'publish',
     'pages',

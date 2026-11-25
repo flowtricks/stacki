@@ -18,6 +18,7 @@ import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
 import { parseComponentRules, type ComponentRule } from '../../shared/properties/componentAccess';
 import { parseDefaultsSource } from '../../shared/properties/componentDefaults';
+import { dropComponentCanvas, parseComponentCanvasSource, serializeComponentCanvas } from '../../shared/properties/componentCanvas';
 import {
   COMPONENT_OP_LIMITS,
   copyName,
@@ -398,6 +399,10 @@ export function planMetadataChanges(projectPath: string, target: ComponentOpTarg
       planned.push({ kind: 'components', before: defaultsSource, after });
     }
   }
+  const canvas = planCanvasChange(projectPath, target);
+  if (canvas !== undefined) {
+    planned.push(canvas);
+  }
   const roles = readProjectMetadata(projectPath, 'roles');
   if (!roles.ok) {
     return failure('write-failed', roles.error.message);
@@ -413,6 +418,25 @@ export function planMetadataChanges(projectPath: string, target: ComponentOpTarg
     }
   }
   return ok(planned);
+}
+
+// The canvas settings of the removed components, cleaned. They are preview settings only: a file that cannot be read
+// or parsed is left as it is rather than refusing the deletion, and its stale keys are ignored by the canvas.
+function planCanvasChange(projectPath: string, target: ComponentOpTarget): MetadataChange | undefined {
+  const stored = readProjectMetadata(projectPath, 'componentCanvas');
+  const source = stored.ok ? stored.value.source : undefined;
+  if (source === undefined) {
+    return undefined;
+  }
+  const parsed = parseComponentCanvasSource(source);
+  if (!parsed.ok) {
+    return undefined;
+  }
+  const cleaned = dropComponentCanvas(parsed.value, (file) => targetOwns(target, file));
+  const after = serializeComponentCanvas(cleaned);
+  return Object.keys(cleaned.components).length === Object.keys(parsed.value.components).length
+    ? undefined
+    : { kind: 'componentCanvas', before: source, after };
 }
 
 // Writes the planned changes in order; a failure puts back the ones already written.

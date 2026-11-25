@@ -43,65 +43,6 @@ export interface CanvasTextTarget {
    * break, `rich` a new paragraph. Absent: Enter finishes editing, as in a frame older than these settings.
    */
   readonly breaks?: CanvasTextBreaks;
-  /** With `breaks: 'rich'`: the page path of the component instance whose blocks the editor edits as rich text. */
-  readonly richRoot?: string;
-}
-
-/** What the canvas `+` makes of the block the caret is in; the host's menu sends it, the frame applies it. */
-export type RichBlockChoice =
-  | { readonly kind: 'block'; readonly block: RichBlockTag }
-  | { readonly kind: 'list'; readonly list: 'ul' | 'ol' }
-  | { readonly kind: 'rule' }
-  | { readonly kind: 'link'; readonly href: string }
-  | { readonly kind: 'media'; readonly media: 'image' | 'video'; readonly address: string };
-export const RICH_BLOCK_TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre'] as const;
-export type RichBlockTag = (typeof RICH_BLOCK_TAGS)[number];
-/** An address the `+` inserts (an image, a video, a link), bounded like an attribute and free of markup. */
-const RICH_ADDRESS_CHARS_MAX = 2_048;
-
-/** The host's answer to a `+` choice, checked by the frame before it edits anything. */
-export function parseRichBlockRequest(input: unknown): { readonly session: string; readonly choice: RichBlockChoice } | undefined {
-  const data = record(input);
-  if (data['type'] !== 'avb:rich-block') {
-    return undefined;
-  }
-  return { session: pathText(data['session']), choice: parseRichChoice(record(data['choice'])) };
-}
-
-function parseRichChoice(data: Readonly<Record<string, unknown>>): RichBlockChoice {
-  switch (data['kind']) {
-    case 'block': {
-      const block = RICH_BLOCK_TAGS.find((tag) => tag === data['block']);
-      if (block === undefined) {
-        throw new Error('Expected a rich text block tag');
-      }
-      return { kind: 'block', block };
-    }
-    case 'list':
-      if (data['list'] !== 'ul' && data['list'] !== 'ol') {
-        throw new Error('Expected a list kind');
-      }
-      return { kind: 'list', list: data['list'] };
-    case 'rule':
-      return { kind: 'rule' };
-    case 'link':
-      return { kind: 'link', href: richAddress(data['href']) };
-    case 'media':
-      if (data['media'] !== 'image' && data['media'] !== 'video') {
-        throw new Error('Expected image or video');
-      }
-      return { kind: 'media', media: data['media'], address: richAddress(data['address']) };
-    default:
-      throw new Error('Expected a rich text choice');
-  }
-}
-
-function richAddress(input: unknown): string {
-  const value = text(input);
-  if (value.length === 0 || value.length > RICH_ADDRESS_CHARS_MAX || /[\s<>"]/.test(value)) {
-    throw new Error('Expected a bounded address without spaces or markup');
-  }
-  return value;
 }
 
 export const CANVAS_TEXT_BREAKS = ['line', 'rich'] as const;
@@ -161,14 +102,6 @@ export type CanvasTextEvent =
       readonly key: string;
       readonly value: string;
     }
-  /** The rich text a canvas edit left in a component instance, as HTML the host checks before writing it. */
-  | { readonly type: 'avb:rich-save'; readonly session: string; readonly key: string; readonly html: string }
-  /** Where the `+` of an empty block goes, in the frame's pixels; absent when the caret is not in one. */
-  | {
-      readonly type: 'avb:rich-plus';
-      readonly session: string;
-      readonly rect?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
-    }
   /** `reason` is the stable code of `message`, which the editor words in the person's language; the frame has no catalog. */
   | {
       readonly type: 'avb:text-refused';
@@ -179,19 +112,6 @@ export type CanvasTextEvent =
     };
 
 export const CANVAS_TEXT_LIMIT = 10_000;
-/** The rich text of one instance, as one canvas save carries it. */
-export const RICH_HTML_CHARS_MAX = 200_000;
-
-function parseRichBox(data: Readonly<Record<string, unknown>>) {
-  const read = (key: string) => {
-    const value = data[key];
-    if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > 1_000_000) {
-      throw new Error('Expected a finite box coordinate');
-    }
-    return value;
-  };
-  return { x: read('x'), y: read('y'), w: read('w'), h: read('h') };
-}
 export const CANVAS_TARGET_LIMIT = 2_000;
 export const CANVAS_RUNS_SAVED_MAX = 100;
 export const CANVAS_BLOCKED_LIMIT = 200;
@@ -261,7 +181,6 @@ function parseTarget(input: unknown): CanvasTextTarget {
     ...(data['segment'] === undefined ? {} : { segment: parseSegment(data['segment']) }),
     ...(data['literal'] === undefined ? {} : { literal: parseLiteral(data['literal']) }),
     ...(data['breaks'] === undefined ? {} : { breaks: parseBreaks(data['breaks']) }),
-    ...(data['richRoot'] === undefined ? {} : { richRoot: pathText(data['richRoot']) }),
   };
 }
 
@@ -315,19 +234,6 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         session: pathText(data['session']),
         key: pathText(data['key']),
         value: canvasTextValue(data['value']),
-      };
-    case 'avb:rich-save': {
-      const html = text(data['html']);
-      if (html.length > RICH_HTML_CHARS_MAX) {
-        throw new Error('Canvas rich text exceeds limit');
-      }
-      return { type: 'avb:rich-save', session: pathText(data['session']), key: pathText(data['key']), html };
-    }
-    case 'avb:rich-plus':
-      return {
-        type: 'avb:rich-plus',
-        session: pathText(data['session']),
-        ...(data['rect'] === undefined ? {} : { rect: parseRichBox(record(data['rect'])) }),
       };
     case 'avb:text-refused':
       return {

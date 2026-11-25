@@ -4,6 +4,7 @@ import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
 import { readMetadataSource } from '../src/features/settings/projectMetadata';
 import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefaults';
 import { validateMetadata } from '../vendor/stacki/shared/properties/projectMetadata';
+import { canvasIssues, parseComponentCanvasSource } from '../vendor/stacki/shared/properties/componentCanvas';
 import { EMPTY_KEEP_LIST, parseStyleKeepList } from '../vendor/stacki/shared/properties/styleKeepList';
 import { checkSelectorUsage } from '../vendor/stacki/electron/properties/selectorUsageFiles';
 import { configOf, foldersFor, readProjectFoldersSource } from '../vendor/stacki/shared/properties/projectFolders';
@@ -35,10 +36,19 @@ export async function checkProject(root: string): Promise<void> {
   if (folders.source !== undefined) {
     validateMetadata('folders', folders.source);
   }
-  if (issues.length > 0) {
-    throw new Error(issues.join('\n'));
+  const canvas = await readMetadataSource(root, 'componentCanvas');
+  const canvasProblems: string[] = [];
+  if (canvas.source !== undefined) {
+    const parsed = parseComponentCanvasSource(canvas.source);
+    if (!parsed.ok) {
+      throw new Error(`.stacki/component-canvas.json: ${parsed.error.message}`);
+    }
+    canvasProblems.push(...canvasIssues(parsed.value, settings.catalog.map((component) => component.file)));
   }
-  console.log('Project component defaults, guide, page order, publish, styles and folder settings are valid.');
+  if (issues.length + canvasProblems.length > 0) {
+    throw new Error([...issues, ...canvasProblems].join('\n'));
+  }
+  console.log('Project component defaults, component canvas, guide, page order, publish, styles and folder settings are valid.');
   await checkAuthProvider(root);
   await reportUnusedSelectors(root, styles.source, foldersFor('styles', configOf(readProjectFoldersSource(folders.source))));
 }

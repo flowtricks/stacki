@@ -27,14 +27,7 @@ import {
   type CanvasTextSelection,
   type CanvasTextSelectionRange,
 } from '../../../shared/properties/canvasTextOverlay';
-import {
-  canvasRichPlus,
-  clearCanvasRichPlus,
-  canvasTextSelection,
-  clearCanvasTextSelection,
-  type CanvasFormatAction,
-  type CanvasFormatState,
-} from './canvasTextSelection';
+import { canvasTextSelection, clearCanvasTextSelection, type CanvasFormatAction, type CanvasFormatState } from './canvasTextSelection';
 import { canvasTextDraft, clearCanvasTextDraft, canvasTypedText, type CanvasTextDraft } from '../../ui/canvasTextDraft';
 
 export interface CanvasTextDocument {
@@ -57,7 +50,7 @@ export interface CanvasTextDocument {
   /** The Content field's formatting, for words selected on the canvas. Absent: no bar. */
   readonly format?: CanvasTextFormatter | undefined;
   /** What Enter types in the text at a page path, from its component's editing settings. Absent: Enter finishes, as before. */
-  readonly breaks?: ((textPath: string) => { readonly breaks: CanvasTextBreaks; readonly richRoot?: string } | undefined) | undefined;
+  readonly breaks?: ((textPath: string) => CanvasTextBreaks | undefined) | undefined;
   /** What `breaks` is read from (the editing settings); a new value rebuilds the catalog, as `components` does. */
   readonly settings?: unknown;
 }
@@ -71,8 +64,6 @@ export interface CanvasTextFormatter {
    * paragraph split at each one. False: the content cannot be laid out so, and nothing was written.
    */
   readonly breaks?: (textId: string, breaks: CanvasTextBreaks, value: string) => boolean;
-  /** Rich text the canvas left in the instance that holds this text, written as its content. False: refused, nothing written. */
-  readonly richText?: (textId: string, html: string) => boolean;
 }
 interface Options {
   readonly document: CanvasTextDocument | undefined;
@@ -196,10 +187,6 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       }
       return;
     }
-    if (message.type === 'avb:rich-plus') {
-      showRichPlus(message, options);
-      return;
-    }
     if (busy || message.key === takeover.key) {
       return;
     }
@@ -213,10 +200,6 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
     }
     if (message.type === 'avb:text-draft') {
       publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
-      return;
-    }
-    if (message.type === 'avb:rich-save') {
-      saveRichText(plan, message.html, { ...options, nodes });
       return;
     }
     if (savedWithBreaks(plan, message, { ...options, nodes })) {
@@ -233,36 +216,6 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
         }
       });
   };
-}
-
-// Rich text typed in a component instance on the canvas: written as the instance's content, the way the rich text
-// dialog writes it, after the host has checked it is plain rich text. One edit, so one undo step.
-function saveRichText(
-  plan: CanvasTextEdit,
-  html: string,
-  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
-) {
-  const node = options.nodes.get(plan.target.path);
-  const written = node?.kind === 'text' && node.id !== undefined && options.initial.format?.richText?.(node.id, html);
-  if (written !== true) {
-    options.initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.cannotFormat'));
-  }
-}
-
-// The `+` beside an empty block, placed over the frame in the window's pixels; its choice goes back to the frame.
-function showRichPlus(message: { readonly session: string; readonly rect?: CanvasTextBox }, options: CanvasTextReceiverOptions) {
-  const frame = options.current.current?.frame.current;
-  if (message.rect === undefined || !frame) {
-    clearCanvasRichPlus(options.session);
-    return;
-  }
-  const origin = frame.getBoundingClientRect();
-  const scale = frame.clientWidth > 0 ? origin.width / frame.clientWidth : 1;
-  canvasRichPlus.set({
-    session: options.session,
-    box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
-    choose: (choice) => options.current.current?.post({ type: 'avb:rich-block', session: options.session, choice }),
-  });
 }
 
 // Words typed with line breaks in a text whose component allows them: saved as the markup the breaks stand for, the
@@ -426,11 +379,8 @@ async function publishCanvasTextSession(
   }
 }
 
-function withBreaks<Target extends { readonly breaks?: CanvasTextBreaks; readonly richRoot?: string }>(
-  target: Target,
-  breaking: { readonly breaks: CanvasTextBreaks; readonly richRoot?: string } | undefined,
-): Target {
-  return breaking === undefined ? target : { ...target, ...breaking };
+function withBreaks<Target extends { readonly breaks?: CanvasTextBreaks }>(target: Target, breaks: CanvasTextBreaks | undefined): Target {
+  return breaks === undefined ? target : { ...target, breaks };
 }
 
 // The cue over the text being typed in: which source its words are written to.

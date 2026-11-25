@@ -31,6 +31,10 @@ const firstSettings = {
   },
   pages: { version: 1, entries: ['about/', 'index.astro'] },
   componentSources: { version: 1, sources: [] },
+  componentCanvas: {
+    version: 1,
+    components: { 'src/components/Button.astro': { split: ['variant'], frames: { 'variant=main': { background: 'transparent' } } } },
+  },
   styles: { version: 1, keep: ['is-*'] },
   breakpointSync: { version: 1, laptop: { excluded: [{ file: 'src/pages/index.astro', locator: '2d535645:0' }] } },
   breakpoints: { version: 2, laptop: { value: 1100, unit: 'px' }, tablet: { value: 48, unit: 'rem' }, phone: { value: 30, unit: 'rem' } },

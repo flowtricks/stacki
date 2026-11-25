@@ -385,6 +385,7 @@
     "shared/properties/cmsRemoteSchema.ts",
     "shared/properties/collectionSettings.ts",
     "shared/properties/componentAccess.ts",
+    "shared/properties/componentCanvas.ts",
     "shared/properties/componentDefaults.ts",
     "shared/properties/componentNaming.ts",
     "shared/properties/componentOps.ts",

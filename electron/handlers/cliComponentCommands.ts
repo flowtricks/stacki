@@ -393,7 +393,8 @@ function duplicate(context: CommandContext): Result<Outcome, CliError> {
 }
 
 function metadataEdit(change: MetadataChange): Edit | undefined {
-  const schema = fileSchemaById(change.kind === 'components' ? 'components' : 'roles');
+  // Each metadata kind a deletion cleans has the file id of the same name (components, roles, componentCanvas).
+  const schema = fileSchemaById(change.kind);
   if (schema === undefined) {
     return undefined;
   }

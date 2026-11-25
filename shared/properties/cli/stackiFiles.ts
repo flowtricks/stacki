@@ -13,6 +13,7 @@ import { APP_SETTINGS_FILE } from './files/appSettingsFile';
 import { BREAKPOINT_SYNC_FILE } from './files/breakpointSyncFile';
 import { BREAKPOINTS_FILE } from './files/breakpointsFile';
 import { CLI_FILE } from './files/cliFile';
+import { COMPONENT_CANVAS_FILE_SCHEMA } from './files/componentCanvasFile';
 import { COMPONENT_SOURCES_FILE } from './files/componentSourcesFile';
 import { COMPONENTS_FILE } from './files/componentsFile';
 import { FOLDERS_FILE } from './files/foldersFile';
@@ -31,6 +32,7 @@ export const STACKI_FILES: readonly FileSchema[] = [
   BREAKPOINT_SYNC_FILE,
   BREAKPOINTS_FILE,
   CLI_FILE,
+  COMPONENT_CANVAS_FILE_SCHEMA,
   COMPONENT_SOURCES_FILE,
   COMPONENTS_FILE,
   FOLDERS_FILE,

@@ -5,13 +5,11 @@ import {
   parseCanvasTextCatalog,
   type CanvasTextCatalog,
   type CanvasTextTarget,
-  parseRichBlockRequest,
 } from '../../shared/properties/canvasText';
 import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches, pathsOf } from './frameRegions';
 import { matchCanvasText, textRunsAround, type TextMatch, type TextRun } from './frameTextMatch';
 import { openNativeText, type NativeTextResult } from './frameTextNative';
-import { openRichText } from './frameRichText';
 import { textEditorRoot, textSelection, type TextOffsets } from './frameTextSelection';
 
 interface ActiveText {
@@ -31,17 +29,13 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
   let typing: { readonly key: string; readonly element: Element } | undefined;
   let focus: ReadonlySet<string> = new Set();
   let openedAtMs = -Infinity;
-  let rich: ReturnType<typeof openRichText>;
-  const finish = (action: 'apply' | 'cancel') => {
-    rich?.finish(action);
-    active?.editor.finish(action);
-  };
+  const finish = (action: 'apply' | 'cancel') => active?.editor.finish(action);
   return {
     catalog: () => catalog,
     focus: () => focus, // The selected node's page path.
     editing: () => (active ? typing?.key : undefined),
     editingElement: () => (active ? typing?.element : undefined),
-    contains: (event: MouseEvent) => (rich ? event.target instanceof Node && rich.container.contains(event.target) : (active?.editor.contains(event) ?? false)),
+    contains: (event: MouseEvent) => active?.editor.contains(event) ?? false,
     dismiss: () => finish('apply'),
     // A scroll or resize ends the edit, unless it is the open's own settling.
     dismissOnMovement: () => {
@@ -56,13 +50,6 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
     receive: (input: unknown) => {
-      const choice = readRichBlockRequest(input);
-      if (choice !== undefined) {
-        if (catalog?.session === choice.session) {
-          rich?.choose(choice.choice);
-        }
-        return;
-      }
       const request = readCanvasTextRequest(input);
       if (!request) {
         return;
@@ -87,15 +74,6 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       const current = catalog;
       if (!current) {
         return;
-      }
-      if (target.breaks === 'rich' && target.richRoot !== undefined) {
-        rich = openCanvasRich({ catalog: current, target, element: match.element, richRoot: target.richRoot }, post, () => {
-          rich = undefined;
-        });
-        if (rich) {
-          openedAtMs = performance.now();
-          return;
-        }
       }
       const opened = { target, match };
       const runs = textRunsAround(current, opened);
@@ -134,39 +112,6 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
   };
-}
-
-// The rich text editor over a component instance's blocks (frameRichText.ts): its `+` and its one save.
-function openCanvasRich(
-  context: { readonly catalog: CanvasTextCatalog; readonly target: CanvasTextTarget; readonly element: Element; readonly richRoot: string },
-  post: (message: unknown) => void,
-  closed: () => void,
-) {
-  const session = context.catalog.session;
-  const editor = openRichText(context.element, context.richRoot, {
-    plus: (rect) => post({ type: 'avb:rich-plus', session, ...(rect ? { rect } : {}) }),
-    done: (html) => {
-      closed();
-      if (html !== undefined) {
-        post({ type: 'avb:rich-save', session, key: context.target.key, html });
-      }
-      post({ type: 'avb:text-inactive', session });
-    },
-  });
-  if (editor) {
-    const box = editor.container.getBoundingClientRect();
-    post({ type: 'avb:text-active', session, key: context.target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
-  }
-  return editor;
-}
-
-function readRichBlockRequest(input: unknown) {
-  try {
-    return parseRichBlockRequest(input);
-  } catch {
-    // Not a `+` choice, or a malformed one: nothing is edited.
-    return undefined;
-  }
 }
 
 // An open editor whose text the page replaced, or whose source moved on.

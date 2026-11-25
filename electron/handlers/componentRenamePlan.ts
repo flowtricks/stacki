@@ -14,7 +14,8 @@
 //                       .mdx file: `<Old>`, `</Old>`, `<Old />`, and `{Old}` in an expression. An alias (`import Foo`) keeps its local
 //                       name, so only its specifier changes. A name that file already uses keeps the old local name instead (a notice).
 //   `.stacki`           the recipe key and every nested `component` reference in components.json (relinkDefaults), and each role's
-//                       rules in roles.json (moveComponentRules).
+//                       rules in roles.json (moveComponentRules), and the component's key in component-canvas.json
+//                       (relinkComponentCanvas).
 //   layout paths        a `layout:` line in a markdown or MDX file's frontmatter.
 //
 // What is only reported (a notice, nothing written): a file that still names the old path or file name as text (CSS, JSON, config
@@ -29,6 +30,7 @@ import { detectNamingStyle, identifierOfFileName, isComponentFileName, type Nami
 import { aliasMap, type Alias } from '../content/cmsRefs';
 import { parseComponentDefaults, parseDefaultsSource, relinkDefaults } from '../../shared/properties/componentDefaults';
 import { moveComponentRules } from '../../shared/properties/componentAccess';
+import { COMPONENT_CANVAS_FILE, parseComponentCanvasSource, relinkComponentCanvas, serializeComponentCanvas } from '../../shared/properties/componentCanvas';
 import { type ComponentRenameRequest, type ComponentRenameSummary, type RenameFileKind, type RenameNotice } from '../../shared/properties/componentRename';
 import { parseProjectRolesSource, serializeProjectRoles } from '../../shared/properties/projectRoles';
 import { isRenameTextCandidate, pageRenameInventoryWork, readRenameText } from '../project/pageRenameInventory';
@@ -190,6 +192,9 @@ function rewriteFile(file: string, source: string, context: Context): Result<Fil
   if (file === '.stacki/roles.json') {
     return rewriteRoles(source, context);
   }
+  if (file === COMPONENT_CANVAS_FILE) {
+    return ok(rewriteCanvas(source, context));
+  }
   const notices: RenameNotice[] = [];
   const mentions = mentionsComponent(source, context);
   let after = source;
@@ -273,6 +278,17 @@ function defaultsTaken(): Result<never, ComponentRenameFailure> {
 // The file as the app writes it, only when something changed: an untouched file keeps its bytes.
 function serializeDefaults(source: string, before: unknown, after: unknown): string {
   return JSON.stringify(before) === JSON.stringify(after) ? source : `${JSON.stringify(parseComponentDefaults(after), undefined, 2)}\n`;
+}
+
+// The canvas settings follow the file. They are preview settings only, so a file the parser refuses never blocks a
+// rename: it is left as it is and named, like any other file the rename could not read.
+function rewriteCanvas(source: string, context: Context): FileResult {
+  const parsed = parseComponentCanvasSource(source);
+  if (!parsed.ok) {
+    return { after: source, notices: [{ file: COMPONENT_CANVAS_FILE, kind: 'unparsed' }] };
+  }
+  const relinked = relinkComponentCanvas(parsed.value, context.change.from, context.change.to);
+  return { after: relinked === parsed.value ? source : serializeComponentCanvas(relinked), notices: [] };
 }
 
 function rewriteRoles(source: string, context: Context): Result<FileResult, ComponentRenameFailure> {

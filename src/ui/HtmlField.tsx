@@ -5,9 +5,7 @@
 // under the caret shows a bubble to open, change or remove it. Opening a field
 // never rewrites its HTML: only an edit writes, and markup the editor cannot
 // show locks the visual editor rather than being dropped (htmlFieldModel.ts).
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
-import { chooseAsset } from './assetPick';
-import { assetValueFor } from './assetPath';
+import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
@@ -271,107 +269,64 @@ function emptyBlockPlace(host: HTMLElement): BlockPlace | undefined {
   return { top: box.top - field.getBoundingClientRect().top, height: box.height };
 }
 
-/** What the `+` menu chooses for an empty block; the dialog and the canvas each carry it out on their own text. */
-export type BlockInsertChoice =
-  | { readonly kind: 'block'; readonly block: Block }
-  | { readonly kind: 'list'; readonly list: 'ul' | 'ol' }
-  | { readonly kind: 'rule' }
-  | { readonly kind: 'link' }
-  | { readonly kind: 'media'; readonly media: 'image' | 'video' };
-
-// The `+` and the menu it opens, in the order a writer reaches for them: the headings, then paragraph, quote, image,
-// link and video, then the other common rich text blocks. Shared by the rich text dialog and the canvas.
-export function BlockInsertButton(props: { readonly style?: CSSProperties; readonly onChoose: (choice: BlockInsertChoice) => void }) {
+// The `+` beside an empty block and the menu it opens, in the order a writer reaches for them: the headings, then
+// paragraph, quote, image, link and video, then the other common rich text blocks. Changing a block keeps its words
+// (formatBlock moves them); an image or a video asks for its address the way a link does.
+function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlace | undefined; readonly onAction: (action: RichTextAction) => void }) {
   const translate = useTranslate();
   const [anchor, setAnchor] = useState<HTMLElement>();
-  const item = (id: string, label: string, choice: BlockInsertChoice): MenuEntry => ({ kind: 'item', id, label, onSelect: () => props.onChoose(choice) });
+  const [media, setMedia] = useState<{ readonly kind: 'image' | 'video'; readonly place: LinkBubblePlace }>();
+  const { editor, place, onAction } = props;
+  const block = (value: Block) => () => onAction({ kind: 'block', block: value });
+  const askMedia = (kind: 'image' | 'video') => () => {
+    editor.restore();
+    setMedia({ kind, place: { top: (place?.top ?? 0) + (place?.height ?? 0) + 6, left: 12 } });
+  };
+  const item = (id: string, label: string, onSelect: () => void): MenuEntry => ({ kind: 'item', id, label, onSelect });
   const entries: readonly MenuEntry[] = [
-    ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag, index) =>
-      item(tag, translate('ui.htmlToolbar.heading', { level: index + 1 }), { kind: 'block', block: tag }),
-    ),
-    item('p', translate('ui.htmlToolbar.paragraph'), { kind: 'block', block: 'p' }),
-    item('blockquote', translate('ui.htmlToolbar.quote'), { kind: 'block', block: 'blockquote' }),
-    item('image', translate('ui.htmlField.image'), { kind: 'media', media: 'image' }),
-    item('link', translate('ui.htmlToolbar.link'), { kind: 'link' }),
-    item('video', translate('ui.htmlField.video'), { kind: 'media', media: 'video' }),
+    ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag, index) => item(tag, translate('ui.htmlToolbar.heading', { level: index + 1 }), block(tag))),
+    item('p', translate('ui.htmlToolbar.paragraph'), block('p')),
+    item('blockquote', translate('ui.htmlToolbar.quote'), block('blockquote')),
+    item('image', translate('ui.htmlField.image'), askMedia('image')),
+    item('link', translate('ui.htmlToolbar.link'), () => onAction({ kind: 'link' })),
+    item('video', translate('ui.htmlField.video'), askMedia('video')),
     { kind: 'divider', id: 'more' },
-    item('ul', translate('ui.htmlToolbar.bulletedList'), { kind: 'list', list: 'ul' }),
-    item('ol', translate('ui.htmlToolbar.numberedList'), { kind: 'list', list: 'ol' }),
-    item('hr', translate('ui.htmlToolbar.divider'), { kind: 'rule' }),
-    item('pre', translate('ui.htmlToolbar.codeBlock'), { kind: 'block', block: 'pre' }),
+    item('ul', translate('ui.htmlToolbar.bulletedList'), () => onAction({ kind: 'list', list: 'ul' })),
+    item('ol', translate('ui.htmlToolbar.numberedList'), () => onAction({ kind: 'list', list: 'ol' })),
+    item('hr', translate('ui.htmlToolbar.divider'), () => onAction({ kind: 'rule' })),
+    item('pre', translate('ui.htmlToolbar.codeBlock'), block('pre')),
   ];
   return (
     <>
-      <button
-        type="button"
-        className="html-block-plus"
-        style={props.style}
-        aria-label={translate('ui.htmlField.insertBlock')}
-        aria-haspopup="menu"
-        aria-expanded={anchor !== undefined}
-        // The caret stays in the empty block: the menu's choice acts on it.
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => setAnchor(anchor === undefined ? event.currentTarget : undefined)}
-      >
-        <PlusIcon size={14} />
-      </button>
+      {place !== undefined && (
+        <button
+          type="button"
+          className="html-block-plus"
+          style={{ top: place.top + Math.max(0, Math.floor((place.height - 20) / 2)) }}
+          aria-label={translate('ui.htmlField.insertBlock')}
+          aria-haspopup="menu"
+          aria-expanded={anchor !== undefined}
+          // The caret stays in the empty block: the menu's choice acts on it.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => setAnchor(anchor === undefined ? event.currentTarget : undefined)}
+        >
+          <PlusIcon size={14} />
+        </button>
+      )}
       <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={() => setAnchor(undefined)} />
-    </>
-  );
-}
-
-/**
- * An image or a video from the asset picker (the Assets panel over the page, or an app that answers picks), handed
- * over as the address the markup uses; a hosted file comes as its public URL.
- */
-export function pickMedia(media: 'image' | 'video', insert: (address: string) => void): void {
-  void chooseAsset(
-    { mediaKind: media, current: '', presentation: 'overlay', onPick: (rel: string) => insert(assetValueFor(rel)), onPickURL: insert },
-    { bypass: false, target: undefined },
-  );
-}
-
-// The dialog's `+`: beside the empty block the caret is in. An image or a video comes from the asset picker, or from
-// the address typed in the field that opens with it; a link asks for its address as the toolbar's link does.
-function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlace | undefined; readonly onAction: (action: RichTextAction) => void }) {
-  const [media, setMedia] = useState<{ readonly kind: 'image' | 'video'; readonly place: LinkBubblePlace }>();
-  const { editor, place, onAction } = props;
-  const insertMedia = (kind: 'image' | 'video', address: string) => {
-    const element = editor.restore();
-    setMedia(undefined);
-    if (element !== undefined) {
-      const source = escapeHTML(address).replaceAll('"', '&quot;');
-      document.execCommand('insertHTML', false, kind === 'image' ? `<img src="${source}" alt="">` : `<video src="${source}" controls></video>`);
-      editor.emit();
-    }
-  };
-  const choose = (choice: BlockInsertChoice) => {
-    switch (choice.kind) {
-      case 'media':
-        editor.restore();
-        setMedia({ kind: choice.media, place: { top: (place?.top ?? 0) + (place?.height ?? 0) + 6, left: 12 } });
-        pickMedia(choice.media, (address) => insertMedia(choice.media, address));
-        return;
-      case 'block':
-      case 'list':
-      case 'rule':
-      case 'link':
-        onAction(choice);
-        return;
-      default: {
-        const exhaustive: never = choice;
-        return exhaustive;
-      }
-    }
-  };
-  return (
-    <>
-      {place !== undefined && <BlockInsertButton style={{ top: place.top + Math.max(0, Math.floor((place.height - 20) / 2)) }} onChoose={choose} />}
       {media && (
         <HtmlLinkEditor
           bubble={{ kind: 'edit', href: '', place: media.place }}
           onEdit={() => {}}
-          onApply={(address) => insertMedia(media.kind, address)}
+          onApply={(address) => {
+            const element = editor.restore();
+            setMedia(undefined);
+            if (element !== undefined) {
+              const source = escapeHTML(address).replaceAll('"', '&quot;');
+              document.execCommand('insertHTML', false, media.kind === 'image' ? `<img src="${source}" alt="">` : `<video src="${source}" controls></video>`);
+              editor.emit();
+            }
+          }}
           onRemove={() => setMedia(undefined)}
           onClose={() => {
             setMedia(undefined);

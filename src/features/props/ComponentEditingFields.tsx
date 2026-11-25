@@ -11,6 +11,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { EditingSetting, EditingSettings } from '../../../shared/properties/componentDefaults';
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 import { SwitchRow } from '../../ui/Switch';
 import TipAnchor from '../../ui/TipAnchor';
 import Popup from '../../ui/Popup';
@@ -18,9 +19,7 @@ import HtmlField from '../../ui/HtmlField';
 import CodeEditor from '../../ui/CodeEditor';
 import { BracesIcon } from '../../ui/Icons';
 import type { InlineNode } from './richContentModel';
-import { richTextNodes, richTextView, sameRichContent, type RichTextCodeReason } from './richTextContent';
-
-export { sameRichContent } from './richTextContent';
+import { richTextNodes, richTextView, type RichTextCodeReason } from './richTextContent';
 
 /** The defaults editor's hold on the selected component's editing settings. */
 export interface ComponentEditingControl {
@@ -71,9 +70,7 @@ export function RichTextContentField(props: {
   readonly label: string;
   /** The content as written between the instance's tags; undefined when there is none. */
   readonly source: string | undefined;
-  /** Writes the editor's content as the instance's children; or, for HTML a prop holds, `onSetHTML` writes it as text. */
-  readonly onSetNodes?: ((nodes: readonly InlineNode[]) => void) | undefined;
-  readonly onSetHTML?: ((html: string) => void) | undefined;
+  readonly onSetNodes: (nodes: readonly InlineNode[]) => void;
   /** Writes code typed in the code view; absent where the host has no source writer, so the code is read only. */
   readonly onSetSource: ((source: string) => void) | undefined;
 }) {
@@ -117,15 +114,7 @@ export function RichTextContentField(props: {
         </button>
       )}
       {open && decision.view === 'rich' && (
-        <RichTextDialog
-          label={props.label}
-          html={decision.html}
-          onWrite={(html) => {
-            props.onSetHTML?.(html);
-            props.onSetNodes?.(richTextNodes(html, document));
-          }}
-          onClose={() => setOpen(false)}
-        />
+        <RichTextDialog label={props.label} html={decision.html} onSetNodes={props.onSetNodes} onClose={() => setOpen(false)} />
       )}
     </div>
   );
@@ -134,7 +123,12 @@ export function RichTextContentField(props: {
 // The editor in a dialog. It keeps the HTML it emitted: the page writes it back as the printer lays it out, which is the
 // same content in other whitespace, and putting that into the editor would move the caret. Content that changes in
 // any other way (a canvas edit, undo) is someone else's and replaces what the editor shows.
-function RichTextDialog(props: { readonly label: string; readonly html: string; readonly onWrite: (html: string) => void; readonly onClose: () => void }) {
+function RichTextDialog(props: {
+  readonly label: string;
+  readonly html: string;
+  readonly onSetNodes: (nodes: readonly InlineNode[]) => void;
+  readonly onClose: () => void;
+}) {
   const translate = useTranslate();
   const [draft, setDraft] = useState(props.html);
   const written = useRef(props.html);
@@ -155,7 +149,7 @@ function RichTextDialog(props: { readonly label: string; readonly html: string; 
           onChange={(html) => {
             written.current = html;
             setDraft(html);
-            props.onWrite(html);
+            props.onSetNodes(richTextNodes(html, document));
           }}
         />
       </div>
@@ -193,4 +187,24 @@ function RichTextCode(props: { readonly source: string; readonly onSetSource: ((
       <CodeEditor value={draft} language="astro" chrome="minimal" {...(onSetSource === undefined ? {} : { onChange: (text: string) => setDraft(text) })} />
     </div>
   );
+}
+
+/** Whether two HTML texts hold the same rich content, whatever whitespace lies between their blocks. */
+export function sameRichContent(left: string, right: string, document: Document): boolean {
+  return JSON.stringify(richShape(richTextNodes(left, document), 0)) === JSON.stringify(richShape(richTextNodes(right, document), 0));
+}
+
+// The content with whitespace runs folded and text that is only whitespace left out: what a reader sees.
+function richShape(nodes: readonly InlineNode[], depth: number): readonly unknown[] {
+  assert(depth <= LIMITS.treeDepthMax, 'Rich text nesting is bounded');
+  return nodes.flatMap((node): readonly unknown[] => {
+    if (node.kind === 'text') {
+      const value = node.value.replace(/\s+/g, ' ').trim();
+      return value === '' ? [] : [value];
+    }
+    if (node.kind === 'expr') {
+      return [node.value];
+    }
+    return [{ name: node.name, props: node.props, children: node.children === undefined ? undefined : richShape(node.children, depth + 1) }];
+  });
 }

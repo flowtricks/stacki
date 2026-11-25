@@ -187,13 +187,7 @@ test('a page reads which texts Enter breaks from its components’ settings, ric
     }
     const breaks = format.canvasTextBreaksOf(nodes, (id) => id, settings);
     const kinds = Object.fromEntries([...breaks].map(([id, kind]) => [byText.get(id), kind]));
-    const instance = nodes.find((node) => node.kind === 'component' && node.name === 'R');
-    assert.deepEqual(kinds, {
-      Words: { breaks: 'line' },
-      bold: { breaks: 'line' },
-      Rich: { breaks: 'rich', richRoot: instance.id },
-      Item: { breaks: 'rich', richRoot: instance.id },
-    });
+    assert.deepEqual(kinds, { Words: 'line', bold: 'line', Rich: 'rich', Item: 'rich' });
     assert.equal(
       format.canvasTextBreaksOf(
         nodes,

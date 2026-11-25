@@ -25,6 +25,8 @@ import type { ComponentImport } from '../source/imports';
 
 /** What each project settings file needs to be written. */
 export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeature[] | undefined>> = {
+  // The component canvas's frames and preview values belong to whoever edits components.
+  componentCanvas: ['component:edit'],
   componentSources: ['settings:folders'],
   components: ['component:edit'],
   folders: ['settings:folders'],

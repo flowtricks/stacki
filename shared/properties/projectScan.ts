@@ -84,8 +84,6 @@ export interface ScanComponent {
   readonly hasRest?: boolean;
   /** The template sets an element's HTML from a value (`set:html={…}`). Absent from an older host: read as false. */
   readonly setHtml?: boolean;
-  /** Props the template sets as HTML (`set:html={prop}`), at most eight. Absent from an older host: none. */
-  readonly htmlProps?: readonly string[];
 }
 
 /** One file's share of a component's instance count (ScanComponent.uses). */
@@ -270,13 +268,6 @@ function parseComponent(input: unknown, where: string): ScanComponent {
       fail(where, 'slotText: expected boolean');
     }
     out['slotText'] = record['slotText'];
-  }
-  if (record['htmlProps'] !== undefined) {
-    const props = record['htmlProps'];
-    if (!Array.isArray(props) || props.length > 8 || !props.every((name) => typeof name === 'string' && /^[A-Za-z_$][\w$]{0,99}$/.test(name))) {
-      fail(where, 'htmlProps: expected at most eight prop names');
-    }
-    out['htmlProps'] = props;
   }
   if (record['setHtml'] !== undefined) {
     if (typeof record['setHtml'] !== 'boolean') {

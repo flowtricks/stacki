@@ -14,11 +14,13 @@ import { AUDIT_IGNORES_FILE, parseAuditIgnores } from './auditIgnores';
 import { BREAKPOINTS_FILE, parseBreakpointsSource } from './projectBreakpoints';
 import { BREAKPOINT_SYNC_FILE, parseBreakpointSyncSource } from './breakpointSyncRecord';
 import { VARIABLE_VISIBILITY_FILE, parseVariableVisibilitySource } from './variableVisibility';
+import { COMPONENT_CANVAS_FILE, parseComponentCanvasSource } from './componentCanvas';
 
 export const METADATA_FILES = {
   audits: AUDIT_IGNORES_FILE,
   breakpoints: BREAKPOINTS_FILE,
   breakpointSync: BREAKPOINT_SYNC_FILE,
+  componentCanvas: COMPONENT_CANVAS_FILE,
   componentSources: COMPONENT_SOURCE_FILE,
   components: '.stacki/components.json',
   folders: PROJECT_FOLDERS_FILE,
@@ -35,7 +37,7 @@ export interface MetadataFile {
   readonly source?: string;
 }
 export function metadataKind(input: unknown): MetadataKind {
-  if (input === 'componentSources') {
+  if (input === 'componentSources' || input === 'componentCanvas') {
     return input;
   }
   if (
@@ -97,6 +99,13 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
   }
   if (kind === 'breakpointSync') {
     const parsed = parseBreakpointSyncSource(source);
+    if (!parsed.ok) {
+      throw new Error(parsed.error.message);
+    }
+    return;
+  }
+  if (kind === 'componentCanvas') {
+    const parsed = parseComponentCanvasSource(source);
     if (!parsed.ok) {
       throw new Error(parsed.error.message);
     }
