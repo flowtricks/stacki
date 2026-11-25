@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': 'Kapat (düzenlemeler anında kaydedilir)',
   'workspace.code.title': 'Kod',
+  'workspace.notifications.copied': 'Kopyalandı',
+  'workspace.notifications.copy': 'Kopyala',
   'workspace.notifications.dismiss': 'Bildirimi kapat',
   'workspace.notifications.label': 'Bildirimler',
   'workspace.notifications.loadMore': 'Daha fazla yükle ({count})',

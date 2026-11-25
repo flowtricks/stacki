@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': '閉じる（編集内容は自動で保存されます）',
   'workspace.code.title': 'コード',
+  'workspace.notifications.copied': 'コピーしました',
+  'workspace.notifications.copy': 'コピー',
   'workspace.notifications.dismiss': '通知を閉じる',
   'workspace.notifications.label': '通知',
   'workspace.notifications.loadMore': 'さらに読み込む（{count}）',

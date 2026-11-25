@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': 'إغلاق (تُحفظ التعديلات مباشرة)',
   'workspace.code.title': 'الكود',
+  'workspace.notifications.copied': 'تم النسخ',
+  'workspace.notifications.copy': 'نسخ',
   'workspace.notifications.dismiss': 'تجاهل الإشعار',
   'workspace.notifications.label': 'الإشعارات',
   'workspace.notifications.loadMore': 'تحميل المزيد ({count})',

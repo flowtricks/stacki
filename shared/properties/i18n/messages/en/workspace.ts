@@ -5,6 +5,8 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 export const messages = {
   'workspace.code.close': 'Close (edits are saved live)',
   'workspace.code.title': 'Code',
+  'workspace.notifications.copied': 'Copied',
+  'workspace.notifications.copy': 'Copy',
   'workspace.notifications.dismiss': 'Dismiss notification',
   'workspace.notifications.label': 'Notifications',
   'workspace.notifications.loadMore': 'Load more ({count})',

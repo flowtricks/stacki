@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': 'Tutup (suntingan disimpan langsung)',
   'workspace.code.title': 'Kode',
+  'workspace.notifications.copied': 'Disalin',
+  'workspace.notifications.copy': 'Salin',
   'workspace.notifications.dismiss': 'Tutup notifikasi',
   'workspace.notifications.label': 'Notifikasi',
   'workspace.notifications.loadMore': 'Muat lebih banyak ({count})',

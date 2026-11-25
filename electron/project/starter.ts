@@ -1,10 +1,12 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 
 import { toRecord } from '../../shared/core/record';
 import { commandNeedsShell } from '../lib/platform';
 import { stopProcessTree } from '../lib/nodeTools';
+import { packageManagerProgram, type PackageManager } from '../../shared/properties/packageManager';
 
 // Starting a site from a starter.
 //
@@ -51,6 +53,40 @@ export const RUN_CANCELLED = 'The command was cancelled.';
 interface RunOptions {
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  /** Extra variables for this child only, laid over the app's own. */
+  readonly environment?: Readonly<Record<string, string>>;
+}
+
+// The Lumos scaffolder (create-lumos 0.3.9) links its skill folders with symlinks and, where Windows refuses them
+// (no Developer Mode, no admin), falls back to `copyFile` on the folder, which always fails with EPERM. This preload
+// makes that one fallback copy the folder instead. It touches nothing else: files go to the original `copyFile`.
+const COPY_DIRECTORIES_SHIM = `const fsp = require('node:fs/promises');
+const { statSync } = require('node:fs');
+const original = fsp.copyFile;
+fsp.copyFile = async function copyFile(source, target, mode) {
+  let directory = false;
+  try {
+    directory = statSync(source).isDirectory();
+  } catch {
+    directory = false;
+  }
+  if (directory) {
+    return fsp.cp(source, target, { recursive: true });
+  }
+  return original.call(this, source, target, mode);
+};
+require('node:module').syncBuiltinESMExports();
+`;
+
+// NODE_OPTIONS for a scaffolder run: the shim written to the temp folder, joined to whatever the person already set.
+function scaffolderEnvironment(): Readonly<Record<string, string>> {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-scaffold-'));
+  const file = path.join(folder, 'copyDirectories.cjs');
+  fs.writeFileSync(file, COPY_DIRECTORIES_SHIM, 'utf8');
+  // Forward slashes: a backslash escapes inside the quotes NODE_OPTIONS reads.
+  const preload = `--require "${file.replace(/\\/g, '/')}"`;
+  const existing = process.env['NODE_OPTIONS'];
+  return { NODE_OPTIONS: existing === undefined || existing.length === 0 ? preload : `${existing} ${preload}` };
 }
 
 const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, options: RunOptions = {}): Promise<string> =>
@@ -69,6 +105,7 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, o
           FORCE_COLOR: '0',
           NO_COLOR: '1',
           CI: '1', // npm asks before downloading a scaffolder; nobody is here to answer
+          ...options.environment,
         },
       });
     } catch (error: unknown) {
@@ -134,7 +171,22 @@ interface CreateStarterOptions {
   readonly name?: string;
   /** The npm command to run, so a test can hand it one that needs no network. */
   readonly npm?: string;
+  /** The manager the person chose. Bun runs the scaffolder itself (`bun create`); the others run it through npm, which every Node install has. */
+  readonly manager?: PackageManager;
   readonly onLog?: OnLog;
+}
+
+// Bun has its own `create`, which downloads and runs the scaffolder. It takes no `--yes` and no `--` separator:
+// what follows the folder name goes to the scaffolder as it is.
+function scaffolderCommand(
+  manager: PackageManager | undefined,
+  create: string,
+  folder: string,
+): { readonly label: string; readonly program: string; readonly args: readonly string[] } {
+  if (manager === 'bun') {
+    return { label: 'bun', program: packageManagerProgram('bun', { windows: isWin }), args: ['create', create, folder, '--no-install'] };
+  }
+  return { label: 'npm', program: packageManagerProgram('npm', { windows: isWin }), args: ['create', create, folder, '--yes', '--', '--no-install'] };
 }
 
 /**
@@ -143,7 +195,10 @@ interface CreateStarterOptions {
  * caller's — this is the part that has to be right before anything is
  * installed into it.
  */
-async function createStarter({ starter = 'lumos', parentPath, name, npm, onLog }: CreateStarterOptions = {}): Promise<{ ok: boolean; projectPath: string }> {
+async function createStarter({ starter = 'lumos', parentPath, name, npm, manager, onLog }: CreateStarterOptions = {}): Promise<{
+  ok: boolean;
+  projectPath: string;
+}> {
   const template = STARTERS[starter];
   if (!template) {
     throw new Error(`${starter} is not a starter this app knows.`);
@@ -153,9 +208,9 @@ async function createStarter({ starter = 'lumos', parentPath, name, npm, onLog }
 
   // `--no-install`: the app installs afterwards, where a failure is an error
   // the wizard can show rather than a line in a log that scrolled past.
-  const args = ['create', template.create, folder, '--yes', '--', '--no-install'];
-  onLog?.(`> npm create ${template.create} ${folder}\n\n`);
-  await run(npm || (isWin ? 'npm.cmd' : 'npm'), args, path.dirname(directory), onLog);
+  const command = scaffolderCommand(manager, template.create, folder);
+  onLog?.(`> ${command.label} create ${template.create} ${folder}\n\n`);
+  await run(npm || command.program, command.args, path.dirname(directory), onLog, { environment: scaffolderEnvironment() });
 
   if (!fs.existsSync(path.join(directory, 'package.json'))) {
     throw new Error('The starter finished but there is no package.json in it.');
@@ -231,4 +286,4 @@ function newSiteDirectory(parentPath: string | undefined, name: string | undefin
   return directory;
 }
 
-export { createStarter, newSiteDirectory, run as runCreateCommand, startSiteHistory, STARTERS };
+export { createStarter, newSiteDirectory, run as runCreateCommand, scaffolderEnvironment, startSiteHistory, STARTERS };
