@@ -45,8 +45,9 @@ export function RichTextContentField(props: {
         : translate('props.richText.viewCode');
   return (
     <div className="props-field props-rich-text" key="content">
-      <div className="props-rich-text-label">
-        <span>{props.label}</span>
+      {/* The label row every prop field has: the name, then the `{}` that switches the field to its code. */}
+      <label onClick={(event) => event.preventDefault()}>
+        <span className="prop-label">{props.label}</span>
         <TipAnchor text={tip}>
           <button
             type="button"
@@ -63,7 +64,7 @@ export function RichTextContentField(props: {
             <BracesIcon size={12} />
           </button>
         </TipAnchor>
-      </div>
+      </label>
       {view === 'code' ? (
         <RichTextCode source={props.source ?? ''} onSetSource={props.onSetSource} />
       ) : (
@@ -101,19 +102,29 @@ function RichTextDialog(props: { readonly label: string; readonly html: string; 
   }, [props.html]);
   return (
     <Popup className="modal props-rich-text-dialog" label={translate('props.richText.title')} onClose={props.onClose} dismissible={true}>
-      <div className="modal-header">{props.label}</div>
-      <div className="modal-body">
-        <HtmlField
-          value={draft}
-          label={props.label}
-          blocks="insert"
-          onChange={(html) => {
-            written.current = html;
-            setDraft(html);
-            props.onWrite(html);
-          }}
-        />
-      </div>
+      {({ close }) => (
+        <>
+          <div className="modal-header">{props.label}</div>
+          <div className="modal-body">
+            <HtmlField
+              value={draft}
+              label={props.label}
+              blocks="insert"
+              onChange={(html) => {
+                written.current = html;
+                setDraft(html);
+                props.onWrite(html);
+              }}
+            />
+          </div>
+          {/* Every change is already written, so the one button closes, as a finished publish's dialog does. */}
+          <div className="modal-footer">
+            <button type="button" className="primary" onClick={close}>
+              {translate('ui.close')}
+            </button>
+          </div>
+        </>
+      )}
     </Popup>
   );
 }

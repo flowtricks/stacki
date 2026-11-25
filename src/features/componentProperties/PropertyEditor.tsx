@@ -117,19 +117,21 @@ export function PropertyEditor(props: PropertyEditorProps) {
             variants={draft.exists ? variants : undefined}
             defaults={draft.exists ? { computed: props.variantDefaults, properties: props.properties ?? [] } : undefined}
             actions={
-              <PropertyActions
-                name={draft.exists ? draft.savedName : ''}
-                // A shared prop is deleted from its type's file, in source.
-                removable={props.property.editing?.kind !== 'override' && props.property.shared === undefined}
-                onRemove={(name) => {
-                  draft.discard();
-                  void props.onSave({ kind: 'remove', name }, 'close');
-                }}
-              />
+              <>
+                {/* How the field is typed in: the last options, above the delete button as every form ends. */}
+                <PropertyEditingSettings field={draft.exists ? draft.savedName : undefined} />
+                <PropertyActions
+                  name={draft.exists ? draft.savedName : ''}
+                  // A shared prop is deleted from its type's file, in source.
+                  removable={props.property.editing?.kind !== 'override' && props.property.shared === undefined}
+                  onRemove={(name) => {
+                    draft.discard();
+                    void props.onSave({ kind: 'remove', name }, 'close');
+                  }}
+                />
+              </>
             }
           />
-          {/* How the field is typed in: last, below everything else the prop has. */}
-          <PropertyEditingSettings field={draft.exists ? draft.savedName : undefined} />
         </>
       )}
     </Popup>

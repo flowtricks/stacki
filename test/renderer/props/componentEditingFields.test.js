@@ -85,12 +85,12 @@ test('a field shows the switches it can take, last in its settings, and they rep
   await draw(
     React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.PropertyEditingSettings, { field: 'html' })),
   );
-  const switches = [...document.querySelectorAll('[role="switch"]')];
+  const switches = [...document.querySelectorAll('.property-flags input[type="checkbox"]')];
   assert.deepEqual(
-    switches.map((element) => [element.getAttribute('aria-label'), element.getAttribute('aria-checked')]),
+    switches.map((element) => [element.getAttribute('aria-label'), element.checked]),
     [
-      ['Allow line breaks', 'false'],
-      ['Allow rich text editing', 'true'],
+      ['Allow line breaks', false],
+      ['Allow rich text editing', true],
     ],
   );
   await click(switches[0]);
@@ -106,11 +106,11 @@ test('a field that takes neither, a new prop, or no host shows nothing', async (
   const host = editingHost({ html: ['lineBreaks'] }, {}, []);
   for (const field of ['title', undefined, '']) {
     await draw(React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.PropertyEditingSettings, { field })));
-    assert.equal(document.querySelectorAll('[role="switch"]').length, 0, String(field));
+    assert.equal(document.querySelectorAll('.property-flags input').length, 0, String(field));
     await clear();
   }
   await draw(React.createElement(modules.PropertyEditingSettings, { field: 'html' }));
-  assert.equal(document.querySelectorAll('[role="switch"]').length, 0, 'no host');
+  assert.equal(document.querySelectorAll('.property-flags input').length, 0, 'no host');
   await clear();
 });
 
@@ -125,7 +125,7 @@ test('each slot that can take a setting gets a row that opens its switches', asy
     'the aside slot takes nothing here, so it has no row',
   );
   await click(rows[0]);
-  const switches = [...document.querySelectorAll('.property-editor [role="switch"]')];
+  const switches = [...document.querySelectorAll('.property-editor .property-flags input')];
   assert.equal(switches.length, 2);
   await click(switches[1]);
   assert.deepEqual(changes, [['slot:default', 'richText', 'on']]);

@@ -179,6 +179,23 @@ function writeFixture(project) {
     await window.waitForSelector('.props-rich-text-code', { timeout: WAIT_MS });
     results.propExpressionLocked = (await window.getAttribute('.props-rich-text .prop-expr-toggle', 'aria-disabled')) === 'true';
     await window.screenshot({ path: path.join(SHOTS, '07-expression-code.png') });
+
+    // The component's own Properties panel: the content slot's row and its settings, and a set:html prop's settings.
+    await window.getByText('HtmlBlock', { exact: true }).first().dblclick();
+    await window
+      .getByRole('button', { name: /^Properties/ })
+      .first()
+      .click();
+    await window.waitForSelector('.property-list', { timeout: WAIT_MS });
+    await window.getByText('html', { exact: true }).first().click();
+    await window.waitForSelector('.property-editing-flags', { timeout: WAIT_MS });
+    // The form fades in; the picture is taken once it is fully shown.
+    await window.waitForFunction(() => getComputedStyle(document.querySelector('.property-editor') ?? document.body).opacity === '1', undefined, {
+      timeout: WAIT_MS,
+    });
+    await window.screenshot({ path: path.join(SHOTS, '08-prop-settings.png') });
+    results.propFlags = await window.locator('.property-editing-flags label').allTextContents();
+    await window.keyboard.press('Escape');
   } catch (error) {
     results.error = String(error);
     await (await app.firstWindow()).screenshot({ path: path.join(SHOTS, 'error.png') }).catch(() => undefined);

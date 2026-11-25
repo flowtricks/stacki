@@ -392,3 +392,15 @@
   background: var(--bg-hover, var(--bg-active));
   color: var(--text);
 }
+
+/* Rich text a component's content holds, in the Properties panel: the button fills the field's width as an input
+   does, and the dialog is as wide as a page's text column. */
+.props-rich-text-edit {
+  width: 100%;
+}
+.props-rich-text-dialog {
+  width: min(720px, calc(100vw - 48px));
+}
+.props-rich-text-dialog .html-content {
+  min-height: 240px;
+}

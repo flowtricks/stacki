@@ -2,13 +2,12 @@
 // form, and, for the component's slots (which have no prop of their own), a row each at the end of the list that opens
 // the same rows. Allow line breaks makes Enter type a `<br>`; Allow rich text editing makes the field rich text (Enter
 // starts a paragraph, a `+` changes the block, the Content field opens the rich text editor). Each row shows only where
-// the field can take it (componentDefaults.ts editingOffered), and each switch writes .stacki/components.json at once.
+// the field can take it (componentDefaults.ts editingOffered), and each checkbox writes .stacki/components.json at once.
 import { createContext, useContext, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { EditingField, EditingSetting, EditingSettings } from '../../../shared/properties/componentDefaults';
 import { assert } from '../../../shared/core/assert';
-import { SwitchRow } from '../../ui/Switch';
 import TipAnchor from '../../ui/TipAnchor';
 import Popup from '../../ui/Popup';
 import { CloseIcon, ElementSlotIcon } from '../../ui/Icons';
@@ -43,20 +42,23 @@ export function PropertyEditingSettings({ field }: { readonly field: EditingFiel
   const offered = host.offered(field);
   const settings = host.settings(field);
   assert(offered.length <= 2, 'A field takes at most the two editing settings');
+  // The same checkboxes as Required (PropertySections.tsx PropertyFlagsFields), each explained in a tooltip.
   return (
-    <>
+    <div className="property-flags property-editing-flags">
       {offered.map((setting) => (
-        <div className="property-field property-editing-setting" key={setting}>
-          <TipAnchor text={translate(TIPS[setting])}>
-            <SwitchRow
-              label={translate(LABELS[setting])}
+        <TipAnchor key={setting} text={translate(TIPS[setting])}>
+          <label>
+            <input
+              type="checkbox"
+              aria-label={translate(LABELS[setting])}
               checked={settings[setting] === true}
-              onToggle={() => host.change(field, setting, settings[setting] === true ? 'off' : 'on')}
+              onChange={(event) => host.change(field, setting, event.target.checked ? 'on' : 'off')}
             />
-          </TipAnchor>
-        </div>
+            {translate(LABELS[setting])}
+          </label>
+        </TipAnchor>
       ))}
-    </>
+    </div>
   );
 }
 
