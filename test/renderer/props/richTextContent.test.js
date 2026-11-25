@@ -225,3 +225,24 @@ test('set:html in a template, not in a comment or the frontmatter, qualifies a c
   assert.equal(rendersHtml('<!-- <div set:html={x} /> --><div />'), false);
   assert.equal(rendersHtml('<div><slot /></div>'), false);
 });
+
+test('the bytes between the tags are read past quoted and braced `>`, and refused when the text is not one element', () => {
+  assert.equal(content.innerSourceOf('<RichText title="a > b" data={x > 1}>\n  <p>a</p>\n</RichText>'), '\n  <p>a</p>\n');
+  assert.equal(content.innerSourceOf('<RichText />'), '');
+  assert.equal(content.innerSourceOf('text'), undefined);
+  assert.equal(content.innerSourceOf('<RichText'), undefined);
+});
+
+test('children stand for rich text only while they are plain markup', () => {
+  const text = (value) => ({ kind: 'text', value });
+  const element = (name, children, props = {}) => ({ kind: 'element', name, props, children });
+  assert.equal(
+    content.plainChildrenHTML([element('p', [text('a & b')], { class: { type: 'string', value: 'x"y' } }), element('br', undefined)]),
+    '<p class="x&quot;y">a & b</p><br>',
+  );
+  assert.equal(content.plainChildrenHTML(undefined), '');
+  assert.equal(content.plainChildrenHTML([element('p', [{ kind: 'expr', value: '{x}' }])]), undefined);
+  assert.equal(content.plainChildrenHTML([{ kind: 'component', name: 'Card', children: [] }]), undefined);
+  assert.equal(content.plainChildrenHTML([element('p', [], { class: { type: 'expr', value: 'x' } })]), undefined);
+  assert.equal(content.plainChildrenHTML([{ kind: 'comment', value: 'x' }]), undefined);
+});

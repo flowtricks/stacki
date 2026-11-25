@@ -2,7 +2,7 @@
 // again after every metadata write the app makes and every project scan, so a switch turned in the defaults editor
 // reaches the canvas and the Properties panel at once. A file that cannot be read leaves every setting off: today's
 // editing, never a wrong one.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { onMetadataWrite, readMetadata } from '../../ipc/projectMetadataBridge';
 import { effectiveEditing, parseDefaultsSource, type ComponentDefaults, type EditingSettings } from '../../../shared/properties/componentDefaults';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
@@ -34,7 +34,14 @@ export function useComponentEditing(projectPath: string | undefined, components:
       stop();
     };
   }, [projectPath, components]);
-  return useMemo(() => editingLookup(projectPath, components, config), [projectPath, components, config]);
+  // A rescan hands over a new list of the same components, and the canvas restarts its text catalog (closing an editor
+  // being typed in) whenever this lookup changes: it changes only when what it answers changes.
+  const key = JSON.stringify([projectPath, config, components.map((entry) => [entry.path, entry.file, entry.slots, entry.slotText, entry.setHtml])]);
+  const kept = useRef<{ readonly key: string; readonly lookup: ComponentEditingLookup }>();
+  if (kept.current?.key !== key) {
+    kept.current = { key, lookup: editingLookup(projectPath, components, config) };
+  }
+  return kept.current.lookup;
 }
 
 /** The settings that apply to the component at an absolute path, as the panel and the canvas catalog read them. */
@@ -50,10 +57,12 @@ export function editingLookup(
     }
     const normalized = componentPath.replaceAll('\\', '/');
     const component = components.find((entry) => entry.path.replaceAll('\\', '/') === normalized);
-    if (component === undefined || !normalized.startsWith(root)) {
+    // The scan's own project-relative name first: a project under a symbolic link (macOS /var is /private/var) scans
+    // to paths that do not start with the folder the project was opened as.
+    const file = component?.file ?? (normalized.startsWith(root) ? normalized.slice(root.length) : undefined);
+    if (component === undefined || file === undefined) {
       return {};
     }
-    const file = normalized.slice(root.length);
     assert(!file.startsWith('/'), 'A component file is project relative');
     return effectiveEditing(config, {
       file,

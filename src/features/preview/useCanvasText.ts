@@ -261,7 +261,11 @@ function showRichPlus(message: { readonly session: string; readonly rect?: Canva
   canvasRichPlus.set({
     session: options.session,
     box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
-    choose: (choice) => options.current.current?.post({ type: 'avb:rich-block', session: options.session, choice }),
+    // The menu took focus out of the frame; it goes back to the frame first, since a page's script may not take it.
+    choose: (choice) => {
+      options.current.current?.frame.current?.focus();
+      options.current.current?.post({ type: 'avb:rich-block', session: options.session, choice });
+    },
   });
 }
 

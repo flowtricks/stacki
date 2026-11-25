@@ -66,6 +66,8 @@ export interface PropsPanelProps {
   readonly richTextProp?: string | undefined;
   /** Writes the selected node's content as code, byte for byte; absent where the host has no source writer. */
   readonly onSetContentSource?: ((source: string) => void) | undefined;
+  /** The selected node's content as the file holds it (the bytes between its tags); undefined when it cannot be read. */
+  readonly contentSource?: string | undefined;
   /** While the selected node is the component whose defaults are being set: its editing settings, last in Settings. */
   readonly componentEditing?: ComponentEditingControl | undefined;
   /** Restates the selected text or expression node as these pieces (TextConnectField.tsx); absent where the host cannot. */

@@ -58,9 +58,8 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
     receive: (input: unknown) => {
       const choice = readRichBlockRequest(input);
       if (choice !== undefined) {
-        if (catalog?.session === choice.session) {
-          rich?.choose(choice.choice);
-        }
+        // Only an open rich text editor takes a choice, from whichever catalog of this file drew its `+`.
+        rich?.choose(choice.choice);
         return;
       }
       const request = readCanvasTextRequest(input);
@@ -77,7 +76,10 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         }
         return;
       }
-      if (catalog?.session !== request.value.session) {
+      // Rich text being typed outlives a catalog the host rebuilt for the same file (a rescan, a settings read): its blocks
+      // are saved whole, by the instance, under whatever session is current when it finishes.
+      const richGoesOn = rich !== undefined && catalog?.file === request.value.file;
+      if (catalog?.session !== request.value.session && !richGoesOn) {
         finish('cancel');
       }
       catalog = request.value;
@@ -89,9 +91,13 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         return;
       }
       if (target.breaks === 'rich' && target.richRoot !== undefined) {
-        rich = openCanvasRich({ catalog: current, target, element: match.element, richRoot: target.richRoot }, post, () => {
-          rich = undefined;
-        });
+        rich = openCanvasRich(
+          { session: () => catalog?.session ?? current.session, target, element: match.element, richRoot: target.richRoot, at: event },
+          post,
+          () => {
+            rich = undefined;
+          },
+        );
         if (rich) {
           openedAtMs = performance.now();
           return;
@@ -138,24 +144,29 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
 
 // The rich text editor over a component instance's blocks (frameRichText.ts): its `+` and its one save.
 function openCanvasRich(
-  context: { readonly catalog: CanvasTextCatalog; readonly target: CanvasTextTarget; readonly element: Element; readonly richRoot: string },
+  context: {
+    readonly session: () => string;
+    readonly target: CanvasTextTarget;
+    readonly element: Element;
+    readonly richRoot: string;
+    readonly at: MouseEvent;
+  },
   post: (message: unknown) => void,
   closed: () => void,
 ) {
-  const session = context.catalog.session;
-  const editor = openRichText(context.element, context.richRoot, {
-    plus: (rect) => post({ type: 'avb:rich-plus', session, ...(rect ? { rect } : {}) }),
+  const editor = openRichText(context.element, context.richRoot, context.at, {
+    plus: (rect) => post({ type: 'avb:rich-plus', session: context.session(), ...(rect ? { rect } : {}) }),
     done: (html) => {
       closed();
       if (html !== undefined) {
-        post({ type: 'avb:rich-save', session, key: context.target.key, html });
+        post({ type: 'avb:rich-save', session: context.session(), key: context.target.key, html });
       }
-      post({ type: 'avb:text-inactive', session });
+      post({ type: 'avb:text-inactive', session: context.session() });
     },
   });
   if (editor) {
     const box = editor.container.getBoundingClientRect();
-    post({ type: 'avb:text-active', session, key: context.target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
+    post({ type: 'avb:text-active', session: context.session(), key: context.target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
   }
   return editor;
 }
@@ -325,8 +336,12 @@ function commitCanvasText(
     value: first.value,
     ...(also.length ? { also: also.map(({ run, value }) => ({ key: run.target.key, value })) } : {}),
   });
-  // Until the preview renders the saved source, the page keeps showing what was typed.
-  result.keep();
+  // Until the preview renders the saved source, the page keeps showing what was typed; except typed line breaks, which
+  // the save writes as markup: the rendered `<br>` and its words arrive as new nodes, beside which kept words would
+  // show twice.
+  if (!edits.some(({ run, value }) => run.target.breaks !== undefined && value.includes('\n'))) {
+    result.keep();
+  }
 }
 
 function readCanvasTextRequest(input: unknown) {

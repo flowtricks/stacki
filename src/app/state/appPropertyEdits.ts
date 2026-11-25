@@ -836,20 +836,22 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
   // A node's content written as code (the rich text code view): the bytes between its tags and nothing else, as one
   // patch of the file, so markup the panel cannot read (a component, an expression) is never reprinted.
   const setNodeContentSource = useCallback(
-    (nodeId: string, next: string) => {
+    (nodeId: string, next: string, shown: string) => {
       const state = pageStateRef.current.pageState;
       const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
       if (!node || (node.kind !== 'component' && node.kind !== 'element')) {
         return;
       }
-      commitEdit(contentSourceGesture(node, next));
+      commitEdit(contentSourceGesture(node, { next, shown }));
     },
     [commitEdit, pageStateRef],
   );
   return { setNodeContent, setNodeInline, setNodeTextPieces, setNodeContentSource };
 }
 
-function contentSourceGesture(node: EditorNode, next: string): EditGesture {
+// `shown` is the code the view was showing: a file whose bytes between the tags changed since is not written over.
+function contentSourceGesture(node: EditorNode, change: { readonly next: string; readonly shown: string }): EditGesture {
+  const { next } = change;
   assert(next.length <= LIMITS.ipcFieldCharsMax, 'Content code fits one field');
   return {
     coalesceKey: `content:${node.id}`,

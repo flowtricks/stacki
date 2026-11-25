@@ -140,3 +140,91 @@ function richShape(nodes: readonly InlineNode[], depth: number): readonly unknow
     return [{ name: node.name, props: node.props, children: node.children === undefined ? undefined : richShape(node.children, depth + 1) }];
   });
 }
+
+/**
+ * The bytes between an element's tags, read from the element's own text: after the `>` that ends its opening tag (one
+ * inside a quoted value or an expression does not count) and before its last `</`. Empty for a self-closing tag;
+ * undefined when the text is not one element.
+ */
+export function innerSourceOf(element: string): string | undefined {
+  assert(element.length <= RICH_TEXT_SOURCE_CHARS_MAX * 2, 'An element read for its content is bounded');
+  if (!element.startsWith('<')) {
+    return undefined;
+  }
+  let quote = '';
+  let depth = 0;
+  for (let index = 1; index < element.length; index++) {
+    const character = element.charAt(index);
+    if (quote !== '') {
+      quote = character === quote ? '' : quote;
+    } else if (character === '"' || character === "'" || character === '`') {
+      quote = character;
+    } else if (character === '{') {
+      depth += 1;
+    } else if (character === '}') {
+      depth = Math.max(0, depth - 1);
+    } else if (character === '>' && depth === 0) {
+      if (element.charAt(index - 1) === '/') {
+        return '';
+      }
+      const close = element.lastIndexOf('</');
+      return close > index ? element.slice(index + 1, close) : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** A page node as far as its markup goes: what `plainChildrenHTML` reads. */
+export interface MarkupNode {
+  readonly kind: string;
+  readonly name?: string;
+  readonly value?: string;
+  readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string } | undefined>> | undefined;
+  readonly children?: readonly MarkupNode[] | undefined;
+}
+
+/**
+ * Children as HTML when they are plain markup (text, and elements with literal attributes), else undefined: a
+ * component, an expression, a loop or a comment is not something rich text may stand for.
+ */
+export function plainChildrenHTML(children: readonly MarkupNode[] | undefined): string | undefined {
+  let count = 0;
+  const write = (nodes: readonly MarkupNode[], depth: number): string | undefined => {
+    assert(depth <= LIMITS.treeDepthMax, 'Plain markup depth is bounded');
+    let out = '';
+    for (const node of nodes) {
+      count += 1;
+      if (count > LIMITS.treeNodesMax) {
+        return undefined;
+      }
+      if (node.kind === 'text') {
+        out += node.value ?? '';
+        continue;
+      }
+      if (node.kind !== 'element' || node.name === undefined || !/^[a-z][a-z0-9]*$/.test(node.name)) {
+        return undefined;
+      }
+      let attributes = '';
+      for (const [name, value] of Object.entries(node.props ?? {})) {
+        if (value?.type === 'bare') {
+          attributes += ` ${name}`;
+        } else if (value?.type === 'string') {
+          attributes += ` ${name}="${(value.value ?? '').replaceAll('"', '&quot;')}"`;
+        } else if (value !== undefined) {
+          return undefined;
+        }
+      }
+      if (node.children === undefined) {
+        out += `<${node.name}${attributes}>`;
+        continue;
+      }
+      const inner = write(node.children, depth + 1);
+      if (inner === undefined) {
+        return undefined;
+      }
+      out += `<${node.name}${attributes}>${inner}</${node.name}>`;
+    }
+    return out;
+  };
+  return write(children ?? [], 0);
+}

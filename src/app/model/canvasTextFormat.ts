@@ -12,7 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { CanvasTextBreaks } from '../../../shared/properties/canvasText';
 import type { EditingSettings } from '../../../shared/properties/componentDefaults';
-import { richTextNodes, richTextView, sameRichContent } from '../../features/props/richTextContent';
+import { plainChildrenHTML, richTextNodes, richTextView, sameRichContent } from '../../features/props/richTextContent';
 import { LIMITS } from '../../../shared/core/limits';
 import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineCandidate, type InlineNode } from '../../features/props/richContentModel';
 import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
@@ -79,8 +79,11 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
         return false;
       }
       assert(chain !== undefined, 'An instance was found among the text’s ancestors');
-      const before = sourceOf(instance);
-      if (before !== undefined && sameRichContent(before, html, document)) {
+      const before = plainChildrenHTML(instance.children);
+      if (before === undefined) {
+        return false; // The content holds more than rich text since the editor opened: never write over it.
+      }
+      if (sameRichContent(before, html, document)) {
         return true; // Nothing a reader would see changed: the file keeps its bytes.
       }
       setInline(instance.id, richTextNodes(html, document));
@@ -498,7 +501,10 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
       continue;
     }
     const settings = settingsOf(node);
-    const rich = settings.richText === true && richTextView(sourceOf(node), document).view === 'rich';
+    // Read from the instance's children, not from a source the parser may leave out: anything but plain markup
+    // (a component, an expression) keeps Enter as it was.
+    const html = settings.richText === true ? plainChildrenHTML(node.children) : undefined;
+    const rich = html !== undefined && richTextView(html, document).view === 'rich';
     const richRoot = rich && node.id !== undefined ? pathFor(node.id) : undefined;
     for (const child of node.children ?? []) {
       if (richRoot !== undefined) {
@@ -523,8 +529,4 @@ function markBlock<Node extends CanvasFormatTree<Node>>(block: Node, mark: (chil
   if (SPLIT_BLOCKS.has(block.name ?? '')) {
     (block.children ?? []).forEach(mark);
   }
-}
-
-function sourceOf(node: object): string | undefined {
-  return 'source' in node && typeof node.source === 'string' ? node.source : undefined;
 }

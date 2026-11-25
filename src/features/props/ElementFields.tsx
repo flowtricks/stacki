@@ -25,6 +25,7 @@ import { classListOfferOf } from './classListProp';
 import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
 import { ComponentEditingSwitches, RichTextContentField } from './ComponentEditingFields';
+import { plainChildrenHTML } from './richTextContent';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
@@ -38,7 +39,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
     return (
       <RichTextContentField
         label={translate('props.element.content')}
-        source={'source' in node && typeof node.source === 'string' ? node.source : undefined}
+        source={state.contentSource ?? plainChildrenHTML(node.children)}
         onSetNodes={onSetInline}
         onSetSource={state.onSetContentSource}
       />

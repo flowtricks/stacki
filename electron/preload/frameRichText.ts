@@ -4,7 +4,7 @@
 // a line break, Enter on an empty list item leaves the list, Backspace in an empty block removes it and returns the
 // caret to the block before. A `+` beside an empty block is drawn by the host (`avb:rich-plus`) and its choice comes
 // back as `avb:rich-block`. Finishing reads the instance's blocks back as HTML (the frame's bookkeeping attributes and
-// markers stripped) and posts one `avb:rich-save`, which the host checks and writes as the instance's content: one
+// markers stripped) and posts one `avb:rich-save`, puts the rendered blocks back, which the host checks and writes as the instance's content: one
 // edit, one undo step. Escape puts every block back as it was and posts nothing.
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
@@ -20,7 +20,7 @@ export interface RichTextCallbacks {
 /** Elements a session reads back, and the depth it walks a block for, both bounded. */
 const RICH_LIMITS = { childrenMax: 2_000, depthMax: 64 } as const;
 
-export function openRichText(block: Element, richRoot: string, callbacks: RichTextCallbacks) {
+export function openRichText(block: Element, richRoot: string, at: { readonly clientX: number; readonly clientY: number }, callbacks: RichTextCallbacks) {
   const top = instanceBlock(block, richRoot);
   const container = top?.parentElement;
   if (!top || !(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
@@ -44,9 +44,9 @@ export function openRichText(block: Element, richRoot: string, callbacks: RichTe
     controller.abort();
     callbacks.plus(undefined);
     const html = action === 'apply' ? readInstanceHTML(container, original, richRoot) : undefined;
-    if (action === 'cancel') {
-      container.replaceChildren(...snapshot);
-    }
+    // The blocks go back as the page rendered them, saved or not: the preview's patch knows its own nodes, and a block
+    // made here would stay beside the rendered one. A save shows when the page renders it.
+    container.replaceChildren(...snapshot);
     if (attribute === null) {
       container.removeAttribute('contenteditable');
     } else {
@@ -79,6 +79,14 @@ export function openRichText(block: Element, richRoot: string, callbacks: RichTe
   // Leaving focus does not finish: the `+` menu lives in the host, and choosing from it takes focus out of the frame
   // and back. A click elsewhere on the canvas finishes (the session's dismiss), as ⌘/Ctrl Enter does.
   container.focus({ preventScroll: true });
+  // The caret where the double click was: focusing an editable element would otherwise put it at the element's start.
+  const caret = document.caretRangeFromPoint(at.clientX, at.clientY);
+  if (caret && container.contains(caret.startContainer)) {
+    caret.collapse(true);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(caret);
+  }
+  report();
   return {
     finish,
     container,

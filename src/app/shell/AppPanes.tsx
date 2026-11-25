@@ -1,4 +1,6 @@
 import { componentEditing, richTextAllowed } from '../../../shared/properties/componentDefaults';
+import { innerSourceOf } from '../../features/props/richTextContent';
+import { sourceRangeForSelection } from '../../features/code/codePanelModel';
 import { FilesCover } from './DesktopFiles';
 import type { ComponentEditingControl } from '../../features/props/ComponentEditingFields';
 import { useFormat, useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
@@ -651,6 +653,13 @@ function useRenderedClassesKnown(selectedId: string | undefined, report: { reado
   return gaveUpFor === selectedId;
 }
 
+// The selected element's content as the file holds it, for the rich text field and its code view.
+function selectedContentSource(app: ShellView): string | undefined {
+  const source = app.pageState?.source;
+  const range = source === undefined ? undefined : sourceRangeForSelection(app.model, app.selectedId, source.length);
+  return source === undefined || range === undefined ? undefined : innerSourceOf(source.slice(range.from, range.to));
+}
+
 // The switches of how the component's text is typed: on the instance whose defaults are being set, and only there.
 function defaultsEditing(app: ShellView): ComponentEditingControl | undefined {
   const canvas = app.defaultsCanvas;
@@ -799,9 +808,11 @@ export function settingsTextHandlers(app: ShellView) {
     },
     richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path).richText === true,
     richTextProp: app.selectedComponent?.slots?.includes('default') === true ? undefined : app.selectedComponent?.htmlProps?.[0],
+    contentSource: selectedContentSource(app),
     onSetContentSource: (source: string) => {
-      if (selectedId) {
-        app.setNodeContentSource(selectedId, source);
+      const shown = selectedContentSource(app);
+      if (selectedId && shown !== undefined) {
+        app.setNodeContentSource(selectedId, source, shown);
       }
     },
     componentEditing: defaultsEditing(app),
