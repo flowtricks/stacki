@@ -13,6 +13,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { repoPath } = require('../helpers/sources.js');
+const { waitFor } = require('../helpers/waitFor.js');
 // Playwright is Studio's dev dependency (its browser tests); Desktop reuses it here rather than adding its own copy.
 const { _electron: electron } = require(repoPath('studio/node_modules/playwright'));
 
@@ -248,7 +249,8 @@ async function lookPass(window, canvas, locale, results) {
   await window.waitForSelector('.html-block-plus', { timeout: WAIT_MS });
   await window.click('.html-block-plus');
   await window.getByRole('menuitem').nth(8).click(); // Image: the ninth row, after the six headings, paragraph and quote.
-  await window.waitForTimeout(600);
+  // The picker opens on the menu's choice: wait for it rather than for a guessed time.
+  await window.locator('.asset-pick-overlay, [class*="asset-pick"]').first().waitFor({ timeout: WAIT_MS });
   await shot('03-asset-picker');
   results.assetPicker = await window.locator('.asset-pick-overlay, [class*="asset-pick"]').count();
   await window.keyboard.press('Escape');
@@ -288,13 +290,8 @@ async function lookPass(window, canvas, locale, results) {
   results.flags = await window.locator('.property-editing-flags label').allTextContents();
 }
 
-// Polls the page file for what an action should have written, within a bound.
+// Polls the page file for what an action should have written, within a bound: 300 polls of 100 ms, past the slowest
+// save seen through the real app.
 async function waitForFile(read, until) {
-  for (let poll = 0; poll < 300; poll++) {
-    if (until(read())) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`The page never showed the edit:\n${read()}`);
+  await waitFor({ what: 'the page file shows the edit', read, until, pollCountMax: 300, pollIntervalMs: 100 });
 }
