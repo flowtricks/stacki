@@ -1,0 +1,167 @@
+.shadcn-starter-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+}
+
+.shadcn-starter-modal .modal-body {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.shadcn-starter-modal .modal-body > * {
+  flex-shrink: 0;
+}
+
+.shadcn-starter-modal :is(.modal-header, .modal-footer) {
+  flex-shrink: 0;
+}
+
+.shadcn-starter-modal .shadcn-project-path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+}
+
+.shadcn-starter-choices {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.shadcn-starter-choices legend,
+.modal-body .shadcn-preset-heading label {
+  max-inline-size: 100%;
+  margin-block-end: 6px;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.shadcn-starter-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.75rem), 1fr));
+  gap: 8px;
+}
+
+.shadcn-starter-tiles[data-layout='three-columns'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.modal-body label.shadcn-starter-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Keep the marks aligned when one label needs another line. */
+  justify-content: flex-start;
+  gap: 4px;
+  min-inline-size: 0;
+  min-block-size: 52px;
+  margin: 0;
+  padding: 6px 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.shadcn-starter-tile-name {
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Keep the native radio in the focus order and send its painted state to the tile. */
+.shadcn-starter-tile .shadcn-starter-radio {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  clip-path: inset(50%);
+}
+
+.shadcn-starter-tile > svg {
+  flex: none;
+  color: var(--text);
+}
+
+.shadcn-starter-tile-check {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+  display: none;
+  color: var(--accent);
+}
+
+.shadcn-starter-choices:enabled .shadcn-starter-tile:hover:not(:has(:checked)) {
+  background: var(--bg-hover);
+}
+
+.shadcn-starter-choices .shadcn-starter-tile:has(:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.shadcn-starter-tile:has(:checked) .shadcn-starter-tile-check {
+  display: flex;
+}
+
+.shadcn-starter-tile:has(:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.shadcn-starter-choices:disabled .shadcn-starter-tile {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.modal-body .shadcn-starter-switches .ui-switch-row {
+  display: flex;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.shadcn-preset-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+}
+
+.modal-body .shadcn-preset-heading label {
+  margin: 0;
+}
+
+.shadcn-preset-action {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.shadcn-preset-action :is(a, button) {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.shadcn-preset-action button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.shadcn-starter-modal :is(.starter-field, .shadcn-preset-action) > [data-invalid='true'] {
+  color: var(--red);
+}

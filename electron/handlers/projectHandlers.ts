@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { writeNewProjectDefaults } from '../project/newProjectDefaults';
 import { createStarter, newSiteDirectory, runCreateCommand, startSiteHistory, STARTERS } from '../project/starter';
+import { createShadcnStarter, inspectShadcnPreset } from '../project/shadcnStarter';
 import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
@@ -105,11 +106,32 @@ function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: P
 }
 
 function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>): void {
+  let creatingShadcn = false;
+  ipcMain.handle('project:inspectShadcnPreset', (_event, { preset }) => {
+    ensureToolPath();
+    return inspectShadcnPreset(preset);
+  });
   // Starting from a starter. The scaffolder, the first commit and the package's
   // name are in ./starter.js; what is here is the install that follows and the
   // log the wizard reads.
-  ipcMain.handle('project:createStarter', async (_event, { starter = 'lumos', parentPath, name, packageManager = 'npm' }) => {
+  ipcMain.handle('project:createStarter', async (_event, request) => {
     ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+    const { packageManager = 'npm' } = request;
+    if (request.starter === 'shadcn') {
+      // The welcome windows share create:log, so only one attempt can own this stream.
+      if (creatingShadcn) {
+        throw new Error('A shadcn site is already being created.');
+      }
+      creatingShadcn = true;
+      try {
+        send('progress', { message: 'Creating the shadcn site…' });
+        return { ok: true, ...(await createShadcnStarter(request, (text) => send('create:log', text))) };
+      } finally {
+        send('progress', PROGRESS_CLEARED);
+        creatingShadcn = false;
+      }
+    }
+    const { starter = 'lumos', parentPath, name } = request;
     await requirePackageManager(packageManager);
     const result = await createStarter({
       starter,

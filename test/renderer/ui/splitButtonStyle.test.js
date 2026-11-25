@@ -71,10 +71,9 @@ function markup(pageDirectory) {
       React.createElement(WelcomeSplitButton, {
         className,
         label: 'Open from folder',
-        menuLabel: 'Open from GitHub',
         menuTitle: 'More ways to open a project',
+        items: [{ label: 'Open from GitHub', onSelect() {} }],
         onClick() {},
-        onMenuSelect() {},
       }),
     );
   // The closed menu's popup uses layout effects, which a server render skips; its warning is expected here.

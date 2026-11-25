@@ -10,6 +10,8 @@ import WelcomeShaderBackground from './WelcomeShaderBackground';
 import { railScrollbarFor, watchRailEdges } from './recentRail';
 import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
+import ShadcnStarterWizard from './ShadcnStarterWizard';
+import { ShadcnStarterLogo } from '../../ui/ShadcnStarterLogo';
 import AstroCopyDialog, { announceAstroCopy, type AstroCopySource } from './AstroCopyDialog';
 import { FolderDropHost, useFolderChoiceRoute } from './FolderDropHost';
 
@@ -18,15 +20,22 @@ interface WelcomeScreenProps {
   readonly showToast: (message: string, kind: 'success' | 'error' | 'info') => void;
 }
 
+const PROJECT_WIZARDS = { astro: NewProjectWizard, lumos: StarterWizard, shadcn: ShadcnStarterWizard };
+type ProjectWizardKind = keyof typeof PROJECT_WIZARDS;
+interface ProjectCreation {
+  readonly kind: ProjectWizardKind;
+  readonly parentPath: string;
+}
+
 export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps) {
   const translate = useTranslate();
   const [cloning, setCloning] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [newProjectParent, setNewProjectParent] = useState<string | undefined>(undefined);
-  const [starterDirectory, setStarterDirectory] = useState<string | undefined>(undefined);
+  const [creation, setCreation] = useState<ProjectCreation | undefined>(undefined);
   const [copySource, setCopySource] = useState<AstroCopySource | undefined>(undefined);
   const recent = useRecentProjects(showToast);
-  const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory, setCopySource);
+  const actions = useWelcomeActions(onOpen, setError, setCreation, setCopySource);
+  const ProjectWizard = PROJECT_WIZARDS[creation?.kind ?? 'lumos'];
   // A folder dropped on the window or on the app's icon: what "Open from folder" does with the same folder.
   const routeFolder = useFolderChoiceRoute({ open: onOpen, offerCopy: setCopySource, showToast });
 
@@ -37,8 +46,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
         hasRecents={recent.projects.length > 0}
         error={error}
         openExisting={() => void actions.openExisting()}
-        startFromLumos={() => void actions.startFromLumos()}
-        createNew={() => void actions.createNew()}
+        startProject={(kind) => void actions.startProject(kind)}
         cloneRepository={() => setCloning(true)}
       />
       <RecentRail projects={recent.projects} refreshing={recent.refreshing} open={onOpen} remove={(projectPath) => void recent.remove(projectPath)} />
@@ -48,17 +56,6 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           onClose={() => setCloning(false)}
           onOpen={(directory) => {
             setCloning(false);
-            onOpen(directory);
-          }}
-        />
-      )}
-      {starterDirectory && (
-        <StarterWizard
-          parentPath={starterDirectory}
-          onClose={() => setStarterDirectory(undefined)}
-          onDone={(directory) => {
-            setStarterDirectory(undefined);
-            showToast(translate('welcome.siteCreated'), 'success');
             onOpen(directory);
           }}
         />
@@ -74,13 +71,13 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           }}
         />
       )}
-      {newProjectParent && (
-        <NewProjectWizard
-          parentPath={newProjectParent}
-          onClose={() => setNewProjectParent(undefined)}
+      {creation && (
+        <ProjectWizard
+          parentPath={creation.parentPath}
+          onClose={() => setCreation(undefined)}
           onDone={(directory) => {
-            setNewProjectParent(undefined);
-            showToast(translate('welcome.projectCreated'), 'success');
+            setCreation(undefined);
+            showToast(translate(creation.kind === 'astro' ? 'welcome.projectCreated' : 'welcome.siteCreated'), 'success');
             onOpen(directory);
           }}
         />
@@ -92,8 +89,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
 function useWelcomeActions(
   onOpen: WelcomeScreenProps['onOpen'],
   setError: React.Dispatch<React.SetStateAction<string | undefined>>,
-  setNewProjectParent: React.Dispatch<React.SetStateAction<string | undefined>>,
-  setStarterDirectory: React.Dispatch<React.SetStateAction<string | undefined>>,
+  setCreation: React.Dispatch<React.SetStateAction<ProjectCreation | undefined>>,
   setCopySource: React.Dispatch<React.SetStateAction<AstroCopySource | undefined>>,
 ) {
   const translate = useTranslate();
@@ -124,26 +120,17 @@ function useWelcomeActions(
       }
     }
   };
-  // Both wizards ask where the site should go and name its folder themselves.
-  const createNew = async (): Promise<void> => {
+  // Each wizard names the site's folder after the native picker chooses its parent.
+  const startProject = async (kind: ProjectWizardKind): Promise<void> => {
     setError(undefined);
     const result = await chooseStarterParent();
     if (!result.ok) {
       setError(result.error);
     } else if (!result.value.canceled) {
-      setNewProjectParent(result.value.parentPath);
+      setCreation({ kind, parentPath: result.value.parentPath });
     }
   };
-  const startFromLumos = async (): Promise<void> => {
-    setError(undefined);
-    const result = await chooseStarterParent();
-    if (!result.ok) {
-      setError(result.error);
-    } else if (!result.value.canceled) {
-      setStarterDirectory(result.value.parentPath);
-    }
-  };
-  return { openExisting, createNew, startFromLumos };
+  return { openExisting, startProject };
 }
 
 function useRecentProjects(showToast: WelcomeScreenProps['showToast']) {
@@ -225,15 +212,13 @@ function WelcomeHero({
   hasRecents,
   error,
   openExisting,
-  startFromLumos,
-  createNew,
+  startProject,
   cloneRepository,
 }: {
   readonly hasRecents: boolean;
   readonly error: string | undefined;
   readonly openExisting: () => void;
-  readonly startFromLumos: () => void;
-  readonly createNew: () => void;
+  readonly startProject: (kind: ProjectWizardKind) => void;
   readonly cloneRepository: () => void;
 }) {
   const translate = useTranslate();
@@ -246,21 +231,20 @@ function WelcomeHero({
             className={hasRecents ? 'primary' : ''}
             label={translate('welcome.hero.openFolder')}
             icon={<FolderIcon size={12} />}
-            menuLabel={translate('welcome.hero.openGitHub')}
-            menuIcon={<GitHubIcon size={15} />}
+            items={[{ label: translate('welcome.hero.openGitHub'), icon: <GitHubIcon size={15} />, onSelect: cloneRepository }]}
             menuTitle={translate('welcome.hero.moreOpen')}
             onClick={openExisting}
-            onMenuSelect={cloneRepository}
           />
           <WelcomeSplitButton
             className={hasRecents ? '' : 'primary'}
             label={translate('welcome.hero.startLumos')}
             icon={<LumosIcon size={15} />}
-            menuLabel={translate('welcome.hero.startAstro')}
-            menuIcon={<AstroIcon size={15} />}
+            items={[
+              { label: translate('welcome.hero.startAstro'), icon: <AstroIcon size={15} />, onSelect: () => startProject('astro') },
+              { label: translate('welcome.hero.startShadcn'), icon: <ShadcnStarterLogo brand="shadcn" size={15} />, onSelect: () => startProject('shadcn') },
+            ]}
             menuTitle={translate('welcome.hero.moreStart')}
-            onClick={startFromLumos}
-            onMenuSelect={createNew}
+            onClick={() => startProject('lumos')}
           />
         </div>
       </div>

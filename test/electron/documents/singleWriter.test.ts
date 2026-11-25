@@ -226,6 +226,31 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/starter.ts': {
     writeFileSync: { count: 1, reason: 'package.json of a new project from a starter' },
   },
+  'electron/project/shadcnStarter.ts': {
+    writeFile: {
+      count: 3,
+      reason: 'creates the launcher package.json and pnpm-workspace.yaml exclusively in private staging, then pins the manager in the generated manifest',
+    },
+    renameSync: {
+      count: 2,
+      reason: 'moves staged entries into an exclusively created project directory and moves those same entries back on failure',
+    },
+  },
+  'electron/project/shadcnSettings.ts': {
+    writeFileSync: { count: 5, reason: 'prepares a disposable CLI fixture and copies captured UI sources into it; real project writes use document actors' },
+  },
+  'electron/project/shadcnStarterCatalog.ts': {
+    writeFile: {
+      count: 3,
+      reason: 'creates Astro catalog adapters and their React islands exclusively in private staging, then records their insertion defaults',
+    },
+  },
+  'electron/project/shadcnStarterContent.ts': {
+    writeFile: {
+      count: 1,
+      reason: 'writes the starter pages, layout, components and insertion defaults in private staging before the new project can be opened',
+    },
+  },
   // The AI chat panel's own files, all in userData or the system temp folder, never in the project.
   // The project files an agent's edit is undone in go through the document actors (aiHandlers.ts).
   'electron/handlers/ai/agentInstaller.ts': {

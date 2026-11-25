@@ -34,6 +34,9 @@ interface InvokeChannels {
   readonly inspectFolder: 'project:inspectFolder';
   readonly takeOpenedFolders: 'project:takeOpenedFolders';
   readonly createStarter: 'project:createStarter';
+  readonly readShadcnSettings: 'project:readShadcnSettings';
+  readonly changeShadcnSetting: 'project:changeShadcnSetting';
+  readonly inspectShadcnPreset: 'project:inspectShadcnPreset';
   readonly scanProject: 'project:scan';
   readonly listProjectClasses: 'project:classes';
   readonly watchProject: 'watch:start';

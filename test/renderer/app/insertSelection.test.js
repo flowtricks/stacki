@@ -18,13 +18,13 @@ const { safeSchema } = require('#dist/electron/properties/propDefaults.js');
 
 const PAGE = '<main><p>One</p><p>Two</p></main>\n';
 
-function fixture(context) {
+function fixture(context, source = PAGE) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-insert-selection-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'src/components'), { recursive: true });
   fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
   const file = path.join(root, 'src/pages/index.astro');
-  fs.writeFileSync(file, PAGE);
+  fs.writeFileSync(file, source);
   const components = ['Grid', 'Card'].map((name) => {
     const componentPath = path.join(root, 'src/components', `${name}.astro`);
     const source =
@@ -106,6 +106,34 @@ test('the palette insert with a Card selected still selects the new Grid root', 
   const grid = find((node) => node.kind === 'component' && node.name === 'Grid');
   assert.equal(__panels.StructurePanel.selectedId, grid.id);
 });
+
+for (const sibling of ['', '\n<script>console.log("Page script");</script>\n']) {
+  test(`the Components panel saves its insert inside the layout ${sibling ? 'with a root script' : 'when the layout is the only root'}`, async (context) => {
+    const source = `---\nimport Layout from '../layouts/main.astro';\n---\n<Layout>\n  <p>Existing content</p>\n</Layout>\n${sibling}`;
+    const setup = fixture(context, source);
+    const layoutFile = path.join(setup.root, 'src/layouts/main.astro');
+    fs.mkdirSync(path.dirname(layoutFile), { recursive: true });
+    fs.writeFileSync(layoutFile, '<html><body><slot /></body></html>\n');
+    const app = await mountApp(setup.root, { scan: setup.scan }, 'insert-selection');
+    context.after(app.unmount);
+    assert.equal(nodeAt([0]).id, 'layout');
+    const palette = document.querySelector('.rail-btn[aria-label^="Components"]');
+    assert.ok(palette);
+    await app.act(async () => {
+      palette.click();
+      await tick();
+    });
+    const grid = setup.components.find((component) => component.name === 'Grid');
+    assert.ok(grid);
+    await gesture(app, async () => {
+      __panels.PalettePanel.onInsert(grid.path);
+      await tick();
+    });
+    const written = fs.readFileSync(setup.file, 'utf8');
+    assert.match(written, /<p>Existing content<\/p>\n  <Grid\b[\s\S]+<\/Grid>\n<\/Layout>/);
+    assert.ok(written.endsWith(`</Layout>\n${sibling}`), 'the file keeps its original content after the layout');
+  });
+}
 
 // The same rule at the start, middle and end of a container, for a component
 // whose root holds several component children: the diff may report the

@@ -1,7 +1,7 @@
 import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { createAstroProject, createStarterProject, subscribeCreateLog, type ProjectTemplate } from './welcomeBridge';
 import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, type CreatePackageManager } from '../../../shared/properties/packageManager';
 import Dropdown from '../../ui/Dropdown';
@@ -9,7 +9,7 @@ import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
-const SITE_NAME_DEFAULT = 'my-site';
+export const SITE_NAME_DEFAULT = 'my-site';
 const SITE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const TEMPLATES = [
   { value: 'basics', labelKey: 'welcome.template.basics.label', hintKey: 'welcome.template.basics.hint' },
@@ -22,9 +22,9 @@ const TEMPLATES = [
   readonly hintKey: MessageKey;
 }[];
 
-type RunState = { readonly kind: 'idle' } | { readonly kind: 'running' } | { readonly kind: 'error'; readonly message: string };
+export type RunState = { readonly kind: 'idle' } | { readonly kind: 'running' } | { readonly kind: 'error'; readonly message: string };
 
-interface WizardProps {
+export interface WizardProps {
   readonly onClose: () => void;
   readonly onDone: (directory: string) => void;
 }
@@ -152,25 +152,34 @@ function siteNameValid(name: string): boolean {
 
 // The site's name and the folder it becomes, shared by both wizards so they name sites alike.
 // Enter submits only a valid name and only while nothing is running.
-function SiteNameField(props: {
+export function SiteNameField(props: {
   readonly parentPath: string;
   readonly name: string;
   readonly running: boolean;
   readonly change: (name: string) => void;
   readonly submit: () => void;
+  readonly pathLabel?: string;
+  readonly problem?: string | undefined;
 }) {
   const translate = useTranslate();
-  const folder = `${props.parentPath}/${props.name.trim() || SITE_NAME_DEFAULT}`;
+  const inputId = useId();
+  const problemId = useId();
+  const folder = siteFolderPath(props.parentPath, props.name.trim() || SITE_NAME_DEFAULT);
   return (
     <>
-      <label className="starter-field">
-        <span>{translate('welcome.siteName')}</span>
+      <div className="starter-field">
+        <label className="starter-field-label" htmlFor={inputId}>
+          {translate('welcome.siteName')}
+        </label>
         <input
+          id={inputId}
           autoFocus
           value={props.name}
           spellCheck={false}
           disabled={props.running}
           maxLength={255}
+          aria-invalid={props.problem !== undefined || undefined}
+          aria-describedby={props.problem === undefined ? undefined : problemId}
           onChange={(event) => props.change(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') {
@@ -181,16 +190,33 @@ function SiteNameField(props: {
             }
           }}
         />
-      </label>
-      <div className="new-project-dir" title={folder}>
-        {folder}
       </div>
+      {props.pathLabel === undefined ? (
+        <div className="new-project-dir" title={folder}>
+          {folder}
+        </div>
+      ) : (
+        <label className="starter-field">
+          {/* Use the path caption for name feedback so validation keeps the fields in place. */}
+          <span id={problemId} aria-live="polite" data-invalid={props.problem !== undefined}>
+            {props.problem ?? props.pathLabel}
+          </span>
+          <input className="shadcn-project-path" aria-label={props.pathLabel} dir="ltr" readOnly value={folder} title={folder} />
+        </label>
+      )}
     </>
   );
 }
 
+function siteFolderPath(parentPath: string, name: string): string {
+  // The native picker returns platform paths, including a drive or share on Windows.
+  const windowsPath = /^[A-Za-z]:\\|^\\\\/.test(parentPath);
+  const separator = windowsPath ? '\\' : '/';
+  return parentPath.endsWith(separator) ? parentPath + name : parentPath + separator + name;
+}
+
 // The manager that installs the new site. The main process checks it is installed first.
-function PackageManagerField(props: {
+export function PackageManagerField(props: {
   readonly value: CreatePackageManager;
   readonly disabled: boolean;
   readonly change: (manager: CreatePackageManager) => void;
@@ -227,21 +253,23 @@ export function useCreateLog() {
   return { text, elementRef, clear: () => setText('') };
 }
 
-function WizardFrame({
+export function WizardFrame({
   title,
   running,
   onClose,
   children,
   footer,
+  className,
 }: {
   readonly title: string;
   readonly running: boolean;
   readonly onClose: () => void;
   readonly children: React.ReactNode;
   readonly footer: (close: () => void) => React.ReactNode;
+  readonly className?: string;
 }) {
   return (
-    <Popup className="modal new-project-modal" onClose={onClose} dismissible={!running}>
+    <Popup className={className ? 'modal new-project-modal ' + className : 'modal new-project-modal'} onClose={onClose} dismissible={!running} label={title}>
       {({ close }) => (
         <>
           <div className="modal-header">{title}</div>

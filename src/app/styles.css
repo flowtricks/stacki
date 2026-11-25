@@ -10016,9 +10016,13 @@ textarea::selection {
 .starter-field .dd-trigger:focus:not(:focus-visible) {
   border-color: transparent;
 }
-.starter-field > span {
+.starter-field > span,
+.starter-field > .starter-field-label {
   font-size: 11.5px;
   color: var(--text-dim);
+}
+.starter-field > .starter-field-label {
+  margin: 0;
 }
 .starter-note {
   font-size: 11.5px;

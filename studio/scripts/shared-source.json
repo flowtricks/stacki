@@ -307,6 +307,8 @@
     "shared/ipc/projectAgentChannels.ts",
     "shared/ipc/publishAccount.ts",
     "shared/ipc/publishRepository.ts",
+    "shared/ipc/shadcnStarter.ts",
+    "shared/ipc/shadcnSettings.ts",
     "shared/ipc/studioAuth.ts",
     "shared/ipc/studioAuthConfigFile.ts",
     "shared/ipc/studioProgress.ts",

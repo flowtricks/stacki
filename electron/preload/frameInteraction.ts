@@ -56,11 +56,10 @@ export function setCanvasInteraction(next: CanvasInteraction): void {
 
 // The canvas's cursor. Select mode shows the editor's arrow everywhere. Interact
 // mode shows the same arrow, never the I-beam over words: it is still the editor,
-// and a page's text is selected and edited as in select mode. What acts on a
-// click shows the pointer, so it is plain what will navigate or run: links,
-// buttons, <summary>, labels, form controls, and whatever the page itself gives a
-// cursor (`cursor: pointer` on a card). Fields typed into keep their I-beam,
-// since interact mode lets them take focus and keystrokes.
+// and a page's text is selected and edited as in select mode. Links, summaries,
+// labels and form controls get click affordances. Buttons use the site's cursor
+// so a project can switch its pointer styling off. Fields typed into keep their
+// I-beam because interact mode lets them take focus and keystrokes.
 //
 // Interact mode's rules have no specificity (`:where`) and no !important, so a
 // cursor the page sets on an element wins over them; the arrow on <html> is
@@ -74,8 +73,8 @@ export function setCanvasInteraction(next: CanvasInteraction): void {
 const DESIGN_CURSOR_CSS = ['*, *::before, *::after { cursor: default !important; }', 'iframe, embed, object { pointer-events: none !important; }'].join('\n');
 const INTERACT_CURSOR_CSS = [
   ':where(html) { cursor: default; }',
-  ':where(a[href], area[href], button, summary, label, select, [role="button"], [role="link"], [onclick]) { cursor: pointer; }',
-  ':where(input:is([type="button" i], [type="submit" i], [type="reset" i], [type="checkbox" i], [type="radio" i], [type="file" i], [type="image" i], [type="color" i], [type="range" i])) { cursor: pointer; }',
+  ':where(a[href], area[href], summary, label, select, [role="link"], [onclick]):where(:not(button, [role="button"])) { cursor: pointer; }',
+  ':where(input:is([type="button" i], [type="submit" i], [type="reset" i], [type="checkbox" i], [type="radio" i], [type="file" i], [type="image" i], [type="color" i], [type="range" i]):not([role="button"])) { cursor: pointer; }',
   ':where(textarea, input:not([type="button" i], [type="submit" i], [type="reset" i], [type="checkbox" i], [type="radio" i], [type="file" i], [type="image" i], [type="color" i], [type="range" i], [type="hidden" i]), [contenteditable]:not([contenteditable="false" i])) { cursor: text; }',
 ].join('\n');
 

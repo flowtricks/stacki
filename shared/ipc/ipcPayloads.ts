@@ -1,3 +1,4 @@
+import { parseShadcnSettingsChange, parseShadcnSettingsRequest } from './shadcnSettings';
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
@@ -60,6 +61,7 @@ import { parseStudioAuth } from './studioAuth';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseDevNetworkRequest } from './devNetwork';
 import { parseAstroCopyRequest } from './astroCopy';
+import { parseShadcnPresetRequest, parseStarterRequest } from './shadcnStarter';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parseWorkerSetupRequest } from '../properties/publishWorkerSetup';
@@ -756,12 +758,10 @@ export const IPC_PAYLOADS = {
     ai: maybeFlag,
     packageManager: optional(parseCreatePackageManager),
   }),
-  'project:createStarter': object({
-    starter: optional(text),
-    parentPath: pathText,
-    name: text,
-    packageManager: optional(parseCreatePackageManager),
-  }),
+  'project:createStarter': parseStarterRequest,
+  'project:readShadcnSettings': parseShadcnSettingsRequest,
+  'project:changeShadcnSetting': parseShadcnSettingsChange,
+  'project:inspectShadcnPreset': parseShadcnPresetRequest,
   'project:injectedRoutes': object({ ...project }),
   'project:openDialog': nothing,
   // The Welcome screen's "Open from folder" and the Astro copy of a plain website (shared/ipc/astroCopy.ts).

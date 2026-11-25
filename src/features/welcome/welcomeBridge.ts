@@ -7,6 +7,7 @@ import type { CreatePackageManager } from '../../../shared/properties/packageMan
 import { cleanError } from '../../lib/cleanError';
 import { parseAstroCopyCheck, parseAstroCopyReply, parseSiteFolderChoice, type AstroCopyRequest } from '../../../shared/ipc/astroCopy';
 import { parseFolderOpenChoice, parseFolderOpenChoices, type FolderOpenChoice } from '../../../shared/ipc/folderOpen';
+import { parseShadcnPresetReply, type ShadcnStarterOptions } from '../../../shared/ipc/shadcnStarter';
 
 export type RecentProject = IpcResults['recents:list'][number];
 export type ProjectDialog = IpcResults['project:openDialog'];
@@ -126,6 +127,21 @@ export function createStarterProject(parentPath: string, name: string, packageMa
     packageManager,
   });
   return welcomeRequest(parseStarterResult, () => window.avb.createStarter(payload));
+}
+
+export function createShadcnStarterProject(request: {
+  readonly parentPath: string;
+  readonly name: string;
+  readonly packageManager: CreatePackageManager;
+  readonly shadcn: ShadcnStarterOptions;
+}) {
+  const payload = parseIpcPayload('project:createStarter', { starter: 'shadcn', ...request });
+  return welcomeRequest(parseStarterResult, () => window.avb.createStarter(payload));
+}
+
+export function inspectShadcnPreset(preset: string) {
+  const payload = parseIpcPayload('project:inspectShadcnPreset', { preset });
+  return welcomeRequest(parseShadcnPresetReply, () => window.avb.inspectShadcnPreset(payload));
 }
 
 export function createAstroProject(options: AstroProjectOptions) {

@@ -6,7 +6,7 @@
 // (src/app/styles.css), which hold the shared geometry; each place colours it
 // in its own stylesheet.
 import { useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { assert } from '../../shared/core/assert';
 import { ChevronDownIcon } from './Icons';
 import Popup from './Popup';
@@ -106,6 +106,7 @@ export default function SplitButton(props: SplitButtonProps) {
         className="welcome-split-menu"
         role="menu"
         id={menuId}
+        onKeyDown={moveMenuFocus}
       >
         {({ finish }) =>
           props.items.map((item, index) => (
@@ -128,4 +129,31 @@ export default function SplitButton(props: SplitButtonProps) {
       </Popup>
     </div>
   );
+}
+
+function moveMenuFocus(event: KeyboardEvent<HTMLDivElement>): void {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
+    return;
+  }
+  const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+  assert(items.length > 0, 'An open split menu has items');
+  assert(items.length <= SPLIT_ITEMS_MAX, 'An open split menu is short');
+  const current = items.findIndex((item) => item === event.target);
+  const last = items.length - 1;
+  const next = menuFocusIndex(event.key, current, last);
+  event.preventDefault();
+  items[next]?.focus();
+}
+
+function menuFocusIndex(key: 'ArrowDown' | 'ArrowUp' | 'Home' | 'End', current: number, last: number): number {
+  switch (key) {
+    case 'Home':
+      return 0;
+    case 'End':
+      return last;
+    case 'ArrowDown':
+      return current < last ? current + 1 : 0;
+    case 'ArrowUp':
+      return current > 0 ? current - 1 : last;
+  }
 }

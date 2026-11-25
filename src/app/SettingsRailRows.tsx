@@ -8,7 +8,7 @@
 // Keyboard: Alt+Up and Alt+Down move a focused row, Alt+Left (Alt+Right when the interface is mirrored, toward
 // the rail) moves it out onto the rail; the context menu offers the same moves. Each move is announced.
 // An item the role cannot open is not drawn, but keeps its place in the order.
-import { useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { assert } from '../../shared/core/assert';
 import { useTranslate } from '../lib/i18n/useTranslate';
 import { canPanel, settingsViewsOf } from '../lib/roleAccess';
@@ -32,9 +32,10 @@ export interface SettingsRailRowsProps {
   readonly onOpenPanel: (panel: RailPanelId) => void;
   /** Whether a component is open: Properties has a row, as it has a button, only then. */
   readonly componentOpen: boolean;
+  readonly projectOptions?: ReactNode;
 }
 
-export function SettingsRailRows({ show, onOpenPanel, componentOpen }: SettingsRailRowsProps) {
+export function SettingsRailRows({ show, onOpenPanel, componentOpen, projectOptions }: SettingsRailRowsProps) {
   const translate = useTranslate();
   const role = useCurrentRole();
   const { order, change } = useRailOrder(DEFAULT_RAIL_ORDER);
@@ -182,6 +183,7 @@ export function SettingsRailRows({ show, onOpenPanel, componentOpen }: SettingsR
           {translate('rail.settingsEmpty')}
         </div>
       )}
+      {projectOptions}
       {ghostSpec !== undefined && (
         <div className="rail-ghost" ref={drag.ghostRef} aria-hidden="true" data-outside={slot === undefined ? 'true' : undefined}>
           <ghostSpec.Icon size={20} />

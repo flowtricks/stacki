@@ -144,7 +144,6 @@ export function useAddComponent(
     [insertables, projectRef, resolveImportPath],
   );
 
-  // target: {parentId: string | undefined, index: number} | undefined (append at end)
   const addComponent = useCallback(
     async (componentName: string, target: InsertTarget | undefined) => {
       const comp = insertables.find((component) => component.path === componentName) ?? insertables.find((component) => component.name === componentName);
@@ -175,10 +174,13 @@ export function useAddComponent(
         return;
       }
       const { node, imports } = componentInstancePlacement(state.model, instance, resolved);
+      // The Components panel has no drop target. Append to the layout's slot so the new component renders with the page's content.
+      const layout = page.kind === 'page' ? state.model.nodes.find((candidate) => candidate.id === 'layout') : undefined;
+      const aimed = target ?? (layout === undefined ? undefined : { parentId: layout.id, index: layout.children?.length ?? 0 });
       // The one placement rule: a refusal writes nothing, and the nearest valid place is used, with a note saying so.
       const environment = { insertables, document: documentOfPath(page.path) };
       const subject = placementNodeOfItem({ type: 'component', name: comp.name }, environment);
-      const gate = subject === undefined ? undefined : gatePlacement(state.model, { kind: 'new', node: subject }, target, { insertables, pagePath: page.path });
+      const gate = subject === undefined ? undefined : gatePlacement(state.model, { kind: 'new', node: subject }, aimed, { insertables, pagePath: page.path });
       const notice = gate === undefined ? undefined : placementNotice(gate, translate);
       if (notice !== undefined) {
         showToast(notice.text, notice.tone);
@@ -187,7 +189,7 @@ export function useAddComponent(
         return;
       }
       // Nested defaults and all their imports are one insertion and undo step.
-      const landing = gate?.kind === 'place' && gate.moved !== undefined ? gate.target : target;
+      const landing = gate?.target ?? aimed;
       const insert = insertGesture(state.model, node, landing, { urgency: true });
       // A labelled block stands in on the canvas until the component renders (framePendingInsert.ts).
       const showStandIn = (): void => {

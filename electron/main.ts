@@ -103,6 +103,7 @@ import { allowLoopbackFraming } from './app/previewFraming';
 import { registerPageTemplateHandlers } from './handlers/pageTemplateHandlers';
 import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
+import { registerShadcnSettingsHandlers } from './handlers/shadcnSettingsHandlers';
 import { registerProjectScanHandlers } from './handlers/projectScanHandlers';
 import { registerStyleSourceHandlers } from './handlers/styleSourceHandlers';
 import { registerAppPageFilesHandlers } from './handlers/appPageFilesHandlers';
@@ -1393,6 +1394,7 @@ registerPageTemplateHandlers(
 );
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
+registerShadcnSettingsHandlers(host);
 registerProjectMetadataHandlers(host);
 registerInstructionHandlers(host);
 registerAgentHandlers(host);

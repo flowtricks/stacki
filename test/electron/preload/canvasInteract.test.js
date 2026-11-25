@@ -150,6 +150,18 @@ test('interact mode: a click selects a button and runs its own listener', async 
     assert.equal(style?.disabled, false, 'the canvas keeps its cursor sheet');
     assert.match(style?.textContent ?? '', /:where\(html\) \{ cursor: default; \}/, 'the editor arrow over text, never the I-beam');
     assert.match(style?.textContent ?? '', /a\[href\][^{]*\{ cursor: pointer; \}/, 'the pointer over what acts on a click');
+    const roleButton = page.window.document.createElement('a');
+    roleButton.href = '#';
+    roleButton.setAttribute('role', 'button');
+    const pointerRules = [...(style?.sheet?.cssRules ?? [])].filter((rule) => rule.style?.getPropertyValue('cursor') === 'pointer');
+    const link = page.window.document.getElementById('about');
+    assert.ok(
+      pointerRules.some((rule) => link.matches(rule.selectorText)),
+      'the link still gets the canvas pointer',
+    );
+    for (const control of [button, roleButton]) {
+      assert.ok(!pointerRules.some((rule) => control.matches(rule.selectorText)), 'the canvas leaves the button cursor to the site');
+    }
     assert.doesNotMatch(style?.textContent ?? '', /!important/, 'a cursor the page sets wins');
   } finally {
     page.window.close();
