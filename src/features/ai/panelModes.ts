@@ -19,8 +19,6 @@ export interface PanelMode {
   /** Where the row sits: lower first. Ties keep registration order. */
   readonly order: number;
   readonly label: (translate: Translator) => string;
-  /** The row's tooltip: what the mode does, in a sentence. */
-  readonly tooltip: (translate: Translator) => string;
   readonly icon: () => ReactNode;
   readonly isActive: () => boolean;
   readonly setActive: (active: 'on' | 'off') => void;

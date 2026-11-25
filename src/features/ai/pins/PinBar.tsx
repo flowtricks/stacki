@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 import type { MessageKey } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { comment as centralComment, listMenu as centralList } from '../../../ui/central/centralGeometry';
+import { bubbleText as centralBubbleText, listMenu as centralList } from '../../../ui/central/centralGeometry';
 import FittedTooltip from '../../../ui/FittedTooltip';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useAiState } from '../aiStore';
@@ -20,7 +20,7 @@ import { PinList } from './PinList';
 import { sendAllPins, sendReadiness, setPinListOpen, startMovingPin, usePinState, type SendBlock } from './pinStore';
 import './pins.css';
 
-const CommentGlyph = centralIcon(centralComment);
+const CommentGlyph = centralIcon(centralBubbleText);
 const ListGlyph = centralIcon(centralList);
 
 const BLOCKS = {
@@ -38,6 +38,8 @@ export function PinBar() {
   const ai = useAiState();
   const listButton = useRef<HTMLButtonElement>(null);
   const sendTip = useDelayedTooltip();
+  // What the mode does, told on the mode's own name in the bar (the Modes menu's rows carry no tooltip).
+  const modeTip = useDelayedTooltip();
   const [sending, setSending] = useState(false);
   if (pins.mode !== 'on') {
     return undefined;
@@ -52,7 +54,7 @@ export function PinBar() {
         : translate('ai.pins.send.subagents');
   return (
     <div className="ai-pin-bar" role="toolbar" aria-label={translate('ai.pins.mode')}>
-      <span className="ai-pin-bar-mode">
+      <span className="ai-pin-bar-mode" onMouseEnter={modeTip.show} onMouseLeave={modeTip.hide}>
         <CommentGlyph size={16} />
         <span className="ai-pin-bar-mode-name">
           {moving === undefined ? translate('ai.pins.mode') : translate('ai.pins.moving', { number: moving.number })}
@@ -101,6 +103,14 @@ export function PinBar() {
         createPortal(
           <FittedTooltip role="tooltip" anchor={sendTip.value}>
             {tip}
+          </FittedTooltip>,
+          tooltipHost(undefined),
+        )}
+      {modeTip.value !== undefined &&
+        moving === undefined &&
+        createPortal(
+          <FittedTooltip role="tooltip" anchor={modeTip.value}>
+            {translate('ai.pins.modeTip')}
           </FittedTooltip>,
           tooltipHost(undefined),
         )}

@@ -653,6 +653,33 @@ export const branch = {
   ),
 };
 
+export const bubbleText = {
+  name: 'bubbleText',
+  // Figma variant 8089:37602.
+  compact: (
+    <>
+      <path
+        d="M15.25 9H8.75M15.25 13H8.75M9.29422 18.4836L11.3593 20.2147C11.7292 20.5248 12.2679 20.5263 12.6397 20.2183L14.738 18.4799C14.9173 18.3313 15.143 18.25 15.3759 18.25H18.25C19.3546 18.25 20.25 17.3546 20.25 16.25V5.75C20.25 4.64543 19.3546 3.75 18.25 3.75H5.75C4.64543 3.75 3.75 4.64543 3.75 5.75V16.25C3.75 17.3546 4.64543 18.25 5.75 18.25H8.65182C8.88675 18.25 9.11418 18.3327 9.29422 18.4836Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 8089:37622.
+  standard: (
+    <>
+      <path
+        d="M15.5 9H8.5M15.5 13H8.5M9.29422 18.7337L11.3593 20.4647C11.7292 20.7748 12.2679 20.7763 12.6397 20.4684L14.738 18.73C14.9173 18.5813 15.143 18.5 15.3759 18.5H18.5C19.6046 18.5 20.5 17.6046 20.5 16.5V5.50002C20.5 4.39545 19.6046 3.50002 18.5 3.50002L5.5 3.5C4.39543 3.5 3.5 4.39543 3.5 5.5V16.5C3.5 17.6046 4.39543 18.5 5.49999 18.5L8.65182 18.5C8.88675 18.5 9.11418 18.5827 9.29422 18.7337Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+};
+
 export const bucket = {
   name: 'bucket',
   // Figma variant 5469:1480.
@@ -5333,6 +5360,61 @@ export const toggle = {
     <>
       <rect x="1" y="4.5" width="22" height="15" rx="7.5" stroke="currentColor" />
       <circle cx="8.5" cy="12" r="3" fill="currentColor" />
+    </>
+  ),
+};
+
+export const toolbox = {
+  name: 'toolbox',
+  // Figma variant 6824:59551.
+  compact: (
+    <>
+      <path
+        d="M2.75 10.75H21.25V18.25C21.25 19.3546 20.3546 20.25 19.25 20.25H4.75C3.64543 20.25 2.75 19.3546 2.75 18.25V10.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.75 10.75V4.75C12.75 3.64543 13.6454 2.75 14.75 2.75H17.25C18.3546 2.75 19.25 3.64543 19.25 4.75V10.75"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12.75 6.75H15.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4.75 10.75V6.50424C4.75 6.17326 4.83214 5.84745 4.98906 5.55604L6.26295 3.19024C6.40895 2.91909 6.69204 2.75 7 2.75C7.30796 2.75 7.59105 2.91909 7.73705 3.19024L9.01094 5.55604C9.16786 5.84745 9.25 6.17326 9.25 6.50424V10.75"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 6824:59581.
+  standard: (
+    <>
+      <path
+        d="M2.5 10.5H21.5V18.5C21.5 19.6046 20.6046 20.5 19.5 20.5H4.5C3.39543 20.5 2.5 19.6046 2.5 18.5V10.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.5 10.5V6.5V4.5C12.5 3.39543 13.3954 2.5 14.5 2.5H17.5C18.6046 2.5 19.5 3.39543 19.5 4.5V10.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 10.5V6.39547C4.5 6.03384 4.59805 5.67897 4.78372 5.36864L6.24329 2.92907C6.40252 2.66293 6.68986 2.5 7 2.5C7.31014 2.5 7.59748 2.66293 7.75671 2.92907L9.21628 5.36864C9.40195 5.67897 9.5 6.03384 9.5 6.39547V10.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12.5 6.5H15.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };

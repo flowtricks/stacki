@@ -1,15 +1,17 @@
-// The header's Modes button: a small menu of the modes registered in panelModes.ts, each row a switch with its
-// tooltip. The button shows the mode that is on (its icon, pressed and in the accent colour), so it is clear at a
-// glance that the canvas is in a mode, and choosing that row again turns it off. With no mode registered there is
-// no button.
+// The header's Modes button, drawn with Central's toolbox: a neutral mark, so any mode can share the menu. It lists
+// the modes registered in panelModes.ts, each row its icon and name. No row carries a tooltip: the menu focuses its first row as it opens, and a
+// tooltip would then stand beside the menu unasked. While a mode is on, the button shows that
+// mode's icon, pressed and in the accent colour, so it is clear at a glance that the canvas is in a mode, and
+// choosing that row again turns it off. The button's own tooltip steps aside while the menu is open (TipButton).
+// With no mode registered there is no button.
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { cursorClick as centralCursorClick } from '../../../ui/central/centralGeometry';
+import { toolbox as centralToolbox } from '../../../ui/central/centralGeometry';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import { setPanelMode, usePanelModes } from '../panelModes';
 import { TipButton } from './TipButton';
 
-const ModesGlyph = centralIcon(centralCursorClick);
+const ModesGlyph = centralIcon(centralToolbox);
 
 export function ModesMenu() {
   const translate = useTranslate();
@@ -24,7 +26,6 @@ export function ModesMenu() {
     id: `mode-${mode.id}`,
     label: mode.label(translate),
     icon: mode.icon(),
-    tooltip: mode.tooltip(translate),
     checked: mode === active,
     onSelect: () => setPanelMode(mode.id, mode === active ? 'off' : 'on'),
   }));
