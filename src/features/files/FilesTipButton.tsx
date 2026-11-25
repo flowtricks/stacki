@@ -16,7 +16,7 @@ export function FilesTipButton(props: { readonly label: string; readonly disable
     <>
       <button
         type="button"
-        className="ghost files-icon-button"
+        className="ghost"
         aria-label={props.label}
         disabled={props.disabled}
         title=""

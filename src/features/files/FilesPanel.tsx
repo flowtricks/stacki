@@ -81,20 +81,21 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
         title={translate('workspace.files.title')}
         actions={
           <>
-            <FilesTipButton label={translate('workspace.files.newFile')} onClick={() => startCreate('file')}>
-              <PlusIcon size={14} />
-            </FilesTipButton>
+            {/* The Pages panel's order and size: new folder, then new file (PagesPanel.tsx). */}
             <FilesTipButton label={translate('workspace.files.newFolder')} onClick={() => startCreate('directory')}>
-              <FolderPlusIcon size={14} />
+              <FolderPlusIcon size={13} />
+            </FilesTipButton>
+            <FilesTipButton label={translate('workspace.files.newFile')} onClick={() => startCreate('file')}>
+              <PlusIcon size={13} />
             </FilesTipButton>
             <FilesTipButton label={translate('workspace.files.refresh')} onClick={() => refresh([EXPLORER_ROOT, ...view.open])}>
-              <RefreshIcon size={14} />
+              <RefreshIcon size={13} />
             </FilesTipButton>
             <FilesTipButton
               label={translate('workspace.files.collapseAll')}
               onClick={() => updateFilesView(projectPath, (current) => ({ ...current, open: new Set() }))}
             >
-              <CollapseVerticalIcon size={14} />
+              <CollapseVerticalIcon size={13} />
             </FilesTipButton>
           </>
         }
@@ -192,7 +193,9 @@ function FindResults(props: { readonly projectPath: string; readonly found: Find
         return (
           <li key={match.path}>
             <button type="button" className="files-result" onClick={() => pick(match.path, match.folder ? 'folder' : 'file')}>
-              <FileEntryIcon name={name} kind={match.folder ? 'directory' : 'file'} open={false} />
+              <span className="files-icon">
+                <FileEntryIcon name={name} kind={match.folder ? 'directory' : 'file'} open={false} />
+              </span>
               <span className="files-name">
                 <bdi dir="ltr">{name}</bdi>
               </span>

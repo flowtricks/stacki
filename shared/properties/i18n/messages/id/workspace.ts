@@ -77,7 +77,7 @@ export const messages = {
   'workspace.files.menu.revealExplorer': 'Tampilkan di Explorer',
   'workspace.files.menu.revealFileManager': 'Tampilkan di pengelola file',
   'workspace.files.menu.revealFinder': 'Tampilkan di Finder',
-  'workspace.files.menu.trash': 'Pindahkan ke Tempat Sampah',
+  'workspace.files.menu.trash': 'Hapus',
   'workspace.files.more': {
     other: '{count} item lagi tidak ditampilkan',
   },
@@ -95,15 +95,16 @@ export const messages = {
   'workspace.files.protected': 'Hanya baca: folder ini dikelola oleh Git dan Stacki',
   'workspace.files.refresh': 'Muat ulang',
   'workspace.files.title': 'File',
-  'workspace.files.trash.body': 'Anda dapat memulihkannya dari Tempat Sampah.',
-  'workspace.files.trash.bodyUnsaved': 'Anda dapat memulihkannya dari Tempat Sampah. Perubahan yang belum disimpan pada file yang terbuka akan hilang.',
-  'workspace.files.trash.confirm': 'Pindahkan ke Tempat Sampah',
+  'workspace.files.trash.body': 'Item yang dihapus masuk ke Tempat Sampah, dan Anda dapat memulihkannya dari sana.',
+  'workspace.files.trash.bodyUnsaved':
+    'Item yang dihapus masuk ke Tempat Sampah, dan Anda dapat memulihkannya dari sana. Perubahan yang belum disimpan pada file yang terbuka akan hilang.',
+  'workspace.files.trash.confirm': 'Hapus',
   'workspace.files.trash.doneMany': {
-    other: '{count} item dipindahkan ke Tempat Sampah',
+    other: '{count} item dihapus',
   },
-  'workspace.files.trash.doneOne': '{name} dipindahkan ke Tempat Sampah',
-  'workspace.files.trash.titleMany': 'Pindahkan {count} item ke Tempat Sampah?',
-  'workspace.files.trash.titleOne': 'Pindahkan {name} ke Tempat Sampah?',
+  'workspace.files.trash.doneOne': '{name} dihapus',
+  'workspace.files.trash.titleMany': 'Hapus {count} item?',
+  'workspace.files.trash.titleOne': 'Hapus {name}?',
   'workspace.files.tree': 'File proyek',
   'workspace.files.undo.move': {
     other: 'Pindahkan {count} item',

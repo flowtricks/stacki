@@ -151,14 +151,17 @@ function EditorHead(props: {
 }) {
   const translate = useTranslate();
   return (
-    <div className="files-editor-head">
-      <span className="files-editor-title">
+    // The CMS and Instructions views' own header (cms-detail-head): the same height, title, muted mono path and actions.
+    <div className="cms-detail-head files-editor-head">
+      <span className="cms-detail-title files-editor-title">
         {props.dirty === true && <span className="files-dirty" aria-hidden="true" />}
         <bdi dir="ltr">{props.name}</bdi>
       </span>
-      <span className="files-editor-path">
-        <bdi dir="ltr">{props.path}</bdi>
-      </span>
+      {props.path !== props.name && (
+        <span className="cms-detail-path files-editor-path">
+          <bdi dir="ltr">{props.path}</bdi>
+        </span>
+      )}
       <span className="files-editor-actions">
         {props.status !== undefined && (
           <span className="files-editor-status" role="status">

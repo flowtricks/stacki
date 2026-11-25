@@ -17,9 +17,10 @@ import {
 } from '../../../shared/ipc/fileExplorer';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import FittedTooltip from '../../ui/FittedTooltip';
-import { ChevronRightIcon } from '../../ui/Icons';
+import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
 import Menu, { type MenuEntry } from '../../ui/Menu';
 import { registerMenuEditTarget } from '../../ui/menuEditTarget';
+import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { tooltipAnchor, tooltipHost } from '../../ui/delayedTooltip';
 import { FileEntryIcon } from './fileIcons';
 import { importInto, trashPaths, transferInto, type FilesActionContext } from './filesActions';
@@ -40,7 +41,7 @@ import {
 import { updateFilesView, type FilesView } from './filesState';
 
 /** One row's height: every row is the same, so the window is arithmetic. */
-export const ROW_PX = 24;
+export const ROW_PX = 32;
 // Rows drawn above and below the visible window, so a fast scroll never shows a gap.
 const OVERSCAN_ROWS = 12;
 // How long a drag rests on a closed folder before the folder opens to receive it.
@@ -447,9 +448,12 @@ export function FileTree(props: FileTreeProps) {
                     }
                   }}
                 >
-                  {row.open !== undefined && <ChevronRightIcon size={12} className="icon-mirror-rtl" />}
+                  {row.open === true && <ChevronDownIcon size={12} />}
+                  {row.open === false && <ChevronRightIcon size={12} className="icon-mirror-rtl" />}
                 </span>
-                <FileEntryIcon name={row.name} kind={row.entryKind} open={row.open} />
+                <span className="files-icon">
+                  <FileEntryIcon name={row.name} kind={row.entryKind} open={row.open} />
+                </span>
                 {renaming ? (
                   <NameInput
                     initial={row.name}
@@ -496,8 +500,9 @@ function rowId(index: number): string {
   return `files-row-${index}`;
 }
 
+// The Navigator's indent: its row padding, then 12px a level (styles.css, .navigator).
 function indent(depth: number): number {
-  return 8 + depth * 12;
+  return 6 + depth * 12;
 }
 
 // The rows with the new-entry field placed first inside its folder (the root's at the top).
@@ -629,6 +634,7 @@ function ContextMenu(props: {
       () => undefined,
     );
   };
+  const chord = (key: string): string => shortcutLabel(key, 'primary', currentDesktopPlatform());
   const revealLabel =
     platform === 'darwin'
       ? 'workspace.files.menu.revealFinder'
@@ -662,13 +668,14 @@ function ContextMenu(props: {
   if (row !== undefined) {
     entries.push(
       { kind: 'item', id: 'cut', label: translate('workspace.files.menu.cut'), disabled: locked, onSelect: clipboard.cut },
-      { kind: 'item', id: 'copy', label: translate('workspace.files.menu.copy'), onSelect: clipboard.copy },
+      { kind: 'item', id: 'copy', label: translate('workspace.files.menu.copy'), shortcut: chord('C'), onSelect: clipboard.copy },
     );
   }
   entries.push({
     kind: 'item',
     id: 'paste',
     label: translate('workspace.files.menu.paste'),
+    shortcut: chord('V'),
     disabled: view.clipboard === undefined || view.clipboard.paths.length === 0 || targetLocked,
     onSelect: () => clipboard.paste(target),
   });
@@ -722,6 +729,8 @@ function ContextMenu(props: {
         kind: 'item',
         id: 'trash',
         label: translate('workspace.files.menu.trash'),
+        // The Navigator's Delete key, told the same way (StructureContextMenu.tsx).
+        shortcut: platform === 'darwin' ? '⌘⌫' : 'Del',
         danger: true,
         disabled: locked,
         onSelect: () => void trashPaths(context, paths),
