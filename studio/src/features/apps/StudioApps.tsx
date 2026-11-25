@@ -237,7 +237,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
   };
   return {
     viewport: () => canvasViewport(view().device),
-    setDevice: (device) => view().setDevice(device),
+    setDevice: (device) => view().pickDevice(device),
     setWidth: unable('Setting the canvas width is not available to apps in Studio yet; choose a device with canvas.setDevice.'),
     scrollTo: able((target) => {
       if (!('nodeId' in target)) {

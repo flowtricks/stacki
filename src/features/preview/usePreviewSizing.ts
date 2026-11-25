@@ -10,10 +10,21 @@ import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDra
  *  query). `serial` counts the asks, so the same width asked again still applies. */
 export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
 
+/**
+ * What an explicit pick of Desktop has left to do. `none` is the ordinary editing canvas: the pane's own width at
+ * 100%, reflowing as the window and panels move. `asked` is a pick the canvas has not measured yet. A pick made
+ * where filling would not show the desktop layout holds the canvas until the pane can: `narrow` draws the Desktop
+ * width, framed and scaled to fit, as typing it would; `wide` (the pane reaches an `up` breakpoint) stops short of it.
+ */
+export type DesktopPick = 'none' | 'asked' | 'narrow' | 'wide';
+
 export function usePreviewDimensions() {
   const [customWidth, setCustomWidth] = useState<number | undefined>(undefined);
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
-  return { customWidth, setCustomWidth, customHeight, setCustomHeight };
+  const [desktopPick, setDesktopPick] = useState<DesktopPick>('none');
+  // The page and rendering the pick was made on: another one opens on the ordinary canvas.
+  const pickViewRef = useRef<string | undefined>(undefined);
+  return { customWidth, setCustomWidth, customHeight, setCustomHeight, desktopPick, setDesktopPick, pickViewRef };
 }
 export type PreviewDimensions = ReturnType<typeof usePreviewDimensions>;
 export type PreviewSizing = ReturnType<typeof usePreviewSizing>;
@@ -25,6 +36,9 @@ export interface PreviewSizingOptions {
   readonly deviceShortcuts: boolean;
   /** The project's Desktop width in pixels (Settings, `useProjectBreakpoints`). */
   readonly desktopFramePx: number;
+  /** What the canvas shows (project, page, reload count): a change drops a held Desktop pick. Only the frame that
+   *  listens for the device keys owns the pick; a second frame (the preview mode) leaves this out and only reads it. */
+  readonly viewKey?: string;
 }
 
 export function usePreviewSizing(
@@ -40,10 +54,19 @@ export function usePreviewSizing(
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  const width = previewFrameWidth(device, customWidth, breakpoints, { desktopFramePx: options.desktopFramePx, paneWidthPx: available.width });
+  const room = { desktopFramePx: options.desktopFramePx, paneWidthPx: available.width, pick: dimensions.desktopPick };
+  const width = previewFrameWidth(device, customWidth, breakpoints, room);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
-  useDeviceShortcuts(breakpoints, options, onDevice);
+  // Every explicit choice of a device goes through here: the buttons, their keys and Fit.
+  const pickDevice = (next: PreviewDevice): void => {
+    if (next === 'desktop') {
+      dimensions.setDesktopPick('asked');
+    }
+    onDevice(next);
+  };
+  useDeviceShortcuts(breakpoints, options, pickDevice);
+  useDesktopPickOwner(device, dimensions, breakpoints, available.width, options);
   useEffect(() => {
     if (device !== 'custom') {
       setCustomWidth(undefined);
@@ -53,7 +76,7 @@ export function usePreviewSizing(
     }
   }, [device, setCustomWidth, setCustomHeight]);
   const panelSettling = usePanelSettling(usePanelDragPhase());
-  const fill = previewFillBounds(device, breakpoints);
+  const fill = previewFillBounds(device, breakpoints, room);
   const viewport = previewViewport(width, available, customHeight, fill);
   // A filling Desktop frame has no width of its own: the pane's less its gutters (0 before the first measure, which keeps Desktop pressed) is the one it draws at.
   const activeDevice = activeDeviceFor(device, width ?? fluidFrameWidthPx(available.width, fill), breakpoints);
@@ -83,6 +106,7 @@ export function usePreviewSizing(
     viewport,
     fillStyle,
     setWidth,
+    pickDevice,
     customHeight,
     resizing,
     // True from a side-panel drag's start until the frame after release: the frame skips its size transition.
@@ -93,16 +117,20 @@ export function usePreviewSizing(
   };
 }
 
-/** What decides how the Desktop device is drawn: the project's Desktop width and the canvas pane's (0 before it is measured). */
+/** What decides how the Desktop device is drawn: the project's Desktop width, the canvas pane's (0 before it is
+ *  measured) and what an explicit pick of Desktop has left to do. */
 export interface DesktopRoom {
   readonly desktopFramePx: number;
   readonly paneWidthPx: number;
+  readonly pick: DesktopPick;
 }
 
 /**
  * The width the frame draws the page at, or undefined to fill the canvas by CSS. A custom
  * width belongs to the custom device: read on any other, it drew one frame at the old custom
  * width after a device button was pressed, until the effect in usePreviewSizing cleared it.
+ * Desktop fills the pane, at 100% and with no frame, unless a pick of it is held in a pane too narrow for the desktop
+ * layout. Resizing alone never scales the page: it reflows, as in a browser window that size.
  */
 export function previewFrameWidth(
   device: PreviewDevice,
@@ -114,40 +142,96 @@ export function previewFrameWidth(
     return customWidth ?? deviceWidth(device, breakpoints);
   }
   if (device === 'desktop') {
-    return desktopWidth(breakpoints, room);
+    assert(Number.isSafeInteger(room.desktopFramePx), 'The Desktop width is whole pixels');
+    assert(room.desktopFramePx > 0, 'The Desktop width is positive');
+    return resolveDesktopPick(room.pick, room.paneWidthPx, desktopRange(breakpoints)) === 'narrow' ? room.desktopFramePx : undefined;
   }
   return deviceWidth(device, breakpoints);
 }
 
-// "Desktop" is a range of widths: everything above the widest smaller-screen (`down`) breakpoint, up to the first
-// wider (`up`) one. A pane that wide is filled, at 100% and with no frame. Only a narrower one, which filled would
-// lay the page out as a laptop or phone under the Desktop button, draws the project's Desktop width instead, as a
-// typed width is drawn (framed and scaled to fit). The pane is judged by its own width, before any gutter. An
-// unmeasured pane fills until measured.
-function desktopWidth(breakpoints: readonly ResolvedBreakpoint[], room: DesktopRoom): number | undefined {
-  assert(Number.isSafeInteger(room.desktopFramePx), 'The Desktop width is whole pixels');
-  assert(room.desktopFramePx > 0, 'The Desktop width is positive');
-  if (room.paneWidthPx === 0) {
-    return undefined;
-  }
-  return room.paneWidthPx < previewFillBounds('desktop', breakpoints).widthPxMin ? room.desktopFramePx : undefined;
-}
-
 /**
- * The widths a filling frame may draw at. Desktop's run from one pixel past the widest `down` canvas (a `width < X`
- * canvas is the last whole pixel inside it) to one pixel short of the narrowest `up` one, so a pane that reaches a
- * wider breakpoint still shows the Desktop layout, centred. Any other filling device takes the whole pane.
+ * "Desktop" as a range of widths: from one pixel past the widest `down` canvas (a `width < X` canvas is the last whole
+ * pixel inside it) to one pixel short of the narrowest `up` one.
  */
-export function previewFillBounds(device: PreviewDevice, breakpoints: readonly ResolvedBreakpoint[]): FillBounds {
-  if (device !== 'desktop') {
-    return FILL_UNBOUNDED;
-  }
+export function desktopRange(breakpoints: readonly ResolvedBreakpoint[]): FillBounds {
   const downs = breakpoints.filter((breakpoint) => breakpoint.direction === 'down').map((breakpoint) => breakpoint.widthPx);
   const ups = breakpoints.filter((breakpoint) => breakpoint.direction === 'up').map((breakpoint) => breakpoint.widthPx);
   return {
     widthPxMin: downs.length === 0 ? 0 : Math.max(...downs) + 1,
     widthPxMax: ups.length === 0 ? undefined : Math.min(...ups) - 1,
   };
+}
+
+/**
+ * Where a pick stands in a pane this wide. A pane in the range needs no help, so the pick is over, and it does not
+ * come back when the pane changes again. The pane is judged by its own width, before any gutter; a wider breakpoint by
+ * the width the page would be filled at. An unmeasured pane leaves the pick as it is.
+ */
+export function resolveDesktopPick(pick: DesktopPick, paneWidthPx: number, range: FillBounds): DesktopPick {
+  if (paneWidthPx === 0) {
+    return pick;
+  }
+  const narrow = paneWidthPx < range.widthPxMin;
+  const wide = range.widthPxMax !== undefined && fluidFrameWidthPx(paneWidthPx, FILL_UNBOUNDED) > range.widthPxMax;
+  switch (pick) {
+    case 'none':
+      return 'none';
+    case 'asked':
+      return narrow ? 'narrow' : wide ? 'wide' : 'none';
+    case 'narrow':
+      return narrow ? 'narrow' : 'none';
+    case 'wide':
+      return wide ? 'wide' : 'none';
+    default: {
+      const exhaustive: never = pick;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * The widths a filling frame may draw at. A Desktop frame in a pane that has the desktop range keeps the page in it
+ * (the scrollbar's gutters give way first), and one holding a `wide` pick stops short of the wider breakpoint.
+ * Everything else takes the pane as it is, at any width.
+ */
+export function previewFillBounds(device: PreviewDevice, breakpoints: readonly ResolvedBreakpoint[], room: DesktopRoom): FillBounds {
+  if (device !== 'desktop') {
+    return FILL_UNBOUNDED;
+  }
+  const range = desktopRange(breakpoints);
+  return {
+    widthPxMin: room.paneWidthPx >= range.widthPxMin ? range.widthPxMin : 0,
+    widthPxMax: resolveDesktopPick(room.pick, room.paneWidthPx, range) === 'wide' ? range.widthPxMax : undefined,
+  };
+}
+
+// The frame that listens for the device keys keeps the pick: it stores where it stands in its own pane, drops it for
+// another device, and drops it when what the canvas shows changes. Opening a page is not choosing Desktop.
+function useDesktopPickOwner(
+  device: PreviewDevice,
+  dimensions: PreviewDimensions,
+  breakpoints: readonly ResolvedBreakpoint[],
+  paneWidthPx: number,
+  options: PreviewSizingOptions,
+): void {
+  const { desktopPick, setDesktopPick, pickViewRef } = dimensions;
+  const owns = options.deviceShortcuts;
+  const viewKey = options.viewKey;
+  useLayoutEffect(() => {
+    if (!owns || viewKey === undefined) {
+      return;
+    }
+    if (pickViewRef.current !== undefined && pickViewRef.current !== viewKey) {
+      setDesktopPick('none');
+    }
+    pickViewRef.current = viewKey;
+  }, [owns, viewKey, pickViewRef, setDesktopPick]);
+  const resolved = device === 'desktop' ? resolveDesktopPick(desktopPick, paneWidthPx, desktopRange(breakpoints)) : 'none';
+  useLayoutEffect(() => {
+    if (owns && resolved !== desktopPick) {
+      setDesktopPick(resolved);
+    }
+  }, [owns, resolved, desktopPick, setDesktopPick]);
 }
 
 // Measures the canvas. During a side-panel drag the canvas follows the panel live, by CSS

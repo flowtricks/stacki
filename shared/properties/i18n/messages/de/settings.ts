@@ -85,7 +85,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
   'settings.breakpoints.desktopNote':
-    'Gilt, wenn das Fenster für das Desktop-Layout zu schmal ist: diese Breite, passend verkleinert. Nie als Media Query verwendet.',
+    'Gilt, wenn du Desktop in einem dafür zu schmalen Fenster wählst: diese Breite, passend verkleinert. Nie als Media Query verwendet.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) läge dann auf der anderen Seite von Desktop.',
   'settings.breakpoints.error.file':
     'Die Breakpoint-Datei ist nicht nutzbar, daher werden die Standardwerte angezeigt und die Datei bleibt unverändert. {message}',

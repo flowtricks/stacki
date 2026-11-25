@@ -71,7 +71,8 @@ export function PreviewCanvas(props: Props) {
     pages: props.sitePages,
   });
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
-  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
+  const viewKey = `${props.projectName}\n${props.file}`;
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx, viewKey }, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,
@@ -92,7 +93,7 @@ export function PreviewCanvas(props: Props) {
           crumbs={[...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []), ...crumbsFor(props.nodes, props.selected)]}
           onCrumb={(id) => props.select(id ?? 'layout')}
           activeDevice={sizing.activeDevice}
-          onDevice={props.onDevice}
+          onDevice={sizing.pickDevice}
           {...(props.device === 'canvas'
             ? {}
             : {
@@ -100,7 +101,7 @@ export function PreviewCanvas(props: Props) {
                   width: sizing.viewport.width,
                   scale: sizing.viewport.scale,
                   onWidth: sizing.setWidth,
-                  onFit: () => props.onDevice('desktop'),
+                  onFit: () => sizing.pickDevice('desktop'),
                 },
               })}
           guide={columnGuide.menu}

@@ -82,7 +82,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Masaüstü',
   'settings.breakpoints.desktopNote':
-    'Pencere masaüstü düzeni için çok dar olduğunda kullanılır: bu genişlik, sığacak şekilde küçültülür. Medya sorgusu olarak asla kullanılmaz.',
+    'Dar bir pencerede Masaüstü’nü seçtiğinizde kullanılır: bu genişlik, sığacak şekilde küçültülür. Medya sorgusu olarak asla kullanılmaz.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) Masaüstü’nün öbür tarafına geçerdi.',
   'settings.breakpoints.error.file': 'Kesme noktaları dosyası kullanılamadı, bu yüzden varsayılanlar gösteriliyor ve dosyaya dokunulmuyor. {message}',
   'settings.breakpoints.error.name': 'Ad 1 ile {maximum} karakter arasında olmalı ve her biri farklı olmalı.',

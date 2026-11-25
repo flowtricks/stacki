@@ -392,9 +392,21 @@ export function useWindowState() {
     setCanvasWidthRequest((previous) => ({ widthPx, serial: (previous?.serial ?? 0) + 1 }));
     setDevice('custom');
   }, []);
+  // A device somebody asked for outside the toolbar (an app, the style panel's Base): a pick, as the button's is, so
+  // Desktop shows the desktop layout even in a narrow pane. Code that only restores a view calls setDevice.
+  const { setDesktopPick } = previewDimensions;
+  const pickDevice = useCallback(
+    (next: PreviewDevice) => {
+      if (next === 'desktop') {
+        setDesktopPick('asked');
+      }
+      setDevice(next);
+    },
+    [setDesktopPick],
+  );
   // The toolbar's desktop device, for the style panel's Base (model/baseWidth.ts): the
   // same state update the device button makes, so the two can never land differently.
-  const showDesktopCanvas = useCallback(() => setDevice('desktop'), []);
+  const showDesktopCanvas = useCallback(() => pickDevice('desktop'), [pickDevice]);
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -446,6 +458,7 @@ export function useWindowState() {
     setContentFocus,
     setCreateRequest,
     setDevice,
+    pickDevice,
     canvasWidthRequest,
     canvasWidthPx,
     setCanvasWidthPx,
