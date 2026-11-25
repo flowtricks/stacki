@@ -1,6 +1,6 @@
 // A frame's title row above it on the canvas, drawn at screen size whatever the zoom: its name (double-click
 // to rename, drag to move the frame), its width, "Original" (hold to see the page as copied) and its menu.
-import { capturePointer } from './designPointer';
+import { capturePointer, focusDesignCanvas } from './designPointer';
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import TipAnchor from '../../../ui/TipAnchor';
@@ -85,6 +85,7 @@ export function DesignFrameHeader({
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.stopPropagation();
     selectFrame(frame.id);
+    focusDesignCanvas();
     if (event.button !== 0 || renaming) {
       return;
     }
@@ -137,13 +138,18 @@ export function DesignFrameHeader({
           defaultValue={frame.name}
           maxLength={DESIGN_LIMITS.frameNameCharsMax}
           autoFocus
+          onFocus={(event) => event.currentTarget.select()}
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === 'Enter') {
+              // The keyboard goes back to the canvas, never to the menu button that started the rename (Enter would open it again).
+              event.preventDefault();
               event.currentTarget.blur();
+              focusDesignCanvas();
             } else if (event.key === 'Escape') {
               setRenaming(false);
+              focusDesignCanvas();
             }
           }}
           onBlur={(event) => {

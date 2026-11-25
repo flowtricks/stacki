@@ -3,7 +3,7 @@
 // lands on the canvas, which finds the frame and the element under it with the frame document's own
 // elementFromPoint. Wheel pans, Cmd/Ctrl-wheel and pinch zoom, Space or the hand tool drags the view, as on
 // the editor's all-breakpoints canvas.
-import { capturePointer } from './designPointer';
+import { capturePointer, keepUnscrolled } from './designPointer';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { flowDropAt, type FlowDrop } from '../model/designDrop';
 import { isFree, isTextLeaf, makeFree, moveInFlow, placeFree, setInlineStyle, inlineStyleOf, duplicateAfter, px, designIdOf } from '../model/designDom';
@@ -544,6 +544,7 @@ export function DesignCanvas({ words, spaceHeld, onTextEdit }: CanvasProps) {
       onPointerCancel={onPointerCancel}
       onPointerLeave={() => setMarks((current) => (current.hover === undefined ? current : { ...current, hover: undefined }))}
       onDoubleClick={onDoubleClick}
+      onScroll={() => keepUnscrolled(host.current ?? undefined)}
     >
       <div className="dm-world" style={{ transform: `translate(${String(view.xPx)}px, ${String(view.yPx)}px) scale(${String(view.scale)})` }}>
         {state.frames.map((frame) => (

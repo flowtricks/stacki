@@ -40,7 +40,12 @@ export function DesignSelectionLayer({
   const selected = selectedElements();
   const selectionFrame = selected === undefined ? undefined : frameOf(selected.frame);
   const boxes =
-    selected === undefined || selectionFrame === undefined ? [] : selected.elements.map((element) => ({ element, box: boxIn(selectionFrame, element) }));
+    selected === undefined || selectionFrame === undefined
+      ? []
+      : selected.elements
+          .map((element) => ({ element, box: boxIn(selectionFrame, element) }))
+          // A hidden element has no box: nothing is drawn at the frame's corner for it (the layers list still shows it).
+          .filter((entry) => entry.box.widthPx > 0 || entry.box.heightPx > 0);
   const single = boxes.length === 1 ? boxes[0] : undefined;
   const hoverFrame = marks.hover === undefined ? undefined : frameOf(marks.hover.frame);
   const hoverBox =

@@ -58,6 +58,7 @@ import { frameDocument as sessionFrameDocument, serializeFrame } from './runtime
 import { designWord, useDesignWords, type DesignWords } from './i18n/designWords';
 import { DesignActionsContext, type DesignActions, type DesignComponent, type DesignPropField } from './ui/designActions';
 import { DesignCanvas } from './ui/DesignCanvas';
+import { focusDesignCanvas, keepUnscrolled } from './ui/designPointer';
 import { DesignInspector } from './ui/DesignInspector';
 import { DesignToolbar } from './ui/DesignToolbar';
 import { fitView } from './ui/canvasGeometry';
@@ -339,7 +340,7 @@ function DesignWorkspace({ app }: { readonly app: DesignHostSource }) {
         </div>
         <div className="dm-rail-cover" style={{ width: left.railPx }} />
         <div className="dm-workspace" style={{ insetInlineStart: left.workspacePx }}>
-          <div className="dm-canvas-box" ref={canvasBox}>
+          <div className="dm-canvas-box" ref={canvasBox} onScroll={() => keepUnscrolled(canvasBox.current ?? undefined)}>
             {state.phase === 'starting' ? (
               <div className="dm-starting" role="status" aria-busy="true" aria-label={words('mode.starting')}>
                 <div className="dm-starting-frame" />
@@ -418,7 +419,8 @@ async function exportFrame(
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
     return true;
-  } catch {
+  } catch (error: unknown) {
+    console.warn('[design mode] the image could not be copied or saved:', String(error));
     return false;
   } finally {
     setBusy(undefined);
@@ -571,7 +573,8 @@ function handleKey(event: KeyboardEvent, canvasSize: () => { readonly widthPx: n
     const frame = state.selection?.frame ?? state.frameSelected ?? state.frames[0]?.id;
     return frame !== undefined && pasteInto(frame);
   }
-  if (event.shiftKey && event.key === '!') {
+  // Shift+1 by the key's place, whatever character the layout gives it ('!' on US keyboards).
+  if (event.shiftKey && !mod && (event.code === 'Digit1' || event.key === '!' || event.key === '1')) {
     const size = canvasSize();
     setView(fitView(state.frames, size.widthPx, size.heightPx));
     return true;
@@ -678,6 +681,7 @@ function startTextEdit(frame: FrameId, element: Element): void {
   }
   setEditingText({ frame, id });
   const view = element.ownerDocument.defaultView;
+  // After the press that started the edit has settled its own focus (it focuses the canvas), or the edit would end at once.
   requestAnimationFrame(() => {
     // The element is of the frame's realm, not this window's: its focus method is found, not assumed.
     const focus: unknown = Reflect.get(element, 'focus');
@@ -714,6 +718,7 @@ function finishTextEdit(): void {
     return;
   }
   current.element.removeAttribute('contenteditable');
+  focusDesignCanvas();
   current.element.ownerDocument.defaultView?.getSelection()?.removeAllRanges();
   commitFrame(current.frame, () => [current.element]);
 }
