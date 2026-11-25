@@ -125,12 +125,14 @@ function instanceProps(
   index: number,
 ): { readonly props: Readonly<Record<string, DefaultValue>>; readonly omitted: ReadonlySet<string> } {
   const names = new Set(schema.map((field) => field.name));
-  const props: Record<string, DefaultValue> = {};
+  // A map while the frame's values are laid over one another, a plain record once settled: the record is what the
+  // page writer reads, and building it by key would read as a model write to the adapter-surface gate.
+  const given = new Map<string, DefaultValue>();
   const omitted = new Set<string>();
   for (const [name, value] of Object.entries(resolved.props)) {
     // A stored value for a prop the component no longer has is kept in the file and left out here.
     if (names.has(name)) {
-      props[name] = typed(schema, name, value);
+      given.set(name, typed(schema, name, value));
     }
   }
   for (const name of resolved.unset) {
@@ -138,35 +140,37 @@ function instanceProps(
   }
   for (const part of parts) {
     if (part.value.kind === 'unset') {
-      delete props[part.prop];
+      given.delete(part.prop);
       omitted.add(part.prop);
     } else {
-      props[part.prop] = typed(schema, part.prop, part.value.value);
+      given.set(part.prop, typed(schema, part.prop, part.value.value));
       omitted.delete(part.prop);
     }
   }
   const unions = unionsOf(schema);
   for (const field of schema) {
-    if (!unionAllows(unions, field.name, heldBy(schema, parts, props))) {
-      delete props[field.name];
+    if (!unionAllows(unions, field.name, heldBy(schema, parts, Object.fromEntries(given)))) {
+      given.delete(field.name);
       omitted.add(field.name);
     }
   }
   // An element id is what many components need before they render at all (a modal its triggers open by id), and one
   // per frame keeps the page's ids unique; it is only a preview value, like every other.
   const id = schema.find((field) => field.name === 'id' && fieldControl(field)?.kind === 'text');
-  if (id !== undefined && props['id'] === undefined && !omitted.has('id')) {
-    props['id'] = `stacki-canvas-${String(index + 1)}`;
+  if (id !== undefined && !given.has('id') && !omitted.has('id')) {
+    given.set('id', `stacki-canvas-${String(index + 1)}`);
   }
   for (const field of schema) {
-    if (field.optional || props[field.name] !== undefined || omitted.has(field.name) || field.default !== undefined) {
+    if (field.optional || given.has(field.name) || omitted.has(field.name) || field.default !== undefined) {
       continue;
     }
     const sample = sampleValue(field);
     if (sample !== undefined) {
-      props[field.name] = sample;
+      given.set(field.name, sample);
     }
   }
+  const props: Readonly<Record<string, DefaultValue>> = Object.fromEntries(given);
+  assert(Object.keys(props).length === given.size, 'Every settled value is in the record');
   assert(
     Object.keys(props).every((name) => names.has(name)),
     'An instance is given only props the component has',
