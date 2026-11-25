@@ -52,6 +52,8 @@ const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
 const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
+// A press that travels less than this is a click: it moves nothing, and the canvas goes on zooming to fit.
+const PAN_START_PX = 3;
 type BreakpointKey = string;
 // Per-breakpoint lookups that fill in as frames mount and report: a frame that
 // has not reported yet has no entry. Sparse maps, not update types, so absence
@@ -157,16 +159,22 @@ function useCanvasPointer(
       return;
     }
     event.preventDefault();
-    userMovedRef.current = true;
     setPanning(true);
     const { clientX, clientY } = event;
+    let moved = false;
     startDrag(event, {
-      onMove: (next) =>
+      onMove: (next) => {
+        moved ||= Math.hypot(next.clientX - clientX, next.clientY - clientY) >= PAN_START_PX;
+        if (!moved) {
+          return;
+        }
+        userMovedRef.current = true;
         setView({
           ...start,
           x: start.x + next.clientX - clientX,
           y: start.y + next.clientY - clientY,
-        }),
+        });
+      },
       onEnd: () => setPanning(false),
     });
   };
