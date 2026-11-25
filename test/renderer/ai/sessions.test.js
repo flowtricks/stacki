@@ -49,6 +49,11 @@ esbuild.buildSync({
       '  const state = useAiState();',
       "  return createElement(Fragment, null, createElement(ConfirmHost), createElement(SessionsView, { chats: state.chats, selected: state.open, layout: 'split' }));",
       '}',
+      // The list under its header, as the narrow panel stacks them.
+      'export function PanelHarness() {',
+      '  const state = useAiState();',
+      '  return createElement(Fragment, null, createElement(ChatHeader, { chat: undefined }), createElement(SessionsView, { chats: state.chats }));',
+      '}',
       'export function HeaderHarness() {',
       '  const state = useAiState();',
       '  const chat = state.open === undefined ? undefined : state.chats.find((candidate) => candidate.id === state.open);',
@@ -583,14 +588,114 @@ test('the list shows the sections with their chats, pinned first, a dot for unre
   await view.unmount();
 });
 
-test('an empty project says what to do, with a button that starts a chat', async () => {
-  const view = await mountView('ListHarness', chatStore.normalizeIndex({ version: 2, trusted: true, sections: [], chats: [] }));
-  assert.match(view.container.textContent, /No chats yet/);
-  const start = [...view.container.querySelectorAll('button')].find((button) => button.textContent.includes('New chat'));
-  assert.ok(start, 'a button starts a chat');
-  assert.ok(start.classList.contains('ai-primary'), 'it is the blue primary button');
-  assert.ok(view.container.querySelector('.ai-sessions-empty svg'), 'a quiet mark above the words');
-  assert.equal(view.container.querySelector('input[aria-label="Search chats"]') ?? undefined, undefined, 'nothing to search yet');
+const emptyIndex = (over = {}) => chatStore.normalizeIndex({ version: 2, trusted: true, sections: [], chats: [], ...over });
+const typeSearch = async (view, value) => {
+  const input = view.container.querySelector('input[aria-label="Search chats"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await settleUi();
+};
+const cardTitles = (view) => [...view.container.querySelectorAll('.ui-empty-state-title')].map((element) => element.textContent);
+const absent = (view, selector) => assert.equal(view.container.querySelector(selector) ?? undefined, undefined, `no ${selector}`);
+
+test('an empty project shows one card with the way to start a chat, and nothing else', async () => {
+  const view = await mountView('ListHarness', emptyIndex());
+  assert.deepEqual(cardTitles(view), ['No chats yet']);
+  const buttons = [...view.container.querySelectorAll('button')];
+  assert.equal(buttons.length, 1, 'the card has the only button');
+  assert.match(buttons[0].textContent, /New chat/);
+  assert.ok(buttons[0].classList.contains('ai-primary'), 'it is the blue primary button');
+  assert.ok(view.container.querySelector('.ui-empty-state svg'), 'a quiet mark above the words');
+  for (const selector of ['.ai-section', '.ai-section-empty', '.ai-new-section', '.ai-sessions-tools']) {
+    absent(view, selector);
+  }
+  // A filter left on from before the last chat went cannot hide the way to start one.
+  await act(async () => sessions.setChatListFilter({ ...sessions.DEFAULT_CHAT_FILTER, showArchived: true, onlyUnread: true }));
+  await settleUi();
+  assert.deepEqual(cardTitles(view), ['No chats yet']);
+  absent(view, '.ai-archived');
+  await view.unmount();
+});
+
+test('sections made before any chat stay listed and usable above the card, with no “No section” heading', async () => {
+  const view = await mountView('ListHarness', emptyIndex({ sections: [section('1', 'Apps', 0), section('2', 'Ideas', 1)] }));
+  assert.deepEqual(
+    [...view.container.querySelectorAll('.ai-section-name')].map((element) => element.textContent),
+    ['Apps', 'Ideas'],
+  );
+  assert.deepEqual(
+    [...view.container.querySelectorAll('.ai-section-empty')].map((element) => element.textContent),
+    ['No chats', 'No chats'],
+    'nothing to drag in, so nothing says to drag',
+  );
+  assert.deepEqual(cardTitles(view), ['No chats yet']);
+  assert.ok(view.container.querySelector('.ai-new-section'), 'another section can be made');
+  assert.ok(view.sectionOf('Apps').querySelector('.ai-row-more'), 'and each renamed or deleted');
+  await view.unmount();
+});
+
+test('an empty section says to drag a chat there while there are chats, and “No section” stays as a drop target', async () => {
+  const view = await mountView('ListHarness', emptyIndex({ sections: [section('1', 'Apps', 0)], chats: [record('a', { section: sectionId('1') })] }));
+  assert.equal(view.sectionOf('No section').querySelector('.ai-section-empty').textContent, 'Drag a chat here');
+  assert.equal(view.container.querySelector('.ui-empty-state') ?? undefined, undefined);
+  await view.unmount();
+});
+
+test('archived chats only: the filter shows them, with nothing to search until it does', async () => {
+  const view = await mountView('ListHarness', emptyIndex({ chats: [record('a', { title: 'Shelved', archivedAt: 5 })] }));
+  assert.deepEqual(cardTitles(view), ['No chats yet']);
+  absent(view, 'input[aria-label="Search chats"]');
+  await act(async () => sessions.setChatListFilter({ ...sessions.DEFAULT_CHAT_FILTER, showArchived: true }));
+  await settleUi();
+  assert.deepEqual(view.titles(), ['Shelved']);
+  await typeSearch(view, 'shel');
+  assert.deepEqual(view.titles(), ['Shelved'], 'an archived match is a match');
+  assert.deepEqual(cardTitles(view), []);
+  await typeSearch(view, 'zzz');
+  assert.deepEqual(cardTitles(view), ['No matching chats']);
+  absent(view, '.ai-archived');
+  await view.unmount();
+});
+
+test('a list that could not be read says so, never that there are no chats, and Try again reads it', async () => {
+  sessions.resetAiStore();
+  window.localStorage.clear();
+  const main = installMain(emptyIndex({ chats: [record('a', { title: 'Back again' })] }));
+  const read = window.avb.aiChats;
+  window.avb.aiChats = async () => ({ ok: false, error: { code: 'unreadable', message: 'The chat list could not be read.' } });
+  await sessions.loadAiProject(PROJECT);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(async () => root.render(React.createElement(sessions.ListHarness)));
+  await settleUi();
+  assert.equal(sessions.aiState().chatsRead, 'failed');
+  assert.match(container.textContent, /Couldn’t load chats/);
+  assert.doesNotMatch(container.textContent, /No chats yet|could not be read/, 'the reason belongs to the toast');
+  window.avb.aiChats = read;
+  await act(async () => {
+    [...container.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Try again')
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  });
+  await settleUi();
+  assert.equal(sessions.aiState().chatsRead, 'ok');
+  assert.equal(container.querySelector('.ai-list-title').textContent, 'Back again');
+  assert.ok(main.named('aiChats').length >= 1);
+  await act(async () => root.unmount());
+  document.body.innerHTML = '';
+});
+
+test('the list header: no filter with no chats; its menu makes a section, which opens for naming', async () => {
+  const view = await mountView('PanelHarness', emptyIndex());
+  absent(view, '.ai-filter-button');
+  await view.click(view.container.querySelector('button[aria-label="Chat actions"]'));
+  assert.deepEqual(view.menuTexts(), ['New section']);
+  await view.click(view.menuRow('New section'));
+  assert.deepEqual(view.main.named('aiSections').at(-1).payload.action, { kind: 'create', name: 'New section' });
+  assert.equal(view.container.querySelector('.ai-section-rename input, input.ai-section-rename').value, 'New section');
   await view.unmount();
 });
 
@@ -802,7 +907,7 @@ test('searching filters across sections, opens folded ones, and turns dragging o
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
   await settleUi();
-  assert.match(view.container.textContent, /No chat matches/);
+  assert.match(view.container.textContent, /No matching chats/);
   await view.click([...view.container.querySelectorAll('button')].find((candidate) => candidate.textContent.includes('Clear search')));
   assert.equal(sessions.aiState().filter.query, '');
   await view.unmount();
@@ -1092,7 +1197,7 @@ test('the search clears with its button and Escape, and a search with no match s
     input().dispatchEvent(new window.Event('input', { bubbles: true }));
   });
   await settleUi();
-  assert.match(view.container.textContent, /No chat matches/);
+  assert.match(view.container.textContent, /No matching chats/);
   assert.equal(view.container.querySelectorAll('.ai-list-row').length, 0);
   await view.click(view.container.querySelector('button.ui-search-clear[aria-label="Clear search"]'));
   assert.equal(sessions.aiState().filter.query, '');

@@ -170,28 +170,25 @@
   flex: 1;
   min-width: 0;
 }
-/* The panel's first paint, before the chat list is read: quiet placeholder rows in the list's own rhythm instead of a word. */
-.ai-skeleton {
+/* The panel's first paint, before the chat list is read: placeholder rows (ui/Skeleton.tsx) as tall as a chat's row. */
+.ai-skeleton-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  height: 44px;
+  box-sizing: border-box;
+  padding-block: 7px 0;
+  padding-inline: 8px;
+}
+.ai-skeleton-row > .ui-skeleton {
+  flex: none;
+}
+.ai-skeleton-lines {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-}
-.ai-skeleton-row {
-  height: 34px;
-  border-radius: 8px;
-  background: var(--bg-input);
-  opacity: 0.6;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .ai-skeleton-row {
-    animation: ai-skeleton-pulse 1.4s ease-in-out infinite;
-  }
-}
-@keyframes ai-skeleton-pulse {
-  50% {
-    opacity: 0.3;
-  }
+  gap: 7px;
+  padding-block-start: 2px;
 }
 /* The sign-in card (SignInCard.tsx): one filled surface for every sign-in state. */
 .ai-signin {

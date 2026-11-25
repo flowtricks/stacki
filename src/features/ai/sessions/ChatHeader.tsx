@@ -27,6 +27,7 @@ import type { ChatLayout } from '../chatLayout';
 import { saveReviewMode, useReviewMode, type ReviewMode } from '../reviewChanges';
 import { collapseAllItems, expandAllItems } from '../transcript/transcriptUi';
 import { RenameField } from './RenameField';
+import { useListMenuEntries } from './listMenu';
 import { AgentChoicesDialog } from '../AgentChoices';
 import { SessionsFilter } from './SessionsFilter';
 import { CHAT_TITLE_CHARS_MAX } from './sessionsModel';
@@ -56,6 +57,7 @@ export interface ChatHeaderProps {
 export function ChatHeader({ chat, layout = 'stacked', expansion, windowToggle }: ChatHeaderProps) {
   const translate = useTranslate();
   const windowEntries = panelWindowEntries(expansion, windowToggle, translate);
+  const listEntries = useListMenuEntries(windowEntries);
   // The Modes button (comment pins and any other registered mode) sits before "+", on the list as in a chat.
   const trailing = (
     <>
@@ -70,7 +72,7 @@ export function ChatHeader({ chat, layout = 'stacked', expansion, windowToggle }
       <div className="ai-header">
         <h2>{translate('ai.sessions.chats')}</h2>
         {layout === 'stacked' && <SessionsFilter />}
-        <PanelMenu entries={windowEntries} />
+        <PanelMenu entries={listEntries} />
         {trailing}
       </div>
     );
@@ -88,7 +90,7 @@ export function ChatHeader({ chat, layout = 'stacked', expansion, windowToggle }
   );
 }
 
-/** The "⋯" menu of the list: only the window's own controls, and nothing at all where the host offers none. */
+/** The "⋯" menu of the list (listMenu.tsx): "New section" and the window's own controls. */
 function PanelMenu({ entries }: { readonly entries: readonly MenuEntry[] }) {
   const translate = useTranslate();
   const trigger = useMenuTrigger();

@@ -29,6 +29,7 @@ import type { ChatId, TurnId } from '../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import { PlusIcon } from '../../ui/Icons';
 import {
   dismissAiError,
@@ -59,6 +60,7 @@ import { RunningChip } from './transcript/RunningPanel';
 import { ChatTranscript } from './transcript/SubagentPane';
 import { ChatHeader, type PanelExpansion, type PanelWindow } from './sessions/ChatHeader';
 import { SessionsView } from './sessions/SessionsView';
+import { NoChats } from './sessions/ListStates';
 import { groupSessions, listOrder } from './sessions/sessionsModel';
 import { chatLayoutFor, chatStepFor, stepThrough, type ChatLayout } from './chatLayout';
 import { EMPTY_CHAT } from './chatReducer';
@@ -103,7 +105,8 @@ export default function AiPanel(props: AiPanelProps) {
   }, []);
   const chat = state.open === undefined ? undefined : state.chats.find((candidate) => candidate.id === state.open);
   const { ref: bodyRef, widthPx } = useBodyWidth();
-  const layout = chatLayoutFor(widthPx);
+  // With no chats and no sections there is nothing for a sidebar to hold: a wide panel shows the one card, not two.
+  const layout = state.chats.length === 0 && state.sections.length === 0 ? 'stacked' : chatLayoutFor(widthPx);
   const header = <ChatHeader chat={chat} layout={layout} expansion={props.expansion} windowToggle={props.windowToggle} />;
   const onBodyKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const direction = chatStepFor(event);
@@ -125,18 +128,30 @@ export default function AiPanel(props: AiPanelProps) {
           recovery={[{ label: translate('ai.panel.dismiss'), run: dismissAiError }]}
         />
       )}
-      {!state.loaded ? (
-        <div className="ai-skeleton" role="status" aria-label={translate('ai.panel.loadingChats')}>
-          {[0, 1, 2].map((row) => (
-            <span key={row} className="ai-skeleton-row" />
-          ))}
-        </div>
-      ) : (
-        <PanelContent {...props} layout={layout} state={state} chat={chat} />
-      )}
+      {!state.loaded ? <ChatListSkeleton /> : <PanelContent {...props} layout={layout} state={state} chat={chat} />}
     </div>
   );
   return <>{props.renderFrame(header, body)}</>;
+}
+
+/** The panel's first paint, before the chat list is read: placeholders in the shape of its rows, an agent's mark and two lines. */
+function ChatListSkeleton() {
+  return (
+    <div className="ai-skeleton">
+      <SkeletonRows
+        count={4}
+        row={(widthPercent) => (
+          <div className="ai-skeleton-row">
+            <Skeleton width="16px" height="16px" />
+            <span className="ai-skeleton-lines">
+              <Skeleton width={`${widthPercent}%`} />
+              <Skeleton width="30%" height="8px" />
+            </span>
+          </div>
+        )}
+      />
+    </div>
+  );
 }
 
 /**
@@ -156,7 +171,11 @@ function PanelContent(props: AiPanelProps & { readonly layout: ChatLayout; reado
         <SessionsView chats={state.chats} selected={chat?.id} layout="split" />
       </nav>
       <div className="ai-main">
-        {chat === undefined ? (
+        {chat === undefined && state.chats.every((candidate) => candidate.archivedAt !== undefined) ? (
+          <div className="ai-pick">
+            <NoChats />
+          </div>
+        ) : chat === undefined ? (
           <div className="ai-pick">
             <p>{translate('ai.panel.pickChat')}</p>
             <button className="ai-primary ai-sessions-start" onClick={() => void newChat(preferredAgent())}>

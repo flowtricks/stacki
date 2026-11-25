@@ -4,6 +4,8 @@
 // Alt+Up / Alt+Down moves the focused one; pinned chats stay at the top of their section whatever is dropped.
 // Dragging is off while a search or filter narrows the list, because a row's place in a partial list is not its
 // place in the whole. Archived chats show only behind the filter menu's "Show archived".
+// When there is nothing to list it shows one card (ListStates.tsx): no chats yet, nothing matches, or not read.
+// With no chats and no sections that card is all there is; sections the person made stay listed above it.
 // The search stays at the top while the rows scroll under it. Up and Down walk the rows and section headers
 // (Home and End jump to the ends), Enter opens the focused chat. In the split layout the list is the sidebar
 // beside the open chat: its row is marked and kept in view, and the filter sits beside the search.
@@ -14,17 +16,20 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, RefCallback } from 'react';
 import type { ChatId, ChatSummary } from '../../../../shared/properties/ai/chatModel';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
+import { assert } from '../../../../shared/core/assert';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { DropLine } from '../../../ui/DropLine';
-import { CommentIcon, PlusIcon, SearchIcon } from '../../../ui/Icons';
+import { PlusIcon } from '../../../ui/Icons';
 import { SearchField } from '../../../ui/SearchField';
 import { applyMove, resolveDrop } from '../../../ui/sectionedDragModel';
 import { useSectionedDrag } from '../../../ui/useSectionedDrag';
 import type { DropMove, DropTarget } from '../../../ui/useSectionedDrag';
-import { DEFAULT_CHAT_FILTER, moveChat, newChat, preferredAgent, setChatListFilter, useAiState } from '../aiStore';
+import { DEFAULT_CHAT_FILTER, moveChat, setChatListFilter, useAiState } from '../aiStore';
 import type { ChatLayout } from '../chatLayout';
 import { addSection } from './chatActions';
 import { ChatRow } from './ChatRow';
+import { takeSectionNameRequest, useSectionNameRequest } from './listMenu';
+import { ChatsNotRead, NoChats, NoMatchingChats } from './ListStates';
 import { SectionHeader } from './SectionHeader';
 import { SessionsFilter } from './SessionsFilter';
 import { NO_SECTION, applyOrder, dragSectionsOf, groupSessions, isNarrowing, listKeyStep, lockPinned } from './sessionsModel';
@@ -56,12 +61,25 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
     listRef.current?.querySelector(`[data-chat="${selected}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
   const state = useAiState();
-  const { filter, sections, views } = state;
+  const { sections, views } = state;
+  // With no chats at all there is nothing to narrow, so a filter left on cannot stand between the person and the way to start.
+  const filter = chats.length === 0 ? DEFAULT_CHAT_FILTER : state.filter;
   const [editing, setEditing] = useState<Editing>(undefined);
+  // A section made from the header's menu opens for naming here, as one made by the list's own button does.
+  const nameRequest = useSectionNameRequest();
+  useEffect(() => {
+    if (nameRequest !== undefined) {
+      setEditing({ kind: 'section', id: nameRequest });
+      takeSectionNameRequest();
+    }
+  }, [nameRequest]);
   // The order a drop shows until the main process answers with the real list.
   const [pending, setPending] = useState<ReturnType<typeof dragSectionsOf> | undefined>(undefined);
   const grouping = groupSessions(chats, sections, filter);
-  const groups = pending === undefined ? grouping.groups : applyOrder(grouping.groups, pending);
+  const live = chats.filter((chat) => chat.archivedAt === undefined);
+  const ordered = pending === undefined ? grouping.groups : applyOrder(grouping.groups, pending);
+  // "No section" stays while there are chats, as the way to drag one out of a section. With none it would only be an empty heading.
+  const groups = live.length === 0 ? ordered.filter((group) => group.section !== undefined) : ordered;
   const dragSections = dragSectionsOf(groups);
   const pinned = new Set(chats.filter((chat) => chat.pinned).map((chat) => chat.id));
   const narrowing = isNarrowing(filter);
@@ -94,8 +112,17 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
     [containerRef],
   );
   const line = drag.dragging === undefined || drag.drop === undefined ? undefined : settledDrop(dragSections, pinned, drag.dragging, drag.drop);
-  const live = chats.filter((chat) => chat.archivedAt === undefined);
   const sectionLimit = sections.length >= AI_LIMITS.sectionsMax;
+  const content = listContent({
+    chats: chats.length,
+    live: live.length,
+    sections: sections.length,
+    shown: grouping.groups.reduce((total, group) => total + group.chats.length, 0) + grouping.archived.length,
+    narrowing,
+    read: state.chatsRead,
+  });
+  // The search is offered only while it has something to search: archived chats count once the filter shows them.
+  const searchable = chats.length > 0 && (live.length > 0 || filter.showArchived || filter.query !== '');
   const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     // A row handles its own letters and Alt+Arrow first; what it leaves, and only on a row or a header, is the list's.
     if (event.defaultPrevented || !(event.target instanceof HTMLElement) || !event.target.matches(LIST_FOCUS_SELECTOR)) {
@@ -110,9 +137,9 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
   };
   return (
     <div className={`ai-sessions is-${layout}`}>
-      {(chats.length > 0 || layout === 'split') && (
+      {(searchable || (layout === 'split' && chats.length > 0)) && (
         <div className="ai-sessions-tools">
-          {chats.length > 0 && (
+          {searchable && (
             <SearchField
               label={translate('ai.sessions.search')}
               clearLabel={translate('elements.panel.clearSearch')}
@@ -125,24 +152,8 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
         </div>
       )}
       <div className="ai-list" ref={setListElement} onKeyDown={onListKeyDown}>
-        {live.length === 0 && !narrowing && (
-          <div className="ai-sessions-empty">
-            <CommentIcon size={20} className="ai-sessions-empty-icon" />
-            <p>{translate('ai.sessions.empty')}</p>
-            <button className="ai-primary ai-sessions-start" onClick={() => void newChat(preferredAgent())}>
-              <PlusIcon size={12} /> {translate('ai.sessions.newChat')}
-            </button>
-          </div>
-        )}
-        {live.length > 0 && grouping.groups.every((group) => group.chats.length === 0) && narrowing && (
-          <div className="ai-sessions-empty">
-            <SearchIcon size={20} className="ai-sessions-empty-icon" />
-            <p>{translate('ai.sessions.noMatch')}</p>
-            <button className="ai-sessions-start" onClick={() => setChatListFilter({ ...DEFAULT_CHAT_FILTER, showArchived: filter.showArchived })}>
-              {translate('ai.sessions.clearFilters')}
-            </button>
-          </div>
-        )}
+        {content === 'not-read' && <ChatsNotRead />}
+        {content === 'no-match' && <NoMatchingChats />}
         {groups.map((group) => (
           <section key={group.key} className="ai-section" {...drag.sectionProps(group.key)}>
             {(group.section !== undefined || sections.length > 0) && (
@@ -169,11 +180,13 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
                 now={now}
                 drag={drag}
                 line={line}
+                emptyText={translate(live.length === 0 ? 'ai.sessions.sectionEmpty' : 'ai.sessions.dropHere')}
               />
             )}
           </section>
         ))}
-        {filter.showArchived && (
+        {/* While narrowing, an archived heading with nothing under it is noise, like an empty section. */}
+        {filter.showArchived && (!narrowing || grouping.archived.length > 0) && (
           <section className="ai-section ai-archived">
             <div className="ai-section-head is-static">
               <span className="ai-section-name">{translate('ai.sessions.archivedHeading')}</span>
@@ -197,7 +210,7 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
             </ul>
           </section>
         )}
-        {!narrowing && (
+        {!narrowing && (live.length > 0 || sections.length > 0) && (
           <button
             className="ai-new-section"
             disabled={sectionLimit}
@@ -207,12 +220,40 @@ export function SessionsView({ chats, selected, layout = 'stacked' }: SessionsVi
             <PlusIcon size={12} /> {translate('ai.sessions.newSection')}
           </button>
         )}
+        {/* Last, so it takes the room that is left: the whole list when nothing else is in it. Split, the chat column shows it. */}
+        {content === 'no-chats' && layout === 'stacked' && <NoChats />}
       </div>
     </div>
   );
 }
 
+type ListContent = 'rows' | 'no-chats' | 'no-match' | 'not-read';
+
+/** Which card, if any, the list shows beside whatever sections and rows it has. */
+function listContent(list: {
+  readonly chats: number;
+  readonly live: number;
+  readonly sections: number;
+  /** Rows the filter lets through, archived ones included when it shows them. */
+  readonly shown: number;
+  readonly narrowing: boolean;
+  readonly read: ReturnType<typeof useAiState>['chatsRead'];
+}): ListContent {
+  assert(list.live <= list.chats, 'listContent: the live chats are some of the chats');
+  assert(list.shown <= list.chats, 'listContent: no more rows than chats');
+  // A list that never arrived is not an empty one: it must not say there are no chats.
+  if (list.read === 'failed' && list.chats === 0 && list.sections === 0) {
+    return 'not-read';
+  }
+  if (list.narrowing) {
+    return list.shown === 0 ? 'no-match' : 'rows';
+  }
+  return list.live === 0 ? 'no-chats' : 'rows';
+}
+
 interface GroupRowsProps {
+  /** What a section with no rows says. */
+  readonly emptyText: string;
   readonly group: SessionGroup;
   readonly sections: ReturnType<typeof useAiState>['sections'];
   readonly running: (chat: ChatSummary) => boolean;
@@ -224,14 +265,11 @@ interface GroupRowsProps {
   readonly line: DropTarget | undefined;
 }
 
-function GroupRows({ group, sections, running, selected, editing, setEditing, now, drag, line }: GroupRowsProps) {
-  const translate = useTranslate();
+function GroupRows({ group, sections, running, selected, editing, setEditing, now, drag, line, emptyText }: GroupRowsProps) {
   const lineHere = line !== undefined && line.sectionId === group.key;
   return (
     <ul className="ai-list-rows">
-      {group.chats.length === 0 && (
-        <li className="ai-section-empty">{group.section === undefined ? translate('ai.sessions.nothingHere') : translate('ai.sessions.dropHere')}</li>
-      )}
+      {group.chats.length === 0 && <li className="ai-section-empty">{emptyText}</li>}
       {group.chats.map((chat) => (
         <Fragment key={chat.id}>
           {lineHere && line.beforeId === chat.id && <DropSlot />}
