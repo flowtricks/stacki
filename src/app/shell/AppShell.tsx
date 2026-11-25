@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { PREVIEW_SHORTCUT, railShortcutLabel } from '../railShortcuts';
 import { FilesTab } from './DesktopFiles';
 import { FilesKeeper } from '../../features/files/FilesKeeper';
 import { DesktopPageSettings } from './PageSettingsDesktop';
@@ -491,7 +492,7 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
 }
 
 // Lit for either kind of looking-not-working (see TitleActions). Its tip waits for
-// a resting pointer and names ⌥P, the key that does the same from anywhere.
+// a resting pointer and names ⌥⇧P, the key that does the same from anywhere.
 function PreviewButton({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
   const tooltip = useDelayedTooltip();
@@ -519,7 +520,7 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
 
 // What the preview button does now, with the key for it.
 function previewButtonLabel(app: Pick<ShellView, 'inPreview' | 'previewRef'>, platform: NodeJS.Platform, translate: Translator): string {
-  const key = platform === 'darwin' ? '⌥P' : 'Alt+P';
+  const key = platform === 'darwin' ? railShortcutLabel(PREVIEW_SHORTCUT) : 'Alt+Shift+P';
   if (app.previewRef) {
     return translate('shell.preview.backToNow', { shortcut: key });
   }

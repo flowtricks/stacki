@@ -1,6 +1,6 @@
 // Goal: while a tile is dragged from the Add elements panel the Navigator is drawn over the panel, for a role
 // that has the Navigator, and it goes away when the drag ends however it ends, leaving the panel as it was. And the
-// panel is a rail tab of its own: its button opens on A, sits first in the default order, and a session reopens it.
+// panel is a rail tab of its own: its button opens on ⌥E, sits first in the default order, and a session reopens it.
 // Methodology: walk the pure state machine through every transition (start, a repeated start, end, end while idle)
 // for both roles; then read the rail's shortcut table, its default order and the seeded tab, which are pure too.
 const test = require('node:test');
@@ -31,14 +31,13 @@ test('a role without the Navigator drags without it', () => {
   assert.equal(nextElementDragState(dragging, { kind: 'end' }), ELEMENT_DRAG_IDLE);
 });
 
-test('Add elements opens on A, first in the rail, and a session reopens it', () => {
+test('Add elements opens on ⌥E, first in the rail, and a session reopens it', () => {
   const press = (key, init = {}) =>
     shortcuts.railActionOf({ altKey: false, shiftKey: false, metaKey: false, ctrlKey: false, key, code: `Key${key.toUpperCase()}`, ...init });
-  assert.equal(press('a')?.action, 'elements');
-  assert.equal(press('A', { shiftKey: true })?.action, 'components', '⇧A stays the Components panel');
-  assert.equal(press('a', { altKey: true })?.action, 'audits', '⌥A stays Audits');
-  assert.equal(press('a', { metaKey: true }), undefined, '⌘A is select all');
-  assert.equal(shortcuts.shortcutOf('elements'), 'A');
+  assert.equal(press('e', { altKey: true })?.action, 'elements');
+  assert.equal(press('a')?.action, undefined, 'the plain letter it had opens nothing');
+  assert.equal(press('e', { metaKey: true }), undefined, '⌘E is the insert palette');
+  assert.equal(shortcuts.shortcutOf('elements'), '⌥E');
   assert.equal(DEFAULT_RAIL_ORDER.top[0], 'elements', 'at the top of the rail, as in Webflow');
   // A person who arranged the rail before the panel existed gets it at its default place, without losing their order.
   const stored = { top: ['navigator', 'pages'], bottom: ['ai'], settings: [] };

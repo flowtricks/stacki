@@ -682,12 +682,12 @@ test('one app the editor cannot read is a broken row; the other apps list as usu
   await act(async () => again.root.unmount());
 });
 
-test('the rail shows Apps and opens it on E, never on ⌘E', async () => {
+test('the rail shows Apps and opens it on ⌥B, never on ⌘B', async () => {
   const selected = [];
   const { container, root } = await mount(React.createElement(LeftRail, { onSelect: (tab) => selected.push(tab) }));
-  assert.ok(container.querySelector('[aria-label="Apps (E)"]'));
-  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true })));
-  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true })));
+  assert.ok(container.querySelector('[aria-label="Apps (⌥B)"]'));
+  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', altKey: true, bubbles: true })));
+  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', altKey: true, metaKey: true, bubbles: true })));
   assert.deepEqual(selected, ['apps']);
   await act(async () => root.unmount());
 });

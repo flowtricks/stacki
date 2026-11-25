@@ -916,11 +916,15 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
         case 'insert':
           openIfEditable();
           return;
-        // ⌥P from the canvas or the live preview, replayed as the physical
+        // ⌥⇧P from the canvas or the live preview, replayed as the physical
         // key so the one handler (usePreviewKey) decides what it does.
         case 'preview':
           // i18n-ignore: a physical key code in a replayed keyboard event.
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', altKey: true, bubbles: true, cancelable: true }));
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', code: 'KeyP', altKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+          return;
+        // A panel chord from the canvas, replayed as its physical key for the rail's own listener (LeftRail.tsx).
+        case 'panel':
+          document.dispatchEvent(new KeyboardEvent('keydown', { code: message.code, altKey: true, bubbles: true, cancelable: true }));
           return;
         // Arrow keys pressed while the canvas iframe holds focus: replay them
         // on the app window so tree navigation behaves the same whether the

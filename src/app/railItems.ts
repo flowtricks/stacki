@@ -63,8 +63,7 @@ export type RailItemSpec =
       readonly kind: 'settingsView';
       readonly id: RailSettingsViewId;
       readonly titleKey: MessageKey;
-      /** Agents has no chord: it opens from its row (railShortcuts.ts). */
-      readonly shortcut: string | undefined;
+      readonly shortcut: string;
       readonly Icon: FeatureIconComponent;
     };
 
@@ -100,8 +99,7 @@ export function railItemSpec(id: string): RailItemSpec | undefined {
     return { kind: 'panel', id: tab.id, titleKey: tab.titleKey, shortcut: tab.shortcut, Icon: tab.Icon };
   }
   if (isRailSettingsViewId(id)) {
-    const shortcut = id === 'agents' ? undefined : shortcutOf(id);
-    return { kind: 'settingsView', id, titleKey: SETTINGS_VIEW_TITLE_KEYS[id], shortcut, Icon: SETTINGS_VIEW_ICONS[id] };
+    return { kind: 'settingsView', id, titleKey: SETTINGS_VIEW_TITLE_KEYS[id], shortcut: shortcutOf(id), Icon: SETTINGS_VIEW_ICONS[id] };
   }
   return undefined;
 }

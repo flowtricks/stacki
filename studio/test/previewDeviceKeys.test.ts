@@ -33,9 +33,11 @@ const frameDocument = new EventTarget();
 const replayed: string[] = [];
 class FakeKeyboardEvent extends Event {
   readonly key: string;
-  constructor(type: string, init: { readonly key: string }) {
+  readonly code: string;
+  constructor(type: string, init: { readonly key?: string; readonly code?: string }) {
     super(type, { cancelable: true });
-    this.key = init.key;
+    this.key = init.key ?? '';
+    this.code = init.code ?? '';
   }
 }
 Object.assign(globalThis, { window: frameWindow, document: frameDocument, Element: FakeElement, KeyboardEvent: FakeKeyboardEvent });
@@ -104,5 +106,40 @@ test('the editor replays a device key from the preview mode and refuses any othe
   receivePreviewDeviceKey({ type: 'studio:key', key: '10' });
   receivePreviewDeviceKey({ type: 'studio:key', key: 3 });
   assert.deepEqual(replayed, ['3'], 'no other key is replayed from the preview mode');
+  frameWindow.removeEventListener('keydown', listener);
+});
+
+test('select mode forwards a panel chord once; fields, interact mode and other ⌥ presses keep theirs', async () => {
+  const { forwardPreviewKeys, receivePreviewKey } = await import('../src/features/preview/previewKeys');
+  const posted: unknown[] = [];
+  let interactive = false;
+  forwardPreviewKeys(
+    (message) => posted.push(message),
+    () => interactive,
+  );
+  const chord = (code: string, target?: FakeElement): void => {
+    const event = new Event('keydown', { cancelable: true, bubbles: true });
+    const fields = { key: 'Dead', code, metaKey: false, ctrlKey: false, altKey: true, shiftKey: false, isComposing: false };
+    for (const [name, value] of Object.entries({ ...fields, target: target ?? new FakeElement(false) })) {
+      Object.defineProperty(event, name, { value });
+    }
+    frameWindow.dispatchEvent(event);
+  };
+  chord('KeyN');
+  assert.deepEqual(posted, [{ type: 'studio:key', key: 'Dead', code: 'KeyN', altKey: true }]);
+  chord('KeyN', new FakeElement(true));
+  chord('KeyJ');
+  interactive = true;
+  chord('KeyN');
+  assert.equal(posted.length, 1, 'a field, a letter with no panel and interact mode send nothing');
+  const codes: unknown[] = [];
+  const listener = (event: Event): void => {
+    codes.push(Reflect.get(event, 'code'));
+  };
+  frameWindow.addEventListener('keydown', listener);
+  receivePreviewKey(posted[0]);
+  receivePreviewKey({ type: 'studio:key', code: 'KeyJ', altKey: true });
+  receivePreviewKey({ type: 'studio:key', altKey: true });
+  assert.deepEqual(codes, ['KeyN'], 'only a panel chord is replayed');
   frameWindow.removeEventListener('keydown', listener);
 });

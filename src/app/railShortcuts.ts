@@ -1,8 +1,9 @@
 // The rail's keyboard shortcuts, in one table that the keys, the tooltips and the Settings root all read, so the
-// chord a person sees is the chord that works and no two actions share one. A letter alone opens a panel
-// (matched on the typed letter); ⌥ plus a letter opens one matched on the physical key, because Option rewrites
-// the typed letter ("ç" for C). Free ⌥ letters: B D G J K N O Q R T U W X Y Z. Taken elsewhere: ⌥P is the
-// interactive preview (appShortcuts.ts), Alt+arrows reorder rail buttons, ⌘⌥⇧ digits are app commands.
+// chord a person sees is the chord that works and no two actions share one. Desktop and Studio both read it. Every
+// panel is ⌥ (Alt) plus a letter, matched on the physical key, because Option rewrites the typed letter ("ç" for C)
+// and several letters are macOS dead keys; a field keeps them, so they still type there. Properties alone is a plain
+// letter. Taken elsewhere: ⌥⇧P is the interactive preview, Alt+arrows reorder rail buttons, ⌘⌥⇧ digits are app
+// commands. The canvas frames write the letters out (electron/preload/frameDesign.ts), held to this table by test.
 import type { SettingsViewId } from '../lib/settingsSections';
 
 /** What a chord does: toggles a panel, opens Settings at a view, or toggles the AI chat. */
@@ -23,8 +24,8 @@ export type RailAction =
   | 'audits'
   | 'projectSettings'
   | 'ai'
-  // Roles has no chord: only hosted Studio lists it, in its Settings root. Agents has none either: it opens from its row.
-  | Exclude<SettingsViewId, 'roles' | 'agents'>;
+  // Roles has no chord: only hosted Studio lists it, in its Settings root.
+  | Exclude<SettingsViewId, 'roles'>;
 
 export interface RailShortcut {
   readonly action: RailAction;
@@ -35,29 +36,33 @@ export interface RailShortcut {
 }
 
 export const RAIL_SHORTCUTS: readonly RailShortcut[] = [
-  { action: 'elements', letter: 'a', alt: false, shift: false },
-  { action: 'pages', letter: 'p', alt: false, shift: false },
-  { action: 'navigator', letter: 'z', alt: false, shift: false },
-  { action: 'components', letter: 'a', alt: false, shift: true },
-  { action: 'properties', letter: 'k', alt: false, shift: false },
-  { action: 'assets', letter: 'j', alt: false, shift: false },
-  { action: 'code', letter: 'c', alt: false, shift: false },
-  { action: 'selectors', letter: 'g', alt: false, shift: false },
-  { action: 'apps', letter: 'e', alt: false, shift: false },
-  { action: 'cms', letter: 'c', alt: true, shift: false },
-  { action: 'files', letter: 'f', alt: true, shift: false },
+  { action: 'elements', letter: 'e', alt: true, shift: false },
+  { action: 'pages', letter: 'p', alt: true, shift: false },
+  { action: 'navigator', letter: 'n', alt: true, shift: false },
+  { action: 'assets', letter: 'k', alt: true, shift: false },
+  { action: 'cms', letter: 'd', alt: true, shift: false },
   { action: 'variables', letter: 'v', alt: true, shift: false },
-  { action: 'history', letter: 'h', alt: true, shift: false },
-  { action: 'instructions', letter: 'i', alt: true, shift: false },
-  { action: 'audits', letter: 'a', alt: true, shift: false },
-  { action: 'projectSettings', letter: 's', alt: true, shift: false },
-  { action: 'ai', letter: 'l', alt: true, shift: false },
-  { action: 'secrets', letter: 'e', alt: true, shift: false },
+  { action: 'history', letter: 'g', alt: true, shift: false },
+  { action: 'components', letter: 'c', alt: true, shift: false },
+  { action: 'properties', letter: 'k', alt: false, shift: false },
+  { action: 'apps', letter: 'b', alt: true, shift: false },
+  { action: 'code', letter: 'o', alt: true, shift: false },
+  { action: 'files', letter: 'f', alt: true, shift: false },
+  { action: 'selectors', letter: 's', alt: true, shift: false },
+  { action: 'audits', letter: 'u', alt: true, shift: false },
+  { action: 'projectSettings', letter: 'z', alt: true, shift: false },
+  { action: 'ai', letter: 'a', alt: true, shift: false },
+  { action: 'secrets', letter: 'r', alt: true, shift: false },
   { action: 'mcp', letter: 'm', alt: true, shift: false },
+  { action: 'instructions', letter: 'i', alt: true, shift: false },
+  { action: 'agents', letter: 'q', alt: true, shift: false },
 ];
 
-/** The chord as the rail writes it: `P`, `⇧A`, `⌥L`. */
-export function railShortcutLabel(shortcut: RailShortcut): string {
+/** The interactive preview's toggle: not a rail action, but written here so the table's test holds it apart. */
+export const PREVIEW_SHORTCUT = { letter: 'p', alt: true, shift: true } as const satisfies Omit<RailShortcut, 'action'>;
+
+/** The chord as the rail writes it: `K`, `⌥P`, `⌥⇧P`. */
+export function railShortcutLabel(shortcut: Omit<RailShortcut, 'action'>): string {
   return `${shortcut.alt ? '⌥' : ''}${shortcut.shift ? '⇧' : ''}${shortcut.letter.toUpperCase()}`;
 }
 

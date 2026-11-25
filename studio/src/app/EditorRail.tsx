@@ -1,4 +1,5 @@
 import type { MessageKey } from '../../vendor/stacki/src/lib/i18n/localeContext';
+import { railActionOf, shortcutOf } from '../../vendor/stacki/src/app/railShortcuts';
 import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { canStudioPanel } from '../features/roles/roleStore';
@@ -17,20 +18,25 @@ import { useRailOverflow, type RailOverflowItem } from '../../vendor/stacki/src/
 // short window has no room for moves into a More menu (railOverflow.ts); the AI
 // button stays anchored at the foot.
 const panels = [
-  { id: 'pages', labelKey: 'rail.pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
-  { id: 'navigator', labelKey: 'rail.navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
-  { id: 'properties', labelKey: 'rail.properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
-  { id: 'components', labelKey: 'rail.components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
-  { id: 'assets', labelKey: 'rail.assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
-  { id: 'collections', labelKey: 'rail.collections', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
-  { id: 'variables', labelKey: 'rail.variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
-  { id: 'code', labelKey: 'rail.code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
-  { id: 'history', labelKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
-  { id: 'apps', labelKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
+  { id: 'pages', labelKey: 'rail.pages', shortcut: shortcutOf('pages'), Icon: FEATURE_ICONS['panel:pages'] },
+  { id: 'navigator', labelKey: 'rail.navigator', shortcut: shortcutOf('navigator'), Icon: FEATURE_ICONS['panel:navigator'] },
+  { id: 'properties', labelKey: 'rail.properties', shortcut: shortcutOf('properties'), Icon: FEATURE_ICONS['panel:properties'] },
+  { id: 'components', labelKey: 'rail.components', shortcut: shortcutOf('components'), Icon: FEATURE_ICONS['panel:components'] },
+  { id: 'assets', labelKey: 'rail.assets', shortcut: shortcutOf('assets'), Icon: FEATURE_ICONS['panel:assets'] },
+  { id: 'collections', labelKey: 'rail.collections', shortcut: shortcutOf('cms'), Icon: FEATURE_ICONS['panel:cms'] },
+  { id: 'variables', labelKey: 'rail.variables', shortcut: shortcutOf('variables'), Icon: FEATURE_ICONS['panel:variables'] },
+  { id: 'code', labelKey: 'rail.code', shortcut: shortcutOf('code'), Icon: FEATURE_ICONS['panel:code'] },
+  { id: 'history', labelKey: 'rail.history', shortcut: shortcutOf('history'), Icon: FEATURE_ICONS['panel:history'] },
+  { id: 'apps', labelKey: 'rail.apps', shortcut: shortcutOf('apps'), Icon: FEATURE_ICONS['panel:apps'] },
 ] as const satisfies readonly { readonly id: string; readonly labelKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
 // The project's Settings sits at the foot above the AI button, as on Desktop (LeftRail.tsx), gated by the
 // same `panel:projectSettings` feature (admin until a role is given it) and never moved into More.
-const SETTINGS_PANEL = { id: 'projectSettings', labelKey: 'rail.settings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
+const SETTINGS_PANEL = {
+  id: 'projectSettings',
+  labelKey: 'rail.settings',
+  shortcut: shortcutOf('projectSettings'),
+  Icon: FEATURE_ICONS['panel:projectSettings'],
+} as const;
 export type Panel = (typeof panels)[number]['id'] | 'ai' | typeof SETTINGS_PANEL.id;
 interface Props {
   readonly componentOpen: boolean;
@@ -165,7 +171,9 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
               className={`rail-btn ai-icon ${panel === 'ai' ? 'on' : ''}`}
               aria-label={translate('rail.ai')}
               aria-pressed={panel === 'ai'}
-              title={translate('rail.ai')}
+              onMouseEnter={showSoon(translate('rail.withShortcut', { label: translate('rail.ai'), shortcut: shortcutOf('ai') }))}
+              onMouseLeave={hide}
+              onBlur={hide}
               onClick={() => select('ai')}
             >
               ✦
@@ -195,45 +203,15 @@ function useRailKeys({ panel, toggle, componentOpen }: Props) {
       ) {
         return;
       }
-      let next: Panel | undefined;
-      if (event.altKey && !event.shiftKey) {
-        if (event.code === 'KeyC') {
-          next = 'collections';
-        }
-        if (event.code === 'KeyH') {
-          next = 'history';
-        }
-        if (event.code === 'KeyV') {
-          next = 'variables';
-        }
-        if (event.code === 'KeyS') {
-          next = 'projectSettings';
-        }
-      } else if (!event.altKey) {
-        const value = event.key.toLowerCase();
-        if (event.shiftKey && value === 'a') {
-          next = 'components';
-        }
-        if (!event.shiftKey) {
-          if (value === 'k' && componentOpen) {
-            next = 'properties';
-          }
-          if (value === 'p') {
-            next = 'pages';
-          }
-          if (value === 'z') {
-            next = 'navigator';
-          }
-          if (value === 'j') {
-            next = 'assets';
-          }
-          if (value === 'c') {
-            next = 'code';
-          }
-          if (value === 'e') {
-            next = 'apps';
-          }
-        }
+      const action = railActionOf(event)?.action;
+      // Studio's rail has some of Desktop's panels; the CMS is its `collections`. Properties has a key only while a component is open.
+      const id = action === 'cms' ? 'collections' : action;
+      let next: Panel | undefined = [...panels, SETTINGS_PANEL].find((item) => item.id === id)?.id;
+      if (id === 'ai') {
+        next = 'ai';
+      }
+      if (next === 'properties' && !componentOpen) {
+        next = undefined;
       }
       if (next && canStudioPanel(role, next)) {
         event.preventDefault();

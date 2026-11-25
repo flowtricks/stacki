@@ -258,7 +258,7 @@ test('the rail draws a role’s pins in pin order, after a line, with their badg
   await mount('pages');
   // The writer holds Pages and Apps but no Navigator or page edit permission, so the default grant of `panel:elements`
   // (shared/properties/projectRoles.ts canElements) does not reach it: no Add elements button. Admin keeps it.
-  assert.deepEqual(labels(), ['Pages (P)', 'Apps (E)', 'Feedback', 'SEO'], 'uninstalled and inaccessible pins are skipped');
+  assert.deepEqual(labels(), ['Pages (⌥P)', 'Apps (⌥B)', 'Feedback', 'SEO'], 'uninstalled and inaccessible pins are skipped');
   assert.ok(document.querySelector('.rail-separator'), 'a line separates panels and apps');
   assert.equal(document.querySelector('.rail-more') ?? undefined, undefined, 'a tall rail has no More button');
   await act(async () => rail.appBadges.set('seo', 4));
@@ -280,7 +280,7 @@ test('the rail draws a role’s pins in pin order, after a line, with their badg
   await settle();
   // The panels after Apps (Instructions, Audits) come before the line; the admin's own pin ends the rail.
   assert.equal(labels().at(-1), 'Secret');
-  assert.ok(labels().includes('Apps (E)'));
+  assert.ok(labels().includes('Apps (⌥B)'));
   await act(async () => root.unmount());
 });
 
@@ -298,7 +298,7 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   // Room for four rows: three buttons and More, above the anchored Settings row (36px: its button and the gap, jsdom's fallback).
   // Desktop's rail has 10px of top padding in CSS; jsdom has none.
   await resize(ANCHOR_PX + 4 * 36 - 4);
-  assert.deepEqual(labels(), ['Add elements (A)', 'Pages (P)', 'Code (C)', 'More']);
+  assert.deepEqual(labels(), ['Add elements (⌥E)', 'Pages (⌥P)', 'Code (⌥O)', 'More']);
   const more = document.querySelector('button.rail-more');
   assert.ok(!more.classList.contains('on'), 'the active panel shows, so More is not active');
   await act(async () => more.click());
@@ -308,14 +308,14 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   // A row's shortcut is told in a tooltip, not printed (src/ui/shortcutTip.tsx); the row carries it for screen readers.
   assert.deepEqual(
     [...document.querySelectorAll('.more-menu-item')].map((row) => row.getAttribute('aria-keyshortcuts') ?? ''),
-    ['Z', 'J', 'Alt+C', 'Alt+V', 'Alt+H', 'Shift+A', 'E', 'Alt+F', ''],
+    ['Alt+N', 'Alt+K', 'Alt+D', 'Alt+V', 'Alt+G', 'Alt+C', 'Alt+B', 'Alt+F', ''],
   );
   assert.ok(document.querySelector('.more-menu-item svg'), 'rows show their icons');
   await act(async () => [...document.querySelectorAll('.more-menu-item')].find((row) => row.textContent === 'Assets').click());
   await settle();
   assert.deepEqual(selected, ['assets'], 'a row selects its panel');
   // A hidden panel's shortcut still opens it.
-  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyK', altKey: true, bubbles: true, cancelable: true })));
   assert.deepEqual(selected, ['assets', 'assets']);
   // Growing back restores every button.
   await resize(1000);
@@ -364,7 +364,7 @@ test('Settings stays outside More and directly precedes the AI item at any heigh
   };
   for (const heightPx of [1000, 400, ANCHOR_PX + 3 * 36, ANCHOR_PX, 20]) {
     await resize(heightPx);
-    assert.deepEqual(anchored(), ['Settings (⌥S)', 'AI chat (⌥L)'], `${heightPx}px: Settings directly precedes AI, both anchored`);
+    assert.deepEqual(anchored(), ['Settings (⌥Z)', 'AI chat (⌥A)'], `${heightPx}px: Settings directly precedes AI, both anchored`);
     assert.ok(
       (await moreRows()).every((row) => !row.startsWith('Settings')),
       `${heightPx}px: Settings is never in More`,
@@ -413,7 +413,7 @@ test('Studio’s rail shows the role’s pins and collapses into More above its 
     ['Pages', 'Navigator', 'Components', 'More', 'Settings', 'AI chat'],
     'the active panel stays, Settings and the AI button keep their place',
   );
-  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true })));
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyK', altKey: true, bubbles: true, cancelable: true })));
   assert.deepEqual(toggled, ['assets'], 'a hidden panel’s shortcut still works');
   await act(async () => studioRoot.unmount());
 });

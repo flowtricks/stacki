@@ -2,6 +2,7 @@
 // escape keys, routes, collections and their sample entries, cleaning up
 // queries, and composing the node edits (App.tsx).
 
+import { PREVIEW_SHORTCUT } from '../railShortcuts';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -565,10 +566,10 @@ export function useEscapeKeys(
   }, [inPreview, editStack.length, closeComponent]);
 }
 
-// ⌥P toggles the interactive preview: into it from the editor, back out of it
+// ⌥⇧P toggles the interactive preview: into it from the editor, back out of it
 // (or out of an older version) from either. Matched on the physical key, because
 // Option rewrites `event.key` on a Mac ("π" for P). A field keeps the key, so
-// typing ⌥P there still types its character.
+// typing ⌥⇧P there still types its character.
 export function usePreviewKey(
   navigation: ReturnType<typeof useNavigation>,
   interactivePreview: ReturnType<typeof useInteractivePreview>,
@@ -601,15 +602,15 @@ export function usePreviewKey(
   }, [inPreview, previewRef, enterPreview, exitPreview, exitCommitPreview]);
 }
 
-// Option and P alone: no Command, Control or Shift.
+// Option, Shift and P (railShortcuts.ts PREVIEW_SHORTCUT): no Command or Control. ⌥P alone opens Pages.
 export function isPreviewKey(event: Pick<KeyboardEvent, 'altKey' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'code'>): boolean {
   if (!event.altKey) {
     return false;
   }
-  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+  if (event.metaKey || event.ctrlKey) {
     return false;
   }
-  return event.code === 'KeyP';
+  return event.shiftKey === PREVIEW_SHORTCUT.shift && event.code === `Key${PREVIEW_SHORTCUT.letter.toUpperCase()}`;
 }
 
 // Injected routes and a dynamic page’s entries.

@@ -20,7 +20,7 @@ import { useRailOrder } from './railOrderStore';
 import { DEFAULT_RAIL_ORDER } from './railDefaults';
 import { useRailDrag } from './railDrag';
 import { orderAfterDrop } from './railDragModel';
-import { RAIL_PANEL_TABS, RAIL_SETTINGS_VIEWS, movedKey, railItemSpec, type RailPanelId } from './railItems';
+import { RAIL_PANEL_TABS, RAIL_SETTINGS_VIEWS, isRailSettingsViewId, movedKey, railItemSpec, type RailPanelId } from './railItems';
 import { animateRailReflow, readRailRows } from './railReflow';
 
 // Each panel button's label, icon and chord are railItems.ts's, read by the Settings panel's root rows too, so a
@@ -109,10 +109,9 @@ export default function LeftRail({
     if (action === 'ai') {
       // The AI chat toggles like a panel; a role without it has no button, so no key.
       aiButton?.onSelect();
-    } else if (action === 'secrets' || action === 'mcp' || action === 'instructions') {
+    } else if (isRailSettingsViewId(action)) {
       // A view of Settings: opens Settings at it, or, when that view is already showing, toggles the panel closed.
-      const access = action === 'instructions' ? canPanel(role, 'instructions') : canPanel(role, 'projectSettings');
-      if (access) {
+      if (settingsViewsOf(role).includes(action)) {
         if (active === 'projectSettings' && shownSettingsView() === action) {
           onSelect('projectSettings');
         } else {
@@ -157,7 +156,7 @@ export default function LeftRail({
         label,
         shortcut: spec.shortcut,
         Icon: spec.Icon,
-        tooltip: spec.shortcut === undefined ? label : translate('rail.withShortcut', { label, shortcut: spec.shortcut }),
+        tooltip: translate('rail.withShortcut', { label, shortcut: spec.shortcut }),
         pressed: active === SETTINGS_TAB.id && shownView === view,
         select: () => {
           if (active === SETTINGS_TAB.id && shownSettingsView() === view) {

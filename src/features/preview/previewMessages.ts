@@ -143,6 +143,8 @@ export function describePreviewReload(reason: PreviewReloadReason, translate: Tr
 export type ShortcutMessage =
   | { readonly name: 'insert' }
   | { readonly name: 'preview' }
+  /** A rail panel chord, Option and the key `code` (src/app/railShortcuts.ts). */
+  | { readonly name: 'panel'; readonly code: string }
   | { readonly name: 'arrow'; readonly key: string }
   | { readonly name: 'key'; readonly key: string; readonly meta: boolean }
   /** A key in the app command range (shared/properties/appShortcuts.ts), which runs an app's command. */
@@ -174,6 +176,10 @@ export function parseShortcutMessage(input: unknown): ShortcutMessage | undefine
         return { name: 'insert' };
       case 'preview':
         return { name: 'preview' };
+      case 'panel': {
+        const code = shortcutKey(value['code']);
+        return /^Key[A-Z]$/.test(code) ? { name: 'panel', code } : undefined;
+      }
       case 'arrow':
         return { name: 'arrow', key: shortcutKey(value['key']) };
       case 'key':

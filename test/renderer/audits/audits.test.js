@@ -12,7 +12,7 @@
 // occurrences; go-to selects as the Navigator does, waits for a newly opened
 // file to render, then flashes; a page-level finding goes to what its fix
 // would change; the rail shows the Audits button, with no
-// count on it, for roles that have the panel, and ⌥A opens it.
+// count on it, for roles that have the panel, and ⌥U opens it.
 // Method: bundle the real modules with esbuild, parse real .astro sources with
 // the editor's parser for fixtures, drive the runner and the fixes with fake
 // IO and a fake main that records every request, and mount the panel and the
@@ -580,7 +580,7 @@ test('occurrence names, notes, and what a page-level finding goes to', () => {
   assert.equal(audits.fixTarget({ ...promote, file: 'src/pages/b.astro' }), undefined, 'a fix in another file is not this page’s element');
 });
 
-test('the rail shows Audits, without a count, to roles with the panel, and ⌥A opens it', async () => {
+test('the rail shows Audits, without a count, to roles with the panel, and ⌥U opens it', async () => {
   const roles = audits.parseProjectRoles({ version: 1, roles: [{ id: 'admin', name: 'Admin', members: ['owner'] }] });
   assert.equal(audits.canPanel(audits.roleViewOf(roles, 'client'), 'audits'), false, 'clients do not see it by default');
   assert.equal(audits.canPanel(audits.ADMIN_VIEW, 'audits'), true);
@@ -591,7 +591,7 @@ test('the rail shows Audits, without a count, to roles with the panel, and ⌥A 
   const root = createRoot(container);
   await act(async () => root.render(React.createElement(audits.LeftRail, { active: undefined, projectPath: PROJECT, onSelect: (tab) => selected.push(tab) })));
   await settle();
-  const button = container.querySelector('button[aria-label="Audits (⌥A)"]');
+  const button = container.querySelector('button[aria-label="Audits (⌥U)"]');
   assert.ok(button, 'the Audits button is on the rail');
   await act(async () =>
     audits.updateAuditState((state) => ({
@@ -609,7 +609,7 @@ test('the rail shows Audits, without a count, to roles with the panel, and ⌥A 
     })),
   );
   assert.equal(button.querySelector('.audits-rail-count') ?? undefined, undefined, 'no count on the rail button: it lives in the panel header');
-  await act(async () => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyA', key: 'å', altKey: true })));
+  await act(async () => window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { code: 'KeyU', key: 'Dead', altKey: true })));
   assert.deepEqual(selected, ['audits']);
   await act(async () => root.unmount());
 });

@@ -1,4 +1,5 @@
 import { record } from '../../shared/validation';
+import { railActionOf } from '../../../vendor/stacki/src/app/railShortcuts';
 import { isReservedShortcut, shortcutOfPress } from '../../../vendor/stacki/shared/properties/appShortcuts';
 const keys = new Set([
   'z',
@@ -55,6 +56,22 @@ export function forwardPreviewKeys(post: (message: unknown) => void, interactive
         event.preventDefault();
         post({ type: 'avb:shortcut', name: 'appCommand', shortcut });
       }
+    },
+    true,
+  );
+  // The rail's panel chords (railShortcuts.ts), as Desktop's canvas forwards them: Option and a letter, in
+  // select mode only. A field in the page, or the canvas's text editor, keeps them to type.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (interactive() || event.isComposing || keyInField(event.target)) {
+        return;
+      }
+      if (!isPanelChord(event)) {
+        return;
+      }
+      event.preventDefault();
+      post({ type: 'studio:key', key: event.key, code: event.code, altKey: true });
     },
     true,
   );
@@ -130,8 +147,15 @@ export function forwardPreviewKeys(post: (message: unknown) => void, interactive
     });
   });
 }
+function isPanelChord(event: Pick<KeyboardEvent, 'altKey' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'key' | 'code'>): boolean {
+  return event.altKey && railActionOf(event) !== undefined;
+}
 export function receivePreviewKey(input: unknown) {
   const value = record(input);
+  if (value['altKey'] === true) {
+    receivePanelChord(value);
+    return;
+  }
   if (typeof value['key'] !== 'string' || !keys.has(value['key'].toLowerCase())) {
     return;
   }
@@ -144,6 +168,18 @@ export function receivePreviewKey(input: unknown) {
       cancelable: true,
     }),
   );
+}
+
+// A forwarded panel chord, replayed for the rail's listener (EditorRail.tsx); any other ⌥ press is dropped.
+function receivePanelChord(value: Readonly<Record<string, unknown>>): void {
+  const code = value['code'];
+  if (typeof code !== 'string') {
+    return;
+  }
+  const press = { key: '', code, altKey: true, shiftKey: false, metaKey: false, ctrlKey: false };
+  if (isPanelChord(press)) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code, altKey: true, cancelable: true }));
+  }
 }
 
 /** A device key sent from the preview mode's frame: the editor replays it as it does the canvas's. */

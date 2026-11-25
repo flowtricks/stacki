@@ -1,7 +1,7 @@
 // Goal: the keys that open the insert palette and toggle the preview do what
 // their tooltips and the menu say. ⌘F, ⌘E and ⌘K all open the palette; a rich
 // text field that claims ⌘K (link) or ⌘E (code) first keeps it; the code editor
-// keeps its own find. ⌥P is Option and P alone, matched on the physical key.
+// keeps its own find. The preview toggle is ⌥⇧P, matched on the physical key (⌥P alone opens Pages).
 // Method: handleCommandKey and isPreviewKey are driven with plain event-shaped
 // objects, counting palette opens, across the positive and negative space.
 const assert = require('node:assert/strict');
@@ -47,11 +47,11 @@ assert.equal(run({ key: 'k', meta: false }).opened, 0, 'K alone is not the palet
 assert.equal(run({ key: 'j' }).opened, 0, '⌘J is not the palette');
 
 const press = (fields) => ({ altKey: false, metaKey: false, ctrlKey: false, shiftKey: false, code: 'KeyP', ...fields });
-assert.equal(isPreviewKey(press({ altKey: true })), true, '⌥P toggles the preview');
+assert.equal(isPreviewKey(press({ altKey: true, shiftKey: true })), true, '⌥⇧P toggles the preview');
+assert.equal(isPreviewKey(press({ altKey: true })), false, '⌥P is Pages');
 assert.equal(isPreviewKey(press({})), false, 'P alone does not');
-assert.equal(isPreviewKey(press({ altKey: true, metaKey: true })), false, '⌥⌘P does not');
-assert.equal(isPreviewKey(press({ altKey: true, shiftKey: true })), false, '⌥⇧P does not');
-assert.equal(isPreviewKey(press({ altKey: true, ctrlKey: true })), false, '⌃⌥P does not');
-assert.equal(isPreviewKey(press({ altKey: true, code: 'KeyO' })), false, '⌥O does not');
+assert.equal(isPreviewKey(press({ altKey: true, shiftKey: true, metaKey: true })), false, '⌥⇧⌘P does not');
+assert.equal(isPreviewKey(press({ altKey: true, shiftKey: true, ctrlKey: true })), false, '⌃⌥⇧P does not');
+assert.equal(isPreviewKey(press({ altKey: true, shiftKey: true, code: 'KeyO' })), false, '⌥⇧O does not');
 
 console.log('app-command-keys: 16 passed');

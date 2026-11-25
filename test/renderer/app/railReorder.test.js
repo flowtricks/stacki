@@ -352,8 +352,8 @@ test('a role-hidden button keeps its place in the stored order, and the shortcut
     [],
     'no id repeats',
   );
-  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'p', bubbles: true })));
-  assert.deepEqual(selected.at(-1), 'pages', 'the P shortcut selects Pages wherever it sits');
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyP', altKey: true, bubbles: true })));
+  assert.deepEqual(selected.at(-1), 'pages', 'the ⌥P shortcut selects Pages wherever it sits');
   await unmount();
 });
 

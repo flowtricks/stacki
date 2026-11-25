@@ -3,7 +3,7 @@
 // (the built-in client by default), and stays when there is no AI button. The Instructions have no rail button
 // of their own: they are a view inside Settings, so ⌥I opens Settings at them, and a role granted only
 // `panel:instructions` still gets the Settings button. The shortcut table has no duplicate chord; each of AI chat
-// (⌥L), Secrets (⌥E), MCP (⌥M) and Instructions (⌥I) routes by role, toggles like the panels, and stays quiet in a field.
+// (⌥A), Secrets (⌥R), MCP (⌥M) and Instructions (⌥I) routes by role, toggles like the panels, and stays quiet in a field.
 // Method: bundle the real LeftRail with the real role store, mount it in jsdom and read the buttons in
 // document order; hover for the tooltip; switch the role and mount again.
 const test = require('node:test');
@@ -21,7 +21,7 @@ esbuild.buildSync({
     contents: [
       "export { default as LeftRail } from './src/app/LeftRail';",
       "export { setActualRole } from './src/lib/currentRole';",
-      "export { RAIL_SHORTCUTS, railActionOf, railShortcutLabel } from './src/app/railShortcuts';",
+      "export { RAIL_SHORTCUTS, PREVIEW_SHORTCUT, railActionOf, railShortcutLabel } from './src/app/railShortcuts';",
       "export { publishSettingsView } from './src/lib/settingsSections';",
       "export { ADMIN_VIEW, roleViewOf, DEFAULT_PROJECT_ROLES, parseProjectRoles } from './shared/properties/projectRoles';",
     ].join('\n'),
@@ -79,7 +79,7 @@ test('Settings is the button immediately before AI chat, at the foot of the rail
   rail.setActualRole(rail.ADMIN_VIEW);
   await mount(true);
   const all = labels();
-  assert.equal(all.at(-1), 'AI chat (⌥L)');
+  assert.equal(all.at(-1), 'AI chat (⌥A)');
   assert.match(all.at(-2), /^Settings \(/, 'Settings immediately before AI chat');
   const anchor = document.querySelector('.rail-anchor');
   assert.deepEqual(
@@ -109,7 +109,7 @@ test('without an AI button Settings still anchors the foot; the client role does
   rail.setActualRole(rail.roleViewOf(rail.DEFAULT_PROJECT_ROLES, 'client'));
   await mount(true);
   assert.ok(!labels().some((label) => label?.startsWith('Settings')));
-  assert.equal(labels().at(-1), 'AI chat (⌥L)');
+  assert.equal(labels().at(-1), 'AI chat (⌥A)');
   await act(async () => root.unmount());
 });
 
@@ -151,38 +151,74 @@ test('a role with only panel:instructions gets the Settings button and the short
 const press = (init) => act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })));
 const chordsOf = () => rail.RAIL_SHORTCUTS.map((shortcut) => rail.railShortcutLabel(shortcut));
 
-test('the shortcut table has no duplicate chord and keeps the ones people already use', () => {
-  const chords = chordsOf();
+// The owner's chords, one per panel and Settings view. Properties alone is a plain letter.
+const CHORDS = {
+  elements: '⌥E',
+  pages: '⌥P',
+  navigator: '⌥N',
+  assets: '⌥K',
+  cms: '⌥D',
+  variables: '⌥V',
+  history: '⌥G',
+  components: '⌥C',
+  properties: 'K',
+  apps: '⌥B',
+  code: '⌥O',
+  files: '⌥F',
+  selectors: '⌥S',
+  audits: '⌥U',
+  projectSettings: '⌥Z',
+  ai: '⌥A',
+  secrets: '⌥R',
+  mcp: '⌥M',
+  instructions: '⌥I',
+  agents: '⌥Q',
+};
+
+test('no two chords are the same, the preview toggle among them', () => {
+  const chords = [...chordsOf(), rail.railShortcutLabel(rail.PREVIEW_SHORTCUT)];
   assert.equal(new Set(chords).size, chords.length, `no chord twice: ${chords.join(' ')}`);
-  assert.ok(!chords.includes('⌥P'), '⌥P is the interactive preview');
+  assert.equal(rail.railShortcutLabel(rail.PREVIEW_SHORTCUT), '⌥⇧P');
   const by = Object.fromEntries(rail.RAIL_SHORTCUTS.map((shortcut) => [shortcut.action, rail.railShortcutLabel(shortcut)]));
-  assert.deepEqual(
-    [by.ai, by.secrets, by.mcp, by.instructions, by.projectSettings, by.cms, by.variables, by.history, by.audits],
-    ['⌥L', '⌥E', '⌥M', '⌥I', '⌥S', '⌥C', '⌥V', '⌥H', '⌥A'],
-  );
-  assert.equal(
-    rail.railActionOf({ altKey: true, shiftKey: false, metaKey: false, ctrlKey: false, key: '¬', code: 'KeyL' })?.action,
-    'ai',
-    'matched on the physical key',
-  );
-  assert.equal(rail.railActionOf({ altKey: true, shiftKey: true, metaKey: false, ctrlKey: false, key: 'x', code: 'KeyL' }), undefined, '⌥⇧L is not ⌥L');
-  assert.equal(
-    rail.railActionOf({ altKey: false, shiftKey: false, metaKey: true, ctrlKey: false, key: 'e', code: 'KeyE' }),
-    undefined,
-    '⌘E is the insert palette’s',
-  );
+  assert.deepEqual(by, CHORDS);
 });
 
-test('⌥L toggles the AI chat, ⌥E and ⌥M open Settings at Secrets and MCP, and a role without them does nothing', async () => {
+test('each chord is matched on the physical key, and the old and modified presses open nothing', () => {
+  const press = (code, fields = {}) =>
+    rail.railActionOf({ altKey: true, shiftKey: false, metaKey: false, ctrlKey: false, key: 'Dead', code, ...fields })?.action;
+  for (const [action, chord] of Object.entries(CHORDS)) {
+    if (chord.startsWith('⌥')) {
+      assert.equal(press(`Key${chord.slice(1)}`), action, chord);
+      assert.equal(press(`Key${chord.slice(1)}`, { shiftKey: true }), undefined, `⇧ with ${chord} is another chord`);
+      assert.equal(press(`Key${chord.slice(1)}`, { ctrlKey: true }), undefined, 'AltGr is Ctrl+Alt: it types');
+      assert.equal(press(`Key${chord.slice(1)}`, { metaKey: true }), undefined);
+    }
+  }
+  // The plain and ⇧ letters the panels used to have are not kept as aliases.
+  for (const key of ['a', 'p', 'z', 'j', 'c', 'g', 'e']) {
+    assert.equal(press(`Key${key.toUpperCase()}`, { altKey: false, key }), undefined, key);
+  }
+  assert.equal(press('KeyA', { altKey: false, shiftKey: true, key: 'A' }), undefined, '⇧A');
+  assert.equal(press('KeyK', { altKey: false, key: 'k' }), 'properties');
+});
+
+test('the canvas frames forward exactly the table’s ⌥ letters', () => {
+  const source = fs.readFileSync(repoPath('electron/preload/frameDesign.ts'), 'utf8');
+  const written = /const panelCodes = '([^']+)';/.exec(source)?.[1]?.split(' ') ?? [];
+  const table = rail.RAIL_SHORTCUTS.filter((shortcut) => shortcut.alt).map((shortcut) => `Key${shortcut.letter.toUpperCase()}`);
+  assert.deepEqual([...written].sort(), table.sort());
+});
+
+test('⌥A toggles the AI chat, ⌥R and ⌥M open Settings at Secrets and MCP, and a role without them does nothing', async () => {
   rail.setActualRole(rail.ADMIN_VIEW);
   selected.length = 0;
   await mount(true);
-  await press({ code: 'KeyL', altKey: true });
-  await press({ code: 'KeyE', altKey: true });
+  await press({ code: 'KeyA', altKey: true });
+  await press({ code: 'KeyR', altKey: true });
   await press({ code: 'KeyM', altKey: true });
   assert.deepEqual(selected, ['ai', 'settings:secrets', 'settings:mcp']);
   await act(async () => root.unmount());
-  // Instructions-only: ⌥I works; ⌥E and ⌥M do not (Secrets and MCP need panel:projectSettings).
+  // Instructions-only: ⌥I works; ⌥R and ⌥M do not (Secrets and MCP need panel:projectSettings).
   const roles = rail.parseProjectRoles({
     version: 1,
     defaultRole: 'client',
@@ -196,15 +232,15 @@ test('⌥L toggles the AI chat, ⌥E and ⌥M open Settings at Secrets and MCP, 
   rail.setActualRole(rail.roleViewOf(roles, 'docs'));
   selected.length = 0;
   await mount(false);
-  for (const code of ['KeyI', 'KeyE', 'KeyM', 'KeyL']) {
+  for (const code of ['KeyI', 'KeyR', 'KeyM', 'KeyQ', 'KeyA']) {
     await press({ code, altKey: true });
   }
-  assert.deepEqual(selected, ['settings:instructions'], 'only the view the role may open, and no AI button means no AI key');
+  assert.deepEqual(selected, ['settings:instructions', 'settings:agents'], 'only the views the role may open, and no AI button means no AI key');
   await act(async () => root.unmount());
   rail.setActualRole(rail.roleViewOf(roles, 'ops'));
   selected.length = 0;
   await mount(false);
-  for (const code of ['KeyI', 'KeyE', 'KeyM']) {
+  for (const code of ['KeyI', 'KeyR', 'KeyM', 'KeyQ']) {
     await press({ code, altKey: true });
   }
   assert.deepEqual(selected, ['settings:secrets', 'settings:mcp']);
@@ -231,19 +267,19 @@ test('the same chord again, with that view showing, toggles Settings closed; a f
     );
   await render('projectSettings');
   rail.publishSettingsView('secrets');
-  await press({ code: 'KeyE', altKey: true });
-  assert.deepEqual(selected, ['projectSettings'], 'Secrets showing: ⌥E toggles the panel closed');
+  await press({ code: 'KeyR', altKey: true });
+  assert.deepEqual(selected, ['projectSettings'], 'Secrets showing: ⌥R toggles the panel closed');
   selected.length = 0;
   await press({ code: 'KeyM', altKey: true });
   assert.deepEqual(selected, ['settings:mcp'], 'another view: ⌥M opens it');
   selected.length = 0;
   rail.publishSettingsView(undefined);
-  await press({ code: 'KeyE', altKey: true });
-  assert.deepEqual(selected, ['settings:secrets'], 'the root showing: ⌥E opens Secrets');
+  await press({ code: 'KeyR', altKey: true });
+  assert.deepEqual(selected, ['settings:secrets'], 'the root showing: ⌥R opens Secrets');
   selected.length = 0;
   const field = document.createElement('input');
   document.body.append(field);
-  await act(async () => field.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyE', altKey: true, bubbles: true, cancelable: true })));
+  await act(async () => field.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'KeyR', altKey: true, bubbles: true, cancelable: true })));
   assert.deepEqual(selected, [], 'typing in a field: no shortcut');
   field.remove();
   await act(async () => own.unmount());

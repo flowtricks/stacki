@@ -1289,6 +1289,7 @@
     "src/app/model/textPieces.ts",
     "src/app/railApps.tsx",
     "src/app/railOverflow.ts",
+    "src/app/railShortcuts.ts",
     "src/app/rejectionMessages.ts",
     "src/app/shell/CanvasTextFormatBar.tsx",
     "src/app/shell/CanvasTextSourceCue.tsx",

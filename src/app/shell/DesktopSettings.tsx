@@ -37,7 +37,7 @@ export default function DesktopSettings({
           selectInstruction(undefined);
         }
       }}
-      shortcuts={{ secrets: shortcutOf('secrets'), mcp: shortcutOf('mcp'), instructions: shortcutOf('instructions') }}
+      shortcuts={{ secrets: shortcutOf('secrets'), mcp: shortcutOf('mcp'), instructions: shortcutOf('instructions'), agents: shortcutOf('agents') }}
       renderInstructions={(context) => <InstructionsSections projectPath={projectPath} context={context} showToast={showToast} />}
       // The Agents view: the project's agent definitions; one opens in the Instructions editor over the canvas.
       renderAgents={() => <AgentsSettings projectPath={projectPath} />}

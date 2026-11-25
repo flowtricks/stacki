@@ -882,7 +882,7 @@ role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`:
 ## Settings panel and secrets
 
 The Settings rail button (`projectSettings`, access feature `panel:projectSettings`, admin only until a
-role is granted it; shortcut ⌥S) sits directly above the AI button and opens a panel whose root is a short
+role is granted it; shortcut ⌥Z) sits directly above the AI button and opens a panel whose root is a short
 list of links (`SETTINGS_VIEW_IDS` in `src/lib/settingsSections.ts`): Secrets, MCP and Instructions. A link
 replaces the panel with that view under a back chevron and the view's title; back, or Escape outside a field,
 returns to the root, and the panel always opens on the root unless something asked for a view
@@ -894,11 +894,16 @@ which lists Secrets and MCP with honest unavailable states and no Instructions. 
 Instructions view also closes the instruction file opened from its list (its edits are saved as the reading
 view unmounts, as with its own close button).
 
-Rail chords live in one table, `src/app/railShortcuts.ts`, which the keys, the tooltips and the Settings root
-rows all read (a test holds it free of duplicates): letters alone P Z ⇧A K J C G E, and ⌥C CMS, ⌥V Variables,
-⌥H Git, ⌥A Audits, ⌥S Settings, ⌥I Instructions, ⌥L AI chat, ⌥E Secrets, ⌥M MCP. ⌥P is the interactive
-preview. ⌥I, ⌥E and ⌥M open Settings at their view, and toggle the panel closed when that view is showing;
-⌥L toggles the AI chat. Each follows the role (no access, no key) and is ignored while typing in a field. It is the project's settings,
+Rail chords live in one table, `src/app/railShortcuts.ts`, which Desktop's and Studio's keys, the tooltips and the
+Settings root rows all read (a test holds it free of duplicates, the preview toggle among them). Each is ⌥ (Alt) plus a
+letter, matched on the physical key: E Add elements, P Pages, N Navigator, K Assets, D CMS, V Variables, G Git,
+C Components, B Apps, O Code, F Files, S Style selectors, U Audits, Z Settings, A AI chat, R Secrets, M MCP,
+I Instructions, Q Agents. Properties alone is a plain K. ⌥⇧P is the interactive preview; the right panel's Style and
+Settings tabs are plain S and D (`src/app/inspectorTabKeys.ts`). ⌥I, ⌥R, ⌥M and ⌥Q open Settings at their view, and
+toggle the panel closed when that view is showing; ⌥A toggles the AI chat. Each follows the role (no access, no key)
+and is ignored while typing in a field, a code editor or canvas text, so macOS dead keys (⌥E, ⌥N, ⌥U, ⌥I) still type
+there. With keyboard focus in the canvas, outside interact mode, the frame forwards them (`avb:shortcut` `panel` in
+Desktop, `studio:key` in Studio). It is the project's settings,
 apart from the app's own Settings screen (`src/app/settings`). Its Secrets view edits one of the project's dev env files
 at a time (`SECRETS_FILE_NAMES`: `.env`, `.env.local`, `.env.development`, `.env.development.local`, the
 dev server's load order), picked in a dropdown that opens on `.env`. `.env.production` is not listed.

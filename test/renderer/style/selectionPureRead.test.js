@@ -194,7 +194,7 @@ const control = (name) =>
 // The visible options of whatever menu or list is open, the first not named `except`.
 const option = (except) =>
   `[...document.querySelectorAll('[role="option"], [role="menuitemradio"], [role="menuitem"]')].find((e) => e.getClientRects().length > 0 && (e.textContent || '').trim() !== ${JSON.stringify(except)}) || undefined`;
-// A panel tab: named by its text alone (the rail's Settings button is named "Settings (⌥S)").
+// A panel tab: named by its text alone (the rail's Settings button is named "Settings (⌥Z)").
 const tab = (name) =>
   `[...document.querySelectorAll('button')].find((e) => e.getClientRects().length > 0 && !e.hasAttribute('aria-label') && (e.textContent || '').trim() === ${JSON.stringify(name)}) || undefined`;
 const optionNamed = (name) =>

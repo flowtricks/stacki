@@ -210,7 +210,7 @@ async function checkInstructions(context) {
 }
 
 async function checkAudits(context) {
-  await context.act(() => pressOption('KeyA'));
+  await context.act(() => pressOption('KeyU'));
   assertPending(context, 'AuditsPanel');
   await releasePanel(context, 'AuditsPanel');
   assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');

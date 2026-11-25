@@ -160,7 +160,7 @@ function forwardModifiers(): void {
 // Forward app shortcuts when the canvas has keyboard focus — otherwise
 // ⌘F/⌘E/⌘K die inside the iframe and the insert palette never opens.
 function forwardShortcut(event: KeyboardEvent): void {
-  // ⌥P toggles the preview, so it is forwarded from the live preview too, where
+  // ⌥⇧P toggles the preview, so it is forwarded from the live preview too, where
   // the canvas does not select. Matched on the physical key: Option turns P
   // into "π". A field in the page keeps it.
   if (isPreviewKey(event)) {
@@ -244,6 +244,18 @@ function forwardShortcut(event: KeyboardEvent): void {
   // ⌘Enter jumps to the class field. The canvas is where the selection is
   // usually made, so it has to reach the app from in here too.
   const isClassJump = mod && !event.altKey && !event.shiftKey && event.key === 'Enter';
+  // The rail's panel chords, Option and a letter (src/app/railShortcuts.ts RAIL_SHORTCUTS, held to this list by
+  // test/renderer/app/railSettings.test.js; the preload imports nothing). A field, handled above, keeps them to type.
+  const panelCodes = 'KeyE KeyP KeyN KeyK KeyD KeyV KeyG KeyC KeyB KeyO KeyF KeyS KeyU KeyZ KeyA KeyR KeyM KeyI KeyQ';
+  if (event.altKey && !mod && !event.shiftKey && panelCodes.split(' ').includes(event.code)) {
+    event.preventDefault();
+    try {
+      window.parent.postMessage({ type: 'avb:shortcut', name: 'panel', code: event.code }, '*');
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   const isProperties = !mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k';
   // ⇧G shows or hides the column guide drawn over this frame. It is replayed
   // as the key "G", which says Shift on its own (src/features/preview/guideSettings.ts).
@@ -263,15 +275,15 @@ function forwardShortcut(event: KeyboardEvent): void {
   }
 }
 
-// Option and P alone, the preview toggle (usePreviewKey in the app).
+// Option, Shift and P, the preview toggle (usePreviewKey in the app).
 function isPreviewKey(event: KeyboardEvent): boolean {
   if (!event.altKey) {
     return false;
   }
-  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+  if (event.metaKey || event.ctrlKey) {
     return false;
   }
-  return event.code === 'KeyP';
+  return event.shiftKey && event.code === 'KeyP';
 }
 
 // A digit 1 to 9 with no modifier: the device keys. Shift is ruled out by the key itself (it
