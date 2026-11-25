@@ -131,6 +131,8 @@ export interface CanvasNode {
   readonly test?: string;
   /** A fragment written `<>`. */
   readonly shorthand?: boolean;
+  /** A comment written in braces. */
+  readonly jsx?: boolean;
   readonly value?: string;
   readonly props?: Readonly<Record<string, Attr>> | undefined;
   readonly children?: readonly CanvasNode[] | undefined;
@@ -192,7 +194,10 @@ export function recipeFromCanvas(model: CanvasModel, session: DefaultsCanvasSess
 }
 // A comment, or braces that compute nothing: kept in the recipe as written.
 function keptMarkup(node: CanvasNode): string | undefined {
-  const written = node.kind === 'comment' ? `<!--${node.value ?? ''}-->` : node.kind === 'expr' ? (node.value ?? '') : undefined;
+  const value = node.value ?? '';
+  // Each comment keeps its own form: an HTML comment ships in the built page and a braces one does not.
+  const comment = node.jsx === true ? `{/*${value}*/}` : `<!--${value}-->`;
+  const written = node.kind === 'comment' ? comment : node.kind === 'expr' ? value : undefined;
   return written !== undefined && isStaticMarkup(written) ? written : undefined;
 }
 

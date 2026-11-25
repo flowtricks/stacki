@@ -381,11 +381,12 @@ test('links as direct children, with the comments and spaces the editor keeps, s
   const recipe = saved(prepared, written);
   assert.deepEqual(
     recipe.children.flatMap((child) => (child.verbatim === undefined ? [] : [child.verbatim])),
-    ['<!-- Links -->', '<!-- panels below -->', '{" "}', '{}', '<!-- end -->'],
+    ['<!-- Links -->', '{/* panels below */}', '{" "}', '{}', '<!-- end -->'],
   );
   const page = insertedTabs(recipe);
   assert.equal(page.match(/<TabLink slot="links">/g).length, 2);
-  for (const kept of ['<!-- Links -->', 'panels below', '{" "}', '<!-- actions -->', '<!-- end -->']) {
+  // A braces comment stays one: written as HTML it would ship in the built page.
+  for (const kept of ['<!-- Links -->', '{/* panels below */}', '{" "}', '<!-- actions -->', '<!-- end -->']) {
     assert.ok(page.includes(kept), kept);
   }
   // A comment in a component with only named slots needs no slot of its own.
