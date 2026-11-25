@@ -48,6 +48,7 @@ const ENTRIES = [
   'dist/electron/lib/componentSources.js',
   'dist/electron/previewServer/studioEntry.js',
   'dist/electron/previewServer/previewWarmup.js',
+  'dist/electron/previewServer/designMode/designRender.js', // Design mode (experimental): docs/design-mode/REMOVE.md
 ];
 
 // The parser uses TypeScript's syntax tree for arbitrary callback bodies. Its

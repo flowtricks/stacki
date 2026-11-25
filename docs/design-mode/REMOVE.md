@@ -42,6 +42,9 @@ frame installs no listener, and the dev server plugin has no hooks.
      the `} else if (isDesignModeSandbox()) {` branch with its comment line, and the `listenForDesignModeRequests();` line.
    - `electron/preview/markerConfig.ts`: the comment and `const { designModeRenderPlugin } = require(…)` lines,
      and the `designModeRenderPlugin(PROJECT_DIRS),` entry of the plugin list.
+   - `test/scripts/release/unpackedParser.test.js`: the `designMode/designRender.js` entry of `ENTRIES`.
+   - `test/shared/properties/appShortcuts.test.ts`: `'src/app/designMode/DesignModeHost.tsx'` in the digit-shortcut list,
+     and the comment line above it.
 3. Run `npm run build:runtime` (the dev server's generated config is written again at its next start).
 
 Kept on purpose (shared with other canvas modes, such as comment pins): `src/lib/canvasModes.ts`,
