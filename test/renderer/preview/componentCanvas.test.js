@@ -204,3 +204,16 @@ test('every frame renders the component defaults: props, text and nested childre
   assert.doesNotMatch(source, />Card</, 'no placeholder when defaults are configured');
   assert.equal(parsePage(source).editable, true);
 });
+
+test('the project background is the canvas surface, frames without their own are transparent over it, and a gone variable falls back', () => {
+  const grey = chrome.chromeStyles('dark');
+  assert.match(grey, /stacki-canvas \{[^}]*background: #1e1e1e;/);
+  assert.match(grey, /stacki-frame-body\[data-transparent\] \{ background: var\(--stacki-page-background, #fff\); \}/);
+  const themed = chrome.chromeStyles('dark', 'var(--background)');
+  assert.match(themed, /stacki-canvas \{[^}]*background: var\(--background, #1e1e1e\);/, 'a variable the project drops draws the grey');
+  assert.match(themed, /stacki-frame-body\[data-transparent\] \{ background: transparent; \}/);
+  assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff;/);
+  assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
+  assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
+  assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
+});

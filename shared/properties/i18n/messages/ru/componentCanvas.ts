@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Показаны первые фреймы: {shown} из {total}. Чтобы увидеть остальные, выделите отдельные фреймы меньшему числу свойств.',
   'componentCanvas.pageName': 'Холст {name}',
   'componentCanvas.panel.background': 'Фон',
+  'componentCanvas.panel.backgroundVariable': 'Связать с переменной',
   'componentCanvas.panel.fixed': 'Фиксированный',
   'componentCanvas.panel.frame.hint':
     'Щёлкните подпись фрейма или пространство вокруг компонента, чтобы выбрать фрейм. Щёлкните внутри компонента, чтобы редактировать его.',
@@ -40,6 +41,7 @@ export const messages = {
     'Где действуют заданные вами размер, фон и значения свойств: в этом фрейме, во всех фреймах одного значения или во всех фреймах. Собственная настройка фрейма важнее более общей.',
   'componentCanvas.panel.scope.label': 'Применить к',
   'componentCanvas.panel.scope.part': 'Все фреймы {part}',
+  'componentCanvas.panel.scope.project': 'Все компоненты',
   'componentCanvas.panel.split.hint':
     'Каждое значение включённого здесь свойства получает свой фрейм, и фреймы показывают все сочетания. Выключенное свойство показывает в каждом фрейме одно значение, которое задаётся в свойствах предпросмотра.',
   'componentCanvas.panel.split.title': 'Отдельные фреймы',

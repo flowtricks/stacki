@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': '正在顯示 {total} 個框架中的前 {shown} 個。若要查看其餘框架，請減少擁有獨立框架的屬性。',
   'componentCanvas.pageName': '{name} 畫布',
   'componentCanvas.panel.background': '背景',
+  'componentCanvas.panel.backgroundVariable': '連結到變數',
   'componentCanvas.panel.fixed': '固定',
   'componentCanvas.panel.frame.hint': '按一下框架的標籤或元件周圍的空白處即可選取該框架。按一下元件內部即可編輯元件。',
   'componentCanvas.panel.frame.pick': '框架',
@@ -34,6 +35,7 @@ export const messages = {
   'componentCanvas.panel.scope.hint': '你設定的尺寸、背景與屬性值的套用範圍：此框架、某個值的所有框架，或所有框架。框架本身的設定優先於範圍較廣的設定。',
   'componentCanvas.panel.scope.label': '套用至',
   'componentCanvas.panel.scope.part': '所有 {part} 框架',
+  'componentCanvas.panel.scope.project': '所有元件',
   'componentCanvas.panel.split.hint':
     '在此開啟的屬性，每個值都有自己的框架，這些框架會顯示所有組合。未開啟的屬性在每個框架中只顯示一個值，該值在「預覽屬性」中設定。',
   'componentCanvas.panel.split.title': '獨立框架',

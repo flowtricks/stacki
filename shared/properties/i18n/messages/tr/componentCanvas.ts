@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': '{total} çerçevenin ilk {shown} tanesi gösteriliyor. Kalanları görmek için daha az prop’a ayrı çerçeve verin.',
   'componentCanvas.pageName': '{name} tuvali',
   'componentCanvas.panel.background': 'Arka plan',
+  'componentCanvas.panel.backgroundVariable': 'Değişkene bağla',
   'componentCanvas.panel.fixed': 'Sabit',
   'componentCanvas.panel.frame.hint':
     'Çerçeveyi seçmek için etiketine veya bileşeninin çevresindeki boşluğa tıklayın. Bileşeni düzenlemek için içine tıklayın.',
@@ -38,6 +39,7 @@ export const messages = {
     'Ayarladığınız boyut, arka plan ve prop değerlerinin uygulanacağı yer: bu çerçeve, tek bir değerin tüm çerçeveleri veya tüm çerçeveler. Çerçevenin kendi ayarı, daha geniş kapsamlı ayara üstün gelir.',
   'componentCanvas.panel.scope.label': 'Uygulama kapsamı',
   'componentCanvas.panel.scope.part': 'Tüm {part} çerçeveleri',
+  'componentCanvas.panel.scope.project': 'Tüm bileşenler',
   'componentCanvas.panel.split.hint':
     'Burada açılan bir prop’un her değeri kendi çerçevesini alır ve çerçeveler tüm birleşimleri gösterir. Kapalı bırakılan prop her çerçevede tek bir değer gösterir; bu değeri Önizleme prop’ları bölümünde ayarlarsınız.',
   'componentCanvas.panel.split.title': 'Ayrı çerçeveler',

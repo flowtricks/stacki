@@ -16,7 +16,7 @@ export interface CanvasOpen {
   readonly layout: CanvasLayout;
   /** The selected frame's key; always one of the layout's frames. */
   readonly frame: string;
-  /** Where the panel's edits go: `` all frames, a split value's key, or the selected frame's own key. */
+  /** Where the panel's edits go: `` all frames, a split value's key, the selected frame's own key, or PROJECT_SCOPE. */
   readonly scope: string;
   readonly scale: number;
   /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
@@ -26,6 +26,12 @@ export interface CanvasOpen {
 }
 
 export type CanvasState = { readonly kind: 'idle' } | { readonly kind: 'opening'; readonly component: string } | CanvasOpen;
+
+/**
+ * The "Apply to" scope of the whole project: its one setting is the canvas background (ComponentCanvasFile.background).
+ * Never a frame key, which is sorted `name=value` pairs or empty.
+ */
+export const PROJECT_SCOPE = '*project';
 
 export type CanvasZoom = 'in' | 'out' | 'reset' | 'fit';
 

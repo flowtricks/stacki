@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Die ersten {shown} von {total} Frames werden angezeigt. Gib weniger Props eigene Frames, um den Rest zu sehen.',
   'componentCanvas.pageName': '{name}-Canvas',
   'componentCanvas.panel.background': 'Hintergrund',
+  'componentCanvas.panel.backgroundVariable': 'Mit Variable verbinden',
   'componentCanvas.panel.fixed': 'Fest',
   'componentCanvas.panel.frame.hint':
     'Klicke auf die Beschriftung eines Frames oder auf den Bereich um seine Komponente, um den Frame auszuwählen. Klicke in die Komponente, um sie zu bearbeiten.',
@@ -38,6 +39,7 @@ export const messages = {
     'Wo die von dir festgelegte Größe, der Hintergrund und die Prop-Werte gelten: für diesen Frame, für jeden Frame eines Werts oder für alle Frames. Die eigene Einstellung eines Frames hat Vorrang vor einer weiter gefassten.',
   'componentCanvas.panel.scope.label': 'Anwenden auf',
   'componentCanvas.panel.scope.part': 'Jeder Frame mit {part}',
+  'componentCanvas.panel.scope.project': 'Alle Komponenten',
   'componentCanvas.panel.split.hint':
     'Jeder Wert einer hier eingeschalteten Prop erhält einen eigenen Frame, und die Frames zeigen jede Kombination. Eine ausgeschaltete Prop zeigt pro Frame einen Wert, den du unter „Vorschau-Props“ festlegst.',
   'componentCanvas.panel.split.title': 'Eigene Frames',

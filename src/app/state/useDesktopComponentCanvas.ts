@@ -13,6 +13,7 @@ import {
   parseComponentCanvasSource,
   serializeComponentCanvas,
   withFrameEdit,
+  withProjectBackground,
   withSplit,
   type ComponentCanvasFile,
   type FrameEdit,
@@ -29,6 +30,7 @@ import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentC
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
   noteComponentCanvas,
+  PROJECT_SCOPE,
   registerCanvasInstanceOpener,
   type CanvasOpen,
   type CanvasState,
@@ -226,7 +228,14 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           setState({ ...current, scope });
         }
       },
-      edit: (edit: FrameEdit) => update((current) => withFrameEdit(current.settings, current.component.file, current.scope, edit)),
+      edit: (edit: FrameEdit) =>
+        update((current) => {
+          // The project scope holds one setting, the canvas background; anything else is not set there.
+          if (current.scope !== PROJECT_SCOPE) {
+            return withFrameEdit(current.settings, current.component.file, current.scope, edit);
+          }
+          return edit.kind === 'background' ? withProjectBackground(current.settings, edit.value) : current.settings;
+        }),
       setSplit: (split) => update((current) => withSplit(current.settings, current.component.file, split)),
       coverRight,
       hideFramePanel: () => {
@@ -258,7 +267,7 @@ function scopeAfterSelect(current: CanvasOpen, key: string): string {
 
 // A scope is the selected frame, every frame, or one split value the selected frame shows.
 function scopeStillFits(scope: string, frame: string, layout: CanvasOpen['layout']): boolean {
-  if (scope === '' || scope === frame) {
+  if (scope === '' || scope === frame || scope === PROJECT_SCOPE) {
     return true;
   }
   const selected = layout.frames.find((candidate) => candidate.key === frame);
@@ -294,7 +303,7 @@ async function openCanvas(
   }
   const id = crypto.randomUUID();
   const pageFile = pageFileOf(id);
-  const page = pageSourceOf(id, component, layout, snapshot, translate);
+  const page = pageSourceOf({ id, component, layout, settings: parsed.value }, snapshot, translate);
   await createDefaultsCanvas(project, pageFile, page);
   try {
     const focusPath = await canvasRootPath(project + '/' + pageFile, page);
@@ -345,12 +354,14 @@ async function openCanvas(
   }
 }
 
-function pageSourceOf(id: string, component: CanvasComponent, layout: CanvasOpen['layout'], snapshot: DefaultsSnapshot, translate: Translator): string {
+function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | 'settings'>, snapshot: DefaultsSnapshot, translate: Translator): string {
+  const { id, component, layout } = canvas;
   return canvasPageSource({
     id,
     component: component.file,
     fallbackText: prettyComponentName(component.name),
     theme: 'dark',
+    surface: canvas.settings.background,
     snapshot,
     frames: layout.frames.map((frame) => ({
       key: frame.key,
@@ -468,7 +479,7 @@ function useCanvasPageWrites(
         if (JSON.stringify(defaults) !== JSON.stringify(open.defaults)) {
           setState((current) => (current.kind === 'open' && current.id === open.id ? { ...current, defaults } : current));
         }
-        const page = pageSourceOf(open.id, open.component, open.layout, snapshot, translate);
+        const page = pageSourceOf(open, snapshot, translate);
         if (page !== held.page && held.active === open.id) {
           held.page = page;
           await writeText(project, pageFileOf(open.id), page);

@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'تُعرض أول {shown} من إجمالي الإطارات البالغ {total}. لرؤية البقية، امنح عددًا أقل من الخصائص إطارات خاصة بها.',
   'componentCanvas.pageName': 'لوحة {name}',
   'componentCanvas.panel.background': 'الخلفية',
+  'componentCanvas.panel.backgroundVariable': 'ربط بمتغير',
   'componentCanvas.panel.fixed': 'ثابت',
   'componentCanvas.panel.frame.hint': 'انقر على تسمية الإطار أو المساحة المحيطة بمكوّنه لتحديد الإطار. انقر داخل المكوّن لتعديله.',
   'componentCanvas.panel.frame.pick': 'الإطار',
@@ -40,6 +41,7 @@ export const messages = {
     'أين يُطبَّق الحجم والخلفية وقيم الخصائص التي تعيّنها: على هذا الإطار، أو على كل إطارات قيمة واحدة، أو على كل الإطارات. ويتقدّم إعداد الإطار الخاص على الإعداد الأوسع نطاقًا.',
   'componentCanvas.panel.scope.label': 'تطبيق على',
   'componentCanvas.panel.scope.part': 'كل إطارات {part}',
+  'componentCanvas.panel.scope.project': 'كل المكوّنات',
   'componentCanvas.panel.split.hint':
     'تحصل كل قيمة لخاصية مفعّلة هنا على إطار خاص بها، وتعرض الإطارات كل التركيبات. أما الخاصية غير المفعّلة فتعرض قيمة واحدة في كل إطار، وتعيّنها في خصائص المعاينة.',
   'componentCanvas.panel.split.title': 'إطارات خاصة',

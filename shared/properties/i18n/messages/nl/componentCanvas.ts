@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'De eerste {shown} van {total} frames worden getoond. Geef minder props eigen frames om de rest te zien.',
   'componentCanvas.pageName': 'Canvas van {name}',
   'componentCanvas.panel.background': 'Achtergrond',
+  'componentCanvas.panel.backgroundVariable': 'Aan variabele koppelen',
   'componentCanvas.panel.fixed': 'Vast',
   'componentCanvas.panel.frame.hint':
     'Klik op het label van een frame of op de ruimte rond het component om het frame te selecteren. Klik in het component om het te bewerken.',
@@ -38,6 +39,7 @@ export const messages = {
     'Waar het formaat, de achtergrond en de propwaarden die je instelt gelden: voor dit frame, voor elk frame van één waarde of voor alle frames. De eigen instelling van een frame gaat voor op een bredere.',
   'componentCanvas.panel.scope.label': 'Toepassen op',
   'componentCanvas.panel.scope.part': 'Elk frame met {part}',
+  'componentCanvas.panel.scope.project': 'Alle componenten',
   'componentCanvas.panel.split.hint':
     'Elke waarde van een prop die hier is ingeschakeld krijgt een eigen frame, en de frames tonen elke combinatie. Een uitgeschakelde prop toont één waarde per frame, die je instelt bij Previewprops.',
   'componentCanvas.panel.split.title': 'Eigen frames',

@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Showing the first {shown} of {total} frames. Give fewer props their own frames to see the rest.',
   'componentCanvas.pageName': '{name} canvas',
   'componentCanvas.panel.background': 'Background',
+  'componentCanvas.panel.backgroundVariable': 'Connect a variable',
   'componentCanvas.panel.fixed': 'Fixed',
   'componentCanvas.panel.frame.hint': 'Click a frame’s label or the space around its component to select the frame. Click inside the component to edit it.',
   'componentCanvas.panel.frame.pick': 'Frame',
@@ -37,6 +38,7 @@ export const messages = {
     'Where the size, background and prop values you set apply: this frame, every frame of one value, or every frame. A frame’s own setting wins over a wider one.',
   'componentCanvas.panel.scope.label': 'Apply to',
   'componentCanvas.panel.scope.part': 'Every {part} frame',
+  'componentCanvas.panel.scope.project': 'All components',
   'componentCanvas.panel.split.hint':
     'Each value of a prop switched on here gets its own frame, and the frames show every combination. A prop left off shows one value per frame, which you set in Preview props.',
   'componentCanvas.panel.split.title': 'Own frames',

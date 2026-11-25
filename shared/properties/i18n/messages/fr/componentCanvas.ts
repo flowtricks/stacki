@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Affichage des {shown} premiers cadres sur {total}. Donnez des cadres séparés à moins de props pour voir les autres.',
   'componentCanvas.pageName': 'Canevas de {name}',
   'componentCanvas.panel.background': 'Arrière-plan',
+  'componentCanvas.panel.backgroundVariable': 'Connecter à une variable',
   'componentCanvas.panel.fixed': 'Fixe',
   'componentCanvas.panel.frame.hint':
     'Cliquez sur le libellé d’un cadre ou sur l’espace autour de son composant pour sélectionner le cadre. Cliquez dans le composant pour le modifier.',
@@ -38,6 +39,7 @@ export const messages = {
     'Où s’appliquent la taille, l’arrière-plan et les valeurs de props que vous définissez : à ce cadre, à tous les cadres d’une même valeur ou à tous les cadres. Le réglage propre à un cadre l’emporte sur un réglage plus large.',
   'componentCanvas.panel.scope.label': 'Appliquer à',
   'componentCanvas.panel.scope.part': 'Tous les cadres {part}',
+  'componentCanvas.panel.scope.project': 'Tous les composants',
   'componentCanvas.panel.split.hint':
     'Chaque valeur d’une prop activée ici a son propre cadre, et les cadres montrent toutes les combinaisons. Une prop désactivée affiche une seule valeur par cadre, que vous définissez dans Props d’aperçu.',
   'componentCanvas.panel.split.title': 'Cadres séparés',

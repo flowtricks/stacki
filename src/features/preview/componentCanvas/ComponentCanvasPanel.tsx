@@ -5,7 +5,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, frameBackground, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
 import type { PropField } from '../../../../shared/properties/propSchema';
 import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
 import Dropdown from '../../../ui/Dropdown';
@@ -18,9 +18,10 @@ import { ComponentFillIcon } from '../../../ui/Icons';
 import { useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import ColorSwatch from '../../style/components/ColorSwatch';
+import VariableConnect from '../../style/VariableConnect';
 import { fieldControl, frameTakes, shownValue, splitPartOf, type ModelFrame } from './canvasModel';
 import { frameLabel, partLabel, prettyComponentName } from './frameLabel';
-import type { CanvasOpen, ComponentCanvasControl } from './componentCanvasSession';
+import { PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 
 // The width a frame takes when it stops hugging and nothing wider sets one.
@@ -43,7 +44,7 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
       </div>
       <SplitSection canvas={canvas} state={state} />
       <FrameSection canvas={canvas} state={state} frame={frame} entry={entry} />
-      <PropsSection canvas={canvas} state={state} frame={frame} entry={entry} />
+      {state.scope !== PROJECT_SCOPE && <PropsSection canvas={canvas} state={state} frame={frame} entry={entry} />}
     </div>
   );
 }
@@ -101,6 +102,7 @@ function FrameSection({
     { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
     ...frame.parts.map((part) => ({ value: frameKey([part]), label: translate('componentCanvas.panel.scope.part', { part: partLabel(part, translate) }) })),
     { value: '', label: translate('componentCanvas.panel.scope.all') },
+    { value: PROJECT_SCOPE, label: translate('componentCanvas.panel.scope.project') },
   ].filter((option, index, all) => all.findIndex((other) => other.value === option.value) === index);
   return (
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.frame.title')}>
@@ -123,9 +125,13 @@ function FrameSection({
         </label>
         <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
       </div>
-      <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
-      <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
-      <BackgroundField canvas={canvas} state={state} value={frame.resolved.background} entry={entry} />
+      {state.scope !== PROJECT_SCOPE && (
+        <>
+          <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
+          <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
+        </>
+      )}
+      <BackgroundField canvas={canvas} state={state} frame={frame} entry={entry} />
     </section>
   );
 }
@@ -178,44 +184,55 @@ function LengthField({
   );
 }
 
+// The background at the chosen scope: the frame's own, a wider scope's, the component's, or the project's canvas
+// background. A value set here is the blue label (reset clears it); one that comes from a wider level is the orange,
+// inherited label, as the Style panel shows an inherited value.
 function BackgroundField({
   canvas,
   state,
-  value,
+  frame,
   entry,
 }: {
   readonly canvas: ComponentCanvasControl;
   readonly state: CanvasOpen;
-  readonly value: string | undefined;
+  readonly frame: ModelFrame;
   readonly entry: FrameEntry | undefined;
 }) {
   const translate = useTranslate();
+  const project = state.scope === PROJECT_SCOPE;
+  const shown = project ? { value: state.settings.background, source: { kind: 'project' as const } } : frameBackground(state.settings, frame.resolved);
+  const own = project ? state.settings.background !== undefined : entry?.background !== undefined;
+  const inherited = !own && shown.value !== undefined;
+  const value = shown.value;
+  const label = translate('componentCanvas.panel.background');
   const commit = (color: string) => {
     const trimmed = color.trim();
+    // Transparent over every frame is what no setting says; for the project it is a setting of its own (no canvas grey).
     const clear = trimmed === '' || (trimmed === 'transparent' && state.scope === '');
     canvas.edit({ kind: 'background', value: clear ? undefined : trimmed });
   };
   return (
     <div className="props-field">
-      <ResetLabel
-        label={translate('componentCanvas.panel.background')}
-        active={entry?.background !== undefined}
-        onReset={() => canvas.edit({ kind: 'background', value: undefined })}
-      />
+      {inherited ? (
+        <span className="prop-label embed-editor_prop-orange component-canvas-inherited">{label}</span>
+      ) : (
+        <ResetLabel label={label} active={own} onReset={() => canvas.edit({ kind: 'background', value: undefined })} />
+      )}
       <div className="component-canvas-color">
         <ColorSwatch
           value={value ?? 'transparent'}
-          ariaLabel={translate('componentCanvas.panel.background')}
+          ariaLabel={label}
           onChange={(color, live) => {
             if (!live) {
               commit(color);
             }
           }}
         />
-        <CommitInput
-          ariaLabel={translate('componentCanvas.panel.background')}
-          value={value ?? ''}
-          placeholder={translate('componentCanvas.panel.transparent')}
+        <BackgroundInput
+          value={own ? (value ?? '') : ''}
+          placeholder={inherited ? (value ?? '') : translate('componentCanvas.panel.transparent')}
+          label={label}
+          connectLabel={translate('componentCanvas.panel.backgroundVariable')}
           onCommit={commit}
         />
       </div>
@@ -335,6 +352,59 @@ function PropControl({
       return exhaustive;
     }
   }
+}
+
+// The background's text, with the Style panel's variable button beside it: a picked variable is written as
+// `var(--name)` at once, so the canvas follows the variable's later edits. Typed text commits on Enter or leaving.
+function BackgroundInput({
+  value,
+  placeholder,
+  label,
+  connectLabel,
+  onCommit,
+}: {
+  readonly value: string;
+  readonly placeholder: string;
+  readonly label: string;
+  readonly connectLabel: string;
+  readonly onCommit: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <VariableConnect
+      code
+      className="is-fill"
+      ariaLabel={connectLabel}
+      prop="background-color"
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommit(binding);
+      }}
+    >
+      <input
+        className="u-input"
+        value={draft}
+        placeholder={placeholder}
+        aria-label={label}
+        spellCheck={false}
+        maxLength={CANVAS_LIMITS.backgroundCharsMax}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== value) {
+            onCommit(draft);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          } else if (event.key === 'Escape') {
+            setDraft(value);
+          }
+        }}
+      />
+    </VariableConnect>
+  );
 }
 
 // Why a control is greyed out, in the app's own tooltip, on hover.

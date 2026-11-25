@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'מוצגות {shown} המסגרות הראשונות מתוך {total}. כדי לראות את השאר, יש לתת מסגרות נפרדות לפחות props.',
   'componentCanvas.pageName': 'קנבס {name}',
   'componentCanvas.panel.background': 'רקע',
+  'componentCanvas.panel.backgroundVariable': 'חיבור למשתנה',
   'componentCanvas.panel.fixed': 'קבוע',
   'componentCanvas.panel.frame.hint': 'לחיצה על התווית של מסגרת או על השטח שסביב הרכיב שלה בוחרת את המסגרת. לחיצה בתוך הרכיב מאפשרת לערוך אותו.',
   'componentCanvas.panel.frame.pick': 'מסגרת',
@@ -37,6 +38,7 @@ export const messages = {
     'היכן חלים הגודל, הרקע וערכי ה־props שמגדירים: במסגרת הזו, בכל המסגרות של ערך אחד, או בכל המסגרות. הגדרה של מסגרת עצמה גוברת על הגדרה רחבה יותר.',
   'componentCanvas.panel.scope.label': 'החלה על',
   'componentCanvas.panel.scope.part': 'כל מסגרות {part}',
+  'componentCanvas.panel.scope.project': 'כל הרכיבים',
   'componentCanvas.panel.split.hint':
     'כל ערך של prop שמופעל כאן מקבל מסגרת משלו, והמסגרות מציגות את כל השילובים. prop שנשאר כבוי מציג ערך אחד בכל מסגרת, והוא נקבע ב־Props לתצוגה מקדימה.',
   'componentCanvas.panel.split.title': 'מסגרות נפרדות',

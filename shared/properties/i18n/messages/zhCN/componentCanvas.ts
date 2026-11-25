@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': '正在显示 {total} 个框架中的前 {shown} 个。要查看其余框架，请减少拥有独立框架的属性。',
   'componentCanvas.pageName': '{name} 画布',
   'componentCanvas.panel.background': '背景',
+  'componentCanvas.panel.backgroundVariable': '连接到变量',
   'componentCanvas.panel.fixed': '固定',
   'componentCanvas.panel.frame.hint': '点击框架的标签或组件周围的空白处即可选择该框架。点击组件内部即可编辑组件。',
   'componentCanvas.panel.frame.pick': '框架',
@@ -34,6 +35,7 @@ export const messages = {
   'componentCanvas.panel.scope.hint': '你设置的尺寸、背景和属性值的应用范围：此框架、某个值的所有框架，或所有框架。框架自身的设置优先于范围更大的设置。',
   'componentCanvas.panel.scope.label': '应用到',
   'componentCanvas.panel.scope.part': '所有 {part} 框架',
+  'componentCanvas.panel.scope.project': '所有组件',
   'componentCanvas.panel.split.hint':
     '在此开启的属性，其每个值都有自己的框架，这些框架会显示所有组合。未开启的属性在每个框架中只显示一个值，该值在“预览属性”中设置。',
   'componentCanvas.panel.split.title': '独立框架',

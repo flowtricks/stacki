@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Mostrando os primeiros {shown} de {total} quadros. Dê quadros próprios a menos props para ver o restante.',
   'componentCanvas.pageName': 'Canvas de {name}',
   'componentCanvas.panel.background': 'Plano de fundo',
+  'componentCanvas.panel.backgroundVariable': 'Conectar a uma variável',
   'componentCanvas.panel.fixed': 'Fixo',
   'componentCanvas.panel.frame.hint':
     'Clique no rótulo de um quadro ou no espaço ao redor do componente para selecionar o quadro. Clique dentro do componente para editá-lo.',
@@ -38,6 +39,7 @@ export const messages = {
     'Onde se aplicam o tamanho, o plano de fundo e os valores de props que você definir: neste quadro, em todos os quadros de um valor ou em todos os quadros. A configuração do próprio quadro prevalece sobre uma mais ampla.',
   'componentCanvas.panel.scope.label': 'Aplicar a',
   'componentCanvas.panel.scope.part': 'Todos os quadros de {part}',
+  'componentCanvas.panel.scope.project': 'Todos os componentes',
   'componentCanvas.panel.split.hint':
     'Cada valor de uma prop ativada aqui ganha seu próprio quadro, e os quadros mostram todas as combinações. Uma prop desativada mostra um valor por quadro, que você define em Props de visualização.',
   'componentCanvas.panel.split.title': 'Quadros próprios',

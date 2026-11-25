@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Vengono mostrati i primi {shown} frame su {total}. Assegna frame propri a meno props per vedere gli altri.',
   'componentCanvas.pageName': 'Canvas di {name}',
   'componentCanvas.panel.background': 'Sfondo',
+  'componentCanvas.panel.backgroundVariable': 'Collega a variabile',
   'componentCanvas.panel.fixed': 'Fisso',
   'componentCanvas.panel.frame.hint':
     'Fai clic sull’etichetta di un frame o sullo spazio intorno al suo componente per selezionare il frame. Fai clic dentro il componente per modificarlo.',
@@ -38,6 +39,7 @@ export const messages = {
     'Dove si applicano la dimensione, lo sfondo e i valori delle props che imposti: a questo frame, a tutti i frame di un valore o a tutti i frame. L’impostazione propria di un frame prevale su una più ampia.',
   'componentCanvas.panel.scope.label': 'Applica a',
   'componentCanvas.panel.scope.part': 'Tutti i frame con {part}',
+  'componentCanvas.panel.scope.project': 'Tutti i componenti',
   'componentCanvas.panel.split.hint':
     'Ogni valore di una prop attivata qui ha il proprio frame, e i frame mostrano tutte le combinazioni. Una prop disattivata mostra un solo valore per frame, che imposti in Props di anteprima.',
   'componentCanvas.panel.split.title': 'Frame propri',

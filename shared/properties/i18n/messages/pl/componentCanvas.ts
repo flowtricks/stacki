@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Wyświetlane ramki: pierwsze {shown} z {total}. Aby zobaczyć pozostałe, daj własne ramki mniejszej liczbie właściwości.',
   'componentCanvas.pageName': 'Kanwa {name}',
   'componentCanvas.panel.background': 'Tło',
+  'componentCanvas.panel.backgroundVariable': 'Połącz ze zmienną',
   'componentCanvas.panel.fixed': 'Stały',
   'componentCanvas.panel.frame.hint':
     'Kliknij etykietę ramki lub miejsce wokół jej komponentu, aby zaznaczyć ramkę. Kliknij wewnątrz komponentu, aby go edytować.',
@@ -40,6 +41,7 @@ export const messages = {
     'Zakres ustawianego rozmiaru, tła i wartości właściwości: ta ramka, wszystkie ramki jednej wartości lub wszystkie ramki. Własne ustawienie ramki ma pierwszeństwo przed szerszym.',
   'componentCanvas.panel.scope.label': 'Zastosuj do',
   'componentCanvas.panel.scope.part': 'Wszystkie ramki {part}',
+  'componentCanvas.panel.scope.project': 'Wszystkie komponenty',
   'componentCanvas.panel.split.hint':
     'Każda wartość właściwości włączonej tutaj dostaje własną ramkę, a ramki pokazują wszystkie kombinacje. Wyłączona właściwość ma w każdej ramce jedną wartość, którą ustawiasz we właściwościach podglądu.',
   'componentCanvas.panel.split.title': 'Własne ramki',

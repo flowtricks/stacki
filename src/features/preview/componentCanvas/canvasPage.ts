@@ -40,6 +40,8 @@ export interface CanvasPageInput {
   /** The text a component with a default slot and no insertion content shows (its own name). */
   readonly fallbackText: string;
   readonly theme: 'light' | 'dark';
+  /** The project's canvas background, when it sets one (componentCanvas.ts ComponentCanvasFile.background). */
+  readonly surface?: string | undefined;
   readonly snapshot: DefaultsSnapshot;
   readonly frames: readonly CanvasPageFrame[];
 }
@@ -65,7 +67,7 @@ export function canvasPageSource(input: CanvasPageInput): string {
 import 'virtual:stacki-component-preview-styles';
 import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';
 ${imports.declarations().join('\n')}
-const chrome = ${JSON.stringify(chromeStyles(input.theme))};
+const chrome = ${JSON.stringify(chromeStyles(input.theme, input.surface))};
 const script = ${JSON.stringify(chromeScript(input.id))};
 ---
 <html {...htmlAttributes} class={[htmlAttributes.class, 'stacki-designer'].filter(Boolean).join(' ')}>

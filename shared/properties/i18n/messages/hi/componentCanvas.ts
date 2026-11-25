@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': '{total} में से पहले {shown} फ़्रेम दिखाए जा रहे हैं। बाकी देखने के लिए कम प्रॉप्स को अलग फ़्रेम दें।',
   'componentCanvas.pageName': '{name} कैनवास',
   'componentCanvas.panel.background': 'पृष्ठभूमि',
+  'componentCanvas.panel.backgroundVariable': 'वेरिएबल से जोड़ें',
   'componentCanvas.panel.fixed': 'स्थिर',
   'componentCanvas.panel.frame.hint':
     'फ़्रेम चुनने के लिए उसके लेबल या उसके कंपोनेंट के आसपास की खाली जगह पर क्लिक करें। कंपोनेंट को संपादित करने के लिए उसके अंदर क्लिक करें।',
@@ -38,6 +39,7 @@ export const messages = {
     'आपके सेट किए गए आकार, पृष्ठभूमि और प्रॉप मान कहाँ लागू हों: इस फ़्रेम पर, किसी एक मान के हर फ़्रेम पर, या हर फ़्रेम पर। फ़्रेम की अपनी सेटिंग ज़्यादा व्यापक सेटिंग से ऊपर रहती है।',
   'componentCanvas.panel.scope.label': 'इस पर लागू करें',
   'componentCanvas.panel.scope.part': 'हर {part} फ़्रेम',
+  'componentCanvas.panel.scope.project': 'सभी कंपोनेंट',
   'componentCanvas.panel.split.hint':
     'यहाँ चालू की गई प्रॉप के हर मान को अपना फ़्रेम मिलता है, और फ़्रेम हर संयोजन दिखाते हैं। बंद छोड़ी गई प्रॉप हर फ़्रेम में एक ही मान दिखाती है, जिसे आप प्रीव्यू प्रॉप्स में सेट करते हैं।',
   'componentCanvas.panel.split.title': 'अलग फ़्रेम',

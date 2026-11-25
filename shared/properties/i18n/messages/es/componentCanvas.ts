@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Se muestran los primeros {shown} de {total} marcos. Da marcos propios a menos props para ver el resto.',
   'componentCanvas.pageName': 'Lienzo de {name}',
   'componentCanvas.panel.background': 'Fondo',
+  'componentCanvas.panel.backgroundVariable': 'Conectar a una variable',
   'componentCanvas.panel.fixed': 'Fijo',
   'componentCanvas.panel.frame.hint':
     'Haz clic en la etiqueta de un marco o en el espacio alrededor de su componente para seleccionar el marco. Haz clic dentro del componente para editarlo.',
@@ -38,6 +39,7 @@ export const messages = {
     'Dónde se aplican el tamaño, el fondo y los valores de props que definas: en este marco, en todos los marcos de un valor o en todos los marcos. El ajuste propio de un marco prevalece sobre uno más amplio.',
   'componentCanvas.panel.scope.label': 'Aplicar a',
   'componentCanvas.panel.scope.part': 'Todos los marcos de {part}',
+  'componentCanvas.panel.scope.project': 'Todos los componentes',
   'componentCanvas.panel.split.hint':
     'Cada valor de una prop activada aquí tiene su propio marco, y los marcos muestran todas las combinaciones. Una prop desactivada muestra un solo valor por marco, que defines en Props de vista previa.',
   'componentCanvas.panel.split.title': 'Marcos propios',

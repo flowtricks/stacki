@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': '전체 {total}개 중 처음 {shown}개의 프레임을 표시합니다. 나머지를 보려면 개별 프레임을 갖는 속성을 줄이세요.',
   'componentCanvas.pageName': '{name} 캔버스',
   'componentCanvas.panel.background': '배경',
+  'componentCanvas.panel.backgroundVariable': '변수에 연결',
   'componentCanvas.panel.fixed': '고정',
   'componentCanvas.panel.frame.hint': '프레임의 레이블이나 컴포넌트 주변의 빈 공간을 클릭하면 프레임이 선택됩니다. 컴포넌트 안을 클릭하면 편집할 수 있습니다.',
   'componentCanvas.panel.frame.pick': '프레임',
@@ -36,6 +37,7 @@ export const messages = {
     '설정한 크기, 배경, 속성 값이 적용되는 범위입니다. 이 프레임, 한 값의 모든 프레임, 또는 모든 프레임 중에서 선택합니다. 프레임 자체의 설정이 더 넓은 범위의 설정보다 우선합니다.',
   'componentCanvas.panel.scope.label': '적용 대상',
   'componentCanvas.panel.scope.part': '모든 {part} 프레임',
+  'componentCanvas.panel.scope.project': '모든 컴포넌트',
   'componentCanvas.panel.split.hint':
     '여기에서 켠 속성은 값마다 개별 프레임을 가지며, 프레임에는 모든 조합이 표시됩니다. 꺼 둔 속성은 프레임마다 하나의 값을 표시하며, 그 값은 미리보기 속성에서 설정합니다.',
   'componentCanvas.panel.split.title': '개별 프레임',

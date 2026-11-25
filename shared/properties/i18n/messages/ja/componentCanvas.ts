@@ -15,6 +15,7 @@ export const messages = {
     '{total} フレーム中、最初の {shown} フレームを表示しています。残りを表示するには、個別のフレームを持つプロパティを減らしてください。',
   'componentCanvas.pageName': '{name} キャンバス',
   'componentCanvas.panel.background': '背景',
+  'componentCanvas.panel.backgroundVariable': '変数に接続',
   'componentCanvas.panel.fixed': '固定',
   'componentCanvas.panel.frame.hint':
     'フレームのラベルかコンポーネントの周囲の余白をクリックすると、フレームを選択できます。コンポーネントの内側をクリックすると編集できます。',
@@ -38,6 +39,7 @@ export const messages = {
     '設定するサイズ、背景、プロパティ値の適用先です。このフレーム、ある値のすべてのフレーム、またはすべてのフレームから選びます。フレーム自体の設定は、より広い範囲の設定より優先されます。',
   'componentCanvas.panel.scope.label': '適用先',
   'componentCanvas.panel.scope.part': '{part} のすべてのフレーム',
+  'componentCanvas.panel.scope.project': 'すべてのコンポーネント',
   'componentCanvas.panel.split.hint':
     'ここでオンにしたプロパティは値ごとに個別のフレームを持ち、フレームにはすべての組み合わせが表示されます。オフのプロパティはフレームごとに 1 つの値を表示し、その値は「プレビュー用プロパティ」で設定します。',
   'componentCanvas.panel.split.title': '個別のフレーム',

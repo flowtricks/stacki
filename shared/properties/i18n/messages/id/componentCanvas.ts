@@ -14,6 +14,7 @@ export const messages = {
   'componentCanvas.notice.truncated': 'Menampilkan {shown} frame pertama dari {total}. Berikan frame sendiri ke lebih sedikit prop untuk melihat sisanya.',
   'componentCanvas.pageName': 'Kanvas {name}',
   'componentCanvas.panel.background': 'Latar belakang',
+  'componentCanvas.panel.backgroundVariable': 'Hubungkan ke variabel',
   'componentCanvas.panel.fixed': 'Tetap',
   'componentCanvas.panel.frame.hint': 'Klik label frame atau ruang di sekitar komponennya untuk memilih frame. Klik di dalam komponen untuk mengeditnya.',
   'componentCanvas.panel.frame.pick': 'Frame', // same
@@ -36,6 +37,7 @@ export const messages = {
     'Tempat berlakunya ukuran, latar belakang, dan nilai prop yang Anda atur: frame ini, setiap frame dengan satu nilai, atau semua frame. Pengaturan milik frame mengalahkan pengaturan yang lebih luas.',
   'componentCanvas.panel.scope.label': 'Terapkan ke',
   'componentCanvas.panel.scope.part': 'Setiap frame {part}',
+  'componentCanvas.panel.scope.project': 'Semua komponen',
   'componentCanvas.panel.split.hint':
     'Setiap nilai dari prop yang diaktifkan di sini mendapat frame sendiri, dan frame menampilkan semua kombinasi. Prop yang dinonaktifkan menampilkan satu nilai per frame, yang Anda atur di Prop pratinjau.',
   'componentCanvas.panel.split.title': 'Frame sendiri',
