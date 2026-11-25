@@ -62,6 +62,8 @@ export interface PropsPanelProps {
    * Content field becomes the rich text editor's button and a code view (ComponentEditingFields.tsx).
    */
   readonly richTextContent?: boolean | undefined;
+  /** With rich text on a component that takes its HTML through a prop (`set:html={html}`) and no slot: that prop. */
+  readonly richTextProp?: string | undefined;
   /** Writes the selected node's content as code, byte for byte; absent where the host has no source writer. */
   readonly onSetContentSource?: ((source: string) => void) | undefined;
   /** While the selected node is the component whose defaults are being set: its editing settings, last in Settings. */

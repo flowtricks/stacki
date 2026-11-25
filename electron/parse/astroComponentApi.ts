@@ -221,6 +221,28 @@ export function rendersHtml(source: string): boolean {
   return /\sset:html\s*=\s*\{/.test(body);
 }
 
+// The props whose value the template sets as HTML (`set:html={body}` where `body` comes from Astro.props): an instance
+// writes that HTML as the prop's text, which rich text editing can edit when it is a literal.
+export function htmlPropsOf(source: string): string[] {
+  const fm = frontmatterOf(source);
+  const body = withoutComments(source).slice(fm ? fm.length : 0);
+  const destructured = /const\s*\{([^}]*)\}\s*=\s*Astro\.props/.exec(fm ? fm.code : '')?.[1] ?? '';
+  const names = new Set<string>();
+  for (const match of body.matchAll(/\sset:html\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/g)) {
+    const name = match[1] ?? '';
+    // `body`, `body = ""` or `html: body` in the destructure: the prop is the name before a colon, if any.
+    const entry = destructured.split(',').find((part) => new RegExp(`(?:^|:)\\s*${name}\\s*(?:=|$)`).test(part.trim()));
+    const prop = entry?.split(':')[0]?.split('=')[0]?.trim();
+    if (prop) {
+      names.add(prop);
+    }
+    if (names.size >= 8) {
+      break;
+    }
+  }
+  return [...names];
+}
+
 export function forwardsRest(source: string): boolean {
   return /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source);
 }

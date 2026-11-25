@@ -31,6 +31,9 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
+  if (state.richTextContent === true && node.kind === 'component' && state.richTextProp !== undefined) {
+    return <RichTextPropField state={state} prop={state.richTextProp} />;
+  }
   if (state.richTextContent === true && node.kind === 'component') {
     return (
       <RichTextContentField
@@ -144,6 +147,17 @@ export function richContextProp(context: RichContext | undefined): {
   readonly bindContext?: RichContext;
 } {
   return context === undefined ? {} : { bindContext: context };
+}
+
+// HTML a prop holds (`html="<p>…</p>"`), edited as rich text while it is a literal: written back as the prop's text.
+// Data or an expression (`html={post.body}`) is never turned into a literal: it shows as code, read only, and changes
+// where it comes from.
+function RichTextPropField({ state, prop }: { readonly state: ElementState; readonly prop: string }) {
+  const value = state.node.props?.[prop];
+  const literal = value === undefined || value.type === 'string';
+  const source = value === undefined ? '' : value.type === 'string' ? value.value : value.type === 'expr' ? `{${value.value}}` : `{${prop}}`;
+  const write = (html: string) => state.onSetProp(prop, { type: 'string', value: html });
+  return <RichTextContentField label={prop} source={source} onSetHTML={literal ? write : undefined} onSetSource={literal ? write : undefined} />;
 }
 
 export function ElementLooseText({ state }: { readonly state: ElementState }) {

@@ -8,14 +8,55 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLiveValue } from '../../ui/liveValue';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type BubblePosition } from '../../features/props/RichFormatButtons';
-import { canvasTextSelection, type CanvasTextSelectionState } from '../../features/preview/canvasTextSelection';
+import { canvasRichPlus, canvasTextSelection, type CanvasRichPlusState, type CanvasTextSelectionState } from '../../features/preview/canvasTextSelection';
+import { BlockInsertButton, pickMedia } from '../../ui/HtmlField';
+import { HtmlLinkEditor } from '../../ui/HtmlLinkEditor';
 
 export function CanvasTextFormatBar() {
   const selection = useLiveValue(canvasTextSelection);
-  if (!selection) {
-    return undefined;
-  }
-  return createPortal(<CanvasTextBubble key={selection.session} selection={selection} />, document.body);
+  const plus = useLiveValue(canvasRichPlus);
+  return (
+    <>
+      {selection && createPortal(<CanvasTextBubble key={selection.session} selection={selection} />, document.body)}
+      {plus && createPortal(<CanvasRichPlus plus={plus} />, document.body)}
+    </>
+  );
+}
+
+// The `+` beside an empty block of rich text being typed on the canvas: the rich text dialog's menu, in its order. An
+// image or a video comes from the asset picker, or an address typed in the field it opens beside the block.
+function CanvasRichPlus({ plus }: { readonly plus: CanvasRichPlusState }) {
+  const [address, setAddress] = useState<'link' | 'image' | 'video'>();
+  const place = { left: Math.max(4, plus.box.x - 28), top: plus.box.y + Math.max(0, Math.floor((plus.box.h - 20) / 2)) };
+  const insert = (kind: 'link' | 'image' | 'video', value: string) => {
+    setAddress(undefined);
+    plus.choose(kind === 'link' ? { kind: 'link', href: value } : { kind: 'media', media: kind, address: value });
+  };
+  return (
+    <div className="canvas-rich-plus" style={{ position: 'fixed', left: place.left, top: place.top, zIndex: 40 }}>
+      <BlockInsertButton
+        onChoose={(choice) => {
+          if (choice.kind === 'media') {
+            setAddress(choice.media);
+            pickMedia(choice.media, (value) => insert(choice.media, value));
+          } else if (choice.kind === 'link') {
+            setAddress('link');
+          } else {
+            plus.choose(choice);
+          }
+        }}
+      />
+      {address && (
+        <HtmlLinkEditor
+          bubble={{ kind: 'edit', href: '', place: { top: 26, left: 0 } }}
+          onEdit={() => {}}
+          onApply={(value) => insert(address, value)}
+          onRemove={() => setAddress(undefined)}
+          onClose={() => setAddress(undefined)}
+        />
+      )}
+    </div>
+  );
 }
 
 function CanvasTextBubble({ selection }: { readonly selection: CanvasTextSelectionState }) {

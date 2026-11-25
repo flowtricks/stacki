@@ -120,3 +120,23 @@ export function withInnerSource(element: string, current: { readonly name: strin
   assert(result.length === element.length - current.inner.length + next.length, 'Only the content changed');
   return result;
 }
+
+/** Whether two HTML texts hold the same rich content, whatever whitespace lies between their blocks. */
+export function sameRichContent(left: string, right: string, document: Document): boolean {
+  return JSON.stringify(richShape(richTextNodes(left, document), 0)) === JSON.stringify(richShape(richTextNodes(right, document), 0));
+}
+
+// The content with whitespace runs folded and text that is only whitespace left out: what a reader sees.
+function richShape(nodes: readonly InlineNode[], depth: number): readonly unknown[] {
+  assert(depth <= LIMITS.treeDepthMax, 'Rich text nesting is bounded');
+  return nodes.flatMap((node): readonly unknown[] => {
+    if (node.kind === 'text') {
+      const value = node.value.replace(/\s+/g, ' ').trim();
+      return value === '' ? [] : [value];
+    }
+    if (node.kind === 'expr') {
+      return [node.value];
+    }
+    return [{ name: node.name, props: node.props, children: node.children === undefined ? undefined : richShape(node.children, depth + 1) }];
+  });
+}

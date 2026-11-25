@@ -798,6 +798,7 @@ export function settingsTextHandlers(app: ShellView) {
       }
     },
     richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path).richText === true,
+    richTextProp: app.selectedComponent?.slots?.includes('default') === true ? undefined : app.selectedComponent?.htmlProps?.[0],
     onSetContentSource: (source: string) => {
       if (selectedId) {
         app.setNodeContentSource(selectedId, source);
