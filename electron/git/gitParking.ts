@@ -8,7 +8,7 @@ import { described } from '../../shared/properties/i18n/messageRef';
 import * as gitHistory from './gitHistory';
 import { git } from '../lib/nodeTools';
 import { ensureExcluded } from '../lib/projectExclusions';
-import { readHead } from './gitState';
+import { projectPrefix, readHead } from './gitState';
 
 // Work in progress, set aside under the branch it belongs to.
 //
@@ -61,14 +61,16 @@ export async function parkBranch(projectPath: string, branch: string | undefined
 // Branches can disagree about .gitignore. Keep existing generated files ignored
 // locally so a return trip cannot stash the other branch's runtime dependencies.
 async function preserveIgnoredPaths(projectPath: string): Promise<void> {
-  const { stdout } = await git(projectPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
+  // The whole repository (`:/`), by paths from its root: a stash takes in every folder, not only the project's own.
+  const { stdout } = await git(projectPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '--full-name', '-z', '--', ':/']);
   const paths = stdout.split('\0').filter(Boolean);
   if (paths.length > 4096) {
     throw new Error('Too many ignored paths to preserve while switching branches');
   }
   // Shared Stacki metadata must remain versioned; only its known generated
   // directories belong in the local exclusions maintained by ensureExcluded.
-  const ignoredPaths = paths.filter((entry) => !entry.startsWith('.stacki/'));
+  const metadata = `${await projectPrefix(git, projectPath)}.stacki/`;
+  const ignoredPaths = paths.filter((entry) => !entry.startsWith(metadata));
   if (!ensureExcluded(projectPath, { ignoredPaths })) {
     throw new Error('Could not preserve generated files before switching branches');
   }

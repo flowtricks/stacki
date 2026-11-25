@@ -510,6 +510,9 @@ async function resolveConflict(props: ModalProps & { readonly conflict: PendingC
   const result = await gitValue(resolveGitMerge(props.project.path, props.conflict.branch, choices));
   assert(result.ok, 'Merge resolution must complete');
   assert(result.into !== undefined, 'Merge resolution requires a target branch');
+  if (result.parkedError !== undefined) {
+    props.showToast(translateReference(result.parkedError, result.parkedErrorRef, props.translate), 'error');
+  }
   if (props.conflict.deleteAfter) {
     await tidyUp({
       projectPath: props.project.path,

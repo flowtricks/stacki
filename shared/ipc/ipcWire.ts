@@ -218,6 +218,9 @@ export type WireMergeOutcome =
       readonly into: undefined | string;
       readonly changed: boolean;
       readonly resolved?: number;
+      /** Unsaved work set aside to finish the merge, still parked because it could not go back. */
+      readonly parkedError?: string | undefined;
+      readonly parkedErrorRef?: MessageRef | undefined;
     }
   | {
       readonly ok: false;

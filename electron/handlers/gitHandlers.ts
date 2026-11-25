@@ -228,7 +228,13 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
 
   // Finishing a merge the user has chosen their way through. The conflicting
   // files come back from git:merge with both versions; this applies the answers.
-  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) => resolveMerge(git, definedFields({ projectPath, branch, choices })));
+  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) => {
+    const parking = {
+      park: (into: string) => parkBranch(projectPath, into),
+      unpark: (into: string) => unparkBranch(projectPath, into),
+    };
+    return resolveMerge(git, { ...definedFields({ projectPath, branch, choices }), parking });
+  });
 
   ipcMain.handle('git:deleteBranch', async (_event, { projectPath, branch, force }) => deleteBranch(git, definedFields({ projectPath, branch, force })));
 

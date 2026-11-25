@@ -12,7 +12,7 @@ import { parseConflict, renderResolved } from './conflicts';
 import type { ConflictPart } from './conflicts';
 import { gitErrorDetail, gitErrorFull } from './git';
 import type { Git } from './git';
-import { branchExists, readHead, requireNoUnfinishedOperation, requireValidBranchName } from './gitState';
+import { branchExists, readHead, requireNoUnfinishedOperation, requireValidBranchName, unfinishedOperation } from './gitState';
 
 // Merging a branch and deleting one.
 //
@@ -60,6 +60,9 @@ export type MergeOutcome =
       readonly into: string | undefined;
       readonly changed: boolean;
       readonly resolved?: number;
+      /** The merge is done, but the unsaved work set aside for it could not go back on top: it is still parked. */
+      readonly parkedError?: string | undefined;
+      readonly parkedErrorRef?: MessageRef | undefined;
     }
   | {
       readonly ok: false;
@@ -75,6 +78,15 @@ export type MergeOutcome =
       readonly branch: string;
       readonly files: readonly string[];
     };
+
+/** What git says when unsaved work sits in a file a merge has to write. */
+const WORK_IN_THE_WAY = /would be overwritten|Please commit your changes|Your local changes/i;
+
+/** Setting the unsaved work aside and taking it back, as the app's parking does. */
+interface Parking {
+  readonly park: (branch: string) => Promise<boolean>;
+  readonly unpark: (branch: string) => Promise<{ readonly error?: string | undefined; readonly errorRef?: MessageRef | undefined }>;
+}
 
 /**
  * The files git could not reconcile, as paths from the repository's root. `-z` because the line form quotes and escapes a name with
@@ -142,16 +154,14 @@ async function stage(git: Git, projectPath: string, stageNumber: number, file: s
  */
 async function resolveMerge(
   git: Git,
-  {
-    projectPath,
-    branch,
-    choices,
-  }: {
+  request: {
     readonly projectPath: string;
     readonly branch: string;
     readonly choices?: Record<string, unknown>;
+    readonly parking?: Parking | undefined;
   },
 ): Promise<MergeOutcome> {
+  const { projectPath, branch, choices, parking } = request;
   requireRefName(branch);
   await requireNoUnfinishedOperation(git, projectPath);
   const into = await currentBranch(git, projectPath);
@@ -159,8 +169,15 @@ async function resolveMerge(
     Object.entries(choices ?? {}).map(([file, choice]): readonly [string, MergeResolution] => [file, parseMergeResolution(choice)]),
   );
   const edited = Object.values(resolutions).filter((choice) => typeof choice === 'object' && 'kind' in choice);
-  const clean = await resolveMergeStart(git, { projectPath, branch, into, edited });
-  if (clean) {
+  const refusal = await resolveMergeStart(git, { projectPath, branch, into, edited });
+  if (refusal !== undefined && (await unfinishedOperation(git, projectPath)) !== 'merge') {
+    // Git never began. Unsaved work in a file the merge writes (restored before the review opened) is the one cause to get past.
+    if (parking !== undefined && WORK_IN_THE_WAY.test(gitErrorFull(refusal.error))) {
+      return resolveMergeAroundWork(git, { ...request, parking: undefined }, parking, into ?? 'HEAD', refusal.error);
+    }
+    throw gitFailure(gitErrorDetail(refusal.error), new ReferencedError('git.error.mergeFinishFailed', { branch }));
+  }
+  if (refusal === undefined) {
     if (edited.length > 0) {
       await git(projectPath, ['merge', '--abort']);
       throw new ReferencedError('git.error.mergeChangedSinceReview');
@@ -205,21 +222,43 @@ async function resolveMergeStart(
     readonly into: string | undefined;
     readonly edited: readonly MergeTextResolution[];
   },
-): Promise<boolean> {
+): Promise<{ readonly error: unknown } | undefined> {
   for (const choice of edited) {
     if (into !== choice.expectedBranch) {
       throw new ReferencedError('git.error.mergeBranchChanged');
     }
   }
-  let clean = false;
   try {
     const prepare = edited.length > 0 ? ['--no-commit', '--no-ff'] : [];
     await git(projectPath, ['-c', 'merge.conflictStyle=diff3', 'merge', '--no-edit', ...prepare, branch]);
-    clean = true;
-  } catch {
-    /* Expected: the merge conflicts again and must be resolved below. */
+    return undefined;
+  } catch (error: unknown) {
+    // Usually the expected one: the merge conflicts again and must be resolved below.
+    return { error };
   }
-  return clean;
+}
+
+// Finish the merge with the unsaved work set aside, and bring it back whatever happens. Parked work is never dropped: when it
+// cannot go back on the merged files it stays in the stash, and the outcome says so.
+async function resolveMergeAroundWork(
+  git: Git,
+  request: Parameters<typeof resolveMerge>[1],
+  parking: Parking,
+  into: string,
+  refusal: unknown,
+): Promise<MergeOutcome> {
+  if (!(await parking.park(into))) {
+    throw gitFailure(gitErrorDetail(refusal), new ReferencedError('git.error.mergeFinishFailed', { branch: request.branch }));
+  }
+  let outcome: MergeOutcome;
+  try {
+    outcome = await resolveMerge(git, request);
+  } catch (error: unknown) {
+    await parking.unpark(into);
+    throw error;
+  }
+  const back = await parking.unpark(into);
+  return outcome.ok && back.error !== undefined ? { ...outcome, parkedError: back.error, parkedErrorRef: back.errorRef } : outcome;
 }
 
 // Keep file reconstruction separate from merge orchestration so every write
@@ -352,7 +391,7 @@ async function mergeBranch(git: Git, { projectPath, branch }: { readonly project
     // than an error, and it comes back shaped like the same question from a
     // branch switch so the UI can ask it the same way.
     const detail = gitErrorFull(error);
-    if (/would be overwritten|Please commit your changes|Your local changes/i.test(detail)) {
+    if (WORK_IN_THE_WAY.test(detail)) {
       const inTheWay = detail
         .split('\n')
         .map((line) => line.trim())

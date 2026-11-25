@@ -50,7 +50,7 @@ function parseMergeFiles(input: unknown) {
   }
   return files;
 }
-const mergeSuccess = object({ changed: boolean, resolved: optional(count) });
+const mergeSuccess = object({ changed: boolean, resolved: optional(count), parkedError: optional(text) });
 const mergeConflict = object({ branch: text, files: parseMergeFiles });
 const mergeDirty = object({ branch: text, files: list(text) });
 const parkResult = object({
@@ -68,7 +68,13 @@ const unparkResult = (input: unknown): { readonly restored: boolean; readonly er
 export function parseMergeResult(input: unknown): WireMergeOutcome {
   const value = record(input);
   if (value['ok'] === true) {
-    return { ok: true, into: optional(text)(value['into']), ...mergeSuccess(value) };
+    const parkedErrorRef = parseOptionalMessageRef(value['parkedErrorRef']);
+    return {
+      ok: true,
+      into: optional(text)(value['into']),
+      ...mergeSuccess(value),
+      ...(parkedErrorRef === undefined ? {} : { parkedErrorRef }),
+    };
   }
   if (value['ok'] !== false) {
     throw new Error('Merge result must declare success or failure');
