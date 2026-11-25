@@ -23,6 +23,7 @@ import { spacingSides } from './spacingShorthand';
 import type { BreakpointId, ParsedRule, Specificity } from './styleTypes';
 import type { InlineDeclaration } from '../../../../shared/engine/inlineStyle';
 import { INLINE_STYLE_LABEL, INLINE_STYLE_SELECTOR } from './inlineTarget';
+import { queryContextImplies } from './queryWidth';
 
 export type ContextKey = string; // '' = Base; else the joined atContext
 export type StateKey = '' | ':hover' | ':focus' | ':active';
@@ -742,12 +743,14 @@ type FoldedRule = {
 // apply to it.
 function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | undefined {
   const ruleContext = contextKeyOf(matched.rule);
-  // Show the current context's OWN rules plus the ones it inherits from — base ('')
-  // and any ancestor query it nests inside — so a query view surfaces the base styles
-  // it builds on (as inherited/orange), not only its own overrides. Mirrors how a
-  // Webflow breakpoint shows wider-breakpoint values. Sibling queries don't apply.
+  // Show the current context's OWN rules plus every rule that applies wherever it does —
+  // base (''), any ancestor query it nests inside, and a sibling width query that holds
+  // across the whole of its width range (`width < 48rem` in a `width < 30rem` view) — as
+  // inherited/orange, ranked by the real cascade, so the panel shows what the page
+  // renders. A query that holds for only part of the range doesn't apply
+  // (model/queryWidth.ts queryContextImplies says which do, and guesses at nothing).
   const atContext = ruleContext === view.context;
-  const inherited = !atContext && (ruleContext === '' || view.context.startsWith(`${ruleContext} › `));
+  const inherited = !atContext && queryContextImplies(view.context, ruleContext);
   if (!atContext && !inherited) {
     return undefined;
   }
