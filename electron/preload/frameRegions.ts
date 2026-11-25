@@ -393,12 +393,28 @@ const nsOf = (element: Element): Map<string, string> => {
   return out;
 };
 
+// The paths the markup was served with: not the ones a marker run or a promotion put on the element here.
+const writtenPaths = (element: Element): string[] => {
+  const mine = ourTags.get(element);
+  return pathsOf(element).filter((nodePath) => !mine?.has(nodePath));
+};
+
 // The nearest ancestor that stands for a node this one is nested UNDER, in
 // the same file. Undefined means this element is where that file's rendering
 // begins — the root of a component instance.
+//
+// An ancestor answering to a node this element was itself written as ends the
+// search: no node of a file contains itself, so that ancestor belongs to an
+// OUTER use of the component, and this element begins its own. Without this a
+// Section inside a Section read as an inner part of the outer one.
 const nsParent = (element: Element, file: string, inner: string): Element | undefined => {
+  const own = writtenPaths(element).filter((nodePath) => nodePath.startsWith(file));
   let up = taggedAncestor(element);
   while (up) {
+    const carried = pathsOf(up);
+    if (own.some((nodePath) => carried.includes(nodePath))) {
+      return undefined;
+    }
     const theirs = nsOf(up).get(file);
     if (theirs !== undefined && inner.startsWith(`${theirs}.`)) {
       return up;
@@ -487,6 +503,11 @@ const promoteInstanceTags = () => {
       up = innerOf === undefined ? undefined : nsParent(at, file, innerOf);
     }
     if (at === element) {
+      continue;
+    }
+    // An element the page already named is another instance: a name is never moved onto it, whatever its markup
+    // says (two uses of a component through different branches of its template share no node to tell them by).
+    if (writtenPaths(at).some((nodePath) => !nodePath.includes('|'))) {
       continue;
     }
     for (const nodePath of page) {
