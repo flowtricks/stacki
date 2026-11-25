@@ -1,33 +1,26 @@
-// The right panel while a frame of the component canvas is selected and no element in it is: which props get their
-// own frames, the frame's size and background, and the preview values it renders with. Every edit goes to the scope
-// "Apply to" names (this frame, every frame of one split value, or every frame); a frame's own setting wins over a
-// wider one. Preview values stay on the canvas: nothing here writes the component or its instances.
+// Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the selected frame's size
+// and background. Every edit goes to the scope "Apply to" names (this frame, every frame of one split value, every
+// frame, or the canvas background of every component); a frame's own setting wins over a wider one. Which props get
+// their own frames and the frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
-import type { PropField } from '../../../../shared/properties/propSchema';
-import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
+import { CANVAS_LIMITS, frameBackground, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
 import Dropdown from '../../../ui/Dropdown';
 import InfoHint from '../../../ui/InfoHint';
-import FittedTooltip from '../../../ui/FittedTooltip';
 import SegmentedControl from '../../../ui/SegmentedControl';
-import { Switch } from '../../../ui/Switch';
 import { ResetLabel } from '../../../ui/ResetLabel';
 import { ComponentFillIcon } from '../../../ui/Icons';
-import { useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import ColorSwatch from '../../style/components/ColorSwatch';
-import { fieldControl, frameTakes, shownValue, splitPartOf, type ModelFrame } from './canvasModel';
+import VariableConnect from '../../style/VariableConnect';
+import type { ModelFrame } from './canvasModel';
 import { frameLabel, partLabel, prettyComponentName } from './frameLabel';
-import type { CanvasOpen, ComponentCanvasControl } from './componentCanvasSession';
+import { PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 
 // The width a frame takes when it stops hugging and nothing wider sets one.
 const FIXED_WIDTH_PX = 400;
 const FIXED_HEIGHT_PX = 300;
-// A value the choice menu uses for "not set": no option of a prop can be this, since prop options are printable text.
-const UNSET_OPTION = '\u0000unset';
 
 export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
@@ -41,9 +34,7 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
         <span className="component-canvas-panel-name">{prettyComponentName(state.component.name)}</span>
         <span className="badge">{translate('componentCanvas.panel.frames', { count: state.layout.frames.length })}</span>
       </div>
-      <SplitSection canvas={canvas} state={state} />
       <FrameSection canvas={canvas} state={state} frame={frame} entry={entry} />
-      <PropsSection canvas={canvas} state={state} frame={frame} entry={entry} />
     </div>
   );
 }
@@ -54,34 +45,6 @@ function Heading({ title, hint }: { readonly title: string; readonly hint: strin
       <span>{title}</span>
       <InfoHint text={hint} />
     </div>
-  );
-}
-
-function SplitSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
-  const translate = useTranslate();
-  if (state.layout.candidates.length === 0) {
-    return undefined;
-  }
-  const full = state.layout.split.length >= CANVAS_LIMITS.splitPropsMax;
-  return (
-    <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.split.title')}>
-      <Heading title={translate('componentCanvas.panel.split.title')} hint={translate('componentCanvas.panel.split.hint')} />
-      {state.layout.candidates.map((candidate) => {
-        const on = state.layout.split.includes(candidate.name);
-        return (
-          <label key={candidate.name} className="component-canvas-switch-row">
-            <span className="component-canvas-switch-name">{candidate.name}</span>
-            <span className="component-canvas-switch-count">{translate('componentCanvas.panel.values', { count: candidate.values.length })}</span>
-            <Switch
-              label={translate('componentCanvas.panel.split.toggle', { name: candidate.name })}
-              checked={on}
-              disabled={!on && full}
-              onToggle={() => canvas.setSplit(on ? state.layout.split.filter((name) => name !== candidate.name) : [...state.layout.split, candidate.name])}
-            />
-          </label>
-        );
-      })}
-    </section>
   );
 }
 
@@ -101,10 +64,11 @@ function FrameSection({
     { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
     ...frame.parts.map((part) => ({ value: frameKey([part]), label: translate('componentCanvas.panel.scope.part', { part: partLabel(part, translate) }) })),
     { value: '', label: translate('componentCanvas.panel.scope.all') },
+    { value: PROJECT_SCOPE, label: translate('componentCanvas.panel.scope.project') },
   ].filter((option, index, all) => all.findIndex((other) => other.value === option.value) === index);
   return (
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.frame.title')}>
-      <Heading title={translate('componentCanvas.panel.frame.title')} hint={translate('componentCanvas.panel.frame.hint')} />
+      <Heading title={translate('componentCanvas.panel.frame.title')} hint={translate('componentCanvas.panel.frame.about')} />
       {state.layout.frames.length > 1 && (
         <div className="props-field">
           <label>{translate('componentCanvas.panel.frame.pick')}</label>
@@ -123,9 +87,13 @@ function FrameSection({
         </label>
         <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
       </div>
-      <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
-      <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
-      <BackgroundField canvas={canvas} state={state} value={frame.resolved.background} entry={entry} />
+      {state.scope !== PROJECT_SCOPE && (
+        <>
+          <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
+          <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
+        </>
+      )}
+      <BackgroundField canvas={canvas} state={state} frame={frame} entry={entry} />
     </section>
   );
 }
@@ -149,7 +117,9 @@ function LengthField({
   const set = (next: FrameLength) => canvas.edit({ kind: 'field', field: side, value: next === 'hug' && state.scope === '' ? undefined : next });
   return (
     <div className="props-field">
-      <ResetLabel label={label} active={entry?.[side] !== undefined} onReset={() => canvas.edit({ kind: 'field', field: side, value: undefined })} />
+      <FieldTitle>
+        <ResetLabel label={label} active={entry?.[side] !== undefined} onReset={() => canvas.edit({ kind: 'field', field: side, value: undefined })} />
+      </FieldTitle>
       <div className="component-canvas-length">
         <SegmentedControl
           ariaLabel={label}
@@ -178,44 +148,57 @@ function LengthField({
   );
 }
 
+// The background at the chosen scope: the frame's own, a wider scope's, the component's, or the project's canvas
+// background. A value set here is the blue label (reset clears it); one that comes from a wider level is the orange,
+// inherited label, as the Style panel shows an inherited value.
 function BackgroundField({
   canvas,
   state,
-  value,
+  frame,
   entry,
 }: {
   readonly canvas: ComponentCanvasControl;
   readonly state: CanvasOpen;
-  readonly value: string | undefined;
+  readonly frame: ModelFrame;
   readonly entry: FrameEntry | undefined;
 }) {
   const translate = useTranslate();
+  const project = state.scope === PROJECT_SCOPE;
+  const shown = project ? { value: state.settings.background, source: { kind: 'project' as const } } : frameBackground(state.settings, frame.resolved);
+  const own = project ? state.settings.background !== undefined : entry?.background !== undefined;
+  const inherited = !own && shown.value !== undefined;
+  const value = shown.value;
+  const label = translate('componentCanvas.panel.background');
   const commit = (color: string) => {
     const trimmed = color.trim();
+    // Transparent over every frame is what no setting says; for the project it is a setting of its own (no canvas grey).
     const clear = trimmed === '' || (trimmed === 'transparent' && state.scope === '');
     canvas.edit({ kind: 'background', value: clear ? undefined : trimmed });
   };
   return (
     <div className="props-field">
-      <ResetLabel
-        label={translate('componentCanvas.panel.background')}
-        active={entry?.background !== undefined}
-        onReset={() => canvas.edit({ kind: 'background', value: undefined })}
-      />
+      <FieldTitle>
+        {inherited ? (
+          <span className="prop-label embed-editor_prop-orange component-canvas-inherited">{label}</span>
+        ) : (
+          <ResetLabel label={label} active={own} onReset={() => canvas.edit({ kind: 'background', value: undefined })} />
+        )}
+      </FieldTitle>
       <div className="component-canvas-color">
         <ColorSwatch
           value={value ?? 'transparent'}
-          ariaLabel={translate('componentCanvas.panel.background')}
+          ariaLabel={label}
           onChange={(color, live) => {
             if (!live) {
               commit(color);
             }
           }}
         />
-        <CommitInput
-          ariaLabel={translate('componentCanvas.panel.background')}
-          value={value ?? ''}
-          placeholder={translate('componentCanvas.panel.transparent')}
+        <BackgroundInput
+          value={own ? (value ?? '') : ''}
+          placeholder={inherited ? (value ?? '') : translate('componentCanvas.panel.transparent')}
+          label={label}
+          connectLabel={translate('componentCanvas.panel.backgroundVariable')}
           onCommit={commit}
         />
       </div>
@@ -223,138 +206,64 @@ function BackgroundField({
   );
 }
 
-function PropsSection({
-  canvas,
-  state,
-  frame,
-  entry,
+// The background's text, with the Style panel's variable button beside it: a picked variable is written as
+// `var(--name)` at once, so the canvas follows the variable's later edits. Typed text commits on Enter or leaving.
+function BackgroundInput({
+  value,
+  placeholder,
+  label,
+  connectLabel,
+  onCommit,
 }: {
-  readonly canvas: ComponentCanvasControl;
-  readonly state: CanvasOpen;
-  readonly frame: ModelFrame;
-  readonly entry: FrameEntry | undefined;
+  readonly value: string;
+  readonly placeholder: string;
+  readonly label: string;
+  readonly connectLabel: string;
+  readonly onCommit: (text: string) => void;
 }) {
-  const translate = useTranslate();
-  const fields = state.component.schema.filter((field) => fieldControl(field) !== undefined);
-  if (fields.length === 0) {
-    return undefined;
-  }
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
   return (
-    <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.props.title')}>
-      <Heading title={translate('componentCanvas.panel.props.title')} hint={translate('componentCanvas.panel.props.hint')} />
-      {fields.map((field) => {
-        const split = splitPartOf(frame, field.name) !== undefined;
-        const taken = frameTakes(state.component, frame, field.name);
-        const reason = split
-          ? translate('componentCanvas.panel.props.split', { name: field.name })
-          : taken
-            ? undefined
-            : translate('componentCanvas.panel.props.unused', { name: field.name });
-        const active = entry?.props?.[field.name] !== undefined || entry?.unset?.includes(field.name) === true;
-        return (
-          <div key={field.name} className={`props-field component-canvas-prop${reason === undefined ? '' : ' is-disabled'}`}>
-            <ResetLabel label={field.name} active={active && reason === undefined} onReset={() => canvas.edit({ kind: 'inherit', name: field.name })} />
-            <DisabledTip reason={reason}>
-              <PropControl canvas={canvas} field={field} frame={frame} defaults={state.defaults} disabled={reason !== undefined} />
-            </DisabledTip>
-          </div>
-        );
-      })}
-    </section>
+    <VariableConnect
+      code
+      className="is-fill"
+      ariaLabel={connectLabel}
+      prop="background-color"
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommit(binding);
+      }}
+    >
+      <input
+        className="u-input"
+        value={draft}
+        placeholder={placeholder}
+        aria-label={label}
+        spellCheck={false}
+        maxLength={CANVAS_LIMITS.backgroundCharsMax}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== value) {
+            onCommit(draft);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.currentTarget.blur();
+          } else if (event.key === 'Escape') {
+            setDraft(value);
+          }
+        }}
+      />
+    </VariableConnect>
   );
 }
 
-function PropControl({
-  canvas,
-  field,
-  frame,
-  defaults,
-  disabled,
-}: {
-  readonly canvas: ComponentCanvasControl;
-  readonly field: PropField;
-  readonly frame: ModelFrame;
-  readonly defaults: Readonly<Record<string, DefaultValue>>;
-  readonly disabled: boolean;
-}) {
-  const translate = useTranslate();
-  const control = fieldControl(field);
-  assert(control !== undefined, 'Only editable props get a control');
-  const shown = shownValue(field, frame, defaults);
-  const set = (value: DefaultValue) => canvas.edit({ kind: 'prop', name: field.name, value });
-  switch (control.kind) {
-    case 'choice': {
-      const unset = frame.omitted.has(field.name) || shown === undefined;
-      const options = [
-        ...control.options.map((option) => ({ value: option, label: option })),
-        ...(field.optional ? [{ value: UNSET_OPTION, label: translate('componentCanvas.panel.props.none') }] : []),
-      ];
-      return (
-        <Dropdown
-          ariaLabel={field.name}
-          disabled={disabled}
-          value={unset ? UNSET_OPTION : String(shown)}
-          options={options}
-          onChange={(value) => (value === UNSET_OPTION ? canvas.edit({ kind: 'unset', name: field.name }) : set(value))}
-        />
-      );
-    }
-    case 'switch':
-      return (
-        <div className="component-canvas-switch">
-          <Switch label={field.name} checked={shown === true} disabled={disabled} onToggle={() => set(shown !== true)} />
-        </div>
-      );
-    case 'number':
-      return (
-        <CommitInput
-          ariaLabel={field.name}
-          disabled={disabled}
-          value={shown === undefined ? '' : String(shown)}
-          onCommit={(text) => {
-            const number = Number(text);
-            if (text.trim() === '') {
-              canvas.edit({ kind: 'inherit', name: field.name });
-            } else if (Number.isFinite(number)) {
-              set(number);
-            }
-          }}
-        />
-      );
-    case 'text':
-      return (
-        <CommitInput
-          ariaLabel={field.name}
-          disabled={disabled}
-          value={typeof shown === 'string' ? shown : shown === undefined ? '' : String(shown)}
-          onCommit={(text) => (text === '' && field.optional ? canvas.edit({ kind: 'unset', name: field.name }) : set(text))}
-        />
-      );
-    default: {
-      const exhaustive: never = control;
-      return exhaustive;
-    }
-  }
-}
-
-// Why a control is greyed out, in the app's own tooltip, on hover.
-function DisabledTip({ reason, children }: { readonly reason: string | undefined; readonly children: ReactNode }) {
-  const tip = useDelayedTooltip();
-  if (reason === undefined) {
-    return children;
-  }
-  return (
-    <div className="component-canvas-disabled" onMouseEnter={tip.show} onMouseLeave={tip.hide}>
-      {children}
-      {tip.value !== undefined &&
-        createPortal(
-          <FittedTooltip anchor={tip.value} role="tooltip">
-            {reason}
-          </FittedTooltip>,
-          document.body,
-        )}
-    </div>
-  );
+// A field's title in the props panel's own label (styles.css `.props-field label`): one size, colour and gap to its
+// control for every field, whether the title is plain text or a label that resets its value. A press on it activates
+// nothing, as the props panel's labels do not (PropFieldLabel.tsx).
+function FieldTitle({ children }: { readonly children: ReactNode }) {
+  return <label onClick={(event) => event.preventDefault()}>{children}</label>;
 }
 
 // A text box that changes nothing while typed: Enter or leaving the field commits, Escape puts the value back.

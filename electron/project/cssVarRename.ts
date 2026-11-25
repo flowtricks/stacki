@@ -9,6 +9,7 @@ import { writeProjectText } from './variableWorkspace';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './cssVarRead';
 import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { astroDeclaredNames, findAstroSources, relativeTo } from './cssVarRegions';
+import { COMPONENT_CANVAS_FILE, parseComponentCanvasSource, renameCanvasVariables, serializeComponentCanvas } from '../../shared/properties/componentCanvas';
 
 // --- renaming ----------------------------------------------------------------
 //
@@ -141,6 +142,13 @@ export function renameVariables(
     writes.push([abs, next]);
   }
 
+  // The component canvas's backgrounds may read a variable too (`.stacki` is skipped above, being a dotted folder).
+  const canvas = renamedCanvasSettings(projectPath, by);
+  if (canvas !== undefined) {
+    occurrences += 1;
+    writes.push(canvas);
+  }
+
   // Written only once every file has been read and rewritten in memory: a
   // half-applied rename is worse than a refused one. Each write goes through
   // the file's document actor (documentWrites.ts), which also announces it as
@@ -149,6 +157,24 @@ export function renameVariables(
     writeProjectText(abs, next);
   }
   return { ok: true, files: writes.length, occurrences, paths: writes.map(([abs]) => abs) };
+}
+
+// `.stacki/component-canvas.json` with the renamed variables in its backgrounds, read and written through its own
+// parser; undefined when it does not exist, cannot be read or names none of them (a broken file is left to its parser).
+function renamedCanvasSettings(projectPath: string, by: ReadonlyMap<string, string>): [string, string] | undefined {
+  const abs = path.join(projectPath, ...COMPONENT_CANVAS_FILE.split('/'));
+  let text: string;
+  try {
+    text = fs.readFileSync(abs, 'utf8');
+  } catch {
+    return undefined;
+  }
+  const parsed = parseComponentCanvasSource(text);
+  if (!parsed.ok) {
+    return undefined;
+  }
+  const renamed = renameCanvasVariables(parsed.value, (name) => by.get(name) ?? name);
+  return renamed === parsed.value ? undefined : [abs, serializeComponentCanvas(renamed)];
 }
 
 // Why the batch cannot be applied as asked, before looking at the project: a name that is not

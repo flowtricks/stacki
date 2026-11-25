@@ -1807,6 +1807,8 @@
     "src/features/props/projectDataSources.ts",
     "src/features/props/propAttributes.tsx",
     "src/features/props/propBindings.tsx",
+    "src/features/props/propFieldExtras.css",
+    "src/features/props/propFieldExtras.ts",
     "src/features/props/propFieldModel.ts",
     "src/features/props/propKinds.ts",
     "src/features/props/propLiteral.ts",

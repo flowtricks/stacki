@@ -39,9 +39,9 @@ function writeFixture(project) {
   const project = path.join(root, 'site');
   writeFixture(project);
   const app = await electron.launch({
-    // A mock keychain: a test app never asks the person's macOS keychain for anything.
+    // A mock keychain (never the person's login keychain) and hidden windows; HOME is left as it is.
     args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '', NODE_OPTIONS: `--require ${repoPath('test/helpers/hideDockPreload.js')}` },
   });
   const results = {};
   const shot = async (name) => {
@@ -95,7 +95,7 @@ function writeFixture(project) {
       await window.getByRole('button', { name: 'Close Button canvas' }).click();
       await waitForState({
         what: 'the canvas closed',
-        read: () => window.locator('.component-canvas-popup, [data-testid="component-canvas-panel"]').count(),
+        read: () => canvas.locator('stacki-frame').count(),
         until: (count) => count === 0,
         pollCountMax: POLLS_MAX,
       });
@@ -107,7 +107,7 @@ function writeFixture(project) {
     await watch('1-close');
     // 2. Close right after an edit (a split switch rewrites the page) and while it reloads.
     await open();
-    await window.getByRole('switch', { name: 'Give each value of emphasis its own frame' }).click();
+    await window.locator('button.component-canvas-split[aria-label^="Give each value of emphasis"]').click();
     await close();
     await watch('2-close-after-edit');
     // 3. Project files change while the canvas is open, then close.
@@ -116,6 +116,17 @@ function writeFixture(project) {
     fs.writeFileSync(path.join(project, 'src/components/Extra.astro'), '<p class="extra">Extra</p>\n');
     await close();
     await watch('3-close-with-file-changes');
+    // 3b. Close from inside an instance (a double click went in).
+    await open();
+    await canvas.locator('stacki-frame .button_wrap').first().dispatchEvent('dblclick', { button: 0, bubbles: true });
+    await waitForState({
+      what: 'inside the instance',
+      read: () => window.locator('.titlebar .comp-back').count(),
+      until: (count) => count === 2,
+      pollCountMax: POLLS_MAX,
+    });
+    await close();
+    await watch('3b-close-from-inside');
     // 4. Leave by opening another page from the Pages panel instead of Close.
     await open();
     await window.locator('[data-rail-id="pages"]').click();

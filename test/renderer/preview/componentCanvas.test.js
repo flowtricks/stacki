@@ -2,7 +2,9 @@
 // with props its variant forbids left out; required props and an element id get usable values; the canvas page imports
 // each component once, writes every frame's props, size and background into a page the editor's own parser reads,
 // escapes what it writes, falls back to the component's name for an empty default slot and keeps insertion defaults
-// under the frame's own values; and only well-formed messages from the canvas page are heard.
+// under the frame's own values; and only well-formed messages from the canvas page are heard. The page's instances are
+// found where the editor's parser puts them, a click anywhere in a frame names its instance and only the open canvas's
+// page counts as one, and a prop value from the Settings panel becomes a preview value only when the canvas can replay it.
 // Method: build layouts from hand-written schemas and stored settings, generate pages from them, parse each page with the
 // app's Astro parser, and feed the message reader known-good and known-bad shapes.
 const test = require('node:test');
@@ -12,6 +14,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const model = loadRenderer('src/features/preview/componentCanvas/canvasModel.ts');
 const page = loadRenderer('src/features/preview/componentCanvas/canvasPage.ts');
 const chrome = loadRenderer('src/features/preview/componentCanvas/canvasChrome.ts');
+const session = loadRenderer('src/features/preview/componentCanvas/componentCanvasSession.ts');
 
 const ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const BUTTON = 'src/components/Button.astro';
@@ -98,7 +101,7 @@ test('the canvas page parses, imports the component once, and writes each frame'
     },
   });
   const source = pageOf(layout);
-  const importLine = 'import ButtonCanvas0 from "../../' + BUTTON + '";';
+  const importLine = 'import Button from "../../' + BUTTON + '";';
   assert.equal(source.split(importLine).length - 1, 1, 'the component is imported once');
   assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"}>'));
   assert.match(
@@ -106,9 +109,9 @@ test('the canvas page parses, imports the component once, and writes each frame'
     /data-fixed-width data-fixed-height style="width: 320px; height: 200px; contain-intrinsic-size: 320px 200px; background: var\(--swatch-light\)"/,
   );
   assert.match(source, /label="Back &quot;&lt;there&gt;&quot;"/, 'prop text is escaped');
-  assert.match(source, /<ButtonCanvas0 variant="main"[^>]*>Button Text<\/ButtonCanvas0>/, 'without a project recipe, the starter defaults fill the slot');
+  assert.match(source, /<Button variant="main"[^>]*>Button Text<\/Button>/, 'without a project recipe, the starter defaults fill the slot');
   const chip = { ...snapshot, catalog: [{ ...snapshot.catalog[0], name: 'Chip', slotText: false }] };
-  assert.match(pageOf(layout, { snapshot: chip, fallbackText: 'Chip' }), />Chip<\/ButtonCanvas0>/, 'an empty default slot shows the component name');
+  assert.match(pageOf(layout, { snapshot: chip, fallbackText: 'Chip' }), />Chip<\/Button>/, 'an empty default slot shows the component name');
   assert.doesNotMatch(source, /variant="main" direction=/, 'main is never given a direction');
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
@@ -121,7 +124,7 @@ test('insertion defaults come first and the frame wins; an unset prop is not pas
   const withRecipe = { ...snapshot, config: { version: 1, components: { [BUTTON]: { props: { label: 'From defaults', variant: 'arrow' }, text: 'Click' } } } };
   const layout = model.buildCanvasLayout(button, { split: [], frames: { '': { unset: ['label'] } } });
   const source = pageOf(layout, { snapshot: withRecipe });
-  assert.match(source, /<ButtonCanvas0 variant="arrow" id="stacki-canvas-1" heading="Heading">Click<\/ButtonCanvas0>/);
+  assert.match(source, /<Button variant="arrow" id="stacki-canvas-1" heading="Heading">Click<\/Button>/);
   assert.doesNotMatch(source, /From defaults/);
 });
 
@@ -198,9 +201,76 @@ test('every frame renders the component defaults: props, text and nested childre
       background: undefined,
     })),
   });
-  const children = '<p>Body copy</p><ActionCanvas1 emphasis="secondary" slot="footer">Read more</ActionCanvas1>';
-  assert.ok(source.includes(`<CardCanvas0 heading="From defaults" variant="default">${children}</CardCanvas0>`), 'defaults, nested recipe and named slot');
-  assert.ok(source.includes(`<CardCanvas0 heading="Cover heading" variant="cover">${children}</CardCanvas0>`), 'a preview value wins over the default');
+  const children = '<p>Body copy</p><Action emphasis="secondary" slot="footer">Read more</Action>';
+  assert.ok(source.includes(`<Card heading="From defaults" variant="default">${children}</Card>`), 'defaults, nested recipe and named slot');
+  assert.ok(source.includes(`<Card heading="Cover heading" variant="cover">${children}</Card>`), 'a preview value wins over the default');
   assert.doesNotMatch(source, />Card</, 'no placeholder when defaults are configured');
   assert.equal(parsePage(source).editable, true);
+});
+
+test('the project background is the canvas surface, frames without their own are transparent over it, and a gone variable falls back', () => {
+  const grey = chrome.chromeStyles('dark');
+  assert.match(grey, /stacki-canvas \{[^}]*background: #1e1e1e;/);
+  assert.match(grey, /stacki-frame-body\[data-transparent\] \{ background: #fff; \}/, 'the page background is painted over this by the script');
+  assert.doesNotMatch(chrome.chromeScript(ID), /setProperty\('--/, 'the chrome sets no custom property a variable picker would list');
+  const layout = model.buildCanvasLayout(button, undefined);
+  assert.match(pageOf(layout, { surface: 'var(--background)' }), /<stacki-canvas data-surface>/, 'a project background marks the canvas');
+  assert.match(pageOf(layout), /<stacki-canvas>/);
+  const themed = chrome.chromeStyles('dark', 'var(--background)');
+  assert.match(themed, /stacki-canvas \{[^}]*background: var\(--background, #1e1e1e\);/, 'a variable the project drops draws the grey');
+  assert.match(themed, /stacki-frame-body\[data-transparent\] \{ background: transparent; \}/);
+  assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff;/);
+  assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
+  assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
+  assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
+});
+
+test('each frame instance is found by its path; a click in a frame names its instance; only the open canvas page is one', () => {
+  const layout = model.buildCanvasLayout(button, { split: ['variant', 'direction'] });
+  const parsed = parsePage(pageOf(layout));
+  assert.equal(parsed.editable, true);
+  const instances = page.canvasInstancesOf(parsed.model.nodes);
+  assert.deepEqual(
+    instances.map((instance) => instance.key),
+    layout.frames.map((frame) => frame.key),
+    'one instance per frame, in frame order',
+  );
+  for (const instance of instances) {
+    const trail = instance.path.split('.').map(Number);
+    let node = parsed.model.nodes[trail[0]];
+    for (const index of trail.slice(1)) {
+      node = node?.children?.[index];
+    }
+    assert.equal(node?.kind, 'component', `${instance.key} is a component instance`);
+    assert.equal(node?.name, 'Button', 'named as the component is, not a generated binding');
+  }
+  const [first, second] = instances;
+  const frameOf = (path) => path.split('.').slice(0, -2).join('.');
+  session.noteComponentCanvas({ kind: 'idle' });
+  assert.equal(session.canvasInstanceAt(first.path), undefined, 'no canvas open: nothing is a frame');
+  assert.equal(session.isComponentCanvasPage(`/site/.stacki/canvas/${ID}.astro`), false);
+  session.noteComponentCanvas({ kind: 'open', id: ID, instances });
+  assert.equal(session.isComponentCanvasPage(`/site/.stacki/canvas/${ID}.astro`), true);
+  assert.equal(session.isComponentCanvasPage('/site/.stacki/canvas/0f8fad5b-d9cb-469f-a165-70867728950f.astro'), false, 'another canvas page is not this one');
+  assert.equal(session.isComponentCanvasPage('/site/src/pages/index.astro'), false);
+  assert.equal(session.canvasInstanceAt(first.path)?.key, first.key, 'the instance itself');
+  assert.equal(session.canvasInstanceAt(first.path + '.0')?.key, first.key, 'inside the instance');
+  assert.equal(session.canvasInstanceAt(frameOf(second.path) + '.0')?.key, second.key, 'the frame label');
+  assert.equal(session.canvasInstanceAt(frameOf(second.path))?.key, second.key, 'the frame itself');
+  assert.equal(session.canvasInstanceAt(frameOf(frameOf(first.path))), undefined, 'the row between frames is no frame');
+  assert.equal(session.canvasInstanceOf(first.path + '.0'), undefined, 'only the instance itself is the instance');
+  assert.throws(() => page.canvasInstancesOf([{ kind: 'element', name: 'stacki-frame', props: {}, children: [] }]), /names its frame/);
+  session.noteComponentCanvas({ kind: 'idle' });
+});
+
+test('a prop value from the Settings panel is a preview value only when the canvas can replay it', () => {
+  assert.equal(model.previewValue({ type: 'string', value: 'Back' }), 'Back');
+  assert.equal(model.previewValue({ type: 'bare' }), true);
+  assert.equal(model.previewValue({ type: 'expr', value: 'false' }), false);
+  assert.equal(model.previewValue({ type: 'expr', value: ' 12.5 ' }), 12.5);
+  assert.equal(model.previewValue({ type: 'expr', value: '"quoted"' }), 'quoted');
+  assert.equal(model.previewValue({ type: 'expr', value: '`a ${b}`' }), undefined, 'a template with code is code');
+  assert.equal(model.previewValue({ type: 'expr', value: 'page.title' }), undefined, 'data is code');
+  assert.equal(model.previewValue({ type: 'expr', value: '() => go()' }), undefined);
+  assert.equal(model.previewValue({ type: 'spread', value: 'rest' }), undefined);
 });

@@ -2,6 +2,7 @@
 // URL, reloading, opening a component, previewing a commit, git info, and
 // composing the lifecycle (App.tsx).
 
+import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { markRenderer } from '../startupMarks';
 import { bootSnapshotFor } from '../../lib/bootSeed';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -353,7 +354,8 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
       const { currentPage: host, pageState: state } = pageStateRef.current;
-      if (host?.path?.includes('/.stacki/canvas/')) {
+      // The defaults canvas edits its instance in place; the component canvas's page opens its instances as any page does.
+      if (host?.path?.includes('/.stacki/canvas/') && !isComponentCanvasPage(host.path)) {
         showToast(translate('shell.navigation.editDefaults'), 'info');
         return;
       }

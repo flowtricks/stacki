@@ -66,6 +66,12 @@ export interface ComponentCanvas {
 
 export interface ComponentCanvasFile {
   readonly version: 1;
+  /**
+   * The project's canvas background: the surface every component canvas draws on, and what a frame shows where neither
+   * the frame nor its component sets a background. A CSS colour, `transparent`, or `var(--name)`, which follows the
+   * variable. Absent: the app's own canvas grey. Versions before this key ignore it, and drop it on their next save.
+   */
+  readonly background?: string;
   readonly components: Readonly<Record<string, ComponentCanvas>>;
 }
 
@@ -104,7 +110,9 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
     components[canvasComponentFile(file)] = parseComponentSettings(settings, file);
   }
   assert(Object.keys(components).length === entries.length, 'Component canvas: every component is kept');
-  return { version: 1, components };
+  const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
+  assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
+  return { version: 1, ...(background === undefined ? {} : { background }), components };
 }
 
 /** A project-relative component path, as `.stacki/components.json` keys them. */
@@ -284,7 +292,7 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
       .sort()
       .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
   );
-  const text = JSON.stringify({ version: 1, components }, undefined, 2) + '\n';
+  const text = JSON.stringify({ version: 1, ...(file.background === undefined ? {} : { background: file.background }), components }, undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
@@ -687,7 +695,67 @@ function withComponentSettings(file: ComponentCanvasFile, component: string, set
   if (Object.keys(components).length > CANVAS_LIMITS.componentsMax) {
     throw new Error(`The canvas keeps settings for at most ${CANVAS_LIMITS.componentsMax} components`);
   }
-  return { version: 1, components };
+  return { ...file, components };
+}
+
+/** The file with the project's canvas background set, or cleared with `undefined` (the app's own grey again). */
+export function withProjectBackground(file: ComponentCanvasFile, background: string | undefined): ComponentCanvasFile {
+  const value = background === undefined ? undefined : canvasBackground(background);
+  const next: ComponentCanvasFile = { version: 1, ...(value === undefined ? {} : { background: value }), components: file.components };
+  assert(next.background === value, 'The project background is what was set');
+  return next;
+}
+
+/** Where a frame's background comes from: a frame or scope entry (its key), the project, or nowhere (the app's grey). */
+export type BackgroundSource = { readonly kind: 'entry'; readonly key: string } | { readonly kind: 'project' } | { readonly kind: 'none' };
+
+/** The background a frame shows and where it comes from: the frame, then its scopes and component, then the project. */
+export function frameBackground(file: ComponentCanvasFile, resolved: ResolvedFrame): { readonly value: string | undefined; readonly source: BackgroundSource } {
+  const key = resolved.origins.get('background');
+  assert(resolved.background === undefined || key !== undefined, 'A frame’s own background says which entry set it');
+  if (resolved.background !== undefined && key !== undefined) {
+    return { value: resolved.background, source: { kind: 'entry', key } };
+  }
+  if (file.background !== undefined) {
+    return { value: file.background, source: { kind: 'project' } };
+  }
+  return { value: undefined, source: { kind: 'none' } };
+}
+
+// `var(--name` in a background, for a rename: the name is a custom property's, ended where a name ends.
+const VARIABLE_REFERENCE = /var\(\s*(--[^\s,()]+)/g;
+
+/** The file with every `var(--name)` its backgrounds read renamed by `rename`; the same file when nothing changed. */
+export function renameCanvasVariables(file: ComponentCanvasFile, rename: (name: string) => string): ComponentCanvasFile {
+  let changed = false;
+  const next = (value: string): string => {
+    const renamed = value.replace(VARIABLE_REFERENCE, (match: string, name: string) => match.slice(0, match.length - name.length) + rename(name));
+    changed ||= renamed !== value;
+    return renamed;
+  };
+  const components = Object.fromEntries(
+    Object.entries(file.components).map(([component, settings]): [string, ComponentCanvas] => {
+      const frames = settings.frames;
+      if (frames === undefined) {
+        return [component, settings];
+      }
+      const renamed = Object.fromEntries(
+        Object.entries(frames).map(([key, entry]): [string, FrameEntry] => [
+          key,
+          entry.background === undefined ? entry : { ...entry, background: next(entry.background) },
+        ]),
+      );
+      return [component, { ...settings, frames: renamed }];
+    }),
+  );
+  const background = file.background === undefined ? undefined : next(file.background);
+  if (!changed) {
+    return file;
+  }
+  const result: ComponentCanvasFile = { version: 1, ...(background === undefined ? {} : { background: canvasBackground(background) }), components };
+  assert(Object.keys(result.components).length === Object.keys(file.components).length, 'A rename keeps every component');
+  assert((result.background === undefined) === (file.background === undefined), 'A rename neither adds nor drops the project background');
+  return result;
 }
 
 // ----- Project upkeep -----
@@ -704,14 +772,14 @@ export function relinkComponentCanvas(file: ComponentCanvasFile, from: string, t
     components[name === from ? to : name] = held;
   }
   assert(Object.keys(components).length === Object.keys(file.components).length, 'A relink keeps every component');
-  return { version: 1, components };
+  return { ...file, components };
 }
 
 /** The settings without the components a deletion removes (`owns` says which files it removes). */
 export function dropComponentCanvas(file: ComponentCanvasFile, owns: (component: string) => boolean): ComponentCanvasFile {
   const components = Object.fromEntries(Object.entries(file.components).filter(([name]) => !owns(name)));
   assert(Object.keys(components).length <= Object.keys(file.components).length, 'A drop never adds a component');
-  return { version: 1, components };
+  return { ...file, components };
 }
 
 /**

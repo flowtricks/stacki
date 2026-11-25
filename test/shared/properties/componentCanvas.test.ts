@@ -25,6 +25,9 @@ import {
   unionAllows,
   withFrameEdit,
   withSplit,
+  withProjectBackground,
+  frameBackground,
+  renameCanvasVariables,
 } from '#dist/shared/properties/componentCanvas.js';
 import { COMPONENT_CANVAS_FILE_SCHEMA } from '#dist/shared/properties/cli/files/componentCanvasFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
@@ -274,5 +277,54 @@ test('the CLI key reference accepts what the app writes', () => {
       'componentCanvas',
     ),
     undefined,
+  );
+});
+
+test('the project background is kept through every edit, and a file without it is what older versions wrote', () => {
+  const older = parseComponentCanvasFile({ version: 1, components: { [button]: { split: [] } } });
+  assert.equal(older.background, undefined);
+  let file = withProjectBackground(older, 'var(--background)');
+  assert.equal(file.background, 'var(--background)');
+  file = withFrameEdit(withSplit(file, button, ['variant']), button, 'variant=main', { kind: 'background', value: 'white' });
+  file = relinkComponentCanvas(file, button, 'src/components/Action.astro');
+  file = dropComponentCanvas(file, () => false);
+  assert.equal(file.background, 'var(--background)');
+  const source = serializeComponentCanvas(file);
+  assert.match(source, /^{\n  "version": 1,\n  "background": "var\(--background\)",/);
+  const parsed = parseComponentCanvasSource(source);
+  assert.ok(parsed.ok);
+  assert.equal(parsed.value.background, 'var(--background)');
+  assert.equal(withProjectBackground(file, undefined).background, undefined);
+  assert.equal(serializeComponentCanvas(withProjectBackground(file, undefined)).includes('"background": "var'), false);
+  // The background is one CSS value, as a frame's is.
+  assert.throws(() => withProjectBackground(file, 'red; color: blue'), /one CSS colour/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, background: '', components: {} }), /CSS colour/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, background: 'x'.repeat(CANVAS_LIMITS.backgroundCharsMax + 1), components: {} }), /CSS colour/);
+});
+
+test('a frame shows its own background, then its scopes and component, then the project, then nothing', () => {
+  let file = withProjectBackground(EMPTY_CANVAS_FILE, 'var(--background)');
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), { value: 'var(--background)', source: { kind: 'project' } });
+  file = withFrameEdit(file, button, '', { kind: 'background', value: 'black' });
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), { value: 'black', source: { kind: 'entry', key: '' } });
+  file = withFrameEdit(file, button, 'variant=main', { kind: 'background', value: 'transparent' });
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), {
+    value: 'transparent',
+    source: { kind: 'entry', key: 'variant=main' },
+  });
+  const none = withProjectBackground(EMPTY_CANVAS_FILE, undefined);
+  assert.deepEqual(frameBackground(none, resolveFrame(undefined, '')), { value: undefined, source: { kind: 'none' } });
+});
+
+test('renaming a variable renames it in every background, and leaves longer names and the file otherwise alone', () => {
+  let file = withProjectBackground(EMPTY_CANVAS_FILE, 'var(--surface)');
+  file = withFrameEdit(file, button, '', { kind: 'background', value: 'var( --surface-2, var(--surface))' });
+  const renamed = renameCanvasVariables(file, (name) => (name === '--surface' ? '--canvas' : name));
+  assert.equal(renamed.background, 'var(--canvas)');
+  assert.equal(renamed.components[button]?.frames?.['']?.background, 'var( --surface-2, var(--canvas))');
+  assert.equal(
+    renameCanvasVariables(file, (name) => name),
+    file,
+    'nothing to rename keeps the same file',
   );
 });

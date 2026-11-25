@@ -41,6 +41,10 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
   metadataKind: 'componentCanvas',
   fields: {
     version: field(literal(1), 'The file format version.', { required: true }),
+    background: field(
+      text(CANVAS_LIMITS.backgroundCharsMax, { charsMin: 1 }),
+      "The project canvas background: the surface every component canvas draws on, and what a frame shows where neither it nor its component sets one. A CSS colour, transparent, or var(--name); absent: the app's own canvas grey.",
+    ),
     components: field(
       mapOf(
         objectOf({

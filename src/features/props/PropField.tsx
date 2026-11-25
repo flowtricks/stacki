@@ -24,15 +24,36 @@ import {
 import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker } from './PropFieldLabel';
 import { ConditionalField } from './ConditionalValue';
 import { conditionalOfAttr, valueLanguageOf } from './conditionalModel';
+import { usePropFieldExtra } from './propFieldExtras';
+import './propFieldExtras.css';
 
 export { type AssetContext, type PropFieldProps, assetImportOf } from './propFieldModel';
 
 export default function PropField(props: PropFieldProps) {
   const state = usePropField(props);
+  const extra = usePropFieldExtra(props.field.name);
   if (state.reason && !state.isSet) {
     return undefined;
   }
-  return <PropFieldControls state={state} />;
+  if (extra?.lockedReason === undefined) {
+    return <PropFieldControls state={state} />;
+  }
+  // Greyed out and closed to pointer and keys, all but the host's own control beside the {} button.
+  return (
+    <div
+      className="prop-field-locked"
+      aria-disabled="true"
+      onKeyDownCapture={(event) => {
+        const target = event.target instanceof Element ? event.target : undefined;
+        if (event.key !== 'Tab' && target?.closest('.prop-field-extra') === null) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
+      <PropFieldControls state={state} />
+    </div>
+  );
 }
 function PropFieldControls({ state }: { readonly state: PropState }) {
   const pill = <PropFieldPill state={state} />;

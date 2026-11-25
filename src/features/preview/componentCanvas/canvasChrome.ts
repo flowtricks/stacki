@@ -22,8 +22,15 @@ export const CHROME_LIMITS = {
 /** The message the page and the editor exchange; `canvas` names the page, so a stale page's messages are ignored. */
 export const CANVAS_MESSAGE = 'stacki:component-canvas';
 
-export function chromeStyles(theme: 'light' | 'dark'): string {
-  const canvas = theme === 'dark' ? '#1e1e1e' : '#e9e9e9';
+/**
+ * The page's own styles. `surface` is the project's canvas background (shared/properties/componentCanvas.ts): the canvas
+ * draws on it, and a frame with no background of its own is transparent over it. Without one, the canvas is the app's
+ * grey and such a frame shows the page's background, as the component sits on in the site.
+ */
+export function chromeStyles(theme: 'light' | 'dark', surface?: string): string {
+  const grey = theme === 'dark' ? '#1e1e1e' : '#e9e9e9';
+  // A variable the project no longer defines falls back to the grey rather than to nothing.
+  const canvas = surface === undefined ? grey : withFallback(surface, grey);
   const label = theme === 'dark' ? '#a3a3a3' : '#6b6b6b';
   const css = `
 html, body { margin: 0 !important; padding: 0 !important; height: 100% !important; overflow: hidden !important; }
@@ -33,18 +40,23 @@ stacki-canvas-world { position: absolute; left: 0; top: 0; display: flex; flex-d
 stacki-canvas-row { display: flex; align-items: flex-start; gap: 64px; }
 stacki-frame { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 stacki-frame-label { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; letter-spacing: 0; text-transform: none; color: ${label}; user-select: none; cursor: default; }
-stacki-frame[data-selected] > stacki-frame-label { color: #2f80ff; }
+stacki-frame[data-selected] > stacki-frame-label { color: #2f80ff !important; }
 stacki-frame-body { display: block; position: relative; transform: translate(0); box-sizing: border-box; width: max-content; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px; min-width: 24px; min-height: 24px; }
-stacki-frame-body[data-transparent] { background: var(--stacki-page-background, #fff); }
+stacki-frame-body[data-transparent] { background: ${surface === undefined ? '#fff' : 'transparent'}; }
 stacki-frame-body[data-fixed-width] { max-width: none; overflow-x: clip; }
 stacki-frame-body[data-fixed-height] { overflow-y: clip; }
 stacki-frame-body[data-fixed-width][data-fixed-height] { content-visibility: auto; }
 stacki-frame-body[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px; }
 stacki-frame-body[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px; }
-stacki-frame[data-selected] > stacki-frame-body { box-shadow: 0 0 0 calc(2px * var(--stacki-unzoom, 1)) #2f80ff; }
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
+}
+
+// `var(--name)` with a fallback, so a variable that is gone draws the fallback; any other value unchanged.
+export function withFallback(value: string, fallback: string): string {
+  const reference = /^var\(\s*(--[^\s,()]+)\s*\)$/.exec(value.trim());
+  return reference === null ? value : `var(${reference[1] ?? ''}, ${fallback})`;
 }
 
 /** The page's script. `id` is the canvas page's own name, checked by both ends of every message. */
@@ -73,10 +85,6 @@ export function chromeScript(id: string): string {
     if (!view) return;
     var transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.scale + ')';
     if (world.style.transform !== transform) world.style.transform = transform;
-    // The selection ring keeps its screen width at every zoom. The labels do not: they are in the frames' layout, so a
-    // label that grew as the view zoomed out would widen the world, and fitting it would zoom out again without end.
-    var unzoom = String(1 / view.scale);
-    if (world.style.getPropertyValue('--stacki-unzoom') !== unzoom) world.style.setProperty('--stacki-unzoom', unzoom);
   }
   function remember() { try { sessionStorage.setItem(KEY, JSON.stringify({ x: view.x, y: view.y, scale: view.scale, moved: moved })); } catch (e) {} post({ event: 'view', scale: view.scale }); }
   function set(next) { view = next; apply(); remember(); }
@@ -115,16 +123,29 @@ export function chromeScript(id: string): string {
       if (outside !== body.hasAttribute('data-fallback')) { if (outside) body.setAttribute('data-fallback', ''); else body.removeAttribute('data-fallback'); }
     }
   }
-  // A frame without a background of its own shows the page's, as the component sits on in the site: the site's text
-  // colours are chosen for it, and over the canvas's grey a dark link or a light button vanished.
+  // Colours are written on the elements themselves, never as custom properties: a property set here would be listed
+  // among the site's own variables wherever the editor offers them (the variable picker of an element in a frame).
+  function paint(elements, property, value) {
+    for (var i = 0; i < elements.length; i++) { if (elements[i].style.getPropertyValue(property) !== value) elements[i].style.setProperty(property, value); }
+  }
+  // Without a project canvas background, a frame without a background of its own shows the page's, as the component
+  // sits on in the site: the site's text colours are chosen for it, and over the canvas's grey a dark link vanished.
   function pageBackground() {
+    if (canvas.hasAttribute('data-surface')) return;
     var clear = function (color) { return !color || color === 'transparent' || /rgba\(.*,\s*0\)$/.test(color); };
     var body = getComputedStyle(document.body).backgroundColor, root = getComputedStyle(document.documentElement).backgroundColor;
-    var color = !clear(body) ? body : !clear(root) ? root : '#fff';
-    if (canvas.style.getPropertyValue('--stacki-page-background') !== color) canvas.style.setProperty('--stacki-page-background', color);
+    paint(document.querySelectorAll('stacki-frame-body[data-transparent]'), 'background', !clear(body) ? body : !clear(root) ? root : '#fff');
+  }
+  // Labels stay legible on any canvas colour: dark on a light canvas, light on a dark one.
+  function labelColor() {
+    var match = /rgba?\(([^)]+)\)/.exec(getComputedStyle(canvas).backgroundColor || '');
+    var parts = match ? match[1].split(',').map(parseFloat) : [30, 30, 30, 1];
+    var alpha = parts.length > 3 ? parts[3] : 1;
+    var light = alpha > 0.5 && (0.299 * parts[0] + 0.587 * parts[1] + 0.114 * parts[2]) > 150;
+    paint(document.querySelectorAll('stacki-frame-label'), 'color', light ? '#5c5c5c' : '#a3a3a3');
   }
   var queued = false;
-  function settle() { queued = false; apply(); mark(); fallbacks(); pageBackground(); }
+  function settle() { queued = false; apply(); mark(); fallbacks(); pageBackground(); labelColor(); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
   new MutationObserver(queue).observe(canvas, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
@@ -141,7 +162,8 @@ export function chromeScript(id: string): string {
   }, { passive: false });
   window.addEventListener('keydown', function (event) { if (event.code === 'Space' && !event.repeat && !(event.target && event.target.isContentEditable)) space = true; }, true);
   window.addEventListener('keyup', function (event) { if (event.code === 'Space') space = false; }, true);
-  // Clicks belong to the editor (it selects what was clicked); a press is where the page learns which frame it was in.
+  // Clicks belong to the editor (it selects the frame's instance); a press tells it whether it was on the frame's own
+  // chrome (its label, the space around the instance), which also opens the frame's settings.
   canvas.addEventListener('pointerdown', function (event) {
     var frame = frameOf(event.target);
     var background = !frame;
@@ -181,6 +203,7 @@ export function chromeScript(id: string): string {
   }
   fallbacks();
   pageBackground();
+  labelColor();
   if (view) { moved = restoredMoved; apply(); if (moved) remember(); else fit(); } else { fit(); }
   if (!view) set({ scale: 1, x: 0, y: 0 });
   post({ event: 'ready' });
