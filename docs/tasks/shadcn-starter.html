@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stacki shadcn starter tasks</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.6;
+      }
+      body {
+        max-width: 78ch;
+        margin: 3rem auto;
+        padding: 0 1.25rem 3rem;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+      }
+      h2 {
+        margin-top: 2rem;
+      }
+      h3 {
+        margin-top: 1.5rem;
+      }
+      a {
+        color: LinkText;
+        overflow-wrap: anywhere;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      dt {
+        font-weight: 650;
+      }
+      dd {
+        margin: 0 0 0.65rem;
+      }
+      li + li {
+        margin-top: 0.35rem;
+      }
+      section {
+        border-top: 1px solid GrayText;
+        margin-top: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Stacki shadcn starter tasks</h1>
+        <p>
+          Add a standalone shadcn Astro starter to Stacki. After creation, the site opens on Style Guide with Example Components in its navigation. The
+          generated theme is editable through Variables, and each advertised starter component is insertable through Components.
+        </p>
+        <p>This plan records the implementation order and acceptance checks for <code>shadcn-starter</code>. The implementation uses shadcn CLI 4.23.0.</p>
+      </header>
+      <nav aria-label="Task index">
+        <ol>
+          <li><a href="#cli">Verify the official CLI</a></li>
+          <li><a href="#contract">Define the starter request</a></li>
+          <li><a href="#creation">Create and open the site</a></li>
+          <li><a href="#wizard">Add the welcome action and wizard</a></li>
+          <li><a href="#variables">Verify theme variables</a></li>
+          <li><a href="#palette">Prove palette insertion with Button</a></li>
+          <li><a href="#pages">Build both starter pages</a></li>
+          <li><a href="#catalogue">Verify the shipped component list</a></li>
+          <li><a href="#review">Run contribution checks</a></li>
+        </ol>
+      </nav>
+      <section aria-labelledby="decisions">
+        <h2 id="decisions">Product decisions</h2>
+        <dl>
+          <dt>Welcome and project type</dt>
+          <dd>
+            Keep Lumos as the main action. Add Start from shadcn beside Start from Astro in its dropdown. Use the Lumos folder picker and wizard flow. Astro is
+            fixed, and the starter creates one standalone site.
+          </dd>
+          <dt>Project fields</dt>
+          <dd>
+            Show Site name, a read-only Project path that updates with the name, and Stacki's existing Package manager dropdown. npm is the initial selection.
+          </dd>
+          <dt>Base and icon library</dt>
+          <dd>
+            Use visible single-select cards with monochrome SVG marks, full labels, and keyboard focus for both fields. Base UI is selected initially, with
+            React Aria and Radix UI available. Icon choices are Lucide, Tabler Icons, Hugeicons, Phosphor Icons, and Remix Icon. Lucide is selected initially.
+            Use the shadcn mark next to Start from shadcn in the welcome menu.
+          </dd>
+          <dt>Preset and switches</dt>
+          <dd>
+            Use Nova with the Neutral palette when the optional preset code is blank. A valid pasted code loads its theme and selects its icon library. A
+            subsequent icon choice overrides that one field. Base, pointer cursor on buttons, and RTL support come from their own controls. Both switches start
+            off. Enabling RTL support adds a reading direction control to the generated previews. A new preview still opens left to right. An invalid code gets
+            an inline error.
+          </dd>
+          <dt>After Create site</dt>
+          <dd>
+            Show progress and open the live preview after setup succeeds. On failure, show the failed step and preserve the wizard input. The editor integration
+            uses the starter, project CSS, and the existing Components and Variables tabs.
+          </dd>
+        </dl>
+        <p>
+          Marketplace apps add optional editor tools. Lumos Fluid Builder is independent of the Lumos starter. Marketplace packaging, UI SDK, monorepo
+          generation, and a built-in copy of the shadcn theme configurator are outside this contribution. <a href="../apps.md">Stacki Apps guide</a>
+        </p>
+      </section>
+      <section aria-labelledby="baseline">
+        <h2 id="baseline">What the audit found</h2>
+        <ul>
+          <li>
+            Stacki runs the Lumos generator, then applies project defaults, installs dependencies, and handles Git. The welcome wrapper passes one alternative
+            action to a shared split button that already supports several. <a href="../../electron/project/starter.ts">Starter runner</a> ·
+            <a href="../../electron/handlers/projectHandlers.ts">Project creation handlers</a> ·
+            <a href="../../src/features/welcome/WelcomeSplitButton.tsx">Welcome split button</a>
+          </li>
+          <li>
+            The earlier official shadcn Astro run on Base UI and Nova produced a buildable site with React, Tailwind, a Button, a lockfile, and an initial
+            commit. The CLI manages install and Git during creation. The remaining bases, icon overrides, and cross-platform manager behavior need verification.
+            <a href="https://ui.shadcn.com/docs/installation/astro">Official Astro setup</a> · <a href="https://ui.shadcn.com/docs/cli#init">CLI options</a>
+          </li>
+          <li>
+            Stacki reads authored CSS custom properties from source, including <code>:root</code> and <code>.dark</code>. The palette scans Astro files. shadcn
+            generates React source and keeps CLI configuration in the root <code>components.json</code>. Stacki stores its insertion recipes in
+            <code>.stacki/components.json</code>. <a href="../../electron/project/cssVarRead.ts">Variable reader</a> ·
+            <a href="../../electron/project/projectFiles.ts">Desktop discovery</a> ·
+            <a href="../../studio/src/features/project/projectServer.ts">Studio discovery</a> ·
+            <a href="../contracts.md#shared-project-editor-metadata">Project metadata</a>
+          </li>
+        </ul>
+      </section>
+      <section aria-labelledby="tasks">
+        <h2 id="tasks">Tasks in implementation order</h2>
+        <article id="cli">
+          <h3>1. Verify the official CLI in disposable sites</h3>
+          <p>
+            Record the CLI version used for the contribution and make Astro and standalone generation explicit. Prove the effective package manager and lockfile
+            for every manager exposed in the wizard, including a destination under a parent with different package-manager metadata. Check what the CLI installs
+            and commits. Document the tested invocation so implementation can reuse it.
+          </p>
+          <p>
+            Use shadcn's preset tools to validate and resolve the optional code. For icon overrides, test the supported <code>migrate icons</code> command
+            before installing the starter's component list. Verify it updates the generated config, imports, and dependencies without changing the selected
+            theme. Use the resolved icon library for later additions. Address any unsupported icon mappings before exposing the corresponding choice.
+          </p>
+          <p>
+            <strong>Done when</strong> all three bases and five icon libraries have evidence from generated output. Cover the blank and custom presets, one
+            conflicting icon override, pointer on and off, and RTL on and off. Check the generated CSS, config, and lockfile as well as a successful Astro
+            build. Use a targeted matrix that covers each option and the interactions above. <a href="https://ui.shadcn.com/docs/cli">shadcn CLI</a> ·
+            <a href="https://ui.shadcn.com/docs/rtl">RTL conventions</a>
+          </p>
+        </article>
+        <article id="contract">
+          <h3>2. Define the starter request and defaults</h3>
+          <p>
+            Read the shared contracts first. Model Lumos and shadcn requests as distinct variants and keep the shared package-manager and name rules. Validate
+            base, icon library, preset code, path, and switches at the boundary. Share the option defaults between the renderer and main process. Separate an
+            untouched preset-derived icon from an explicit user selection so a preset change updates the right field.
+          </p>
+          <p>
+            <strong>Done when</strong> focused contract tests accept every supported option and reject malformed requests, unknown values, oversized input,
+            option-like values, and invalid codes. Existing Lumos requests still work. <a href="../contracts.md">Stacki contracts</a> ·
+            <a href="../../shared/ipc/ipcPayloads.ts">IPC payloads</a> · <a href="../../src/features/welcome/welcomeBridge.ts">Welcome bridge</a>
+          </p>
+        </article>
+        <article id="creation">
+          <h3>3. Create and open the site safely</h3>
+          <p>
+            Reuse Stacki's subprocess, progress, tool-path, and project-default helpers where their behavior fits. Pass an argument list to the official CLI.
+            Check required tools before writing. Confirm the CLI selected the requested manager before proceeding. Account for its own install and Git steps,
+            preserve a coherent initial history of the finished site, and keep Git configuration and remotes local to the generated project.
+          </p>
+          <p>
+            Give each attempt an owned work location and refuse to replace existing files or links. Put the finished site at the requested path only after
+            generation, theme setup, and starter content succeed. Verify relocatability for each manager before relying on a staged install. Bound subprocess
+            duration and output. Wait for the attempt to stop writing before offering retry, and keep stale logs out of the next attempt. Preserve the existing
+            Cancel behavior while creation runs.
+          </p>
+          <p>
+            <strong>Done when</strong> success returns a valid Astro path with the chosen lockfile and final starter files. Missing tools, timeout, invalid
+            preset, a concurrent attempt, and a destination created during setup produce a clear outcome without overwriting user files. Confirm a failed
+            install neither opens an incomplete site nor leaves the final path marked successful.
+            <a href="../../electron/project/starter.ts">Starter process runner</a> ·
+            <a href="../../electron/handlers/projectHandlers.ts">Existing project finalization</a> ·
+            <a href="../../test/electron/project/starter.test.js">Starter tests</a>
+          </p>
+        </article>
+        <article id="wizard">
+          <h3>4. Add the welcome action and wizard</h3>
+          <p>
+            Pass multiple alternatives to the existing welcome split button. Open the parent-folder picker first. Reuse the existing wizard fields, custom
+            Package manager dropdown, logs, and translations. Use labelled, keyboard-accessible single-select groups for Base and Icon library, plus the
+            existing switch style for pointer and RTL. Link to shadcn Create beside the optional preset field.
+          </p>
+          <p>
+            <strong>Done when</strong> keyboard and mouse users can open the new flow, cancel the folder picker, edit options, and submit once. Verify the
+            default and preset icon selection, an explicit icon override, both switches, validation feedback, progress, retry, and opening after success. Lumos
+            and plain Astro retain their existing flows. <a href="../../src/features/welcome/WelcomeScreen.tsx">Welcome screen</a> ·
+            <a href="../../src/features/welcome/WelcomeWizards.tsx">Existing wizard</a> ·
+            <a href="../../test/renderer/welcome/welcome.test.js">Welcome tests</a>
+          </p>
+        </article>
+        <article id="variables">
+          <h3>5. Verify light and dark theme variables</h3>
+          <p>
+            Keep shadcn's theme in the generated site's global stylesheet under <code>src</code>. Use the authored <code>:root</code> and
+            <code>.dark</code> declarations for editable values. Preserve Tailwind's <code>@theme inline</code> aliases. Confirm each color token supplied by
+            the selected theme appears under the correct scope in Variables, including background, foreground, primary, accent, chart, and sidebar colors when
+            present.
+          </p>
+          <p>
+            <strong>Done when</strong> Desktop and Studio edit the same light and dark token independently, save only the intended declaration, and update the
+            computed color on the page in the matching mode. Verify the saved values after reopen and exercise an outdated edit. If current Stacki misses a
+            declaration, fix the shared reader or the generated CSS at the source.
+            <a href="https://ui.shadcn.com/docs/theming#theme-tokens">shadcn theme tokens</a> ·
+            <a href="../../studio/src/features/variables/variableServer.ts">Studio variable operations</a>
+          </p>
+        </article>
+        <article id="palette">
+          <h3>6. Prove palette insertion with Button</h3>
+          <p>
+            Keep the official React Button and add a thin, project-owned Astro wrapper. Expose an editable label and supported variant. Set useful insertion
+            defaults in <code>.stacki/components.json</code> and use normal Astro props and slots. Keep Stacki markup out of Astro files.
+          </p>
+          <p>
+            <strong>Done when</strong> Button appears in Components in Desktop and Studio. Insert it into a test page, change label and variant, then check
+            preview, saved source, undo and redo, and reopen. Confirm the generated shadcn source stays intact during instance edits. Repeat on all three bases
+            before expanding the catalogue. <a href="../components.md">Stacki component guide</a> ·
+            <a href="../../shared/properties/componentDefaults.ts">Recipe validation</a>
+          </p>
+        </article>
+        <article id="pages">
+          <h3>7. Build Style Guide and Example Components</h3>
+          <p>
+            Make Style Guide the homepage. Show semantic colors, typography, radius, and the selected icons alongside working controls. Use Example Components
+            for a composed interface with realistic sample data. Use shadcn's Toggle Group for theme selection in the shared Astro layout and for LTR or RTL
+            selection when the project enables RTL support. Remember each choice across navigation. Use the generated project's theme and registry components on
+            both pages. <a href="https://ui.shadcn.com/create">shadcn Create preview reference</a>
+          </p>
+          <p>
+            <strong>Done when</strong> a fresh install opens on Style Guide, both links work in the canvas, and the pages build as normal routes. Change a theme
+            token and see it update in both. Check keyboard and focus behavior in a Dialog or another overlay, and verify that Tabs respond and retain saved
+            defaults after reopen. Test RTL layout and overlay placement with Arabic content.
+            <a href="https://docs.astro.build/en/guides/framework-components/#hydrating-interactive-components">Astro hydration</a>
+          </p>
+        </article>
+        <article id="catalogue">
+          <h3>8. Verify every component shipped in the starter</h3>
+          <p>
+            Install every <code>registry:ui</code> entry supported by the selected base and let shadcn resolve its dependencies. The 4.23.0 registry contains 65
+            Base UI entries, 64 Radix UI entries, and 62 React Aria entries. Add the three documented compositions for Data Table, Date Picker, and Typography.
+            Keep compound React widgets in one island where their parts share state. Use Astro wrappers and recipes for Components, and preserve the generated
+            CSS variables and Tailwind theme aliases.
+          </p>
+          <p>
+            <strong>Done when</strong> the installed inventory and searchable Components entries match for every base. Test insertion of each advertised entry
+            in Desktop and Studio, verify its default content and rendered output, and exercise interactive examples in the canvas. Run the installed
+            <code>astro-studio check-project &lt;project-directory&gt;</code> on generated fixtures to catch missing paths, invalid slots, or cycles.
+            <a href="https://ui.shadcn.com/docs/components">Official component catalogue</a> ·
+            <a href="../../studio/test/component-insert-defaults.test.ts">Studio insertion tests</a> ·
+            <a href="../../studio/test/componentPreview.browser.ts">Studio preview checks</a>
+          </p>
+        </article>
+        <article id="review">
+          <h3>9. Run contribution checks</h3>
+          <p>
+            Read the repository instructions for the touched areas. Use the existing gates and hooks. Run <code>npm run check:changed</code> and
+            <code>env -u ELECTRON_RUN_AS_NODE npm test</code> for the completed feature. Run the generated site's <code>astro build</code> through its chosen
+            package manager. Run the existing Desktop and Studio browser checks that cover the changed paths. Create a fresh site through the actual welcome
+            flow and record the exact base, preset, icon library, manager, and switches used.
+          </p>
+          <p>
+            <strong>Done when</strong> the tested checkout can create a site, open both pages, edit theme values, and insert the shipped components. Record any
+            combinations still unverified before asking for review. Keep unrelated Builder changes, policy files, and generated preview output out of the
+            contribution. <a href="../../AGENTS.md">Repository instructions</a> · <a href="../enforcement.md">Checks and hooks</a>
+          </p>
+        </article>
+      </section>
+      <section aria-labelledby="verification">
+        <h2 id="verification">Initial starter verification on macOS</h2>
+        <ul>
+          <li>
+            The Desktop wizard created a real site from a custom preset under a symlinked parent folder. It applied the selected base, icon override, pointer
+            and RTL settings and opened Style Guide.
+          </li>
+          <li>
+            Generated Base UI, Radix UI and React Aria sites built successfully. npm and pnpm kept their own lockfiles when launched under a parent configured
+            for the other manager.
+          </li>
+          <li>
+            All six starter components saved through the Desktop and Studio palettes. A Button label and variant edit updated the Desktop canvas and Astro
+            source. Light and dark color declarations saved independently in Studio.
+          </li>
+          <li>
+            Both starter pages rendered with working navigation and theme switching. Browser checks exercised Tabs and an Arabic RTL Dialog with focus return.
+          </li>
+          <li>
+            The full repository run reported an EmDash dialog layout failure that also reproduced on unchanged commit <code>b36a2d02</code>. The phone preview's
+            skeleton timing failure also reproduced on that commit and passed an isolated branch rerun.
+          </li>
+        </ul>
+      </section>
+      <section aria-labelledby="catalog-verification">
+        <h2 id="catalog-verification">Full catalog verification on macOS</h2>
+        <ul>
+          <li>
+            The Desktop wizard kept all eight choice labels inside their cards at the standard width and in a narrow right-to-left window. Pointer and arrow-key
+            selection worked. The menu mark and choice card marks used monochrome SVG artwork.
+          </li>
+          <li>
+            A fresh Radix UI project completed through the Desktop wizard with npm, Tabler Icons, and RTL support enabled. A fresh React Aria project also
+            completed with pnpm, Phosphor Icons, and RTL support enabled.
+          </li>
+          <li>
+            Desktop discovered 68 Base UI, 67 Radix UI, and 65 React Aria entries. Each total includes Data Table, Date Picker, and Typography. Each project
+            passed
+            <code>astro-studio check-project</code>. A temporary route rendered all entries together for each base and passed <code>astro check</code>,
+            <code>astro build</code>, and browser hydration checks.
+          </li>
+          <li>
+            Both preview pages opened in LTR on fresh visits. The LTR and RTL choices persisted across routes and reloads when RTL support was enabled. The
+            dialog followed the selected direction and returned focus on Escape. The light, dark, and system choices updated the shared theme tokens.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
