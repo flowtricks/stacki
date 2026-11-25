@@ -81,7 +81,8 @@ function writeFixture(project) {
   const read = (file) => (fs.existsSync(path.join(project, file)) ? fs.readFileSync(path.join(project, file), 'utf8') : '');
   const buttonBefore = read('src/components/Button.astro');
   const app = await electron.launch({
-    args: [repoPath('dist/electron/main.js'), `--user-data-dir=${path.join(root, 'user-data')}`, project],
+    // A mock keychain: a test app never asks the person's macOS keychain for anything.
+    args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
   });
   const results = {};
