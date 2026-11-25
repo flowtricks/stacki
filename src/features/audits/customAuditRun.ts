@@ -6,7 +6,7 @@
 // An audit whose patterns the guard refuses (a hand-edited file) runs nothing and is reported in `problems`; one that reached
 // its caps or its time budget is reported in `stopped`. Neither stops the rest of the audit.
 import { assert } from '../../../shared/core/assert';
-import { auditFinding, type AuditCustomRef, type AuditFileKind, type AuditFinding } from '../../../shared/page/auditFindings';
+import { auditFinding, numberedRepeats, type AuditCustomRef, type AuditFileKind, type AuditFinding } from '../../../shared/page/auditFindings';
 import { CUSTOM_MATCH_LIMITS, markupText, scanCustom, type CustomMatch, type CustomMatcher } from '../../../shared/page/auditCustom';
 import { lineOf, lineStarts, nodeChildren } from '../../../shared/page/auditMarkup';
 import type { PageNode } from '../../../shared/page/pageNode';
@@ -49,7 +49,7 @@ export function runCustomAudits(audits: readonly CustomAudit[], sources: readonl
       continue;
     }
     const run = auditRun(audit, compiled.value, sources, now);
-    findings.push(...run.findings);
+    findings.push(...numberedRepeats(run.findings));
     if (run.stopped) {
       stopped.push({ id: audit.id, name: audit.name });
     }

@@ -11,6 +11,8 @@ export interface IgnorableFinding {
   readonly id: string;
   readonly file: string;
   readonly detail: string;
+  /** Set on a repeat of an identical match (shared/page/auditFindings.ts numberedRepeats). */
+  readonly repeatOf?: string;
 }
 
 /** A finding the project ignores, and the note someone left, when they left one. */
@@ -24,7 +26,8 @@ export function ignoreReasons(findings: readonly IgnorableFinding[], file: Pick<
   const pages = new Map(file.ignoredPages.map((entry) => [entry.file, entry]));
   const reasons = new Map<string, IgnoredFinding>();
   for (const finding of findings) {
-    const entry = own.get(finding.id);
+    // An ignore of the first of identical matches covers them all, as it did while they shared one id.
+    const entry = own.get(finding.id) ?? (finding.repeatOf === undefined ? undefined : own.get(finding.repeatOf));
     const page = pages.get(finding.file);
     if (entry !== undefined || page !== undefined) {
       reasons.set(finding.id, { reason: entry?.reason ?? page?.reason });

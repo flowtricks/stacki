@@ -758,6 +758,8 @@ export interface AuditFinding {
   readonly routes?: readonly string[];
   /** For check `custom`: the project's audit that found it. */
   readonly custom?: AuditCustomRef;
+  /** On the second and later of matches that read the same: the first one's id, whose ignore covers them all. */
+  readonly repeatOf?: string;
 }
 
 /** Where a raw CSS value is: its rule's selector, the declaration, the token, the file's line, and what kind of value it is. */
@@ -808,6 +810,19 @@ export function findingId(input: Pick<AuditFinding, 'check' | 'file' | 'element'
   assert((input.check === 'custom') === (input.custom !== undefined), 'findingId: a custom finding names its audit, and only it does');
   const where = input.element === undefined ? '-' : input.element.path.join('.');
   return `${ruleKey(input)}|${input.file}|${where}|${input.detail}`;
+}
+
+/** `findings` with every match that reads like an earlier one given its own id (`…|#2`). The first keeps the id as it is, so ignores
+ * saved against it still hold, and the others name it (`repeatOf`) so the same ignore covers them. */
+export function numberedRepeats(findings: readonly AuditFinding[]): readonly AuditFinding[] {
+  const seen = new Map<string, number>();
+  const numbered = findings.map((finding) => {
+    const count = (seen.get(finding.id) ?? 0) + 1;
+    seen.set(finding.id, count);
+    return count === 1 ? finding : { ...finding, id: `${finding.id}|#${count}`, repeatOf: finding.id };
+  });
+  assert(numbered.length === findings.length, 'numberedRepeats: nothing is dropped');
+  return numbered;
 }
 
 /** The rule a finding is listed under: its check, or `custom:<id>` for a custom audit's, so each custom audit is its own row. */

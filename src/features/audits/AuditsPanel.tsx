@@ -215,7 +215,11 @@ export default function AuditsPanel(props: AuditsPanelProps) {
     unignorePage: async (file) => void (await writeIgnores(props, translate, (value) => withoutIgnoredPage(value, file))),
     unignoreIds: async (ids) => void (await writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value))),
     unignoreAll: async () => void (await writeIgnores(props, translate, withoutAnyIgnores)),
-    restore: async (finding) => void (await writeIgnores(props, translate, (value) => withoutIgnore(value, finding.id))),
+    restore: async (finding) => {
+      // A repeat may be hidden by the first match's entry: that is the one to take away.
+      const ids = finding.repeatOf === undefined ? [finding.id] : [finding.id, finding.repeatOf];
+      await writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value));
+    },
     ignoredOf: (finding) => reasons.get(finding.id),
     changeTokens: (message, change) => changeTokenSettings(props, translate, message, change),
     customAudit: (id) => customAudits.find((audit) => audit.id === id),
