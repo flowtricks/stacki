@@ -96,7 +96,7 @@ function declarationIssues(
   if (settings.allowed.includes(value.trim().toLowerCase())) {
     return [];
   }
-  const outside = blankVariables(value);
+  const outside = blankVariables(blankUrls(value));
   const issues: TokenIssue[] = [];
   const taken: [number, number][] = [];
   const push = (kind: TokenIssueKind, token: string, at: number): void => {
@@ -198,6 +198,13 @@ export function selectorAt(text: string, at: number): string {
 /** `text` with every comment blanked, so offsets still index the original. */
 export function blankComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, (comment) => ' '.repeat(comment.length));
+}
+
+// A url() names a file or an element (`url(#add)`): nothing inside it is a colour or a size. Offsets are kept.
+function blankUrls(value: string): string {
+  const out = value.replace(/\burl\(\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^)"']*)\s*\)/gi, (url) => ' '.repeat(url.length));
+  assert(out.length === value.length, 'blankUrls: offsets are kept');
+  return out;
 }
 
 /** `value` with every `var(…)`, nested parentheses and all, blanked, so offsets still index the original. */

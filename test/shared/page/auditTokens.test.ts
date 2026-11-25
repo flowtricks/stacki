@@ -246,3 +246,8 @@ test('only root and theme variables in stylesheets are offered as tokens; privat
   );
   assert.deepEqual([...tokenVariables('not files')], []);
 });
+
+test('a url() is never a colour or a size, whatever its fragment or file name spells', () => {
+  assert.deepEqual(kinds('.a { fill: url(#add); filter: url("a.svg#face"); background: url( \'(#bad).png\' ) #fff; }'), ['token-color:#fff']);
+  assert.deepEqual(kinds('.a { mask: url(#bed), linear-gradient(#000, #111); }'), ['token-color:#000', 'token-color:#111']);
+});
