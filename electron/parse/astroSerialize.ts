@@ -63,7 +63,7 @@ function inlineString(nodes: readonly ParserNode[], depth: number): string {
       // A void element keeps its attributes, `<br>` included: written bare, a
       // `<br class="hero_break" />` lost its class from the file and its path
       // tag from the preview, and the canvas then refused the text around it.
-      out += `<${node.name}${serializeAttrs(node.props, node.attrOrder)} />`;
+      out += `<${node.name}${serializeAttrs(node.props, node.attrOrder)}${node.openVoid === true ? '>' : ' />'}`;
     } else if (node.children.length === 0) {
       // Written as a pair with nothing between them. Closing it as `<span />`
       // says the same thing to a browser and a different thing to a diff.
@@ -551,7 +551,7 @@ function serializeNodeElement(
     }
   };
   if (node.children === undefined) {
-    openTag(node.tightClose ? '/>' : ' />');
+    openTag(node.openVoid === true ? '>' : node.tightClose ? '/>' : ' />');
     return;
   }
   // Inline runs stay on one line: <p>We're <strong>Acme</strong>.</p>

@@ -1169,3 +1169,47 @@ test('a component content restated with line breaks applies in every position', 
     assert.deepEqual(shape(echo.children ?? []), shape(restated.children ?? []), what);
   }
 });
+
+// A break already in the page, deleted on the canvas: the content comes back as the words joined, read from the
+// rendered element (template whitespace and all), and is written over the instance's children. Reported refused as an
+// editor error for a Lumos Paragraph whose break was saved earlier, beside a RichText sibling. Each source shape a
+// break can have in a page is tried, and each content the canvas can send for it.
+test('a break saved in the page and deleted on the canvas applies, whatever the source looks like', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const imports = '---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\n---\n';
+  const sources: readonly (readonly [string, string])[] = [
+    ['one line', '<div><Paragraph>Lorem ipsum dolor sit amet.<br />Another paragraph</Paragraph><RichText><p>x</p></RichText></div>'],
+    [
+      'indented, break on its own line',
+      '<div>\n  <Paragraph>\n    Lorem ipsum dolor sit amet.\n    <br />\n    Another paragraph\n  </Paragraph>\n  <RichText><p>x</p></RichText>\n</div>',
+    ],
+    [
+      'indented, break inline',
+      '<div>\n  <Paragraph>\n    Lorem ipsum dolor sit amet. <br />Another paragraph\n  </Paragraph>\n  <RichText>\n    <p>x</p>\n  </RichText>\n</div>',
+    ],
+    ['open break', '<div><Paragraph>Lorem ipsum dolor sit amet.<br>Another paragraph</Paragraph></div>'],
+  ];
+  let made = 0;
+  const id = () => `g${String(++made).padStart(32, '0')}`;
+  const text = (value: string) => ({ kind: 'text', id: id(), value });
+  const br = () => ({ kind: 'element', id: id(), name: 'br', props: {}, children: undefined });
+  const contents: readonly (readonly [string, () => readonly unknown[]])[] = [
+    ['joined', () => [text('\n    Lorem ipsum dolor sit amet.\n    Another paragraph\n  ')]],
+    ['line two deleted', () => [text('Lorem ipsum dolor sit amet.')]],
+    ['break kept, line two deleted', () => [text('Lorem ipsum dolor sit amet.'), br()]],
+    ['joined, tight', () => [text('Lorem ipsum dolor sit amet.Another paragraph')]],
+  ];
+  for (const [shape, inner] of sources) {
+    for (const [what, children] of contents) {
+      fs.writeFileSync(file, `${imports}${inner}\n`);
+      const shown = await read(harness, file);
+      const component = nodeAt(shown, [0, 0]);
+      assert.ok(component.kind === 'component', `${shape}: the paragraph`);
+      const restated = parsePageNode({ ...Object.fromEntries(Object.entries(component).filter(([key]) => key !== 'source')), children: children() });
+      const applied = await edit(harness, file, shown.checksum, { tag: 'replace-node', target: refAt(shown, [0, 0]), node: restated });
+      assert.ok(applied.ok, `${shape}, ${what} applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+    }
+  }
+});

@@ -328,6 +328,8 @@ function withdraw(
   refusal: { readonly reason: RejectionReason; readonly reported: boolean },
 ): void {
   recordNoChange(record);
+  // The toast names the reason in words; the log keeps what a report needs to find the cause (never shown in the UI).
+  console.warn('Stacki refused an edit:', { reason: refusal.reason, path, base: origin.checksum });
   if (refusal.reported) {
     deps.notice(refusal.reason);
   }

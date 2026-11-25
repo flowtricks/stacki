@@ -208,7 +208,7 @@ function tagExtras(record: Record<string, unknown>, where: string): Pick<PairedN
       out[field] = record[field];
     }
   }
-  for (const field of ['tightClose', 'shorthand', 'dynamicTag', 'astroAsset'] as const) {
+  for (const field of ['tightClose', 'openVoid', 'shorthand', 'dynamicTag', 'astroAsset'] as const) {
     if (record[field] !== undefined) {
       if (typeof record[field] !== 'boolean') {
         fail(where, `${field}: expected boolean`);

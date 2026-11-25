@@ -389,6 +389,7 @@ export type WireParserNode =
       readonly children: undefined | ReadonlyArray<WireParserNode>;
       readonly shorthand?: boolean;
       readonly tightClose?: boolean;
+      readonly openVoid?: boolean;
       readonly closeSource?: string;
       readonly dynamicTag?: boolean;
       readonly astroAsset?: boolean;

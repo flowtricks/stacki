@@ -284,6 +284,14 @@ function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Re
   const own = textOf(bytes, projected.span);
   const hunks = placedHunks(print(previous), print(next), own);
   if (!hunks.ok) {
+    // What an "editor error" report needs: the node's own bytes and the two printings the change was placed between.
+    console.warn('A node restatement could not be placed on its bytes:', {
+      reason: hunks.error,
+      path: anchor.path,
+      own: own.slice(0, 400),
+      printed: print(previous).slice(0, 400),
+      next: print(next).slice(0, 400),
+    });
     return hunks;
   }
   const moved = shiftedHunks(hunks.value, projected.span.start);
