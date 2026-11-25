@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { layerPreviewStyle, useResolvedCustomProperties } from './GradientCode';
 import { VariableSelect, variableIn } from './KeywordConnect';
 import { RatioOtherInput } from './AspectRatioField';
-import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, type BgLayer } from './model/background';
+import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, splitTopLevelCommas, type BgLayer } from './model/background';
 import LayerList from './LayerList';
 import { PlusIcon } from './components/MenuParts';
 import { openAfterRemoval } from './model/fieldHooks';
@@ -237,22 +237,30 @@ function useLayerStack({ read, setProp, clearProp }: Props) {
   const rawImage = valueOf('background-image').trim();
   const shorthand = valueOf('background').trim();
   const fromShorthand = (!rawImage || rawImage.toLowerCase() === 'none') && !!shorthand;
+  // What a var() in the shorthand holds says whether it is a layer or the colour.
+  const variables = useResolvedCustomProperties([fromShorthand ? shorthand : '']);
   const longhands = fromShorthand
-    ? splitBackgroundShorthand(shorthand)
+    ? splitBackgroundShorthand(shorthand, variables)
     : {
         image: valueOf('background-image'),
         size: valueOf('background-size'),
         position: valueOf('background-position'),
         repeat: valueOf('background-repeat'),
         attachment: valueOf('background-attachment'),
+        origin: '',
+        clip: '',
         color: '',
       };
-  const layers = parseLayers(longhands);
+  const boxes = {
+    origin: boxSource(read, 'background-origin', longhands.origin),
+    clip: boxSource(read, 'background-clip', longhands.clip),
+  };
+  const layers = parseLayers({ ...longhands, origin: boxes.origin.list, clip: boxes.clip.list });
 
   // When sourced from the shorthand, replace it: clear `background` and preserve its
   // colour into background-color.
   const applyLayers = (next: BgLayer[]) => {
-    writeLonghands(serializeLayers(next), { read, setProp, clearProp });
+    writeLonghands(next, boxes, { read, setProp, clearProp, keepOwn: fromShorthand });
     if (fromShorthand) {
       clearProp('background');
       if (longhands.color && !valueOf('background-color').trim()) {
@@ -287,11 +295,31 @@ function useLayerStack({ read, setProp, clearProp }: Props) {
   return { layers, applyLayers, openLayer, setOpenLayer, addLayer, removeLayer, reorder };
 }
 
-// Write the stack back to the five longhands, but only those whose value actually
+// Where a layer's box comes from. A list the picked selector declares is edited with
+// its layers. One value it declares applies to every layer (`background-clip: text`):
+// it is not the layers' to rewrite. With none declared, the shorthand's own boxes,
+// if it says any, move to the longhand.
+type BoxSource = { readonly list: string; readonly listed: boolean; readonly single: string };
+
+function boxSource(read: Props['read'], prop: string, fromShorthand: string): BoxSource {
+  const display = displayOf(read(prop));
+  const own = display.present && display.isSelected ? display.value.trim() : '';
+  if (own === '') {
+    return { list: fromShorthand, listed: false, single: '' };
+  }
+  const listed = splitTopLevelCommas(own).length > 1;
+  return listed ? { list: own, listed, single: '' } : { list: '', listed, single: own };
+}
+
+// Write the stack back to its longhands, but only those whose value actually
 // changed on the picked selector. Each setProp/clearProp is a separate native op that
-// toggles busy + re-reads from Webflow, so rewriting all five longhands on every change
+// toggles busy + re-reads from Webflow, so rewriting every longhand on every change
 // flashes the panel and echoes unchanged values back to Webflow.
-function writeLonghands(serialized: ReturnType<typeof serializeLayers>, { read, setProp, clearProp }: Pick<Props, 'read' | 'setProp' | 'clearProp'>) {
+function writeLonghands(
+  layers: BgLayer[],
+  boxes: { readonly origin: BoxSource; readonly clip: BoxSource },
+  { read, setProp, clearProp, keepOwn }: Pick<Props, 'read' | 'setProp' | 'clearProp'> & { readonly keepOwn: boolean },
+) {
   // The value the PICKED selector itself sets for `prop` (undefined when it doesn't set
   // it — a value inherited from another selector doesn't count).
   const ownValue = (prop: string): string | undefined => {
@@ -305,13 +333,22 @@ function writeLonghands(serialized: ReturnType<typeof serializeLayers>, { read, 
       if (own !== trimmed) {
         setProp(prop, trimmed, false);
       }
-    } else if (own !== undefined) {
+    } else if (own !== undefined && !keepOwn) {
+      // Beside a shorthand, a longhand the layers do not set is the author's own.
       clearProp(prop);
     }
   };
+  const serialized = serializeLayers(layers);
   write('background-image', serialized.image);
   write('background-size', serialized.size);
   write('background-position', serialized.position);
   write('background-repeat', serialized.repeat);
   write('background-attachment', serialized.attachment);
+  for (const key of ['origin', 'clip'] as const) {
+    const source = boxes[key];
+    // A box typed into a layer's code makes a single value into a list; the other layers keep that value.
+    if (source.listed || layers.some((layer) => layer[key].trim())) {
+      write(`background-${key}`, serializeLayers(layers.map((layer) => ({ ...layer, [key]: layer[key] || source.single })))[key]);
+    }
+  }
 }

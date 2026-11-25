@@ -117,7 +117,8 @@ export function setLayerKind({ next, displayKind, props }: { next: LayerKind; di
   }
   const seeded = blankLayer(next);
   assert(layerKind(seeded.image) === next, 'setLayerKind: the new layer is of the kind asked for');
-  applyLayers(layers.map((entry, i) => (i === index ? seeded : entry)));
+  // The boxes stay: the panel has no field to put them back with.
+  applyLayers(layers.map((entry, i) => (i === index ? { ...seeded, origin: layer.origin, clip: layer.clip } : entry)));
 }
 
 // An image layer's picker, or an unparsed gradient's raw text; then Size and Position.

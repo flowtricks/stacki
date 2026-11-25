@@ -16,8 +16,10 @@ const divider = {
   position: '0 0',
   repeat: 'repeat-x',
   attachment: '',
+  origin: '',
+  clip: '',
 };
-const photo = { image: 'url(photo.png)', size: 'cover', position: 'center', repeat: 'no-repeat', attachment: '' };
+const photo = { image: 'url(photo.png)', size: 'cover', position: 'center', repeat: 'no-repeat', attachment: '', origin: '', clip: '' };
 const switched = (next, displayKind) => {
   const writes = [];
   setLayerKind({ next, displayKind, props: { layers: [divider, photo], index: 0, applyLayers: (layers) => writes.push(layers) } });

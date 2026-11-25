@@ -1,10 +1,11 @@
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../../shared/core/assert';
+import { substituteCustomProperties } from './cssVars';
 // Multi-layer `background` model. CSS backgrounds are parallel comma-separated
 // lists — background-image holds the layers (index 0 = the TOP layer), and
-// background-size / -position / -repeat / -attachment hold one entry per layer.
-// background-color is a single value painted behind every layer. This module
+// background-size / -position / -repeat / -attachment / -origin / -clip hold one
+// entry per layer. background-color is a single value painted behind every layer. This module
 // parses those longhands into an ordered layer list and serializes it back,
 // splitting on TOP-LEVEL commas only (gradients / rgba() have inner commas).
 
@@ -18,6 +19,10 @@ export type BgLayer = {
   position: string;
   repeat: string;
   attachment: string;
+  /** The boxes (`padding-box`, `border-box`, …). The panel has no field for
+   *  them; they travel with their layer. */
+  origin: string;
+  clip: string;
 };
 
 export type BackgroundLonghands = {
@@ -26,6 +31,8 @@ export type BackgroundLonghands = {
   position: string;
   repeat: string;
   attachment: string;
+  origin: string;
+  clip: string;
 };
 
 /** Split on commas that are NOT inside parentheses, brackets or quotes — so
@@ -153,52 +160,103 @@ export function isShadowLength(token: string): boolean {
 const REPEAT_KW = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round']);
 const ATTACH_KW = new Set(['scroll', 'fixed', 'local']);
 const BOX_KW = new Set(['border-box', 'padding-box', 'content-box']);
-const isImageToken = (token: string) => /^(url|(repeating-)?(linear|radial|conic)-gradient)\(/i.test(token) || token.toLowerCase() === 'none';
+// Boxes only `background-clip` accepts.
+const CLIP_ONLY_KW = new Set(['text', 'border-area']);
+const IMAGE_FUNCTION = /^(-(webkit|moz|o)-)?(url|(repeating-)?(linear|radial|conic)-gradient|gradient|image-set|image|cross-fade|element|paint)\(/i;
+const isImageToken = (token: string) => IMAGE_FUNCTION.test(token) || token.toLowerCase() === 'none';
+const isVariableToken = (token: string) => /^var\(/i.test(token);
+const isMathToken = (token: string) => /^(calc|min|max|clamp)\(/i.test(token);
 const isPositionToken = (token: string) => /^(left|right|top|bottom|center)$/i.test(token) || /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token);
 
-/** Parse a `background` shorthand into the five longhands + the (single) color.
+/** Parse a `background` shorthand into its longhands + the (single) color.
  *  Order-tolerant per CSS; a `pos / size` group is split on the top-level slash.
- *  Longhands only some layer sets come back ''; color only from the last layer. */
-export function splitBackgroundShorthand(bg: string): BackgroundLonghands & { color: string } {
+ *  Longhands only some layer sets come back ''; color only from the last layer.
+ *  `variables` holds what the page resolves each custom property to, which is the
+ *  only way to tell a var() holding an image from one holding the colour. */
+export function splitBackgroundShorthand(bg: string, variables: ReadonlyMap<string, string> = new Map()): BackgroundLonghands & { color: string } {
   const layerTexts = splitTopLevelCommas(bg);
-  const images: string[] = [];
-  const sizes: string[] = [];
-  const positions: string[] = [];
-  const repeats: string[] = [];
-  const attachments: string[] = [];
+  const parsed: BackgroundLayerTokens[] = [];
   let color = '';
   layerTexts.forEach((layerText, layerIndex) => {
     const isLastLayer = layerIndex === layerTexts.length - 1;
-    const layer = parseBackgroundLayer(layerText, { isLastLayer });
-    if (layer.color) {
-      color = layer.color;
-    }
-    // A layer with no image is just the trailing colour — don't emit it as a layer.
-    if (!layer.image) {
-      if (isLastLayer && !color) {
-        color = layer.positionTokens.join(' ').trim();
-      }
+    const layer = parseBackgroundLayer(layerText, { isLastLayer, variables });
+    if (!isLastLayer) {
+      // Every layer before the last has an image: dropping it would shift the rest.
+      parsed.push(layer.image ? layer : withStrayImage(layer));
       return;
     }
-    images.push(layer.image || 'none');
-    sizes.push(layer.sizeTokens.join(' '));
-    positions.push(layer.positionTokens.join(' '));
-    repeats.push(layer.repeat);
-    attachments.push(layer.attachment);
+    color = layer.color;
+    if (layer.image) {
+      parsed.push(layer);
+      return;
+    }
+    // A layer with no image is just the trailing colour — don't emit it as a layer.
+    if (!color) {
+      color = layer.positionTokens.join(' ').trim();
+    }
+    // Its box still clips the colour, which a longhand list says through the
+    // bottom layer's entry: kept as a layer that paints nothing, when it differs.
+    const above = parsed[parsed.length - 1];
+    if (clipOf(layer) !== (above === undefined ? 'border-box' : clipOf(above))) {
+      parsed.push({ ...layer, image: 'none', positionTokens: [], color: '' });
+    }
   });
   const join = (list: string[], initial: string) => (list.some((item) => item.trim()) ? list.map((item) => item.trim() || initial).join(', ') : '');
   return {
-    image: images.join(', '),
-    size: join(sizes, 'auto'),
-    position: join(positions, '0% 0%'),
-    repeat: join(repeats, 'repeat'),
-    attachment: join(attachments, 'scroll'),
+    image: parsed.map((layer) => layer.image).join(', '),
+    size: join(
+      parsed.map((layer) => layer.sizeTokens.join(' ')),
+      'auto',
+    ),
+    position: join(
+      parsed.map((layer) => layer.positionTokens.join(' ')),
+      '0% 0%',
+    ),
+    repeat: join(
+      parsed.map((layer) => layer.repeat),
+      'repeat',
+    ),
+    attachment: join(
+      parsed.map((layer) => layer.attachment),
+      'scroll',
+    ),
+    origin: boxList(
+      parsed.map((layer) => layer.origin),
+      'padding-box',
+    ),
+    clip: boxList(
+      parsed.map((layer) => layer.clip),
+      'border-box',
+    ),
     color,
   };
 }
 
+const clipOf = (layer: Pick<BackgroundLayerTokens, 'clip'>): string => layer.clip || 'border-box';
+
+// A box list: '' when no layer says one, one value when every layer says the same
+// (CSS repeats it), else one entry per layer.
+function boxList(entries: readonly string[], initial: string): string {
+  if (!entries.some((entry) => entry.trim())) {
+    return '';
+  }
+  const filled = entries.map((entry) => entry.trim() || initial);
+  return new Set(filled).size === 1 ? (filled[0] ?? initial) : filled.join(', ');
+}
+
+// A layer before the last with no image the parser knows: a function it has not
+// heard of stands as the image, else the layer paints none.
+function withStrayImage(layer: BackgroundLayerTokens): BackgroundLayerTokens {
+  const at = layer.positionTokens.findIndex((token) => token.includes('(') && !isMathToken(token));
+  return {
+    ...layer,
+    image: layer.positionTokens[at] ?? 'none',
+    positionTokens: layer.positionTokens.filter((_, index) => index !== at),
+  };
+}
+
 /** One layer as `background` shorthand text: its image, then position / size,
- *  tiling and attachment where set. What the code view of a layer edits. */
+ *  tiling, attachment and boxes where set. What the code view of a layer edits. */
 export function layerShorthand(layer: BgLayer): string {
   const parts = [layer.image.trim()];
   const position = layer.position.trim();
@@ -208,7 +266,7 @@ export function layerShorthand(layer: BgLayer): string {
   } else if (position !== '') {
     parts.push(position);
   }
-  for (const part of [layer.repeat, layer.attachment]) {
+  for (const part of [layer.repeat, layer.attachment, boxShorthand(layer)]) {
     if (part.trim() !== '') {
       parts.push(part.trim());
     }
@@ -218,13 +276,27 @@ export function layerShorthand(layer: BgLayer): string {
   return text;
 }
 
+// The boxes as the shorthand writes them: one word sets both, else origin then clip.
+function boxShorthand(layer: Pick<BgLayer, 'origin' | 'clip'>): string {
+  const origin = layer.origin.trim();
+  const clip = layer.clip.trim();
+  if (CLIP_ONLY_KW.has(clip)) {
+    return origin ? `${origin} ${clip}` : clip;
+  }
+  if (!origin && !clip) {
+    return '';
+  }
+  const pair = [origin || 'padding-box', clip || 'border-box'];
+  return pair[0] === pair[1] ? (pair[0] ?? '') : pair.join(' ');
+}
+
 /** The layer a shorthand text describes, or undefined when it names no image
  *  (an empty or colour-only text is not a layer). */
 export function parseLayerShorthand(text: string): BgLayer | undefined {
   if (splitTopLevelCommas(text).length !== 1) {
     return undefined; // One layer per code block: a comma here would start a second.
   }
-  const tokens = parseBackgroundLayer(text.trim(), { isLastLayer: false });
+  const tokens = parseBackgroundLayer(text.trim(), { isLastLayer: false, variables: new Map() });
   if (!tokens.image) {
     return undefined;
   }
@@ -234,6 +306,8 @@ export function parseLayerShorthand(text: string): BgLayer | undefined {
     position: tokens.positionTokens.join(' '),
     repeat: tokens.repeat,
     attachment: tokens.attachment,
+    origin: tokens.origin,
+    clip: tokens.clip,
   };
 }
 
@@ -241,20 +315,48 @@ type BackgroundLayerTokens = {
   image: string;
   repeat: string;
   attachment: string;
+  origin: string;
+  clip: string;
   positionTokens: string[];
   sizeTokens: string[];
   /** The leftover token that names the background colour ('' when none). */
   color: string;
 };
 
+type LayerContext = { readonly isLastLayer: boolean; readonly variables: ReadonlyMap<string, string> };
+
+// Which var() among a layer's tokens is its image, when no image is written out.
+// Before the last layer there is no colour, so the first one is. In the last layer
+// a var() is the colour unless it resolves (or falls back) to an image, or it
+// leads a placement only an image can have and resolves to nothing.
+function imageVariable(tokens: readonly string[], context: LayerContext): string | undefined {
+  if (tokens.some(isImageToken)) {
+    return undefined;
+  }
+  const variables = tokens.filter(isVariableToken);
+  if (!context.isLastLayer) {
+    return variables[0];
+  }
+  const resolved = variables.map((token) => substituteCustomProperties(token, context.variables).trim());
+  const at = resolved.findIndex((value) => IMAGE_FUNCTION.test(value));
+  if (at >= 0) {
+    return variables[at];
+  }
+  const placed = tokens.some((token) => token === '/' || REPEAT_KW.has(token.toLowerCase()) || ATTACH_KW.has(token.toLowerCase()));
+  return placed && resolved[0] === '' && tokens[0] === variables[0] ? variables[0] : undefined;
+}
+
 // Sort one layer's tokens into its longhands. Only the LAST layer may carry the colour.
-function parseBackgroundLayer(layerText: string, options: { readonly isLastLayer: boolean }): BackgroundLayerTokens {
+function parseBackgroundLayer(layerText: string, context: LayerContext): BackgroundLayerTokens {
   // Normalize `a / b` (with or without spaces around the slash) into tokens.
-  const tokens = splitTopLevelSpaces(layerText.replace(/\s*\/\s*/g, ' / '));
+  const tokens = splitTopLevelSpaces(spaceTopLevelSlashes(layerText));
+  const variableImage = imageVariable(tokens, context);
   const layer: BackgroundLayerTokens = {
     image: '',
     repeat: '',
     attachment: '',
+    origin: '',
+    clip: '',
     positionTokens: [],
     sizeTokens: [],
     color: '',
@@ -264,19 +366,23 @@ function parseBackgroundLayer(layerText: string, options: { readonly isLastLayer
     const lower = token.toLowerCase();
     if (token === '/') {
       afterSlash = true;
-    } else if (isImageToken(token)) {
+    } else if (isImageToken(token) || (token === variableImage && !layer.image)) {
       layer.image = token;
     } else if (REPEAT_KW.has(lower)) {
       layer.repeat = layer.repeat ? `${layer.repeat} ${lower}` : lower;
     } else if (ATTACH_KW.has(lower)) {
       layer.attachment = lower;
     } else if (BOX_KW.has(lower)) {
-      // Origin / clip — not modeled here.
+      // The first box sets both; a second one is the clip.
+      layer.clip = lower;
+      layer.origin ||= lower;
+    } else if (CLIP_ONLY_KW.has(lower)) {
+      layer.clip = lower;
     } else if (afterSlash) {
       layer.sizeTokens.push(token);
     } else if (isPositionToken(token)) {
       layer.positionTokens.push(token);
-    } else if (options.isLastLayer) {
+    } else if (context.isLastLayer) {
       // A leftover (non-position) token in the LAST layer is the background-color
       // (covers named colours like `white` too, without a colour lookup table).
       layer.color = token;
@@ -285,6 +391,28 @@ function parseBackgroundLayer(layerText: string, options: { readonly isLastLayer
     }
   }
   return layer;
+}
+
+// Only a slash outside parentheses and quotes separates position from size: one
+// inside url() or rgb() belongs to the value and keeps its spacing.
+function spaceTopLevelSlashes(text: string): string {
+  let depth = 0;
+  let quote = '';
+  let out = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+    if (quote !== '') {
+      quote = ch === quote ? '' : quote;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '(') {
+      depth += 1;
+    } else if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+    }
+    out += ch === '/' && quote === '' && depth === 0 ? ' / ' : ch;
+  }
+  return out;
 }
 
 /** Which kind of layer an image value is, from its function/keyword. */
@@ -337,24 +465,30 @@ export function layerLabel(image: string, translate: Translator = ENGLISH_TRANSL
   }
 }
 
-/** Parse the five longhands into an ordered layer list (top layer first). */
+/** Parse the longhands into an ordered layer list (top layer first). */
 export function parseLayers(props: BackgroundLonghands): BgLayer[] {
-  const images = props.image.trim() ? splitTopLevelCommas(props.image) : [];
-  // `none` (the initial value, or an explicit reset) means there are no layers.
-  const cleaned = images.filter((img) => img && img.toLowerCase() !== 'none');
-  if (!cleaned.length) {
-    return [];
-  }
+  const images = props.image.trim() ? splitTopLevelCommas(props.image).filter(Boolean) : [];
   const sizes = props.size.trim() ? splitTopLevelCommas(props.size) : [];
   const positions = props.position.trim() ? splitTopLevelCommas(props.position) : [];
   const repeats = props.repeat.trim() ? splitTopLevelCommas(props.repeat) : [];
   const attachments = props.attachment.trim() ? splitTopLevelCommas(props.attachment) : [];
-  return cleaned.map((image, i) => ({
+  const origins = props.origin.trim() ? splitTopLevelCommas(props.origin) : [];
+  const clips = props.clip.trim() ? splitTopLevelCommas(props.clip) : [];
+  // `none` (the initial value, or an explicit reset) means there are no layers —
+  // unless a box of its own clips the colour. Beside other layers a `none` stays:
+  // leaving it out would move every later entry onto the wrong image.
+  if (images.every((image) => image.toLowerCase() === 'none') && !origins.length && !clips.length) {
+    return [];
+  }
+  return images.map((image, i) => ({
     image,
     size: sizes[i] ?? '',
     position: positions[i] ?? '',
     repeat: repeats[i] ?? '',
     attachment: attachments[i] ?? '',
+    // A shorter box list repeats, as CSS reads it.
+    origin: origins[i % origins.length] ?? '',
+    clip: clips[i % clips.length] ?? '',
   }));
 }
 
@@ -372,7 +506,7 @@ const INITIAL = {
  *  comma list, padding unset layers with the CSS initial so indexes line up. */
 export function serializeLayers(layers: BgLayer[]): BackgroundLonghands {
   if (!layers.length) {
-    return { image: '', size: '', position: '', repeat: '', attachment: '' };
+    return { image: '', size: '', position: '', repeat: '', attachment: '', origin: '', clip: '' };
   }
   const list = (key: 'size' | 'position' | 'repeat' | 'attachment'): string =>
     layers.some((layer) => layer[key].trim()) ? layers.map((layer) => layer[key].trim() || INITIAL[key]).join(', ') : '';
@@ -382,6 +516,14 @@ export function serializeLayers(layers: BgLayer[]): BackgroundLonghands {
     position: list('position'),
     repeat: list('repeat'),
     attachment: list('attachment'),
+    origin: boxList(
+      layers.map((layer) => layer.origin),
+      'padding-box',
+    ),
+    clip: boxList(
+      layers.map((layer) => layer.clip),
+      'border-box',
+    ),
   };
 }
 
@@ -397,5 +539,5 @@ export function blankLayer(kind: LayerKind): BgLayer {
           : kind === 'color'
             ? colorOverlayImage('rgba(0, 0, 0, 0.5)')
             : 'url()';
-  return { image, size: '', position: '', repeat: '', attachment: '' };
+  return { image, size: '', position: '', repeat: '', attachment: '', origin: '', clip: '' };
 }

@@ -42,7 +42,7 @@ assert.equal(substituteCustomProperties('calc(var(--a) * 3)', new Map([['--a', '
 
 // The preview paints the layer at its own size, position and tiling.
 const style = layerPreviewStyle(
-  { image: scallop, size: 'calc(var(--divider-size) * 3) var(--divider-size)', position: '0 0', repeat: 'repeat-x', attachment: '' },
+  { image: scallop, size: 'calc(var(--divider-size) * 3) var(--divider-size)', position: '0 0', repeat: 'repeat-x', attachment: '', origin: '', clip: '' },
   values,
 );
 assert.equal(style.backgroundSize, 'calc(12px * 3) 12px');
@@ -50,7 +50,8 @@ assert.equal(style.backgroundRepeat, 'repeat-x');
 assert.equal(style.backgroundPosition, '0 0');
 assert.match(style.backgroundImage, /transparent 12px/);
 assert.equal(
-  layerPreviewStyle({ image: 'linear-gradient(red, blue)', size: '', position: '', repeat: '', attachment: '' }, new Map()).backgroundSize,
+  layerPreviewStyle({ image: 'linear-gradient(red, blue)', size: '', position: '', repeat: '', attachment: '', origin: '', clip: '' }, new Map())
+    .backgroundSize,
   undefined,
 );
 
@@ -63,9 +64,12 @@ assert.equal(layer.position, '0 0');
 assert.equal(layer.size, 'calc(var(--divider-size) * 3) var(--divider-size)');
 assert.equal(layer.repeat, 'repeat-x');
 assert.equal(layerShorthand(layer), layerText, 'written back as it was read');
-assert.equal(layerShorthand({ image: 'linear-gradient(red, blue)', size: '', position: '', repeat: '', attachment: '' }), 'linear-gradient(red, blue)');
 assert.equal(
-  layerShorthand({ image: 'linear-gradient(red, blue)', size: '10px', position: '', repeat: '', attachment: 'fixed' }),
+  layerShorthand({ image: 'linear-gradient(red, blue)', size: '', position: '', repeat: '', attachment: '', origin: '', clip: '' }),
+  'linear-gradient(red, blue)',
+);
+assert.equal(
+  layerShorthand({ image: 'linear-gradient(red, blue)', size: '10px', position: '', repeat: '', attachment: 'fixed', origin: '', clip: '' }),
   'linear-gradient(red, blue) 0 0 / 10px fixed',
 );
 // Not a layer: nothing, a colour alone, or a second layer after a comma.

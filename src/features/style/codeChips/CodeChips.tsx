@@ -855,7 +855,7 @@ function layersTitle(property: LayeredProperty, translate: ReturnType<typeof use
 function BackgroundLayersList({ props }: { readonly props: StyleRowProps }) {
   const translate = useTranslate();
   const value = displayOf(props.read('background-image')).value;
-  const layers = parseLayers({ image: value, size: '', position: '', repeat: '', attachment: '' });
+  const layers = parseLayers({ image: value, size: '', position: '', repeat: '', attachment: '', origin: '', clip: '' });
   const [openLayer, setOpenLayer] = useState<number | undefined>(undefined);
   const applyLayers = (next: BgLayer[]): void => {
     const image = serializeLayers(next).image;
