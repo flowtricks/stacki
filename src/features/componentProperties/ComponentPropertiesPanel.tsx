@@ -17,12 +17,15 @@ import { kindIcon } from './PropertyType';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from './PropertiesIcon';
 import { PropertyEditor, withListSettingType } from './PropertyEditor';
-import { SlotEditingRows } from './PropertyEditingSettings';
+import { SlotEditingEditor, SlotEditingRows } from './PropertyEditingSettings';
 import { VariantConditionMark, conditionLines } from './PropertyVariants';
 import './componentProperties.css';
 
 type Selection =
-  { readonly kind: 'none' } | { readonly kind: 'property'; readonly originalName: string; readonly value: ComponentProperty } | { readonly kind: 'attributes' };
+  | { readonly kind: 'none' }
+  | { readonly kind: 'property'; readonly originalName: string; readonly value: ComponentProperty }
+  | { readonly kind: 'attributes' }
+  | { readonly kind: 'slot'; readonly slot: string };
 
 /** The panel's props: the component file, and the open page's elements for its attributes prop. */
 export type PropertiesPanelProps = ComponentPropertiesPanelProps &
@@ -113,7 +116,13 @@ function PropertyPanelContent({ data, busy, save, saveHost, host }: PropertyCont
       <>
         {selection.kind === 'none' && (
           <>
-            <PropertyList data={data} busy={busy} onSelect={(value) => setSelection({ kind: 'property', originalName: value.name, value })} onChange={save} />
+            <PropertyList
+              data={data}
+              busy={busy}
+              onSelect={(value) => setSelection({ kind: 'property', originalName: value.name, value })}
+              onOpenSlot={(slot) => setSelection({ kind: 'slot', slot })}
+              onChange={save}
+            />
             <SharedPropertyGroups
               data={data}
               busy={busy}
@@ -123,6 +132,7 @@ function PropertyPanelContent({ data, busy, save, saveHost, host }: PropertyCont
             {attributes !== undefined && <AttributesPropertyRow attributes={attributes} busy={busy} onOpen={() => setSelection({ kind: 'attributes' })} />}
           </>
         )}
+        {selection.kind === 'slot' && <SlotEditingEditor slot={selection.slot} onClose={() => setSelection({ kind: 'none' })} />}
         {selection.kind === 'attributes' && attributes !== undefined && (
           <AttributesPropertyEditor
             attributes={attributes}
@@ -197,10 +207,12 @@ interface PropertyListProps {
   readonly data: ComponentProperties;
   readonly busy: boolean;
   readonly onSelect: (property: ComponentProperty) => void;
+  /** Opens a slot's settings; the slots' rows come first and are not reordered with the props. */
+  readonly onOpenSlot: (slot: string) => void;
   readonly onChange: (change: PropertyChange) => Promise<boolean>;
 }
 // The component's own props, in their order. A shared type's are listed under it (SharedPropertyGroups).
-function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
+function PropertyList({ data, busy, onSelect, onOpenSlot, onChange }: PropertyListProps) {
   const translate = useTranslate();
   const disabled = busy;
   const properties = useMemo(() => data.properties.filter((property) => property.shared === undefined), [data.properties]);
@@ -225,6 +237,7 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
   );
   return (
     <div className="property-list list-field">
+      <SlotEditingRows disabled={busy} onOpen={onOpenSlot} />
       {data.properties.length === 0 && <p className="property-help">{translate('componentProps.panel.empty')}</p>}
       {properties.map((property, index) => (
         <ListFieldRow
@@ -269,7 +282,6 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           )}
         </ListFieldRow>
       ))}
-      <SlotEditingRows disabled={busy} />
     </div>
   );
 }

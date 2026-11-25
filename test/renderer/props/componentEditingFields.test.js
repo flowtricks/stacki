@@ -114,17 +114,38 @@ test('a field that takes neither, a new prop, or no host shows nothing', async (
   await clear();
 });
 
-test('each slot that can take a setting gets a row that opens its switches', async () => {
+test('each slot that can take a setting gets a row drawn as a prop row, which opens its switches', async () => {
   const changes = [];
+  const opened = [];
   const host = editingHost({ 'slot:default': ['lineBreaks', 'richText'] }, {}, changes);
-  await draw(React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.SlotEditingRows, { disabled: false })));
-  const rows = [...document.querySelectorAll('.property-slot-row button')];
-  assert.deepEqual(
-    rows.map((row) => row.textContent),
-    ['Content'],
-    'the aside slot takes nothing here, so it has no row',
+  await draw(
+    React.createElement(
+      modules.FieldEditingContext.Provider,
+      { value: host },
+      React.createElement(modules.SlotEditingRows, { disabled: false, onOpen: (slot) => opened.push(slot) }),
+    ),
   );
-  await click(rows[0]);
+  const rows = [...document.querySelectorAll('.property-slot-row')];
+  assert.equal(rows.length, 1, 'the aside slot takes nothing here, so it has no row');
+  const [row] = rows;
+  // The prop rows' columns: the grip's place (kept, not draggable), then the button with its icon and name.
+  assert.deepEqual(
+    [...row.children].map((child) => child.className),
+    ['list-field-grip property-grip-space', 'list-field-text property-row-main'],
+  );
+  assert.equal(row.querySelector('.property-grip-space').tagName, 'SPAN', 'nothing to press or drag');
+  assert.ok(row.querySelector('.list-field-icon svg'));
+  assert.equal(row.querySelector('button').textContent, 'Content');
+  await click(row.querySelector('button'));
+  assert.deepEqual(opened, ['default']);
+  await clear();
+  await draw(
+    React.createElement(
+      modules.FieldEditingContext.Provider,
+      { value: host },
+      React.createElement(modules.SlotEditingEditor, { slot: 'default', onClose: () => {} }),
+    ),
+  );
   const switches = [...document.querySelectorAll('.property-editor .property-flags input')];
   assert.equal(switches.length, 2);
   await click(switches[1]);

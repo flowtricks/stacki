@@ -1,16 +1,16 @@
 // How a field of the component is typed in, set where its name and tooltip are: the last rows of a prop's settings
-// form, and, for the component's slots (which have no prop of their own), a row each at the end of the list that opens
-// the same rows. Allow line breaks makes Enter type a `<br>`; Allow rich text editing makes the field rich text (Enter
+// form, and, for the component's slots (which have no prop of their own), a row each at the top of the list that opens
+// the same rows, first in the list. Allow line breaks makes Enter type a `<br>`; Allow rich text editing makes the field rich text (Enter
 // starts a paragraph, a `+` changes the block, the Content field opens the rich text editor). Each row shows only where
 // the field can take it (componentDefaults.ts editingOffered), and each checkbox writes .stacki/components.json at once.
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { EditingField, EditingSetting, EditingSettings } from '../../../shared/properties/componentDefaults';
 import { assert } from '../../../shared/core/assert';
 import TipAnchor from '../../ui/TipAnchor';
 import Popup from '../../ui/Popup';
-import { CloseIcon, ElementSlotIcon } from '../../ui/Icons';
+import { CloseIcon, DragIcon, ElementSlotIcon } from '../../ui/Icons';
 
 /** What the host knows about the open component's fields and writes for them. Absent: no editing rows (Studio for now). */
 export interface FieldEditingHost {
@@ -62,46 +62,59 @@ export function PropertyEditingSettings({ field }: { readonly field: EditingFiel
   );
 }
 
-/** A row per slot at the end of the property list, opening that slot's editing settings in the settings form's place. */
-export function SlotEditingRows({ disabled }: { readonly disabled: boolean }) {
+/**
+ * A row per slot, first in the property list (the content between the tags is what a component is mostly for), drawn
+ * as the prop rows are: the same columns, with the grip's place kept empty since a slot is not reordered or deleted.
+ */
+export function SlotEditingRows({ disabled, onOpen }: { readonly disabled: boolean; readonly onOpen: (slot: string) => void }) {
   const host = useContext(FieldEditingContext);
   const translate = useTranslate();
-  const [open, setOpen] = useState<string>();
   if (host === undefined) {
     return undefined;
   }
   const slots = host.slots.filter((slot) => host.offered(`slot:${slot}`).length > 0);
-  const label = (slot: string) => (slot === 'default' ? translate('props.element.content') : slot);
   return (
     <>
       {slots.map((slot) => (
-        // A slot is not a prop: it has no grip to reorder and nothing to delete here, only its settings to open.
         <div key={slot} className="list-field-row property-row property-slot-row">
-          <button type="button" className="list-field-text property-row-main" disabled={disabled} aria-expanded={open === slot} onClick={() => setOpen(slot)}>
+          <span className="list-field-grip property-grip-space" aria-hidden="true">
+            <DragIcon size={12} />
+          </span>
+          <button type="button" className="list-field-text property-row-main" disabled={disabled} onClick={() => onOpen(slot)}>
             <span className="list-field-icon" aria-hidden="true">
-              <ElementSlotIcon size={12} />
+              <ElementSlotIcon size={14} />
             </span>
-            {label(slot)}
+            {slotLabel(slot, translate)}
           </button>
         </div>
       ))}
-      {open !== undefined && (
-        <Popup mode="popover" portal={false} className="property-editor" label={label(open)} onClose={() => setOpen(undefined)} dismissible={true}>
-          {({ close }) => (
-            <>
-              <header>
-                <div className="property-editor-title">
-                  <strong>{label(open)}</strong>
-                </div>
-                <button aria-label={translate('componentProps.dialog.close')} onClick={close}>
-                  <CloseIcon size={12} />
-                </button>
-              </header>
-              <PropertyEditingSettings field={`slot:${open}`} />
-            </>
-          )}
-        </Popup>
-      )}
     </>
+  );
+}
+
+function slotLabel(slot: string, translate: ReturnType<typeof useTranslate>): string {
+  return slot === 'default' ? translate('props.element.content') : slot;
+}
+
+/** A slot's settings, opened in the list's place as a prop's settings form is. */
+export function SlotEditingEditor({ slot, onClose }: { readonly slot: string; readonly onClose: () => void }) {
+  const translate = useTranslate();
+  const label = slotLabel(slot, translate);
+  return (
+    <Popup mode="popover" portal={false} className="property-editor" label={label} onClose={onClose} dismissible={true}>
+      {({ close }) => (
+        <>
+          <header>
+            <div className="property-editor-title">
+              <strong>{label}</strong>
+            </div>
+            <button aria-label={translate('componentProps.dialog.close')} onClick={close}>
+              <CloseIcon size={12} />
+            </button>
+          </header>
+          <PropertyEditingSettings field={`slot:${slot}`} />
+        </>
+      )}
+    </Popup>
   );
 }

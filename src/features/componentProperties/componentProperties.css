@@ -405,3 +405,9 @@
   margin: 2px 0 0;
   padding-inline-start: 16px;
 }
+
+/* A slot's row keeps the grip's place, so its icon and name line up with the props' rows; there is nothing to drag. */
+.property-grip-space {
+  visibility: hidden;
+  cursor: default;
+}
