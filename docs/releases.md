@@ -47,6 +47,39 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.19
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.19.
+- **Fixes**
+  - release: ship vendored Studio sources without prose comments
+  - check: give check:local's ESLint the gate's memory
+  - apps: frame overlays fill their item instead of 300 × 150
+  - git: resolve conflicts in quoted names and monorepo folders
+  - studio: open projects with file names Studio cannot edit
+  - style: property writes leave nested rules' declarations alone
+  - git: never merge binary or deleted files as text
+  - create-stacki: fail when a typed setup question is cancelled
+  - preview: the loading line clears for a page that never answers
+  - preview: leaving the width field untouched keeps the device
+  - preview: tell a replacement page to hide its scrollbar
+  - dictation: restart a part that already has every byte
+  - apps: Paste and Copy reach a text field in a focused app frame
+  - ai: list changed files from the project folder in monorepos
+  - audits: every run reads audits.json again
+  - audits: a self-closing script or style hides no template
+  - audits: a --prefix* rule matches numbered custom properties
+  - assets: undoing a move returns the file that moved
+  - cms: read [sets] and !exclusions in collection patterns
+  - welcome: a failed clone no longer blocks cloning again
+  - studio: keep the fence intact when an asset adds an import
+  - studio: stop vendoring 38 shared files Studio never imports
+  - studio: keep Settings writes inside a last child
+  - git: bring parked work back when the second merge throws
+  - style: a padding keyword never joins a multi-part shorthand
+  - style: shadows keep lengths in any unit and math functions
+  - style: background layer edits keep !important
+  - style: transition edits keep the easing beside allow-discrete
+
 ## 1.4.18
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.18.
