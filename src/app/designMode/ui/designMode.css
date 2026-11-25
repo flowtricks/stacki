@@ -131,7 +131,7 @@
 }
 .dm-world {
   position: absolute;
-  left: 0;
+  left: 0; /* physical: the canvas is a coordinate plane, panned by transform from its top-left corner in every language */
   top: 0;
   transform-origin: 0 0;
 }
@@ -159,7 +159,7 @@
 
 .dm-frame-header {
   position: absolute;
-  inset-inline-start: 0;
+  left: 0; /* physical: scaled from its top-left corner (transform-origin 0 0) to sit over its frame at any zoom */
   height: 28px;
   display: flex;
   align-items: center;
@@ -212,9 +212,9 @@
   flex: 1;
 }
 
-.dm-marks {
+  left: 0; /* physical: marks are drawn in the canvas plane, whose origin is its top-left corner */
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 0;
   pointer-events: none;
 }
