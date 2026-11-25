@@ -10,6 +10,7 @@ import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
 import { getHost, onHostChange, type HostState } from '../model/host';
 import {
+  adoptReload,
   buildSnapshot,
   onDocsReloaded,
   rebuildRules,
@@ -792,7 +793,7 @@ export function useChangeSubscriptions(
 
 // Rebuild the panel's model after an edit.
 export function useRefreshDerived(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
-  const { busyRef, classListRef, contentRef, docsRef, primedRef, targetRef } = editorRefs;
+  const { busyRef, classListRef, contentRef, docsRef, pageDocsRef, primedRef, targetRef } = editorRefs;
   const { setScan } = scanState;
 
   const refreshDerived = useCallback(async () => {
@@ -832,13 +833,16 @@ export function useRefreshDerived(editorRefs: ReturnType<typeof useEditorRefs>, 
   }, [classListRef, contentRef, docsRef, primedRef, setScan, targetRef]);
 
   // An undo/redo rewrote a stylesheet and re-parsed its doc in place — re-resolve
-  // so the fields show what the file now says.
+  // so the fields show what the file now says. The step's doc may no longer be the
+  // one the panel holds (a background read replaced it), so the panel's own docs for
+  // that source take the text too.
   useEffect(
     () =>
-      onDocsReloaded(() => {
+      onDocsReloaded((reloaded) => {
+        adoptReload([...docsRef.current, ...pageDocsRef.current], reloaded);
         void refreshDerived();
       }),
-    [refreshDerived],
+    [docsRef, pageDocsRef, refreshDerived],
   );
 
   // The page model moved (an undo or redo, a save's reply, a code edit): its `<style>` blocks

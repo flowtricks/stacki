@@ -635,8 +635,13 @@ export async function writeFirstStyleBlock(
 // Undo/redo rewrites a stylesheet behind the panel's back, so the doc it will
 // write from next has to be brought back in step — otherwise the next edit
 // would serialize the stale AST and quietly resurrect what was just undone.
-const docsReloaded = new Set<() => void>();
-export function onDocsReloaded(listener: () => void): () => void {
+/** A source an undo or redo rewrote, and the text it holds now. */
+export interface ReloadedSource {
+  readonly key: string;
+  readonly code: string;
+}
+const docsReloaded = new Set<(reloaded: ReloadedSource) => void>();
+export function onDocsReloaded(listener: (reloaded: ReloadedSource) => void): () => void {
   docsReloaded.add(listener);
   return () => {
     docsReloaded.delete(listener);
@@ -657,9 +662,31 @@ async function writeStyleFileAndReload(embedDocument: EmbedDocument, path: strin
   // read — for a component file that means re-splitting its markup, not
   // treating the whole file as one region of CSS.
   embedDocument.replaceWith(documentForSource(embedDocument.source, text));
+  assert(embedDocument.code === text, 'writeStyleFileAndReload: the document holds the text written');
+  const reloaded: ReloadedSource = { key: embedDocument.source.key, code: text };
   for (const listener of docsReloaded) {
-    listener();
+    listener(reloaded);
   }
+}
+
+/**
+ * Bring the panel's own documents for a reloaded source up to the text it holds now, and say how many were read again.
+ * An undo step keeps the document its write was made from, and a background read since then replaces that object in
+ * the panel with a fresh one: reloading only the step's copy left the panel drawing the value from before the undo.
+ */
+export function adoptReload(docs: readonly EmbedDocument[], reloaded: ReloadedSource): number {
+  let adopted = 0;
+  for (const embedDocument of new Set(docs)) {
+    if (embedDocument.source.key === reloaded.key) {
+      if (embedDocument.code !== reloaded.code) {
+        embedDocument.replaceWith(documentForSource(embedDocument.source, reloaded.code));
+        adopted += 1;
+      }
+      assert(embedDocument.code === reloaded.code, 'adoptReload: every document of the source holds its text');
+    }
+  }
+  assert(adopted <= docs.length, 'adoptReload: at most one read per document');
+  return adopted;
 }
 
 /**
