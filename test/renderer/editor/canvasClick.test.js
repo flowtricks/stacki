@@ -103,6 +103,20 @@ const check = (what, condition, detail) => {
   // page's <slot> — carries no page-model marker, so it arrives with no path.
   check('and an unmapped click selects the layout that owns it', act(undefined, page) === 'layout', act(undefined, page));
 
+  // --- the component defaults page ----------------------------------------------
+  // Set component defaults opens an ordinary page of which one instance is edited, dimming the rest as an open
+  // component does. Read by the component rules, every child was "the instance itself, stay put", so only the
+  // Navigator could select one, and a click on the dimmed page closed the editor.
+  const defaults = { focusPath: '0.1.1', scope: '', ownedRoot: '0.1.1' };
+  for (const owned of ['0.1.1', '0.1.1.0', '0.1.1.1.0', '0.1.1.1.0.2']) {
+    check(`on the defaults page a click on ${owned} selects it`, act(owned, defaults) === 'select', act(owned, defaults));
+  }
+  for (const away of [undefined, '0.1.0', '0.1', '0.1.10', '0.1.2.0']) {
+    check(`and one on the dimmed page (${away}) is inert`, act(away, defaults) === 'nothing', act(away, defaults));
+    check(`inert with the frame's outside flag too (${away})`, canvasClickAction({ path: away, outside: true, ...defaults }).kind === 'nothing');
+  }
+  check('the click, the right-click and the double click all ask with the instance', readAppSource().split('ownedRoot: ').length - 1 === 3);
+
   // --- the panel asks -----------------------------------------------------------
   // The app shell and the modules it was split into (src/app).
   const app = readAppSource();

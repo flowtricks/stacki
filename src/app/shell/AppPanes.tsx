@@ -205,6 +205,7 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
     outside: point.outside,
     focusPath: app.focusPath,
     scope: app.editedRel ? `${app.editedRel}|` : '',
+    ownedRoot: defaultsRootPath(app),
   });
   if (action.kind === 'close' || action.kind === 'nothing' || !app.pageState?.editable) {
     return undefined;
@@ -216,6 +217,12 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
   }
   selectCanvasPath(app, path, point);
   return { ...point, nodeId: node.id };
+}
+
+// The instance the component defaults page edits, while that page is the open file; undefined anywhere else.
+function defaultsRootPath(app: ShellView): string | undefined {
+  const canvas = app.defaultsCanvas;
+  return canvas.isOpen && canvas.state.kind !== 'idle' ? canvas.state.session.targetPath : undefined;
 }
 
 // What a click on the canvas MEANT — see canvasClick.js. The canvas answers with a
@@ -264,6 +271,7 @@ export function selectCanvasPath(
     outside: !!info?.outside,
     focusPath: app.focusPath,
     scope: app.editedRel ? `${app.editedRel}|` : '',
+    ownedRoot: defaultsRootPath(app),
   });
   if (kind === 'nothing') {
     return;
@@ -274,12 +282,8 @@ export function selectCanvasPath(
     if (componentCanvasShown() && app.editStack.length <= 2) {
       return;
     }
-    if (app.defaultsCanvas.state.kind !== 'idle') {
-      void app.defaultsCanvas.run('done');
-    } else {
-      // Opening the parent file reports its own failures.
-      void app.closeComponent();
-    }
+    // Opening the parent file reports its own failures.
+    void app.closeComponent();
     return;
   }
   const { model } = app;
@@ -311,6 +315,10 @@ export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, target: Pseudo
 // landed on chrome the layout renders itself (nav, footer) — that markup belongs to
 // the layout, so open the layout, matching what a single click there selects.
 export function openCanvasPath(app: ShellView, path: string | undefined, occurrence: number): void {
+  const root = defaultsRootPath(app);
+  if (root !== undefined && canvasClickAction({ path, ownedRoot: root }).kind === 'nothing') {
+    return; // A double click on the dimmed page around the defaults instance opens nothing, the layout included.
+  }
   if (!path) {
     if (app.layoutNode?.name) {
       void app.openComponent(app.layoutNode.name, app.pathFor('layout')).catch(app.reportFailure);

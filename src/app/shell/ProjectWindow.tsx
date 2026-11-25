@@ -40,7 +40,9 @@ function canvasRouteOf(app: AppView) {
   const pageEntry = app.editStack[0] || app.currentPage;
   const patternRoute = pageEntry?.route;
   const component = app.currentPage?.kind === 'component' ? app.currentPage : undefined;
-  const focusPath = app.defaultsCanvas.state.kind === 'idle' ? component?.focusPath : app.defaultsCanvas.state.session.targetPath;
+  // The defaults page lights its instance, and only that page: another page opened meanwhile is an ordinary one.
+  const defaults = app.defaultsCanvas;
+  const focusPath = defaults.isOpen && defaults.state.kind !== 'idle' ? defaults.state.session.targetPath : component?.focusPath;
   const focusOcc = component ? (component.focusOcc ?? 0) : 0;
   const openedOcc = component?.hostOcc;
   // The focus routes clicks either way; this says whether it also draws.
