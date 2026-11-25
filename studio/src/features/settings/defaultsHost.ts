@@ -20,6 +20,7 @@ export const studioDefaultsHost = {
       slots: component.slots,
       slotText: component.slotText ?? false,
       ...(component.setHtml === true ? { setHtml: true } : {}),
+      ...(component.htmlProps === undefined ? {} : { htmlProps: component.htmlProps }),
     }));
     if (stored.source === undefined) {
       return { catalog, config: starterDefaults(catalog) };

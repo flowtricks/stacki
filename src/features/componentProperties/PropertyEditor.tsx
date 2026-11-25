@@ -14,6 +14,7 @@ import type { PropertyOptionChange } from './PropertyOptions';
 import { PropertyType, opensOnCode, type CodeMode } from './PropertyType';
 import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
 import { PropertyDefaultNote, PropertyKindSettings } from './PropertySettings';
+import { PropertyEditingSettings } from './PropertyEditingSettings';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 export { literalOptions };
 import { useRef, useState, type ReactNode } from 'react';
@@ -127,6 +128,8 @@ export function PropertyEditor(props: PropertyEditorProps) {
               />
             }
           />
+          {/* How the field is typed in: last, below everything else the prop has. */}
+          <PropertyEditingSettings field={draft.exists ? draft.savedName : undefined} />
         </>
       )}
     </Popup>

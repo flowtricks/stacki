@@ -90,27 +90,37 @@ Delete in the Components panel's "…" menu is one step over the whole site, pla
 - Duplicate's Undo deletes the copy with `uses: 'refuse'`: a copy something now uses is kept. The CLI's `components delete`
   refuses a used component the same way.
 
-## How a component's text is edited
+## How a component's fields are typed in
 
-"Set component defaults" ends its Settings group with two switches, both off by default. Each writes
-`.stacki/components.json` at once, as a key on the component's own recipe that exists only while on (`"lineBreaks": true`,
-`"richText": true`); turning one off removes the key, and an owner left empty goes with it, so the file returns byte for
-byte. Older Stacki versions read recipes key by key and skip these keys, so they keep reading the file; a defaults save
-made in an older version rewrites the file from what it parsed and drops them. Renames and moves carry them
-(`relinkDefaults`); the CLI's `components` schema describes them, so `stacki config set` can turn them on.
+Each field of a component has two switches, off by default, as the last rows where the field's name and tooltip are
+set (the Properties panel of the open component): a prop in its settings form, a slot through its own row at the end
+of the list (the default slot is **Content**). Each writes `.stacki/components.json` at once, on the component's
+recipe under `editing`, keyed by the prop's name or `slot:<name>`, and only while on (`"editing": { "slot:default":
+{ "richText": true } }`); turning one off removes the key, then an empty field, `editing` and an empty recipe, so the
+file returns byte for byte. Older Stacki versions read recipes key by key and skip `editing`, so they keep reading the
+file; a defaults save made in an older version rewrites the file from what it parsed and drops it. A component rename
+or move carries it (`relinkDefaults`); a prop renamed or deleted in the Properties panel takes its settings with it
+(`withEditingFieldMoved`), as a separate write from the source edit. The CLI schema describes it (`stacki config set`).
 
-| Setting | Offered for | Canvas | Properties panel |
-|---|---|---|---|
-| Allow line breaks | Every component | Enter and Shift Enter type a line break, saved as `<br />`; ⌘/Ctrl Enter finishes, Escape cancels, a click away saves | The Content field, which already wrote `<br>` for Enter, is unchanged |
-| Allow rich text editing | A component with a default slot that is not a line of words (`<slot />` not inside `<p>`, a heading, a link…), or a `set:html` (`richTextAllowed`) | Enter in a paragraph, heading, quote, list item or code block types a break that is saved as a new block, inline formatting split with it; a heading goes on as a paragraph, a list item as another item | Content becomes **Edit rich text**, which opens the rich text editor in a dialog; `+` beside an empty block chooses Heading 1–6, Paragraph, Quote, Image, Link, Video, lists, divider or code block |
+| Field | Allow line breaks | Allow rich text editing |
+|---|---|---|
+| Default slot (`slot:default`) inside a line of words (`<p><slot /></p>`) | Offered | Not offered: blocks inside `<p>` are invalid HTML |
+| Default slot otherwise, or a named slot | Offered | Offered |
+| A prop the template sets with `set:html={prop}` | Offered | Offered |
+| Any other prop (text printed as `{prop}`, an attribute such as href, alt or class, a number, a switch, an image, a choice) | Not offered: a `<br>` would be escaped or literal | Not offered |
 
-With both on, rich text's Enter wins in a block. A stored rich text setting on a component that no longer qualifies is
-ignored and kept, and `check-project` names it. The rich text editor opens only content it can give back unchanged in
-meaning (`richTextView`, `src/features/props/richTextContent.ts`): native rich text tags with plain attributes. A
-component, an expression, a comment, a directive or an unknown tag or attribute shows the content as highlighted code
-instead, the `{}` beside the label locked on code with a tooltip saying why. Code is written as one patch of the bytes
-between the instance's tags, when the code view loses focus, and refused when those bytes changed meanwhile.
+| Where | Line breaks on | Rich text on |
+|---|---|---|
+| Canvas | Enter and Shift Enter type a line break, saved as `<br />`; ⌘/Ctrl Enter finishes, Escape cancels, a click away saves | The instance's blocks become editable: Enter starts a new paragraph at once, Shift Enter a line break, Enter on an empty list item leaves the list, Backspace removes an empty block; a `+` beside an empty block chooses Heading 1–6, Paragraph, Quote, Image, Link, Video, lists, divider or code block; ⌘/Ctrl Enter or a click elsewhere saves the blocks as one edit, Escape restores them |
+| Properties panel | The Content field, which already wrote `<br>` for Enter, is unchanged | Content (or the set:html prop) becomes **Edit rich text**, opening the rich text editor in a dialog with the same `+`; image and video come from the asset picker or a typed address |
 
-Not yet: Studio and the demo draw the same panel components but pass neither setting, so they edit as before; the `+`
-menu lives in the dialog, not on the canvas; a set:html component qualifies for the setting but its prop is still edited
-by its own field.
+With both on, rich text's Enter wins. A stored setting a field can no longer take is ignored and kept, and
+`check-project` names it. The rich text editor opens only content it can give back unchanged in meaning
+(`richTextView`, `src/features/props/richTextContent.ts`): native rich text tags with plain attributes. A component, an
+expression, a comment, a directive or an unknown tag or attribute shows the content as highlighted code instead, the
+`{}` beside the label locked on code with a tooltip saying why; a set:html prop given an expression is shown as code,
+read only, never turned into a literal. Code is written as one patch of the bytes between the instance's tags, when the
+code view loses focus, and refused when those bytes changed meanwhile.
+
+Not yet: Studio draws the same Properties panel and canvas `+` but its host passes no settings, so it edits as
+before; Enter on the canvas in text a set:html prop renders still finishes editing.

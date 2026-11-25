@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { assert } from '../../../shared/core/assert';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { createDefaultsCanvas, removeDefaultsCanvas } from '../../ipc/projectMetadataBridge';
 import { CANVAS_DIRECTORY, type DefaultsCanvasSession } from '../../../shared/properties/defaultsCanvas';
-import {
-  componentEditing,
-  parseComponentDefaults,
-  resolveComponentRecipe,
-  withComponentEditing,
-  type EditingSetting,
-} from '../../../shared/properties/componentDefaults';
+import { parseComponentDefaults, resolveComponentRecipe, type ComponentDefaults } from '../../../shared/properties/componentDefaults';
 import { recipeFromCanvas, type CanvasModel } from './defaultsCanvasModel';
 import type { DefaultsHost } from './defaultsHost';
 import { prepareDefaultsCanvas, type DefaultsContext } from './defaultsCanvasContext';
@@ -64,8 +57,7 @@ export function useDefaultsCanvas(host: CanvasHost) {
     await startCanvas(host, control, prepared.session, prepared.source);
   };
   const run = (kind: CanvasAction) => runCanvas(host, control, kind, translate);
-  const setEditing = (setting: EditingSetting, value: 'on' | 'off') => editCanvasSetting(host, control, { setting, value });
-  return { state, start, run, setEditing, isOpen: host.isOpen };
+  return { state, start, run, isOpen: host.isOpen };
 }
 
 async function startCanvas(host: CanvasHost, control: CanvasControl, session: DefaultsCanvasSession, source: string) {
@@ -130,33 +122,12 @@ async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasA
   }
 }
 
-// An editing setting is written the moment it is switched, on its own: it says how text is typed, which the canvas
-// being edited already follows, and it is not part of the instance whose defaults Save writes.
-async function editCanvasSetting(host: CanvasHost, control: CanvasControl, change: { readonly setting: EditingSetting; readonly value: 'on' | 'off' }) {
-  const { active, operation } = control;
-  const session = active.current;
-  if (!session || operation.current) {
-    return;
-  }
-  operation.current = true;
-  try {
-    const config = withComponentEditing(session.snapshot.config, session.component, change.setting, change.value);
-    const snapshot = await host.defaults.save({ ...session.snapshot, config });
-    assert((componentEditing(snapshot.config, session.component)[change.setting] === true) === (change.value === 'on'), 'The saved file holds the setting');
-    const next = { ...session, snapshot };
-    active.current = next;
-    control.setState({ kind: 'editing', session: next, message: '' });
-  } finally {
-    operation.current = false;
-  }
-}
-
 async function saveCanvas(host: CanvasHost, session: DefaultsCanvasSession): Promise<DefaultsCanvasSession> {
   const recipe = recipeFromCanvas(await host.read(session), session);
   const config = parseComponentDefaults({
     version: 1,
-    // The canvas holds what an instance inserts with; how its text is edited is set beside it and kept.
-    components: { ...session.snapshot.config.components, [session.component]: { ...componentEditing(session.snapshot.config, session.component), ...recipe } },
+    // The canvas holds what an instance inserts with; how its fields are typed in is set in the Properties panel and kept.
+    components: { ...session.snapshot.config.components, [session.component]: { ...editingOf(session.snapshot.config, session.component), ...recipe } },
   });
   const result = resolveComponentRecipe(session.component, config, session.snapshot.catalog);
   if (!result.ok) {
@@ -164,4 +135,9 @@ async function saveCanvas(host: CanvasHost, session: DefaultsCanvasSession): Pro
   }
   const snapshot = await host.defaults.save({ ...session.snapshot, config });
   return { ...session, snapshot };
+}
+
+function editingOf(config: ComponentDefaults, file: string) {
+  const editing = config.components[file]?.editing;
+  return editing === undefined ? {} : { editing };
 }

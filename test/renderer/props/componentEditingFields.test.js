@@ -17,7 +17,11 @@ const directory = repoPath('node_modules/.stacki-test/component-editing-fields')
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'component-editing-fields.cjs');
 buildSync({
-  stdin: { contents: "export * from './src/features/props/ComponentEditingFields';", resolveDir: ROOT, loader: 'ts' },
+  stdin: {
+    contents: "export * from './src/features/props/ComponentEditingFields';\nexport * from './src/features/componentProperties/PropertyEditingSettings';",
+    resolveDir: ROOT,
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -66,12 +70,20 @@ const click = async (element) => {
   await act(async () => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
 };
 
-test('both switches show for a component that takes HTML children, and report what they ask for', async () => {
+function editingHost(offered, settings, changes) {
+  return {
+    slots: ['default', 'aside'],
+    offered: (field) => offered[field] ?? [],
+    settings: (field) => settings[field] ?? {},
+    change: (field, setting, state) => changes.push([field, setting, state]),
+  };
+}
+
+test('a field shows the switches it can take, last in its settings, and they report what they ask for', async () => {
   const changes = [];
+  const host = editingHost({ html: ['lineBreaks', 'richText'] }, { html: { richText: true } }, changes);
   await draw(
-    React.createElement(modules.ComponentEditingSwitches, {
-      control: { settings: { richText: true }, richTextAllowed: true, onChange: (setting, value) => changes.push([setting, value]) },
-    }),
+    React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.PropertyEditingSettings, { field: 'html' })),
   );
   const switches = [...document.querySelectorAll('[role="switch"]')];
   assert.deepEqual(
@@ -84,18 +96,39 @@ test('both switches show for a component that takes HTML children, and report wh
   await click(switches[0]);
   await click(switches[1]);
   assert.deepEqual(changes, [
-    ['lineBreaks', 'on'],
-    ['richText', 'off'],
+    ['html', 'lineBreaks', 'on'],
+    ['html', 'richText', 'off'],
   ]);
   await clear();
 });
 
-test('rich text is not offered for a component that cannot take HTML children', async () => {
-  await draw(React.createElement(modules.ComponentEditingSwitches, { control: { settings: { richText: true }, richTextAllowed: false, onChange: () => {} } }));
+test('a field that takes neither, a new prop, or no host shows nothing', async () => {
+  const host = editingHost({ html: ['lineBreaks'] }, {}, []);
+  for (const field of ['title', undefined, '']) {
+    await draw(React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.PropertyEditingSettings, { field })));
+    assert.equal(document.querySelectorAll('[role="switch"]').length, 0, String(field));
+    await clear();
+  }
+  await draw(React.createElement(modules.PropertyEditingSettings, { field: 'html' }));
+  assert.equal(document.querySelectorAll('[role="switch"]').length, 0, 'no host');
+  await clear();
+});
+
+test('each slot that can take a setting gets a row that opens its switches', async () => {
+  const changes = [];
+  const host = editingHost({ 'slot:default': ['lineBreaks', 'richText'] }, {}, changes);
+  await draw(React.createElement(modules.FieldEditingContext.Provider, { value: host }, React.createElement(modules.SlotEditingRows, { disabled: false })));
+  const rows = [...document.querySelectorAll('.property-slot-row button')];
   assert.deepEqual(
-    [...document.querySelectorAll('[role="switch"]')].map((element) => element.getAttribute('aria-label')),
-    ['Allow line breaks'],
+    rows.map((row) => row.textContent),
+    ['Content'],
+    'the aside slot takes nothing here, so it has no row',
   );
+  await click(rows[0]);
+  const switches = [...document.querySelectorAll('.property-editor [role="switch"]')];
+  assert.equal(switches.length, 2);
+  await click(switches[1]);
+  assert.deepEqual(changes, [['slot:default', 'richText', 'on']]);
   await clear();
 });
 

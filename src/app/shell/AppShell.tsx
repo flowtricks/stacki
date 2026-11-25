@@ -6,6 +6,9 @@ import { CanvasTextSourceCue } from './CanvasTextSourceCue';
 import { ResizablePanel } from './ResizablePanel';
 import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
+import { desktopDefaultsHost, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
+import { FieldEditingContext, type FieldEditingHost } from '../../features/componentProperties/PropertyEditingSettings';
+import { editingOffered, withEditingFieldMoved, withFieldEditing } from '../../../shared/properties/componentDefaults';
 import { DesktopPublishButton } from './DesktopPublishButton';
 import { ToastStack } from '../../features/notifications/ToastStack';
 import { ProjectFolderDrop } from './ProjectFolderDrop';
@@ -588,21 +591,65 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
     return undefined;
   }
   return (
-    <ComponentPropertiesPanel
-      key={page.path}
-      projectPath={app.project.path}
-      file={page.path}
-      name={page.name}
-      flushSave={app.flushSave}
-      onSavePhase={app.propertySave.changePhase}
-      onSaved={app.completePropertySave}
-      onRecordUndo={app.recordPropertyUndo}
-      nodes={app.model?.nodes}
-      onSelectNode={app.setSelectedId}
-      onReplaceProps={app.replaceProps}
-      onOpenFile={(rel) => void app.openProjectFile(rel)}
-    />
+    <FieldEditingContext.Provider value={desktopFieldEditing(app, page.path)}>
+      <ComponentPropertiesPanel
+        key={page.path}
+        projectPath={app.project.path}
+        file={page.path}
+        name={page.name}
+        flushSave={app.flushSave}
+        onSavePhase={app.propertySave.changePhase}
+        onSaved={app.completePropertySave}
+        onRecordUndo={app.recordPropertyUndo}
+        nodes={app.model?.nodes}
+        onSelectNode={app.setSelectedId}
+        onReplaceProps={app.replaceProps}
+        onOpenFile={(rel) => void app.openProjectFile(rel)}
+        onFieldMoved={(from, to) => moveFieldEditing(app, page.path, { from, to })}
+      />
+    </FieldEditingContext.Provider>
   );
+}
+
+// The open component's fields as the Properties panel's editing rows read and write them (.stacki/components.json).
+function desktopFieldEditing(app: ShellView, componentPath: string): FieldEditingHost | undefined {
+  const component = app.scan.components.find((entry) => entry.path === componentPath);
+  if (component === undefined) {
+    return undefined;
+  }
+  const catalogEntry = {
+    slots: component.slots ?? [],
+    slotText: component.slotText ?? false,
+    ...(component.htmlProps === undefined ? {} : { htmlProps: component.htmlProps }),
+  };
+  return {
+    slots: catalogEntry.slots,
+    offered: (field) => editingOffered(catalogEntry, field),
+    settings: (field) => app.componentEditing(componentPath, field),
+    change: (field, setting, state) => {
+      const host = desktopDefaultsHost(app.project.path);
+      void host
+        .load()
+        .then((snapshot) => {
+          const file = component.file ?? relativeComponentPath(app.project.path, componentPath);
+          return host.save({ ...snapshot, config: withFieldEditing(snapshot.config, { file, field }, { setting, state }) });
+        })
+        .catch(app.reportFailure);
+    },
+  };
+}
+
+// A renamed or deleted prop's editing settings go with it; a file with none for it is not written.
+function moveFieldEditing(app: ShellView, componentPath: string, move: { readonly from: string; readonly to: string | undefined }): void {
+  const host = desktopDefaultsHost(app.project.path);
+  const file = app.scan.components.find((entry) => entry.path === componentPath)?.file ?? relativeComponentPath(app.project.path, componentPath);
+  void host
+    .load()
+    .then((snapshot) => {
+      const config = withEditingFieldMoved(snapshot.config, file, move.from, move.to);
+      return config === snapshot.config ? snapshot : host.save({ ...snapshot, config });
+    })
+    .catch(app.reportFailure);
 }
 
 export function PagesTab({ app }: { readonly app: ShellView }) {

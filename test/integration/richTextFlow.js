@@ -1,6 +1,6 @@
 // Goal: see the component editing settings work in the real app, end to end, and keep screenshots for a person:
-// Allow rich text on a slot component and on a Lumos-style `set:html` component, Allow line breaks on a paragraph
-// component; Enter on the canvas, the `+`, the Edit rich text dialog, the code view, and undo and redo of a canvas edit.
+// Allow rich text on the content slot of a slot component and of a Lumos-style `set:html` component and on a
+// set:html prop, Allow line breaks on a paragraph component's content; Enter on the canvas, the `+`, the Edit rich text dialog, the code view, and undo and redo of a canvas edit.
 //
 // Method: a generated fixture project in a temporary directory (the studio fixture's installed packages cloned beside
 // it, copy-on-write on macOS), never the owner's projects. The built app (`npm run build:electron`,
@@ -52,10 +52,10 @@ function writeFixture(project) {
       {
         version: 1,
         components: {
-          'src/components/Paragraph.astro': { lineBreaks: true },
-          'src/components/RichText.astro': { richText: true },
-          'src/components/LumosRichText.astro': { richText: true },
-          'src/components/HtmlBlock.astro': { richText: true },
+          'src/components/Paragraph.astro': { editing: { 'slot:default': { lineBreaks: true } } },
+          'src/components/RichText.astro': { editing: { 'slot:default': { richText: true } } },
+          'src/components/LumosRichText.astro': { editing: { 'slot:default': { richText: true } } },
+          'src/components/HtmlBlock.astro': { editing: { html: { richText: true } } },
         },
       },
       undefined,

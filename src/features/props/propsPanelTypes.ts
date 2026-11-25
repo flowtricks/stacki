@@ -17,7 +17,6 @@ import type { TextPiece } from './textConnect';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import React from 'react';
-import type { ComponentEditingControl } from './ComponentEditingFields';
 import LinkField from './LinkField';
 
 export type SelectedNode = PageNode | { readonly kind: 'frontmatter'; readonly id: string };
@@ -62,14 +61,12 @@ export interface PropsPanelProps {
    * Content field becomes the rich text editor's button and a code view (ComponentEditingFields.tsx).
    */
   readonly richTextContent?: boolean | undefined;
-  /** With rich text on a component that takes its HTML through a prop (`set:html={html}`) and no slot: that prop. */
-  readonly richTextProp?: string | undefined;
+  /** Props of the selected instance that its component sets with `set:html` and whose rich text setting is on. */
+  readonly richTextProps?: readonly string[] | undefined;
   /** Writes the selected node's content as code, byte for byte; absent where the host has no source writer. */
   readonly onSetContentSource?: ((source: string) => void) | undefined;
   /** The selected node's content as the file holds it (the bytes between its tags); undefined when it cannot be read. */
   readonly contentSource?: string | undefined;
-  /** While the selected node is the component whose defaults are being set: its editing settings, last in Settings. */
-  readonly componentEditing?: ComponentEditingControl | undefined;
   /** Restates the selected text or expression node as these pieces (TextConnectField.tsx); absent where the host cannot. */
   readonly onSetTextPieces?: ((pieces: readonly TextPiece[]) => void) | undefined;
   readonly onOpenCode?: () => void;

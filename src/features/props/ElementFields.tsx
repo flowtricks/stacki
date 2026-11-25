@@ -24,7 +24,7 @@ import { canvasDraftInline } from './canvasDraftInline';
 import { classListOfferOf } from './classListProp';
 import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
-import { ComponentEditingSwitches, RichTextContentField } from './ComponentEditingFields';
+import { RichTextContentField } from './ComponentEditingFields';
 import { plainChildrenHTML } from './richTextContent';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
@@ -32,9 +32,6 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
-  if (state.richTextContent === true && node.kind === 'component' && state.richTextProp !== undefined) {
-    return <RichTextPropField state={state} prop={state.richTextProp} />;
-  }
   if (state.richTextContent === true && node.kind === 'component') {
     return (
       <RichTextContentField
@@ -153,7 +150,7 @@ export function richContextProp(context: RichContext | undefined): {
 // HTML a prop holds (`html="<p>…</p>"`), edited as rich text while it is a literal: written back as the prop's text.
 // Data or an expression (`html={post.body}`) is never turned into a literal: it shows as code, read only, and changes
 // where it comes from.
-function RichTextPropField({ state, prop }: { readonly state: ElementState; readonly prop: string }) {
+export function RichTextPropField({ state, prop }: { readonly state: ElementState; readonly prop: string }) {
   const value = state.node.props?.[prop];
   const literal = value === undefined || value.type === 'string';
   const source = value === undefined ? '' : value.type === 'string' ? value.value : value.type === 'expr' ? `{${value.value}}` : `{${prop}}`;
@@ -216,6 +213,10 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
         .filter(appliesNow)
         .filter((field) => field.name !== 'class' && !(styleField && field.name === 'style'))
         .map((field) => {
+          // A prop the component sets with set:html, with its rich text setting on: the rich text field in its place.
+          if (state.richTextProps?.includes(field.name) === true) {
+            return <RichTextPropField key={field.name} state={state} prop={field.name} />;
+          }
           const value = canvasDraftProp(node.id, field.name, draft) ?? node.props?.[field.name];
           const onChange: ValueChange = (next, immediate) => setPropCascading(field.name, next, immediate);
           const plain = (
@@ -283,7 +284,7 @@ export function ElementExtraFields({ state }: { readonly state: ElementState }) 
 export function ElementSettingsHeader({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
   const { settingsOpen, setSettingsOpen, settingsCount } = state;
-  const hasSettings = state.hasSettings || state.componentEditing !== undefined;
+  const { hasSettings } = state;
   return (
     <>
       {hasSettings && (
@@ -438,8 +439,7 @@ export function ElementSlot({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementSettings({ state }: { readonly state: ElementState }) {
-  const { node, comment, onSetComment, settingsOpen } = state;
-  const hasSettings = state.hasSettings || state.componentEditing !== undefined;
+  const { node, comment, onSetComment, settingsOpen, hasSettings } = state;
   return (
     <>
       {hasSettings && settingsOpen && (
@@ -456,8 +456,6 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
             put it — so it sits apart from the component's own props, last of
             all, below even the comment. */}
           <ElementSlot state={state} />
-          {/* How the component's text is typed: set while its defaults are, and last of all, below even slot. */}
-          {state.componentEditing && <ComponentEditingSwitches control={state.componentEditing} />}
         </>
       )}
     </>

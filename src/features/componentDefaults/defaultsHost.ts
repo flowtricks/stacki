@@ -20,6 +20,7 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
         slots: component.slots ?? [],
         slotText: component.slotText ?? false,
         ...(component.setHtml === true ? { setHtml: true } : {}),
+        ...(component.htmlProps === undefined ? {} : { htmlProps: component.htmlProps }),
       }));
       return defaultsSnapshot(stored.source, catalog);
     },

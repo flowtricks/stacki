@@ -1,8 +1,7 @@
-import { componentEditing, richTextAllowed } from '../../../shared/properties/componentDefaults';
+import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
 import { innerSourceOf } from '../../features/props/richTextContent';
 import { sourceRangeForSelection } from '../../features/code/codePanelModel';
 import { FilesCover } from './DesktopFiles';
-import type { ComponentEditingControl } from '../../features/props/ComponentEditingFields';
 import { useFormat, useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { desktopCanvasText } from './desktopCanvasText';
@@ -660,21 +659,6 @@ function selectedContentSource(app: ShellView): string | undefined {
   return source === undefined || range === undefined ? undefined : innerSourceOf(source.slice(range.from, range.to));
 }
 
-// The switches of how the component's text is typed: on the instance whose defaults are being set, and only there.
-function defaultsEditing(app: ShellView): ComponentEditingControl | undefined {
-  const canvas = app.defaultsCanvas;
-  if (canvas.state.kind === 'idle' || app.selectedId === undefined || app.selectedId !== canvas.rootId) {
-    return undefined;
-  }
-  const session = canvas.state.session;
-  const component = session.snapshot.catalog.find((entry) => entry.file === session.component);
-  return {
-    settings: componentEditing(session.snapshot.config, session.component),
-    richTextAllowed: component !== undefined && richTextAllowed(component),
-    onChange: (setting, value) => void canvas.setEditing(setting, value).catch(app.reportFailure),
-  };
-}
-
 // What the Settings tab shows about the selection.
 export function settingsValues(app: ShellView) {
   const { selectedNode, selectedId } = app;
@@ -806,8 +790,8 @@ export function settingsTextHandlers(app: ShellView) {
         app.setNodeInline(selectedId, kids);
       }
     },
-    richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path).richText === true,
-    richTextProp: app.selectedComponent?.slots?.includes('default') === true ? undefined : app.selectedComponent?.htmlProps?.[0],
+    richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path, DEFAULT_SLOT_FIELD).richText === true,
+    richTextProps: (app.selectedComponent?.htmlProps ?? []).filter((prop) => app.componentEditing(app.selectedComponent?.path, prop).richText === true),
     contentSource: selectedContentSource(app),
     onSetContentSource: (source: string) => {
       const shown = selectedContentSource(app);
@@ -815,7 +799,6 @@ export function settingsTextHandlers(app: ShellView) {
         app.setNodeContentSource(selectedId, source, shown);
       }
     },
-    componentEditing: defaultsEditing(app),
     onSetTextPieces: (pieces: readonly TextPiece[]) => {
       if (selectedId) {
         app.setNodeTextPieces(selectedId, pieces);

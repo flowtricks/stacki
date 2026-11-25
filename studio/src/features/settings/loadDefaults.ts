@@ -12,6 +12,7 @@ export async function loadInsertionDefaults(root: string) {
     slots: component.slots,
     slotText: component.slotText,
     ...(component.setHtml === true ? { setHtml: true } : {}),
+    ...(component.htmlProps === undefined ? {} : { htmlProps: component.htmlProps }),
   }));
   if (stored.source === undefined) {
     return { config: starterDefaults(catalog), catalog, imports: project.components };

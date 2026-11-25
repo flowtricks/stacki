@@ -1,46 +1,58 @@
-// Goal: a component's editing settings (lineBreaks, richText) live in .stacki/components.json only while on, read the
-// same in every host, survive a rename and a defaults save, and rich text applies only to a component that can take
-// HTML children.
+// Goal: a component field's editing settings (lineBreaks, richText) live in .stacki/components.json only while on,
+// under the component's recipe by prop name or `slot:<name>`, read the same in every host, follow a component rename
+// and a prop rename or delete, and are offered only where the field can render them.
 // Method: parse known-good and each known-bad shape, switch settings on and off and compare the file byte for byte,
-// relink a renamed owner, decide qualification for slot, text-slot, set:html and slotless components, and check that
-// check-project names a stored setting that no longer applies without the parser dropping it.
+// relink a renamed owner and move a renamed prop, decide what each kind of field is offered, and check that
+// check-project names a stored setting a field cannot take, without the parser dropping it.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  componentEditing,
   defaultsIssues,
+  editingOffered,
   effectiveEditing,
+  fieldEditing,
   parseComponentDefaults,
   parseDefaultsSource,
   relinkDefaults,
   resolveComponentRecipe,
-  richTextAllowed,
-  withComponentEditing,
+  withEditingFieldMoved,
+  withFieldEditing,
 } from '#dist/shared/properties/componentDefaults.js';
 import { COMPONENTS_FILE } from '#dist/shared/properties/cli/files/componentsFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
 
 const paragraph = 'src/components/Paragraph.astro';
 const rich = 'src/components/RichText.astro';
+const block = 'src/components/HtmlBlock.astro';
 const catalog = [
-  { file: paragraph, name: 'Paragraph', props: [], slots: ['default'], slotText: true },
-  { file: rich, name: 'RichText', props: [], slots: ['default'], slotText: false },
+  { file: paragraph, name: 'Paragraph', props: ['size'], slots: ['default'], slotText: true },
+  { file: rich, name: 'RichText', props: [], slots: ['default', 'aside'], slotText: false },
+  { file: block, name: 'HtmlBlock', props: ['html', 'title'], slots: [], slotText: false, setHtml: true, htmlProps: ['html'] },
 ];
 
-test('settings parse only as true on a component, and an absent key is off', () => {
-  const config = parseComponentDefaults({ version: 1, components: { [paragraph]: { lineBreaks: true }, [rich]: { richText: true, props: {} } } });
-  assert.deepEqual(componentEditing(config, paragraph), { lineBreaks: true });
-  assert.deepEqual(componentEditing(config, rich), { richText: true });
-  assert.deepEqual(componentEditing(config, 'src/components/Other.astro'), {});
+test('settings parse per field, only as true, and an absent key is off', () => {
+  const config = parseComponentDefaults({
+    version: 1,
+    components: { [paragraph]: { editing: { 'slot:default': { lineBreaks: true } } }, [block]: { props: {}, editing: { html: { richText: true } } } },
+  });
+  assert.deepEqual(fieldEditing(config, paragraph, 'slot:default'), { lineBreaks: true });
+  assert.deepEqual(fieldEditing(config, block, 'html'), { richText: true });
+  assert.deepEqual(fieldEditing(config, block, 'title'), {});
   for (const bad of [false, 'true', 1, {}]) {
-    assert.throws(() => parseComponentDefaults({ version: 1, components: { [paragraph]: { lineBreaks: bad } } }), /lineBreaks is true or left out/);
-    assert.throws(() => parseComponentDefaults({ version: 1, components: { [paragraph]: { richText: bad } } }), /richText is true or left out/);
+    assert.throws(
+      () => parseComponentDefaults({ version: 1, components: { [paragraph]: { editing: { 'slot:default': { lineBreaks: bad } } } } }),
+      /lineBreaks is true or left out/,
+    );
   }
+  for (const field of ['1x', 'slot:', 'slot:a b', 'a.b', '']) {
+    assert.throws(() => parseComponentDefaults({ version: 1, components: { [paragraph]: { editing: { [field]: { lineBreaks: true } } } } }), /editing field/);
+  }
+  assert.throws(() => parseComponentDefaults({ version: 1, components: { [paragraph]: { editing: [] } } }));
 });
 
 test('a setting does not change what the component inserts with', () => {
   const plain = parseComponentDefaults({ version: 1, components: { [paragraph]: { text: 'Words' } } });
-  const set = withComponentEditing(plain, paragraph, 'lineBreaks', 'on');
+  const set = withFieldEditing(plain, { file: paragraph, field: 'slot:default' }, { setting: 'lineBreaks', state: 'on' });
   assert.deepEqual(resolveComponentRecipe(paragraph, set, catalog), resolveComponentRecipe(paragraph, plain, catalog));
 });
 
@@ -51,60 +63,60 @@ test('switching on and off again leaves the file as it was, keeping the other ke
   if (!parsed.ok) {
     return;
   }
-  const on = withComponentEditing(parsed.value, rich, 'richText', 'on');
+  const on = withFieldEditing(parsed.value, { file: rich, field: 'slot:default' }, { setting: 'richText', state: 'on' });
   assert.deepEqual(Object.keys(on.components), [rich, paragraph]);
-  assert.equal(on.components[rich]?.richText, true);
-  assert.equal(on.components[rich]?.text, 'Hi');
-  const off = withComponentEditing(on, rich, 'richText', 'off');
+  assert.deepEqual(on.components[rich], { text: 'Hi', editing: { 'slot:default': { richText: true } } });
+  const off = withFieldEditing(on, { file: rich, field: 'slot:default' }, { setting: 'richText', state: 'off' });
   assert.equal(`${JSON.stringify(off, undefined, 2)}\n`, source);
-  // An owner the setting alone created goes with it.
-  const created = withComponentEditing(parsed.value, 'src/components/New.astro', 'lineBreaks', 'on');
-  assert.deepEqual(created.components['src/components/New.astro'], { lineBreaks: true });
-  assert.equal(`${JSON.stringify(withComponentEditing(created, 'src/components/New.astro', 'lineBreaks', 'off'), undefined, 2)}\n`, source);
-  assert.throws(() => withComponentEditing(parsed.value, '../outside.astro', 'lineBreaks', 'on'), /project-relative/);
+  const created = withFieldEditing(parsed.value, { file: block, field: 'html' }, { setting: 'lineBreaks', state: 'on' });
+  assert.deepEqual(created.components[block], { editing: { html: { lineBreaks: true } } });
+  const removed = withFieldEditing(created, { file: block, field: 'html' }, { setting: 'lineBreaks', state: 'off' });
+  assert.equal(`${JSON.stringify(removed, undefined, 2)}\n`, source);
+  assert.throws(() => withFieldEditing(parsed.value, { file: '../outside.astro', field: 'html' }, { setting: 'lineBreaks', state: 'on' }), /project-relative/);
+  assert.throws(() => withFieldEditing(parsed.value, { file: block, field: 'not a field' }, { setting: 'lineBreaks', state: 'on' }), /editing field/);
 });
 
-test('a written file reads back with its settings, and a rename carries them', () => {
-  const config = withComponentEditing(
-    withComponentEditing(parseComponentDefaults({ version: 1, components: {} }), rich, 'richText', 'on'),
-    rich,
-    'lineBreaks',
-    'on',
-  );
-  const read = parseDefaultsSource(JSON.stringify(config));
-  assert.equal(read.ok, true);
-  if (!read.ok) {
-    return;
-  }
-  assert.deepEqual(componentEditing(read.value, rich), { lineBreaks: true, richText: true });
-  const moved = relinkDefaults(read.value, rich, 'src/ui/RichText.astro');
+test('a component rename and a prop rename or delete carry the settings', () => {
+  const config = withFieldEditing(parseComponentDefaults({ version: 1, components: {} }), { file: block, field: 'html' }, { setting: 'richText', state: 'on' });
+  const moved = relinkDefaults(config, block, 'src/ui/HtmlBlock.astro');
   assert.equal(moved.ok, true);
   if (moved.ok) {
-    assert.deepEqual(componentEditing(moved.value, 'src/ui/RichText.astro'), { lineBreaks: true, richText: true });
-    assert.deepEqual(componentEditing(moved.value, rich), {});
+    assert.deepEqual(fieldEditing(moved.value, 'src/ui/HtmlBlock.astro', 'html'), { richText: true });
   }
+  const renamed = withEditingFieldMoved(config, block, 'html', 'body');
+  assert.deepEqual(fieldEditing(renamed, block, 'body'), { richText: true });
+  assert.deepEqual(fieldEditing(renamed, block, 'html'), {});
+  assert.deepEqual(withEditingFieldMoved(config, block, 'html', undefined).components[block], {});
+  assert.equal(withEditingFieldMoved(config, block, 'title', 'name'), config, 'a field with no settings changes nothing');
 });
 
-test('rich text needs a slot for blocks or set:html; a stored setting that no longer applies is ignored, kept and named', () => {
-  assert.equal(richTextAllowed({ slots: ['default'], slotText: false }), true);
-  assert.equal(richTextAllowed({ slots: ['default', 'aside'], slotText: false }), true);
-  assert.equal(richTextAllowed({ slots: ['default'], slotText: true }), false, 'a slot inside <p> takes words only');
-  assert.equal(richTextAllowed({ slots: ['aside'], slotText: false }), false);
-  assert.equal(richTextAllowed({ slots: [], slotText: false }), false);
-  assert.equal(richTextAllowed({ slots: [], slotText: false, setHtml: true }), true);
-  const config = parseComponentDefaults({ version: 1, components: { [paragraph]: { richText: true, lineBreaks: true } } });
-  const [paragraphEntry] = catalog;
-  assert.ok(paragraphEntry);
-  assert.deepEqual(effectiveEditing(config, paragraphEntry), { lineBreaks: true });
-  assert.equal(config.components[paragraph]?.richText, true, 'the stored key stays');
-  assert.deepEqual(defaultsIssues(config, catalog), [`${paragraph} has richText on but no slot or set:html for HTML children; it is ignored.`]);
-  assert.deepEqual(defaultsIssues(parseComponentDefaults({ version: 1, components: { [rich]: { richText: true } } }), catalog), []);
+test('each field is offered only what it can render', () => {
+  const [paragraphEntry, richEntry, blockEntry] = catalog;
+  assert.ok(paragraphEntry && richEntry && blockEntry);
+  assert.deepEqual(editingOffered(paragraphEntry, 'slot:default'), ['lineBreaks'], 'a slot inside <p> takes words, not blocks');
+  assert.deepEqual(editingOffered(richEntry, 'slot:default'), ['lineBreaks', 'richText']);
+  assert.deepEqual(editingOffered(richEntry, 'slot:aside'), ['lineBreaks', 'richText']);
+  assert.deepEqual(editingOffered(richEntry, 'slot:missing'), []);
+  assert.deepEqual(editingOffered(blockEntry, 'html'), ['lineBreaks', 'richText']);
+  assert.deepEqual(editingOffered(blockEntry, 'title'), [], 'a prop printed as text escapes a <br>');
+  assert.deepEqual(editingOffered(paragraphEntry, 'size'), []);
+  const config = parseComponentDefaults({
+    version: 1,
+    components: { [paragraph]: { editing: { 'slot:default': { richText: true, lineBreaks: true }, size: { lineBreaks: true } } } },
+  });
+  assert.deepEqual(effectiveEditing(config, paragraphEntry, 'slot:default'), { lineBreaks: true });
+  assert.deepEqual(effectiveEditing(config, paragraphEntry, 'size'), {});
+  assert.equal(config.components[paragraph]?.editing?.['slot:default']?.richText, true, 'the stored key stays');
+  assert.deepEqual(defaultsIssues(config, catalog), [
+    `${paragraph} has richText on for slot:default, which cannot take it (no such slot, or not a set:html prop); it is ignored.`,
+    `${paragraph} has lineBreaks on for size, which cannot take it (no such slot, or not a set:html prop); it is ignored.`,
+  ]);
 });
 
-test('the CLI schema describes both settings and accepts only true', () => {
+test('the CLI schema describes the editing map and accepts only true', () => {
   const schema = COMPONENTS_FILE.fields['components'];
   assert.ok(schema);
-  assert.equal(checkValue(schema.type, { [rich]: { richText: true, lineBreaks: true } }, 'components'), undefined);
-  assert.notEqual(checkValue(schema.type, { [rich]: { richText: false } }, 'components'), undefined);
-  assert.notEqual(checkValue(schema.type, { [rich]: { lineBreaks: 'yes' } }, 'components'), undefined);
+  assert.equal(checkValue(schema.type, { [rich]: { editing: { 'slot:default': { richText: true, lineBreaks: true } } } }, 'components'), undefined);
+  assert.notEqual(checkValue(schema.type, { [rich]: { editing: { 'slot:default': { richText: false } } } }, 'components'), undefined);
+  assert.notEqual(checkValue(schema.type, { [rich]: { editing: { 'bad field': { lineBreaks: true } } } }, 'components'), undefined);
 });

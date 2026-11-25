@@ -20,6 +20,8 @@ export interface ComponentPropertiesPanelProps {
   readonly onSaved: () => Promise<void>;
   /** An applied batch can be undone with this token (step 6). */
   readonly onRecordUndo?: (token: string) => void;
+  /** A prop renamed (`to`) or deleted (`to` undefined) by a save: its editing settings follow it (.stacki/components.json). */
+  readonly onFieldMoved?: ((from: string, to: string | undefined) => void) | undefined;
 }
 type PanelState =
   | { readonly kind: 'loading' }
@@ -73,6 +75,11 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
       }
       props.onRecordUndo?.(result.value.undo);
       await props.onSaved();
+      if (change.kind === 'remove') {
+        props.onFieldMoved?.(change.name, undefined);
+      } else if (change.kind === 'save' && change.originalName !== '' && change.originalName !== change.property.name) {
+        props.onFieldMoved?.(change.originalName, change.property.name);
+      }
       return { kind: 'saved', source: result.value.source };
     } catch (caught: unknown) {
       tell(String(caught));

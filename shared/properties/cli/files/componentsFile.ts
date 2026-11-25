@@ -1,7 +1,7 @@
 // i18n-ignore-file: the CLI and its MCP tools speak to agents and scripts in English; none of this is interface text.
 // `.stacki/components.json`: what a component brings with it when it is inserted (props, text or children), keyed by the
 // component's file. The parser is shared/properties/componentDefaults.ts.
-import { DEFAULT_LIMITS } from '../../componentDefaults';
+import { DEFAULT_LIMITS, EDITING_FIELDS_MAX } from '../../componentDefaults';
 import { arrayOf, field, jsonValue, literal, mapOf, objectOf, text, type FieldSchema, type FileSchema, type ValueSchema } from '../stackiSchema';
 
 const COMPONENT_PATH = '^(?:src/|node_modules/(?:@[\\w.-]+/)?[\\w.-]+/)[\\w./ -]+\\.astro$';
@@ -67,7 +67,7 @@ export const COMPONENTS_FILE: FileSchema = {
   id: 'components',
   file: '.stacki/components.json',
   description:
-    'What each component brings along when it is inserted (default props, text or children) and how its text is edited (lineBreaks, richText). Shared by Desktop and Studio.',
+    'What each component brings along when it is inserted (default props, text or children) and how each field is typed in (editing: lineBreaks, richText). Shared by Desktop and Studio.',
   requires: 'component:edit',
   metadataKind: 'components',
   fields: {
@@ -82,14 +82,27 @@ export const COMPONENTS_FILE: FileSchema = {
             `Children inserted inside, up to ${DEFAULT_LIMITS.childrenMax}; a recipe holds text or children, never both.`,
             { commands: COMMANDS },
           ),
-          lineBreaks: field(
-            literal(true),
-            "On: Enter types a line break (<br>) in this component's text on the canvas and in the Content field. Off is the key left out; true is the only stored value.",
-            { commands: COMMANDS },
-          ),
-          richText: field(
-            literal(true),
-            'On: text inside this component is edited as rich text (Enter starts a new paragraph, a + menu changes the block). Applies only while the component has a slot or a set:html prop; off is the key left out.',
+          editing: field(
+            mapOf(
+              objectOf({
+                lineBreaks: field(
+                  literal(true),
+                  'On: Enter types a line break (<br>) in this field, on the canvas and in the panel. Off is the key left out.',
+                  {
+                    commands: COMMANDS,
+                  },
+                ),
+                richText: field(
+                  literal(true),
+                  'On: this field is edited as rich text (Enter starts a new paragraph, + changes a block, Edit rich text in the panel). Off is the key left out.',
+                  { commands: COMMANDS },
+                ),
+              }),
+              EDITING_FIELDS_MAX,
+              'a prop name, or slot:<name> (slot:default for the content between the tags)',
+              '^(?:[A-Za-z_$][\\w$]{0,99}|slot:[\\w-]{1,100})$',
+            ),
+            'How each field is typed in. Offered for slots and for props the template sets with set:html; check-project names a setting a field cannot take.',
             { commands: COMMANDS },
           ),
         }),

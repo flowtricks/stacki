@@ -1,17 +1,10 @@
-// How a component's text is edited, in two places of the Properties panel:
-//
-// - While its defaults are being set, the last two rows of Settings switch Allow line breaks and Allow rich text
-//   editing (the second only for a component that can take HTML children). Each switch writes .stacki/components.json
-//   at once (useDefaultsCanvas.setEditing).
-// - On an instance of a component with rich text on, the Content field becomes an Edit rich text button that opens the
-//   rich text editor in a dialog, with a `{}` beside the label that shows the same content as code. Content the editor
-//   cannot give back unchanged opens as code alone, and the toggle's tooltip says why (richTextContent.ts).
+// Rich text in the Properties panel. On an instance whose content (or set:html prop) has rich text on, the field
+// becomes an Edit rich text button that opens the rich text editor in a dialog, with a `{}` beside the label that
+// shows the same content as code. Content the editor cannot give back unchanged opens as code alone, and the toggle's
+// tooltip says why (richTextContent.ts).
 import { useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
-import type { EditingSetting, EditingSettings } from '../../../shared/properties/componentDefaults';
-import { assert } from '../../../shared/core/assert';
-import { SwitchRow } from '../../ui/Switch';
 import TipAnchor from '../../ui/TipAnchor';
 import Popup from '../../ui/Popup';
 import HtmlField from '../../ui/HtmlField';
@@ -21,44 +14,6 @@ import type { InlineNode } from './richContentModel';
 import { richTextNodes, richTextView, sameRichContent, type RichTextCodeReason } from './richTextContent';
 
 export { sameRichContent } from './richTextContent';
-
-/** The defaults editor's hold on the selected component's editing settings. */
-export interface ComponentEditingControl {
-  readonly settings: EditingSettings;
-  /** The component takes HTML children (componentDefaults.ts richTextAllowed): only then is rich text offered. */
-  readonly richTextAllowed: boolean;
-  readonly onChange: (setting: EditingSetting, value: 'on' | 'off') => void;
-}
-
-const SETTING_LABELS: Readonly<Record<EditingSetting, MessageKey>> = {
-  lineBreaks: 'props.editing.lineBreaks',
-  richText: 'props.editing.richText',
-};
-const SETTING_TIPS: Readonly<Record<EditingSetting, MessageKey>> = {
-  lineBreaks: 'props.editing.lineBreaksTip',
-  richText: 'props.editing.richTextTip',
-};
-
-export function ComponentEditingSwitches({ control }: { readonly control: ComponentEditingControl }) {
-  const translate = useTranslate();
-  const shown: readonly EditingSetting[] = control.richTextAllowed ? ['lineBreaks', 'richText'] : ['lineBreaks'];
-  assert(shown.length > 0, 'Line breaks are offered for every component');
-  return (
-    <>
-      {shown.map((setting) => (
-        <div className="props-field props-editing-setting" key={setting}>
-          <TipAnchor text={translate(SETTING_TIPS[setting])}>
-            <SwitchRow
-              label={translate(SETTING_LABELS[setting])}
-              checked={control.settings[setting] === true}
-              onToggle={() => control.onChange(setting, control.settings[setting] === true ? 'off' : 'on')}
-            />
-          </TipAnchor>
-        </div>
-      ))}
-    </>
-  );
-}
 
 const CODE_REASON_TIPS: Readonly<Record<RichTextCodeReason, MessageKey>> = {
   expression: 'props.richText.codeExpression',

@@ -7,6 +7,7 @@ import type { ShellView } from '../App';
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
 import { canvasTextBreaksOf, canvasTextFormatter, type CanvasTextBreaking } from '../model/canvasTextFormat';
 import { componentReference } from '../model/componentReference';
+import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
 import { projectRelativePath } from '../../lib/projectPath';
 
 export function desktopCanvasText(app: ShellView, translate: Translator): CanvasTextDocument | undefined {
@@ -66,6 +67,7 @@ function desktopTextBreaks(app: ShellView, model: NonNullable<ShellView['model']
     breaks ??= canvasTextBreaksOf(model.nodes, app.pathFor, (node) =>
       app.componentEditing(
         componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
+        DEFAULT_SLOT_FIELD,
       ),
     );
     return breaks.get(path);

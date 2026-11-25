@@ -1536,6 +1536,7 @@
     "src/features/componentProperties/PropertyAttributes.tsx",
     "src/features/componentProperties/PropertyDeclarationInfo.tsx",
     "src/features/componentProperties/PropertyDefault.tsx",
+    "src/features/componentProperties/PropertyEditingSettings.tsx",
     "src/features/componentProperties/PropertyEditor.tsx",
     "src/features/componentProperties/PropertyFieldHead.tsx",
     "src/features/componentProperties/PropertyOptions.tsx",

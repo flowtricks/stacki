@@ -17,6 +17,7 @@ import { kindIcon } from './PropertyType';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from './PropertiesIcon';
 import { PropertyEditor, withListSettingType } from './PropertyEditor';
+import { SlotEditingRows } from './PropertyEditingSettings';
 import { VariantConditionMark, conditionLines } from './PropertyVariants';
 import './componentProperties.css';
 
@@ -268,6 +269,7 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
           )}
         </ListFieldRow>
       ))}
+      <SlotEditingRows disabled={busy} />
     </div>
   );
 }
