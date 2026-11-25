@@ -1,5 +1,5 @@
-// Goal: ⌘R and ⇧⌘R always refresh the site preview, wherever focus is, and never reload Stacki; Stacki's own reload is a separate
-// View item (⌥⌘R in dev, no accelerator when packaged).
+// Goal: ⌘R and ⇧⌘R always refresh the site preview, wherever focus is, and never reload Stacki; ⇧⌘R clears the HTTP cache first.
+// Stacki's own reload is a separate View item (⌥⌘R in dev, no accelerator when packaged).
 // Method: the pure decision (preview open or not) is checked directly, including the negative space (no preview: nothing happens).
 // Then the real menu template is built for a dev and a packaged run, the items are found by accelerator or label and clicked, and
 // each reports the command it asked to run, so the pairing of accelerator and command is pinned for both modes.
@@ -15,6 +15,12 @@ test('with a preview open the shortcut refreshes the site', () => {
 
 test('with no preview open the shortcut does nothing', () => {
   assert.equal(routeReload({ previewOpen: false }), 'noop');
+  assert.equal(routeReload({ previewOpen: false, hard: true }), 'noop');
+});
+
+test('a hard refresh clears the cache before it refreshes the site', () => {
+  assert.equal(routeReload({ previewOpen: true, hard: true }), 'clearCacheAndRefreshPreview');
+  assert.equal(routeReload({ previewOpen: true, hard: false }), 'refreshPreview');
 });
 
 interface ViewItem {
@@ -50,10 +56,10 @@ function viewItems(mode: 'dev' | 'packaged'): ViewItem[] {
 }
 
 for (const mode of ['dev', 'packaged'] as const) {
-  test(`a ${mode} run maps both site accelerators to the site refresh`, () => {
+  test(`a ${mode} run maps ⌘R to the site refresh and ⇧⌘R to the hard one`, () => {
     const items = viewItems(mode);
     assert.equal(items.find((item) => item.accelerator === 'CmdOrCtrl+R')?.asked, 'refreshSite');
-    assert.equal(items.find((item) => item.accelerator === 'Shift+CmdOrCtrl+R')?.asked, 'refreshSite');
+    assert.equal(items.find((item) => item.accelerator === 'Shift+CmdOrCtrl+R')?.asked, 'hardRefreshSite');
   });
 }
 
