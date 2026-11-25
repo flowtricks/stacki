@@ -21,7 +21,6 @@ import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { usePreviewRuntime, type CanvasSelectInfo, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
 import type { CanvasNoticeEvent } from './canvasClickRetry';
 import type { PreviewReloadReason } from './previewMessages';
-import { FLUID_FRAME_WIDTH } from './previewViewport';
 import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
 import { GuideOverlay } from './GuideOverlay';
@@ -256,7 +255,7 @@ function DesignPreview({
         style={
           width
             ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: 10 * scale }
-            : { width: FLUID_FRAME_WIDTH, height: '100%', borderRadius: 0 }
+            : { ...sizing.fillStyle, height: '100%', borderRadius: 0 }
         }
       >
         {/* First in the layer, so the outlines and spacing bands paint over it. */}

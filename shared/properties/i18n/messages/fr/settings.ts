@@ -83,7 +83,8 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Très grand',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Bureau',
-  'settings.breakpoints.desktopNote': 'Largeur du canevas Bureau, réduite pour tenir dans une fenêtre plus petite. Jamais utilisée comme media query.',
+  'settings.breakpoints.desktopNote':
+    'Utilisée quand la fenêtre est trop étroite pour la mise en page Bureau : cette largeur, réduite pour tenir. Jamais utilisée comme media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) passerait de l’autre côté de Bureau.',
   'settings.breakpoints.error.file':
     'Le fichier des points d’arrêt est inutilisable : les valeurs par défaut s’affichent et le fichier reste intact. {message}',

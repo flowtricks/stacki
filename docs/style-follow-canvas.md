@@ -34,19 +34,22 @@ the target and the canvas move together. Only a row with no canvas width to go t
 
 ## The Desktop device and the pane
 
-The Desktop device fills the pane, at scale 1, when the pane has room for the project's Desktop width
-(Settings, 90rem unless set) and the filled width still reads as Desktop. Otherwise it draws that
-width, exactly as the same number typed into the width box: framed and scaled to fit
-(`previewFrameWidth` in `usePreviewSizing.ts`, the one rule for the toolbar button, the device key,
-Fit, the style panel's Base, apps' `canvas.setDevice` and the preview mode, in Desktop and Studio).
-Two panes get the fixed width:
+"Desktop" is a range of widths: everything above the widest `down` breakpoint, up to the first `up`
+one. A pane whose own width (before any gutter) is in or past that range is filled at scale 1, edge to
+edge, with no frame (`previewFrameWidth` and `previewFillBounds` in `usePreviewSizing.ts`, the one rule
+for the toolbar button, the device key, Fit, the style panel's Base, apps' `canvas.setDevice` and the
+preview mode, in Desktop and Studio). The page is as wide as the pane less the scrollbar's gutters,
+held within the range:
 
-- a narrower one, which filled would lay the page out as a laptop or phone under the Desktop button;
-- one that reaches an `up` breakpoint, which filled would lay the page out in that wider layout.
+- where the gutters would push it below the range, they give way first (at the very edge the page takes
+  the whole pane, and the canvas scrollbar has no room beside it);
+- where the pane reaches an `up` breakpoint, the page stops one pixel short of it, centred.
 
-Resizing the window moves between the two. The canvas reports the width it draws, so the toolbar
-(`activeDeviceFor`) presses Desktop and following lands where that width does: Base in a
-desktop-first component. An unmeasured pane fills until its first measure.
+Only a pane narrower than the range draws the project's Desktop width (Settings, 90rem unless set),
+exactly as the same number typed into the width box: framed and scaled to fit. Resizing the window
+moves between the two. The canvas reports the width it draws, so the toolbar (`activeDeviceFor`)
+presses Desktop and following lands where that width does: Base in a desktop-first component. An
+unmeasured pane fills until its first measure.
 
 ## Where a picked row puts the canvas
 

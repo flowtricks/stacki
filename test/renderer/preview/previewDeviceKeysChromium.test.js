@@ -28,7 +28,7 @@ const AREA = { width: 1800, height: 900 };
 // Bar order (breakpointDevices.ts barDevices): the `up` one, Desktop, the three `down` ones, the all-breakpoints canvas.
 const EXPECTED = [
   { key: '1', device: 'wide', widthPx: 1600 },
-  { key: '2', device: 'desktop', widthPx: 1440 },
+  { key: '2', device: 'desktop', widthPx: 1599 },
   { key: '3', device: 'laptop', widthPx: 1023 },
   { key: '4', device: 'tablet', widthPx: 767 },
   { key: '5', device: 'phone', widthPx: 479 },
@@ -52,7 +52,7 @@ const BREAKPOINTS = resolveBreakpoints([
   { id: 'phone', name: undefined, direction: 'down', setting: { value: 30, unit: 'rem' } },
 ]);
 
-// The stage is wide enough to reach the wide breakpoint, so Desktop draws Settings' Desktop width (90rem), not the stage.
+// The stage is wide enough to reach the wide breakpoint, so Desktop stops one pixel short of it (1599px), centred.
 
 // The forwarded key, replayed on the document as appNodeEdits.ts replays it.
 window.addEventListener('message', (event) => {
