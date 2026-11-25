@@ -90,6 +90,8 @@ export function openRichText(block: Element, richRoot: string, at: { readonly cl
   return {
     finish,
     container,
+    /** Says again where the `+` goes, for a host that has rebuilt its catalog. */
+    replus: report,
     choose: (choice: RichBlockChoice) => {
       if (!closed) {
         applyRichChoice(container, choice);

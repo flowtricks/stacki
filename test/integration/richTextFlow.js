@@ -81,6 +81,12 @@ function writeFixture(project) {
     await window.setViewportSize({ width: 1500, height: 950 }).catch(() => undefined);
     const canvas = window.frameLocator('iframe').first();
     await canvas.locator('.rich-text h2').waitFor({ timeout: WAIT_MS });
+    // `RICH_TEXT_LOOKS=<locale>` (de, ar …) takes the pictures a consistency review needs instead of the flow.
+    const looks = process.env['RICH_TEXT_LOOKS'];
+    if (looks !== undefined && looks !== '') {
+      await lookPass(window, canvas, looks, results);
+      return;
+    }
     await window.screenshot({ path: path.join(SHOTS, '01-open.png') });
     await window.evaluate(() => {
       Reflect.set(window, '__posts', []);
@@ -202,10 +208,85 @@ function writeFixture(project) {
   } finally {
     await app.close().catch(() => undefined);
     fs.writeFileSync(path.join(SHOTS, 'page-after.astro'), page());
+    // Printed here, so a pass that returns early (the look pass) reports too.
+    console.log(`RESULT ${JSON.stringify(results)}`);
+    console.log(`Screenshots: ${SHOTS}`);
   }
-  console.log(`RESULT ${JSON.stringify(results)}`);
-  console.log(`Screenshots: ${SHOTS}`);
 })();
+
+// The states a reviewer compares with the rest of the app, in one interface language: the canvas `+` and its menu
+// driven by the keyboard alone, the asset picker it opens, the `+` at another zoom, a narrow window, the rich text
+// field and its dialog, and a prop's settings.
+async function lookPass(window, canvas, locale, results) {
+  // The interface's own words in this language, from the built catalogs, to find tabs and rail buttons by name.
+  const word = (area, key) => require(repoPath(`dist/shared/properties/i18n/messages/${locale}/${area}.js`)).messages[key];
+  const shot = (name) => window.screenshot({ path: path.join(SHOTS, `${locale}-${name}.png`) });
+  await window.evaluate((preference) => localStorage.setItem('stacki.locale', preference), locale);
+  await window.reload();
+  // A reload starts on the welcome screen: the fixture is its recent project.
+  await window.getByText('site', { exact: true }).first().click();
+  await canvas.locator('.rich-text h2').waitFor({ timeout: WAIT_MS });
+  await canvas.locator('.rich-text p').first().dblclick();
+  await canvas.locator('[data-avb-text-editor]').waitFor({ timeout: WAIT_MS });
+  await window.keyboard.press('End');
+  await window.keyboard.press('Enter');
+  await window.waitForSelector('.html-block-plus', { timeout: WAIT_MS });
+  await shot('01-plus');
+  // Keyboard only: focus the +, open its menu, move to Heading 3, choose it.
+  await window.focus('.html-block-plus');
+  await window.keyboard.press('Enter');
+  await window.waitForSelector('[role="menu"]', { timeout: WAIT_MS });
+  await shot('02-menu');
+  for (let step = 0; step < 2; step++) {
+    await window.keyboard.press('ArrowDown');
+  }
+  await window.keyboard.press('Enter');
+  await canvas.locator('.rich-text h3').first().waitFor({ timeout: WAIT_MS });
+  results.keyboardMenu = true;
+  await window.keyboard.type('Heading');
+  await window.keyboard.press('Enter');
+  await window.waitForSelector('.html-block-plus', { timeout: WAIT_MS });
+  await window.click('.html-block-plus');
+  await window.getByRole('menuitem').nth(8).click(); // Image: the ninth row, after the six headings, paragraph and quote.
+  await window.waitForTimeout(600);
+  await shot('03-asset-picker');
+  results.assetPicker = await window.locator('.asset-pick-overlay, [class*="asset-pick"]').count();
+  await window.keyboard.press('Escape');
+  await shot('04-address-field');
+  await window.keyboard.press('Escape');
+  await window.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  // Another zoom: the + still sits beside its block.
+  await window.keyboard.press(process.platform === 'darwin' ? 'Meta+Equal' : 'Control+Equal');
+  await canvas.locator('.rich-text p').first().dblclick();
+  await window.keyboard.press('End');
+  await window.keyboard.press('Enter');
+  await window.waitForSelector('.html-block-plus', { timeout: WAIT_MS });
+  await shot('05-plus-zoomed');
+  await window.keyboard.press('Escape');
+  // A narrow window, the rich text field and its dialog, and a prop's settings.
+  await window.setViewportSize({ width: 1100, height: 800 });
+  await window.getByText('LumosRichText', { exact: true }).first().click();
+  await window.getByText(word('shell', 'shell.rightTabs.settings'), { exact: true }).first().click();
+  await window.waitForSelector('.props-rich-text-edit', { timeout: WAIT_MS });
+  await shot('06-field-narrow');
+  await window.click('.props-rich-text-edit');
+  await window.waitForSelector('.props-rich-text-dialog .html-content', { timeout: WAIT_MS });
+  await shot('07-dialog-narrow');
+  await window.keyboard.press('Escape');
+  await window.getByText('HtmlBlock', { exact: true }).first().dblclick();
+  await window
+    .getByRole('button', { name: new RegExp(`^${word('rail', 'rail.properties')}`) })
+    .first()
+    .click();
+  await window.waitForSelector('.property-list', { timeout: WAIT_MS });
+  await window.locator('.property-row-main').first().click();
+  await window.waitForSelector('.property-editing-flags', { timeout: WAIT_MS });
+  await window.waitForFunction(() => getComputedStyle(document.querySelector('.property-editor') ?? document.body).opacity === '1', undefined, {
+    timeout: WAIT_MS,
+  });
+  await shot('08-prop-settings');
+  results.flags = await window.locator('.property-editing-flags label').allTextContents();
+}
 
 // Polls the page file for what an action should have written, within a bound.
 async function waitForFile(read, until) {

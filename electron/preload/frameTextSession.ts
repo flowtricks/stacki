@@ -31,7 +31,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
   let typing: { readonly key: string; readonly element: Element } | undefined;
   let focus: ReadonlySet<string> = new Set();
   let openedAtMs = -Infinity;
-  let rich: ReturnType<typeof openRichText>;
+  let rich: ReturnType<typeof openCanvasRich>;
   const finish = (action: 'apply' | 'cancel') => {
     rich?.finish(action);
     active?.editor.finish(action);
@@ -82,7 +82,11 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       if (catalog?.session !== request.value.session && !richGoesOn) {
         finish('cancel');
       }
+      const renewed = richGoesOn && catalog?.session !== request.value.session;
       catalog = request.value;
+      if (renewed) {
+        rich?.announce();
+      }
     },
     open: (target: CanvasTextTarget, match: TextMatch, event: MouseEvent) => {
       finish('apply');
@@ -164,11 +168,18 @@ function openCanvasRich(
       post({ type: 'avb:text-inactive', session: context.session() });
     },
   });
-  if (editor) {
+  if (!editor) {
+    return undefined;
+  }
+  // Said when the editor opens, and again under each catalog the host rebuilds meanwhile: the host's editing cues (the
+  // name tag hidden, the source cue) belong to its current session, as plain text editing has them.
+  const announce = () => {
     const box = editor.container.getBoundingClientRect();
     post({ type: 'avb:text-active', session: context.session(), key: context.target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
-  }
-  return editor;
+    editor.replus();
+  };
+  announce();
+  return { ...editor, announce };
 }
 
 function readRichBlockRequest(input: unknown) {

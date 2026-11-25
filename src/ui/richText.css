@@ -404,3 +404,13 @@
 .props-rich-text-dialog .html-content {
   min-height: 240px;
 }
+
+/* The canvas `+` and the address field it opens, placed over the page: the box is wide enough for the field (the
+   bubble sizes itself against it) and lets every press it does not draw through to the canvas. */
+.canvas-rich-plus {
+  width: 400px;
+  pointer-events: none;
+}
+.canvas-rich-plus > * {
+  pointer-events: auto;
+}

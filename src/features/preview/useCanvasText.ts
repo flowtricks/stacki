@@ -27,14 +27,7 @@ import {
   type CanvasTextSelection,
   type CanvasTextSelectionRange,
 } from '../../../shared/properties/canvasTextOverlay';
-import {
-  canvasRichPlus,
-  clearCanvasRichPlus,
-  canvasTextSelection,
-  clearCanvasTextSelection,
-  type CanvasFormatAction,
-  type CanvasFormatState,
-} from './canvasTextSelection';
+import { canvasRichPlus, canvasTextSelection, clearCanvasTextSelection, type CanvasFormatAction, type CanvasFormatState } from './canvasTextSelection';
 import { canvasTextDraft, clearCanvasTextDraft, canvasTypedText, type CanvasTextDraft } from '../../ui/canvasTextDraft';
 
 export interface CanvasTextDocument {
@@ -152,6 +145,7 @@ function startCanvasText(current: RefObject<Options>) {
     overlay.close();
     clearCanvasTextDraft(session);
     clearCanvasTextSelection(session);
+    // The `+` is not cleared here: the frame's rich text editor outlives a rebuilt catalog, and says when it closes.
     unsubscribeContent();
     unsubscribeRefresh();
     clearCanvasSourceCue(session);
@@ -253,7 +247,8 @@ function saveRichText(
 function showRichPlus(message: { readonly session: string; readonly rect?: CanvasTextBox }, options: CanvasTextReceiverOptions) {
   const frame = options.current.current?.frame.current;
   if (message.rect === undefined || !frame) {
-    clearCanvasRichPlus(options.session);
+    // Whichever catalog drew the `+`: the frame keeps one rich text editor across catalogs, and it says when it is gone.
+    canvasRichPlus.set(undefined);
     return;
   }
   const origin = frame.getBoundingClientRect();
