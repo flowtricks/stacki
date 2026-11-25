@@ -12,7 +12,7 @@ import { Publisher, type PublishState } from '../src/features/publishing/publish
 import { publishRoute } from '../src/features/publishing/publishRoutes';
 import { parsePublishState } from '../src/features/publishing/publishClient';
 
-test('publish HTTP returns a job before the commit finishes and duplicate starts share it', async () => {
+test('publish HTTP returns a job before the commit finishes and duplicate starts share it', async (context) => {
   const root = await publishFixture();
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -48,6 +48,7 @@ test('publish HTTP returns a job before the commit finishes and duplicate starts
       return 'live';
     },
   );
+  const publish = context.mock.method(publisher, 'publish');
   const { server, url } = await publishServer(publisher);
   try {
     const start = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(2000) });
@@ -74,8 +75,12 @@ test('publish HTTP returns a job before the commit finishes and duplicate starts
     assert.deepEqual(stages, expectedStages(first.id));
   } finally {
     release();
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections();
+    });
+    // Publish runs after the HTTP response and can still use the fixture if an assertion fails early.
+    await Promise.all(publish.mock.calls.map(({ result }) => result));
     await rm(root, { recursive: true, force: true });
   }
 });
