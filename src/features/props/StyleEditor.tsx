@@ -11,6 +11,7 @@ import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { appTheme, appHighlight } from '../../ui/CodeEditor';
 import { codeIndentExtensions } from '../../ui/codeEditorIndent';
+import { useCssFieldChips } from '../../ui/cssFieldChips';
 
 // A `style` attribute holds a declaration list, not a stylesheet — no
 // selector, no braces. @codemirror/lang-css can't read that: it parses
@@ -128,8 +129,10 @@ function styleStep(stream: StringStream, state: StyleState): StyleStep {
     stream.eatWhile(/[\da-fA-F]/);
     return { style: 'num', inValue, depth }; // hex color
   }
-  // Number with an optional unit (12px, 1.5rem, 50%, -.3em)
-  if (stream.match(/^[-+]?(\d*\.\d+|\d+)(px|r?em|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt|cm|mm|in)?/)) {
+  // A number with its unit (12px, 100svh, 50cqmin, -.3em, 1e3ms): whatever
+  // name is glued to the digits is the unit. A list of known units lagged CSS and
+  // split `100svh` into `100s` and `vh`.
+  if (stream.match(/^[-+]?(\d*\.\d+|\d+)([eE][-+]?\d+)?(%|[a-zA-Z]+)?/)) {
     return { style: 'num', inValue, depth };
   }
   // Bare word: a property before the colon, a function if a ( follows,
@@ -147,15 +150,21 @@ function styleStep(stream: StringStream, state: StyleState): StyleStep {
 // Splitting on ";" has to skip the ones inside strings and parens — a
 // `background: url("a;b.png")` or a data: URI would otherwise be cut in half.
 export function splitDeclarations(text: string): string[] {
+  return declarationPieces(text)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+}
+
+// The text cut at each declaration's `;`, untouched: joined with `;` it is the text again.
+function declarationPieces(text: string): string[] {
   assert(text.length <= LIMITS.attrCharsMax, 'StyleEditor: style value limit exceeded');
   const out: string[] = [];
-  let buf = '';
+  let start = 0;
   let depth = 0;
   let quote: string | undefined;
   for (let i = 0; i < text.length; i++) {
     const character = text.charAt(i);
     if (quote) {
-      buf += character;
       if (character === quote && text[i - 1] !== '\\') {
         quote = undefined;
       }
@@ -163,22 +172,18 @@ export function splitDeclarations(text: string): string[] {
     }
     if (character === '"' || character === "'") {
       quote = character;
-      buf += character;
     } else if (character === '(') {
       depth++;
-      buf += character;
     } else if (character === ')') {
       depth = Math.max(0, depth - 1);
-      buf += character;
     } else if (character === ';' && depth === 0) {
-      out.push(buf);
-      buf = '';
-    } else {
-      buf += character;
+      out.push(text.slice(start, i));
+      start = i + 1;
     }
   }
-  out.push(buf);
-  return out.map((declaration) => declaration.trim()).filter(Boolean);
+  out.push(text.slice(start));
+  assert(out.join(';') === text, 'StyleEditor: the pieces are the text');
+  return out;
 }
 
 // One declaration per line for editing.
@@ -195,8 +200,59 @@ export const collapseDeclarations = (text: string): string => {
   return declarations.join('; ') + (declarations.length ? ';' : '');
 };
 
+/**
+ * The attribute for the editor's `text`, spelled as `previous` spelled it. The
+ * editor shows one declaration per line, but the source keeps its own spacing,
+ * line breaks and last `;`: only a declaration that changed is rewritten, so
+ * connecting a variable changes that reference and nothing else. A new
+ * declaration is written ` name: value`, and an attribute that was empty is
+ * written on one line (collapseDeclarations).
+ */
+export function rewriteDeclarations(previous: string, text: string): string {
+  const next = splitDeclarations(text);
+  const pieces = declarationPieces(previous);
+  const written = pieces.filter((piece) => piece.trim() !== '');
+  if (next.length === 0 || written.length === 0) {
+    return collapseDeclarations(text);
+  }
+  const same = (at: number, from: number): boolean => written[from]?.trim() === next[at];
+  const shared = Math.min(next.length, written.length);
+  let head = 0;
+  while (head < shared && same(head, head)) {
+    head += 1;
+  }
+  let tail = 0;
+  while (tail < shared - head && same(next.length - 1 - tail, written.length - 1 - tail)) {
+    tail += 1;
+  }
+  // Which of the old declarations lends its spacing to the new one at `at`.
+  const lender = (at: number): number | undefined => {
+    if (at >= next.length - tail) {
+      return written.length - (next.length - at);
+    }
+    return at < head || at < written.length - tail ? at : undefined;
+  };
+  const body = next.map((declaration, at) => {
+    const from = lender(at);
+    const old = from === undefined ? undefined : written[from];
+    if (old === undefined) {
+      return at === 0 ? declaration : ` ${declaration}`;
+    }
+    const lead = old.slice(0, old.length - old.trimStart().length);
+    const trail = old.slice(old.trimEnd().length);
+    // The first declaration's lead is not a separator, so moved down it takes one.
+    return `${at > 0 && from === 0 && lead === '' ? ' ' : lead}${declaration}${trail}`;
+  });
+  const end = pieces.at(-1) ?? '';
+  const closed = pieces.length > 1 && end.trim() === '';
+  const result = `${body.join(';')}${closed ? `;${end}` : ''}`;
+  assert(splitDeclarations(result).join(';') === next.join(';'), 'StyleEditor: the attribute holds the edited declarations');
+  return result;
+}
+
 interface StyleEditorProps {
   readonly value?: string | undefined;
+  /** The attribute to write after an edit (rewriteDeclarations); empty when nothing is left. */
   readonly onChange?: (value: string) => void;
   readonly autoFocus?: boolean;
   readonly placeholder?: string;
@@ -218,6 +274,11 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
   const viewRef = useRef<EditorView | undefined>(undefined);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  // The attribute as it is spelled now, which the next edit is written over.
+  const sourceRef = useRef(value || '');
+  // The same CSS chips every code editor draws: the text is a bare declaration list.
+  const codeChips = useCssFieldChips();
+  const chipExtension = codeChips.extension;
   // Mounted once with the expanded text; from then on the effect below decides
   // when the incoming value is news and when it's this editor's own echo.
   const [initial] = useState(() => ({ text: expandDeclarations(value), placeholder, autoFocus }));
@@ -237,6 +298,7 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
           drawSelection(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
           styleMode,
+          chipExtension,
           cmPlaceholder(initial.placeholder),
           appTheme,
           appHighlight,
@@ -246,7 +308,8 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
               if (!update.transactions.some((transaction) => transaction.docChanged && transaction.annotation(outsideValue) !== true)) {
                 return; // Only the outside value changed the document.
               }
-              onChangeRef.current?.(update.state.doc.toString());
+              sourceRef.current = rewriteDeclarations(sourceRef.current, update.state.doc.toString());
+              onChangeRef.current?.(sourceRef.current);
             }
           }),
         ],
@@ -260,7 +323,7 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
       viewRef.current = undefined;
       view.destroy();
     };
-  }, [initial]);
+  }, [initial, chipExtension]);
 
   // A change that didn't come from here — Reset, undo, a value written by
   // something else — has to reach the document, or the editor goes on showing
@@ -273,9 +336,11 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
       return;
     }
     const next = value || '';
-    if (collapseDeclarations(view.state.doc.toString()) === next) {
+    if (collapseDeclarations(view.state.doc.toString()) === collapseDeclarations(next)) {
+      sourceRef.current = next;
       return;
     }
+    sourceRef.current = next;
     // A value arriving from outside is not an edit made here: kept off the
     // editor's undo stack, so ⌘Z never undoes it back to a stale value.
     view.dispatch({
@@ -284,7 +349,12 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
     });
   }, [value]);
 
-  return <div ref={hostRef} className="style-editor" />;
+  return (
+    <>
+      <div ref={hostRef} className="style-editor" />
+      {codeChips.overlay}
+    </>
+  );
 }
 
 // Each scan advances the stream and stops at its finite line boundary.

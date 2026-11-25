@@ -2309,6 +2309,7 @@
     "src/ui/commitInPlace.ts",
     "src/ui/conditionLabel.ts",
     "src/ui/contentInputs.css",
+    "src/ui/cssFieldChips.ts",
     "src/ui/controls.css",
     "src/ui/dateFieldModel.ts",
     "src/ui/dateTimePicker.css",

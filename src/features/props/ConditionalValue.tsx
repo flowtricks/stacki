@@ -35,7 +35,8 @@ import {
 } from '../../editor/conditionalValue';
 import { templateHoles, type TemplateHole } from '../../editor/bindings';
 import { FIELD_UNFOCUSED } from './fieldFocus';
-import ExprInput, { type ExprInputAPI } from '../../ui/ExprInput';
+import ExprInput, { type ExprInputAPI, type ExprInputProps } from '../../ui/ExprInput';
+import { useCssFieldChips } from '../../ui/cssFieldChips';
 import { isExpression } from './jsCheck';
 import { CodeInline, CodeTokens } from '../../ui/CodeBlock';
 import type { CodeLine, CodeToken } from '../../ui/codeHighlight';
@@ -1186,7 +1187,7 @@ export function ResultField(props: {
         {props.language === 'css' && isPlainResult(result) ? (
           // Declarations, highlighted as the style attribute's CSS editor
           // highlights them, with each `${name}` drawn as a purple chip.
-          <ExprInput
+          <CssBodyInput
             value={bodyOfResult(result)}
             syncValue={bodyOfResult(result)}
             syntax={styleDeclarations}
@@ -1264,6 +1265,18 @@ export function ResultField(props: {
 }
 
 // "↳ Value [Show | Hide | Required]": a branch value picked from icon choices, laid out as the typed value's row is.
+// A style branch's declarations, with the CSS chips the style attribute's own editor draws
+// beside the purple `${name}` chips.
+function CssBodyInput(props: ExprInputProps) {
+  const codeChips = useCssFieldChips();
+  return (
+    <>
+      <ExprInput {...props} extensions={codeChips.extension} />
+      {codeChips.overlay}
+    </>
+  );
+}
+
 function ChoiceResult(props: {
   readonly label: string;
   readonly result: ConditionalResult;

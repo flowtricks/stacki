@@ -23,6 +23,11 @@ import { described } from '../../../vendor/stacki/shared/properties/i18n/message
 import { loopSourceEdit } from './loopSourceEdit';
 import { commentEdits, commentFieldValue } from './commentEdit';
 import { useStructureSettings } from './useStructureSettings';
+import { useCodeChips } from '../../../vendor/stacki/src/features/style/codeChips/CodeChips';
+import { installCssFieldChips } from '../../../vendor/stacki/src/ui/cssFieldChips';
+
+// The Settings panel's CSS fields (the style prop) draw the code editors' chips, as in Desktop.
+installCssFieldChips(useCodeChips);
 
 interface Props {
   readonly document: SharedDocument;

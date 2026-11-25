@@ -27,7 +27,7 @@ import DateField from '../../ui/DateField';
 import { containsHTML } from '../../ui/htmlFieldModel';
 import { calendarValue } from '../../ui/dateFieldModel';
 import SegSwitch from './SegSwitch';
-import StyleEditor, { collapseDeclarations } from './StyleEditor';
+import StyleEditor from './StyleEditor';
 import { ChevronDownIcon } from '../../ui/Icons';
 import {
   type AssetContext,
@@ -117,14 +117,13 @@ export function StyleControl({ state }: { readonly state: PropControlState }) {
         value={attrText(value) || ''}
         // i18n-ignore: CSS example.
         placeholder="color: red;"
-        onChange={(text) => {
-          const flat = collapseDeclarations(text);
+        onChange={(next) => {
           // Nothing left in it means no attribute at all — an element never
           // asked for an empty style="" and shouldn't carry one.
-          if (!flat) {
+          if (!next) {
             onChange(undefined, true);
           } else {
-            onChange({ type: 'string', value: flat }, false);
+            onChange({ type: 'string', value: next }, false);
           }
         }}
       />

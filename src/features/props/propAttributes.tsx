@@ -11,7 +11,7 @@ import type { SourceContext, FieldPosition, FieldPickerAt, InsertAPI } from './p
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import StyleEditor, { collapseDeclarations } from './StyleEditor';
+import StyleEditor from './StyleEditor';
 import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
@@ -816,10 +816,9 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
     <StyleEditor
       value={draftValue}
       autoFocus={focusValue}
-      onChange={(text) => {
-        const flat = collapseDeclarations(text);
-        setDraftValue(flat);
-        onChangeValue(flat);
+      onChange={(next) => {
+        setDraftValue(next);
+        onChangeValue(next);
       }}
     />
   ) : assetMode ? (

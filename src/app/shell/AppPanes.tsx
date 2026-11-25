@@ -67,6 +67,10 @@ import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/Ca
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { componentCanvasShown } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { installCssFieldChips } from '../../ui/cssFieldChips';
+
+// The Settings panel's CSS fields (the style prop) draw the code editors' chips.
+installCssFieldChips(useCodeChips);
 
 // One function for the life of the app: the Style panel publishes its host on every render, and a
 // new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
@@ -682,7 +686,7 @@ export function settingsValues(app: ShellView) {
     focusClass: app.classFocus,
     focusContent: app.contentFocus,
     isLayout: selectedId === 'layout',
-    layouts: app.scan.layouts,
+    layouts: app.layoutOptions,
     currentLayoutName: app.currentLayoutName,
     schema: app.selectedSchema,
     listProps: app.listProps,

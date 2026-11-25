@@ -174,7 +174,9 @@ export function cssValueChips(text: string, kind: CssChipText): readonly CssValu
   }
   // A stable sort: chips at one offset keep the order they were found in, so a layered property's
   // whole-list chip stays in front of its first layer's.
-  const kept = chips.slice(0, CHIPS_MAX).sort((left, right) => left.from - right.from);
+  // A reference that holds a `${…}` hole is the template's to draw, never one chip over both.
+  const own = chips.filter((chip) => chip.kind !== 'variable' || !chip.value.includes('${'));
+  const kept = own.slice(0, CHIPS_MAX).sort((left, right) => left.from - right.from);
   for (const chip of kept) {
     assert(chip.from <= chip.to, 'cssValueChips: a chip keeps its order');
     assert(text.slice(chip.from, chip.to) === chip.value, 'cssValueChips: a chip is the text it covers');
@@ -253,6 +255,12 @@ export function scanDeclarations(text: string, region: CssChipRange, onDeclarati
       index = quoteEnd(text, index, region.to);
       continue;
     }
+    // A template's `${name}` (a conditional style's branch) is part of its value: its braces
+    // open and close no rule, so the declaration around it keeps its chips.
+    if (character === '$' && text.charAt(index + 1) === '{') {
+      index = holeEnd(text, index, region.to);
+      continue;
+    }
     if (character === '(') {
       depth += 1;
     } else if (character === ')') {
@@ -268,6 +276,13 @@ export function scanDeclarations(text: string, region: CssChipRange, onDeclarati
     index += 1;
   }
   declarationsIn(text, { from: start, to: region.to }, onDeclaration);
+}
+
+// The offset after the `${…}` that opens at `open`, or past its `$` when it does not close.
+function holeEnd(text: string, open: number, limit: number): number {
+  assert(text.startsWith('${', open), 'holeEnd: a hole opens here');
+  const close = text.indexOf('}', open + 2);
+  return close < 0 || close >= limit ? open + 1 : close + 1;
 }
 
 // The offset after the comment that opens at `open`, or `limit` when it does not close before it.

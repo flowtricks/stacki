@@ -180,6 +180,8 @@ export interface ExprInputProps {
    * module does not know: a style attribute's declarations (StyleEditor.tsx).
    */
   readonly syntax?: Extension | undefined;
+  /** More of the caller's own editor behaviour, set once as the field mounts (CSS chips). */
+  readonly extensions?: Extension | undefined;
   /** The field's accessible name, for a field no <label> wraps. */
   readonly ariaLabel?: string;
 }
@@ -270,6 +272,7 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         chipsOfField,
         chipField,
         chipsAreAtomic,
+        initial.extensions ?? [],
         appTheme,
         appHighlight,
         ...((initial.wrap ?? true) ? [EditorView.lineWrapping] : []),
