@@ -463,6 +463,7 @@ export const messages = {
   'ai.pins.moving': '{number} numaralı iğnenin gideceği yere tıklayın',
   'ai.pins.noComment': 'Henüz yorum yok',
   'ai.pins.noElement': 'İğneler sayfadaki bir öğeye konur. Bir öğeye tıklayın.',
+  'ai.pins.notAPage': 'İğneler sayfalara konur. Önce bileşen tuvalini veya varsayılanları kapatın.',
   'ai.pins.openWork': '{number} numaralı iğne üzerindeki çalışmayı göster',
   'ai.pins.placeholder': 'Değişikliği açıklayın…',
   'ai.pins.popover': 'İğne {number}',

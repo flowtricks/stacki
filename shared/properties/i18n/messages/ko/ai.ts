@@ -441,6 +441,7 @@ export const messages = {
   'ai.pins.moving': '핀 {number}을(를) 놓을 곳을 클릭하세요',
   'ai.pins.noComment': '아직 댓글이 없습니다',
   'ai.pins.noElement': '핀은 페이지의 요소에 놓습니다. 요소를 클릭하세요.',
+  'ai.pins.notAPage': '핀은 페이지에 놓습니다. 먼저 컴포넌트 캔버스나 기본값을 닫으세요.',
   'ai.pins.openWork': '핀 {number}의 작업 보기',
   'ai.pins.placeholder': '변경할 내용을 설명하세요…',
   'ai.pins.popover': '핀 {number}',

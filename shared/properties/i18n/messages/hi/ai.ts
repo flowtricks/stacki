@@ -463,6 +463,7 @@ export const messages = {
   'ai.pins.moving': 'पिन {number} को जहाँ रखना है वहाँ क्लिक करें',
   'ai.pins.noComment': 'अभी कोई कमेंट नहीं',
   'ai.pins.noElement': 'पिन पेज के किसी एलिमेंट पर लगते हैं। किसी एलिमेंट पर क्लिक करें।',
+  'ai.pins.notAPage': 'पिन पेजों पर लगते हैं। पहले कंपोनेंट कैनवस या डिफ़ॉल्ट बंद करें।',
   'ai.pins.openWork': 'पिन {number} पर हुआ काम दिखाएँ',
   'ai.pins.placeholder': 'बदलाव के बारे में बताएँ…',
   'ai.pins.popover': 'पिन {number}',

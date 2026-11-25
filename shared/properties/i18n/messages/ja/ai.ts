@@ -442,6 +442,7 @@ export const messages = {
   'ai.pins.moving': 'ピン {number} の移動先をクリックしてください',
   'ai.pins.noComment': 'コメントはまだありません',
   'ai.pins.noElement': 'ピンはページの要素に配置します。要素をクリックしてください。',
+  'ai.pins.notAPage': 'ピンはページに配置します。先にコンポーネントキャンバスかデフォルト値を閉じてください。',
   'ai.pins.openWork': 'ピン {number} の作業を表示',
   'ai.pins.placeholder': '変更内容を入力…',
   'ai.pins.popover': 'ピン {number}',

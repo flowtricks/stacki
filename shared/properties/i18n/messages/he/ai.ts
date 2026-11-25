@@ -483,6 +483,7 @@ export const messages = {
   'ai.pins.moving': 'יש ללחוץ במקום החדש של נעץ {number}',
   'ai.pins.noComment': 'אין עדיין תגובה',
   'ai.pins.noElement': 'נעצים מוצמדים לרכיב בדף. יש ללחוץ על רכיב.',
+  'ai.pins.notAPage': 'נעצים מוצמדים לדפים. יש לסגור קודם את קנבס הרכיב או את ערכי ברירת המחדל.',
   'ai.pins.openWork': 'הצגת העבודה על נעץ {number}',
   'ai.pins.placeholder': 'תיאור השינוי…',
   'ai.pins.popover': 'נעץ {number}',

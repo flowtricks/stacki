@@ -465,6 +465,7 @@ export const messages = {
   'ai.pins.moving': 'Cliquez à l’endroit où placer l’épingle {number}',
   'ai.pins.noComment': 'Pas encore de commentaire',
   'ai.pins.noElement': 'Les épingles se placent sur un élément de la page. Cliquez sur un élément.',
+  'ai.pins.notAPage': 'Les épingles se placent sur des pages. Fermez d’abord le canevas du composant ou les valeurs par défaut.',
   'ai.pins.openWork': 'Afficher le travail sur l’épingle {number}',
   'ai.pins.placeholder': 'Décrivez la modification…',
   'ai.pins.popover': 'Épingle {number}',

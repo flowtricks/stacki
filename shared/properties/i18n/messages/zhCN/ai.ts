@@ -439,6 +439,7 @@ export const messages = {
   'ai.pins.moving': '点击图钉 {number} 的新位置',
   'ai.pins.noComment': '还没有评论',
   'ai.pins.noElement': '图钉只能放在页面元素上。请点击一个元素。',
+  'ai.pins.notAPage': '图钉只能放在页面上。请先关闭组件画布或默认值。',
   'ai.pins.openWork': '查看图钉 {number} 的处理过程',
   'ai.pins.placeholder': '描述要做的更改…',
   'ai.pins.popover': '图钉 {number}',

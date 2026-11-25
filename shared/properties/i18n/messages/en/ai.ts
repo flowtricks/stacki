@@ -463,6 +463,7 @@ export const messages = {
   'ai.pins.moving': 'Click where pin {number} goes',
   'ai.pins.noComment': 'No comment yet',
   'ai.pins.noElement': 'Pins go on an element of the page. Click an element.',
+  'ai.pins.notAPage': 'Pins go on pages. Close the component canvas or defaults first.',
   'ai.pins.openWork': 'Show the work on pin {number}',
   'ai.pins.placeholder': 'Describe the change…',
   'ai.pins.popover': 'Pin {number}',

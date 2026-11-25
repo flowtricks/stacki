@@ -229,6 +229,12 @@ function useCanvasNow(app: ShellView): CanvasNow {
   }, [page, scope, renderedPaths, model]);
 }
 
+// A page Stacki generates and removes again (the component canvas's, the defaults editor's), with whatever is opened
+// from it: a pin there would send the agent to a file that is gone once the canvas closes.
+function isScratchPage(page: string): boolean {
+  return page.startsWith('.stacki/');
+}
+
 function canvasPage(app: ShellView): string | undefined {
   const path = (app.editStack[0] ?? app.currentPage)?.path;
   return path === undefined ? undefined : projectRelativePath(app.project.path, path, window.avb.platform);
@@ -280,6 +286,10 @@ function findElements(nodes: readonly PageNode[] | undefined, tag: string, text:
 function takeClick(app: ShellView, click: CanvasClickReport, translate: Translator): void {
   const path = click.path;
   const page = canvasPage(app);
+  if (page !== undefined && isScratchPage(page)) {
+    reportErrorToast(translate('ai.pins.notAPage'));
+    return;
+  }
   if (path === undefined || page === undefined || path.length > PIN_LIMITS.canvasPathCharsMax) {
     reportErrorToast(translate('ai.pins.noElement'));
     return;
@@ -385,7 +395,7 @@ function cropPlaced(entry: PlacedPin, translate: Translator): void {
 async function moveDraggedPin(app: ShellView, id: PinId, point: { readonly x: number; readonly y: number }, translate: Translator): Promise<void> {
   const pin = pinState().board.pins.find((candidate) => candidate.id === id);
   const page = canvasPage(app);
-  if (pin === undefined || page === undefined || pin.delivery.kind === 'sent') {
+  if (pin === undefined || page === undefined || isScratchPage(page) || pin.delivery.kind === 'sent') {
     return;
   }
   const hit = await queryCanvasPoint(point.x, point.y);

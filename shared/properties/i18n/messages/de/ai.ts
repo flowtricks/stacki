@@ -466,6 +466,7 @@ export const messages = {
   'ai.pins.moving': 'Klicke dorthin, wo Pin {number} hin soll',
   'ai.pins.noComment': 'Noch kein Kommentar',
   'ai.pins.noElement': 'Pins gehören auf ein Element der Seite. Klicke auf ein Element.',
+  'ai.pins.notAPage': 'Pins gehören auf Seiten. Schließe zuerst die Komponentenfläche oder die Standardwerte.',
   'ai.pins.openWork': 'Arbeit an Pin {number} anzeigen',
   'ai.pins.placeholder': 'Änderung beschreiben …',
   'ai.pins.popover': 'Pin {number}', // same

@@ -508,6 +508,7 @@ export const messages = {
   'ai.pins.moving': 'Щёлкните там, куда переместить метку {number}',
   'ai.pins.noComment': 'Комментария пока нет',
   'ai.pins.noElement': 'Метки ставятся на элементы страницы. Щёлкните элемент.',
+  'ai.pins.notAPage': 'Метки ставятся на страницах. Сначала закройте холст компонента или значения по умолчанию.',
   'ai.pins.openWork': 'Показать работу над меткой {number}',
   'ai.pins.placeholder': 'Опишите изменение…',
   'ai.pins.popover': 'Метка {number}',

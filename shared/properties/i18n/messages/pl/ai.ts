@@ -508,6 +508,7 @@ export const messages = {
   'ai.pins.moving': 'Kliknij, gdzie ma trafić pinezka {number}',
   'ai.pins.noComment': 'Nie ma jeszcze komentarza',
   'ai.pins.noElement': 'Pinezki umieszcza się na elementach strony. Kliknij element.',
+  'ai.pins.notAPage': 'Pinezki umieszcza się na stronach. Najpierw zamknij kanwę komponentu lub wartości domyślne.',
   'ai.pins.openWork': 'Pokaż prace nad pinezką {number}',
   'ai.pins.placeholder': 'Opisz zmianę…',
   'ai.pins.popover': 'Pinezka {number}',

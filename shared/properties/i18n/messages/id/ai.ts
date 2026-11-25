@@ -442,6 +442,7 @@ export const messages = {
   'ai.pins.moving': 'Klik tempat tujuan pin {number}',
   'ai.pins.noComment': 'Belum ada komentar',
   'ai.pins.noElement': 'Pin ditempatkan pada elemen halaman. Klik sebuah elemen.',
+  'ai.pins.notAPage': 'Pin ditempatkan pada halaman. Tutup dulu kanvas komponen atau nilai bawaan.',
   'ai.pins.openWork': 'Tampilkan pekerjaan pada pin {number}',
   'ai.pins.placeholder': 'Jelaskan perubahannya…',
   'ai.pins.popover': 'Pin {number}', // same

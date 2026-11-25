@@ -550,6 +550,7 @@ export const messages = {
   'ai.pins.moving': 'انقر الموضع الجديد للدبوس {number}',
   'ai.pins.noComment': 'لا تعليق بعد',
   'ai.pins.noElement': 'تُثبَّت الدبابيس على عنصر في الصفحة. انقر عنصرًا.',
+  'ai.pins.notAPage': 'تُثبَّت الدبابيس على الصفحات. أغلق لوحة المكوّن أو القيم الافتراضية أولًا.',
   'ai.pins.openWork': 'عرض العمل على الدبوس {number}',
   'ai.pins.placeholder': 'صف التغيير…',
   'ai.pins.popover': 'الدبوس {number}',

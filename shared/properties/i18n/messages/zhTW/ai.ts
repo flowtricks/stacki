@@ -439,6 +439,7 @@ export const messages = {
   'ai.pins.moving': '按一下圖釘 {number} 的新位置',
   'ai.pins.noComment': '尚無註解',
   'ai.pins.noElement': '圖釘只能放在頁面元素上。請按一下元素。',
+  'ai.pins.notAPage': '圖釘只能放在頁面上。請先關閉元件畫布或預設值。',
   'ai.pins.openWork': '顯示圖釘 {number} 的處理過程',
   'ai.pins.placeholder': '描述要做的變更…',
   'ai.pins.popover': '圖釘 {number}',

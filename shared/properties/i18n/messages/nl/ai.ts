@@ -464,6 +464,7 @@ export const messages = {
   'ai.pins.moving': 'Klik waar pin {number} moet komen',
   'ai.pins.noComment': 'Nog geen opmerking',
   'ai.pins.noElement': 'Pins horen op een element van de pagina. Klik op een element.',
+  'ai.pins.notAPage': 'Pins horen op pagina’s. Sluit eerst het componentcanvas of de standaardwaarden.',
   'ai.pins.openWork': 'Het werk aan pin {number} tonen',
   'ai.pins.placeholder': 'Beschrijf de wijziging…',
   'ai.pins.popover': 'Pin {number}', // same
