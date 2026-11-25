@@ -202,3 +202,25 @@ test('strings are blanked for discovery with their offsets kept', () => {
   assert.ok(!blank.includes(';'));
   assert.ok(blank.startsWith('a: "'));
 });
+
+test('a style block inside a comment, a script or the frontmatter is not one, as the parsed page reads it', () => {
+  const source = [
+    '---',
+    "const sample = '<!-- <style>.a { color: red }</style>';",
+    '---',
+    '<!-- <style>.old { text-align: left }</style> -->',
+    '{/* <style>.draft { text-align: left }</style> */}',
+    "<script>const open = '<!--';</script>",
+    '<style>.live::after { content: "<!--"; text-align: right }</style>',
+    '<!-- <style> -->',
+    '<style>.last { text-align: end }</style>',
+  ].join('\n');
+  const segments = customSegments('src/pages/a.astro', source, 'declaration');
+  assert.deepEqual(
+    segments.map((segment) => segment.text),
+    ['.live::after { content: "<!--"; text-align: right }', '.last { text-align: end }'],
+  );
+  for (const segment of segments) {
+    assert.equal(source.slice(segment.offset, segment.offset + segment.text.length), segment.text);
+  }
+});

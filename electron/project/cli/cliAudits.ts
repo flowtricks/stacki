@@ -104,13 +104,17 @@ function auditsPresets(): Result<Outcome, CliError> {
 }
 
 // The audit the flags describe, laid over `base` (a preset, the saved audit, or nothing), as raw JSON the app's parser then judges.
-function withFlags(context: CommandContext, base: Record<string, unknown>): Record<string, unknown> {
+function withFlags(context: CommandContext, base: Record<string, unknown>): Result<Record<string, unknown>, CliError> {
   const next: Record<string, unknown> = { ...base };
-  for (const name of ['name', 'icon', 'severity', 'message']) {
+  for (const name of ['name', 'icon', 'severity']) {
     const value = given(context, name);
     if (value !== undefined) {
       next[name] = value;
     }
+  }
+  const message = given(context, 'message');
+  if (message !== undefined) {
+    next['message'] = message.length === 0 ? undefined : message;
   }
   const category = given(context, 'category');
   if (category !== undefined) {
@@ -125,6 +129,13 @@ function withFlags(context: CommandContext, base: Record<string, unknown>): Reco
     next['enabled'] = enabled;
   }
   const scope = given(context, 'scope') ?? (typeof base['scope'] === 'string' ? base['scope'] : 'declaration');
+  // A flag the scope does not read is refused: dropped quietly, the command would report a change it did not make.
+  const unused = (scope === 'declaration' ? ['regex'] : ['property', 'valueMustMatch', 'valueMustNotMatch']).find((name) => given(context, name) !== undefined);
+  if (unused !== undefined) {
+    const flag = unused.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    const instead = scope === 'declaration' ? '--property and --value-must-match' : '--regex';
+    return refused(`--${flag} does not apply to a ${scope} audit; it takes ${instead}. Nothing was written.`);
+  }
   const baseMatch = typeof base['match'] === 'object' && base['match'] !== null && base['scope'] === scope ? base['match'] : {};
   const match: Record<string, unknown> = { ...baseMatch };
   if (scope === 'declaration') {
@@ -142,7 +153,7 @@ function withFlags(context: CommandContext, base: Record<string, unknown>): Reco
   }
   next['scope'] = scope;
   next['match'] = match;
-  return next;
+  return ok(next);
 }
 
 // Checks what the flags made: the app's parser for its shape and bounds, then the guard for every pattern. Designer- and
@@ -207,7 +218,11 @@ function auditsAdd(context: CommandContext): Result<Outcome, CliError> {
   }
   const base =
     preset === undefined ? { icon: 'star', category: 'tokens' } : (serializedCustomAudits([{ ...preset.audit, id: preset.preset, enabled: true }])[0] ?? {});
-  const raw = withFlags(context, base);
+  const flagged = withFlags(context, base);
+  if (!flagged.ok) {
+    return flagged;
+  }
+  const raw = flagged.value;
   const taken = file.value.customAudits.map((audit) => audit.id);
   const wanted = given(context, 'id');
   if (wanted !== undefined && taken.includes(wanted)) {
@@ -250,7 +265,11 @@ function auditsUpdate(context: CommandContext): Result<Outcome, CliError> {
     return refused(`There is no custom audit "${id}" (ids: ${file.value.customAudits.map((audit) => audit.id).join(', ') || 'none'}).`, 'missing');
   }
   const [written] = serializedCustomAudits([current]);
-  const audit = checkedAudit({ ...withFlags(context, { ...written }), id });
+  const flagged = withFlags(context, { ...written });
+  if (!flagged.ok) {
+    return flagged;
+  }
+  const audit = checkedAudit({ ...flagged.value, id });
   if (!audit.ok) {
     return audit;
   }
@@ -299,7 +318,11 @@ function auditsTest(context: CommandContext): Result<Outcome, CliError> {
       preset === undefined
         ? { id: 'inline', name: 'Inline audit', icon: 'star', category: 'tokens' }
         : (serializedCustomAudits([{ ...preset.audit, id: preset.preset, enabled: true }])[0] ?? {});
-    const checked = checkedAudit({ ...withFlags(context, base), enabled: true });
+    const flagged = withFlags(context, base);
+    if (!flagged.ok) {
+      return flagged;
+    }
+    const checked = checkedAudit({ ...flagged.value, enabled: true });
     if (!checked.ok) {
       return checked;
     }

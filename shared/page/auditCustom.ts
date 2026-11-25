@@ -215,12 +215,9 @@ const BLOCK_ATTRIBUTES = '(?:[^>=]|=>|=(?!>))*(?<!/)>';
  */
 export function markupText(source: string): string {
   assert(source.length <= CUSTOM_MATCH_LIMITS.textCharsMax, 'markupText: the source is inside the text bound');
-  const blank = (part: string): string => part.replace(/[^\n]/g, ' ');
-  const fence = /^(\s*---\r?\n[\s\S]*?\r?\n---)/.exec(source);
-  const withoutFrontmatter = fence === null ? source : `${blank(fence[1] ?? '')}${source.slice((fence[1] ?? '').length)}`;
-  const out = withoutFrontmatter.replace(
+  const out = withoutFrontmatter(source).replace(
     new RegExp(`(<(style|script)\\b${BLOCK_ATTRIBUTES})([\\s\\S]*?)(<\\/\\2\\s*>)`, 'gi'),
-    (_whole, open: string, _name: string, inner: string, close: string) => `${open}${blank(inner)}${close}`,
+    (_whole, open: string, _name: string, inner: string, close: string) => `${open}${blankLines(inner)}${close}`,
   );
   assert(out.length === source.length, 'markupText: offsets are kept');
   return out;
@@ -255,11 +252,28 @@ export function customSegments(file: string, source: string, scope: CustomMatche
     return [];
   }
   const segments: CustomSegment[] = [];
-  for (const block of source.matchAll(new RegExp(`(<style\\b${BLOCK_ATTRIBUTES})([\\s\\S]*?)<\\/style\\s*>`, 'gi'))) {
-    segments.push({ text: block[2] ?? '', offset: block.index + (block[1] ?? '').length });
+  // Read left to right, so whatever opens first holds what follows: a `<style>` written inside a comment or a script is not a
+  // block (the panel reads the parsed page, where it is not one), and a `<!--` inside a block or a script opens no comment.
+  const opened = new RegExp(
+    `<!--[\\s\\S]*?(?:-->|$)|\\{\\/\\*[\\s\\S]*?\\*\\/\\}|<script\\b${BLOCK_ATTRIBUTES}[\\s\\S]*?<\\/script\\s*>|(<style\\b${BLOCK_ATTRIBUTES})([\\s\\S]*?)<\\/style\\s*>`,
+    'gi',
+  );
+  for (const block of withoutFrontmatter(source).matchAll(opened)) {
+    const open = block[1];
+    if (open !== undefined) {
+      segments.push({ text: block[2] ?? '', offset: block.index + open.length });
+    }
   }
   return segments;
 }
+
+// The source with its frontmatter blanked, offsets and line breaks kept.
+function withoutFrontmatter(source: string): string {
+  const fence = /^(\s*---\r?\n[\s\S]*?\r?\n---)/.exec(source)?.[1] ?? '';
+  return `${blankLines(fence)}${source.slice(fence.length)}`;
+}
+
+const blankLines = (part: string): string => part.replace(/[^\n]/g, ' ');
 
 /** A place a scan over files found, for a sample or a CLI answer. */
 export interface CustomFileMatch {

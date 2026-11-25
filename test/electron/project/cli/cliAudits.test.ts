@@ -165,3 +165,33 @@ test('presets lists every preset as a whole audit', async () => {
   assert.ok(presets.length >= 4);
   assert.equal(dig(presets, 0, 'safe'), true);
 });
+
+test('a flag the audit’s scope does not use is refused, not reported as an update', async () => {
+  const root = makeProject(FIXTURE);
+  assert.ok((await runCommand(request(root, ['audits', 'add'], TEXT_ALIGN, 'apply'))).ok);
+  assert.ok((await runCommand(request(root, ['audits', 'add'], { name: 'Notes', scope: 'markup', regex: 'TODO' }, 'apply'))).ok);
+  const before = readText(root, '.stacki/audits.json');
+  const cases: readonly (readonly [Record<string, unknown>, RegExp])[] = [
+    [{ id: 'hard-coded-text-align', regex: 'left' }, /--regex does not apply to a declaration audit/],
+    [{ id: 'notes', property: '^color$' }, /--property does not apply to a markup audit/],
+    [{ id: 'notes', valueMustMatch: 'red' }, /--value-must-match does not apply to a markup audit/],
+    [{ id: 'notes', valueMustNotMatch: 'red' }, /--value-must-not-match does not apply to a markup audit/],
+  ];
+  for (const [args, message] of cases) {
+    const answer = await runCommand(request(root, ['audits', 'update'], args, 'apply'));
+    assert.equal(answer.ok ? 'ok' : answer.error.code, 'invalid-value', JSON.stringify(args));
+    assert.match(answer.ok ? '' : answer.error.message, message);
+  }
+  assert.equal(readText(root, '.stacki/audits.json'), before);
+  // Changing the scope in the same command takes that scope's flags.
+  const moved = await runCommand(request(root, ['audits', 'update'], { id: 'notes', scope: 'declaration', property: '^color$' }, 'apply'));
+  assert.ok(moved.ok, moved.ok ? '' : moved.error.message);
+});
+
+test('an empty --message clears the message', async () => {
+  const root = makeProject(FIXTURE);
+  assert.ok((await runCommand(request(root, ['audits', 'add'], { ...TEXT_ALIGN, message: 'Use a variable.' }, 'apply'))).ok);
+  const cleared = await runCommand(request(root, ['audits', 'update'], { id: 'hard-coded-text-align', message: '' }, 'apply'));
+  assert.ok(cleared.ok, cleared.ok ? '' : cleared.error.message);
+  assert.equal(audits(root)[0]?.message, undefined);
+});
