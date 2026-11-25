@@ -130,6 +130,7 @@
     "electron/preload/frameReveal.ts",
     "electron/preload/frameRevealGlide.ts",
     "electron/preload/frameRevealMath.ts",
+    "electron/preload/frameRichText.ts",
     "electron/preload/frameScrollbar.ts",
     "electron/preload/frameStyleSources.ts",
     "electron/preload/frameText.ts",

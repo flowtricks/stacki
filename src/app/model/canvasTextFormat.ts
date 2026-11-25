@@ -12,7 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { CanvasTextBreaks } from '../../../shared/properties/canvasText';
 import type { EditingSettings } from '../../../shared/properties/componentDefaults';
-import { richTextView } from '../../features/props/richTextContent';
+import { richTextNodes, richTextView, sameRichContent } from '../../features/props/richTextContent';
 import { LIMITS } from '../../../shared/core/limits';
 import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineCandidate, type InlineNode } from '../../features/props/richContentModel';
 import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
@@ -71,6 +71,20 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
         return true;
       }
       return splitIntoParagraphs(nodes, { rootId: content.rootId, children: typed, trail: content.trail }, setInline);
+    },
+    richText: (textId, html) => {
+      const chain = ancestorsOf(nodes, textId);
+      const instance = [...(chain?.ancestors ?? [])].reverse().find((node) => node.kind === 'component');
+      if (instance?.id === undefined || richTextView(html, document).view !== 'rich') {
+        return false;
+      }
+      assert(chain !== undefined, 'An instance was found among the text’s ancestors');
+      const before = sourceOf(instance);
+      if (before !== undefined && sameRichContent(before, html, document)) {
+        return true; // Nothing a reader would see changed: the file keeps its bytes.
+      }
+      setInline(instance.id, richTextNodes(html, document));
+      return true;
     },
   };
 }
@@ -444,6 +458,12 @@ function nodeAtTrail(host: HTMLElement, trail: readonly number[]): ChildNode | u
   return node;
 }
 
+/** What Enter types in one text, and for rich text the instance whose blocks the canvas edits. */
+export interface CanvasTextBreaking {
+  readonly breaks: CanvasTextBreaks;
+  readonly richRoot?: string;
+}
+
 /**
  * What Enter types in each text of a page, keyed by the text's page path, from the editing settings of the component
  * instance it sits in. Rich text applies to the words of a block (a paragraph, a heading, a list item …) directly in
@@ -454,9 +474,9 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
   nodes: readonly Node[],
   pathFor: (id: string) => string | undefined,
   settingsOf: (component: Node) => EditingSettings,
-): ReadonlyMap<string, CanvasTextBreaks> {
-  const breaks = new Map<string, CanvasTextBreaks>();
-  const mark = (node: Node, kind: CanvasTextBreaks, depth: number) => {
+): ReadonlyMap<string, CanvasTextBreaking> {
+  const breaks = new Map<string, CanvasTextBreaking>();
+  const mark = (node: Node, kind: CanvasTextBreaking, depth: number) => {
     assert(depth <= LIMITS.treeDepthMax, 'Marked text sits at a bounded depth');
     if (node.kind === 'text') {
       const path = node.id === undefined ? undefined : pathFor(node.id);
@@ -479,11 +499,12 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
     }
     const settings = settingsOf(node);
     const rich = settings.richText === true && richTextView(sourceOf(node), document).view === 'rich';
+    const richRoot = rich && node.id !== undefined ? pathFor(node.id) : undefined;
     for (const child of node.children ?? []) {
-      if (rich) {
-        markBlock(child, (text) => mark(text, 'rich', 0));
+      if (richRoot !== undefined) {
+        markBlock(child, (text) => mark(text, { breaks: 'rich', richRoot }, 0));
       } else if (settings.lineBreaks === true) {
-        mark(child, 'line', 0);
+        mark(child, { breaks: 'line' }, 0);
       }
     }
   }

@@ -6,7 +6,9 @@
 // Method: real Electron window with the built preload over rendered markup and a catalog whose first target carries
 // `breaks: 'line'`; a real double click opens the editor, real key events type. Boxes are read from layout, the
 // messages from what the frame posts to its host. Every wait polls the state it is about (waitFor), never a sleep.
-// A screenshot of the open editor is written beside the probe for a person to look at.
+// The same window then edits a rich text instance: Enter makes a new paragraph at once, the caret in an empty block
+// asks the host for its `+`, a `+` choice turns the block into a heading, and ⌘/Ctrl Enter posts the instance's HTML
+// without the preview's bookkeeping. Screenshots of both open editors are written beside the probe.
 const fs = require('fs');
 const http = require('http');
 const crypto = require('crypto');
@@ -28,7 +30,7 @@ const check = (what, condition, detail) => {
 };
 
 const PAGE = 'src/pages/index.astro';
-const SOURCE = '<p class="lead">\n  Words of a paragraph\n</p>\n<h2 class="head">A heading</h2>\n';
+const SOURCE = '<p class="lead">\n  Words of a paragraph\n</p>\n<h2 class="head">A heading</h2>\n<RichText><p>Hello world</p><h2>Title</h2></RichText>\n';
 const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420px;margin:20px}.head{width:420px;margin:20px}</style>';
 
 (async () => {
@@ -49,12 +51,24 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
   const paragraph = plans.find((plan) => plan.target.tag === 'p').target;
   const heading = plans.find((plan) => plan.target.tag === 'h2').target;
   const checksum = crypto.createHash('sha256').update(SOURCE).digest('hex');
-  const catalog = { type: 'avb:text-catalog', session: 'one', file: PAGE, checksum, targets: [{ ...paragraph, breaks: 'line' }, heading] };
+  const hello = plans.find((plan) => plan.target.value === 'Hello world').target;
+  const catalog = {
+    type: 'avb:text-catalog',
+    session: 'one',
+    file: PAGE,
+    checksum,
+    targets: [{ ...paragraph, breaks: 'line' }, heading, { ...hello, breaks: 'rich', richRoot: '2' }],
+  };
   const marked = (node, inner) => `<!--avb-s:${node}-->${inner}<!--avb-e:${node}-->`;
   const html =
     `<!doctype html><meta charset=utf-8>${STYLE}<body>${stampComment({ file: PAGE, checksum })}` +
     marked('0', '<p class="lead" data-avb-p="0">\n  Words of a paragraph\n</p>') +
     marked('1', '<h2 class="head" data-avb-p="1">A heading</h2>') +
+    // The rich text component draws its own wrapper and label; the instance's blocks sit beside the label.
+    marked(
+      '2',
+      `<div class="rich" data-astro-cid-x><span class="label">Component label</span>${marked('2.0', '<p data-avb-p="2.0" data-astro-cid-x>Hello world</p>')}${marked('2.1', '<h2 data-avb-p="2.1">Title</h2>')}</div>`,
+    ) +
     '</body>';
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1');
@@ -75,6 +89,7 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
   const catalogFile = path.join(directory, 'catalog.json');
   fs.writeFileSync(catalogFile, JSON.stringify(catalog));
   const shot = path.join(directory, 'editing.png');
+  const richShot = path.join(directory, 'rich.png');
   const probe = path.join(directory, 'probe.js');
   fs.writeFileSync(
     probe,
@@ -90,7 +105,7 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
        const frame = 'document.getElementById("canvas").contentWindow';
        const post = (message) => run(frame + '.postMessage(' + JSON.stringify(message) + ', "*")');
        await win.loadURL('http://127.0.0.1:${port}/host.html');
-       await waitFor({ what: 'the page loaded', read: () => run(frame + '.document.querySelectorAll("p").length'), until: (count) => count === 1 });
+       await waitFor({ what: 'the page loaded', read: () => run(frame + '.document.querySelectorAll("p").length'), until: (count) => count >= 1 });
        await post({ type: 'avb:track', paths: ['0', '1'], scope: '', focus: '', focusOcc: 0 });
        await post(JSON.parse(fs.readFileSync(${JSON.stringify(catalogFile)}, 'utf8')));
        const box = (selector) => run('(() => { const r = ' + frame + '.document.querySelector(' + JSON.stringify(selector) + ').getBoundingClientRect(); return { top: r.top, left: r.left, width: r.width, height: r.height }; })()');
@@ -145,6 +160,26 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
        key('Return');
        await waitFor({ what: 'the heading editor closed on Enter', read: () => run(editorOpen), until: (value) => value === false });
        out.heading = await run(frame + '.document.querySelector("h2").textContent');
+       // Rich text: the caret at the end of "Hello", Enter, typing, a + choice, then ⌘/Ctrl Enter.
+       await open('.rich p');
+       await run('(() => { const d = ' + frame + '.document; const t = [...d.querySelector(".rich p").childNodes].find((n) => n.nodeType === 3); d.getSelection().collapse(t, 5); })()');
+       key('Return');
+       const blocks = () => run('[...' + frame + '.document.querySelector(".rich").children].map((e) => e.tagName + ":" + e.textContent.trim()).join("|")');
+       await waitFor({ what: 'Enter made a paragraph', read: blocks, until: (text) => (text.match(/P:/g) ?? []).length === 2 });
+       out.afterEnter = await blocks();
+       key('End', ['shift']);
+       key('Delete');
+       await waitFor({ what: 'the new paragraph emptied', read: blocks, until: (text) => text.includes('P:|') });
+       await waitFor({ what: 'the + was asked for', read: () => run('JSON.stringify(window.posts.filter((m) => m.type === "avb:rich-plus").at(-1) ?? null)'), until: (text) => /rect/.test(text) });
+       await post({ type: 'avb:rich-block', session: 'one', choice: { kind: 'block', block: 'h3' } });
+       await waitFor({ what: 'the block became a heading', read: blocks, until: (text) => text.includes('H3:') });
+       await win.webContents.insertText('New');
+       await waitFor({ what: 'the heading took words', read: blocks, until: (text) => text.includes('H3:New') });
+       out.afterChoice = await blocks();
+       fs.writeFileSync(${JSON.stringify(richShot)}, (await win.webContents.capturePage()).toPNG());
+       key('Return', [process.platform === 'darwin' ? 'meta' : 'control']);
+       await waitFor({ what: 'the rich editor closed', read: () => run(editorOpen), until: (value) => value === false });
+       out.rich = JSON.parse(await waitFor({ what: 'the rich save arrived', read: () => run('JSON.stringify(window.posts.filter((m) => m.type === "avb:rich-save"))'), until: (text) => text !== '[]' }));
        console.log('RESULT ' + JSON.stringify(out));
        app.quit();
      });`,
@@ -184,6 +219,9 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
       detail,
     );
     check('a text without the setting finishes on Enter, unchanged', reading.heading === 'A heading', detail);
+    check('rich Enter makes a new paragraph at once', reading.afterEnter === 'SPAN:Component label|P:Hello|P:world|H2:Title', detail);
+    check('a + choice turns the empty block into a heading', reading.afterChoice === 'SPAN:Component label|P:Hello|H3:New|H2:Title', detail);
+    check('the save is the instance blocks only, without bookkeeping', reading.rich[0]?.html === '<p>Hello</p><h3>New</h3><h2>Title</h2>', detail);
   }
   if (failures.length) {
     console.error(`canvas-line-break: ${failures.length}/${checked} failed\n${failures.join('\n')}`);

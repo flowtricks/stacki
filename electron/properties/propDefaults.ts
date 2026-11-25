@@ -7,7 +7,7 @@ import type { SchemaField } from '../parse/astroParserTypes';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag, rootComponent } from '../parse/astroParser';
-import { forwardsRest, rendersHtml } from '../parse/astroComponentApi';
+import { forwardsRest, htmlPropsOf, rendersHtml } from '../parse/astroComponentApi';
 import { frontmatterOf } from '../parse/astroFence';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
@@ -142,6 +142,7 @@ export function safeSchema(filePath: string, projectPath: string) {
       hasRest: forwardsRest(source),
       // A `set:html` from a prop: its instances take HTML children through it (rich text editing).
       setHtml: rendersHtml(source),
+      htmlProps: htmlPropsOf(source),
     };
   } catch {
     return {
@@ -153,6 +154,7 @@ export function safeSchema(filePath: string, projectPath: string) {
       rootComponent: undefined,
       hasRest: false,
       setHtml: false,
+      htmlProps: [],
     };
   }
 }
