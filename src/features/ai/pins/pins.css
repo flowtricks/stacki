@@ -37,7 +37,9 @@ button.ai-pin-marker:hover:not(:disabled),
 button.ai-pin-marker:focus-visible,
 button.ai-pin-marker:active:not(:disabled),
 button.ai-pin-marker.is-open,
-button.ai-pin-marker.is-dragging {
+button.ai-pin-marker.is-open:hover:not(:disabled),
+button.ai-pin-marker.is-dragging,
+button.ai-pin-marker.is-dragging:hover:not(:disabled) {
   background: var(--accent-pressed);
   color: #fff;
   opacity: 1;

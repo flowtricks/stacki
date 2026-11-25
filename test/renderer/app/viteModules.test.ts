@@ -71,7 +71,11 @@ import { createServer, type ViteDevServer } from 'vite';
 // 1.4.17 stands at 182: the new boundary parsers (the phone-preview network contract, the Astro copy request) and the
 // outline ownership rule are shared contract modules the renderer links; each is one module a parser or a rule needs, with
 // a little headroom.
-const MODULES_MAX = 190;
+// Comment pins and component defaults, 191 measured (188 before them): the pins channels and a prompt's pin brief are
+// validated by their own contracts (commentPins, over commentPinBrief, which the chat model also reads), and project
+// metadata validates the defaults that name imported files and literals (componentDefaultValues). All three are payload
+// parsers docs/contracts.md requires, with a little headroom.
+const MODULES_MAX = 195;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },
