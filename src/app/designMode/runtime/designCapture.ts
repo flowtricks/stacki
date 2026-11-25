@@ -94,7 +94,7 @@ export async function captureFrame(
   stage.setAttribute('data-design-capture', '');
   stage.style.cssText = 'position:fixed;inset:0;z-index:2147483646;overflow:hidden;background:#fff;pointer-events:none;';
   const frame = document.createElement('iframe');
-  frame.name = DESIGN_SANDBOX_FRAME_NAME;
+  frame.setAttribute('name', DESIGN_SANDBOX_FRAME_NAME);
   frame.setAttribute('sandbox', 'allow-same-origin');
   frame.style.cssText = `position:absolute;left:0;top:0;border:0;width:${String(widthPx)}px;height:${String(viewportHeightPx)}px;transform-origin:0 0;background:#fff;`;
   stage.append(frame);

@@ -1,4 +1,4 @@
-// Design mode (experimental, removable: src/app/designMode/REMOVE.md): the dev server route that renders one
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md): the dev server route that renders one
 // component with props Design mode chose, and writes nothing.
 //
 // POST /__avb/design-render takes { component, props, slots } (shared/designMode/designModeContract.ts) and

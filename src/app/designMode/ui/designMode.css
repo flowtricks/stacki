@@ -1,4 +1,4 @@
-/* Design mode (experimental; src/app/designMode/REMOVE.md). Fills, never outlines, for controls; the app's tokens
+/* Design mode (experimental; docs/design-mode/REMOVE.md). Fills, never outlines, for controls; the app's tokens
    throughout, so both themes follow. Every scroll container keeps a stable gutter. */
 
 .dm-root {

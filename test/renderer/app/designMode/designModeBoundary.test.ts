@@ -1,5 +1,5 @@
 // Goal: Design mode stays removable and can never write. (1) Nothing outside its folders reaches it except the
-// integration points src/app/designMode/REMOVE.md lists, each exactly where it says. (2) Its renderer modules import
+// integration points docs/design-mode/REMOVE.md lists, each exactly where it says. (2) Its renderer modules import
 // only what a sandbox needs: shared contracts, the UI kit, the canvas's read-only request channel, the AI panel's
 // draft and screenshot, and nothing of the editor's edit queue, gestures, saves or IPC writes. (3) It calls no preload
 // method but the menu listener and no `fetch`; the frame's relay fetches only the two read-only routes. (4) What the
@@ -22,7 +22,7 @@ const FILES_MAX = 20_000;
 const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'src/app/shell/AppShell.tsx': 2,
   'electron/preload/preload.ts': 3,
-  'electron/preview/markerConfig.ts': 3,
+  'electron/preview/markerConfig.ts': 2,
 };
 
 function sourceFiles(): readonly string[] {

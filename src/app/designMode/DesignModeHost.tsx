@@ -1,4 +1,4 @@
-// Design mode (experimental; src/app/designMode/REMOVE.md lists how to take it out): where it meets the app.
+// Design mode (experimental; docs/design-mode/REMOVE.md lists how to take it out): where it meets the app.
 //
 // The app mounts this once (src/app/shell/AppShell.tsx, one marked line). Importing it registers the "Design
 // mode" row of the AI composer's canvas modes menu (src/lib/canvasModes.ts). While Design mode is on, this

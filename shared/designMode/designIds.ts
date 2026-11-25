@@ -1,4 +1,4 @@
-// Design mode (experimental, removable: src/app/designMode/REMOVE.md): the ids of its frames and of the elements
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md): the ids of its frames and of the elements
 // of a frame's document, branded so the two never trade places. Validated constructors, which is why they live
 // in shared/ (the layer where an assertion right after validation is allowed).
 

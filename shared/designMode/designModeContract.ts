@@ -1,4 +1,4 @@
-// Design mode (experimental, removable: src/app/designMode/REMOVE.md): the messages the renderer and the
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md): the messages the renderer and the
 // canvas frame exchange, and the body of the dev server's design render route.
 //
 // Design mode never writes. Its frames are copies of the rendered page that live in the renderer; the canvas

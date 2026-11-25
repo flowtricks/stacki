@@ -347,7 +347,7 @@ const { loopbackGuardMiddleware, markCanvasSourceFile, markChunkFile, scanStyleB
 const componentPreviewModule = `,
   `;
 const { componentPreviewPlugin } = require(componentPreviewModule);
-// Design mode (experimental, src/app/designMode/REMOVE.md): its read-only render route, beside the preview helpers.
+// Design mode (experimental, docs/design-mode/REMOVE.md): its read-only render route, beside the preview helpers.
 const { designModeRenderPlugin } = require(require('node:path').join(require('node:path').dirname(componentPreviewModule), 'designMode/designRender.js'));
 const { readPackagePreviews } = require(require('node:path').join(
   require('node:path').dirname(componentPreviewModule), '../lib/componentSources.js'));

@@ -1,4 +1,4 @@
-// Design mode (experimental, removable: src/app/designMode/REMOVE.md): the stylesheet text rewrites a
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md): the stylesheet text rewrites a
 // snapshot needs. Pure string functions and one bounded cache, so a test runs them without a browser.
 
 const URL_PATTERN = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;

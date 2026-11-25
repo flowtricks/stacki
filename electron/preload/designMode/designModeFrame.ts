@@ -1,4 +1,4 @@
-// Design mode (experimental, removable: src/app/designMode/REMOVE.md), the canvas frame's half.
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md), the canvas frame's half.
 //
 // The renderer cannot read the canvas: the page is the dev server's origin and the app is another. So the
 // frame answers three read-only requests, and nothing else (shared/designMode/designModeContract.ts):

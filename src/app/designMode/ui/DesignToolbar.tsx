@@ -1,6 +1,6 @@
 // The floating tool bar at the bottom of the design canvas: Move (V), Text (T), Box (R), Image, Component,
 // Hand (H), and the zoom.
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import TipAnchor from '../../../ui/TipAnchor';
 import { INSTANCE_ATTRIBUTE } from '../model/designPrepare';
@@ -62,6 +62,7 @@ export function DesignToolbar({
   const state = useDesignState();
   const actions = useDesignActions();
   const picker = useRef<HTMLInputElement>(null);
+  const [pickerKey, setPickerKey] = useState(0);
   const components = useMenuTrigger();
   const zoom = useMenuTrigger();
   const addComponent = async (path: string, name: string) => {
@@ -202,16 +203,15 @@ export function DesignToolbar({
       </TipAnchor>
       <input
         ref={picker}
+        key={pickerKey}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
         hidden
         aria-label={words('tool.image')}
         onChange={(event) => {
           onImage(event.currentTarget.files?.[0]);
-          // Cleared, so picking the same file again is heard as a change.
-          if (picker.current !== null) {
-            picker.current.value = '';
-          }
+          // A new input for the next pick, so picking the same file again is heard as a change.
+          setPickerKey((key) => key + 1);
         }}
       />
       <Menu
