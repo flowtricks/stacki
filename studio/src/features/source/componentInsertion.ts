@@ -1,7 +1,8 @@
 import { indentUnitOf } from '../../../vendor/stacki/shared/core/indent';
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { defaultInstance, type InsertionDefaults } from './instanceDefaults';
-import { componentImport, resolveImport, type ComponentImport } from './imports';
+import { componentImport, relativeImport, resolveImport, type ComponentImport } from './imports';
+import { assetBindingName } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 import { insertFragment } from './sourceOperations';
 import { parsePage, type Edit, type TreeAction } from './source';
 
@@ -18,8 +19,12 @@ export function componentInsertionEdits(source: string, action: Insert, file: st
   const imports = insertionImports(parsed.model.imports, file, components);
   const resolved = resolveImport(file, action.importPath, components);
   const rootName = imports.resolve(resolved, action.name, action.importPath);
-  const node = defaultInstance(resolved, settings, (child, name) =>
-    imports.resolve(child, name, componentImport(file, components.find((item) => item.file === child) ?? { file: child })),
+  const node = defaultInstance(
+    resolved,
+    settings,
+    (child, name) => imports.resolve(child, name, componentImport(file, components.find((item) => item.file === child) ?? { file: child })),
+    (asset) => imports.asset(asset),
+    (tag, from) => imports.builtin(tag, from),
   );
   const fragment = node ? serializeNodes([node], indentUnitOf(source)) : action.paired ? `<${rootName}>Text</${rootName}>` : `<${rootName} />`;
   const edits: Edit[] = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
@@ -61,5 +66,21 @@ function insertionImports(
     available.push({ name, path: specifier });
     return name;
   };
-  return { resolve, statements };
+  // An asset default's import, as picking the file writes it: the page's own import of it, else a new relative one.
+  const asset = (target: string) => {
+    const specifier = relativeImport(file, target);
+    return resolve(target, assetBindingName(target, new Set(available.map((item) => item.name))), specifier);
+  };
+  // One of Astro's built-ins, imported by name: the page's own import of it, else a new one under a free name.
+  const builtin = (tag: string, from: string) => {
+    const existing = available.find((item) => !item.typeOnly && item.path === from && item.imported === tag);
+    if (existing) {
+      return existing.name;
+    }
+    const name = assetBindingName(tag, new Set(available.map((item) => item.name)));
+    statements.push(`import { ${name === tag ? tag : `${tag} as ${name}`} } from ${JSON.stringify(from)};`);
+    available.push({ name, path: from, imported: tag });
+    return name;
+  };
+  return { resolve, asset, builtin, statements };
 }

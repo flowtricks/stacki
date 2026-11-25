@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'Impostato da condizioni',
   'componentProps.defaults.discard': 'Annulla modifiche',
   'componentProps.defaults.entryRead': 'Il codice legge {value} da {name} direttamente. Modificalo nel sorgente.',
+  'componentProps.defaults.insertedWithoutAsset': 'Inserito senza {file}, che non è più nel progetto. Reimposta i valori predefiniti di questo componente.',
+  'componentProps.defaults.missingAsset': 'Manca un file predefinito: {file}. Salvando verrà rimosso da questi valori predefiniti.',
   'componentProps.defaults.missingTable': '{name} non ha valori predefiniti per opzione da modificare.',
   'componentProps.defaults.perOption': 'Inizia ogni gruppo con {controller} e un’opzione.',
   'componentProps.defaults.return': 'Torna ai valori predefiniti',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Valori predefiniti salvati in questo progetto.',
   'componentProps.defaults.tableReset':
     'Il componente calcola questo valore predefinito dalla propria tabella: cambia il valore predefinito di ogni opzione nelle condizioni, o la tabella nel sorgente.',
+  'componentProps.defaults.unsupportedChild': '{child} non può far parte dei valori predefiniti. Rimuovilo e salva di nuovo, oppure annulla le modifiche.',
+  'componentProps.defaults.unsupportedValue':
+    '«{prop}» su {tag} non può essere un valore predefinito perché legge il codice della pagina. Scegli un valore fisso, un elenco o un file, oppure annulla le modifiche.',
   'componentProps.dialog.close': 'Chiudi le impostazioni della proprietà',
   'componentProps.dialog.loading': 'Caricamento della proprietà…',
   'componentProps.dialog.title': 'Impostazioni della proprietà',

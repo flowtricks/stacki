@@ -1,4 +1,6 @@
-import { parseDefaultsSource, type DefaultComponent, type DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
+import { parseDefaultsSource, type ComponentDefaults, type DefaultComponent, type DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
+import { defaultAssetUses } from '../../../shared/properties/componentDefaultValues';
+import { resolveAssetImport } from '../../ipc/assetBridge';
 import { starterDefaults } from '../../../shared/properties/componentStarterDefaults';
 import { scanProject } from '../../ipc/bridge';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
@@ -22,7 +24,8 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
         ...(component.setHtml === true ? { setHtml: true } : {}),
         ...(component.htmlProps === undefined ? {} : { htmlProps: component.htmlProps }),
       }));
-      return defaultsSnapshot(stored.source, catalog);
+      const snapshot = defaultsSnapshot(stored.source, catalog);
+      return { ...snapshot, missingAssets: await missingAssetFiles(projectPath, snapshot.config) };
     },
     save: async (snapshot) => {
       const result = await writeMetadata(projectPath, {
@@ -33,6 +36,18 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
       return defaultsSnapshot(result.source, snapshot.catalog);
     },
   };
+}
+
+/** The asset defaults of `config` whose file is not in the project (deleted, or moved by hand). */
+export async function missingAssetFiles(projectPath: string, config: ComponentDefaults): Promise<readonly string[]> {
+  const files = [...new Set(defaultAssetUses(config).map((use) => use.file))];
+  const found = await Promise.all(files.map((file) => assetFileExists(projectPath, file)));
+  return files.filter((_, index) => found[index] !== true);
+}
+
+/** A project file's import from the root resolves only while the file is there. */
+export async function assetFileExists(projectPath: string, file: string): Promise<boolean> {
+  return (await resolveAssetImport(projectPath, `${projectPath}/${file}`, `/${file}`)).ok;
 }
 
 export function defaultsSnapshot(source: string | undefined, catalog: readonly DefaultComponent[]): DefaultsSnapshot {

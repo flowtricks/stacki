@@ -22,6 +22,10 @@ const good = {
       ],
     },
     'src/components/Note.astro': { text: 'Hello' },
+    'src/components/Img.astro': {
+      assets: { src: { file: 'src/assets/art.svg' }, mobile: { file: 'src/assets/art.svg', url: true } },
+      literals: { options: '["a"]', shots: { source: '[a]', imports: { a: 'src/assets/art.svg' } } },
+    },
   },
 };
 
@@ -40,7 +44,7 @@ test('known-bad documents are refused by the registry', () => {
   const bad: ReadonlyArray<readonly [string, unknown, RegExp]> = [
     ['an unknown top-level key', { ...good, recipes: {} }, /unknown key/],
     ['an unknown recipe key', recipe({ prop: {} }), /unknown key/],
-    ['an unknown child key', recipe({ children: [{ element: 'p', tag: 'x' }] }), /unknown key/],
+    ['an unknown child key', recipe({ children: [{ element: 'p', kind: 'x' }] }), /unknown key/],
     ['a wrong version', { version: 2, components: {} }, /expected 1/],
     ['a missing components map', { version: 1 }, /components: required/],
     ['a path that is not a component', { version: 1, components: { 'README.md': {} } }, /is not a component file path/],
@@ -49,6 +53,8 @@ test('known-bad documents are refused by the registry', () => {
     ['an inherit other than false', recipe({ children: [{ component: 'src/components/A.astro', inherit: true }] }), /expected false/],
     ['an invalid element name', recipe({ children: [{ element: 'Div' }] }), /does not match/],
     ['an invalid prop name', recipe({ props: { '1bad': 'x' } }), /is not a prop name/],
+    ['an asset with no file', recipe({ assets: { src: {} } }), /file: required/],
+    ['an asset outside src', recipe({ assets: { src: { file: 'public/a.png' } } }), /does not match/],
     ['too many children', recipe({ children: Array.from({ length: 33 }, () => ({ literal: 'x' })) }), /at most/],
   ];
   for (const [what, document, reason] of bad) {

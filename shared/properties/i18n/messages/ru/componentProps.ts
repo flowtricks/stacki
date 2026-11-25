@@ -47,6 +47,9 @@ export const messages = {
   'componentProps.defaults.conditional': 'Задаётся условиями',
   'componentProps.defaults.discard': 'Отменить изменения',
   'componentProps.defaults.entryRead': 'Код читает {value} из {name} напрямую. Измените это в исходнике.',
+  'componentProps.defaults.insertedWithoutAsset':
+    'Вставлено без {file}: этого файла больше нет в проекте. Задайте значения по умолчанию для компонента заново.',
+  'componentProps.defaults.missingAsset': 'Не найден файл по умолчанию: {file}. При сохранении он будет удалён из этих значений по умолчанию.',
   'componentProps.defaults.missingTable': 'У {name} нет значений по умолчанию для отдельных вариантов.',
   'componentProps.defaults.perOption': 'Начинайте каждую группу с {controller} и одного варианта.',
   'componentProps.defaults.return': 'Вернуть значения по умолчанию',
@@ -54,6 +57,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Значения по умолчанию сохранены в этом проекте.',
   'componentProps.defaults.tableReset':
     'Компонент вычисляет это значение по своей таблице: измените значение каждого варианта в условиях или таблицу в исходнике.',
+  'componentProps.defaults.unsupportedChild': '{child} не может быть частью значений по умолчанию. Удалите и сохраните ещё раз или отмените изменения.',
+  'componentProps.defaults.unsupportedValue':
+    '«{prop}» у {tag} не может быть значением по умолчанию, потому что читает код страницы. Выберите постоянное значение, список или файл либо отмените изменения.',
   'componentProps.dialog.close': 'Закрыть настройки свойства',
   'componentProps.dialog.loading': 'Загрузка свойства…',
   'componentProps.dialog.title': 'Настройки свойства',

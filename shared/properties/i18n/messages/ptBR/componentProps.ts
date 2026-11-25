@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'Definir por condições', // review
   'componentProps.defaults.discard': 'Descartar alterações',
   'componentProps.defaults.entryRead': 'O código lê {value} de {name} diretamente. Altere no código-fonte.', // review
+  'componentProps.defaults.insertedWithoutAsset': 'Inserido sem {file}, que não está mais no projeto. Defina novamente os padrões deste componente.',
+  'componentProps.defaults.missingAsset': 'Falta um arquivo padrão: {file}. Ao salvar, ele será removido destes padrões.',
   'componentProps.defaults.missingTable': '{name} não tem padrões por opção para editar.', // review
   'componentProps.defaults.perOption': 'Comece cada grupo com {controller} e uma opção.', // review
   'componentProps.defaults.return': 'Voltar aos padrões',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Padrões salvos neste projeto.',
   'componentProps.defaults.tableReset':
     'O componente calcula este padrão com a própria tabela: altere o padrão de cada opção nas condições, ou a tabela no código.', // review
+  'componentProps.defaults.unsupportedChild': '{child} não pode fazer parte dos padrões. Remova e salve novamente, ou descarte as alterações.',
+  'componentProps.defaults.unsupportedValue':
+    '“{prop}” em {tag} não pode ser um padrão porque lê o código da página. Escolha um valor fixo, uma lista ou um arquivo, ou descarte as alterações.',
   'componentProps.dialog.close': 'Fechar configurações da propriedade',
   'componentProps.dialog.loading': 'Carregando propriedade…',
   'componentProps.dialog.title': 'Configurações da propriedade',

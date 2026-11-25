@@ -21,6 +21,7 @@ import {
 } from './componentPreviewContext';
 import {
   componentPreviewRecipe,
+  previewModuleSource,
   instanceMarkupNodes,
   instancePreviewRecipe,
   previewDefaultsPath,
@@ -270,7 +271,7 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
           authored = componentPreviewInputs(source, name, instance === undefined ? found.sample : undefined, instance);
         }
       }
-      return 'export default ' + JSON.stringify(previewModuleData(root, file, relative, source, name, authored, projectStyles(), pathAliases(), files)) + ';';
+      return previewModuleSource(previewModuleData(root, file, relative, source, name, authored, projectStyles(), pathAliases(), files), recipe?.code);
     },
   };
 }

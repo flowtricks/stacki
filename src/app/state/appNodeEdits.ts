@@ -54,7 +54,8 @@ import { copiedFile, pasteSourceOf } from '../model/contextPaste';
 import { useContextPaste } from './appContextPaste';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { structuralSelection } from '../model/selectionStructure';
-import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
+import { loadComponentInstance, componentInstancePlacement, resolveInstanceImports } from '../model/componentInstances';
+import { sayMissingAssets } from './missingDefaultAssets';
 import { appShortcutRoute } from '../../features/apps/appsRuntime';
 import { runShortcutCommand } from '../../features/apps/appCommands';
 import { useCoreState } from './appLifecycle';
@@ -138,7 +139,7 @@ export function useAddComponent(
         return;
       }
       void loadComponentInstance(comp, insertables, projectPath)
-        .then((instance) => Promise.all(instance.components.map((component) => resolveImportPath(component.path))))
+        .then((instance) => resolveInstanceImports(instance, projectPath, resolveImportPath))
         .catch(() => undefined);
     },
     [insertables, projectRef, resolveImportPath],
@@ -156,12 +157,7 @@ export function useAddComponent(
       // The palette already leaves a hidden component out; this refuses one asked for another way (a drag, a stale list).
       assertCanAddComponent(currentRole(), comp);
       const instance = await loadComponentInstance(comp, insertables, projectPath);
-      const resolved = await Promise.all(
-        instance.components.map(async (component) => ({
-          component,
-          paths: await resolveImportPath(component.path),
-        })),
-      );
+      const resolved = await resolveInstanceImports(instance, projectPath, resolveImportPath);
       // Import lookup is asynchronous; never apply a pending insertion to a
       // different page or project that was opened while those reads ran.
       if (pageStateRef.current.currentPage?.path !== page.path) {
@@ -186,6 +182,7 @@ export function useAddComponent(
       if (gate?.kind === 'stop') {
         return;
       }
+      sayMissingAssets(instance.missing, translate);
       // Nested defaults and all their imports are one insertion and undo step.
       const landing = gate?.kind === 'place' && gate.moved !== undefined ? gate.target : target;
       const insert = insertGesture(state.model, node, landing, { urgency: true });

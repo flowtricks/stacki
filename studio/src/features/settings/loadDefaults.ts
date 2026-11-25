@@ -1,7 +1,23 @@
-import { scanProject } from '../project/projectServer';
+import { stat } from 'node:fs/promises';
+import { listedPath, scanProject } from '../project/projectServer';
+import { defaultAssetUses } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 import { readMetadataSource } from './projectMetadata';
-import { parseDefaultsSource } from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { parseDefaultsSource, type ComponentDefaults } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
+
+/** The asset defaults whose file is not in the project. */
+async function missingAssetFiles(root: string, config: ComponentDefaults): Promise<readonly string[]> {
+  const files = [...new Set(defaultAssetUses(config).map((use) => use.file))];
+  const found = await Promise.all(
+    files.map((file) =>
+      listedPath(root, file)
+        .then((absolute) => stat(absolute))
+        .then((info) => info.isFile())
+        .catch(() => false),
+    ),
+  );
+  return files.filter((_, index) => found[index] !== true);
+}
 
 export async function loadInsertionDefaults(root: string) {
   const [project, stored] = await Promise.all([scanProject(root), readMetadataSource(root, 'components')]);
@@ -21,5 +37,5 @@ export async function loadInsertionDefaults(root: string) {
   if (!parsed.ok) {
     throw new Error(parsed.error.message);
   }
-  return { config: parsed.value, catalog, imports: project.components };
+  return { config: parsed.value, catalog, imports: project.components, missingAssets: await missingAssetFiles(root, parsed.value) };
 }

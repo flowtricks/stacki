@@ -8,6 +8,7 @@ import { parseSaveSequence } from './saveProtocol';
 import { addCause, causeFromServerError, type AttentionCause } from './attention';
 import { parseMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { receiveSharedPublish } from '../publishing/sharedPublish';
+import { reportActionToast } from '../../../vendor/stacki/src/ui/errorNotices';
 import { getEditorRole, subscribeRole } from '../roles/roleStore';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
 import { occurrenceOf, parsePeer, type Peer } from './presence';
@@ -262,6 +263,8 @@ export class SharedDocument {
         this.receiveSaved(sequence);
       } else if (message['type'] === 'selection') {
         this.receiveSelection(message);
+      } else if (message['type'] === 'notice') {
+        reportActionToast(studioWireText(message), 'warning', []);
       } else if (message['type'] === 'error') {
         this.refuseAction();
         this.error = studioWireText(message);

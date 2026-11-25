@@ -9,6 +9,7 @@ import {
   type ResolvedNode,
 } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { starterDefaults, INSTANCE_HEADING, INSTANCE_PARAGRAPH } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
+import { assetBindingName, defaultAttributes, isFragmentTag, withoutMissingAssets } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 export const HEADING_TEXT = INSTANCE_HEADING;
 export const PARAGRAPH_TEXT = INSTANCE_PARAGRAPH;
 
@@ -31,15 +32,30 @@ const starterCatalog: readonly DefaultComponent[] = starterFiles.map((file) => (
   slotText: false,
 }));
 export interface InsertionDefaults {
+  /** Asset defaults whose file is gone: an insert goes without them. */
+  readonly missingAssets?: readonly string[];
   readonly imports?: readonly ComponentImport[];
   readonly config: ComponentDefaults;
   readonly catalog: readonly DefaultComponent[];
+}
+
+/** The files an insert of `file` leaves out because they are gone. */
+export function leftOutAssets(file: string | undefined, settings: InsertionDefaults | undefined): readonly string[] {
+  if (file === undefined || settings === undefined || !settings.catalog.some((component) => component.file === file)) {
+    return [];
+  }
+  const result = resolveComponentRecipe(file, settings.config, settings.catalog);
+  const gone = new Set(settings.missingAssets);
+  return result.ok ? withoutMissingAssets(result.value, (asset) => !gone.has(asset)).missing : [];
 }
 
 export function defaultInstance(
   file: string | undefined,
   settings: InsertionDefaults | undefined,
   resolve: (file: string, name: string) => string,
+  // The name the page imports an asset default's file under; only a recipe holding files asks.
+  assetImport: (asset: string) => string = (asset) => assetBindingName(asset, new Set()),
+  builtinImport: (tag: string, from: string) => string = (tag) => tag,
 ): ParserNode | undefined {
   const defaults = settings ?? {
     config: starterDefaults(starterCatalog),
@@ -55,28 +71,31 @@ export function defaultInstance(
   const build = (recipe: ResolvedNode, depth: number): ParserNode => {
     assert(depth <= DEFAULT_LIMITS.depthMax, 'Default instance depth is bounded');
     if ('literal' in recipe) {
-      return { kind: 'text', value: recipe.literal };
+      if (recipe.verbatim === undefined) {
+        return { kind: 'text', value: recipe.literal };
+      }
+      return recipe.verbatim.startsWith('<!--') ? { kind: 'comment', value: recipe.verbatim.slice(4, -3) } : { kind: 'expr', value: recipe.verbatim };
     }
     let name: string;
     if ('component' in recipe) {
       const component = defaults.catalog.find((entry) => entry.file === recipe.component);
       assert(component !== undefined, 'Resolved recipe component exists');
       name = resolve(component.file, component.name);
+    } else if (recipe.from !== undefined && recipe.tag !== undefined) {
+      name = builtinImport(recipe.tag, recipe.from);
+    } else if (isFragmentTag(recipe.tag)) {
+      name = 'Fragment';
     } else {
-      name = recipe.element;
+      name = recipe.tag ?? recipe.element;
     }
+    // A Fragment or a built-in is written as a component the project does not hold.
+    const asComponent = 'component' in recipe || recipe.from !== undefined || isFragmentTag(recipe.tag);
+    const shorthand = 'element' in recipe && recipe.tag === '<>' && Object.keys(recipe.props).length === 0;
     return {
-      kind: 'component' in recipe ? 'component' : 'element',
+      kind: asComponent ? 'component' : 'element',
       name,
-      props: Object.fromEntries(
-        Object.entries(recipe.props).map(([name, value]) => [
-          name,
-          {
-            type: typeof value === 'string' ? 'string' : 'expr',
-            value: String(value),
-          },
-        ]),
-      ),
+      ...(shorthand ? { shorthand: true } : {}),
+      props: Object.fromEntries(defaultAttributes(recipe, assetImport)),
       children:
         recipe.content.kind === 'empty'
           ? undefined
@@ -85,5 +104,6 @@ export function defaultInstance(
             : recipe.content.children.map((child) => build(child, depth + 1)),
     };
   };
-  return build(result.value, 0);
+  const gone = new Set(defaults.missingAssets);
+  return build(withoutMissingAssets(result.value, (asset) => !gone.has(asset)).node, 0);
 }

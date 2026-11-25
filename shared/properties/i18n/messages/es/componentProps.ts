@@ -37,6 +37,9 @@ export const messages = {
   'componentProps.defaults.conditional': 'Definir por condiciones', // review
   'componentProps.defaults.discard': 'Descartar cambios',
   'componentProps.defaults.entryRead': 'El código lee {value} de {name} directamente. Cámbialo en el código fuente.', // review
+  'componentProps.defaults.insertedWithoutAsset':
+    'Se insertó sin {file}, que ya no está en el proyecto. Vuelve a definir los valores predeterminados de este componente.',
+  'componentProps.defaults.missingAsset': 'Falta un archivo predeterminado: {file}. Al guardar se quitará de estos valores predeterminados.',
   'componentProps.defaults.missingTable': '{name} no tiene valores predeterminados por opción que editar.', // review
   'componentProps.defaults.perOption': 'Empieza cada grupo con {controller} y una opción.', // review
   'componentProps.defaults.return': 'Volver a los valores predeterminados',
@@ -44,6 +47,10 @@ export const messages = {
   'componentProps.defaults.saved': 'Valores predeterminados guardados en este proyecto.',
   'componentProps.defaults.tableReset':
     'El componente calcula este valor por defecto con su propia tabla: cambia el de cada opción en las condiciones, o la tabla en el código.', // review
+  'componentProps.defaults.unsupportedChild':
+    '{child} no puede formar parte de los valores predeterminados. Quítalo y guarda de nuevo, o descarta los cambios.',
+  'componentProps.defaults.unsupportedValue':
+    '«{prop}» de {tag} no puede ser un valor predeterminado porque lee el código de la página. Elige un valor fijo, una lista o un archivo, o descarta los cambios.',
   'componentProps.dialog.close': 'Cerrar ajustes de la propiedad',
   'componentProps.dialog.loading': 'Cargando propiedad…',
   'componentProps.dialog.title': 'Ajustes de la propiedad',

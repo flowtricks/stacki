@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': '条件で設定',
   'componentProps.defaults.discard': '変更を破棄',
   'componentProps.defaults.entryRead': 'コードは {value} を {name} から直接読み取っています。ソースで変更してください。',
+  'componentProps.defaults.insertedWithoutAsset': '{file} はプロジェクトにないため、除いて挿入しました。このコンポーネントのデフォルトを設定し直してください。',
+  'componentProps.defaults.missingAsset': 'デフォルトのファイルが見つかりません: {file}。保存するとこのデフォルトから削除されます。',
   'componentProps.defaults.missingTable': '{name} には編集できるオプションごとのデフォルトがありません。',
   'componentProps.defaults.perOption': '各グループは {controller} と 1 つのオプションで始めてください。',
   'componentProps.defaults.return': 'デフォルトに戻す',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': 'デフォルトをこのプロジェクトに保存しました。',
   'componentProps.defaults.tableReset':
     'このコンポーネントはこのデフォルトを独自のテーブルから計算しています。条件で各オプションのデフォルトを変更するか、ソースでテーブルを変更してください。',
+  'componentProps.defaults.unsupportedChild': '{child} はデフォルトに含められません。削除してもう一度保存するか、変更を破棄してください。',
+  'componentProps.defaults.unsupportedValue':
+    '{tag} の「{prop}」はページのコードを参照するため、デフォルトにできません。固定値、リスト、またはファイルを選ぶか、変更を破棄してください。',
   'componentProps.dialog.close': 'プロパティ設定を閉じる',
   'componentProps.dialog.loading': 'プロパティを読み込み中…',
   'componentProps.dialog.title': 'プロパティ設定',

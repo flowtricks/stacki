@@ -18,6 +18,7 @@ import {
   type DefaultsSnapshot,
   type ResolvedNode,
 } from '../../../../shared/properties/componentDefaults';
+import { defaultAttributes, elementMarkup, mergeDefaultValues, withoutMissingAssets } from '../../../../shared/properties/componentDefaultValues';
 import type { FrameLength } from '../../../../shared/properties/componentCanvas';
 import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 import { chromeScript, chromeStyles } from './canvasChrome';
@@ -108,37 +109,48 @@ function baseRecipe(input: Pick<CanvasPageInput, 'snapshot' | 'component' | 'fal
 }
 
 function instanceMarkup(input: CanvasPageInput, recipe: ComponentRecipe, frame: CanvasPageFrame, imports: ImportTable): string {
-  const props = Object.fromEntries(Object.entries({ ...recipe.props, ...frame.props }).filter(([name]) => !frame.omitted.has(name)));
+  // A frame's own value replaces the default of that prop, wherever the recipe holds it (an image, a list).
+  const merged = mergeDefaultValues(recipe, { props: frame.props });
+  const shown = <T>(values: Readonly<Record<string, T>> | undefined): Readonly<Record<string, T>> =>
+    Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => !frame.omitted.has(name)));
+  const props = shown(merged.props);
+  const held = { assets: shown(merged.assets), literals: shown(merged.literals) };
   const config: ComponentDefaults = {
     version: 1,
-    components: { ...input.snapshot.config.components, [input.component]: { ...recipe, props } },
+    components: { ...input.snapshot.config.components, [input.component]: { ...recipe, props, ...held } },
   };
   const resolved = resolveComponentRecipe(input.component, config, input.snapshot.catalog);
   // A recipe the resolver refuses (a cycle, a missing child) still draws the component, with its props and no children.
-  const node: ResolvedNode = resolved.ok ? resolved.value : { component: input.component, props, content: { kind: 'empty' } };
-  return renderNode(node, imports, 0);
+  const node: ResolvedNode = resolved.ok ? resolved.value : { component: input.component, props, ...held, content: { kind: 'empty' } };
+  const gone = new Set(input.snapshot.missingAssets);
+  return renderNode(withoutMissingAssets(node, (file) => !gone.has(file)).node, imports, 0);
 }
 
 function renderNode(node: ResolvedNode, imports: ImportTable, depth: number): string {
   assert(depth <= DEFAULT_LIMITS.depthMax, 'A canvas instance has bounded depth');
   if ('literal' in node) {
-    return encodeText(node.literal);
+    return node.verbatim ?? encodeText(node.literal);
   }
-  const name = 'component' in node ? imports.binding(node.component) : node.element;
-  const props = Object.entries(node.props)
-    .map(([key, value]) => renderProp(key, value))
+  const name =
+    'component' in node
+      ? imports.binding(node.component)
+      : node.from !== undefined && node.tag !== undefined
+        ? imports.builtin(node.tag, node.from)
+        : (node.tag ?? node.element);
+  const props = defaultAttributes(node, (file) => imports.asset(file))
+    .map(([key, attribute]) => renderProp(key, attribute))
     .join('');
   if (node.content.kind === 'empty') {
-    return `<${name}${props} />`;
+    return elementMarkup(name, props, undefined);
   }
   const children =
     node.content.kind === 'text' ? encodeText(node.content.text) : node.content.children.map((child) => renderNode(child, imports, depth + 1)).join('');
-  return `<${name}${props}>${children}</${name}>`;
+  return elementMarkup(name, props, children);
 }
 
-function renderProp(name: string, value: DefaultValue): string {
+function renderProp(name: string, attribute: { readonly type: 'string' | 'expr'; readonly value: string }): string {
   assert(/^[A-Za-z_$][\w$:-]*$/.test(name), 'A prop name is an attribute name');
-  return typeof value === 'string' ? ` ${name}="${encodeText(value).replaceAll('"', '&quot;')}"` : ` ${name}={${String(value)}}`;
+  return attribute.type === 'string' ? ` ${name}="${encodeText(attribute.value).replaceAll('"', '&quot;')}"` : ` ${name}={${attribute.value}}`;
 }
 
 function frameMarkup(frame: CanvasPageFrame, instance: string): string {
@@ -178,7 +190,29 @@ function frameMarkup(frame: CanvasPageFrame, instance: string): string {
 // One import per component the frames use, under a name that cannot meet the page's own words.
 class ImportTable {
   private readonly names = new Map<string, string>();
+  private readonly assets = new Map<string, string>();
+  private readonly builtins = new Map<string, string>();
+
+  /** The name one of Astro's built-ins is imported under. */
+  builtin(tag: string, from: string): string {
+    const key = `import { ${tag} as canvas${tag} } from ${JSON.stringify(from)};`;
+    this.builtins.set(key, `canvas${tag}`);
+    assert(this.builtins.size <= DEFAULT_LIMITS.nodesMax, 'A canvas page imports a bounded number of built-ins');
+    return `canvas${tag}`;
+  }
   constructor(private readonly snapshot: DefaultsSnapshot) {}
+
+  /** The name an asset default's file is imported under. */
+  asset(file: string): string {
+    const held = this.assets.get(file);
+    if (held !== undefined) {
+      return held;
+    }
+    const name = 'canvasAsset' + String(this.assets.size);
+    this.assets.set(file, name);
+    assert(this.assets.size <= DEFAULT_LIMITS.storedNodesMax, 'A canvas page imports a bounded number of files');
+    return name;
+  }
 
   binding(file: string): string {
     const held = this.names.get(file);
@@ -198,9 +232,10 @@ class ImportTable {
   }
 
   declarations(): readonly string[] {
-    return [...this.names].map(([file, name]) => {
+    const components = [...this.names].map(([file, name]) => {
       const specifier = this.snapshot.catalog.find((entry) => entry.file === file)?.importPath ?? '../../' + file;
       return `import ${name} from ${JSON.stringify(specifier)};`;
     });
+    return [...components, ...[...this.assets].map(([file, name]) => `import ${name} from ${JSON.stringify('../../' + file)};`), ...this.builtins.keys()];
   }
 }

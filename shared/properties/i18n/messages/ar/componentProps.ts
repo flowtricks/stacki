@@ -51,6 +51,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'يحدده الشروط',
   'componentProps.defaults.discard': 'تجاهل التغييرات',
   'componentProps.defaults.entryRead': 'تقرأ الشيفرة {value} من {name} مباشرة. غيّره في المصدر.',
+  'componentProps.defaults.insertedWithoutAsset': 'تم الإدراج بدون {file} لأنه لم يعد في المشروع. عيّن القيم الافتراضية لهذا المكوّن من جديد.',
+  'componentProps.defaults.missingAsset': 'ملف افتراضي مفقود: {file}. سيؤدي الحفظ إلى إزالته من هذه القيم الافتراضية.',
   'componentProps.defaults.missingTable': 'لا توجد في {name} قيم افتراضية لكل خيار لتحريرها.',
   'componentProps.defaults.perOption': 'ابدأ كل مجموعة بـ {controller} وخيار واحد.',
   'componentProps.defaults.return': 'العودة إلى القيم الافتراضية',
@@ -58,6 +60,9 @@ export const messages = {
   'componentProps.defaults.saved': 'حُفظت القيم الافتراضية في هذا المشروع.',
   'componentProps.defaults.tableReset':
     'يحسب المكوّن هذه القيمة الافتراضية من جدوله الخاص: غيّر القيمة الافتراضية لكل خيار في الشروط، أو غيّر الجدول في المصدر.',
+  'componentProps.defaults.unsupportedChild': 'لا يمكن أن يكون {child} جزءًا من القيم الافتراضية. أزِله واحفظ مرة أخرى، أو تجاهل تغييراتك.',
+  'componentProps.defaults.unsupportedValue':
+    'لا يمكن أن تكون “{prop}” في {tag} قيمة افتراضية لأنها تقرأ من كود الصفحة. اختر قيمة ثابتة أو قائمة أو ملفًا، أو تجاهل تغييراتك.',
   'componentProps.dialog.close': 'إغلاق إعدادات الخاصية',
   'componentProps.dialog.loading': 'جارٍ تحميل الخاصية…',
   'componentProps.dialog.title': 'إعدادات الخاصية',

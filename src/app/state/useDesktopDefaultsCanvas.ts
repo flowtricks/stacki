@@ -7,6 +7,7 @@ import { useDefaultsCanvas } from '../../features/componentDefaults/useDefaultsC
 import { desktopDefaultsHost, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { defaultsCanvasRoute } from '../../../shared/properties/defaultsCanvas';
 import { readPage } from '../../ipc/bridge';
+import { resolveAssetImport } from '../../ipc/assetBridge';
 import type { OpenFile } from '../../editor/pageState';
 import type { useAppScope } from './appComposers';
 
@@ -48,6 +49,10 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
       app.setRightTab('settings');
     },
     read: (session) => readDefaultsCanvas(app, project + '/' + session.file, translate),
+    resolveImport: async (session, specifier) => {
+      const found = await resolveAssetImport(project, project + '/' + session.file, specifier);
+      return found.ok ? found.rel : undefined;
+    },
     leave: async () => {
       const entry = previous.current.stack.at(-1);
       if (entry) {

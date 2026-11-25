@@ -3,6 +3,7 @@ import { checkAuthProvider } from './checkAuth';
 import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
 import { readMetadataSource } from '../src/features/settings/projectMetadata';
 import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefaults';
+import { defaultAssetUses } from '../vendor/stacki/shared/properties/componentDefaultValues';
 import { validateMetadata } from '../vendor/stacki/shared/properties/projectMetadata';
 import { canvasIssues, parseComponentCanvasSource } from '../vendor/stacki/shared/properties/componentCanvas';
 import { EMPTY_KEEP_LIST, parseStyleKeepList } from '../vendor/stacki/shared/properties/styleKeepList';
@@ -15,7 +16,13 @@ export async function checkProject(root: string): Promise<void> {
     validateMetadata('componentSources', sources.source);
   }
   const settings = await loadInsertionDefaults(root);
-  const issues = defaultsIssues(settings.config, settings.catalog);
+  const gone = new Set(settings.missingAssets);
+  const issues = [
+    ...defaultsIssues(settings.config, settings.catalog),
+    ...defaultAssetUses(settings.config)
+      .filter((use) => gone.has(use.file))
+      .map((use) => `.stacki/components.json: ${use.owner} default ${use.prop} imports ${use.file}, which is not in the project.`),
+  ];
   const guide = await readMetadataSource(root, 'guide');
   if (guide.source !== undefined) {
     validateMetadata('guide', guide.source);
