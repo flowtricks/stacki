@@ -209,8 +209,15 @@ test('a command whose processes pass its memory bound is killed and says why', {
   // other gates). The time limit is therefore only a backstop far beyond any stall; which bound fired is read from the message,
   // which only the memory path writes, so the test never races a fixed number of seconds.
   const MEMORY_KILL_WAIT_MS = 120_000;
-  // Touches 400 MB page by page so it is resident, then holds it; the bound is 150 MB.
-  const script = 'const block = Buffer.alloc(400 * 1024 * 1024, 1); setInterval(() => block[0]++, 100);';
+  // Rewrite a byte every 4 KiB so the OS keeps the buffer's pages resident between RSS samples.
+  const script = `
+    const block = Buffer.alloc(400 * 1024 * 1024);
+    setInterval(() => {
+      for (let offset = 0; offset < block.length; offset += 4 * 1024) {
+        block[offset]++;
+      }
+    }, 25);
+  `;
   const greedy = { name: 'greedy', command: process.execPath, argumentsList: ['-e', script], rssBytesMax: 150 * 1024 * 1024, timeoutMs: MEMORY_KILL_WAIT_MS };
   const [outcome] = await runTestPool([greedy], options(1), () => {});
   assert.equal(outcome.passed, false);
