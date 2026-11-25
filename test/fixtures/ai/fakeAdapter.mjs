@@ -13,6 +13,10 @@
 //   hold          keeps the turn open until a steering message or a cancel arrives
 //   unauthorized  an internal error carrying an HTTP 401, as Claude reports an expired login
 //   /compact      compaction_update in_progress then completed ("/compact fail": failed)
+//   <comment-pins> acts as Claude's coordinator for a "Send all" of comment pins: reads the waves the
+//                 instructions give, starts one Agent call per pin titled "Pin <n>: …" (each reading a file
+//                 as its own child, `parentToolUseId`), finishes a wave before starting the next, and says how
+//                 many images and image notes it was given
 // Other methods: `_session/steering` (accepted while a turn is held, `promptRequired` when idle,
 // an error when the text says "refuse"), `session/fork` (answers `fork-of-<source>` with the
 // source's modes), `session/set_mode`.
@@ -171,6 +175,14 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       held = { id, sessionId };
       return;
     }
+    if (text.includes('<comment-pins>')) {
+      runPins(sessionId, params.prompt);
+      for (const word of ['All', ' pins', ' done.']) {
+        update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
+      }
+      send({ id, result: { stopReason: 'end_turn' } });
+      return;
+    }
     const file = text.match(/edit (\S+)/)?.[1];
     if (file !== undefined) {
       update(sessionId, { sessionUpdate: 'tool_call', toolCallId: 'edit1', title: `Edit ${file}`, kind: 'edit', status: 'pending', locations: [{ path: file }] });
@@ -258,4 +270,37 @@ function runCompaction(id, sessionId, text) {
   update(sessionId, { sessionUpdate: 'usage_update', used: 5000, size: 1_000_000 });
   // The turn ends `end_turn` even when compaction failed, as the real adapter's does.
   send({ id, result: { stopReason: 'end_turn' } });
+}
+
+// Claude's coordinator for comment pins, as the instructions ask: one Agent call per pin, wave after wave.
+function runPins(sessionId, prompt) {
+  const text = prompt.find((block) => block.type === 'text')?.text ?? '';
+  const images = prompt.filter((block) => block.type === 'image').length;
+  const notes = prompt.filter((block) => block.type === 'text' && /^Pin \d+, image \d+:/.test(block.text ?? '')).length;
+  update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Got ${images} images and ${notes} notes. ` } });
+  const waves = [...text.matchAll(/Wave \d+: ([^\n]+)/g)].map((match) => [...match[1].matchAll(/pin (\d+)/g)].map((pin) => Number(pin[1])));
+  for (const wave of waves) {
+    for (const number of wave) {
+      update(sessionId, {
+        sessionUpdate: 'tool_call',
+        toolCallId: `agent${number}`,
+        title: `Pin ${number}: Make the change`,
+        kind: 'think',
+        status: 'in_progress',
+        rawInput: { description: `Pin ${number}: Make the change`, subagent_type: 'general-purpose' },
+        _meta: { claudeCode: { toolName: 'Agent' } },
+      });
+      update(sessionId, {
+        sessionUpdate: 'tool_call',
+        toolCallId: `read${number}`,
+        title: 'Read src/pages/index.astro',
+        kind: 'read',
+        status: 'completed',
+        _meta: { claudeCode: { toolName: 'Read', parentToolUseId: `agent${number}` } },
+      });
+    }
+    for (const number of wave) {
+      update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `agent${number}`, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `Pin ${number} changed.` } }] });
+    }
+  }
 }

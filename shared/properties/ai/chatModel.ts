@@ -13,6 +13,7 @@ import type { Brand } from '../../core/brand';
 import { toArray, toRecord } from '../../core/record';
 import { parseAgentId, type AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
+import { PIN_SEND_MODES, parseSentPins, type PinSendMode, type SentPin } from './commentPinBrief';
 import { BUILTIN_CHIP_IDS, SKILL_SOURCES, isProjectRelativePath, isSkillDisplayPath, type BuiltinChipId, type SkillSource } from './mentions';
 
 export type ChatId = Brand<string, 'ChatId'>;
@@ -104,7 +105,9 @@ export type SentPart =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'file'; readonly path: string; readonly truncated: boolean; readonly excerpt: string | undefined }
   | { readonly kind: 'skill'; readonly name: string; readonly source: SkillSource; readonly path: string }
-  | { readonly kind: 'builtin'; readonly id: BuiltinChipId; readonly textHash: string };
+  | { readonly kind: 'builtin'; readonly id: BuiltinChipId; readonly textHash: string }
+  /** Comment pins sent with "Send all" (commentPinBrief.ts): each pin's number, words and names, never the agent's instructions. */
+  | { readonly kind: 'pins'; readonly mode: PinSendMode; readonly pins: readonly SentPin[] };
 
 export type CompactionStatus = 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
@@ -398,6 +401,8 @@ export function parseSentPart(input: unknown): SentPart {
       }
       return { kind: 'builtin', id: oneOf(value['id'], BUILTIN_CHIP_IDS, 'part.id'), textHash };
     }
+    case 'pins':
+      return { kind: 'pins', mode: oneOf(value['mode'], PIN_SEND_MODES, 'part.mode'), pins: parseSentPins(value['pins']) };
     default:
       throw new Error('part.kind: unknown kind');
   }

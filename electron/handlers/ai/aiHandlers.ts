@@ -40,6 +40,7 @@ import {
   type ListResult,
 } from './chatStore';
 import { MentionIndex, listProjectFiles } from './mentionIndex';
+import { PinBoardStore } from './pinBoardStore';
 import { captureScreenshot, cssRectToWindow } from './screenshotCapture';
 import { ScreenRecorder } from './screenRecorder';
 import type { ChatSummary } from '../../../shared/properties/ai/chatModel';
@@ -77,6 +78,12 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   const chats = (): ChatStore => {
     store ??= new ChatStore(path.join(options.userData(), 'ai'));
     return store;
+  };
+  let pinStore: PinBoardStore | undefined;
+  // Beside the project's chats, so a project's private AI state stays in one folder.
+  const pins = (): PinBoardStore => {
+    pinStore ??= new PinBoardStore((projectPath) => chats().projectDirectory(projectPath));
+    return pinStore;
   };
   const agentHost = (): AgentHost => {
     agents ??= new AgentHost({
@@ -209,9 +216,13 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     const root = open(input.projectPath);
     // A steer injects into the running turn (and starts one when none runs); a send is refused while a turn runs.
     if (input.mode === 'steer') {
+      if (input.pins !== undefined) {
+        // Pins start a turn of their own: their instructions assume nothing else is running.
+        return err({ code: 'invalid' as const, ...described('ai.error.pinsSteer') });
+      }
       return agentHost().steer(root, input.chat, input.text, input.attachments, input.parts);
     }
-    return agentHost().prompt(root, input.chat, input.text, input.attachments, { parts: input.parts });
+    return agentHost().prompt(root, input.chat, input.text, input.attachments, { parts: input.parts, pins: input.pins });
   });
   host.ipcMain.handle('ai:steer', (_event, input) => agentHost().steer(open(input.projectPath), input.chat, input.text, input.attachments, input.parts));
   host.ipcMain.handle('ai:autoCompactGet', () => ({ percent: options.autoCompact.get() }));
@@ -220,6 +231,11 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     return { percent: options.autoCompact.get() };
   });
   host.ipcMain.handle('ai:compact', (_event, input) => agentHost().compact(open(input.projectPath), input.chat));
+  host.ipcMain.handle('ai:pinsRead', (_event, input) => ok(pins().read(open(input.projectPath))));
+  host.ipcMain.handle('ai:pinsWrite', (_event, input) => {
+    const saved = pins().write(open(input.projectPath), input.board, input.images);
+    return saved ? ok({ saved: true as const }) : err({ code: 'invalid' as const, ...described('ai.error.pinsTooLarge') });
+  });
   host.ipcMain.handle('ai:chatFork', (_event, input) => {
     const forked = chats().fork(open(input.projectPath), input.chat, Date.now());
     return forked.ok ? ok(summaryOf(forked.value)) : forked;

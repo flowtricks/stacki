@@ -30,6 +30,8 @@ import {
 } from '../properties/ai/chatModel';
 import { parseAutoCompactPercent } from '../properties/ai/autoCompact';
 import { parseRememberAction, parseRememberedSettings, type RememberedSettings } from '../properties/ai/rememberedSettings';
+import { parsePinBrief } from '../properties/ai/commentPinBrief';
+import { parsePinBoardStrict, parsePinImages, type PinBoardRead } from '../properties/ai/commentPins';
 import { parseMentionCandidates, parseMentionKinds, parseMentionQuery, parsePromptParts, type MentionCandidate } from '../properties/ai/mentions';
 import { parseMergeResolution, type MergeResolution } from './mergeResolution';
 import type { WireConflictPart, WireMergeClash } from './ipcWire';
@@ -329,9 +331,22 @@ export const AI_PAYLOADS = {
   }),
   'ai:chatDelete': object({ projectPath, chat }),
   'ai:chatRead': object({ projectPath, chat }),
-  'ai:prompt': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts), mode: optional(promptMode) }),
+  'ai:prompt': object({
+    projectPath,
+    chat,
+    text: prompt,
+    attachments,
+    parts: optional(parsePromptParts),
+    mode: optional(promptMode),
+    // Comment pins sent with "Send all": what the agent is told about each (commentPinBrief.ts).
+    pins: optional(parsePinBrief),
+  }),
   'ai:steer': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts) }),
   'ai:compact': object({ projectPath, chat }),
+  /** The project's comment pins and their images, kept under userData (electron/handlers/ai/pinBoardStore.ts). */
+  'ai:pinsRead': object({ projectPath }),
+  /** Replaces the board whole; `images` are the images not stored yet. An image the board no longer names is removed. */
+  'ai:pinsWrite': object({ projectPath, board: parsePinBoardStrict, images: parsePinImages }),
   /** The saved "Auto-compact at" percentage, if any. */
   'ai:autoCompactGet': object({}),
   /** `percent` undefined: the agent's own default. */
@@ -499,6 +514,8 @@ export interface AiResults {
   readonly 'ai:prompt': Result<{ readonly turn: TurnId }, AiFailure>;
   readonly 'ai:steer': Result<SteerReply, AiFailure>;
   readonly 'ai:compact': Result<{ readonly started: true }, AiFailure>;
+  readonly 'ai:pinsRead': Result<PinBoardRead, AiFailure>;
+  readonly 'ai:pinsWrite': Result<{ readonly saved: true }, AiFailure>;
   readonly 'ai:autoCompactGet': AutoCompactReply;
   readonly 'ai:autoCompactSet': AutoCompactReply;
   readonly 'ai:chatFork': Result<ChatSummary, AiFailure>;
@@ -698,6 +715,14 @@ export function parseSteerReply(input: unknown): SteerReply {
     throw new Error('ai:steer.outcome: unknown outcome');
   }
   return { turn: toTurnId(text(value['turn'])), outcome };
+}
+
+/** The success value of `ai:pinsWrite`. */
+export function parsePinsSaved(input: unknown): { readonly saved: true } {
+  if (record(input)['saved'] !== true) {
+    throw new Error('ai:pinsWrite: expected saved');
+  }
+  return { saved: true };
 }
 
 /** What `ai:autoCompactGet` and `ai:autoCompactSet` answer: the saved percentage, undefined for the agent's default. */

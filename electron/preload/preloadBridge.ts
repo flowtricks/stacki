@@ -440,6 +440,8 @@ function aiBridge() {
     aiPrompt: invoke('ai:prompt'),
     aiSteer: invoke('ai:steer'),
     aiCompact: invoke('ai:compact'),
+    aiPinsRead: invoke('ai:pinsRead'),
+    aiPinsWrite: invoke('ai:pinsWrite'),
     aiAutoCompactGet: invoke('ai:autoCompactGet'),
     aiAutoCompactSet: invoke('ai:autoCompactSet'),
     aiChatFork: invoke('ai:chatFork'),

@@ -19,6 +19,8 @@ export function sentPartsView(parts: readonly SentPart[] | undefined): ReactNode
         return <MentionChipView key={index} chip={{ kind: 'skill', name: part.name, path: part.path }} />;
       case 'builtin':
         return <MentionChipView key={index} chip={{ kind: 'builtin', id: part.id }} />;
+      case 'pins':
+        return undefined; // A message of comment pins is drawn whole by PinsMessage (pins/PinsMessage.tsx), never as a chip.
       default: {
         const exhaustive: never = part;
         return exhaustive;
