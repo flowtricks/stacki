@@ -621,15 +621,22 @@ function buildMenu() {
 }
 
 // ⌘R and ⇧⌘R refresh the site, the same function as the toolbar's refresh button (the renderer owns it), wherever focus is and
-// only while a project is open. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in dev, where the main side is
+// only while a project is open. ⇧⌘R clears the HTTP cache first, so a replaced image or font shows. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in dev, where the main side is
 // bound in at require time and a window reload would keep running old code, and a window reload in a packaged build.
 // electron/app/reloadRouting.ts holds the refresh decision.
 function runReload(command: ReloadCommand): void {
   switch (command) {
-    case 'refreshSite': {
-      const action = routeReload({ previewOpen: openProjectRoot !== undefined });
+    case 'refreshSite':
+    case 'hardRefreshSite': {
+      const action = routeReload({ previewOpen: openProjectRoot !== undefined, hard: command === 'hardRefreshSite' });
       if (action === 'refreshPreview') {
         send('menu:refreshPreview');
+      } else if (action === 'clearCacheAndRefreshPreview') {
+        // A failed clear still refreshes: the person asked for the site, and a soft refresh is the closest thing to it.
+        void session.defaultSession
+          .clearCache()
+          .catch((error: unknown) => console.error('[reload] could not clear the HTTP cache:', error))
+          .finally(() => send('menu:refreshPreview'));
       }
       return;
     }
