@@ -3,9 +3,12 @@
 // green platform; releaseStatus applies the same rule to any run that has shard jobs.
 // Methodology: assessShards and checkJobProblems get built job lists: all green, then each single
 // defect, and a run from before sharding (no shard jobs) that must still be judged as before.
+// A command stub checks that the aggregate reads the right repository, run and attempt.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assessShards, parseShardArguments } from '../../../scripts/release/checkShards.mts';
+import { recordingReporter } from '../../../scripts/release/actionsReport.mts';
+import { assessShards, parseShardArguments, runShardCheck } from '../../../scripts/release/checkShards.mts';
+import { ok } from '../../../scripts/release/releaseResult.mts';
 import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, checkJobProblems, REQUIRED_CHECK_JOBS, shardJobName, staticJobName, staticJobsFor, studioJobName, type CheckJob } from '../../../scripts/release/releaseStatus.mts';
 
 const job = (name: string, conclusion = 'success'): CheckJob => ({ name, status: 'completed', conclusion });
@@ -52,5 +55,47 @@ test('arguments name a known platform, a run and an attempt', () => {
   assert.ok(parseShardArguments(['--os=ubuntu-latest', '--run-id=123', '--attempt=1']).ok);
   for (const bad of [['--os=freebsd', '--run-id=1', '--attempt=1'], ['--os=ubuntu-latest', '--run-id=x', '--attempt=1'], ['--os=ubuntu-latest', '--run-id=1']]) {
     assert.ok(!parseShardArguments(bad).ok, bad.join(' '));
+  }
+});
+
+test('the aggregate queries the repository that owns the workflow run and attempt', () => {
+  const { reporter, report } = recordingReporter();
+  const input = { os: 'ubuntu-latest', runId: '45694269579', attempt: '2' };
+  const exitCode = runShardCheck(
+    input,
+    { GITHUB_REPOSITORY: 'ridala/stacki' },
+    (request) => {
+      assert.deepEqual(request, {
+        command: 'gh',
+        argumentsList: ['run', 'view', '45694269579', '--attempt', '2', '--repo', 'ridala/stacki', '--json', 'jobs'],
+      });
+      return ok(JSON.stringify({ jobs: allShards }));
+    },
+    reporter,
+  );
+  assert.equal(exitCode, 0);
+  assert.deepEqual(report.summaries, ['## test (ubuntu-latest): the static checks and all 4 shards passed']);
+  assert.deepEqual(report.messages, []);
+});
+
+test('the aggregate rejects a missing or malformed workflow repository before calling gh', () => {
+  const input = { os: 'ubuntu-latest', runId: '123', attempt: '1' };
+  for (const repository of [
+    '',
+    'stacki',
+    'https://github.com/ridala/stacki',
+    '-owner/stacki',
+    'ridala/.',
+    'ridala/..',
+    'ridala/stacki\n',
+    `${'a'.repeat(40)}/stacki`,
+    `ridala/${'a'.repeat(101)}`,
+    undefined,
+  ]) {
+    const { reporter, report } = recordingReporter();
+    const environment = repository === undefined ? {} : { GITHUB_REPOSITORY: repository };
+    const exitCode = runShardCheck(input, environment, () => assert.fail('Invalid repository reached gh'), reporter);
+    assert.equal(exitCode, 2);
+    assert.deepEqual(report.messages, ['error: GITHUB_REPOSITORY must name the workflow repository as owner/name.']);
   }
 });
