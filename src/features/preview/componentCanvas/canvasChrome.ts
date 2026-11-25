@@ -42,7 +42,7 @@ stacki-frame-body[data-fixed-height] { overflow-y: clip; }
 stacki-frame-body[data-fixed-width][data-fixed-height] { content-visibility: auto; }
 stacki-frame-body[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px; }
 stacki-frame-body[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px; }
-stacki-frame[data-selected] > stacki-frame-body { box-shadow: 0 0 0 2px #2f80ff; }
+stacki-frame[data-selected] > stacki-frame-body { box-shadow: 0 0 0 calc(2px * var(--stacki-unzoom, 1)) #2f80ff; }
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
@@ -72,6 +72,10 @@ export function chromeScript(id: string): string {
     if (!view) return;
     var transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.scale + ')';
     if (world.style.transform !== transform) world.style.transform = transform;
+    // The selection ring keeps its screen width at every zoom. The labels do not: they are in the frames' layout, so a
+    // label that grew as the view zoomed out would widen the world, and fitting it would zoom out again without end.
+    var unzoom = String(1 / view.scale);
+    if (world.style.getPropertyValue('--stacki-unzoom') !== unzoom) world.style.setProperty('--stacki-unzoom', unzoom);
   }
   function remember() { try { sessionStorage.setItem(KEY, JSON.stringify({ x: view.x, y: view.y, scale: view.scale, moved: moved })); } catch (e) {} post({ event: 'view', scale: view.scale }); }
   function set(next) { view = next; apply(); remember(); }

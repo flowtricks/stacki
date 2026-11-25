@@ -83,12 +83,12 @@ export function frameTakes(component: CanvasComponent, frame: ModelFrame, prop: 
   return unionAllows(unionsOf(component.schema), prop, heldBy(component.schema, frame.parts, frame.props));
 }
 
-/** The value a frame's instance shows for a prop: what it is given, else the component's default. */
-export function shownValue(field: PropField, frame: ModelFrame): DefaultValue | undefined {
+/** The value a frame's instance shows for a prop: its preview value, else the component defaults' value, else the prop's own default. */
+export function shownValue(field: PropField, frame: ModelFrame, defaults: Readonly<Record<string, DefaultValue>>): DefaultValue | undefined {
   if (frame.omitted.has(field.name)) {
     return field.default;
   }
-  return frame.props[field.name] ?? field.default;
+  return frame.props[field.name] ?? defaults[field.name] ?? field.default;
 }
 
 export function splitPartOf(frame: ModelFrame, prop: string): FramePart | undefined {

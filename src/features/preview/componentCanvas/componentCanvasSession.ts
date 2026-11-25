@@ -4,6 +4,7 @@
 import { createContext, useContext } from 'react';
 import type { ComponentCanvasFile, FrameEdit } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
+import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
 
 export interface CanvasOpen {
@@ -18,6 +19,8 @@ export interface CanvasOpen {
   /** Where the panel's edits go: `` all frames, a split value's key, or the selected frame's own key. */
   readonly scope: string;
   readonly scale: number;
+  /** The props the component defaults give an inserted instance: what a frame shows where it sets nothing. */
+  readonly defaults: Readonly<Record<string, DefaultValue>>;
 }
 
 export type CanvasState = { readonly kind: 'idle' } | { readonly kind: 'opening'; readonly component: string } | CanvasOpen;

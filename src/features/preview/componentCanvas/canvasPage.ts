@@ -88,9 +88,16 @@ ${world}
   return source;
 }
 
+/** The props an inserted instance is given (the component defaults), which a frame shows unless it sets its own. */
+export function defaultProps(snapshot: DefaultsSnapshot, component: string, fallbackText: string): Readonly<Record<string, DefaultValue>> {
+  const props = baseRecipe({ snapshot, component, fallbackText }).props ?? {};
+  assert(Object.keys(props).length <= DEFAULT_LIMITS.propsMax, 'Default props are bounded');
+  return props;
+}
+
 // The recipe every frame starts from: the project's own, else the starter one, and text for a default slot that would
 // otherwise be empty, because many components (a button, a modal) render nothing without their slot.
-function baseRecipe(input: CanvasPageInput): ComponentRecipe {
+function baseRecipe(input: Pick<CanvasPageInput, 'snapshot' | 'component' | 'fallbackText'>): ComponentRecipe {
   const own: ComponentRecipe | undefined = input.snapshot.config.components[input.component];
   const recipe: ComponentRecipe = own ?? starterDefaults(input.snapshot.catalog).components[input.component] ?? {};
   const entry = input.snapshot.catalog.find((component) => component.file === input.component);

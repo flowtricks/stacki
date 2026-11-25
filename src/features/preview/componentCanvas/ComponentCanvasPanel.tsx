@@ -255,7 +255,7 @@ function PropsSection({
           <div key={field.name} className={`props-field component-canvas-prop${reason === undefined ? '' : ' is-disabled'}`}>
             <ResetLabel label={field.name} active={active && reason === undefined} onReset={() => canvas.edit({ kind: 'inherit', name: field.name })} />
             <DisabledTip reason={reason}>
-              <PropControl canvas={canvas} field={field} frame={frame} disabled={reason !== undefined} />
+              <PropControl canvas={canvas} field={field} frame={frame} defaults={state.defaults} disabled={reason !== undefined} />
             </DisabledTip>
           </div>
         );
@@ -268,17 +268,19 @@ function PropControl({
   canvas,
   field,
   frame,
+  defaults,
   disabled,
 }: {
   readonly canvas: ComponentCanvasControl;
   readonly field: PropField;
   readonly frame: ModelFrame;
+  readonly defaults: Readonly<Record<string, DefaultValue>>;
   readonly disabled: boolean;
 }) {
   const translate = useTranslate();
   const control = fieldControl(field);
   assert(control !== undefined, 'Only editable props get a control');
-  const shown = shownValue(field, frame);
+  const shown = shownValue(field, frame, defaults);
   const set = (value: DefaultValue) => canvas.edit({ kind: 'prop', name: field.name, value });
   switch (control.kind) {
     case 'choice': {

@@ -149,3 +149,58 @@ test('only well-formed messages from this canvas are heard', () => {
   assert.equal(chrome.canvasMessage(undefined, ID), undefined);
   assert.equal(chrome.canvasMessage('select', ID), undefined);
 });
+
+test('every frame renders the component defaults: props, text and nested children with their own defaults', () => {
+  const CARD = 'src/components/Card.astro';
+  const ACTION = 'src/components/Action.astro';
+  const card = {
+    file: CARD,
+    name: 'Card',
+    schema: [
+      { name: 'variant', type: 'enum', optional: true, options: ['default', 'cover'], default: 'default' },
+      { name: 'heading', type: 'string', optional: true },
+    ],
+  };
+  const defaults = {
+    catalog: [
+      { file: CARD, name: 'Card', props: ['variant', 'heading'], slots: ['default', 'footer'], slotText: false },
+      { file: ACTION, name: 'Action', props: ['emphasis'], slots: ['default'], slotText: true },
+    ],
+    config: {
+      version: 1,
+      components: {
+        [CARD]: {
+          props: { heading: 'From defaults' },
+          children: [
+            { element: 'p', text: 'Body copy' },
+            { component: ACTION, props: { slot: 'footer' } },
+          ],
+        },
+        [ACTION]: { props: { emphasis: 'secondary' }, text: 'Read more' },
+      },
+    },
+  };
+  const layout = model.buildCanvasLayout(card, { frames: { 'variant=cover': { props: { heading: 'Cover heading' } } } });
+  const source = page.canvasPageSource({
+    id: ID,
+    component: CARD,
+    fallbackText: 'Card',
+    theme: 'dark',
+    snapshot: defaults,
+    frames: layout.frames.map((frame) => ({
+      key: frame.key,
+      label: frame.key,
+      row: frame.row,
+      props: frame.props,
+      omitted: frame.omitted,
+      width: 'hug',
+      height: 'hug',
+      background: undefined,
+    })),
+  });
+  const children = '<p>Body copy</p><ActionCanvas1 emphasis="secondary" slot="footer">Read more</ActionCanvas1>';
+  assert.ok(source.includes(`<CardCanvas0 heading="From defaults" variant="default">${children}</CardCanvas0>`), 'defaults, nested recipe and named slot');
+  assert.ok(source.includes(`<CardCanvas0 heading="Cover heading" variant="cover">${children}</CardCanvas0>`), 'a preview value wins over the default');
+  assert.doesNotMatch(source, />Card</, 'no placeholder when defaults are configured');
+  assert.equal(parsePage(source).editable, true);
+});

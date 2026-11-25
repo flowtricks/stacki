@@ -21,10 +21,10 @@ import type { DefaultComponent, DefaultsSnapshot } from '../../../shared/propert
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { LIMITS } from '../../../shared/core/limits';
 import { parsePageSource, writeText } from '../../ipc/bridge';
-import { createDefaultsCanvas, readMetadata, removeDefaultsCanvas, writeMetadata } from '../../ipc/projectMetadataBridge';
+import { createDefaultsCanvas, onMetadataWrite, readMetadata, removeDefaultsCanvas, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { defaultsSnapshot, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { buildCanvasLayout, type CanvasComponent } from '../../features/preview/componentCanvas/canvasModel';
-import { canvasPageSource, CANVAS_ROOT_TAG } from '../../features/preview/componentCanvas/canvasPage';
+import { canvasPageSource, CANVAS_ROOT_TAG, defaultProps } from '../../features/preview/componentCanvas/canvasPage';
 import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentCanvas/canvasChrome';
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
@@ -160,7 +160,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
 
   const catalog = useRef<readonly DefaultComponent[]>([]);
   catalog.current = useMemo(() => catalogOf(project, app.scan), [project, app.scan]);
-  useCanvasPageWrites(state, writes, catalog, { project, translate });
+  useCanvasPageWrites(state, writes, catalog, { project, translate, setState });
   useCanvasMessages(state, setState, app);
   useLiveSchema(state, app.scan, setState);
   useLeaveWhenAway(state, app, origin, finish);
@@ -175,7 +175,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       selectFrame: (key) => {
         const current = stateRef.current;
         if (current.kind === 'open' && current.layout.frames.some((frame) => frame.key === key)) {
-          setState({ ...current, frame: key, scope: current.scope === current.frame ? key : current.scope });
+          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key) });
         }
       },
       setScope: (scope) => {
@@ -195,6 +195,15 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
     }),
     [app.project.path, finish, open, state, update],
   );
+}
+
+// The scope when another frame is selected: "this frame" follows the selection, a wider scope stays while the new frame
+// is in it, and otherwise the new frame itself.
+function scopeAfterSelect(current: CanvasOpen, key: string): string {
+  if (current.scope === current.frame) {
+    return key;
+  }
+  return scopeStillFits(current.scope, key, current.layout) ? current.scope : key;
 }
 
 // A scope is the selected frame, every frame, or one split value the selected frame shows.
@@ -259,7 +268,17 @@ async function openCanvas(
     app.setRightTab('settings');
     const first = layout.frames[0]?.key ?? '';
     return {
-      state: { kind: 'open', id, component, settings: parsed.value, layout, frame: first, scope: first, scale: 1 },
+      state: {
+        kind: 'open',
+        id,
+        component,
+        settings: parsed.value,
+        layout,
+        frame: first,
+        scope: first,
+        scale: 1,
+        defaults: defaultProps(snapshot, file, prettyComponentName(component.name)),
+      },
       origin,
       base: stored.source,
       page,
@@ -358,10 +377,14 @@ function useCanvasPageWrites(
   state: CanvasState,
   writes: React.MutableRefObject<Writes>,
   catalog: React.MutableRefObject<readonly DefaultComponent[]>,
-  context: { readonly project: string; readonly translate: Translator },
+  context: { readonly project: string; readonly translate: Translator; readonly setState: React.Dispatch<React.SetStateAction<CanvasState>> },
 ): void {
   const open = state.kind === 'open' ? state : undefined;
-  const { project, translate } = context;
+  const { project, translate, setState } = context;
+  // Component defaults saved while the canvas is open (Set component defaults, a nested component's recipe) change
+  // what the frames' instances are given, so the page is written again from the file, never from a copy of it.
+  const [defaultsVersion, setDefaultsVersion] = useState(0);
+  useEffect(() => onMetadataWrite(() => setDefaultsVersion((version) => version + 1)), []);
   useEffect(() => {
     if (open === undefined) {
       return undefined;
@@ -371,7 +394,12 @@ function useCanvasPageWrites(
     held.pageTimer = setTimeout(() => {
       void (async () => {
         const components = await readMetadata(project, 'components');
-        const page = pageSourceOf(open.id, open.component, open.layout, defaultsSnapshot(components.source, catalog.current), translate);
+        const snapshot = defaultsSnapshot(components.source, catalog.current);
+        const defaults = defaultProps(snapshot, open.component.file, prettyComponentName(open.component.name));
+        if (JSON.stringify(defaults) !== JSON.stringify(open.defaults)) {
+          setState((current) => (current.kind === 'open' && current.id === open.id ? { ...current, defaults } : current));
+        }
+        const page = pageSourceOf(open.id, open.component, open.layout, snapshot, translate);
         if (page !== held.page) {
           held.page = page;
           await writeText(project, pageFileOf(open.id), page);
@@ -379,7 +407,7 @@ function useCanvasPageWrites(
       })().catch((error: unknown) => console.warn('Could not update the component canvas page:', error));
     }, CANVAS_TIMING.pageDelayMs);
     return () => clearTimeout(held.pageTimer);
-  }, [catalog, open, project, translate, writes]);
+  }, [catalog, defaultsVersion, open, project, setState, translate, writes]);
 }
 
 // Messages from the canvas page: which frame a press landed in, the zoom, and that it is ready for the selection.
@@ -400,7 +428,7 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
         const key = message.frame;
         setState((current) =>
           current.kind === 'open' && current.layout.frames.some((candidate) => candidate.key === key)
-            ? { ...current, frame: key, scope: current.scope === current.frame ? key : current.scope }
+            ? { ...current, frame: key, scope: scopeAfterSelect(current, key) }
             : current,
         );
         if (message.chrome) {
