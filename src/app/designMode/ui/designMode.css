@@ -10,6 +10,11 @@
 .dm-root > * {
   pointer-events: auto;
 }
+/* A chat expanded over the editor stays above the cover: it holds the Modes menu, and collapsing it shows the
+   design canvas beside the docked chat. A floating chat is already above. */
+.app:has([data-design-mode]) .dockable-window.ai-frame.is-expanded {
+  z-index: 241;
+}
 
 .dm-topbar.titlebar {
   position: absolute;

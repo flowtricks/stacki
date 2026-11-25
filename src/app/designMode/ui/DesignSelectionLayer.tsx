@@ -4,7 +4,7 @@
 // size on screen at any zoom.
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { FlowDrop } from '../model/designDrop';
-import { RESIZE_HANDLES, type Box, type GapHint, type ResizeHandle, type SnapGuide } from '../model/designSnap';
+import { RESIZE_HANDLES, handlePlace, type Box, type GapHint, type ResizeHandle, type SnapGuide } from '../model/designSnap';
 import type { DesignFrameRecord, FrameId } from '../model/designTypes';
 import { designState, selectedElements, useDesignState } from '../runtime/designSession';
 
@@ -97,10 +97,8 @@ function rectStyle(box: Box, borderPx: number): React.CSSProperties {
 }
 
 function handleStyle(box: Box, handle: ResizeHandle, scale: number): React.CSSProperties {
-  const size = 8 / scale;
-  const x = handle.includes('w') ? box.xPx : handle.includes('e') ? box.xPx + box.widthPx : box.xPx + box.widthPx / 2;
-  const y = handle.includes('n') ? box.yPx : handle.includes('s') ? box.yPx + box.heightPx : box.yPx + box.heightPx / 2;
-  return { left: x - size / 2, top: y - size / 2, width: size, height: size, borderWidth: 1 / scale };
+  const place = handlePlace(box, handle, scale);
+  return { left: place.xPx, top: place.yPx, width: place.widthPx, height: place.heightPx, borderWidth: 1 / scale };
 }
 
 function sizeLabelStyle(box: Box, scale: number): React.CSSProperties {

@@ -82,6 +82,11 @@ const MODES_MENU_ORDER = 20;
 
 function pageOf(app: DesignHostSource, words: DesignWords): DesignPage | undefined {
   const current = app.currentPage;
+  // The component defaults editor shows a scratch page under .stacki/ (a component on the canvas is no page either):
+  // there is no page to copy, and covering the editor would hide its Close button.
+  if (current?.path?.includes('/.stacki/') === true) {
+    return undefined;
+  }
   if (current === undefined || app.pageUrlPath === undefined || current.kind !== 'page') {
     return current?.kind === 'route' ? { projectPath: app.project.path, file: undefined, route: current.route, title: current.name } : undefined;
   }

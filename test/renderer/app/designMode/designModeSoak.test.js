@@ -170,6 +170,8 @@ async function runInElectron({ window, project, options }) {
   /** Opens the AI panel header's Modes menu and picks the row matching `name`. */
   const pickMode = async (name) => {
     await until('the Modes button', `!!document.querySelector('.ai-modes-button')`);
+    // A menu just chosen from is still closing: a click on the button in the same moment is taken as part of it.
+    await driver.settle();
     await driver.evaluate(`document.querySelector('.ai-modes-button').click()`);
     await until(`the ${name.source} row`, `!!${modeRow(name)}`);
     await driver.evaluate(`${modeRow(name)}.click()`);

@@ -176,3 +176,24 @@ export function resizeBox(start: Box, handle: ResizeHandle, dxPx: number, dyPx: 
   const yPx = handle.includes('n') ? start.yPx + start.heightPx - heightPx : start.yPx;
   return { xPx, yPx, widthPx, heightPx };
 }
+
+/** A resize handle's side, in screen pixels. */
+const HANDLE_SCREEN_PX = 8;
+/** A selection narrower or lower than this on screen keeps its handles outside: three handles' room, so its middle stays free. */
+const HANDLE_ROOM_SCREEN_PX = HANDLE_SCREEN_PX * 3;
+
+/**
+ * Where a handle is drawn, in canvas pixels: centred on its corner or side, so it stays the same size on screen at
+ * any zoom. On a selection too small on screen for that, it sits just outside instead: centred ones would cover
+ * the element, and a drag started on it would resize rather than move (a line of text at fit-all zoom).
+ */
+export function handlePlace(box: Box, handle: ResizeHandle, scale: number): Box {
+  const size = HANDLE_SCREEN_PX / scale;
+  const along = (startPx: number, lengthPx: number, side: -1 | 0 | 1): number => {
+    const outside = lengthPx * scale < HANDLE_ROOM_SCREEN_PX ? (side * size) / 2 : 0;
+    return startPx + (lengthPx * (side + 1)) / 2 + outside - size / 2;
+  };
+  const sideX = handle.includes('w') ? -1 : handle.includes('e') ? 1 : 0;
+  const sideY = handle.includes('n') ? -1 : handle.includes('s') ? 1 : 0;
+  return { xPx: along(box.xPx, box.widthPx, sideX), yPx: along(box.yPx, box.heightPx, sideY), widthPx: size, heightPx: size };
+}

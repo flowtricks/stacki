@@ -314,3 +314,18 @@ test('hand-off notes are one bounded line that says what the pictures are', () =
   assert.match(note, /nothing was saved/);
   assert.match(note, /3 changes, described with the close-ups that follow/);
 });
+
+test('handles sit on a large selection and just outside a small one, whose middle stays free to drag', () => {
+  const large = { xPx: 100, yPx: 100, widthPx: 400, heightPx: 200 };
+  assert.deepEqual(snap.handlePlace(large, 'nw', 0.5), { xPx: 92, yPx: 92, widthPx: 16, heightPx: 16 });
+  assert.deepEqual(snap.handlePlace(large, 's', 0.5), { xPx: 292, yPx: 292, widthPx: 16, heightPx: 16 });
+  // A 20 px line at 40% is 8 px high on screen.
+  const line = { xPx: 100, yPx: 100, widthPx: 400, heightPx: 20 };
+  for (const handle of snap.RESIZE_HANDLES) {
+    const place = snap.handlePlace(line, handle, 0.4);
+    const coversMiddle = place.yPx < 110 && place.yPx + place.heightPx > 110 && place.xPx < 500 && place.xPx + place.widthPx > 100;
+    assert.equal(handle === 'e' || handle === 'w' ? false : coversMiddle, false, handle);
+  }
+  assert.equal(snap.handlePlace(line, 'n', 0.4).yPx + 20, 100, 'the north handle ends where the line starts');
+  assert.equal(snap.handlePlace(line, 's', 0.4).yPx, 120, 'the south handle starts where the line ends');
+});
