@@ -1,5 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { FilesTab } from './DesktopFiles';
+import { FilesKeeper } from '../../features/files/FilesKeeper';
 import { DesktopPageSettings } from './PageSettingsDesktop';
 import { CanvasTextFormatBar } from './CanvasTextFormatBar';
 import { CanvasTextSourceCue } from './CanvasTextSourceCue';
@@ -174,6 +175,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
             </div>
           )}
         </div>
+        {/* Reads the project's files ahead and keeps them current, so the Files panel opens on its tree. */}
+        {canRailTab(role, 'files') && <FilesKeeper key={projectPath} projectPath={projectPath} />}
         <AppOverlays app={app} />
         <AuditsHost app={app} />
         <AiHost app={app} />

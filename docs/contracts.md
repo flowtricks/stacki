@@ -3036,4 +3036,10 @@ collision, and for `filesystem` the system's error code; never a path or file co
   tags, `.stacki/components.json` recipe keys, roles); both keep their own Undo. Every other move is plain: no code is
   rewritten. Plain renames and moves record an Undo step that moves the entries back (refused, never forced, when the
   old name was taken meanwhile).
+- **Ready before it opens.** The app shell mounts `FilesKeeper.tsx` for the open project whenever the role may use the
+  panel. It reads the root and the folders left open (never a closed one, so `node_modules` stays unread), follows them
+  with `files:watch` while the panel is closed too, reads them again on `files:changed` and on window return, and reads
+  a folder again when it is opened, keeping the held listing on screen. So the panel's first frame is the tree. A
+  `files:list` that rejects, refuses or does not answer in 10 s is a failure: no placeholder rows stay, the open panel
+  says so in a toast and offers Refresh (a listing already held stays on screen).
 - **Access.** The panel follows `code:edit` (`src/lib/roleAccess.ts`). Its shortcut is ⌥F. Studio has no Files panel yet.

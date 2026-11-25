@@ -59,6 +59,7 @@ export const messages = {
   'workspace.files.error.notText': '{name}은(는) UTF-8 텍스트가 아니므로 저장되지 않습니다',
   'workspace.files.error.outside': '{name}은(는) 프로젝트 밖으로 연결됩니다',
   'workspace.files.error.protected': '{name}은(는) 여기에서 읽기 전용입니다. Git과 Stacki가 관리합니다',
+  'workspace.files.error.read': '{name}을(를) 읽을 수 없습니다',
   'workspace.files.error.tooLarge': '한 번에 복사할 수 있는 양을 넘습니다',
   'workspace.files.error.tooMany': '{name}의 복사본에 쓸 수 있는 이름이 없습니다',
   'workspace.files.find': '이름으로 파일 찾기',

@@ -59,6 +59,7 @@ export const messages = {
   'workspace.files.error.notText': '{name}はUTF-8のテキストではないため、保存されません',
   'workspace.files.error.outside': '{name}はプロジェクトの外を指しています',
   'workspace.files.error.protected': '{name}はここでは読み取り専用です。GitとStackiが管理しています',
+  'workspace.files.error.read': '{name}を読み込めませんでした',
   'workspace.files.error.tooLarge': '1回のコピーで扱える量を超えています',
   'workspace.files.error.tooMany': '{name}のコピーに使える名前が残っていません',
   'workspace.files.find': '名前でファイルを検索',

@@ -62,6 +62,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} — не текст UTF-8, поэтому он не сохраняется',
   'workspace.files.error.outside': '{name} ведёт за пределы проекта',
   'workspace.files.error.protected': '{name} здесь только для чтения: им управляют Git и Stacki',
+  'workspace.files.error.read': 'Не удалось прочитать {name}',
   'workspace.files.error.tooLarge': 'Это больше, чем может вместить одна копия',
   'workspace.files.error.tooMany': 'Для копии {name} не осталось свободных имён',
   'workspace.files.find': 'Найти файл по имени',

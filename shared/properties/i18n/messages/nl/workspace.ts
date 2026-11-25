@@ -60,6 +60,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} is geen UTF-8-tekst en wordt daarom niet opgeslagen',
   'workspace.files.error.outside': '{name} leidt buiten het project',
   'workspace.files.error.protected': '{name} is hier alleen-lezen: Git en Stacki beheren het',
+  'workspace.files.error.read': 'Kan {name} niet lezen',
   'workspace.files.error.tooLarge': 'Dat is meer dan één kopie mag bevatten',
   'workspace.files.error.tooMany': 'Er is geen vrije naam meer voor een kopie van {name}',
   'workspace.files.find': 'Bestand op naam zoeken',

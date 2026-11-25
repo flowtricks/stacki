@@ -61,6 +61,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} אינו טקסט UTF-8, ולכן לא נשמר',
   'workspace.files.error.outside': '{name} מוביל אל מחוץ לפרויקט',
   'workspace.files.error.protected': '{name} לקריאה בלבד כאן: Git ו-Stacki מנהלים אותו',
+  'workspace.files.error.read': 'לא ניתן לקרוא את {name}',
   'workspace.files.error.tooLarge': 'זה יותר ממה שעותק אחד יכול להכיל',
   'workspace.files.error.tooMany': 'לא נשאר שם פנוי לעותק של {name}',
   'workspace.files.find': 'חיפוש קובץ לפי שם',

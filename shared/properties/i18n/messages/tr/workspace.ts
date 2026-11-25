@@ -60,6 +60,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} UTF-8 metni değil, bu yüzden kaydedilmiyor',
   'workspace.files.error.outside': '{name} projenin dışına çıkıyor',
   'workspace.files.error.protected': '{name} burada salt okunur: onu Git ve Stacki yönetir',
+  'workspace.files.error.read': '{name} okunamadı',
   'workspace.files.error.tooLarge': 'Bu, tek bir kopyanın alabileceğinden fazla',
   'workspace.files.error.tooMany': '{name} kopyası için boş ad kalmadı',
   'workspace.files.find': 'Ada göre dosya bul',

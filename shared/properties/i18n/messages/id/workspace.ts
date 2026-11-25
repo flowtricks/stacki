@@ -59,6 +59,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} bukan teks UTF-8, jadi tidak disimpan',
   'workspace.files.error.outside': '{name} mengarah ke luar proyek',
   'workspace.files.error.protected': '{name} hanya baca di sini: dikelola oleh Git dan Stacki',
+  'workspace.files.error.read': 'Tidak dapat membaca {name}',
   'workspace.files.error.tooLarge': 'Itu melebihi muatan satu salinan',
   'workspace.files.error.tooMany': 'Tidak ada lagi nama kosong untuk salinan {name}',
   'workspace.files.find': 'Cari file berdasarkan nama',

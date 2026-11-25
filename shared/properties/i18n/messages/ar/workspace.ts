@@ -64,6 +64,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} ليس نصًا بترميز UTF-8، لذا لا يُحفظ',
   'workspace.files.error.outside': 'يؤدي {name} إلى خارج المشروع',
   'workspace.files.error.protected': '{name} للقراءة فقط هنا: يتولاه Git وStacki',
+  'workspace.files.error.read': 'تعذّرت قراءة {name}',
   'workspace.files.error.tooLarge': 'هذا أكثر مما تتسع له نسخة واحدة',
   'workspace.files.error.tooMany': 'لم يتبقَّ اسم متاح لنسخة من {name}',
   'workspace.files.find': 'البحث عن ملف بالاسم',

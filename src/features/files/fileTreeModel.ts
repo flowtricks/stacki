@@ -38,6 +38,8 @@ export type TreeRow =
 export interface TreeShape {
   readonly listings: ReadonlyMap<ExplorerPath, ExplorerListing>;
   readonly open: ReadonlySet<ExplorerPath>;
+  /** Folders whose read failed: they are not shown as still loading. */
+  readonly failed?: ReadonlySet<ExplorerPath>;
 }
 
 /** The rows on screen: the root's entries, and inside every open folder its entries, depth first. */
@@ -73,7 +75,7 @@ export function visibleRows(shape: TreeShape): readonly TreeRow[] {
       entryKind: entry.kind,
       depth: frame.depth,
       open,
-      loading: open === true && listing === undefined,
+      loading: open === true && listing === undefined && shape.failed?.has(path) !== true,
       protected: isProtectedPath(path),
     });
     if (listing !== undefined) {

@@ -62,6 +62,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} to nie tekst UTF-8, więc nie jest zapisywany',
   'workspace.files.error.outside': '{name} prowadzi poza projekt',
   'workspace.files.error.protected': '{name} jest tu tylko do odczytu: zajmują się nim Git i Stacki',
+  'workspace.files.error.read': 'Nie udało się odczytać: {name}',
   'workspace.files.error.tooLarge': 'To więcej, niż może pomieścić jedna kopia',
   'workspace.files.error.tooMany': 'Nie ma już wolnej nazwy dla kopii {name}',
   'workspace.files.find': 'Znajdź plik po nazwie',

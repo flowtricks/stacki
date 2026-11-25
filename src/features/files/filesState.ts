@@ -1,7 +1,7 @@
 // What the Files panel remembers per project while the app runs: the folder listings read so far, the open folders,
 // the selection, the file in the editor and whether it holds unsaved text, and the panel's cut or copy. Kept outside
-// the panel because only the open left panel is mounted (AppShell.tsx, LeftPanel): switching to another panel and back
-// paints the tree as it was in the first frame, then reads again in place (docs/ui-loading.md).
+// the panel because only the open left panel is mounted (AppShell.tsx, LeftPanel): FilesKeeper.tsx fills it from the
+// moment the project opens and keeps it current, so the panel paints the tree in its first frame (docs/ui-loading.md).
 //
 // Bounds: listings for at most `LISTINGS_MAX` folders per project (the least recently read go first), state for at
 // most `PROJECTS_MAX` projects, and at most `watchDirectoriesMax` open folders remembered in browser storage.
@@ -20,6 +20,8 @@ export interface FilesClipboard {
 
 export interface FilesView {
   readonly listings: ReadonlyMap<ExplorerPath, ExplorerListing>;
+  /** Folders whose last read failed or went unanswered; a listing already held stays on screen. */
+  readonly failed: ReadonlySet<ExplorerPath>;
   readonly open: ReadonlySet<ExplorerPath>;
   readonly selected: ReadonlySet<ExplorerPath>;
   readonly focused: ExplorerPath | undefined;
@@ -35,6 +37,7 @@ const listeners = new Set<() => void>();
 function emptyView(projectPath: string): FilesView {
   return {
     listings: new Map(),
+    failed: new Set(),
     open: readOpen(projectPath),
     selected: new Set(),
     focused: undefined,
@@ -84,6 +87,11 @@ export function useFilesView(projectPath: string): FilesView {
 
 /** The view with a folder's listing stored, the oldest listings dropped past the bound. */
 export function withListing(view: FilesView, listing: ExplorerListing): FilesView {
+  const held = view.listings.get(listing.path);
+  // A background read that found nothing new changes nothing, so nothing is drawn again.
+  if (held !== undefined && sameListing(held, listing) && !view.failed.has(listing.path)) {
+    return view;
+  }
   const listings = new Map(view.listings);
   listings.delete(listing.path);
   listings.set(listing.path, listing);
@@ -95,13 +103,33 @@ export function withListing(view: FilesView, listing: ExplorerListing): FilesVie
       listings.delete(key);
     }
   }
-  return { ...view, listings };
+  return { ...view, listings, failed: new Set([...view.failed].filter((each) => each !== listing.path)) };
+}
+
+/** The view after a read of `folder` failed: always a new set, so each failed attempt can be told apart. */
+export function withFailure(view: FilesView, folder: ExplorerPath): FilesView {
+  const failed = new Set([...view.failed].filter((each) => each !== folder));
+  failed.add(folder);
+  for (const oldest of [...failed].slice(0, Math.max(0, failed.size - FILE_EXPLORER_LIMITS.watchDirectoriesMax))) {
+    failed.delete(oldest);
+  }
+  return { ...view, failed };
+}
+
+function sameListing(left: ExplorerListing, right: ExplorerListing): boolean {
+  if (left.totalCount !== right.totalCount || left.entries.length !== right.entries.length) {
+    return false;
+  }
+  return left.entries.every((entry, index) => {
+    const other = right.entries[index];
+    return other !== undefined && other.name === entry.name && other.kind === entry.kind;
+  });
 }
 
 /** The view with every listing at or under `path` forgotten (it went away), keeping the rest. */
 export function withoutListings(view: FilesView, path: ExplorerPath): FilesView {
   const listings = new Map([...view.listings].filter(([key]) => !isWithinPath(path, key)));
-  return { ...view, listings };
+  return { ...view, listings, failed: new Set([...view.failed].filter((key) => !isWithinPath(path, key))) };
 }
 
 /** The view after `from` became `to`: open folders, selection and the editor follow the entry. */

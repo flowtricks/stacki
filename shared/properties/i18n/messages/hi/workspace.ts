@@ -60,6 +60,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} UTF-8 टेक्स्ट नहीं है, इसलिए सहेजी नहीं जाती',
   'workspace.files.error.outside': '{name} प्रोजेक्ट के बाहर ले जाता है',
   'workspace.files.error.protected': '{name} यहाँ केवल पढ़ने के लिए है: इसे Git और Stacki संभालते हैं',
+  'workspace.files.error.read': '{name} को पढ़ा नहीं जा सका',
   'workspace.files.error.tooLarge': 'यह एक कॉपी की क्षमता से ज़्यादा है',
   'workspace.files.error.tooMany': '{name} की कॉपी के लिए कोई खाली नाम नहीं बचा',
   'workspace.files.find': 'नाम से फ़ाइल खोजें',

@@ -1,8 +1,9 @@
 // The Files panel: every file and folder of the open project, dotfiles and `.git` included, as VS Code's Explorer
 // shows them (docs/contracts.md, "Files panel"). The header creates, refreshes and collapses; the search finds files
 // by name across the project; the tree (FileTree.tsx) does the rest. Opening a file shows it over the canvas
-// (FileEditorView.tsx). The panel paints its last tree at once from filesState.ts and reads again in place; only the
-// first open of a project, before any listing, shows placeholder rows (docs/ui-loading.md).
+// (FileEditorView.tsx). FilesKeeper.tsx reads the tree from the moment the project opens, so the panel paints it from
+// filesState.ts in its first frame. Placeholder rows show only while the very first read is still unanswered, and a read
+// that fails or never answers ends them: a toast says so and a Refresh button asks again (docs/ui-loading.md).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EXPLORER_ROOT, baseName, isProtectedPath, parentPath, type ExplorerPath, type FindAnswer } from '../../../shared/ipc/fileExplorer';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -19,8 +20,8 @@ import type { FilesHost } from './filesHost';
 import { targetFolderOf, visibleRows } from './fileTreeModel';
 import { FilesTipButton } from './FilesTipButton';
 import { FileTree, type Editing } from './FileTree';
-import { updateFilesView, useFilesView } from './filesState';
-import { useFilesLoader } from './useFilesLoader';
+import { refreshFolders } from './filesReader';
+import { filesView, updateFilesView, useFilesView } from './filesState';
 import './files.css';
 
 // Typing rests this long before a find runs, so each keystroke does not walk the project.
@@ -31,19 +32,8 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
   const { projectPath } = host;
   const view = useFilesView(projectPath);
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
-  const reported = useRef(new Set<ExplorerPath>());
-  const refresh = useFilesLoader(projectPath, view, (folder) => {
-    // One toast per folder that could not be read, not one per retry.
-    if (!reported.current.has(folder)) {
-      reported.current.add(folder);
-      host.showToast(
-        translate('workspace.files.error.filesystem', {
-          name: folder === '' ? (projectPath.split(/[\\/]/).filter(Boolean).pop() ?? projectPath) : baseName(folder),
-        }),
-        'error',
-      );
-    }
-  });
+  const refresh = useCallback((folders: readonly ExplorerPath[]) => refreshFolders(projectPath, folders), [projectPath]);
+  useReadFailures(host, view.failed);
   const context = useMemo<FilesActionContext>(() => ({ host, translate, refresh }), [host, translate, refresh]);
   const rows = useMemo(() => visibleRows(view), [view]);
 
@@ -73,8 +63,8 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
 
   const [query, setQuery] = useState('');
   const found = useFind(projectPath, query);
-  const rootListed = view.listings.has(EXPLORER_ROOT);
   const root = view.listings.get(EXPLORER_ROOT);
+  const refreshShown = (): void => refresh([EXPLORER_ROOT, ...view.open]);
   return (
     <section className="files-panel">
       <PanelHeader
@@ -88,7 +78,7 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
             <FilesTipButton label={translate('workspace.files.newFile')} onClick={() => startCreate('file')}>
               <PlusIcon size={13} />
             </FilesTipButton>
-            <FilesTipButton label={translate('workspace.files.refresh')} onClick={() => refresh([EXPLORER_ROOT, ...view.open])}>
+            <FilesTipButton label={translate('workspace.files.refresh')} onClick={refreshShown}>
               <RefreshIcon size={13} />
             </FilesTipButton>
             <FilesTipButton
@@ -103,7 +93,14 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
       <PanelSearch value={query} placeholder={translate('workspace.files.find')} clearLabel={translate('workspace.files.findClear')} onChange={setQuery} />
       {query.trim() !== '' ? (
         <FindResults projectPath={projectPath} found={found} onPicked={() => setQuery('')} />
-      ) : !rootListed ? (
+      ) : root === undefined && view.failed.has(EXPLORER_ROOT) ? (
+        <div className="files-failed">
+          <button type="button" onClick={refreshShown}>
+            <RefreshIcon size={13} />
+            {translate('workspace.files.refresh')}
+          </button>
+        </div>
+      ) : root === undefined ? (
         <div className="files-loading">
           <SkeletonRows
             count={8}
@@ -115,13 +112,37 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
             )}
           />
         </div>
-      ) : root !== undefined && root.entries.length === 0 && editing === undefined ? (
+      ) : root.entries.length === 0 && editing === undefined ? (
         <EmptyState icon={<FolderIcon size={20} />} title={translate('workspace.files.empty')} />
       ) : (
         <FileTree context={context} view={view} editing={editing} onEdit={setEditing} onCommitName={commitName} />
       )}
     </section>
   );
+}
+
+// Says which folder could not be read: one toast per folder while the panel is open, not one per retry. A failure from
+// before the panel opened is asked again first and told only if it fails again, so a passing one is never mentioned.
+function useReadFailures(host: FilesHost, failed: ReadonlySet<ExplorerPath>): void {
+  const translate = useTranslate();
+  const { projectPath, showToast } = host;
+  const failedAtOpen = useRef(failed);
+  const reported = useRef(new Set<ExplorerPath>());
+  useEffect(() => {
+    refreshFolders(projectPath, [...filesView(projectPath).failed]);
+  }, [projectPath]);
+  useEffect(() => {
+    if (failed === failedAtOpen.current) {
+      return;
+    }
+    for (const folder of failed) {
+      if (!reported.current.has(folder)) {
+        reported.current.add(folder);
+        const name = folder === '' ? (projectPath.split(/[\\/]/).filter(Boolean).pop() ?? projectPath) : baseName(folder);
+        showToast(translate('workspace.files.error.read', { name }), 'error');
+      }
+    }
+  }, [failed, projectPath, showToast, translate]);
 }
 
 type FindState = { readonly kind: 'idle' } | { readonly kind: 'ready'; readonly matches: FindAnswer['matches']; readonly complete: boolean };

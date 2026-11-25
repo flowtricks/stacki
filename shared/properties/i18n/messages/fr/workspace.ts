@@ -60,6 +60,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} n’est pas du texte UTF-8, il n’est donc pas enregistré',
   'workspace.files.error.outside': '{name} mène hors du projet',
   'workspace.files.error.protected': '{name} est en lecture seule ici : Git et Stacki s’en occupent',
+  'workspace.files.error.read': 'Impossible de lire {name}',
   'workspace.files.error.tooLarge': 'C’est plus qu’une seule copie ne peut contenir',
   'workspace.files.error.tooMany': 'Aucun nom libre ne reste pour une copie de {name}',
   'workspace.files.find': 'Rechercher un fichier par nom',

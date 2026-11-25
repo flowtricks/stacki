@@ -59,6 +59,7 @@ export const messages = {
   'workspace.files.error.notText': '{name} 不是 UTF-8 文本，因此不会保存',
   'workspace.files.error.outside': '{name} 指向项目之外',
   'workspace.files.error.protected': '{name} 在此处为只读：由 Git 和 Stacki 管理',
+  'workspace.files.error.read': '无法读取 {name}',
   'workspace.files.error.tooLarge': '超出了单次复制可容纳的内容',
   'workspace.files.error.tooMany': '已没有可用于 {name} 副本的名称',
   'workspace.files.find': '按名称查找文件',
