@@ -171,6 +171,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:prompt': { ...aiChat, text: 'Tighten the hero copy', attachments: [] },
   'ai:steer': { ...aiChat, text: 'Also fix the footer', attachments: [] },
   'ai:compact': aiChat,
+  'ai:pinsRead': { projectPath: '/site' },
+  'ai:pinsWrite': { projectPath: '/site', board: { version: 1, pins: [] }, images: [] },
   'ai:chatFork': aiChat,
   'ai:chatMove': { ...aiChat, section: `s${'1'.repeat(16)}` },
   'ai:sections': { projectPath: '/site', action: { kind: 'create', name: 'Launch' } },

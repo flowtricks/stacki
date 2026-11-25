@@ -246,6 +246,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 1, reason: 'the temporary copy of the chat index or a reviews file in userData/ai' },
     renameSync: { count: 1, reason: 'puts that index or reviews file in place whole (atomic save)' },
   },
+  'electron/handlers/ai/pinBoardStore.ts': {
+    writeFileSync: { count: 1, reason: "the temporary copy of a project's comment pins board or one of its images, in userData/ai" },
+    renameSync: { count: 1, reason: 'puts that board or image in place whole (atomic save)' },
+  },
   'electron/handlers/ai/treeSnapshot.ts': {
     copyFileSync: { count: 1, reason: "a temporary copy of the project's git index in the system temp folder, for a snapshot; removed after" },
   },
