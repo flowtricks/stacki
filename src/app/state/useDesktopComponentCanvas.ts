@@ -17,6 +17,7 @@ import {
   withFrameEdit,
   withProjectBackground,
   withSplit,
+  CANVAS_LIMITS,
   type ComponentCanvasFile,
   type FrameEdit,
 } from '../../../shared/properties/componentCanvas';
@@ -562,11 +563,24 @@ async function reloadCanvasPage(
   const next = toEditorPageState(carriedParse(latest.pageState, read));
   assert(next.source === read.source, 'The canvas page shown is the one on disk');
   app.setPageState(next);
-  const path = moved.after.find((instance) => instance.key === key)?.path;
+  const path = (moved.after.find((instance) => instance.key === key) ?? (key === undefined ? undefined : narrowerFrame(moved.after, key)))?.path;
   const node = path === undefined || !next.editable ? undefined : nodeAtPath(next.model.nodes, trailOf(path));
   if (node !== undefined) {
     app.setSelectedId(node.id);
   }
+}
+
+// A frame a new split divided: the first of the frames it became, whose keys hold every pair of its own (`variant=arrow`
+// became `direction=forward&variant=arrow` and `direction=back&variant=arrow`), or the frame a removed split merged
+// it into.
+function narrowerFrame(instances: readonly CanvasInstance[], key: string): CanvasInstance | undefined {
+  const pairs = key === '' ? [] : key.split('&');
+  assert(pairs.length <= CANVAS_LIMITS.splitPropsMax, 'A frame key holds a bounded number of pairs');
+  const pairsOf = (instance: CanvasInstance): readonly string[] => (instance.key === '' ? [] : instance.key.split('&'));
+  return (
+    instances.find((instance) => pairs.every((pair) => pairsOf(instance).includes(pair))) ??
+    instances.find((instance) => pairsOf(instance).every((pair) => pairs.includes(pair)))
+  );
 }
 
 // Messages from the canvas page: which frame a press landed in, the zoom, and that it is ready for the selection.

@@ -7,7 +7,6 @@
 //
 // Here in the app layer because it joins three features: the props panel's row extras (features/props), the canvas
 // (features/preview) and the navigator's tree (features/structure).
-import { createPortal } from 'react-dom';
 import { assert } from '../../../shared/core/assert';
 import { can } from '../../../shared/properties/projectRoles';
 import { CANVAS_LIMITS } from '../../../shared/properties/componentCanvas';
@@ -23,10 +22,8 @@ import {
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { previewValue, splitPartOf } from '../../features/preview/componentCanvas/canvasModel';
 import { frameLabel } from '../../features/preview/componentCanvas/frameLabel';
-import type { PropFieldExtras } from '../../features/props/propFieldExtras';
+import type { PropFieldAction, PropFieldExtras } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
-import FittedTooltip from '../../ui/FittedTooltip';
-import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -89,9 +86,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
         ...(candidate === undefined || !mayEdit
           ? {}
           : {
-              action: (
-                <SplitToggle canvas={canvas} state={state} name={name} count={candidate.values.length} onRefused={(text) => app.showToast(text, 'info')} />
-              ),
+              action: splitAction(state, { name, count: candidate.values.length }, { canvas, translate, onRefused: (text) => app.showToast(text, 'info') }),
             }),
         ...(split ? { lockedReason: translate('componentCanvas.split.locked', { name }) } : {}),
       };
@@ -122,59 +117,35 @@ function atCanvasPage(app: ShellView): boolean {
   return isComponentCanvasPage(app.currentPage?.path) && app.editStack.length <= 1;
 }
 
-// The own-frames toggle beside a prop's {}: the same size and hover as it, filled while the prop is split.
-function SplitToggle({
-  canvas,
-  state,
-  name,
-  count,
-  onRefused,
-}: {
-  readonly canvas: ComponentCanvasControl;
-  readonly state: CanvasOpen;
-  readonly name: string;
-  readonly count: number;
-  readonly onRefused: (text: string) => void;
-}) {
-  const translate = useTranslate();
-  const tip = useDelayedTooltip();
+// The own-frames toggle beside a prop's {}: drawn by the props row as the {} is (PropFieldLabel.tsx), pressed while
+// the prop is split. At the limit it stays pressable and says why in a toast.
+function splitAction(
+  state: CanvasOpen,
+  field: { readonly name: string; readonly count: number },
+  context: { readonly canvas: ComponentCanvasControl; readonly translate: Translator; readonly onRefused: (text: string) => void },
+): PropFieldAction {
+  const { name, count } = field;
+  const { canvas, translate, onRefused } = context;
   const split = state.layout.split;
   const on = split.includes(name);
   const full = !on && split.length >= CANVAS_LIMITS.splitPropsMax;
-  const text = on
+  assert(split.length <= CANVAS_LIMITS.splitPropsMax, 'The split stays inside its bound');
+  const label = on
     ? translate('componentCanvas.split.on', { name })
     : full
       ? translate('componentCanvas.split.full', { max: CANVAS_LIMITS.splitPropsMax })
       : translate('componentCanvas.split.off', { name, count });
-  return (
-    <>
-      <button
-        type="button"
-        className={`prop-expr-toggle component-canvas-split${on ? ' on' : ''}`}
-        aria-pressed={on}
-        aria-disabled={full}
-        aria-label={text}
-        onMouseEnter={tip.show}
-        onMouseLeave={tip.hide}
-        onClick={(event) => {
-          event.preventDefault();
-          tip.hide();
-          if (full) {
-            onRefused(text);
-            return;
-          }
-          canvas.setSplit(on ? split.filter((entry) => entry !== name) : [...split, name]);
-        }}
-      >
-        <CanvasIcon size={12} />
-      </button>
-      {tip.value !== undefined &&
-        createPortal(
-          <FittedTooltip anchor={tip.value} role="tooltip">
-            {text}
-          </FittedTooltip>,
-          document.body,
-        )}
-    </>
-  );
+  return {
+    icon: <CanvasIcon size={12} />,
+    label,
+    pressed: on,
+    refused: full,
+    onPress: () => {
+      if (full) {
+        onRefused(label);
+      } else {
+        canvas.setSplit(on ? split.filter((entry) => entry !== name) : [...split, name]);
+      }
+    },
+  };
 }
