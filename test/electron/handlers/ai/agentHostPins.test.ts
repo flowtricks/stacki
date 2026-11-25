@@ -32,6 +32,8 @@ function fakeHost() {
   }
   const store = new ChatStore(path.join(userData, 'ai'));
   const pushes: ChatEvent[] = [];
+  // Woken by every push, so a wait is on the events themselves, never on a clock.
+  const waiters = new Set<() => void>();
   const host = new AgentHost({
     userData,
     store,
@@ -40,6 +42,9 @@ function fakeHost() {
         const push = parseAiEventsPush(payload);
         pushes.push(...push.events);
         host.acknowledge(push.chars);
+        for (const wake of [...waiters]) {
+          wake();
+        }
       }
     },
     files: {
@@ -57,18 +62,19 @@ function fakeHost() {
     spawnAdapter: (entry: string, cwd: string, environment: Record<string, string | undefined>) =>
       spawn(process.execPath, [entry], { cwd, env: { ...environment }, stdio: ['pipe', 'pipe', 'pipe'] }),
   });
-  return { root, store, host, events: (): readonly ChatEvent[] => pushes };
-}
-
-async function until(label: string, condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 400; attempt++) {
-    if (condition()) {
-      return;
-    }
-    await new Promise((resolve) => setImmediate(resolve));
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  assert.fail(`timed out waiting for ${label}`);
+  // Resolves once `condition` holds, checked after each push; the test runner's own timeout bounds a wait that never ends.
+  const until = (condition: () => boolean): Promise<void> =>
+    new Promise((resolve) => {
+      const check = (): void => {
+        if (condition()) {
+          waiters.delete(check);
+          resolve();
+        }
+      };
+      waiters.add(check);
+      check();
+    });
+  return { root, store, host, until, events: (): readonly ChatEvent[] => pushes };
 }
 
 const entry = (number: number, file: string, images: readonly number[]) => ({
@@ -84,7 +90,7 @@ const entry = (number: number, file: string, images: readonly number[]) => ({
 });
 
 test('one turn of pins: the agent gets every instruction and image, each pin its own subagent, shared files in waves', async (context) => {
-  const { root, store, host, events } = fakeHost();
+  const { root, store, host, events, until } = fakeHost();
   context.after(() => host.stopAll());
   store.trust(root);
   const chat = store.create(root, 'claude', 'New chat', 1);
@@ -98,7 +104,7 @@ test('one turn of pins: the agent gets every instruction and image, each pin its
     pins: brief,
   });
   assert.ok(started.ok, JSON.stringify(started));
-  await until('the end of the turn', () => events().some((event) => event.kind === 'turn-end'));
+  await until(() => events().some((event) => event.kind === 'turn-end'));
   const all = events();
   const said = all.flatMap((event) => (event.kind === 'text' ? [event.text] : [])).join('');
   assert.match(said, /Got 2 images and 2 notes/, 'the images and their notes reached the agent');
