@@ -31,11 +31,7 @@ function startPointerDrag(event: DragStart, options: DragOptions, release: () =>
   let latest: PointerEvent | undefined;
   // A platform event may carry a null pointerId; either side missing one matches anything.
   const matches = (next: Event): boolean =>
-    !('pointerId' in next) ||
-    next.pointerId === undefined ||
-    next.pointerId === null ||
-    event.pointerId === undefined ||
-    next.pointerId === event.pointerId;
+    !('pointerId' in next) || next.pointerId === undefined || next.pointerId === null || event.pointerId === undefined || next.pointerId === event.pointerId;
   const apply = (): void => {
     frame = undefined;
     if (!latest) {

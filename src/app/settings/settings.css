@@ -1,96 +1,613 @@
+/* Settings: a sidebar of tabs beside the chosen tab's page (Settings.tsx).
+   The dialog has a fixed height, so switching tabs never makes it jump. The
+   page's header is fixed; only the scroll area under it moves, and it fades an
+   edge only while there is more to scroll past it, so a row is never cut in
+   half against the chrome. The header is set off by a 1px line, like every
+   Stacki header; sections are separated by space, headings and fills.
+
+   Spacing scale: 4, 8, 12, 16, 24, 32. Text: 13px labels, 12px muted
+   descriptions, 11px section headings. */
 .app-settings {
+  --settings-gutter: 32px;
+  --settings-fade: 24px;
   margin: auto;
   inset: 0;
-  width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
+  width: min(880px, calc(100vw - 48px));
+  height: min(640px, calc(100dvh - 48px));
   padding: 0;
-  border: 1px solid #3a3a3a;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #1b1b1b;
   color: #e8e8e8;
-  box-shadow: 0 24px 90px #0008;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.6);
   font: inherit;
+  overflow: hidden;
 }
-.app-settings header,
-.app-settings footer {
+.app-settings-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+/* The sidebar: a darker fill, the dialog's title, then the tabs. */
+.app-settings-sidebar {
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-}
-.app-settings h2 {
-  font-size: 21px;
-}
-.app-settings footer {
-  justify-content: flex-end;
-  border-top: 1px solid #333;
-}
-.app-settings-content {
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 12px;
+  background: #161616;
   overflow-y: auto;
-  max-height: calc(100vh - 220px);
-  padding: 0 24px 24px;
+  scrollbar-gutter: stable;
 }
-.app-preferences {
-  padding-bottom: 12px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #333;
-}
-.app-preference-row {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
+.app-settings-sidebar h2 {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 15px;
   font-weight: 600;
 }
-.app-preference-toggle {
-  position: relative;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 20px;
+.app-settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-settings-tabs [role='tab'] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: start;
+  white-space: nowrap;
+}
+.app-settings-tabs [role='tab'] svg {
+  color: var(--text-faint);
+}
+.app-settings-tabs [role='tab']:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* The app's selected-row fill (.structure-node.selected): a soft accent ground
+   with an accent icon. */
+.app-settings-tabs [role='tab'][aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.app-settings-tabs [role='tab'][aria-selected='true'] svg {
+  color: var(--accent);
+}
+.app-settings-tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The page: a fixed header, the scroll area, and the action bar when shown. */
+.app-settings-main {
+  min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-settings-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 20px 8px;
+  padding-inline: var(--settings-gutter) 16px;
+  border-bottom: 1px solid var(--border);
+}
+.app-settings-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.app-settings-close {
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid #666;
-  border-radius: 999px;
-  background: #444;
+  border-radius: 6px;
 }
-.app-preference-toggle span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 120ms ease;
+.app-settings-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
-.app-preference-toggle[aria-checked='true'] {
-  background: #009dff;
-  border-color: #009dff;
+/* The fade is a mask, so it fades whatever scrolls under it (cards, chips,
+   code) into the dialog's own background. Each edge's fade is zero until the
+   scroll area says there is more past it (useScrollEdges). */
+.app-settings-scroll {
+  --settings-fade-top: 0px;
+  --settings-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  /* The first section sits one step below the header, so every tab's eyebrow has room above it. */
+  padding: 20px var(--settings-gutter) var(--settings-gutter);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
 }
-.app-preference-toggle[aria-checked='true'] span {
-  transform: translateX(14px);
+.app-settings-scroll[data-edge-top='fade'] {
+  --settings-fade-top: var(--settings-fade);
 }
-.app-preference-toggle:focus-visible {
-  outline: 2px solid #009dff;
-  outline-offset: 3px;
+.app-settings-scroll[data-edge-bottom='fade'] {
+  --settings-fade-bottom: var(--settings-fade);
 }
-.app-preference-toggle:disabled {
-  opacity: 0.5;
+/* A readable measure: wide dialogs leave space at the right, not long lines. */
+.app-settings-content {
+  max-width: 600px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .app-preference-toggle span {
-    transition: none;
-  }
+.app-settings-panel[hidden] {
+  display: none;
 }
-.app-preferences p,
-.app-settings-content > p {
-  margin: 8px 0 20px;
-  color: #aaa;
+.app-settings-panel > section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Loading lines. */
+.app-settings-status {
+  margin: 0;
+  color: var(--text-dim);
   font-size: 12px;
   line-height: 1.6;
 }
-.app-preferences [role='alert'] {
-  color: #ff9b92;
+.app-settings-status {
+  color: var(--text-faint);
+}
+
+/* A section: a small heading (with an optional (i)), then its rows. */
+.app-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.app-settings-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+/* A section's action (its Add button) shares the heading's line and ends it. */
+.app-settings-section-header:has(.app-settings-section-action) {
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.app-settings-section-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  max-inline-size: 100%;
+}
+.app-settings-section-title {
+  display: flex;
+  align-items: center;
+}
+.app-settings-section-header h4 {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* A row: label and description in the first column, the control in a second
+   column of its own, so controls line up down the page however long the text. */
+.app-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 24px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.app-settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-settings-row-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.app-settings-row-label-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-end: 6px;
+  color: var(--text-faint);
+}
+/* A round flag in the dropdown's 16px icon column; the artwork carries its own colour, so no tile or border behind it. */
+.app-locale-flag {
+  display: flex;
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+}
+.ui-flag {
+  display: block;
+  border-radius: 50%;
+}
+/* The fallback when a flag has no artwork: fills the dropdown's 16px icon column; a background tile, never a border. */
+.app-locale-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  direction: ltr;
+}
+.app-settings-row-description {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-settings-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Nothing to show: centred in the page, an icon on a soft disc above one sentence. */
+.app-settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  text-align: center;
+}
+/* A list's own empty state inside a page that has other sections: a short band, not a page. */
+.app-settings-empty[data-compact='true'] {
+  gap: 8px;
+  padding: 20px 16px;
+}
+.app-settings-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.app-settings-empty p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* The save indicator, at the top right of the page. It takes no height of its own
+   (the panel's 24px gap is pulled back), so the first section starts right under
+   the header and the indicator sits on the same line as its heading. */
+.app-settings-save-row {
+  position: relative;
+  height: 0;
+  margin-bottom: -24px;
+}
+.app-settings-save-row .app-settings-saved {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+}
+.app-settings-saved {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 56px;
+  min-height: 19px;
+  justify-content: flex-end;
+  color: var(--text-faint);
+  font-size: 12px;
+  transition: opacity 200ms ease;
+}
+.app-settings-saved[data-state='idle'] {
+  opacity: 0;
+}
+.app-settings-saved[data-state='saved'] svg {
+  color: var(--green);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-settings-saved {
+    transition: none;
+  }
+}
+
+/* Narrow windows: the sidebar becomes a row of tabs above the page, scrolling
+   sideways rather than cutting a label off; rows stack their control under
+   the text once there is no room beside it. */
+@media (max-width: 640px) {
+  .app-settings {
+    --settings-gutter: 16px;
+  }
+  .app-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .app-settings-sidebar {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .app-settings-sidebar h2 {
+    display: none;
+  }
+  .app-settings-tabs {
+    flex-direction: row;
+  }
+  .app-settings-tabs [role='tab'] {
+    flex: none;
+  }
+  .app-settings-header {
+    padding-top: 12px;
+  }
+}
+@media (max-width: 480px) {
+  .app-settings-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-settings-row-control {
+    justify-content: flex-start;
+  }
+}
+/* Settings → Folders: one row per panel, its folders as chips with a remove
+   button, then its two actions. Rows are separated by space and a soft fill,
+   never lines; a chip is a fill, not an outline. */
+.app-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.app-folder-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+/* The heading row: icon, title, then the row's actions in a column of their
+   own at the right, so every row's Add button lines up whatever the title. */
+.app-folder-heading {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.app-folder-heading > svg {
+  color: var(--text-faint);
+}
+.app-folder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
+  border-radius: 6px;
+  background: #ffffff10;
+  font-size: 12px;
+}
+.app-folder-chip:not(:has(button)) {
+  padding-inline-end: 8px;
+}
+.app-folder-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-folder-chip button:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+.app-folder-none,
+.app-folder-fixed {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.app-folder-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+/* The title, plain at its defaults; once changed, the app's blue set label
+   (.prop-label.set), whose click offers Reset to default. */
+.app-folder-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-folder-title .prop-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.app-folder-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.app-folder-actions button:hover:not(:disabled) {
+  background: #ffffff10;
+  color: var(--text);
+}
+.app-folder-actions button:disabled {
+  opacity: 0.45;
+}
+.app-folder-chip button:focus-visible,
+.app-folder-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The CMS section's collection switches: the name, then its switch at the right end. */
+.app-folder-toggles {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-folder-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  font-size: 12px;
+}
+/* A collection row: its CMS icon in a fixed 16px column (as the Roles and Audits rows), the name, then the switch. */
+.app-folder-collection {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.app-folder-collection-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+/* "Open content config" and "Open astro.config" share this: a plain button like Change on the Stacki Studio page: the base button fills, hover,
+   pressed and focus states apply; this only sizes the icon gap and keeps it from stretching across the card. */
+.app-folder-config-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+}
+/* A data file in the data picker list: collapsed by default, a chevron, the file icon and the name at the start, its switch at the end.
+   Its own class, not the Roles group header's (which pads 8px a side): no side padding, so its switch sits in the same column as
+   its exports' and the collections' switches. */
+.app-folder-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  min-height: 30px;
+}
+.app-folder-group .app-folder-group-disclosure {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: start;
+}
+.app-folder-group-disclosure:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.app-folder-group-disclosure > svg {
+  flex: none;
+  transition: transform 0.15s;
+}
+/* The file or collection icon: one 16px column for every top-level row of the picker list. */
+.app-folder-row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--text-faint);
+}
+.app-folder-group[data-open='true'] .app-folder-group-disclosure > svg {
+  transform: rotate(90deg);
+}
+.app-folder-group-summary {
+  color: var(--text-faint, var(--text-dim));
+  font-size: 11px;
+}
+/* A data file's export, under its file in the data picker list. */
+.app-folder-toggle.is-nested {
+  padding-inline-start: 44px;
+}
+/* A top-level row of the picker list starts where a file's icon does (past its 12px chevron and the 8px gap). */
+.app-folder-toggle.is-top-level {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-inline-start: 20px;
+}
+.app-folder-toggle.is-top-level > :last-child {
+  margin-inline-start: auto;
+}
+/* The "…" (MoreMenu) on a Settings card (an audit check's priority, an MCP server, a role) is a ghost button:
+   no fill at rest, the icon dim; the fill appears on hover, keyboard focus and while its menu is open. The base
+   button rule fills every button, so this restates the rest state for the one shared class. */
+.app-settings .more-menu-button {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-settings .more-menu-button:hover:not(:disabled),
+.app-settings .more-menu-button:focus-visible,
+.app-settings .more-menu-button.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
 }

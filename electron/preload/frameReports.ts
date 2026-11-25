@@ -5,6 +5,7 @@ import { authoredStyleMutation } from './frameAuthoredStyles';
 // one pass per frame. Mutations are classified here, so the frame's own
 // writes never trigger a pass.
 
+import type { PseudoLayer } from '../../shared/page/pseudoPath';
 import type { Rect, Spacing } from './frameBasics';
 import { PROBE_ATTR, isComment, isElement, isText } from './frameBasics';
 import {
@@ -20,14 +21,8 @@ import {
   taggedPlaces,
   trackedPaths,
 } from './frameRegions';
-import {
-  STACKI_CLASSES,
-  classesForPath,
-  ownClasses,
-  rectsForPath,
-  resetThinCache,
-  spacingForPath,
-} from './frameMeasure';
+import { STACKI_CLASSES, classesForPath, ownClasses, rectsForPath, resetThinCache, spacingForPath } from './frameMeasure';
+import { revealPath } from './frameReveal';
 
 // The boxes as last reported, so the watcher below can tell whether the page
 // has moved since — see `followMotion`.
@@ -205,6 +200,10 @@ export const sendRendered = () => {
 // rule in any stylesheet, so the source cannot answer and the navigator has
 // no way to ask per row.
 //
+// The same pass notes each element whose ::before or ::after is drawn (it has
+// `content` and is displayed): a pseudo-element exists only in CSS, so the
+// navigator, which lists the source, could not show it as a layer.
+//
 // Read in the same pass, and only for nodes that put an element on the page:
 // a computed style is cheap to read one at a time and not free by the
 // hundred, so this rides the walk that already happens rather than adding
@@ -212,18 +211,31 @@ export const sendRendered = () => {
 let lastStatesKey = '';
 const firstElementFor = (nodePath: string): Element | undefined => {
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element && element.isConnected) {
       return element;
     }
   }
   return elementsWithPath(nodePath)[0] || undefined;
 };
+// Whether a pseudo-element is drawn: `content` other than none/normal, and displayed.
+const drawsPseudo = (element: Element, pseudo: '::before' | '::after'): boolean => {
+  const style = window.getComputedStyle(element, pseudo);
+  return style.content !== 'none' && style.content !== 'normal' && style.content !== '' && style.display !== 'none';
+};
+// The nodes the last pass found drawing a ::before or ::after, kept for the
+// pointer (frameTargets.ts): a pseudo-element is measured under the cursor
+// only for a node listed here, so moving over the rest of the page costs no
+// computed-style read at all.
+let drawnBefore: ReadonlySet<string> = new Set<string>();
+let drawnAfter: ReadonlySet<string> = new Set<string>();
+/** Whether the last pass found the node at `nodePath` drawing `pseudo`. */
+export const drawsPseudoAt = (nodePath: string, pseudo: PseudoLayer): boolean => (pseudo === 'before' ? drawnBefore : drawnAfter).has(nodePath);
 const sendStates = (rendered: string[]): void => {
   const hidden = [];
   const inert = [];
+  const before: string[] = [];
+  const after: string[] = [];
   for (const nodePath of rendered) {
     const element = firstElementFor(nodePath);
     if (!element) {
@@ -237,16 +249,24 @@ const sendStates = (rendered: string[]): void => {
       if (cs.pointerEvents === 'none') {
         inert.push(nodePath);
       }
+      if (drawsPseudo(element, '::before')) {
+        before.push(nodePath);
+      }
+      if (drawsPseudo(element, '::after')) {
+        after.push(nodePath);
+      }
     } catch {
       /* an element that cannot be measured says nothing about itself */
     }
   }
-  const key = `${hidden.join(' ')}|${inert.join(' ')}`;
+  drawnBefore = new Set(before);
+  drawnAfter = new Set(after);
+  const key = `${hidden.join(' ')}|${inert.join(' ')}|${before.join(' ')}|${after.join(' ')}`;
   if (key === lastStatesKey) {
     return;
   }
   lastStatesKey = key;
-  window.parent.postMessage({ type: 'avb:node-states', hidden, inert }, '*');
+  window.parent.postMessage({ type: 'avb:node-states', hidden, inert, before, after }, '*');
 };
 
 // The classes each node actually ended up with. `class:list={[...]}` and
@@ -258,9 +278,13 @@ const sendStates = (rendered: string[]): void => {
 let lastClassKey = '';
 
 // The app asked a different question (its scope or focused instance changed),
-// so the next rendered-nodes and classes reports are sent even if unchanged.
+// or dropped what it held (its tree changed shape), so the next rendered-nodes,
+// states and classes reports are sent even if unchanged. The states were left
+// out: the app dropped them on an edit, the page said nothing new, and the
+// navigator lost its ::before rows and hidden marks until something changed.
 export function forgetReportedKeys(): void {
   lastRenderedKey = '';
+  lastStatesKey = '';
   lastClassKey = '';
 }
 export const sendClasses = () => {
@@ -294,46 +318,12 @@ export const sendClasses = () => {
   window.parent.postMessage({ type: 'avb:node-classes', classes: out }, '*');
 };
 
-// Selecting a node in the navigator brings it onto the page. Only scrolls
-// when the node is actually out of sight — re-selecting something already
-// on screen shouldn't move the page under the user.
-const SCROLL_MARGIN = 24;
-// Where the page has to go for a box to be on screen, along one axis: the
-// scroll position it already has when the box is comfortably inside, and
-// otherwise enough to bring it in. A box longer than the viewport is aligned
-// to its start rather than centred, which would push the beginning of it out.
-const revealAlong = (start: number, length: number, viewport: number, at: number): number => {
-  if (start >= SCROLL_MARGIN && start + length <= viewport - SCROLL_MARGIN) {
-    return at;
-  }
-  const offset = length >= viewport - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : (viewport - length) / 2;
-  return Math.max(0, at + start - offset);
-};
+// Selecting a node in the navigator brings it onto the page, when it is out of
+// sight. One path can render many times (a node inside a loop, a component used
+// repeatedly): the occurrence names the instance being worked in, not whichever
+// one comes first. frameReveal.ts decides and scrolls, for Studio's canvas too.
 export const scrollPathIntoView = (nodePath: string, occ: number): void => {
-  const rects = rectsForPath(nodePath);
-  if (!rects || !rects.length) {
-    return;
-  }
-  // One path can render many times (a node inside a loop, a component used
-  // repeatedly). Scroll to the instance being worked in, not whichever one
-  // happens to come first in the document.
-  const rect = rects[occ] ?? rects[0]; // viewport-relative
-  if (!rect) {
-    return;
-  }
-  const vh = window.innerHeight || document.documentElement.clientHeight;
-  const vw = window.innerWidth || document.documentElement.clientWidth;
-  const top = revealAlong(rect.y, rect.h, vh, window.scrollY);
-  // Sideways too. A site can be wider than the frame — full-bleed sliders,
-  // a track of cards, a decorative circle hanging off the edge — and once the
-  // canvas is scrolled across, everything on it reads as having slipped off
-  // to the left with no scrollbar to say otherwise. Selecting something is
-  // how you ask to see it, so it is also how you get back.
-  const left = revealAlong(rect.x, rect.w, vw, window.scrollX);
-  if (top === window.scrollY && left === window.scrollX) {
-    return;
-  }
-  window.scrollTo({ top, left, behavior: 'smooth' });
+  revealPath(nodePath, occ);
 };
 
 // `stacki-opened` on the instance being edited — the one that was actually
@@ -358,10 +348,7 @@ export const scrollPathIntoView = (nodePath: string, occ: number): void => {
 // A component's region holds its <script> and <style> too. They are elements,
 // and they are not what anyone means by the root of the component.
 const UNRENDERED = new Set(['TEMPLATE', 'SCRIPT', 'STYLE', 'LINK', 'META', 'TITLE']);
-const openedRoots = (): Element[] =>
-  (focusRoots() || []).filter(
-    (node): node is Element => isElement(node) && !UNRENDERED.has(node.tagName),
-  );
+const openedRoots = (): Element[] => (focusRoots() || []).filter((node): node is Element => isElement(node) && !UNRENDERED.has(node.tagName));
 
 let openedEls: Element[] = [];
 export const paintOpened = () => {
@@ -429,7 +416,33 @@ export const queueRects = (pageToo = false) => {
 // several times a second, so a measurement one beat behind is an outline that
 // never catches up.
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+// A drag on the canvas's width handle reflows this page every animation frame, and each reflow used to measure every tracked box
+// and walk the page for what rendered: the walk, not the drag, was the frame's cost, and the drag stuttered. While the viewport
+// width is changing, the measurements wait for it to rest and run once. The caller returns at once when this answers true.
+const RESIZE_QUIET_MS = 100;
+// A unit test loads this module before it has a window, to reach the pure classifiers; the page always has one.
+let viewportWidthPx = typeof window === 'undefined' ? 0 : window.innerWidth;
+let resizeQuietTimer: ReturnType<typeof setTimeout> | undefined;
+const holdForResize = (): boolean => {
+  const widthPx = window.innerWidth;
+  if (widthPx === viewportWidthPx && resizeQuietTimer === undefined) {
+    return false;
+  }
+  viewportWidthPx = widthPx;
+  clearTimeout(resizeQuietTimer);
+  resizeQuietTimer = setTimeout(() => {
+    resizeQuietTimer = undefined;
+    // The whole answer, as remeasure gives it: a media query may have hidden a node, so what rendered is back in question too.
+    remeasure();
+  }, RESIZE_QUIET_MS);
+  return true;
+};
+
 export const remeasure = () => {
+  if (holdForResize()) {
+    return;
+  }
   // Something changed the document — which nodes rendered, and what their
   // classes resolved to, are both back in question.
   queueRects(true);
@@ -454,6 +467,9 @@ const readStates = () => {
   sendStates(lastRendered);
 };
 export const remeasureStyles = () => {
+  if (holdForResize()) {
+    return;
+  }
   queueRects();
   clearTimeout(styleSettleTimer);
   styleSettleTimer = setTimeout(() => queueRects(), 120);
@@ -485,8 +501,7 @@ const ownNode = (node: Node): boolean => {
   }
   return ownElement(node);
 };
-const classTokens = (value: string | undefined): Set<string> =>
-  new Set((value ?? '').split(/\s+/).filter((token) => token !== ''));
+const classTokens = (value: string | undefined): Set<string> => new Set((value ?? '').split(/\s+/).filter((token) => token !== ''));
 // Only the canvas's own classes came or went.
 const ownClassChange = (record: MutationRecord): boolean => {
   if (!isElement(record.target)) {
@@ -501,8 +516,7 @@ const ownClassChange = (record: MutationRecord): boolean => {
   }
   return true;
 };
-const withoutViewportHeight = (style: string | undefined): string =>
-  (style ?? '').replace(/--avb-vh:[^;]*;?\s*/g, '').trim();
+const withoutViewportHeight = (style: string | undefined): string => (style ?? '').replace(/--avb-vh:[^;]*;?\s*/g, '').trim();
 const ownAttributeChange = (record: MutationRecord): boolean => {
   const target = record.target;
   if (ownElement(target) || record.attributeName === PATH_ATTR) {
@@ -526,7 +540,13 @@ const recordKind = (record: MutationRecord): MutationKind => {
     if (ownAttributeChange(record)) {
       return 'none';
     }
-    return record.attributeName === 'style' || insideHead(record.target) ? 'css' : 'page';
+    if (insideHead(record.target)) {
+      return 'css';
+    }
+    // Attributes can change layout, visibility and selector matching, but only
+    // class changes invalidate reported class lists. Any script that responds by
+    // replacing markup produces its own child-list record and structural pass.
+    return record.attributeName === 'class' ? 'page' : 'css';
   }
   if (record.type === 'characterData') {
     const parent = record.target.parentNode;

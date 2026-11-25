@@ -1,3 +1,7 @@
+import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
+import { assert } from '../../vendor/stacki/shared/core/assert';
+import { can } from '../../vendor/stacki/shared/properties/projectRoles';
+import { dockedWidthPx, isMobileEditor, useEditorLayout, useEditorLayoutSync, useMobileEditor } from './mobileEditor';
 import { CanvasContextMenu } from '../features/navigator/CanvasContextMenu';
 import { pathFor } from '../features/project/previewSelection';
 import { isCanvasPage } from '../../vendor/stacki/shared/properties/defaultsCanvas';
@@ -10,7 +14,14 @@ import type { FollowTarget } from '../features/collaboration/useCollaborators';
 import type { PreviewDevice } from '../../vendor/stacki/src/features/preview/PreviewToolbar';
 import { StyleSettings } from '../features/settings/StyleSettings';
 import { useIdleSession } from '../features/session/useIdleSession';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { prefetchPanels } from '../../vendor/stacki/src/app/shell/panelPrefetch';
+import { routeFor } from '../features/project/projectClient';
+import { pageForRoute } from '../features/pages/templateRoutes';
+import { canvasRouteFor, chooseTemplateEntry } from '../features/pages/templateEntryStore';
+import { pageAddressHost } from '../features/project/pageAddress';
+import { canvasRoute, canvasRouteBase } from '../features/preview/canvasRoute';
+import { livePageTitles, projectPageLabel } from '../features/project/pageLabels';
 import type { Project } from '../features/project/projectClient';
 import { useEditor } from '../features/project/useEditor';
 import { EditorHeader } from '../features/project/EditorHeader';
@@ -25,8 +36,12 @@ import type { ComponentFocus, OpenFile } from '../features/project/editorNavigat
 import { VariablesWorkspace } from '../features/variables/VariablesWorkspace';
 import { CodePopup } from '../features/code/CodePopup';
 import { CodeAccess } from '../../vendor/stacki/src/ui/CodeAccess';
+import { KeptTabPanel } from '../../vendor/stacki/src/ui/KeptTabPanel';
 import { getHost, setHost } from '../../vendor/stacki/src/features/style/model/host';
 import { PreviewWorkspace, useInteractivePreview } from '../features/preview/InteractivePreview';
+import { usePanelResize, usePanelWidths } from '../../vendor/stacki/src/app/shell/ResizablePanel';
+import { PanelCloseButton } from './PanelCloseButton';
+import { StudioAppsHost } from '../features/apps/StudioApps';
 export interface EditorProps {
   readonly session: Session | undefined;
   readonly view: ReturnType<typeof useEditorView>;
@@ -43,6 +58,7 @@ export interface EditorProps {
 
 export function Editor(props: EditorProps) {
   const interactivePreview = useInteractivePreview(props);
+  usePanelPrefetch(props.project.workspaceId ?? props.project.name);
   const { panel, setPanel } = props.view;
   const componentOpen = props.file.endsWith('.astro') && !isCanvasPage(props.file);
   useComponentPanel(componentOpen, setPanel);
@@ -54,8 +70,11 @@ export function Editor(props: EditorProps) {
     props.file,
     props.report,
     () => {
-      setMobileSettings(true);
-      setPanel((current) => (current === 'code' ? current : 'navigator'));
+      // Phone panels cover the canvas. Selection must not open an overlay.
+      if (!isMobileEditor()) {
+        // Code and Apps keep their panel: a running app reads the selection while visible.
+        setPanel((current) => (current === 'code' || current === 'apps' ? current : 'navigator'));
+      }
     },
     !session.paused,
     setCanPause,
@@ -68,46 +87,67 @@ export function Editor(props: EditorProps) {
   );
   const defaultsCanvas = useStudioDefaultsCanvas(props, model);
   const scopedModel = defaultsSelection(model, defaultsCanvas);
+  const titledProps = editorTitleProps(props, model);
+  const layout = useStudioLayout(panel, !model.collection, setMobileSettings);
   if (session.paused) {
     return <PausedEditor resume={session.resume} />;
   }
   return (
-    <CodeAccess.Provider value={props.view.role !== 'client'}>
-      <div
-        className="app studio-app"
-        onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}
-      >
+    <CodeAccess.Provider value={can(props.view.studioRole, 'code:edit')}>
+      <div className="app studio-app" data-editor-layout={layout} onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}>
         <EditorHeader
           closeDefaults={() => void defaultsCanvas.run('done')}
           defaultsMode={defaultsCanvas.state.kind !== 'idle'}
-          {...props}
+          {...titledProps}
           document={model.document}
           interactivePreview={interactivePreview}
+          cursorChat={cursorChatFor(model, props.view.device, interactivePreview)}
         />
         <DefaultsCanvasBar canvas={defaultsCanvas} />
         <CanvasContextMenu props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
         <SyncNotice refresh={props.refresh} report={props.report} />
-        <PreviewWorkspace preview={interactivePreview}>
+        <PreviewWorkspace
+          preview={interactivePreview}
+          size={{ projectName: props.project.name, device: props.view.device, dimensions: props.view.dimensions, onDevice: props.view.setDevice }}
+        >
           <EditorRail
             componentOpen={componentOpen}
+            projectPath={props.project.name}
             panel={panel}
             toggle={(next) => {
               setPanel(next);
               setMobileSettings(false);
             }}
           />
-          <Sidebar props={props} model={scopedModel} defaultsCanvas={defaultsCanvas} />
-          <EditorContent
-            props={props}
-            model={scopedModel}
-            mobileSettings={mobileSettings}
-            setMobileSettings={setMobileSettings}
-          />
+          <Sidebar props={titledProps} model={scopedModel} defaultsCanvas={defaultsCanvas} />
+          <EditorContent props={titledProps} model={scopedModel} mobileSettings={mobileSettings} setMobileSettings={setMobileSettings} />
+          <StudioAppsHost props={titledProps} model={scopedModel} />
         </PreviewWorkspace>
       </div>
     </CodeAccess.Provider>
   );
 }
+function editorTitleProps(props: EditorProps, model: ReturnType<typeof useEditor>): EditorProps {
+  return { ...props, project: livePageTitles(props.project, props.file, model) };
+}
+
+function cursorChatFor(
+  model: ReturnType<typeof useEditor>,
+  device: PreviewDevice,
+  preview: ReturnType<typeof useInteractivePreview>,
+): (() => void) | undefined {
+  if (model.collection) {
+    return undefined;
+  }
+  if (device === 'canvas') {
+    return undefined;
+  }
+  if (preview.active) {
+    return undefined;
+  }
+  return () => model.preview.send({ type: 'studio:cursor-chat' });
+}
+
 function Sidebar({
   props,
   model,
@@ -132,6 +172,30 @@ function Sidebar({
       close={() => setPanel(undefined)}
     />
   );
+}
+
+// Desktop's layout rule decides from the room the rail and the open panels take. The floating
+// inspector closes when the editor docks, so it does not float open again at the next collapse.
+function useStudioLayout(panel: EditorProps['view']['panel'], inspector: boolean, setMobileSettings: (visible: boolean) => void) {
+  const widths = usePanelWidths();
+  useEditorLayoutSync(dockedWidthPx({ panel, inspector, widths }));
+  const layout = useEditorLayout();
+  useEffect(() => {
+    if (layout === 'docked') {
+      setMobileSettings(false);
+    }
+  }, [layout, setMobileSettings]);
+  return layout;
+}
+
+// Readies the panels after a project opens, as Desktop's shell does (panelPrefetch.ts): the
+// Astro grammar and the variables, assets and CMS reads, under the key Studio's panels read
+// the project by. Studio's panels are in its main bundle, so there are no chunks to fetch.
+function usePanelPrefetch(projectKey: string) {
+  useEffect(() => {
+    assert(projectKey.length > 0, 'Editor: an open project has a key');
+    return prefetchPanels({ projectPath: 'studio', preloadChunks: undefined, hostReads: [] });
+  }, [projectKey]);
 }
 
 function useComponentPanel(componentOpen: boolean, setPanel: EditorProps['view']['setPanel']) {
@@ -161,21 +225,37 @@ function EditorContent({
   readonly setMobileSettings: (visible: boolean) => void;
 }) {
   const { device, setDevice, setPanel } = props.view;
+  const translate = useTranslate();
+  const mobile = useMobileEditor();
+  const toggleInspector = () => {
+    if (mobileSettings) {
+      setMobileSettings(false);
+    } else {
+      setMobileSettings(true);
+      setPanel(undefined);
+    }
+  };
   useStyleProject();
+  const browseApps = useCallback(() => setPanel('apps'), [setPanel]);
   return (
     <div className="studio-editor-content">
       <PreviewCanvas
         {...model}
+        openComponent={can(props.view.studioRole, 'component:edit') ? model.openComponent : undefined}
         focusPath={props.focus?.path}
         device={device}
         onDevice={setDevice}
         dimensions={props.view.dimensions}
         file={props.file}
         projectName={props.project.name}
-        showSettings={() => {
-          setMobileSettings(!mobileSettings);
-          setPanel(undefined);
+        components={props.project.components}
+        pageLabel={projectPageLabel(props.project, props.file, translate)}
+        editRoute={(route) => editCanvasRoute(props, model, route)}
+        sitePages={{
+          base: canvasRouteBase(model.preview.url, canvasRouteFor(props.previewFile) ?? routeFor(props.previewFile)),
+          routes: props.project.pages.map(routeFor),
         }}
+        inspector={mobile ? { open: mobileSettings && !props.view.pick, toggle: toggleInspector } : undefined}
       />
       <Inspector
         props={props}
@@ -186,20 +266,14 @@ function EditorContent({
         close={() => setMobileSettings(false)}
       />
       <CmsWorkspace props={props} document={model.document} />
-      {props.view.role !== 'client' && (
-        <VariablesWorkspace props={props} document={model.document} />
-      )}
-      {props.view.role !== 'client' && <CodePopup editor={model.codeWindow} />}
+      {can(props.view.studioRole, 'panel:variables') && <VariablesWorkspace props={props} document={model.document} />}
+      {can(props.view.studioRole, 'code:edit') && <CodePopup editor={model.codeWindow} />}
       <QuickInsert
         key={props.file}
         model={model}
         project={props.project}
-        enabled={
-          !model.collection &&
-          !(props.view.panel === 'collections' && props.view.cms) &&
-          props.view.panel !== 'variables' &&
-          !props.view.pick
-        }
+        enabled={!model.collection && !(props.view.panel === 'collections' && props.view.cms) && props.view.panel !== 'variables' && !props.view.pick}
+        browseApps={browseApps}
         report={props.report}
       />
     </div>
@@ -220,44 +294,61 @@ function Inspector({
   openCode: () => void;
   close: () => void;
 }) {
+  const translate = useTranslate();
   const { tab, setTab } = props.view;
-  const client = props.view.role === 'client';
+  // Without the Style panel the inspector shows Settings alone, as Client mode did.
+  const client = !can(props.view.studioRole, 'panel:style');
+  // Desktop's resize handle and stored width. Collapsed, the inspector floats at that width.
+  const resize = usePanelResize('right');
+  const mobile = useMobileEditor();
   if (model.collection) {
+    return null;
+  }
+  if (client && !can(props.view.studioRole, 'panel:settings')) {
     return null;
   }
   return (
     <aside
+      aria-label={translate('studio.inspector.label')}
       className={`studio-right ${visible ? 'mobile-open' : ''} ${client ? 'client-inspector' : ''}`}
+      style={{ width: resize.width }}
     >
-      <button className="mobile-close ghost" onClick={close} aria-label="Close settings">
-        ×
-      </button>
-      <InspectorTabs client={client} tab={tab} setTab={setTab} />
-      {!client && model.document && tab === 'style' && (
-        <StyleSettings
-          preview={model.preview.outlines}
-          document={model.document}
-          nodes={model.nodes}
-          selected={model.selected}
-          classes={props.project.classes}
-          select={model.select}
-          device={device}
-          report={props.report}
-        />
+      {/* The close button shares the tab row, so it takes the tabs' height and centre. */}
+      <div className="studio-inspector-head">
+        <InspectorTabs client={client} tab={tab} setTab={setTab} />
+        <PanelCloseButton label={translate('studio.inspector.close')} close={close} />
+      </div>
+      {!client && model.document && (
+        <KeptTabPanel shown={tab === 'style'}>
+          <StyleSettings
+            preview={model.preview.outlines}
+            document={model.document}
+            nodes={model.nodes}
+            selected={model.selected}
+            classes={props.project.classes}
+            lengthUnit={props.project.lengthUnit}
+            select={model.select}
+            device={device}
+            report={props.report}
+          />
+        </KeptTabPanel>
       )}
-      {model.document && tab === 'settings' && (
-        <Settings
-          key={props.view.role}
-          document={model.document}
-          node={model.node}
-          component={model.component}
-          project={props.project}
-          selected={model.selected}
-          nodes={model.nodes}
-          {...(client ? {} : { openCode })}
-          error={props.report}
-        />
+      {model.document && (
+        <KeptTabPanel shown={tab === 'settings'}>
+          <Settings
+            key={props.view.role}
+            document={model.document}
+            node={model.node}
+            component={model.component}
+            project={props.project}
+            selected={model.selected}
+            nodes={model.nodes}
+            {...(client ? {} : { openCode })}
+            error={props.report}
+          />
+        </KeptTabPanel>
       )}
+      {!mobile && resize.handle}
     </aside>
   );
 }
@@ -270,25 +361,26 @@ function InspectorTabs({
   readonly tab: 'style' | 'settings';
   readonly setTab: (tab: 'style' | 'settings') => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       {' '}
       {client ? (
-        <div className="right-tabs">Settings</div>
+        <div className="right-tabs">{translate('shell.rightTabs.settings')}</div>
       ) : (
         <div className="right-tabs">
           <span
             className="right-tabs-indicator"
             style={{
-              left: tab === 'style' ? '10px' : 'calc(50% + 1px)',
+              insetInlineStart: tab === 'style' ? '10px' : 'calc(50% + 1px)',
               width: 'calc(50% - 11px)',
             }}
           />
           <button className={tab === 'style' ? 'on' : ''} onClick={() => setTab('style')}>
-            Style
+            {translate('shell.rightTabs.style')}
           </button>
           <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>
-            Settings
+            {translate('shell.rightTabs.settings')}
           </button>
         </div>
       )}
@@ -296,19 +388,17 @@ function InspectorTabs({
   );
 }
 function PausedEditor({ resume }: { resume: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="boot">
-      <p>Studio paused to save hosting costs.</p>
-      <p>Your saved draft is safe.</p>
-      <button onClick={resume}>Resume editing</button>
+      <p>{translate('studio.paused.title')}</p>
+      <p>{translate('studio.paused.body')}</p>
+      <button onClick={resume}>{translate('studio.paused.resume')}</button>
     </div>
   );
 }
 
-function defaultsSelection(
-  model: ReturnType<typeof useEditor>,
-  canvas: ReturnType<typeof useStudioDefaultsCanvas>,
-): ReturnType<typeof useEditor> {
+function defaultsSelection(model: ReturnType<typeof useEditor>, canvas: ReturnType<typeof useStudioDefaultsCanvas>): ReturnType<typeof useEditor> {
   return {
     ...model,
     select: (id, occurrence) => {
@@ -322,4 +412,20 @@ function defaultsSelection(
       model.select(id, occurrence);
     },
   };
+}
+
+function editCanvasRoute(props: EditorProps, model: ReturnType<typeof useEditor>, destination: string): void {
+  // Under the static demo's base, the frame reports /demo/site/about for the project's /about.
+  const route = canvasRoute(destination, model.preview.url, canvasRouteFor(props.previewFile) ?? routeFor(props.previewFile));
+  // A route can be a template's entry (/docs/intro): that opens the template showing it.
+  const page = pageForRoute(props.project.pages, route, routeFor);
+  if (page) {
+    if (page.entry !== undefined) {
+      chooseTemplateEntry(page.file, page.entry);
+    }
+    props.open(page.file);
+  } else if (pageAddressHost()?.leave(route) !== true) {
+    // No host took the visitor to the route as the site serves it, so the canvas reloads its page.
+    model.preview.retry();
+  }
 }

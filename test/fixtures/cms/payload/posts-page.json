@@ -1,0 +1,165 @@
+{
+ "docs": [
+  {
+   "id": 8,
+   "title": "Post 008 alpha",
+   "slug": "post-8",
+   "tagline": "Tagline 8",
+   "body": {
+    "root": {
+     "type": "root",
+     "format": "",
+     "indent": 0,
+     "version": 1,
+     "direction": "ltr",
+     "children": [
+      {
+       "type": "paragraph",
+       "format": "",
+       "indent": 0,
+       "version": 1,
+       "direction": "ltr",
+       "textFormat": 0,
+       "children": [
+        {
+         "mode": "normal",
+         "text": "Body of post 8",
+         "type": "text",
+         "style": "",
+         "detail": 0,
+         "format": 0,
+         "version": 1
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "views": 8,
+   "featured": true,
+   "kind": "news",
+   "publishedAt": "2024-01-09T06:00:00.000Z",
+   "author": 1,
+   "categories": [
+    3
+   ],
+   "cover": 6,
+   "meta": {
+    "description": null
+   },
+   "contact": null,
+   "mode": null,
+   "snippet": null,
+   "extra": null,
+   "tags": [],
+   "links": [
+    {
+     "id": "6af6fc1673ae4c05fd86cf11",
+     "label": "L8",
+     "url": "https://example.test/8"
+    }
+   ],
+   "updatedAt": "2026-11-13T12:33:27.750Z",
+   "createdAt": "2026-11-13T12:01:26.282Z",
+   "_status": "draft"
+  },
+  {
+   "id": 7,
+   "title": "Post 007 zebra",
+   "slug": "post-7",
+   "tagline": "Tagline 7",
+   "body": {
+    "root": {
+     "type": "root",
+     "format": "",
+     "indent": 0,
+     "version": 1,
+     "direction": "ltr",
+     "children": [
+      {
+       "type": "paragraph",
+       "format": "",
+       "indent": 0,
+       "version": 1,
+       "direction": "ltr",
+       "textFormat": 0,
+       "children": [
+        {
+         "mode": "normal",
+         "text": "Body of post 7",
+         "type": "text",
+         "style": "",
+         "detail": 0,
+         "format": 0,
+         "version": 1
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "views": 7,
+   "featured": false,
+   "kind": "news",
+   "publishedAt": "2024-01-08T06:00:00.000Z",
+   "author": 1,
+   "categories": [
+    2
+   ],
+   "cover": null,
+   "meta": {
+    "description": null
+   },
+   "contact": null,
+   "mode": null,
+   "snippet": null,
+   "extra": null,
+   "tags": [],
+   "links": [
+    {
+     "id": "6af6fc1673ae4c05fd86cf10",
+     "label": "L7",
+     "url": "https://example.test/7"
+    }
+   ],
+   "updatedAt": "2026-11-13T12:33:27.600Z",
+   "createdAt": "2026-11-13T12:01:26.268Z",
+   "_status": "draft"
+  },
+  {
+   "id": 566,
+   "title": "Fresh qq80c",
+   "slug": "f-8d87ibu",
+   "tagline": null,
+   "body": null,
+   "views": 9999,
+   "featured": false,
+   "kind": null,
+   "publishedAt": null,
+   "author": null,
+   "categories": [],
+   "cover": null,
+   "meta": {
+    "description": null
+   },
+   "contact": null,
+   "mode": null,
+   "snippet": null,
+   "extra": null,
+   "tags": [],
+   "links": [],
+   "updatedAt": "2026-11-13T12:33:27.319Z",
+   "createdAt": "2026-11-13T12:33:26.479Z",
+   "_status": "draft"
+  }
+ ],
+ "hasNextPage": true,
+ "hasPrevPage": false,
+ "limit": 3,
+ "nextPage": 2,
+ "page": 1,
+ "pagingCounter": 1,
+ "prevPage": null,
+ "totalDocs": 567,
+ "totalPages": 189
+}

@@ -1,8 +1,8 @@
-// Model for editing grid-template-columns / -rows as an ordered list of tracks, with
-// per-track sizing (a "default" single size, or a minmax(min, max) pair). Reading
-// expands `repeat(n, …)` and drops [line-name] tokens so the list is one entry per
-// visible track; writing emits an explicit space-separated list (Webflow's native
-// API drops some CSS functions, so we avoid repeat() on write).
+// Model for grid-template-columns / -rows: the tracks of a value, per-track sizing
+// (a "default" single size, or a minmax(min, max) pair), which values a count can say
+// (classifyTrackCount) and what a typed track list may write (checkTrackExpression).
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 
 /** Split a track list on TOP-LEVEL whitespace (parens / brackets protect commas,
  *  minmax(), repeat(), and [line names]). */
@@ -58,106 +58,96 @@ export function parseTrackList(value: string): string[] {
   return out;
 }
 
-/** Join tracks back to a grid-template value ('' → clear the property). */
-export function serializeTrackList(tracks: string[]): string {
-  return tracks.length
-    ? tracks
-        .map((track) => track.trim())
-        .filter(Boolean)
-        .join(' ')
-    : '';
+/**
+ * What the Columns and Rows count control can say about a value.
+ *
+ * A count is faithful only when the value IS "N equal tracks": a number of tracks
+ * that are all `1fr`, `minmax(0, 1fr)` or `auto` (the sizes the stepper itself writes),
+ * said as `repeat(N, track)` or written out. Writing a count replaces the value with
+ * `repeat(N, track)`, so for anything else the number would be a lie and the write
+ * would destroy what was there. Those values are an `expression`: the control shows
+ * the value itself as text (`subgrid` says whether it is a subgrid, which has its own
+ * switch). Never decided by typing a count: only the explicit "Switch to count" turns
+ * an expression into a count.
+ *
+ * Expressions: auto-fit / auto-fill repeats, a variable count, a variable for the
+ * list, `subgrid`, `masonry`, named lines, mixed sizes (`100px 1fr`, `1fr 2fr`),
+ * fixed lengths, `minmax()` with any non-fr bound, `calc()` / `clamp()` / `min()` /
+ * `max()` / `fit-content()` sizes, `min-content` / `max-content`, a repeat of several
+ * tracks, a count outside 1..500, `!important` and CSS-wide keywords.
+ */
+export type TrackCount = { readonly kind: 'count'; readonly count: number } | { readonly kind: 'expression'; readonly subgrid: boolean };
+
+// The sizes that make equal tracks countable: what the count stepper writes.
+const EQUAL_TRACK = /^(1fr|auto|minmax\(\s*0(px)?\s*,\s*1fr\s*\))$/i;
+
+/** The largest count the stepper writes (GridFlowControls clampCount). */
+const TRACK_COUNT_MAX = 500;
+
+/** Classify a `grid-template-columns` / `-rows` value (with its `!important`, if any) for the count control. */
+export function classifyTrackCount(value: string): TrackCount {
+  const trimmed = value.trim();
+  const lower = trimmed.toLowerCase();
+  if (!trimmed || lower === 'none') {
+    return { kind: 'count', count: 0 };
+  }
+  const expression: TrackCount = { kind: 'expression', subgrid: /\bsubgrid\b/.test(lower) };
+  if (/!\s*important/.test(lower)) {
+    return expression;
+  }
+  const tokens = splitTracks(trimmed);
+  const first = tokens[0] ?? '';
+  const repeated = tokens.length === 1 ? first.match(/^repeat\(\s*(\d+)\s*,(.*)\)$/is) : undefined;
+  if (repeated) {
+    const count = parseInt(repeated[1] ?? '0', 10);
+    const sizes = splitTracks(repeated[2] ?? '');
+    const size = sizes[0] ?? '';
+    const countable = sizes.length === 1 && EQUAL_TRACK.test(size) && count >= 1 && count <= TRACK_COUNT_MAX;
+    return countable ? { kind: 'count', count } : expression;
+  }
+  const equal = tokens.length <= TRACK_COUNT_MAX && tokens.every((token) => EQUAL_TRACK.test(token) && token.replace(/\s+/g, '') === first.replace(/\s+/g, ''));
+  return equal ? { kind: 'count', count: tokens.length } : expression;
 }
 
-// Two ways of writing the same grid.
-//
-//   repeat(2, minmax(0, 1fr))        the count, said once
-//   minmax(0, 1fr) minmax(0, 1fr)    the tracks, written out
-//
-// Nothing chooses between them for the reader: the first is shorter and says
-// "these are all the same", the second is what you want in front of you when
-// one of them is about to stop being the same. Both are the same grid, so this
-// is a way of writing, not a change to the layout — and the panel's own
-// controls pick one each: the count stepper writes repeat(), and editing a
-// track in the grid settings writes them all out.
+/** Why a typed track list cannot be written: nothing in it, or text that is not one value. */
+export type TrackExpressionProblem = 'empty' | 'malformed';
+
+export type TrackExpressionCheck =
+  { readonly kind: 'ok'; readonly value: string; readonly important: boolean } | { readonly kind: 'invalid'; readonly problem: TrackExpressionProblem };
 
 /**
- * How a track list is written: a single `repeat()`, tracks written out that
- * could be a repeat(), tracks that differ (so they could not), or nothing.
+ * Check a typed track list before it is written: not empty, parentheses and
+ * brackets balanced and in order, and nothing that would end the declaration
+ * (`;`, braces). A trailing `!important` is the flag, not part of the value.
  */
-export function trackForm(value: string): 'repeat' | 'list' | 'mixed' | 'none' {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'none') {
-    return 'none';
+export function checkTrackExpression(text: string): TrackExpressionCheck {
+  let value = text.trim();
+  const flag = value.match(/!\s*important\s*$/i);
+  if (flag) {
+    value = value.slice(0, flag.index).trim();
   }
-  const top = splitTracks(trimmed).filter((x) => !x.startsWith('['));
-  if (top.length === 1) {
-    // `repeat(3, 1fr)` — a count and one track. `repeat(auto-fit, …)` is not a
-    // count and has its own control, so it is left alone here.
-    const rep = (top[0] ?? '').match(/^repeat\(\s*\d+\s*,(.*)\)$/is);
-    if (rep && splitTracks(rep[1] ?? '').filter((x) => !x.startsWith('[')).length === 1) {
-      return 'repeat';
+  if (!value) {
+    return { kind: 'invalid', problem: 'empty' };
+  }
+  if (/[;{}]/.test(value)) {
+    return { kind: 'invalid', problem: 'malformed' };
+  }
+  const closers: string[] = [];
+  for (const ch of value) {
+    if (ch === '(') {
+      closers.push(')');
+    } else if (ch === '[') {
+      closers.push(']');
+    } else if (ch === ')' || ch === ']') {
+      if (closers.pop() !== ch) {
+        return { kind: 'invalid', problem: 'malformed' };
+      }
     }
   }
-  const tracks = parseTrackList(trimmed);
-  if (tracks.length > 1 && tracks.every((x) => x === tracks[0])) {
-    return 'list';
-  }
-  return 'mixed';
+  return closers.length === 0 ? { kind: 'ok', value, important: flag !== null } : { kind: 'invalid', problem: 'malformed' };
 }
 
-/** The same tracks written out one by one, or '' if there is nothing to write. */
-export function asTrackList(value: string): string {
-  return serializeTrackList(parseTrackList(value));
-}
-
-/**
- * Whether the track list controls can hold this value — that is, whether it is
- * a list of tracks at all.
- *
- * `!important`, a CSS-wide keyword, `subgrid`, or a variable standing in for
- * the whole list are all values a grid can have and the track editors cannot:
- * shown as tracks they would read as one track with a strange name, and the
- * first edit would write that reading back over what was there. So the panel
- * keeps those in the expression field and says the tracks are not available.
- */
-export function canEditAsTracks(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return true;
-  }
-  if (/!\s*important/i.test(trimmed)) {
-    return false;
-  }
-  const lower = trimmed.toLowerCase();
-  if (/^(inherit|initial|unset|revert|revert-layer)$/.test(lower)) {
-    return false;
-  }
-  if (/\b(subgrid|masonry)\b/.test(lower)) {
-    return false;
-  }
-  const tracks = parseTrackList(trimmed);
-  if (!tracks.length) {
-    return lower === 'none';
-  }
-  // A variable in place of ONE track is a track — the editors hold it fine. One
-  // in place of the whole list only looks like a track.
-  if (tracks.length === 1 && /^var\(/i.test(tracks[0] ?? '')) {
-    return false;
-  }
-  return true;
-}
-
-/** The same tracks as a `repeat()`, or '' when they differ and it cannot say them. */
-export function asRepeat(value: string): string {
-  const tracks = parseTrackList(value);
-  if (tracks.length < 2 || !tracks.every((x) => x === tracks[0])) {
-    return '';
-  }
-  return `repeat(${tracks.length}, ${tracks[0]})`;
-}
-
-export type TrackSize =
-  { mode: 'default'; value: string } | { mode: 'minmax'; min: string; max: string };
+export type TrackSize = { mode: 'default'; value: string } | { mode: 'minmax'; min: string; max: string };
 
 /** Parse a single track into its sizing (a minmax pair, or a single value). */
 export function parseTrackSize(track: string): TrackSize {
@@ -198,35 +188,14 @@ export function trackKind(track: string): TrackKind {
   return 'other';
 }
 
-/**
- * Whether a track is a `<fixed-size>` — the only track shape CSS permits inside an
- * auto-fit / auto-fill `repeat()`. Per the Grid spec that's:
- *   • a fixed `<length-percentage>` (20rem, 50%, …), OR
- *   • `minmax(<fixed-breadth>, <track-breadth>)` — a FIXED min, any max (so
- *     `minmax(20rem, 1fr)`, the canonical responsive pattern, qualifies), OR
- *   • `minmax(<inflexible-breadth>, <fixed-breadth>)` — an inflexible min (fixed /
- *     auto / min|max-content, but NOT fr) and a FIXED max.
- * Bare `fr`, `auto`, `min|max-content`, and `fit-content()` are NOT fixed-size.
- */
-export function isFixedSizeTrack(track: string): boolean {
-  const isFixedBreadth = (track: string) => trackKind(track) === 'length';
-  const isInflexibleBreadth = (track: string) =>
-    ['length', 'auto', 'content'].includes(trackKind(track));
-  const size = parseTrackSize(track);
-  if (size.mode === 'default') {
-    return isFixedBreadth(size.value);
-  }
-  return isFixedBreadth(size.min) || (isInflexibleBreadth(size.min) && isFixedBreadth(size.max));
-}
-
 /** Short human label for a track row (Webflow-style). */
-export function trackLabel(track: string): string {
+export function trackLabel(track: string, translate: Translator = ENGLISH_TRANSLATE): string {
   const size = parseTrackSize(track);
   if (size.mode === 'minmax') {
-    return `Min/Max: ${size.min} / ${size.max}`;
+    return translate('styleModel.grid.track.minMax', { min: size.min, max: size.max });
   }
   const sizeValue = size.value.trim();
-  return sizeValue.toLowerCase() === 'auto' || !sizeValue ? 'Auto' : sizeValue;
+  return sizeValue.toLowerCase() === 'auto' || !sizeValue ? translate('styleModel.grid.track.auto') : sizeValue;
 }
 
 // ── grid-template-areas ──
@@ -242,11 +211,7 @@ export type GridArea = {
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type GridAreaPatch =
-  | Pick<GridArea, 'name'>
-  | Pick<GridArea, 'colStart'>
-  | Pick<GridArea, 'colEnd'>
-  | Pick<GridArea, 'rowStart'>
-  | Pick<GridArea, 'rowEnd'>;
+  Pick<GridArea, 'name'> | Pick<GridArea, 'colStart'> | Pick<GridArea, 'colEnd'> | Pick<GridArea, 'rowStart'> | Pick<GridArea, 'rowEnd'>;
 
 /** Parse a `grid-template-areas` value into its named areas (in first-appearance
  *  order), each as the bounding box of the cells its name occupies. `.` = empty. */
@@ -297,17 +262,13 @@ export function parseAreas(value: string): GridArea[] {
 /** Emit a `grid-template-areas` value from named areas — paints each area's rectangle
  *  into a grid sized to the furthest extent, `.` for uncovered cells ('' → clear). */
 export function serializeAreas(areas: GridArea[]): string {
-  const valid = areas.filter(
-    (area) => area.name.trim() && area.colStart >= 1 && area.rowStart >= 1,
-  );
+  const valid = areas.filter((area) => area.name.trim() && area.colStart >= 1 && area.rowStart >= 1);
   if (!valid.length) {
     return '';
   }
   const rows = Math.max(...valid.map((area) => Math.max(area.rowStart, area.rowEnd)));
   const cols = Math.max(...valid.map((area) => Math.max(area.colStart, area.colEnd)));
-  const grid: string[][] = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => '.'),
-  );
+  const grid: string[][] = Array.from({ length: rows }, () => Array.from({ length: cols }, () => '.'));
   for (const area of valid) {
     const rowFirst = Math.min(area.rowStart, area.rowEnd),
       rowLast = Math.max(area.rowStart, area.rowEnd);
@@ -327,19 +288,21 @@ export function serializeAreas(areas: GridArea[]): string {
 }
 
 /** The list-row label: `{name} Row {rowStart} / Col {colStart}` (Webflow-style). */
-export function areaLabel(area: GridArea): string {
-  return `${area.name} Row ${area.rowStart} / Col ${area.colStart}`;
+export function areaLabel(area: GridArea, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate('styleModel.grid.area.position', { name: area.name, row: area.rowStart, column: area.colStart });
 }
 
 /** A unique `Area` / `Area-2` / … name not already used. */
 export function nextAreaName(areas: GridArea[]): string {
   const used = new Set(areas.map((area) => area.name));
   if (!used.has('Area')) {
+    // i18n-ignore: the generated name is an identifier written into the user's grid-template-areas.
     return 'Area';
   }
   const candidateCount = areas.length + 2;
   for (let number = 2; number <= candidateCount; number += 1) {
     if (!used.has(`Area-${number}`)) {
+      // i18n-ignore: the generated name is an identifier written into the user's grid-template-areas.
       return `Area-${number}`;
     }
   }

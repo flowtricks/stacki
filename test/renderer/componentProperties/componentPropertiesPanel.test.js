@@ -10,10 +10,8 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
-const {
-  readComponentProperties,
-  editPropertyDefinition,
-} = require('#dist/electron/properties/propertyDefinitions.js');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
+const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
 
 test('component properties lifecycle and controls', async () => {
   const directory = repoPath('node_modules/.stacki-test/properties');
@@ -25,7 +23,9 @@ test('component properties lifecycle and controls', async () => {
        from './src/features/componentProperties/ComponentPropertiesPanel';
      export {default as Rail} from './src/app/LeftRail';
      export {literalOptions} from './src/features/componentProperties/PropertyEditor';
-     export {movePropertyItem} from './src/features/componentProperties/PropertyReorder';`,
+     export {movePropertyItem} from './src/features/componentProperties/PropertyReorder';
+     export {EditorView} from '@codemirror/view';
+     export {ConfirmHost} from './src/ui/ConfirmDialog';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -43,17 +43,7 @@ test('component properties lifecycle and controls', async () => {
     pretendToBeVisual: true,
   });
   require('../../helpers/popupDom').installPopupDOM(dom.window);
-  for (const key of [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-    'Window',
-    'DOMRect',
-  ]) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'Window', 'DOMRect']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
   }
   global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -63,7 +53,7 @@ test('component properties lifecycle and controls', async () => {
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const { Panel, Rail, literalOptions, movePropertyItem } = require(bundle);
+  const { Panel, Rail, literalOptions, movePropertyItem, EditorView, ConfirmHost } = require(bundle);
   const names = ['title', 'variant', 'visible'];
   assert.deepEqual(movePropertyItem(names, 0, 3), ['variant', 'visible', 'title']);
   assert.deepEqual(movePropertyItem(names, 2, 0), ['visible', 'title', 'variant']);
@@ -103,12 +93,7 @@ test('component properties lifecycle and controls', async () => {
   assert(document.querySelector('[aria-label="Properties (K)"]'));
   await key('k');
   assert.deepEqual(clicked, ['properties']);
-  for (const options of [
-    { ctrlKey: true },
-    { metaKey: true },
-    { altKey: true },
-    { shiftKey: true },
-  ]) {
+  for (const options of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }]) {
     await key('k', options);
   }
   const input = document.createElement('input');
@@ -119,6 +104,12 @@ test('component properties lifecycle and controls', async () => {
   await renderRail(false);
   await key('k');
   assert.equal(clicked.length, 1);
+  // Option rewrites e.key ("√" for V), so the Option panels match the physical key.
+  await key('√', { altKey: true, code: 'KeyV' });
+  await key('ç', { altKey: true, code: 'KeyC' });
+  await key('˙', { altKey: true, code: 'KeyH' });
+  assert.deepEqual(clicked.slice(1), ['variables', 'cms', 'history']);
+  clicked.length = 1;
 
   const property = {
     name: 'title',
@@ -162,6 +153,11 @@ test('component properties lifecycle and controls', async () => {
       return result.ok ? { ...result, value: { ...result.value, undo: UNDO_TOKEN } } : result;
     },
     revertComponentProperties: async () => ({ ok: true, value: { undo: UNDO_TOKEN } }),
+    // A deletion asks first, with what it will take out across the site (propertyRemovalDialog.tsx).
+    previewPropertyRemoval: async (request) => ({
+      ok: true,
+      value: { name: request.name, component: 'src/components/Card.astro', usages: [{ path: 'src/pages/index.astro', count: 2 }], reviews: [] },
+    }),
     __editProperties: async (request) => {
       edits.push(request);
       order.push('write');
@@ -169,9 +165,7 @@ test('component properties lifecycle and controls', async () => {
         data = {
           ...data,
           source: `${data.source}\noptions:${request.change.type}`,
-          properties: data.properties.map((field) =>
-            field.name === request.change.name ? { ...field, type: request.change.type } : field,
-          ),
+          properties: data.properties.map((field) => (field.name === request.change.name ? { ...field, type: request.change.type } : field)),
         };
         return { ok: true, value: data };
       }
@@ -182,9 +176,7 @@ test('component properties lifecycle and controls', async () => {
       if (request.change.kind === 'order') {
         data = {
           ...data,
-          properties: request.change.names.map((name) =>
-            data.properties.find((field) => field.name === name),
-          ),
+          properties: request.change.names.map((name) => data.properties.find((field) => field.name === name)),
         };
         return { ok: true, value: data };
       }
@@ -238,10 +230,7 @@ test('component properties lifecycle and controls', async () => {
     await pointer(window, 'pointermove', gap * 40);
     await pointer(window, 'pointerup', gap * 40);
   };
-  const optionValues = () =>
-    [...document.querySelectorAll('.property-options .list-field-text')].map((row) =>
-      row.textContent.trim(),
-    );
+  const optionValues = () => [...document.querySelectorAll('.property-options .list-field-text')].map((row) => row.textContent.trim());
   const dragOptions = async (from, gap) => {
     const rows = [...document.querySelectorAll('.property-options .list-field-row')];
     rows.forEach((row, index) => {
@@ -278,56 +267,66 @@ test('component properties lifecycle and controls', async () => {
   assert.deepEqual(order.slice(-5), ['saving', 'flush', 'write', 'refresh', 'idle']);
   await act(async () => document.querySelector('[aria-label="Add property"]').click());
   assert.match(document.body.textContent, /New property/);
-  const save = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Save property',
+  const setValue = async (element, value) =>
+    act(async () => {
+      const prototype = element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+      element.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  // An existing prop saves itself; closing its form saves what is pending, and the save takes a turn to land.
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+  const closeEditor = async () => {
+    await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
+    await settle();
+  };
+  // A new prop has no Save button: it is created when its name is committed, and a name that cannot be one says why.
+  assert.equal(
+    [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property'),
+    undefined,
   );
-  await act(async () => save.click());
+  const nameInput = document.querySelector('.property-editor input');
+  await setValue(nameInput, '1 bad');
+  await act(async () => nameInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   assert.match(toastMessages(), /Use a name/);
   assert.equal(edits.length, 1);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
-  await act(async () =>
-    [...document.querySelectorAll('.property-row-main')]
-      .find((button) => button.textContent.includes('title'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.includes('title')).click());
   assert.equal(document.querySelector('[aria-label="Default text"]').value, 'Hello');
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
-  assert.match(toastMessages(), /Write failed/);
-  assert.match(document.body.textContent, /Property settings/);
+  await setValue(document.querySelector('[aria-label="Default text"]'), 'Hello there');
+  await closeEditor();
+  assert.match(toastMessages(), /Write failed/, 'a save refused as the form closes still says why');
   assert.deepEqual(literalOptions('"One | two" | "Three"'), ['"One | two"', '"Three"']);
   assert.equal(literalOptions('string | { tag: "a" | "b" }'), undefined);
-  await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
+  const confirmRoot = createRoot(document.body.appendChild(document.createElement('div')));
+  await act(async () => confirmRoot.render(React.createElement(ConfirmHost)));
   await act(async () => document.querySelector('[aria-label="Delete title"]').click());
+  await settle();
+  assert.match(
+    document.querySelector('.confirm-dialog').textContent,
+    /Delete title\?.*Removes its value from 2 instances:.*src\/pages\/index\.astro · 2.*One Undo restores everything\./,
+  );
+  assert.notDeepEqual(edits.at(-1).change, { kind: 'remove', name: 'title' }, 'nothing is deleted before the answer');
+  await act(async () => [...document.querySelectorAll('.confirm-dialog button')].find((button) => button.textContent === 'Delete property').click());
+  await settle();
+  assert.equal(document.querySelectorAll('.confirm-dialog').length, 0, 'the answer closes the dialog');
+  await act(async () => confirmRoot.unmount());
   assert.deepEqual(edits.at(-1).change, { kind: 'remove', name: 'title' });
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(0, 2);
+  await settle();
   assert.equal(optionValues()[0], 'Outline');
   assert.equal(optionValues()[1], 'Solid');
-  assert.deepEqual(edits.at(-1).change, {
-    kind: 'options',
-    name: 'variant',
-    type: '"Outline" | "Solid"',
-  });
+  assert.equal(edits.at(-1).change.property.type, '"Outline" | "Solid"', 'a move saves at once');
+  const movesSent = edits.length;
   await dragOptions(1, 0);
+  await settle();
   assert.equal(optionValues()[0], 'Solid');
-  assert.deepEqual(edits.at(-1).change, {
-    kind: 'options',
-    name: 'variant',
-    type: '"Solid" | "Outline"',
-  });
+  assert.equal(edits.length, movesSent, 'the move above was refused, so moving back to what the file holds has nothing to save');
   await act(async () => document.querySelector('.property-options .list-field-remove').click());
   assert.equal(optionValues()[0], 'Outline');
   assert.equal(document.querySelector('.property-options .list-field-remove').disabled, true);
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
-  assert.equal(edits.at(-1).change.property.type, '"Outline"');
+  await settle();
+  assert.equal(edits.at(-1).change.property.type, '"Outline"', 'removing an option saves at once');
   const previousReads = reads;
   const flushCount = order.filter((item) => item === 'flush').length;
   await notify(['/site/src/components/Other.astro']);
@@ -397,8 +396,8 @@ test('component properties lifecycle and controls', async () => {
   readProperties = async () => ({ ok: true, value: data });
   await notify();
   assert.match(document.querySelector('.property-list').textContent, /afterSave/);
-  // A conflict can arrive before its watcher event. Reconcile it automatically
-  // so removing Reload cannot leave the panel stuck on an obsolete revision.
+  // A conflict can arrive before its watcher event. The form reloads what the file
+  // holds, so the panel cannot be left stuck on an obsolete revision.
   await act(async () => document.querySelector('.property-row-main').click());
   data = {
     ...data,
@@ -406,19 +405,16 @@ test('component properties lifecycle and controls', async () => {
     properties: [{ ...property, name: 'reconciled' }],
   };
   failure = { code: 'conflict', message: 'Changed on disk' };
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await act(async () => document.querySelector('.property-flags input').click());
+  await settle();
+  assert.match(toastMessages(), /no longer has/, 'the form reloads, and a toast says the prop is gone');
+  assert.equal(document.querySelector('.property-editor [role="alert"]') ?? undefined, undefined, 'no alert paragraph is added to the form');
+  await closeEditor();
   assert.match(document.querySelector('.property-list').textContent, /reconciled/);
   assert.ok(document.querySelector('.property-editor') === null);
 
   // Exercise the actual inherited-contract reader and writer through the controls.
-  const {
-    readComponentProperties,
-    editPropertyDefinition,
-  } = require('#dist/electron/properties/propertyDefinitions.js');
+  const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
   const inherited = `---
 import type { HTMLAttributes } from 'astro/types';
 type ContainerGap = 'small' | 'medium' | 'large';
@@ -439,23 +435,17 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
+  assert.match(toastMessages(), /ContainerGap is used 2 times in this file/, 'the shared-alias warning is a toast');
+  assert.equal(document.querySelector('.property-share-warning') ?? undefined, undefined, 'no warning paragraph is added to the form');
   assert.ok(document.querySelector('[aria-label="Component TypeScript source"]') === null);
   assert.equal(optionValues()[0], 'small');
-  const setValue = async (element, value) =>
-    act(async () => {
-      const prototype =
-        element.tagName === 'TEXTAREA'
-          ? window.HTMLTextAreaElement.prototype
-          : window.HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
-      element.dispatchEvent(new window.Event('input', { bubbles: true }));
-    });
-  const pressDown = async (element) =>
-    act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
+  const pressDown = async (element) => act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
   assert.ok(document.querySelector('.property-options input') === null);
   await act(async () => document.querySelector('.property-options .list-field-text').click());
-  const firstOption = document.querySelector('.list-item-field input');
-  assert.equal(document.activeElement, firstOption);
+  const firstOption = document.querySelector('.list-item-editor input');
+  // Never assert.equal on nodes: a failing one inspected the whole fiber tree and took over 4 GB in
+  // 5 s here (docs/memory-safety.md).
+  assertSameElement(document.activeElement, firstOption, 'the first option has the keyboard');
   assert.equal(firstOption.selectionStart, 0);
   assert.equal(firstOption.selectionEnd, 'small'.length);
   await pressDown(firstOption);
@@ -470,11 +460,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.equal(document.querySelectorAll('.dd-option').length, 1);
   await pressDown(document.querySelector('.dd-option'));
   assert.ok(document.querySelector('.property-editor'));
-  await act(async () =>
-    document
-      .querySelector('.dd-option')
-      .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('.dd-option').dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
   assert.equal(defaultLabel(), 'compact');
   await act(async () => document.querySelector('.dd-option').click());
   assert.equal(defaultLabel(), 'medium');
@@ -489,40 +475,46 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
     .find((label) => label.textContent.trim().startsWith('Tooltip'))
     .querySelector('textarea');
   await setValue(tooltip, 'Choose space between items.');
-  await act(async () => document.querySelector('.property-flags input').click());
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  // An existing prop's Required is its Visibility's Required choice (PropertyVisibility.tsx).
+  await act(async () => document.querySelector('.property-visibility [role="radio"][aria-label="Required"]').click());
+  await closeEditor();
   const editedGap = data.properties.find((field) => field.name === 'spacing');
   assert.equal(editedGap.required, true);
   assert.equal(editedGap.description, 'Choose space between items.');
   assert.equal(editedGap.type, `'large' | "compact" | 'medium'`);
   assert.equal(editedGap.defaultValue, '"compact"');
-  assert.deepEqual(edits.at(-1).change.optionRenames, [{ from: "'small'", to: '"compact"' }]);
+  // Sent once, with the save that changed the option; the rename on closing does not repeat it.
+  assert.deepEqual(
+    edits.flatMap((edit) => edit.change.optionRenames ?? []),
+    [{ from: "'small'", to: '"compact"' }],
+  );
+  // The options live in the alias both props use, so the edit is written there (the form warned it changes both).
+  assert.match(data.source, /spacing: ContainerGap/);
   assert.match(data.source, /other\?: ContainerGap/);
   assert.match(data.source, /Props extends HTMLAttributes<'section'>/);
-  assert.match(data.source, /type ContainerGap = 'small' \| 'medium' \| 'large'/);
-  // Type controls reuse the searchable dropdown and preserve expressions across
-  // mode toggles. Browsing choices does not replace the current union.
+  assert.match(data.source, /type ContainerGap = 'large' \| "compact" \| 'medium'/);
+  // The Kind picker reuses the searchable dropdown; the `{}` toggle beside
+  // Options (or Kind, for a prop without options) shows the exact expression. Browsing kinds does not replace the current union.
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Options/);
-  const toggleType = async (label) =>
-    act(async () => document.querySelector(`[aria-label="${label}"]`).click());
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, editedGap.type);
-  await toggleType('Use the type dropdown');
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Choice/);
+  const codeInput = () => document.querySelector('[aria-label="Code type"]');
+  // The field is CodeMirror, so it is typed through its own transactions.
+  const typeCode = async (text) => {
+    const view = EditorView.findFromDOM(document.querySelector('.property-code .cm-editor'));
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+  };
+  const toggleCode = async () => act(async () => document.querySelector('.property-code-toggle').click());
+  assert.ok(codeInput() === null);
+  await toggleCode();
+  assert.equal(codeInput().textContent, editedGap.type);
+  await toggleCode();
+  assert.ok(codeInput() === null);
   assert.equal(optionValues()[0], 'large');
   await act(async () => document.querySelector('.property-type .dd-trigger').click());
   assert(document.querySelector('.dd-search'));
   await setValue(document.querySelector('.dd-search'), 'boolean');
   assert.equal(document.querySelectorAll('.dd-option').length, 1);
-  await act(async () =>
-    document
-      .querySelector('.dd-option')
-      .dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })),
-  );
+  await act(async () => document.querySelector('.dd-option').dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
   assert.equal(optionValues()[0], 'large');
   await key('Escape', {}, document.querySelector('.dd-search'));
   assert.equal(optionValues()[0], 'large');
@@ -530,23 +522,13 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   await setValue(document.querySelector('.dd-search'), 'boolean');
   await act(async () => document.querySelector('.dd-option').click());
   assert.ok(document.querySelector('.property-options .list-field') === null);
-  await toggleType('Write a type expression');
-  assert.equal(document.querySelector('input[aria-label="Type expression"]').value, 'boolean');
-  await setValue(
-    document.querySelector('input[aria-label="Type expression"]'),
-    'typeof designTheme',
-  );
-  await toggleType('Use the type dropdown');
-  assert.match(
-    document.querySelector('.property-type .dd-trigger').textContent,
-    /typeof designTheme/,
-  );
-  await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    'typeof designTheme',
-  );
-  // Existing unsupported types open directly as ordinary inputs.
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Switch/);
+  await toggleCode();
+  assert.equal(codeInput().textContent, 'boolean');
+  await typeCode('typeof designTheme');
+  assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Code type/);
+  assert.equal(codeInput().textContent, 'typeof designTheme');
+  // Existing unsupported types open directly in the Code type field.
   data = {
     ...data,
     source: 'custom type',
@@ -554,10 +536,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    'typeof designTheme',
-  );
+  assert.equal(codeInput().textContent, 'typeof designTheme');
   // A default that names another frontmatter value is shown as a binding. Its
   // chip opens the same scoped picker used by prop values and can be repointed.
   const boundDefault = `---
@@ -571,27 +550,15 @@ const { tag = 'h2', variant = tag } = Astro.props;
 <h1>{variant}</h1>`;
   data = readComponentProperties(boundDefault);
   await notify();
-  await act(async () =>
-    [...document.querySelectorAll('.property-row-main')]
-      .find((button) => button.textContent.includes('variant'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.includes('variant')).click());
   const defaultChip = document.querySelector('.property-default .cm-chip');
   assert.equal(defaultChip.textContent, 'tag');
   assert.ok(document.querySelector('.property-default textarea') === null);
   await pressDown(defaultChip);
   assert.equal(document.querySelector('.bind-menu .dp-row.selected .dp-key').textContent, 'tag');
-  await act(async () =>
-    [...document.querySelectorAll('.bind-menu .dp-row')]
-      .find((row) => row.title.startsWith('fallback'))
-      .click(),
-  );
+  await act(async () => [...document.querySelectorAll('.bind-menu .dp-row')].find((row) => row.title.startsWith('fallback')).click());
   assert.equal(document.querySelector('.property-default .cm-content').textContent, 'fallback');
-  await act(async () =>
-    [...document.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Save property')
-      .click(),
-  );
+  await closeEditor();
   assert.equal(data.properties.find((field) => field.name === 'variant').defaultValue, 'fallback');
   assert.match(data.source, /variant = fallback/);
   // The shared editor handles add/edit/remove and drag while the adapter keeps
@@ -611,45 +578,39 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(4, 0);
-  await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    '"1" | true | false | "true" | 1',
-  );
-  await toggleType('Use the type dropdown');
+  await toggleCode();
+  assert.equal(codeInput().textContent, '"1" | true | false | "true" | 1');
+  await toggleCode();
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[4].click());
-  await setValue(document.querySelector('.list-item-field input'), '-');
-  await setValue(document.querySelector('.list-item-field input'), '-2');
+  await setValue(document.querySelector('.list-item-editor input'), '-');
+  await setValue(document.querySelector('.list-item-editor input'), '-2');
   await act(async () => document.querySelector('.list-item-editor [title="Close"]').click());
-  await toggleType('Write a type expression');
-  assert.equal(
-    document.querySelector('input[aria-label="Type expression"]').value,
-    '"1" | true | false | "true" | -2',
-  );
-  await toggleType('Use the type dropdown');
+  await toggleCode();
+  assert.equal(codeInput().textContent, '"1" | true | false | "true" | -2');
+  await toggleCode();
   await act(async () => document.querySelector('.property-options .list-field-add').click());
-  assert.equal(document.querySelector('.list-item-field input').value, '');
+  assert.equal(document.querySelector('.list-item-editor input').value, '');
   assert.equal(optionValues().length, 5);
   const added = 'A "quoted" | option';
-  await setValue(document.querySelector('.list-item-field input'), added);
-  await key('Enter', {}, document.querySelector('.list-item-field input'));
+  await setValue(document.querySelector('.list-item-editor input'), added);
+  await key('Enter', {}, document.querySelector('.list-item-editor input'));
   assert.equal(optionValues().at(-1), added);
   assert.ok(document.querySelector('.list-item-editor') === null);
-  await act(async () =>
-    [...document.querySelectorAll('.property-options .list-field-remove')].at(-1).click(),
-  );
+  await act(async () => [...document.querySelectorAll('.property-options .list-field-remove')].at(-1).click());
   assert.equal(optionValues().length, 5);
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[1].click());
-  await setValue(document.querySelector('.list-item-field input'), 'false');
-  await key('Escape', {}, document.querySelector('.list-item-field input'));
+  await setValue(document.querySelector('.list-item-editor input'), 'false');
+  await key('Escape', {}, document.querySelector('.list-item-editor input'));
   assert.equal(defaultLabel(), 'false');
   assert.ok(document.querySelector('.list-item-editor') === null);
   // Settings use the shared dismissal behavior for app chrome and canvas clicks.
   // Nested option popovers and dropdowns above remain inside the settings editor.
   const editsBeforeDismiss = edits.length;
   await pressDown(document.querySelector('.property-component'));
+  await settle();
   assert.equal(document.querySelector('.property-editor') === null, true);
-  assert.equal(edits.length, editsBeforeDismiss);
+  assert.equal(edits.length, editsBeforeDismiss + 1, 'a dismissal is a close, so it saves what was pending');
+  const editsAfterDismiss = edits.length;
   await act(async () => document.querySelector('.property-row-main').click());
   await act(async () =>
     window.dispatchEvent(
@@ -659,8 +620,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
     ),
   );
   assert.equal(document.querySelector('.property-editor') === null, true);
-  assert.equal(edits.length, editsBeforeDismiss);
-  // Unsupported contracts still open property settings rather than raw source.
+  assert.equal(edits.length, editsAfterDismiss, 'with nothing pending, it writes nothing');
+  // Combined contracts open editable property settings, never raw source.
   data = {
     ...data,
     source: 'unsupported contract',
@@ -681,7 +642,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   assert.match(document.body.textContent, /Property settings/);
   assert.ok(document.querySelector('[aria-label="Component TypeScript source"]') === null);
-  assert.equal(document.querySelector('.property-readonly-fields textarea').readOnly, true);
+  assert.ok(document.querySelector('.property-readonly-fields') === null, 'a combined contract is edited, not read');
+  assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-source-tag') === null);
   assert.match(document.querySelector('.property-declaration-info').title, /Tag\./);
   assert.match(document.querySelector('.property-declaration-info').title, /line 3/);
@@ -693,8 +655,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   await pressDown(document.querySelector('.property-component'));
   assert.ok(document.querySelector('.property-editor') === null);
-  assert.equal(edits.length, editsBeforeDismiss);
-  // Common fields in a combined contract use normal editing; only affected props are restricted.
+  assert.equal(edits.length, editsAfterDismiss);
+  // Every field in a combined contract uses normal editing; variant rules are shown beside it.
   data = {
     ...data,
     source: 'combined contract',
@@ -708,17 +670,14 @@ const { tag = 'h2', variant = tag } = Astro.props;
       {
         ...property,
         name: 'image',
-        editing: {
-          kind: 'restricted',
-          reason: 'This prop has variant rules. Edit its declaration in source.',
-        },
+        editing: { kind: 'editable' },
         conditions: ['variant = "default": not allowed', 'variant = "cover": optional'],
       },
     ],
   };
   await notify();
   assert.equal(document.querySelector('[aria-label="Delete eyebrow"]').disabled, false);
-  assert.equal(document.querySelector('[aria-label="Delete image"]').disabled, true);
+  assert.equal(document.querySelector('[aria-label="Delete image"]').disabled, false);
   await act(async () => document.querySelector('.property-row-main').click());
   assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-readonly-fields') === null);
@@ -727,8 +686,8 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
   await act(async () => document.querySelectorAll('.property-row-main')[1].click());
   assert.match(document.querySelector('.property-conditions').textContent, /default.*not allowed/);
-  assert.match(document.querySelector('.property-readonly-fields').textContent, /variant rules/);
-  assert.ok(document.querySelector('.property-editor fieldset') === null);
+  assert.ok(document.querySelector('.property-readonly-fields') === null);
+  assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   // Inherited Astro attributes can be overridden locally without exposing a
   // rename or delete that would leave the inherited contract in place.
   data = {
@@ -752,10 +711,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   assert.equal(document.querySelector('.property-editor fieldset').disabled, false);
   assert.ok(document.querySelector('.property-readonly-fields') === null);
   assert.equal(document.querySelector('.property-editor label input').disabled, true);
-  assert.equal(
-    document.querySelector('textarea[placeholder="Describe how to use this property…"]').readOnly,
-    false,
-  );
+  assert.equal(document.querySelector('textarea[placeholder="Describe how to use this property…"]').readOnly, false);
   assert.match(document.querySelector('.property-editor').textContent, /declared locally/);
   assert.ok(document.querySelector('.property-actions .danger') === null);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());

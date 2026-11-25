@@ -12,8 +12,66 @@ import { SourceTextModule } from 'node:vm';
 import { createServer, type ViteDevServer } from 'vite';
 
 // Includes publishing, project metadata, defaults-canvas, and history payload parsers.
-// The current renderer contract graph contains 44 modules, including the page-order parser.
-const MODULES_MAX = 44;
+// The graph includes the package-source and review-receipt contracts alongside account sign-in.
+// The validated merge-result payload adds one module to the 47-module graph.
+// The package manager a new site is created with adds one more.
+// Saved publish settings now validate their URL through the published-site contract.
+// CMS connections and the connected-CMS panel add their contracts (connections, remote
+// documents, remote schema): three more. A video link's card (linkPreview) and the
+// project's content collections shown as a connection (astroContent): two more.
+// A content collection's settings (collectionSettings) and its fields' checks (fieldChecks):
+// two more. The unused-selector payloads (selectorUsage) and the styles keep list
+// (styleKeepList) that project metadata validates: two more. Reading what a loop goes
+// through (loopSource) and the dev server's answer about a page's last-rendered values
+// (previewScope), for the binding picker's loop items: two more.
+// The page template form's plan and sample payloads (pageTemplate): one more.
+// The project scan's length unit (lengthUnit), rem in a Lumos project: one more.
+// Media hosting: the IPC payloads validate saved connections, folders and uploads
+// (mediaHosting) and a provider account's key and connect request (mediaAccounts): two more.
+// Project metadata validates the panels' folder settings (projectFolders): one more.
+// The history panel's author pictures validate their request and reply (commitAvatars): one more.
+// Project metadata validates the roles file (projectRoles): one more.
+// The Stacki Apps IPC payloads validate app ids, capabilities, staged tokens and GitHub
+// sources before invoke, as docs/contracts.md asks of every channel (apps): one more.
+// The apps manifest parser validates app commands and shortcut claims, whose
+// shortcut grammar and reserved range live in their own contract (appShortcuts): one more.
+// Sharing and publishing apps add four: the payloads validate shares, repositories and submissions
+// (appPublish, which names the marketplace's one license from appMarketplace), and the manifest
+// parser reads each app's settings (appSettings) and its secret-scan allowlist (appSecrets).
+// App storage's payloads validate keys, scopes, values and writer tokens before invoke (appStorage):
+// one more.
+// Apps added as a folder: the payloads validate a folder's name before invoke (appFolders): one more.
+// App project files and sign-ins: the payloads validate file operations (appFiles) and provider ids,
+// and the manifest parser reads each app's `network` and `auth` (appAuth): two more.
+// App permissions: the manifest parser and the roles file read each app's `permissions`
+// (appPermissions): one more.
+// Stacki connections and requests through the host: the manifest parser reads the connections registry
+// (appConnections), and the payloads validate a request an app asks the host to make (appNet): two more.
+// The Instructions panel's payloads validate its listing and files (instructions), and project
+// metadata reads the Audits panel's ignore list (auditIgnores): two more.
+// The AI chat's payloads validate chats, prompts and agent events (aiChat), over the chat model
+// (chatModel), the agent ids (agentIds) and the chat's bounds (aiLimits): four more. The @ mention
+// candidates (mentions) add one.
+// The Settings payloads (secrets, mcp and the microphone) validate their changes with the envFile,
+// secrets and mcp parsers: about eight more, with a little headroom.
+// Message references: the typed `messageRef` (shared/properties/i18n/messageRef) imports the English catalog so a key typo is a compile
+// error, and that catalog is one module per namespace (about forty files) plus the reference, locale and format modules the payload
+// parsers now read: roughly sixty more. English is bundled in the app anyway, so the graph is larger but the shipped size is not.
+// Breakpoint sync's request parsers (breakpointSyncPlan, breakpointSyncRecord, projectBreakpoints) and EmDash's (emdash, emdashInstall
+// and its message namespace) are in the graph; the sync parser takes its text bound from the record leaf, not the whole CSS scanner
+// (mediaBreakpointSync), which keeps the graph at the limit instead of over it.
+// The component row menu, rename and access rules validate their requests (componentOps, componentNaming,
+// componentRename, componentAccess), the props' variant rules (variantRules), the new style tag setting
+// (newStyleTag), the recovery screen's messages (recovery) and the loop selection reader (loopSelection):
+// about ten more, 159 measured, with a little headroom.
+// HEAD stood at 169 before Settings > Agents and Add elements. The agents channels validate their payloads before invoke
+// (projectAgentChannels, over the agent definitions' parsers in projectAgents, which reads Codex's TOML through mcpToml and
+// mcpCodex), and the English catalog gained the Add elements namespace (elements): five more, 174 measured. None can leave:
+// the payload parsers are the boundary docs/contracts.md requires, and the catalog is one module per namespace.
+// 1.4.17 stands at 182: the new boundary parsers (the phone-preview network contract, the Astro copy request) and the
+// outline ownership rule are shared contract modules the renderer links; each is one module a parser or a rule needs, with
+// a little headroom.
+const MODULES_MAX = 190;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },
@@ -68,10 +126,7 @@ function createModuleLoader(server: ViteDevServer): (url: string) => Promise<Sou
   };
 }
 
-async function createModuleLoaderTransform(
-  server: ViteDevServer,
-  url: string,
-): Promise<SourceTextModule> {
+async function createModuleLoaderTransform(server: ViteDevServer, url: string): Promise<SourceTextModule> {
   const transformed = await server.transformRequest(url);
   assert.ok(transformed, `Vite must serve ${url}`);
   assert.ok(transformed.code.length > 0, `${url} must contain executable JavaScript`);

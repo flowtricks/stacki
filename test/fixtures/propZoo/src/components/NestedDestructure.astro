@@ -1,0 +1,14 @@
+---
+interface Props {
+  author: { name: string; avatar?: string };
+  meta?: { tags?: string[]; reading?: number };
+}
+const {
+  author: { name, avatar },
+  meta: { tags = [], reading = 1 } = {},
+} = Astro.props;
+---
+<div class="nested-destructure">
+  {avatar && <img src={avatar} alt="" width="24" height="24" />}
+  <span>{name}</span> · <span>{reading} min</span> · <span>{tags.join(', ')}</span>
+</div>

@@ -1,24 +1,13 @@
 import { request } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
-import {
-  parseComponentProperties,
-  parsePropertiesResult,
-  type PropertyChange,
-} from '../../../vendor/stacki/shared/properties/propertyEditing';
+import { parseComponentProperties, parsePropertiesResult, type PropertyChange } from '../../../vendor/stacki/shared/properties/propertyEditing';
+import { parsePropertyRemovalPreview } from '../../../vendor/stacki/shared/properties/propertyRemoval';
 
 const endpoint = '/studio/api/component-properties';
 export async function readComponentProperties(_project: string, file: string) {
-  return parsePropertiesResult(
-    await request(endpoint + '?file=' + encodeURIComponent(file)),
-    parseComponentProperties,
-  );
+  return parsePropertiesResult(await request(endpoint + '?file=' + encodeURIComponent(file)), parseComponentProperties);
 }
-export async function editComponentProperties(
-  _project: string,
-  file: string,
-  source: string,
-  change: PropertyChange,
-) {
+export async function editComponentProperties(_project: string, file: string, source: string, change: PropertyChange) {
   const result = parsePropertiesResult(await post({ file, source, change }), (value) => ({
     ...parseComponentProperties(value),
     undo: undoToken(value),
@@ -27,6 +16,10 @@ export async function editComponentProperties(
     window.dispatchEvent(new Event('studio:source-updated'));
   }
   return result;
+}
+// What deleting a prop would do across the site, for its confirmation; nothing is written.
+export async function previewPropertyRemoval(_project: string, file: string, name: string) {
+  return parsePropertiesResult(await post({ file, removal: name }), parsePropertyRemovalPreview);
 }
 export async function revertComponentProperties(token: string) {
   const result = parsePropertiesResult(await post({ undo: token }), (value) => ({

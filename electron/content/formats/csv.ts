@@ -91,9 +91,7 @@ function parseLines(text: string): ParsedCsv {
 
 function parseData(text: string): Record<string, string>[] {
   const { header, rows } = parseLines(text);
-  return rows.map((row) =>
-    Object.fromEntries(header.map((name, i) => [name, row.cells[i] ? row.cells[i].value : ''])),
-  );
+  return rows.map((row) => Object.fromEntries(header.map((name, i) => [name, row.cells[i] ? row.cells[i].value : ''])));
 }
 
 const DELETE = Symbol('delete');

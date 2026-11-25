@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "selection-outline",
+  "name": "Selection outline",
+  "version": "1.0.0",
+  "description": "Outlines the selected element on the canvas and counts project changes.",
+  "icon": "icon.svg",
+  "entry": "index.html",
+  "window": {
+    "mode": "panel"
+  },
+  "author": {
+    "github": "octocat"
+  }
+}

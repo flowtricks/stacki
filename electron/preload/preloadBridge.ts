@@ -10,21 +10,112 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 // Main parses every payload before it reaches a handler.
 const invoke =
   <K extends IpcChannel>(channel: K) =>
-  (
-    ...args: undefined extends IpcPayloads[K]
-      ? [payload?: IpcPayloads[K]]
-      : [payload: IpcPayloads[K]]
-  ): Promise<unknown> =>
+  (...args: undefined extends IpcPayloads[K] ? [payload?: IpcPayloads[K]] : [payload: IpcPayloads[K]]): Promise<unknown> =>
     ipcRenderer.invoke(channel, args[0]);
 
+// The boot path (electron/boot/bootChannels.ts): the seed for the first render, read synchronously here so it is
+// already in the page before any script runs, a save for the snapshot, and the report that the real shell painted.
+// The seed stays `unknown` until src/lib/bootSeed.ts parses it.
+function exposeBoot(): void {
+  const seed: unknown = ipcRenderer.sendSync('boot:read');
+  contextBridge.exposeInMainWorld('stackiBoot', {
+    seed,
+    save: (text: string): void => ipcRenderer.send('boot:save', text),
+    firstFrame: (): void => ipcRenderer.send('boot:first-frame'),
+  });
+}
+
 export function exposeBridge(): void {
+  exposeBoot();
   contextBridge.exposeInMainWorld('avb', {
     ...projectBridge(),
+    ...cmsBridge(),
     ...dataBridge(),
     ...pageBridge(),
     ...terminalBridge(),
+    ...aiBridge(),
     ...eventBridge(),
   } satisfies PreloadBridge);
+}
+
+// CMS connections and the CMS panel's connected-CMS calls.
+function cmsBridge() {
+  return {
+    cmsConnections: invoke('cmsConnections:list'),
+    saveCmsConnection: invoke('cmsConnections:save'),
+    removeCmsConnection: invoke('cmsConnections:remove'),
+    checkCmsConnection: invoke('cmsConnections:check'),
+    sanityLogin: invoke('cmsConnections:sanityLogin'),
+    remoteCollections: invoke('cmsRemote:collections'),
+    remoteDocuments: invoke('cmsRemote:documents'),
+    remoteDocument: invoke('cmsRemote:document'),
+    remoteTemplate: invoke('cmsRemote:template'),
+    writeRemoteDocument: invoke('cmsRemote:write'),
+    remoteReferenceOptions: invoke('cmsRemote:references'),
+    actOnRemoteDocument: invoke('cmsRemote:act'),
+    remoteHistory: invoke('cmsRemote:history'),
+    restoreRemoteRevision: invoke('cmsRemote:restore'),
+    uploadRemoteAsset: invoke('cmsRemote:upload'),
+    linkPreview: invoke('cmsRemote:linkPreview'),
+    createRemoteDocument: invoke('cmsRemote:create'),
+    deleteRemoteDocuments: invoke('cmsRemote:delete'),
+    moveRemoteDocument: invoke('cmsRemote:move'),
+    listApps: invoke('apps:list'),
+    pickAppFile: invoke('apps:pickFile'),
+    stageGitHubApp: invoke('apps:stageGitHub'),
+    appRepositories: invoke('apps:githubRepositories'),
+    appReleases: invoke('apps:githubReleases'),
+    commitApp: invoke('apps:commit'),
+    discardApp: invoke('apps:discard'),
+    uninstallApp: invoke('apps:uninstall'),
+    checkAppUpdates: invoke('apps:checkUpdates'),
+    applyAppUpdate: invoke('apps:applyUpdate'),
+    appFolders: invoke('apps:folders'),
+    revealAppFolder: invoke('apps:revealFolder'),
+    appMarketplace: invoke('apps:marketplace'),
+    installMarketplaceApp: invoke('apps:installMarketplace'),
+    setAppAutoUpdate: invoke('apps:setAutoUpdate'),
+    appRepositoryVisibility: invoke('apps:repositoryVisibility'),
+    scanAppSecrets: invoke('apps:scanSecrets'),
+    appRepositoryStatus: invoke('apps:repositoryStatus'),
+    makeAppRepositoryPublic: invoke('apps:makePublic'),
+    addAppLicense: invoke('apps:addLicense'),
+    shareApp: invoke('apps:share'),
+    switchAppSource: invoke('apps:switchSource'),
+    checkMarketplaceApp: invoke('apps:checkMarketplace'),
+    submitMarketplaceApp: invoke('apps:submitMarketplace'),
+    readAppSettings: invoke('apps:readSettings'),
+    writeAppSettings: invoke('apps:writeSettings'),
+    appFileStamps: invoke('apps:fileStamps'),
+    appStorageGet: invoke('apps:storageGet'),
+    appStorageSet: invoke('apps:storageSet'),
+    appStorageKeys: invoke('apps:storageKeys'),
+    watchAppStorage: invoke('apps:storageWatch'),
+    appPerson: invoke('apps:person'),
+    appPeople: invoke('apps:people'),
+    appHostVersion: invoke('apps:hostVersion'),
+    appCanvasSnapshot: invoke('apps:canvasSnapshot'),
+    appFiles: invoke('apps:files'),
+    connectAppAuth: invoke('apps:authConnect'),
+    appAuthStatus: invoke('apps:authStatus'),
+    appAuthToken: invoke('apps:authToken'),
+    disconnectAppAuth: invoke('apps:authDisconnect'),
+    appNetFetch: invoke('apps:netFetch'),
+    mediaConnections: invoke('mediaHosting:connections'),
+    saveMediaConnection: invoke('mediaHosting:save'),
+    removeMediaConnection: invoke('mediaHosting:remove'),
+    discoverMediaAccounts: invoke('mediaHosting:discover'),
+    connectMediaAccount: invoke('mediaHosting:connectAccount'),
+    listHostedMedia: invoke('mediaHosting:list'),
+    pickUploadHostedMedia: invoke('mediaHosting:pickUpload'),
+    uploadHostedMedia: invoke('mediaHosting:upload'),
+    createHostedFolder: invoke('mediaHosting:createFolder'),
+    renameHostedMedia: invoke('mediaHosting:rename'),
+    deleteHostedMedia: invoke('mediaHosting:delete'),
+    reorderHostedMedia: invoke('mediaHosting:reorder'),
+    replaceHostedMedia: invoke('mediaHosting:replace'),
+    replaceAsset: invoke('assets:replace'),
+  };
 }
 
 // The project, its assets and files, and the canvas selection.
@@ -36,22 +127,46 @@ function projectBridge() {
 
     publishStart: invoke('publish:start'),
     publishState: invoke('publish:state'),
+    publishAvailability: invoke('publish:availability'),
+    publishedSiteURL: invoke('publish:siteURL'),
     publishingRepositories: invoke('publish:repository'),
     discoverPublishing: invoke('publish:discover'),
+    publishingAccount: invoke('publish:account'),
+    setUpPublishWorker: invoke('publish:workerSetup'),
+    listInstructions: invoke('instructions:list'),
+    readInstruction: invoke('instructions:read'),
+    writeInstruction: invoke('instructions:write'),
+    createInstruction: invoke('instructions:create'),
+    createInstructionFolder: invoke('instructions:createFolder'),
+    revealInstruction: invoke('instructions:reveal'),
+    listAgents: invoke('agents:list'),
+    saveAgent: invoke('agents:save'),
+    deleteAgent: invoke('agents:delete'),
     projectMetadata: invoke('project:metadata'),
     writeProjectMetadata: invoke('project:writeMetadata'),
+    pickProjectFolder: invoke('project:pickFolder'),
+    rolesIdentity: invoke('roles:identity'),
+    githubSearchUsers: invoke('github:searchUsers'),
     studioStatus: invoke('studio:status'),
     installStudio: invoke('studio:install'),
+    setStudioAuth: invoke('studio:setAuth'),
+    upgradeStudio: invoke('studio:upgrade'),
+    studioUpgradeCheck: invoke('studio:upgradeCheck'),
+    restoreStudio: invoke('studio:restore'),
 
     // Project:
     openProjectDialog: invoke('project:openDialog'),
-    newProjectDialog: invoke('project:newDialog'),
-    scaffoldProject: invoke('project:scaffold'),
     createAstroProject: invoke('project:createAstro'),
     parentDialog: invoke('project:parentDialog'),
+    openSiteDialog: invoke('project:openSiteDialog'),
+    checkAstroCopy: invoke('project:checkAstroCopy'),
+    createAstroCopy: invoke('project:createAstroCopy'),
+    inspectFolder: invoke('project:inspectFolder'),
+    takeOpenedFolders: invoke('project:takeOpenedFolders'),
     createStarter: invoke('project:createStarter'),
-    hasNodeModules: invoke('project:hasNodeModules'),
-    installDeps: invoke('project:install'),
+    readShadcnSettings: invoke('project:readShadcnSettings'),
+    changeShadcnSetting: invoke('project:changeShadcnSetting'),
+    inspectShadcnPreset: invoke('project:inspectShadcnPreset'),
     scanProject: invoke('project:scan'),
     listProjectClasses: invoke('project:classes'),
     watchProject: invoke('watch:start'),
@@ -106,6 +221,8 @@ function dataBridge() {
     deleteCms: invoke('cms:delete'),
     cmsUsage: invoke('cms:usage'),
     cmsAssetRef: invoke('cms:assetRef'),
+    cmsConstants: invoke('cms:constants'),
+    editCmsConstants: invoke('cms:editConstants'),
     resolveImport: invoke('project:resolveImport'),
     cmsMeta: invoke('cms:meta'),
     contentConfig: invoke('content:config'),
@@ -115,6 +232,10 @@ function dataBridge() {
     moveCssVariables: invoke('css:moveVariables'),
     addCssVariables: invoke('css:addVariables'),
     renameCssVariables: invoke('css:renameVariables'),
+    scanBreakpointSync: invoke('breakpointSync:scan'),
+    scanBreakpointUsage: invoke('breakpointSync:usage'),
+    applyBreakpointSync: invoke('breakpointSync:apply'),
+    restoreBreakpointSync: invoke('breakpointSync:restore'),
     setCssSectionTitle: invoke('css:setSectionTitle'),
     removeCssSection: invoke('css:removeSection'),
     addCssSection: invoke('css:addSection'),
@@ -132,6 +253,8 @@ function dataBridge() {
     contentTargets: invoke('content:targets'),
     contentRenamePlan: invoke('content:renamePlan'),
     renameContentEntry: invoke('content:rename'),
+    contentRemoteRead: invoke('content:remoteRead'),
+    contentRemoteEdit: invoke('content:remoteEdit'),
     setCmsMeta: invoke('cms:setMeta'),
     onCmsChanged: (callback: () => void) => {
       const listener = () => callback();
@@ -144,11 +267,6 @@ function dataBridge() {
     addRecent: invoke('recents:add'),
     removeRecent: invoke('recents:remove'),
     refreshThumb: invoke('recents:refreshThumb'),
-    onThumbUpdated: (callback: (payload: unknown) => void) => {
-      const listener = (_event: unknown, payload: unknown) => callback(payload);
-      ipcRenderer.on('recents:thumb', listener);
-      return () => ipcRenderer.removeListener('recents:thumb', listener);
-    },
   } satisfies Partial<PreloadBridge>;
 }
 
@@ -159,35 +277,87 @@ function pageBridge() {
     readPage: invoke('page:read'),
     parsePageSource: invoke('page:parse'),
     editPage: invoke('page:edit'),
+    editPageBatch: invoke('page:editBatch'),
     previewPageEdit: invoke('page:previewEdit'),
     createPage: invoke('page:create'),
+    createPageTemplate: invoke('pageTemplate:create'),
+    planPageTemplate: invoke('pageTemplate:plan'),
+    sampleDataSource: invoke('pageTemplate:sample'),
+    setProjectEnv: invoke('project:setEnv'),
+    listSecrets: invoke('secrets:list'),
+    readSecret: invoke('secrets:read'),
+    applySecretsChange: invoke('secrets:apply'),
+    ignoreSecretsFile: invoke('secrets:ignore'),
+    readMcp: invoke('mcp:read'),
+    readMcpText: invoke('mcp:readText'),
+    revealMcpServer: invoke('mcp:reveal'),
+    applyMcpChange: invoke('mcp:apply'),
+    saveMcpText: invoke('mcp:saveText'),
+    readMcpCodex: invoke('mcp:readCodex'),
+    revealMcpCodexServer: invoke('mcp:revealCodex'),
+    applyMcpCodexChange: invoke('mcp:applyCodex'),
     deletePage: invoke('page:delete'),
     movePage: invoke('page:move'),
+    planPageSettings: invoke('page:planSettings'),
+    applyPageSettings: invoke('page:applySettings'),
+    revertPageSettings: invoke('page:revertSettings'),
+    planRemovePages: invoke('page:planRemoveMany'),
+    removePages: invoke('page:removeMany'),
+    readPageTemplate: invoke('page:readTemplate'),
+    retargetPageTemplate: invoke('page:retargetTemplate'),
     createPageFolder: invoke('pagefolder:create'),
     renamePageFolder: invoke('pagefolder:rename'),
     deletePageFolder: invoke('pagefolder:delete'),
     importPathFor: invoke('page:importPathFor'),
     rebaseImport: invoke('page:rebaseImport'),
     createComponent: invoke('component:create'),
+    discardComponent: invoke('component:discard'),
+    duplicateComponent: invoke('component:duplicate'),
+    planComponentRename: invoke('component:planRename'),
+    renameComponent: invoke('component:rename'),
+    revertComponentRename: invoke('component:revertRename'),
+    planComponentRemoval: invoke('component:planRemove'),
+    removeComponent: invoke('component:remove'),
+    restoreRemovedComponent: invoke('component:restoreRemoved'),
     componentProperties: invoke('component:properties'),
     editComponentProperties: invoke('component:editProperties'),
     revertComponentProperties: invoke('component:revertProperties'),
+    previewPropertyRemoval: invoke('component:previewPropertyRemoval'),
     componentUsage: invoke('component:usage'),
+    componentClassUsage: invoke('component:classUsage'),
+    recordStyleMove: invoke('styleMove:record'),
+    clearStyleMove: invoke('styleMove:clear'),
+    pendingStyleMove: invoke('styleMove:pending'),
+    resolveStyleMove: invoke('styleMove:resolve'),
     dynamicPaths: invoke('page:dynamicPaths'),
+    emDashProject: invoke('emdash:project'),
+    emDashInstallPlan: invoke('emdash:installPlan'),
+    emDashInstall: invoke('emdash:install'),
+    emDashInstallCancel: invoke('emdash:installCancel'),
+    emDashAdminUrl: invoke('emdash:adminUrl'),
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
+    sampleValue: invoke('content:sampleValue'),
+    renderAuditPage: invoke('audit:render'),
+    measureAuditPage: invoke('audit:measure'),
 
     // Dev server:
     startDevServer: invoke('dev:start'),
     stopDevServer: invoke('dev:stop'),
     diagnoseDev: invoke('dev:diagnose'),
+    inspectDevPage: invoke('dev:inspect'),
     probeDevPage: invoke('dev:probe'),
+    devNetwork: invoke('dev:network'),
+    setDevNetwork: invoke('dev:setNetwork'),
 
     // Style panel targets:
     listStyleFiles: invoke('style:listFiles'),
     listAstroStyleFiles: invoke('style:listAstroStyles'),
     readStyleFile: invoke('style:readFile'),
     writeStyleFile: invoke('style:writeFile'),
+    selectorUsage: invoke('style:selectorUsage'),
+    removeSelectors: invoke('style:removeSelectors'),
+    restoreSelectors: invoke('style:restoreSelectors'),
 
     // Git:
     gitInfo: invoke('git:info'),
@@ -198,11 +368,10 @@ function pageBridge() {
     previewStop: invoke('preview:stop'),
     checkPreview: invoke('preview:check'),
     gitLog: invoke('git:log'),
-    gitCommitFiles: invoke('git:commitFiles'),
     gitCommitDiff: invoke('git:commitDiff'),
+    gitAvatars: invoke('git:avatars'),
     gitAllFiles: invoke('git:allFiles'),
     gitStatus: invoke('git:status'),
-    gitFileAt: invoke('git:fileAt'),
     gitWorktrees: invoke('git:worktrees'),
     gitPark: invoke('git:park'),
     gitUnpark: invoke('git:unpark'),
@@ -213,6 +382,8 @@ function pageBridge() {
     gitRestoreFile: invoke('git:restoreFile'),
     gitRestoreProject: invoke('git:restoreProject'),
     gitPush: invoke('git:push'),
+    gitPull: invoke('git:pull'),
+    gitIncoming: invoke('git:incoming'),
     gitRepositories: invoke('git:repositories'),
     gitClone: invoke('git:clone'),
     gitConnect: invoke('git:connect'),
@@ -236,8 +407,7 @@ function terminalBridge() {
     closeTerminal: invoke('terminal:close'),
     terminalInput: (id: string, data: string) => ipcRenderer.send('terminal:input', { id, data }),
     terminalAck: (id: string, count: number) => ipcRenderer.send('terminal:ack', { id, count }),
-    terminalClipboardImage: (bytes: Uint8Array, mime: string) =>
-      ipcRenderer.invoke('terminal:clipboardImage', { bytes, mime }),
+    terminalClipboardImage: (bytes: Uint8Array, mime: string) => ipcRenderer.invoke('terminal:clipboardImage', { bytes, mime }),
     onTerminalData: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('terminal:data', listener);
@@ -257,12 +427,97 @@ function terminalBridge() {
 }
 
 // What main pushes to the app, and its preferences and menu.
+// The AI chat panel. Acks are `send`: they are frequent, one-way flow-control
+// signals, as the terminal's are.
+function aiBridge() {
+  return {
+    aiAgents: invoke('ai:agents'),
+    aiInstallAgent: invoke('ai:installAgent'),
+    aiTrust: invoke('ai:trust'),
+    aiPrewarm: invoke('ai:prewarm'),
+    aiChats: invoke('ai:chats'),
+    aiChatCreate: invoke('ai:chatCreate'),
+    aiChatUpdate: invoke('ai:chatUpdate'),
+    aiChatDelete: invoke('ai:chatDelete'),
+    aiChatRead: invoke('ai:chatRead'),
+    aiPrompt: invoke('ai:prompt'),
+    aiSteer: invoke('ai:steer'),
+    aiCompact: invoke('ai:compact'),
+    aiAutoCompactGet: invoke('ai:autoCompactGet'),
+    aiAutoCompactSet: invoke('ai:autoCompactSet'),
+    aiChatFork: invoke('ai:chatFork'),
+    aiChatMove: invoke('ai:chatMove'),
+    aiSections: invoke('ai:sections'),
+    aiDiff: invoke('ai:diff'),
+    aiMentions: invoke('ai:mentions'),
+    aiScreenshot: invoke('ai:screenshot'),
+    aiRecord: invoke('ai:record'),
+    aiCancel: invoke('ai:cancel'),
+    aiPermission: invoke('ai:permission'),
+    aiSetOption: invoke('ai:setOption'),
+    aiRemember: invoke('ai:remember'),
+    aiReview: invoke('ai:review'),
+    aiSetup: invoke('ai:setup'),
+    onAiSetup: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:setupState', listener);
+      return () => ipcRenderer.removeListener('ai:setupState', listener);
+    },
+    aiAck: (chars: number) => ipcRenderer.send('ai:ack', { chars }),
+    onAiEvents: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:events', listener);
+      return () => ipcRenderer.removeListener('ai:events', listener);
+    },
+    onAiAgentStatus: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:agentStatus', listener);
+      return () => ipcRenderer.removeListener('ai:agentStatus', listener);
+    },
+  };
+}
+
 function eventBridge() {
   return {
+    onAppShareProgress: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:shareProgress', listener);
+      return () => ipcRenderer.removeListener('apps:shareProgress', listener);
+    },
+    onAppFoldersChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:foldersChanged', listener);
+      return () => ipcRenderer.removeListener('apps:foldersChanged', listener);
+    },
+    onAppStorageChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:storageChanged', listener);
+      return () => ipcRenderer.removeListener('apps:storageChanged', listener);
+    },
+    onAppAuthChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:authChanged', listener);
+      return () => ipcRenderer.removeListener('apps:authChanged', listener);
+    },
+    onAppPersonChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('apps:personChanged', listener);
+      return () => ipcRenderer.removeListener('apps:personChanged', listener);
+    },
+    onDictationProgress: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('dictation:progress', listener);
+      return () => ipcRenderer.removeListener('dictation:progress', listener);
+    },
     onStudioProgress: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('studio:progress', listener);
       return () => ipcRenderer.removeListener('studio:progress', listener);
+    },
+    onUpdateState: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('update:state', listener);
+      return () => ipcRenderer.removeListener('update:state', listener);
     },
     // Events:
     onPageMaybeChanged: (callback: (data: unknown) => void) => {
@@ -296,15 +551,35 @@ function eventBridge() {
       ipcRenderer.on('create:log', listener);
       return () => ipcRenderer.removeListener('create:log', listener);
     },
+    // A folder the app's icon, the command line or a second launch handed over (electron/project/folderOpen.ts).
+    onFolderOpened: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('project:folderOpened', listener);
+      return () => ipcRenderer.removeListener('project:folderOpened', listener);
+    },
+    // Live output of the command that adds EmDash to the open project, shown in its dialog.
+    onEmDashInstallLog: (callback: (chunk: unknown) => void) => {
+      const listener = (_event: unknown, chunk: unknown) => callback(chunk);
+      ipcRenderer.on('emdash:installLog', listener);
+      return () => ipcRenderer.removeListener('emdash:installLog', listener);
+    },
     onFsChanged: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('fs:changed', listener);
       return () => ipcRenderer.removeListener('fs:changed', listener);
     },
+    onInstructionsChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('instructions:changed', listener);
+      return () => ipcRenderer.removeListener('instructions:changed', listener);
+    },
 
     // App preferences — read once on load; the menu pushes changes as they happen.
     settings: invoke('settings:get'),
     setPreference: invoke('settings:set'),
+    setLocale: invoke('locale:set'),
+    readUpdateState: invoke('update:read'),
+    actOnUpdate: invoke('update:act'),
 
     // Application menu events (macOS menu accelerators never reach the DOM)
     onMenu: (channel: string, callback: (data?: unknown) => void) => {
@@ -314,6 +589,14 @@ function eventBridge() {
       ipcRenderer.on(`menu:${channel}`, listener);
       return () => ipcRenderer.removeListener(`menu:${channel}`, listener);
     },
+    dictationStatus: invoke('dictation:status'),
+    dictationDownload: invoke('dictation:download'),
+    dictationCancel: invoke('dictation:cancel'),
+    dictationRemove: invoke('dictation:remove'),
+    dictationReveal: invoke('dictation:reveal'),
+    microphoneOpenSettings: invoke('microphone:openSettings'),
+    microphoneRequest: invoke('microphone:request'),
+    microphoneStatus: invoke('microphone:status'),
     nativeCopy: invoke('native:copy'),
     nativePaste: invoke('native:paste'),
     nativeUndo: invoke('native:undo'),

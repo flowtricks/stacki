@@ -1,13 +1,24 @@
-import { StudioUpdates } from '../updates/StudioUpdates';
-import { StoragePanel } from '../storage/StoragePanel';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
+import release from '../../shared/release.json';
 import type { Session } from './useSession';
+import { AccountAvatar, Avatar } from './Avatar';
 import { StackiLogo } from '../../shared/ui/StackiLogo';
 import { useRef, useState } from 'react';
 import Popup from '../../../vendor/stacki/src/ui/Popup';
+import { CommentIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { RoleMenu } from '../roles/RoleMenu';
 import { SoundToggle } from '../settings/SoundToggle';
+import { AppsPrivacyToggle } from '../apps/AppsPrivacyToggle';
+import './accountMenu.css';
 
-export function AccountMenu({ saved, session }: { saved: boolean; session: Session | undefined }) {
+interface AccountMenuProps {
+  readonly saved: boolean;
+  readonly session: Session | undefined;
+  readonly cursorChat: (() => void) | undefined;
+}
+
+export function AccountMenu(props: AccountMenuProps) {
+  const translate = useTranslate();
   const menu = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -19,8 +30,8 @@ export function AccountMenu({ saved, session }: { saved: boolean; session: Sessi
         aria-expanded={open}
         aria-haspopup="dialog"
         className="studio-brand"
-        aria-label="Stacki account menu"
-        title="Stacki account menu"
+        aria-label={translate('studio.account.menu')}
+        title={translate('studio.account.menu')}
       >
         <StackiLogo />
       </button>
@@ -31,32 +42,85 @@ export function AccountMenu({ saved, session }: { saved: boolean; session: Sessi
         open={open}
         onClose={close}
         anchor={menu.current ?? undefined}
-        label="Stacki account"
+        label={translate('studio.account.label')}
       >
-        <RoleMenu saved={saved} close={close} />
-        <SoundToggle />
-        {session?.kind === 'github' && <StudioUpdates />}
-        {session?.kind === 'github' ? (
+        {(actions) => (
           <>
-            <strong>@{session.login}</strong>
-            <form method="post" action="/studio/auth/logout">
-              <button
-                disabled={!saved}
-                title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}
-              >
-                Sign out
-              </button>
-            </form>
+            <RoleMenu saved={props.saved} close={actions.close} />
+            <SoundToggle />
+            <AppsPrivacyToggle />
+            <button
+              className="account-action"
+              type="button"
+              aria-label={translate('studio.account.cursorChat')}
+              aria-keyshortcuts="/"
+              disabled={props.cursorChat === undefined}
+              title={props.cursorChat ? translate('studio.account.cursorChatShortcut') : translate('studio.account.cursorChatUnavailable')}
+              onClick={() =>
+                actions.finish(() => {
+                  close();
+                  props.cursorChat?.();
+                })
+              }
+            >
+              <CommentIcon />
+              <span>{translate('studio.account.cursorChat')}</span>
+              <kbd aria-hidden="true">/</kbd>
+            </button>
+            <AccountIdentity saved={props.saved} session={props.session} />
+            <span className="account-version">{translate('studio.account.version', { version: release.version })}</span>
           </>
-        ) : (
-          <span className="local-session">
-            {session?.kind === 'local'
-              ? 'Local development · no sign-in required'
-              : 'Loading account…'}
-          </span>
         )}
-        <StoragePanel refresh={() => window.dispatchEvent(new Event('studio:assets-changed'))} />
       </Popup>
     </div>
+  );
+}
+
+function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 'session'>) {
+  const translate = useTranslate();
+  if (session?.kind === 'account') {
+    return (
+      <div className="account-profile">
+        <span className="account-avatar" aria-hidden="true">
+          <AccountAvatar name={session.name} avatarUrl={session.avatarUrl} />
+        </span>
+        <div className="account-profile-name">
+          <strong title={session.name}>{session.name}</strong>
+          <span title={session.identity}>{session.email ?? session.identity}</span>
+        </div>
+        <SignOut saved={saved} />
+      </div>
+    );
+  }
+  if (session?.kind !== 'github') {
+    return <span className="local-session">{session?.kind === 'local' ? translate('studio.account.local') : translate('studio.account.loading')}</span>;
+  }
+  return (
+    <div className="account-profile">
+      <span className="account-avatar" aria-hidden="true">
+        <Avatar key={session.id} id={session.id} name={session.login} />
+      </span>
+      <div className="account-profile-name">
+        <strong title={`@${session.login}`}>@{session.login}</strong>
+        <span>{translate('studio.account.github')}</span>
+      </div>
+      <SignOut saved={saved} />
+    </div>
+  );
+}
+
+function SignOut({ saved }: Pick<AccountMenuProps, 'saved'>) {
+  const translate = useTranslate();
+  return (
+    <form method="post" action="/studio/auth/logout">
+      <button
+        className="account-sign-out"
+        type="submit"
+        disabled={!saved}
+        title={saved ? translate('studio.account.signOutTitle') : translate('studio.account.signOutWait')}
+      >
+        {translate('studio.account.signOut')}
+      </button>
+    </form>
   );
 }

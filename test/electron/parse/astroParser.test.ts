@@ -3,18 +3,8 @@
 // one field at a time and cross each new collection, text, and depth boundary.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  parsePage,
-  parseTemplate,
-  serializeNodes,
-  serializePage,
-  serializePageMarked,
-} from '#dist/electron/parse/astroParser.js';
-import {
-  assertTreeInvariants,
-  parsePageNode,
-  parsePageResult,
-} from '#dist/shared/page/pageNode.js';
+import { parsePage, parseTemplate, serializeNodes, serializePage, serializePageMarked } from '#dist/electron/parse/astroParser.js';
+import { assertTreeInvariants, parsePageNode, parsePageResult } from '#dist/shared/page/pageNode.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import type { ParserNode } from '#dist/electron/parse/astroParserTypes.js';
 
@@ -53,10 +43,7 @@ test('block loops and import slots survive the real IPC contract', () => {
 test('legacy component inputs retain defaults and do not gain frontmatter', () => {
   const nodes = [{ kind: 'element', name: 'div', children: [] }];
   assert.equal(serializePage({ nodes, hadFrontmatter: false }), '<div></div>\n');
-  assert.equal(
-    serializePage({ nodes, imports: [{ name: 'Card', path: './Card.astro' }] }),
-    "---\nimport Card from './Card.astro';\n---\n<div></div>\n",
-  );
+  assert.equal(serializePage({ nodes, imports: [{ name: 'Card', path: './Card.astro' }] }), "---\nimport Card from './Card.astro';\n---\n<div></div>\n");
   assert.deepEqual(nodes, [{ kind: 'element', name: 'div', children: [] }]);
 });
 
@@ -106,28 +93,25 @@ test('serializer validates optional source metadata and every attribute variant'
     { blankAfter: 0.5 },
     { start: Number.NaN },
   ]) {
-    assert.throws(
-      () => serializeNodes([{ ...node, ...patch }]),
-      /Serialize|node\.|attribute|array/,
-    );
+    assert.throws(() => serializeNodes([{ ...node, ...patch }]), /Serialize|node\.|attribute|array/);
   }
 });
 
-test('source, collection, and recursive bounds fail before exhausting the process', () => {
-  assert.equal(parsePage('x'.repeat(LIMITS.ipcFieldCharsMax + 1)).editable, false);
-  const deepSource =
-    '<div>'.repeat(LIMITS.treeDepthMax + 2) + 'x' + '</div>'.repeat(LIMITS.treeDepthMax + 2);
+test('large input is accepted; only structural bounds (depth, cycles) fail before exhausting the process', () => {
+  // No size limit (owner requirement): a page, a node list and a text run past every old cap are parsed, written and read whole.
+  // Generated at test time, never committed.
+  const big = parsePage('<p>' + 'x'.repeat(12_000_000) + '</p>');
+  assert.equal(big.editable, true);
+  const deepSource = '<div>'.repeat(LIMITS.treeDepthMax + 2) + 'x' + '</div>'.repeat(LIMITS.treeDepthMax + 2);
   assert.equal(parseTemplate(deepSource).clean, false);
   assert.equal(parseTemplate('<p>next parse still works</p>').clean, true);
-  const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, () => ({
+  const wide = Array.from({ length: 50_000 }, () => ({
     kind: 'text',
     value: 'x',
   }));
-  assert.throws(() => serializeNodes(wide), /node limit/);
-  assert.throws(
-    () => serializeNodes([{ kind: 'text', value: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }]),
-    /exceeds limit/,
-  );
+  assert.doesNotThrow(() => serializeNodes(wide), 'more nodes than the old cap are written');
+  const longText = 'x'.repeat(5_000_000);
+  assert.ok(serializeNodes([{ kind: 'text', value: longText }]).includes(longText), 'a text node longer than the old cap is written whole');
   const cycle: { kind: string; name: string; children: unknown[] } = {
     kind: 'element',
     name: 'div',
@@ -172,23 +156,46 @@ test('loop statement wire data rejects the old string shape and malformed arrays
   for (const body of ['const x = 1;', [1], [jsonNull]]) {
     assert.throws(() => parsePageNode({ ...loop, body }), /body/);
   }
-  const body = Array.from({ length: LIMITS.treeNodesMax + 1 }, () => 'const x = 1;');
-  assert.throws(() => parsePageNode({ ...loop, body }), /body: exceeds statement limit/);
+  // No size limit: a body of more statements than the old cap is accepted.
+  const body = Array.from({ length: 50_000 }, () => 'const x = 1;');
+  assert.doesNotThrow(() => parsePageNode({ ...loop, body }));
 });
 
-test('producer tree invariants reject missing ids and bounded traversal overflow', () => {
-  assert.throws(
-    () => assertTreeInvariants([{ kind: 'text' }]),
-    /Tree invariant violated: missing id/,
-  );
-  const wide = Array.from({ length: LIMITS.treeNodesMax + 1 }, (_, index) => ({
+test('producer tree invariants reject missing ids and over-deep trees, and accept any width', () => {
+  assert.throws(() => assertTreeInvariants([{ kind: 'text' }]), /Tree invariant violated: missing id/);
+  const wide = Array.from({ length: 50_000 }, (_, index) => ({
     kind: 'text',
     id: `n${index}`,
   }));
-  assert.throws(() => assertTreeInvariants(wide), /Tree invariant violated: exceeds 20000 nodes/);
+  assert.doesNotThrow(() => assertTreeInvariants(wide), 'a list wider than the old 20000-node cap is valid');
   let tree: ParserNode = { kind: 'text', id: 'n0', value: 'leaf' };
   for (let index = 1; index <= LIMITS.treeDepthMax + 1; index++) {
     tree = { kind: 'element', id: `n${index}`, name: 'div', children: [tree] };
   }
   assert.throws(() => assertTreeInvariants([tree]), /Tree invariant violated: exceeds depth 64/);
+});
+
+test('an empty loop saves as code that builds and reads back empty', () => {
+  // A loop just inserted has no children. `(item) => ()` does not parse, so
+  // the body is written as `null`, and reading it back finds no children.
+  for (const loop of [
+    { id: 'n1', kind: 'map', head: '[].map((item) => (', children: [] },
+    { id: 'n1', kind: 'map', head: '[].map((item) => (', children: [], bare: true },
+  ] as const) {
+    const written = serializeNodes([parsePageNode(loop)]);
+    assert.ok(!/\(\s*\)\s*\)/.test(written), `no empty arrow body in ${written}`);
+    const parsed = parseTemplate(written);
+    assert.equal(parsed.clean, true, `${written} parses`);
+    const [read] = parsed.nodes;
+    assert.equal(read?.kind, 'map');
+    if (read?.kind !== 'map') {
+      return;
+    }
+    assert.deepEqual(read.children, [], `an empty loop reads back empty from ${written}`);
+    if (loop.bare === undefined) {
+      // Read as code, a just-inserted loop showed only its Code field instead of
+      // its Source, Filters and Sort.
+      assert.equal(read.bodyParts, undefined, `an empty loop is a loop, not code: ${written}`);
+    }
+  }
 });

@@ -42,11 +42,7 @@ export interface CommitRecord {
 
 /** The commits leading from `authored` to `current`, oldest first, when the
  * log holds an unbroken chain; undefined otherwise. */
-export function commitChain(
-  log: readonly CommitRecord[],
-  authored: Snapshot['checksum'],
-  current: Snapshot['checksum'],
-): readonly CommitRecord[] | undefined {
+export function commitChain(log: readonly CommitRecord[], authored: Snapshot['checksum'], current: Snapshot['checksum']): readonly CommitRecord[] | undefined {
   assert(log.length <= LIMITS.commitLogEntriesMax, 'The commit log is inside its bound');
   const chain: CommitRecord[] = [];
   let at = authored;
@@ -80,10 +76,7 @@ export function minimalSplices(splices: readonly Splice[]): readonly Splice[] {
       prefix++;
     }
     let suffix = 0;
-    while (
-      suffix < shorter - prefix &&
-      expected[expected.length - 1 - suffix] === replacement[replacement.length - 1 - suffix]
-    ) {
+    while (suffix < shorter - prefix && expected[expected.length - 1 - suffix] === replacement[replacement.length - 1 - suffix]) {
       suffix++;
     }
     const start = splice.range.start + prefix;
@@ -131,25 +124,13 @@ export function rebaseSpan(span: ByteSpan, splices: readonly Splice[]): ByteSpan
 
 /** `intent`, authored against the first commit's `from`, restated against
  * `current`, the last commit's `to`. */
-export function rebaseIntent(
-  intent: Intent,
-  chain: readonly CommitRecord[],
-  current: Snapshot,
-): Result<Intent, RejectionReason> {
+export function rebaseIntent(intent: Intent, chain: readonly CommitRecord[], current: Snapshot): Result<Intent, RejectionReason> {
   assert(chain.length > 0, 'A rebase follows at least one commit');
   assert(chain[chain.length - 1]?.to === current.checksum, 'The chain ends at the current bytes');
   const through = (span: ByteSpan): ByteSpan | undefined =>
-    chain.reduce<ByteSpan | undefined>(
-      (image, record) =>
-        image === undefined ? undefined : rebaseCommittedSpan(image, record, rebaseSpan),
-      span,
-    );
+    chain.reduce<ByteSpan | undefined>((image, record) => (image === undefined ? undefined : rebaseCommittedSpan(image, record, rebaseSpan)), span);
   const untouched = (span: ByteSpan): ByteSpan | undefined =>
-    chain.reduce<ByteSpan | undefined>(
-      (image, record) =>
-        image === undefined ? undefined : rebaseCommittedSpan(image, record, shiftUntouched),
-      span,
-    );
+    chain.reduce<ByteSpan | undefined>((image, record) => (image === undefined ? undefined : rebaseCommittedSpan(image, record, shiftUntouched)), span);
   const anchor = rebaseAnchor(intent.anchor, through, current);
   if (!anchor.ok) {
     return anchor;
@@ -182,10 +163,7 @@ function rebaseCommittedSpan(
   if (relocation !== undefined) {
     const { source, target } = relocation;
     assert(source.start < source.end, 'A relocation has a non-empty source');
-    assert(
-      source.end - source.start === target.end - target.start,
-      'A relocation preserves its bytes and length',
-    );
+    assert(source.end - source.start === target.end - target.start, 'A relocation preserves its bytes and length');
     // An empty hunk at an edge could belong outside the relocated subtree.
     if (span.start === span.end) {
       if (span.start === source.start) {
@@ -231,11 +209,7 @@ export function shiftUntouched(span: ByteSpan, splices: readonly Splice[]): Byte
   return image;
 }
 
-function rebaseAnchor(
-  anchor: AnchorRef,
-  through: Through,
-  current: Snapshot,
-): Result<AnchorRef, RejectionReason> {
+function rebaseAnchor(anchor: AnchorRef, through: Through, current: Snapshot): Result<AnchorRef, RejectionReason> {
   if (anchor.expectedKind === 'document') {
     return ok(
       toAnchorRef({
@@ -267,12 +241,7 @@ function rebaseAnchor(
   // Found again by its image and its kind: a span and a kind name one node,
   // except a node and a same-kind first descendant covering the same bytes,
   // which is refused rather than chosen.
-  const found = projection.nodes.filter(
-    (node) =>
-      node.kind === anchor.expectedKind &&
-      node.span.start === span.start &&
-      node.span.end === span.end,
-  );
+  const found = projection.nodes.filter((node) => node.kind === anchor.expectedKind && node.span.start === span.start && node.span.end === span.end);
   const [node] = found;
   if (node === undefined) {
     return err('anchor-moved');
@@ -283,11 +252,7 @@ function rebaseAnchor(
   return ok(toAnchorRef({ span, path: node.path, expectedKind: node.kind }));
 }
 
-function rebaseOperation(
-  operation: Operation,
-  images: Images,
-  current: Snapshot,
-): Result<Operation, RejectionReason> {
+function rebaseOperation(operation: Operation, images: Images, current: Snapshot): Result<Operation, RejectionReason> {
   const { through } = images;
   switch (operation.tag) {
     case 'set-attribute':
@@ -332,9 +297,7 @@ function rebaseOperation(
         operation.tag === 'revert-splices' ? through : images.untouched,
       );
       if (spans === undefined) {
-        return err(
-          operation.tag === 'apply-code-patch' ? 'merge-conflict' : 'region-externally-modified',
-        );
+        return err(operation.tag === 'apply-code-patch' ? 'merge-conflict' : 'region-externally-modified');
       }
       const hunks = operation.hunks.map((hunk, index) => {
         const span = spans[index];
@@ -350,10 +313,7 @@ function rebaseOperation(
   }
 }
 
-function rebaseSpans(
-  spans: readonly ByteSpan[],
-  through: Through,
-): readonly ByteSpan[] | undefined {
+function rebaseSpans(spans: readonly ByteSpan[], through: Through): readonly ByteSpan[] | undefined {
   const images: ByteSpan[] = [];
   for (const span of spans) {
     const image = through(span);

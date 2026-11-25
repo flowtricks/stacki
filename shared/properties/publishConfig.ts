@@ -1,4 +1,6 @@
 import { list, record, text } from '../core/boundary';
+import { parsePublishedSiteURL } from './publishSite';
+import { parseGitHubWorkflow, type GitHubWorkflow } from './publishReview';
 
 export type PublishTarget = 'all' | 'github' | 'hosting';
 export type Hosting =
@@ -21,15 +23,24 @@ export type Hosting =
       readonly projectId: string;
     };
 export interface PublishConfig {
+  readonly publishedSite?: PublishedSite;
+  readonly githubWorkflow?: GitHubWorkflow;
   readonly version: 1;
+  readonly defaultTarget: PublishTarget;
   readonly githubAccount: string;
   readonly hosting: Hosting;
   readonly buildScript: string;
   readonly beforePublish: readonly string[];
   readonly afterPublish: readonly string[];
 }
+export interface PublishedSite {
+  readonly hosting: Exclude<Hosting, { readonly provider: 'none' }>;
+  readonly url: string;
+  readonly source: 'manual' | 'discovered';
+}
 export const DEFAULT_PUBLISH_CONFIG: PublishConfig = {
   version: 1,
+  defaultTarget: 'all',
   githubAccount: '',
   hosting: { provider: 'none' },
   buildScript: 'build',
@@ -53,6 +64,14 @@ export function parsePublishTarget(input: unknown): PublishTarget {
   throw new Error('Choose all, github, or hosting as the publish target.');
 }
 
+export function parsePublishCommitMessage(input: unknown): string {
+  const message = text(input).trim();
+  if (message.length === 0 || message.length > 4000) {
+    throw new Error('Enter a commit message between 1 and 4000 characters.');
+  }
+  return message;
+}
+
 export function parsePublishConfig(input: unknown): PublishConfig {
   const value = record(input);
   if (value['version'] !== 1) {
@@ -67,12 +86,34 @@ export function parsePublishConfig(input: unknown): PublishConfig {
   }
   return {
     version: 1,
+    ...(value['publishedSite'] === undefined ? {} : { publishedSite: parsePublishedSite(value['publishedSite']) }),
+    ...(value['githubWorkflow'] === undefined
+      ? {}
+      : {
+          githubWorkflow: parseGitHubWorkflow(value['githubWorkflow']),
+        }),
+    defaultTarget: value['defaultTarget'] === undefined ? 'all' : parsePublishTarget(value['defaultTarget']),
     githubAccount,
     hosting: parseHosting(value['hosting']),
     buildScript: identifier(value['buildScript']),
     beforePublish: scripts(value['beforePublish']),
     afterPublish: scripts(value['afterPublish']),
   };
+}
+
+function parsePublishedSite(input: unknown): PublishedSite {
+  const value = record(input);
+  const hosting = parseHosting(value['hosting']);
+  if (hosting.provider === 'none') {
+    throw new Error('Published site must belong to a hosting destination.');
+  }
+  const source = value['source'];
+  if (source !== 'manual') {
+    if (source !== 'discovered') {
+      throw new Error('Invalid published site source.');
+    }
+  }
+  return { hosting, source, url: parsePublishedSiteURL(value['url']) };
 }
 
 export function parsePublishSource(source: string | undefined): PublishConfig {

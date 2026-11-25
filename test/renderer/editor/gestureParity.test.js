@@ -125,9 +125,7 @@ function meaning(value, depth = 0) {
         merged.push(item);
       }
     }
-    return merged
-      .filter((item) => !(item && item.kind === 'text' && /^\s*$/.test(item.value)))
-      .map((item) => meaning(item, depth + 1));
+    return merged.filter((item) => !(item && item.kind === 'text' && /^\s*$/.test(item.value))).map((item) => meaning(item, depth + 1));
   }
   if (value && typeof value === 'object') {
     const out = {};
@@ -224,10 +222,7 @@ function sweep(label, casesFor) {
         const theirs = parsePage(reprinted, { locs: false });
         assert.ok(mine.editable, `${where}: the engine's result parses`);
         assert.ok(theirs.editable, `${where}: the legacy result parses`);
-        if (
-          process.env.PARITY_DEBUG &&
-          JSON.stringify(meaning(mine.model)) !== JSON.stringify(meaning(theirs.model))
-        ) {
+        if (process.env.PARITY_DEBUG && JSON.stringify(meaning(mine.model)) !== JSON.stringify(meaning(theirs.model))) {
           console.log(`--- ${where}\nENGINE\n${result.text}\nLEGACY\n${reprinted}`);
         }
         assert.deepEqual(meaning(mine.model), meaning(theirs.model), `${where}: same page`);
@@ -241,15 +236,11 @@ function sweep(label, casesFor) {
 
 function report(context, tally) {
   const refused = [...tally.refused].map(([reason, count]) => `${count} ${reason}`).join(', ');
-  context.diagnostic(
-    `${tally.compared} compared, ${tally.identical} byte-identical, ` +
-      `${tally.legacyOnly} legacy-only, refused: ${refused || 'none'}`,
-  );
+  context.diagnostic(`${tally.compared} compared, ${tally.identical} byte-identical, ` + `${tally.legacyOnly} legacy-only, refused: ${refused || 'none'}`);
 }
 
 const TAGS = new Set(['element', 'component', 'raw']);
-const stringProps = (node) =>
-  Object.entries(node.props ?? {}).filter(([, value]) => value && value.type === 'string');
+const stringProps = (node) => Object.entries(node.props ?? {}).filter(([, value]) => value && value.type === 'string');
 const options = { coalesceKey: undefined, urgency: true };
 
 test('parity, attribute: set a new attribute, set and remove each string one', (context) => {
@@ -263,11 +254,7 @@ test('parity, attribute: set a new attribute, set and remove each string one', (
         gestures.propsGesture(node.id, { [name]: { type: 'string', value: 'x y' } }, options),
         gestures.propsGesture(node.id, { [name]: undefined }, options),
       ]),
-      gestures.propsGesture(
-        node.id,
-        { 'data-a': { type: 'string', value: 'a' }, 'data-b': { type: 'string', value: 'b' } },
-        options,
-      ),
+      gestures.propsGesture(node.id, { 'data-a': { type: 'string', value: 'a' }, 'data-b': { type: 'string', value: 'b' } }, options),
     ];
   });
   report(context, tally);
@@ -281,11 +268,7 @@ test('parity, prop: expressions and bare props, new and replacing any value', (c
     }
     const named = Object.entries(node.props ?? {}).filter(([, value]) => value.type !== 'spread');
     return [
-      gestures.propsGesture(
-        node.id,
-        { items: { type: 'expr', value: 'list.slice(0, 3)' } },
-        options,
-      ),
+      gestures.propsGesture(node.id, { items: { type: 'expr', value: 'list.slice(0, 3)' } }, options),
       gestures.propsGesture(node.id, { hidden: { type: 'bare' } }, options),
       ...named.flatMap(([name]) => [
         gestures.propsGesture(node.id, { [name]: { type: 'expr', value: 'value ?? 1' } }, options),
@@ -307,9 +290,7 @@ function placesOf(model) {
     found.push(entry);
     const children = entry.node.children;
     if (Array.isArray(children) && entry.node.kind !== 'chunk-group') {
-      children.forEach((child, index) =>
-        pending.push({ node: child, parentId: entry.node.id, index }),
-      );
+      children.forEach((child, index) => pending.push({ node: child, parentId: entry.node.id, index }));
     }
   }
   return found;
@@ -348,24 +329,10 @@ test('parity, insert and remove: beside, inside, a copy of each node, each remov
     const entry = byNode.get(model).get(node.id);
     const urgency = { urgency: true };
     const cases = [
-      gestures.insertGesture(
-        model,
-        newNode('element'),
-        { parentId: entry.parentId, index: entry.index },
-        urgency,
-      ),
-      gestures.insertGesture(
-        model,
-        newNode('comment'),
-        { parentId: entry.parentId, index: entry.index + 1 },
-        urgency,
-      ),
+      gestures.insertGesture(model, newNode('element'), { parentId: entry.parentId, index: entry.index }, urgency),
+      gestures.insertGesture(model, newNode('comment'), { parentId: entry.parentId, index: entry.index + 1 }, urgency),
       gestures.duplicateGesture(node.id, withNewIds(node), urgency),
-      gestures.removalGesture(
-        [node.id],
-        { apply: (current) => gestures.withoutNodes(current, [node.id]), changesMore: false },
-        urgency,
-      ),
+      gestures.removalGesture([node.id], { apply: (current) => gestures.withoutNodes(current, [node.id]), changesMore: false }, urgency),
     ];
     if ((node.kind === 'element' || node.kind === 'component') && Array.isArray(node.children)) {
       const inside = { parentId: node.id, index: node.children.length };
@@ -377,29 +344,24 @@ test('parity, insert and remove: beside, inside, a copy of each node, each remov
   assert.ok(tally.compared > 1000, `the sweep compares many real gestures (${tally.compared})`);
 });
 
-test(
-  'parity, move: every node before the first root, ' + 'after the last, into each element',
-  (context) => {
-    const rules = { keepsSlot: () => true };
-    const tally = sweep('move', (node, model) => {
-      const roots = model.nodes;
-      const elements = placesOf(model)
-        .map((entry) => entry.node)
-        .filter((candidate) => candidate.kind === 'element' && Array.isArray(candidate.children))
-        .slice(0, 4);
-      const places = [
-        { parentId: undefined, index: 0 },
-        { parentId: undefined, index: roots.length },
-        ...elements.map((parent) => ({ parentId: parent.id, index: parent.children.length })),
-      ];
-      return places
-        .map((place) => gestures.moveGesture(model, node.id, place, rules, { urgency: true }))
-        .filter((gesture) => gesture !== undefined);
-    });
-    report(context, tally);
-    assert.ok(tally.compared > 500, `the sweep compares many real moves (${tally.compared})`);
-  },
-);
+test('parity, move: every node before the first root, ' + 'after the last, into each element', (context) => {
+  const rules = { keepsSlot: () => true };
+  const tally = sweep('move', (node, model) => {
+    const roots = model.nodes;
+    const elements = placesOf(model)
+      .map((entry) => entry.node)
+      .filter((candidate) => candidate.kind === 'element' && Array.isArray(candidate.children))
+      .slice(0, 4);
+    const places = [
+      { parentId: undefined, index: 0 },
+      { parentId: undefined, index: roots.length },
+      ...elements.map((parent) => ({ parentId: parent.id, index: parent.children.length })),
+    ];
+    return places.map((place) => gestures.moveGesture(model, node.id, place, rules, { urgency: true })).filter((gesture) => gesture !== undefined);
+  });
+  report(context, tally);
+  assert.ok(tally.compared > 500, `the sweep compares many real moves (${tally.compared})`);
+});
 
 test('parity, inline CSS: one declaration set, changed, added or removed in place', (context) => {
   let inPlace = 0;
@@ -411,17 +373,14 @@ test('parity, inline CSS: one declaration set, changed, added or removed in plac
     const before = style.value;
     const first = before.split(';')[0] ?? '';
     const property = first.split(':')[0]?.trim();
-    const afters = [
-      `${before}${before.trim().endsWith(';') || !before.trim() ? '' : ';'} outline: 0`.trim(),
-    ];
+    const afters = [`${before}${before.trim().endsWith(';') || !before.trim() ? '' : ';'} outline: 0`.trim()];
     if (property) {
       afters.push(before.replace(/:[^;]*/, ': 7px'));
       afters.push(before.replace(/^[^;]*;?\s*/, ''));
     }
     return afters.map((after) => {
       const gesture = gestures.inlineStyleGesture(node.id, { before, after }, options);
-      const [request] =
-        gesture.request(() => ({ path: [0], kind: 'element', span: { start: 0, end: 1 } })) ?? [];
+      const [request] = gesture.request(() => ({ path: [0], kind: 'element', span: { start: 0, end: 1 } })) ?? [];
       inPlace += request?.tag === 'set-inline-style' ? 1 : 0;
       return gesture;
     });
@@ -453,9 +412,7 @@ test('parity, frontmatter: imports added and removed, declarations, with an inse
       ...model.imports.map((imported) =>
         gestures.frontmatterGesture(model, options, (current) => ({
           ...current,
-          imports: current.imports.filter(
-            (entry) => entry !== imported && entry.name !== imported.name,
-          ),
+          imports: current.imports.filter((entry) => entry !== imported && entry.name !== imported.name),
         })),
       ),
     ];
@@ -468,21 +425,13 @@ test('parity, frontmatter: imports added and removed, declarations, with an inse
         props: {},
         children: undefined,
       };
-      const insert = gestures.insertGesture(
-        model,
-        node,
-        { parentId: undefined, index: model.nodes.indexOf(first) },
-        options,
-      );
+      const insert = gestures.insertGesture(model, node, { parentId: undefined, index: model.nodes.indexOf(first) }, options);
       cases.push(gestures.sequence(gestures.frontmatterGesture(model, options, addImport), insert));
     }
     return cases;
   });
   report(context, tally);
-  assert.ok(
-    tally.compared > 60,
-    `the sweep compares many frontmatter gestures (${tally.compared})`,
-  );
+  assert.ok(tally.compared > 60, `the sweep compares many frontmatter gestures (${tally.compared})`);
 });
 
 test('parity, loop rename: each loop parameter renamed, every reference with it', (context) => {
@@ -490,32 +439,15 @@ test('parity, loop rename: each loop parameter renamed, every reference with it'
     if (node.kind !== 'map') {
       return [];
     }
-    const match = /^([\s\S]+?)\.map\(\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)\s*=>\s*\($/.exec(
-      node.head.trim(),
-    );
+    const match = /^([\s\S]+?)\.map\(\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)\s*=>\s*\($/.exec(node.head.trim());
     if (match === null) {
       return [];
     }
     const [, data, item, index] = match;
-    const head = (nextItem, nextIndex) =>
-      `${data}.map((${nextItem}${nextIndex ? `, ${nextIndex}` : ''}) => (`;
-    const cases = [
-      gestures.loopRenameGesture(
-        page,
-        node.id,
-        { head: head('renamed', index), renames: [{ from: item, to: 'renamed' }] },
-        { urgency: true },
-      ),
-    ];
+    const head = (nextItem, nextIndex) => `${data}.map((${nextItem}${nextIndex ? `, ${nextIndex}` : ''}) => (`;
+    const cases = [gestures.loopRenameGesture(page, node.id, { head: head('renamed', index), renames: [{ from: item, to: 'renamed' }] }, { urgency: true })];
     if (index) {
-      cases.push(
-        gestures.loopRenameGesture(
-          page,
-          node.id,
-          { head: head(item, 'position'), renames: [{ from: index, to: 'position' }] },
-          { urgency: true },
-        ),
-      );
+      cases.push(gestures.loopRenameGesture(page, node.id, { head: head(item, 'position'), renames: [{ from: index, to: 'position' }] }, { urgency: true }));
     }
     return cases.filter((gesture) => gesture !== undefined);
   });

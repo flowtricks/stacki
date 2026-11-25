@@ -2,9 +2,7 @@ import { projectAliases } from '../properties/importPaths';
 import type { MainHost } from './mainHost';
 import { convertImage } from '../project/imageConversion';
 
-export function registerImageConversionHandler(
-  host: Pick<MainHost, 'ipcMain' | 'shell' | 'noteAppWrite' | 'send'>,
-): void {
+export function registerImageConversionHandler(host: Pick<MainHost, 'ipcMain' | 'shell' | 'noteAppWrite' | 'send'>): void {
   // Image codecs and multi-file rewrites run one at a time, with no growing queue.
   let running = false;
   host.ipcMain.handle('assets:convert', async (_event, payload) => {

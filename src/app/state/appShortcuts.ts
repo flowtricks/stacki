@@ -2,18 +2,32 @@
 // escape keys, routes, collections and their sample entries, cleaning up
 // queries, and composing the node edits (App.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef } from 'react';
+import { assert } from '../../../shared/core/assert';
+import { data, type Data } from '../../../shared/core/boundary';
 import type { ImportDecl } from '../../../shared/page/pageNode';
+import { loadCatalog } from '../../features/props/loopCatalog';
+import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
+import { showInsertOnCanvas } from '../../editor/canvasInsertShow';
+import { editTrace } from '../../lib/editTrace';
+import { documentOfPath, placementNodeOfItem } from '../../editor/placementCheck';
+import { gatePlacement, placementNotice } from '../model/placementGate';
 import { frontmatterGesture, insertGesture } from '../../editor/editGestures';
 import {
   collectionsInScope,
+  type ImportedCall,
+  importedCallsInScope,
+  sanityFetchesInScope,
+  type SanityFetch,
   markedQueries,
   QUERY_MARK,
   referencesInScope,
   removeMarkedQuery,
 } from '../../editor/dataSuggest';
-import type { InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertChoice, InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertTarget } from '../../editor/insertTarget';
 import { toRecord } from '../../../shared/core/record';
 import { type EditorModel } from '../../editor/pageView';
 import {
@@ -22,23 +36,19 @@ import {
   readDynamicPaths,
   readInjectedRoutes,
   readSampleEntry,
+  readSampleValue,
   runNativeEdit,
 } from '../../ipc/appBridge';
+import { appShortcutRoute } from '../../features/apps/appsRuntime';
 import { newId, routeToPath } from '../model/nodeFactory';
+import { dynamicEntryIndexOf, previewNeedsPath, previewPageFor, previewPathOfPage } from '../model/previewPage';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
-import {
-  type AppKeys,
-  handleAppKeyDown,
-  copySelectionTrail,
-  inEditable,
-  type MenuEdits,
-  menuCopy,
-  menuPaste,
-} from '../model/appKeys';
+import { type AppKeys, handleAppKeyDown, copySelectionTrail, inEditable, type MenuEdits, menuCopy, menuPaste } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
 import { useWrapNode } from './appWrapNode';
+import { windowHeld } from '../../ui/busyLock';
 import {
   useHistory,
   useAddComponent,
@@ -53,25 +63,15 @@ import {
 } from './appNodeEdits';
 
 // Editing nodes from the navigator and the palette.
-export function useNodeEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
-  const addComponentScope = useAddComponent(coreState, history);
+export function useNodeEdits(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const addComponentScope = useAddComponent(coreState, history, lifecycle);
   const componentQueries = useComponentQueries(coreState);
   const createComponent = useCreateComponent(coreState, componentQueries, lifecycle, history);
   const moveNodeScope = useMoveNode(coreState, history, lifecycle);
   const wrapNodeScope = useWrapNode(coreState, history);
   const removeNodeScope = useRemoveNode(coreState, lifecycle, history);
   const copyNodeScope = useCopyNode(coreState, removeNodeScope, lifecycle, history);
-  const pasteNodeScope = usePasteNode(
-    removeNodeScope,
-    coreState,
-    addComponentScope,
-    lifecycle,
-    history,
-  );
+  const pasteNodeScope = usePasteNode(removeNodeScope, coreState, addComponentScope, lifecycle, history);
   const insertPalette = useInsertPalette(coreState);
   useCanvasMessages(coreState, insertPalette);
   return {
@@ -95,33 +95,48 @@ export function useInsertItem(
   history: ReturnType<typeof useHistory>,
 ) {
   const { cmsRel, contentName, insertables, leftTab, pageStateRef, selectedIdRef } = coreState;
-  const { setSelectedId } = coreState;
-  const { addComponent, setInsertOpen } = nodeEdits;
-  const { reportFailure } = lifecycle;
+  const { canvasPathForRef, setSelectedId } = coreState;
+  const { addComponent, setInsertOpen, warmComponent } = nodeEdits;
+  const { reportFailure, showToast } = lifecycle;
   const { commitEdit } = history;
+  const translate = useTranslate();
 
   // Where a new node goes — see insertTarget.js. The rule lives there so the
   // "why did that land next to the section instead of in it?" answer can be
   // read, and tested, without a running app.
   const insertTargetFor = useCallback(
-    (model: EditorModel, selectionId: string | undefined, item: InsertItem) =>
-      placeInsert(model, selectionId, item, insertables),
+    (model: EditorModel, selectionId: string | undefined, item: InsertItem) => placeInsert(model, selectionId, item, insertables),
     [insertables],
   );
 
-  const insertItem = useCallback(
-    (item: InsertItem) => {
+  // Inserts `item` where `aimed` points: the selection's place for the palette and the panel's click, the drop's
+  // place for a drag from the Add elements panel. One path, so a drop and a click write the same node.
+  const insertItemAt = useCallback(
+    (item: InsertChoice, aimed: InsertTarget) => {
+      editTrace.begin(`insert ${item.type}`);
       setInsertOpen(false);
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
       }
-      const target = insertTargetFor(state.model, selectedIdRef.current, item);
 
+      // A component is placed (and refused, or moved with a note) by addComponent, which asks the same rule once it has read the component.
       if (item.type === 'component') {
-        void addComponent(item.path ?? item.name, target).catch(reportFailure);
+        void addComponent(item.path ?? item.name, aimed).catch(reportFailure);
         return;
       }
+      // The one placement rule: a refusal writes nothing; the nearest valid place is used, with a note saying so.
+      const pagePath = pageStateRef.current.currentPage?.path;
+      const subject = placementNodeOfItem(item, { insertables, document: documentOfPath(pagePath) });
+      const gate = subject === undefined ? undefined : gatePlacement(state.model, { kind: 'new', node: subject }, aimed, { insertables, pagePath });
+      const notice = gate === undefined ? undefined : placementNotice(gate, translate);
+      if (notice !== undefined) {
+        showToast(notice.text, notice.tone);
+      }
+      if (gate?.kind === 'stop') {
+        return;
+      }
+      const target = gate === undefined ? aimed : gate.target;
 
       // <Image>/<Picture> need `import { … } from 'astro:assets'` — a named
       // import of a virtual module, so there is no file path to resolve the
@@ -139,26 +154,67 @@ export function useInsertItem(
         return;
       }
       // Step 6, insert: a new node needs no import, so it is one request.
-      commitEdit(insertGesture(state.model, node, target, { urgency: true }));
+      editTrace.mark('placed');
+      if (commitEdit(insertGesture(state.model, node, target, { urgency: true }))) {
+        editTrace.mark('committed');
+        // Drawn on the canvas at once, planned against the tree as it stood; the rebuilt page replaces it.
+        showInsertOnCanvas(state.model, target, node, (nodeId) => canvasPathForRef.current(nodeId));
+        editTrace.mark('canvas told');
+      }
+      editTrace.finish();
       setSelectedId(id);
     },
-    [
-      insertTargetFor,
-      addComponent,
-      commitEdit,
-      reportFailure,
-      pageStateRef,
-      selectedIdRef,
-      setInsertOpen,
-      setSelectedId,
-    ],
+    [addComponent, commitEdit, canvasPathForRef, reportFailure, showToast, translate, insertables, pageStateRef, setInsertOpen, setSelectedId],
+  );
+
+  // The palette's pick, and the Add elements panel's click: where the selection points (insertTarget.ts).
+  const insertItem = useCallback(
+    (item: InsertItem) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) {
+        setInsertOpen(false);
+        return;
+      }
+      insertItemAt(item, insertTargetFor(state.model, selectedIdRef.current, item));
+    },
+    [insertItemAt, insertTargetFor, pageStateRef, selectedIdRef, setInsertOpen],
+  );
+
+  // Why the palette cannot put an item where the selection points: the refusal, or undefined when it can (or lands beside, with a note).
+  const placementForItem = useCallback(
+    (item: InsertItem) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable || item.type === 'component' || item.type === 'astroAsset') {
+        return undefined;
+      }
+      const pagePath = pageStateRef.current.currentPage?.path;
+      const subject = placementNodeOfItem(item, { insertables, document: documentOfPath(pagePath) });
+      if (subject === undefined) {
+        return undefined;
+      }
+      const gate = gatePlacement(state.model, { kind: 'new', node: subject }, insertTargetFor(state.model, selectedIdRef.current, item), {
+        insertables,
+        pagePath,
+      });
+      return gate.kind === 'stop' ? gate.refusal : undefined;
+    },
+    [insertTargetFor, insertables, pageStateRef, selectedIdRef],
   );
 
   // True while the CMS covers the canvas: the page-editing shortcuts below
   // would act on a selection the user can't see.
   const cmsOpenRef = useRef(false);
   cmsOpenRef.current = leftTab === 'cms' && (!!cmsRel || !!contentName);
-  return { cmsOpenRef, insertItem };
+  // The palette is on this item: a component's reads start now, so choosing it finds them done.
+  const warmInsertItem = useCallback(
+    (item: InsertItem): void => {
+      if (item.type === 'component') {
+        warmComponent(item.path ?? item.name);
+      }
+    },
+    [warmComponent],
+  );
+  return { cmsOpenRef, insertItem, insertItemAt, placementForItem, warmInsertItem };
 }
 
 // The app’s keyboard shortcuts.
@@ -170,7 +226,7 @@ export function useKeyboard(
   history: ReturnType<typeof useHistory>,
 ) {
   const { historyRef, reportFailure } = lifecycle;
-  const { openCodeWindowRef, pageStateRef, selectedIdRef, setClassFocus } = coreState;
+  const { openCodeWindowRef, pageStateRef, pseudoPickRef, selectedIdRef, setClassFocus } = coreState;
   const { setCreateRequest, setLeftTab, setRightTab } = coreState;
   const { copyNode, duplicateNode, nodeClipboardRef, pasteNode, removeNode } = nodeEdits;
   const { setInsertOpen } = nodeEdits;
@@ -185,6 +241,7 @@ export function useKeyboard(
       historyRef,
       pageStateRef,
       selectedIdRef,
+      pseudoPickRef,
       openCodeWindowRef,
       nodeClipboardRef,
       cmsOpenRef,
@@ -217,6 +274,7 @@ export function useKeyboard(
     nodeClipboardRef,
     openCodeWindowRef,
     pageStateRef,
+    pseudoPickRef,
     selectedIdRef,
     setClassFocus,
     setCreateRequest,
@@ -235,7 +293,8 @@ export function useMenuShortcuts(
   history: ReturnType<typeof useHistory>,
 ) {
   const { flushSave, reportFailure, showToast } = lifecycle;
-  const { pageStateRef, projectRef, selectedIdRef, selectionKeysRef } = coreState;
+  const translate = useTranslate();
+  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, selectionKeysRef, setRefreshKey } = coreState;
   const { cmsOpenRef } = insertItemScope;
   const { copyNode, nodeClipboardRef, pasteNode } = nodeEdits;
   const { redo, undo } = history;
@@ -245,10 +304,11 @@ export function useMenuShortcuts(
   // paste route to the focused text field when one is active, otherwise to
   // the selected node.
   useEffect(() => {
-    const copying = { flushSave, showToast, projectRef, selectionKeysRef };
+    const copying = { flushSave, showToast, projectRef, selectionKeysRef, translate };
     const copySelection = (): Promise<void> => copySelectionTrail(copying);
     const menu: MenuEdits = {
       selectedIdRef,
+      pseudoPickRef,
       pageStateRef,
       cmsOpenRef,
       nodeClipboardRef,
@@ -270,7 +330,26 @@ export function useMenuShortcuts(
       // panel, the CMS itself. A command carries its own inverse and needs no
       // page — and a snapshot without one is dropped rather than applied, which
       // undo already does.
+      //
+      // Focus in an app's frame (docs/apps.md, "Undo, redo and shortcuts"): the
+      // menu takes ⌘Z before the frame sees it, so it is routed here. A text
+      // field in the app undoes its own typing, an app that keeps the shortcut
+      // hears `shortcut.press`, and otherwise this is Stacki's undo, once: the
+      // frame never saw the key, so its SDK forwarded nothing.
+      // Commands that change the project do nothing while a cover holds the window (src/ui/busyLock.ts); copying does.
       window.avb.onMenu('undo', () => {
+        if (windowHeld()) {
+          return;
+        }
+        const route = appShortcutRoute('Mod+Z', document.activeElement ?? undefined);
+        if (route === 'app') {
+          return;
+        }
+        // A text field in the app's frame: the field's own undo, as for a field of Stacki's.
+        if (route === 'native') {
+          runNativeEdit('undo');
+          return;
+        }
         if (inEditable()) {
           runNativeEdit('undo');
           return;
@@ -279,6 +358,18 @@ export function useMenuShortcuts(
         void undo();
       }),
       window.avb.onMenu('redo', () => {
+        if (windowHeld()) {
+          return;
+        }
+        const route = appShortcutRoute('Mod+Shift+Z', document.activeElement ?? undefined);
+        if (route === 'app') {
+          return;
+        }
+        // A text field in the app's frame: the field's own redo, as for a field of Stacki's.
+        if (route === 'native') {
+          runNativeEdit('redo');
+          return;
+        }
         if (inEditable()) {
           runNativeEdit('redo');
           return;
@@ -287,15 +378,29 @@ export function useMenuShortcuts(
         void redo();
       }),
       window.avb.onMenu('copy', () => menuCopy(menu)),
-      window.avb.onMenu('paste', () => menuPaste(menu)),
+      window.avb.onMenu('paste', () => {
+        if (!windowHeld()) {
+          menuPaste(menu);
+        }
+      }),
       // ⇧⌘C — the selection's file:line trail, for pasting into an AI chat.
       // Copies markup coordinates, not markup: ⌘C already does the node.
       window.avb.onMenu('copySelection', () => {
         void copySelection().catch(reportFailure);
       }),
+      // ⌘R and ⇧⌘R, wherever focus is: the menu accelerator runs before any page key handling, so a focused text field cannot swallow
+      // it, and the main process sends it here (electron/app/reloadRouting.ts) only while a project is open. The same bump as the
+      // toolbar's refresh button; with no site loaded it remounts nothing visible.
+      window.avb.onMenu('refreshPreview', () => {
+        if (!windowHeld()) {
+          setRefreshKey((count) => count + 1);
+        }
+      }),
     ];
     return () => offs.forEach((off) => off());
   }, [
+    translate,
+    setRefreshKey,
     undo,
     redo,
     copyNode,
@@ -307,68 +412,72 @@ export function useMenuShortcuts(
     nodeClipboardRef,
     pageStateRef,
     projectRef,
+    pseudoPickRef,
     selectedIdRef,
     selectionKeysRef,
   ]);
 }
 
 // The interactive preview mode.
-export function useInteractivePreview(
-  coreState: ReturnType<typeof useCoreState>,
-  navigation: ReturnType<typeof useNavigation>,
-) {
-  const { devUrl, inPreviewRef, livePathRef, pageStateRef, previewIframeRef } = coreState;
-  const { previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
+export function useInteractivePreview(coreState: ReturnType<typeof useCoreState>, navigation: ReturnType<typeof useNavigation>) {
+  const { devUrl, inPreview, inPreviewRef, livePathRef, pageStateRef, previewIframeRef } = coreState;
+  const { currentPage, dynamicIndex, dynamicPaths, editStack, previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
   const { selectPage } = navigation;
 
   // ----------------------------------------------------------------
-  // Interactive preview mode — browse the site inside the app; on exit,
-  // the editor follows whichever page was navigated to.
+  // Interactive preview mode — browse the site inside the app. The page
+  // switcher and the preview drive each other (previewPage.ts): a page
+  // picked while previewing loads in the preview, and a link followed in
+  // the preview opens its page in the editor, preview mode staying on.
   // ----------------------------------------------------------------
+
+  // Whatever the canvas is showing — which for a dynamic page is one entry's
+  // URL, not its pattern. Opening /blog/[...id] asks the dev server for a
+  // route no page produces, and it answers with the site's 404, while the
+  // URL field (built from the same entry) went on claiming otherwise.
+  const canvasPath = useCallback(
+    () => livePathRef.current || routeToPath(pageStateRef.current.currentPage?.route || '/', trailingSlash),
+    [livePathRef, pageStateRef, trailingSlash],
+  );
 
   const enterPreview = useCallback(() => {
     if (!devUrl) {
       return;
     }
-    // Whatever the canvas is showing — which for a dynamic page is one entry's
-    // URL, not its pattern. Opening /blog/[...id] asks the dev server for a
-    // route no page produces, and it answers with the site's 404, while the
-    // URL field (built from the same entry) went on claiming otherwise.
-    const path =
-      livePathRef.current ||
-      routeToPath(pageStateRef.current.currentPage?.route || '/', trailingSlash);
+    const path = canvasPath();
     previewPathRef.current = path;
     setPreviewSource(devUrl + path);
     setInPreview(true);
-  }, [
-    devUrl,
-    trailingSlash,
-    livePathRef,
-    pageStateRef,
-    previewPathRef,
-    setInPreview,
-    setPreviewSource,
-  ]);
+  }, [devUrl, canvasPath, previewPathRef, setInPreview, setPreviewSource]);
 
+  // The editor already follows the preview's page as it goes, so leaving only closes it.
   const exitPreview = useCallback(() => {
     setInPreview(false);
-    const raw = previewPathRef.current;
-    if (!raw) {
+  }, [setInPreview]);
+
+  // The switcher drives the preview: a page opened while previewing loads in it,
+  // unless the preview is already there (it opened the page itself, below).
+  const openPath = currentPage?.path;
+  // The page the canvas renders, as canvasRouteOf reads it: a component shows its page.
+  const canvasRoute = (editStack[0] ?? currentPage)?.route;
+  // A dynamic page's entries arrive after the page opens, and name where it loads.
+  const entryRoute = dynamicPaths[dynamicIndex]?.route;
+  useEffect(() => {
+    if (!inPreview || !devUrl) {
       return;
     }
-    let path = raw.split('?')[0]?.split('#')[0] ?? '';
-    if (path.length > 1 && path.endsWith('/')) {
-      path = path.slice(0, -1);
+    const page = canvasRoute === undefined ? undefined : { route: canvasRoute, path: routeToPath(canvasRoute, trailingSlash) };
+    const path = previewPathOfPage(page, canvasPath());
+    if (previewNeedsPath(previewPathRef.current, path)) {
+      previewPathRef.current = path;
+      setPreviewSource(devUrl + path);
     }
-    const page = scan.pages.find((pg) => pg.route === (path || '/'));
-    if (page && page.path !== pageStateRef.current.currentPage?.path) {
-      // Opening a page reports its own failures.
-      void selectPage(page);
-    }
-  }, [scan.pages, selectPage, pageStateRef, previewPathRef, setInPreview]);
+  }, [inPreview, devUrl, openPath, canvasRoute, entryRoute, canvasPath, previewPathRef, setPreviewSource, trailingSlash]);
 
-  // Track navigation inside the preview iframe (the preload posts
-  // avb:navigated from every loaded frame).
+  // The preview drives the switcher: the preload posts avb:navigated from every
+  // loaded frame and after each client-side navigation, and the page it names opens.
+  const follow = useRef({ pages: scan.pages, selectPage, pageStateRef });
+  follow.current = { pages: scan.pages, selectPage, pageStateRef };
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
       const message = toRecord(event.data);
@@ -376,11 +485,19 @@ export function useInteractivePreview(
         return;
       }
       const ifr = previewIframeRef.current;
-      if (ifr && event.source === ifr.contentWindow) {
-        const path = message['path'];
-        if (typeof path === 'string') {
-          previewPathRef.current = path;
-        }
+      if (!ifr || event.source !== ifr.contentWindow) {
+        return;
+      }
+      const path = message['path'];
+      if (typeof path !== 'string' || !path.startsWith('/')) {
+        return;
+      }
+      previewPathRef.current = path;
+      const { pages, selectPage: open, pageStateRef: state } = follow.current;
+      const page = previewPageFor(pages, path);
+      if (page && page.path !== state.current.currentPage?.path) {
+        // Opening a page reports its own failures.
+        void open(page);
       }
     };
     window.addEventListener('message', onMessage);
@@ -435,8 +552,7 @@ export function useEscapeKeys(
       // Let fields, menus, and dialogs consume their own Escape first.
       if (
         target instanceof HTMLElement &&
-        (target.closest('input, textarea, select, [contenteditable="true"]') ||
-          target.closest('.popup-surface, .dd-popup, .insert-overlay, .code-window'))
+        (target.closest('input, textarea, select, [contenteditable="true"]') || target.closest('.popup-surface, .dd-popup, .insert-overlay, .code-window'))
       ) {
         return;
       }
@@ -449,10 +565,60 @@ export function useEscapeKeys(
   }, [inPreview, editStack.length, closeComponent]);
 }
 
+// ⌥P toggles the interactive preview: into it from the editor, back out of it
+// (or out of an older version) from either. Matched on the physical key, because
+// Option rewrites `event.key` on a Mac ("π" for P). A field keeps the key, so
+// typing ⌥P there still types its character.
+export function usePreviewKey(
+  navigation: ReturnType<typeof useNavigation>,
+  interactivePreview: ReturnType<typeof useInteractivePreview>,
+  coreState: ReturnType<typeof useCoreState>,
+) {
+  const { inPreview, previewRef } = coreState;
+  const { exitCommitPreview } = navigation;
+  const { enterPreview, exitPreview } = interactivePreview;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (!isPreviewKey(event)) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) {
+        return;
+      }
+      event.preventDefault();
+      if (previewRef) {
+        // Leaving the old version cannot fail: a server that will not stop is ignored.
+        void exitCommitPreview();
+      } else if (inPreview) {
+        exitPreview();
+      } else {
+        enterPreview();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [inPreview, previewRef, enterPreview, exitPreview, exitCommitPreview]);
+}
+
+// Option and P alone: no Command, Control or Shift.
+export function isPreviewKey(event: Pick<KeyboardEvent, 'altKey' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'code'>): boolean {
+  if (!event.altKey) {
+    return false;
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+    return false;
+  }
+  return event.code === 'KeyP';
+}
+
 // Injected routes and a dynamic page’s entries.
 export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
-  const { currentPage, devStatus, devUrl, editStack, pageState, project, scan } = coreState;
-  const { setDynamicError, setDynamicIndex, setDynamicPaths, setInjectedRoutes } = coreState;
+  const { currentPage, devStatus, devUrl, editStack, linkedEntry, pageState, project, scan } = coreState;
+  const { setDynamicError, setDynamicIndex, setDynamicPaths, setInjectedRoutes, setLinkedEntry } = coreState;
+  // Read when the entries arrive, not a reason to read them again.
+  const linkedRef = useRef(linkedEntry);
+  linkedRef.current = linkedEntry;
 
   // The route list is written by the dev server as it resolves its routes, so
   // it is read once the server is up — and again after a rescan, since adding
@@ -494,10 +660,17 @@ export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
         if (!live) {
           return;
         }
-        setDynamicPaths(result?.entries || []);
+        const entries = result?.entries || [];
+        setDynamicPaths(entries);
         // Keep showing the same entry across reloads where we can — the
-        // params are what identify it, not its position in the list.
-        setDynamicIndex((i) => (i < (result?.entries || []).length ? i : 0));
+        // params are what identify it, not its position in the list. An entry a
+        // canvas link landed on is shown instead, and from now on by its index.
+        const linked = linkedRef.current;
+        const landed = linked?.pagePath === entry.path ? dynamicEntryIndexOf(entries, linked.route) : undefined;
+        setDynamicIndex((i) => landed ?? (i < entries.length ? i : 0));
+        if (landed !== undefined) {
+          setLinkedEntry(undefined);
+        }
         if (result?.error) {
           setDynamicError(result.error);
         } else {
@@ -511,17 +684,7 @@ export function useRoutes(coreState: ReturnType<typeof useCoreState>) {
     // Frontmatter rather than the whole pageState: getStaticPaths lives there,
     // and depending on the model would re-run a collection query on every
     // keystroke in the page body.
-  }, [
-    project,
-    editStack,
-    currentPage,
-    devStatus,
-    devUrl,
-    pageFrontmatter,
-    setDynamicError,
-    setDynamicIndex,
-    setDynamicPaths,
-  ]);
+  }, [project, editStack, currentPage, devStatus, devUrl, pageFrontmatter, setDynamicError, setDynamicIndex, setDynamicPaths, setLinkedEntry]);
   return { model, pageFrontmatter };
 }
 
@@ -558,10 +721,7 @@ export function useCollections(coreState: ReturnType<typeof useCoreState>) {
 }
 
 // Sample entries for the collections the open file reads.
-export function useSampleEntries(
-  coreState: ReturnType<typeof useCoreState>,
-  routes: ReturnType<typeof useRoutes>,
-) {
+export function useSampleEntries(coreState: ReturnType<typeof useCoreState>, routes: ReturnType<typeof useRoutes>) {
   const { collectionSamples, currentPage, devStatus, devUrl, dynamicIndex } = coreState;
   const { dynamicPaths, setCollectionSamples } = coreState;
   const { pageFrontmatter } = routes;
@@ -573,10 +733,7 @@ export function useSampleEntries(
     const frontmatter = pageFrontmatter ?? '';
     // The entry on the canvas, which is what a reference in this file resolves
     // AGAINST — this post's author, not the collection's first.
-    const props =
-      currentPage?.kind === 'component'
-        ? undefined
-        : dynamicPaths[dynamicIndex]?.props || undefined;
+    const props = currentPage?.kind === 'component' ? undefined : dynamicPaths[dynamicIndex]?.props || undefined;
     const wanted: { readonly key: string; readonly name: string; readonly id?: string }[] = [
       ...collectionsInScope(frontmatter).map((name) => ({ key: name, name })),
       ...referencesInScope(frontmatter, props).map((reference) => ({
@@ -589,11 +746,7 @@ export function useSampleEntries(
       return undefined;
     }
     let live = true;
-    Promise.all(
-      wanted.map((want) =>
-        readSampleEntry(devUrl, want.name, want.id).then((entry) => [want.key, entry] as const),
-      ),
-    )
+    Promise.all(wanted.map((want) => readSampleEntry(devUrl, want.name, want.id).then((entry) => [want.key, entry] as const)))
       .then((pairs) => {
         if (live) {
           setCollectionSamples((previous) => ({ ...previous, ...Object.fromEntries(pairs) }));
@@ -603,23 +756,70 @@ export function useSampleEntries(
     return () => {
       live = false;
     };
-  }, [
-    pageFrontmatter,
-    devUrl,
-    devStatus,
-    collectionSamples,
-    dynamicPaths,
-    dynamicIndex,
-    currentPage,
-    setCollectionSamples,
-  ]);
+  }, [pageFrontmatter, devUrl, devStatus, collectionSamples, dynamicPaths, dynamicIndex, currentPage, setCollectionSamples]);
+}
+
+// What the open file's calls to its imports return — a CMS query's entries —
+// sampled once per value, by the dev server, for the binding picker.
+export function useSampleValues(coreState: ReturnType<typeof useCoreState>, routes: ReturnType<typeof useRoutes>) {
+  const { currentPage, devStatus, devUrl, project, setValueSamples, valueSamples } = coreState;
+  const { model, pageFrontmatter } = routes;
+  const pagePath = currentPage?.path;
+  useEffect(() => {
+    if (!devUrl || devStatus !== 'on' || !project || !pagePath) {
+      return undefined;
+    }
+    const imports = model?.imports ?? [];
+    const wanted = importedCallsInScope(pageFrontmatter, imports).filter((call) => !(`${pagePath}|${call.name}` in valueSamples));
+    const fetches = sanityFetchesInScope(pageFrontmatter, imports).filter((fetch) => !(`${pagePath}|${fetch.name}` in valueSamples));
+    if (!wanted.length && !fetches.length) {
+      return undefined;
+    }
+    let live = true;
+    const ask = (call: ImportedCall) =>
+      readSampleValue({
+        projectPath: project.path,
+        devUrl,
+        pagePath,
+        spec: call.spec,
+        name: call.exportName,
+      })
+        .catch(() => undefined)
+        .then((value) => [`${pagePath}|${call.name}`, value] as const);
+    // A Sanity query's documents, as one of them read through the CMS
+    // connection: a list of one, so a loop over the value offers its fields.
+    const fetched = fetches.length === 0 ? Promise.resolve([]) : sampleSanityFetches(project.path, pagePath, fetches);
+    void Promise.all([Promise.all(wanted.map(ask)), fetched]).then(([called, read]) => {
+      const pairs = [...called, ...read];
+      if (live) {
+        setValueSamples((previous) => ({ ...previous, ...Object.fromEntries(pairs) }));
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [devUrl, devStatus, project, pagePath, pageFrontmatter, model, valueSamples, setValueSamples]);
+}
+
+/** One document of each fetched Sanity type, keyed as useSampleValues stores
+ * values; a value with no connection or no document keeps `undefined`, so it
+ * is asked for once. */
+async function sampleSanityFetches(projectPath: string, pagePath: string, fetches: readonly SanityFetch[]): Promise<readonly (readonly [string, Data])[]> {
+  assert(fetches.length > 0, 'Only fetches are sampled');
+  const catalog = await loadCatalog(projectPath).catch(() => undefined);
+  const answers = await Promise.all(
+    fetches.map(async (fetch) => {
+      const sample = catalog === undefined ? undefined : await loadSanitySample(projectPath, catalog, fetch.type).catch(() => undefined);
+      // Field values come from the CMS: parsed as any sampled value is.
+      return [`${pagePath}|${fetch.name}`, sample === undefined ? undefined : data([sample])] as const;
+    }),
+  );
+  assert(answers.length === fetches.length, 'Every fetch has an answer');
+  return answers;
 }
 
 // Taking back queries the page stopped using.
-export function useQueryCleanup(
-  routes: ReturnType<typeof useRoutes>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useQueryCleanup(routes: ReturnType<typeof useRoutes>, history: ReturnType<typeof useHistory>) {
   const { model } = routes;
   const { commitEdit } = history;
 
@@ -639,9 +839,7 @@ export function useQueryCleanup(
     }
     const timer = setTimeout(() => {
       const focused = document.activeElement;
-      if (
-        focused?.closest?.('.props-field, .rich-content, .bind-input, .expr-input, .attr-editor')
-      ) {
+      if (focused?.closest?.('.props-field, .rich-content, .bind-input, .expr-input, .attr-editor')) {
         return;
       }
       const fm = current.extraFrontmatter || '';
@@ -667,8 +865,7 @@ export function useQueryCleanup(
         let imports = pageModel.imports;
         if (!mentions(next)) {
           if (!mentions(JSON.stringify(pageModel.nodes || []))) {
-            const needed = (i: ImportDecl) =>
-              !(i.name === 'getCollection' && i.path === 'astro:content');
+            const needed = (i: ImportDecl) => !(i.name === 'getCollection' && i.path === 'astro:content');
             imports = pageModel.imports.filter(needed);
           }
         }

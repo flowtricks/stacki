@@ -14,17 +14,11 @@ const path = require('path');
 const os = require('os');
 
 const { readContentConfig, stopAllServices } = require('#dist/electron/content/contentConfig.js');
-const {
-  listEntries,
-  countEntries,
-  coveredPaths,
-} = require('#dist/electron/content/contentEntries.js');
+const { listEntries, countEntries, coveredPaths } = require('#dist/electron/content/contentEntries.js');
 const { repoPath } = require('../../helpers/sources.js');
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
-const source = path.resolve(
-  process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE,
-);
+const source = path.resolve(process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE);
 
 const failures = [];
 let checked = 0;
@@ -149,10 +143,7 @@ function listCms(root) {
   };
   const all = (selector) => [...container.querySelectorAll(selector)];
   const text = () => container.textContent;
-  const rowNamed = (name) =>
-    all('.cms-collection').find(
-      (node) => node.querySelector('.cms-collection-name')?.textContent === name,
-    );
+  const rowNamed = (name) => all('.cms-collection').find((node) => node.querySelector('.cms-collection-name')?.textContent === name);
 
   // --- both sources present --------------------------------------------------
   await mount({ listCms: async (root) => listCms(root), contentCollections });
@@ -165,9 +156,7 @@ function listCms(root) {
   check('and the project does not read as empty', !/No collections to show/.test(text()));
   check(
     'a data file a collection owns is not listed twice',
-    !all('.cms-collection').some((element) =>
-      /^Data$/.test(element.querySelector('.cms-collection-name')?.textContent || ''),
-    ),
+    !all('.cms-collection').some((element) => /^Data$/.test(element.querySelector('.cms-collection-name')?.textContent || '')),
     all('.cms-collection')
       .map((element) => element.querySelector('.cms-collection-name')?.textContent)
       .join(', '),

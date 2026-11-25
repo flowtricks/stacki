@@ -17,6 +17,9 @@ export function isStyleModule(source: string): boolean {
   return /[?&]astro&type=style|\.(css|s[ac]ss|less|pcss|styl)(\?|$)/.test(source || '');
 }
 
+/** Every attribute the canvas markers add starts with this (data-avb-p, data-avb-d). */
+const MARKER_ATTRIBUTE_PREFIX = 'data-avb-';
+
 interface ScriptInfo {
   readonly src: string;
   readonly type: string;
@@ -52,16 +55,18 @@ function scriptsOf(page: Document): ScriptInfo[] {
     if (isStyleModule(source)) {
       continue;
     }
-    let attrs: [string, string][] = Array.from(script.attributes, (attribute) => [
-      attribute.name,
-      attribute.value,
-    ]);
+    let attrs: [string, string][] = Array.from(script.attributes, (attribute) => [attribute.name, attribute.value]);
     attrs = attrs.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
     out.push({
       src: source,
       type: script.getAttribute('type') || '',
       attrs,
-      signature: JSON.stringify([attrs, script.textContent]),
+      // Marker attributes are left out: they name where a node came from, and the stamp
+      // among them (data-avb-d) changes with every save of the file. A page whose layout
+      // spreads its props onto a JSON-LD <script> (stacki.build's BaseHead) carried the
+      // page's stamp there, so every prop edit read as "scripts changed" and reloaded
+      // the canvas: the flicker, and a second of delay per keystroke.
+      signature: JSON.stringify([attrs.filter(([name]) => !name.startsWith(MARKER_ATTRIBUTE_PREFIX)), script.textContent]),
     });
   }
   return out;
@@ -80,28 +85,66 @@ export function scriptSignature(page: Document): string {
  * where it sits, and this cannot put it there: the copy the patch inserted is
  * inert and replacing it is a different job. So an inline arrival still reloads.
  */
-export function addedScripts(
-  previousDocument: Document,
-  nextDocument: Document,
-): ScriptInfo[] | undefined {
+export function addedScripts(previousDocument: Document, nextDocument: Document): ScriptInfo[] | undefined {
   const before = scriptsOf(previousDocument);
   const after = scriptsOf(nextDocument);
-  const had = new Set(before.map((script) => script.signature));
+  // An external module runs once per URL, whatever the order or the count of its tags: the page that is
+  // live has already run each one it holds, and a second tag for the same URL does nothing. So modules
+  // compare as a set. Why: Astro emits a component's module where the component renders, and a slot
+  // rendered to a string (a Section's Fragment set:html) finishes in a different order from one edit to
+  // the next; reading that order as "scripts changed" reloaded the canvas on a prop edit and replayed
+  // the page's intro animation (a duplicate's count moves the same way).
+  const modulesBefore = new Set(before.filter(isExternalModule).map((script) => script.signature));
+  const modulesAfter = new Set(after.filter(isExternalModule).map((script) => script.signature));
+  for (const signature of modulesBefore) {
+    if (!modulesAfter.has(signature)) {
+      return undefined; // A module that is gone cannot be un-run.
+    }
+  }
+  // Everything else keeps its order and count: neither a reorder nor another execution of a script that
+  // already ran can be patched.
+  const ordered = before.filter((script) => !isExternalModule(script));
+  const had = new Set(ordered.map((script) => script.signature));
   const added: ScriptInfo[] = [];
+  const addedModules = new Set<string>();
   let i = 0;
   for (const script of after) {
-    if (script.signature === before[i]?.signature) {
-      i++;
-    } else {
-      // Already-run scripts must keep their order and count. Neither a
-      // reorder nor another execution of an existing script can be patched.
-      if (had.has(script.signature) || !script.src) {
-        return undefined;
+    if (isExternalModule(script)) {
+      if (!modulesBefore.has(script.signature) && !addedModules.has(script.signature)) {
+        addedModules.add(script.signature);
+        added.push(script);
       }
+    } else if (script.signature === ordered[i]?.signature) {
+      i++;
+    } else if (had.has(script.signature) || !script.src) {
+      return undefined;
+    } else {
       added.push(script);
     }
   }
-  return i === before.length ? added : undefined;
+  return i === ordered.length ? added : undefined;
+}
+
+// One short line for the log: which script made the page unpatchable.
+export function describeScriptChange(previousDocument: Document, nextDocument: Document): string {
+  const label = (script: ScriptInfo): string => (script.src === '' ? 'inline script "' + script.signature.slice(0, 60) + '"' : script.src.slice(0, 120));
+  const before = scriptsOf(previousDocument);
+  const after = scriptsOf(nextDocument);
+  const afterSignatures = new Set(after.map((script) => script.signature));
+  const beforeSignatures = new Set(before.map((script) => script.signature));
+  const gone = before.find((script) => !afterSignatures.has(script.signature));
+  if (gone !== undefined) {
+    return 'script changed or gone: ' + label(gone);
+  }
+  const arrived = after.find((script) => !beforeSignatures.has(script.signature) && script.src === '');
+  if (arrived !== undefined) {
+    return 'an inline script arrived: ' + label(arrived);
+  }
+  return 'scripts reordered or repeated';
+}
+
+function isExternalModule(script: ScriptInfo): boolean {
+  return script.src !== '' && script.type === 'module';
 }
 
 // The modules a rendering asks for that this page has never run. Made here, not

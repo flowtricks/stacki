@@ -13,6 +13,7 @@
 //   7. The actor never commits an older snapshot over a newer one. (checkGeneration)
 //   8. Queue, parser, diff and snapshot bounds hold.          (checkBounds)
 //   9. The same seed produces the same results.               (the suite runs seeds twice)
+//  10. A plan applied without a write changed no byte.         (checkUnchanged)
 import { assert } from '#dist/shared/core/assert.js';
 import type { Intent, Outcome } from '#dist/shared/engine/intent.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
@@ -23,30 +24,31 @@ import { tagNameEnd } from '#dist/shared/engine/planSupport.js';
 
 type Committed = Extract<ActorEffect, { tag: 'committed' }>;
 
-export function checkOutcome(
-  outcome: Outcome,
-  accepted: ReadonlyMap<string, Intent>,
-  terminal: ReadonlyMap<string, Outcome>,
-): void {
+export function checkOutcome(outcome: Outcome, accepted: ReadonlyMap<string, Intent>, terminal: ReadonlyMap<string, Outcome>): void {
   assert(accepted.has(outcome.intentId), 'Invariant 1: only accepted intents reach an outcome');
   assert(!terminal.has(outcome.intentId), 'Invariant 1: an intent reaches exactly one outcome');
 }
 
-export function checkQuiescent(
-  accepted: ReadonlyMap<string, Intent>,
-  terminal: ReadonlyMap<string, Outcome>,
-): void {
+export function checkQuiescent(accepted: ReadonlyMap<string, Intent>, terminal: ReadonlyMap<string, Outcome>): void {
   for (const id of accepted.keys()) {
     assert(terminal.has(id), `Invariant 1: accepted intent ${id} reached a terminal outcome`);
   }
   assert(terminal.size === accepted.size, 'Invariant 1: no outcome without an accepted intent');
 }
 
+/** A plan applied with no write (documentActor.ts `unchanged`) changes no
+ * byte: its candidate is its base, which is what lets the actor skip the write. */
+export function checkUnchanged(effect: Extract<ActorEffect, { tag: 'unchanged' }>): void {
+  assert(effect.candidate.checksum === effect.base.checksum, 'An unchanged plan leaves the checksum');
+  assert(equalBytes(effect.candidate.bytes, effect.base.bytes), 'An unchanged plan leaves every byte');
+}
+
 export function checkCommitted(effect: Committed): void {
   const before = effect.base.bytes;
   const after = effect.candidate.bytes;
   const splices = orderedSplices(effect.plan.splices);
-  assert(splices.length <= LIMITS.splicesPerIntentMax, 'Invariant 8: splice count is bounded');
+  // Disjoint, ordered splices: at most one per byte of the base, plus one insertion at its end.
+  assert(splices.length <= before.length + 1, 'Invariant 8: splice count is bounded by the file');
   let cursorBefore = 0;
   let cursorAfter = 0;
   for (const splice of splices) {
@@ -54,10 +56,7 @@ export function checkCommitted(effect: Committed): void {
     assert(equalBytes(found, splice.expectedBytes), 'Invariant 2: the splice matched its witness');
     const gap = splice.range.start - cursorBefore;
     assert(
-      equalBytes(
-        before.subarray(cursorBefore, splice.range.start),
-        after.subarray(cursorAfter, cursorAfter + gap),
-      ),
+      equalBytes(before.subarray(cursorBefore, splice.range.start), after.subarray(cursorAfter, cursorAfter + gap)),
       'Invariant 3: bytes before a splice are unchanged',
     );
     cursorAfter += gap;
@@ -66,10 +65,7 @@ export function checkCommitted(effect: Committed): void {
     cursorAfter += splice.replacementBytes.length;
     cursorBefore = splice.range.end;
   }
-  assert(
-    equalBytes(before.subarray(cursorBefore), after.subarray(cursorAfter)),
-    'Invariant 3: the tail is unchanged',
-  );
+  assert(equalBytes(before.subarray(cursorBefore), after.subarray(cursorAfter)), 'Invariant 3: the tail is unchanged');
   checkTarget(effect);
   // Invariant 6, the part checkable here: a program's text rewrite is never
   // mapped, so one applied to bytes it was not authored against is a silent
@@ -105,8 +101,7 @@ function checkTarget(effect: Committed): void {
     }
   }
   const path = targetPath(effect);
-  const same = (candidate: readonly number[]) =>
-    candidate.length === path.length && candidate.every((step, index) => step === path[index]);
+  const same = (candidate: readonly number[]) => candidate.length === path.length && candidate.every((step, index) => step === path[index]);
   const target = before.nodes.find((node) => same(node.path));
   assert(target?.kind === anchor.expectedKind, 'Invariant 4: the anchor held the expected kind');
   if (staysInPlace(operation.tag)) {
@@ -122,16 +117,9 @@ function checkTarget(effect: Committed): void {
 }
 
 // What the plan promised about the candidate, checked on this side too.
-function checkPostKinds(
-  effect: Committed,
-  after: Extract<Committed['candidate']['projection'], { tag: 'valid' }>,
-): void {
+function checkPostKinds(effect: Committed, after: Extract<Committed['candidate']['projection'], { tag: 'valid' }>): void {
   for (const post of effect.plan.postKinds) {
-    const found = after.nodes.find(
-      (node) =>
-        node.path.length === post.path.length &&
-        node.path.every((step, index) => step === post.path[index]),
-    );
+    const found = after.nodes.find((node) => node.path.length === post.path.length && node.path.every((step, index) => step === post.path[index]));
     assert(found?.kind === post.kind, 'Invariant 4: every planned post-kind holds');
   }
 }
@@ -189,10 +177,7 @@ function targetPath(effect: Committed): readonly number[] {
     if (node.kind !== 'element' && node.kind !== 'component' && node.kind !== 'raw') {
       return false;
     }
-    const end = node.attributes.reduce(
-      (last, attribute) => Math.max(last, attribute.span.end),
-      tagNameEnd(bytes, node),
-    );
+    const end = node.attributes.reduce((last, attribute) => Math.max(last, attribute.span.end), tagNameEnd(bytes, node));
     return node.span.start < splice.range.start && splice.range.end <= end;
   });
   const [owner] = owners;

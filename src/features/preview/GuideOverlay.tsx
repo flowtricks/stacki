@@ -25,11 +25,7 @@ export function GuideOverlay({
   return (
     <div className="guide-overlay" aria-hidden="true">
       {columns.map((column, index) => (
-        <div
-          key={index}
-          className="guide-column"
-          style={{ left: column.xPx * scale, width: column.widthPx * scale }}
-        >
+        <div key={index} className="guide-column" style={{ left: column.xPx * scale, width: column.widthPx * scale }}>
           <span className="guide-column-fill" style={fillStyle(settings)} />
           {settings.numbers ? (
             <span className="guide-column-number" style={numberStyle(settings)}>

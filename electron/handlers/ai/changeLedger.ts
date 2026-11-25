@@ -1,0 +1,456 @@
+// What one chat's turns changed, so the person can keep or undo each file.
+// Edits apply the moment the agent makes them (Timothy's decision: review
+// after, not approve before); the ledger keeps each touched file's content as
+// it was before the turn, and as the agent left it.
+//
+// Two sources, because neither adapter routes its writes through the client
+// (spike, docs/contracts.md "AI panel"): the files a tool call names are read
+// from disk the first time they are named — before the edit runs, since an
+// edit is announced (and, in ask mode, approved) before it happens — and a git
+// tree snapshot at each end of the turn (treeSnapshot.ts) catches what a shell
+// command changed without naming. Outside git only the first source applies.
+//
+// Undo writes the "before" text back through the document actors, witnessed
+// by the "after" text: when the file changed since the agent's edit, the write
+// is not made and the three versions go to the merge editor instead (`drifted`).
+// Text files only: a binary or oversized file is left out of the ledger.
+//
+// Tracking is decided once, when a turn begins (the Settings toggle "Snapshot before & after each AI change"), and
+// kept on the turn: a turn that began tracked finishes tracked even if the toggle flips mid-turn, and
+// one that began untracked takes no snapshot at either end. A snapshot that fails or outlasts its
+// deadline never blocks the turn: the turn goes on without it and finishes as `unavailable`.
+import path from 'node:path';
+import { assert } from '../../../shared/core/assert';
+import { toArray, toRecord } from '../../../shared/core/record';
+import type { ReviewOutcome } from '../../../shared/ipc/aiChat';
+import { mergeConflictSnapshot, type MergePick, type MergeResolution } from '../../../shared/ipc/mergeResolution';
+import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import { toTurnId, type ChatFileChange, type FileChangeKind, type ReviewState, type TurnId } from '../../../shared/properties/ai/chatModel';
+import { mergeInline, renderResolved, threeWay, type ConflictPart } from '../../git/conflicts';
+import { described } from './aiMessages';
+import type { TreeSnapshots } from './treeSnapshot';
+
+export interface LedgerEntry {
+  /** Project-relative, forward slashes. */
+  readonly path: string;
+  /** Undefined: the file did not exist before the turn. */
+  readonly before: string | undefined;
+  /** Undefined: the turn deleted the file. */
+  readonly after: string | undefined;
+  readonly review: ReviewState;
+}
+
+export interface LedgerTurn {
+  readonly turn: TurnId;
+  readonly entries: readonly LedgerEntry[];
+}
+
+/** The disk, as the ledger may touch it. Writes go through the document actors (aiHandlers.ts). */
+export interface LedgerFiles {
+  /** The file's text; undefined when it does not exist. Throws when it is not readable text. */
+  readonly read: (file: string) => string | undefined;
+  readonly write: (file: string, text: string, expected: string) => void;
+  readonly create: (file: string, text: string) => void;
+  readonly trash: (file: string) => Promise<void>;
+}
+
+/** A file the ledger could not read as text: left out, never guessed at. */
+export class UnreadableFile extends Error {}
+
+/** Whether a turn takes the git snapshots, as the person's setting said when the turn began. */
+export type TrackingMode = 'on' | 'off';
+
+/** How a finished turn was tracked: with snapshots, not at all (by choice), or not at all (the snapshot failed or timed out). */
+export type TurnTracking = 'tracked' | 'off' | 'unavailable';
+
+/** A finished turn: its kept entries, and how the ledger came by them. Durations only, never paths. */
+export interface FinishedTurn extends LedgerTurn {
+  readonly tracking: TurnTracking;
+  /** The agent announced an edit, a deletion or a move this turn, whether or not the ledger could see its result. */
+  readonly edited: boolean;
+  readonly snapshotBeforeMs: number | undefined;
+  readonly snapshotAfterMs: number | undefined;
+}
+
+interface OpenTurn {
+  readonly turn: TurnId;
+  readonly mode: TrackingMode;
+  readonly tree: string | undefined;
+  /** The snapshot at the start failed or timed out (not the same as a project that is not a git repository). */
+  readonly unavailable: boolean;
+  readonly snapshotBeforeMs: number | undefined;
+  readonly captured: Map<string, string | undefined>;
+  edited: boolean;
+}
+
+type Timed<T> = { readonly ok: true; readonly value: T; readonly ms: number } | { readonly ok: false; readonly ms: number };
+
+/**
+ * Runs `work` for at most `limitMs`. A rejection or a deadline is a value, so a slow or broken git
+ * can cost the turn the wait but never the turn itself. The abandoned work is left to finish alone. The timer is cleared as soon as either side settles, so it never outlives the call.
+ */
+async function timed<T>(limitMs: number, work: () => Promise<T>): Promise<Timed<T>> {
+  assert(limitMs > 0, 'timed: a positive deadline');
+  const started = performance.now();
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<{ readonly ok: false }>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false }), limitMs);
+  });
+  const run = work().then(
+    (value): { readonly ok: true; readonly value: T } => ({ ok: true, value }),
+    (): { readonly ok: false } => ({ ok: false }),
+  );
+  const result = await Promise.race([run, deadline]);
+  clearTimeout(timer);
+  const ms = Math.round(performance.now() - started);
+  return result.ok ? { ok: true, value: result.value, ms } : { ok: false, ms };
+}
+
+export class ChangeLedger {
+  private open: OpenTurn | undefined;
+  private turns: LedgerTurn[];
+
+  constructor(
+    private readonly root: string,
+    private readonly files: LedgerFiles,
+    private readonly snapshots: TreeSnapshots,
+    stored: readonly LedgerTurn[],
+    /** How long one end-of-turn snapshot may take before the turn goes on without it; tests shorten it. */
+    private readonly snapshotDeadlineMs: number = AI_LIMITS.snapshotMsMax,
+  ) {
+    assert(path.isAbsolute(root), 'ChangeLedger: the project root is absolute');
+    this.turns = stored.slice(-AI_LIMITS.ledgerTurnsMax);
+  }
+
+  /** Opens `turn`. With `mode` off nothing is snapshotted, now or at the end: the decision lives on the turn. */
+  async begin(turn: TurnId, mode: TrackingMode): Promise<void> {
+    assert(this.open === undefined, 'ChangeLedger.begin: one turn at a time per chat');
+    if (mode === 'off') {
+      this.open = { turn, mode, tree: undefined, unavailable: false, snapshotBeforeMs: undefined, captured: new Map(), edited: false };
+      return;
+    }
+    const snapshot = await timed(this.snapshotDeadlineMs, () => this.snapshots.snapshot(this.root));
+    this.open = {
+      turn,
+      mode,
+      tree: snapshot.ok ? snapshot.value : undefined,
+      unavailable: !snapshot.ok,
+      snapshotBeforeMs: snapshot.ms,
+      captured: new Map(),
+      edited: false,
+    };
+    assert(this.open.captured.size === 0, 'ChangeLedger.begin: a turn starts with nothing captured');
+  }
+
+  /** The agent announced an edit, deletion or move: kept so an untracked turn can say so. */
+  noteEdit(): void {
+    if (this.open !== undefined) {
+      this.open.edited = true;
+    }
+  }
+
+  /** A tool call named `file`: keep its content now, before the call changes it. Once per file per turn. */
+  noteTouch(file: string): void {
+    const open = this.open;
+    if (open === undefined || open.mode === 'off') {
+      return;
+    }
+    const relative = this.relative(file);
+    if (relative === undefined || open.captured.has(relative) || open.captured.size >= AI_LIMITS.ledgerFilesMax) {
+      return;
+    }
+    try {
+      open.captured.set(relative, this.files.read(this.absolute(relative)));
+    } catch {
+      // Not text: nothing to review.
+    }
+  }
+
+  /** Ends the turn: every file whose content changed, with its before and after. */
+  async finish(turn: TurnId): Promise<FinishedTurn> {
+    const open = this.open;
+    assert(open !== undefined, 'ChangeLedger.finish: a turn is open');
+    assert(open.turn === turn, 'ChangeLedger.finish: the turn that began');
+    this.open = undefined;
+    const before = new Map(open.captured);
+    let tracking: TurnTracking = open.mode === 'off' ? 'off' : open.unavailable ? 'unavailable' : 'tracked';
+    let snapshotAfterMs: number | undefined;
+    if (open.tree !== undefined) {
+      const tree = open.tree;
+      const after = await timed(this.snapshotDeadlineMs, () => this.changesSince(tree));
+      snapshotAfterMs = after.ms;
+      if (after.ok) {
+        for (const change of after.value) {
+          // The tree from the turn's start is the truth for "before"; a capture can only be later.
+          before.set(change.path, change.original);
+        }
+      } else {
+        tracking = 'unavailable';
+      }
+    }
+    assert(open.mode === 'on' || before.size === 0, 'ChangeLedger.finish: an untracked turn captured nothing');
+    const entries: LedgerEntry[] = [];
+    let bytes = 0;
+    for (const [relative, original] of before) {
+      if (entries.length >= AI_LIMITS.ledgerFilesMax) {
+        break;
+      }
+      let current: string | undefined;
+      try {
+        current = this.files.read(this.absolute(relative));
+      } catch {
+        continue;
+      }
+      bytes += (original?.length ?? 0) + (current?.length ?? 0);
+      if (current !== original && bytes <= AI_LIMITS.ledgerBytesMax) {
+        entries.push({ path: relative, before: original, after: current, review: 'pending' });
+      }
+    }
+    const kept: LedgerTurn = { turn, entries };
+    if (entries.length > 0) {
+      this.turns = [...this.turns, kept].slice(-AI_LIMITS.ledgerTurnsMax);
+    }
+    assert(this.turns.length <= AI_LIMITS.ledgerTurnsMax, 'ChangeLedger.finish: kept turns are bounded');
+    assert(tracking !== 'off' || entries.length === 0, 'ChangeLedger.finish: an untracked turn keeps no entries');
+    return { turn, entries, tracking, edited: open.edited, snapshotBeforeMs: open.snapshotBeforeMs, snapshotAfterMs };
+  }
+
+  /** The files that differ between the turn's first tree and the tree now, each with its content in the first. */
+  private async changesSince(tree: string): Promise<readonly { readonly path: string; readonly original: string | undefined }[]> {
+    const after = await this.snapshots.snapshot(this.root);
+    const changes = after === undefined ? [] : await this.snapshots.changes(this.root, tree, after);
+    const found: { readonly path: string; readonly original: string | undefined }[] = [];
+    for (const change of changes) {
+      found.push({ path: change.path, original: change.status === 'added' ? undefined : await this.snapshots.blob(this.root, tree, change.path) });
+    }
+    assert(found.length <= changes.length, 'ChangeLedger.changesSince: one entry per change');
+    return found;
+  }
+
+  async review(
+    turn: TurnId,
+    file: string,
+    action: { readonly kind: 'keep' } | { readonly kind: 'undo' } | { readonly kind: 'resolve'; readonly resolution: MergeResolution },
+  ): Promise<ReviewOutcome> {
+    const relative = this.relative(file) ?? file;
+    const entry = this.turns.find((candidate) => candidate.turn === turn)?.entries.find((candidate) => candidate.path === relative);
+    if (entry === undefined) {
+      return { tag: 'failed', ...described('ai.error.changeGone') };
+    }
+    if (entry.review !== 'pending') {
+      return { tag: 'failed', ...(entry.review === 'kept' ? described('ai.error.alreadyKept') : described('ai.error.alreadyUndone')) };
+    }
+    switch (action.kind) {
+      case 'keep':
+        this.settle(turn, relative, 'kept');
+        return { tag: 'done', review: 'kept' };
+      case 'undo':
+        return this.undo(turn, entry);
+      case 'resolve':
+        return this.resolve(turn, entry, action.resolution);
+      default: {
+        const exhaustive: never = action;
+        return exhaustive;
+      }
+    }
+  }
+
+  /** Every kept turn, for the chat's reviews file. */
+  stored(): readonly LedgerTurn[] {
+    return this.turns;
+  }
+
+  /** One pending file's text before and after `turn`; undefined once it is settled or no longer kept. */
+  diffOf(turn: TurnId, file: string): LedgerDiff | undefined {
+    return diffOfTurns(this.turns, turn, this.relative(file) ?? file);
+  }
+
+  /** The changes of one turn, as the transcript records them. */
+  static changesOf(turn: LedgerTurn): readonly ChatFileChange[] {
+    return turn.entries.map((entry) => ({ path: entry.path, change: changeKind(entry), review: entry.review }));
+  }
+
+  private async undo(turn: TurnId, entry: LedgerEntry): Promise<ReviewOutcome> {
+    const file = this.absolute(entry.path);
+    let current: string | undefined;
+    try {
+      current = this.files.read(file);
+    } catch {
+      return { tag: 'failed', ...described('ai.error.notText', { path: entry.path }) };
+    }
+    if (current !== entry.after) {
+      if (current === undefined || entry.before === undefined || entry.after === undefined) {
+        return { tag: 'failed', ...described('ai.error.changedAfter', { path: entry.path }) };
+      }
+      return { tag: 'drifted', clash: { path: entry.path, ours: current, theirs: entry.before, parts: undoParts(entry.after, current, entry.before) } };
+    }
+    try {
+      await this.restore(file, entry.before, current);
+    } catch (error: unknown) {
+      return { tag: 'failed', message: error instanceof Error ? error.message : String(error) };
+    }
+    this.settle(turn, entry.path, 'undone');
+    return { tag: 'done', review: 'undone' };
+  }
+
+  private async resolve(turn: TurnId, entry: LedgerEntry, resolution: MergeResolution): Promise<ReviewOutcome> {
+    const file = this.absolute(entry.path);
+    const current = this.files.read(file);
+    if (current === undefined || entry.before === undefined || entry.after === undefined) {
+      return { tag: 'failed', ...described('ai.error.notMergeable', { path: entry.path }) };
+    }
+    const parts = undoParts(entry.after, current, entry.before);
+    let text: string;
+    if (resolution === 'ours') {
+      this.settle(turn, entry.path, 'kept');
+      return { tag: 'done', review: 'kept' };
+    } else if (resolution === 'theirs') {
+      text = entry.before;
+    } else if (isPicks(resolution)) {
+      text = renderResolved(parts, resolution);
+    } else {
+      if (resolution.expected !== mergeConflictSnapshot(parts)) {
+        return { tag: 'failed', ...described('ai.error.changedWhileMerging', { path: entry.path }) };
+      }
+      text = resolution.text;
+    }
+    try {
+      this.files.write(file, text, current);
+    } catch (error: unknown) {
+      return { tag: 'failed', message: error instanceof Error ? error.message : String(error) };
+    }
+    this.settle(turn, entry.path, 'undone');
+    return { tag: 'done', review: 'undone' };
+  }
+
+  private async restore(file: string, before: string | undefined, current: string | undefined): Promise<void> {
+    if (before === undefined) {
+      // The turn created the file: undoing moves it to the bin, where it can be got back from.
+      await this.files.trash(file);
+    } else if (current === undefined) {
+      this.files.create(file, before);
+    } else {
+      this.files.write(file, before, current);
+    }
+  }
+
+  private settle(turn: TurnId, relative: string, review: ReviewState): void {
+    this.turns = this.turns.map((candidate) =>
+      candidate.turn === turn
+        ? { ...candidate, entries: candidate.entries.map((entry) => (entry.path === relative ? { ...entry, review } : entry)) }
+        : candidate,
+    );
+    const settled = this.turns.find((candidate) => candidate.turn === turn)?.entries.find((entry) => entry.path === relative);
+    assert(settled?.review === review, 'ChangeLedger.settle: the review is recorded');
+  }
+
+  private relative(file: string): string | undefined {
+    const absolute = path.resolve(this.root, file);
+    const relative = path.relative(this.root, absolute);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return undefined; // Outside the project: not Stacki's to undo.
+    }
+    return relative.split(path.sep).join('/');
+  }
+
+  private absolute(relative: string): string {
+    const absolute = path.join(this.root, ...relative.split('/'));
+    assert(this.relative(absolute) === relative, 'ChangeLedger.absolute: stays inside the project');
+    return absolute;
+  }
+}
+
+/**
+ * The merge an undo becomes when the file moved on: base is the agent's
+ * version, "ours" the file as it is now, "theirs" the version before the turn.
+ * Lines only one side touched combine; the rest are the person's to choose.
+ */
+export function undoParts(agentText: string, currentText: string, beforeText: string): readonly ConflictPart[] {
+  const runs = threeWay(agentText.split('\n'), currentText.split('\n'), beforeText.split('\n'));
+  const parts: ConflictPart[] = runs.map((run): ConflictPart => {
+    if (!('ours' in run)) {
+      return { kind: 'same', text: run.common.join('\n') };
+    }
+    const ours = run.ours.join('\n');
+    const theirs = run.theirs.join('\n');
+    const changedBy = run.changedBy ?? 'both';
+    const merged = changedBy === 'both' && run.base !== undefined ? mergeInline(run.base.join('\n'), ours, theirs) : undefined;
+    return merged === undefined ? { kind: 'clash', ours, theirs, changedBy } : { kind: 'clash', ours, theirs, changedBy, merged };
+  });
+  assert(parts.length === runs.length, 'undoParts: one part per run');
+  return parts;
+}
+
+function isPicks(resolution: MergeResolution): resolution is readonly MergePick[] {
+  return Array.isArray(resolution);
+}
+
+function changeKind(entry: LedgerEntry): FileChangeKind {
+  if (entry.before === undefined) {
+    return 'created';
+  }
+  return entry.after === undefined ? 'deleted' : 'modified';
+}
+
+/** A pending change's two sides. Undefined `oldText`: the turn created the file; undefined `newText`: it deleted it. */
+export interface LedgerDiff {
+  readonly oldText: string | undefined;
+  readonly newText: string | undefined;
+}
+
+/**
+ * The diff of one file in one turn, from the ledger's turns (live or read back from the reviews
+ * file). Only a pending entry has content: a settled one keeps none (`serializeLedger`), so asking
+ * for it answers undefined rather than an empty text that would read as a deleted file.
+ */
+export function diffOfTurns(turns: readonly LedgerTurn[], turn: TurnId, relative: string): LedgerDiff | undefined {
+  const entry = turns.find((candidate) => candidate.turn === turn)?.entries.find((candidate) => candidate.path === relative);
+  if (entry === undefined || entry.review !== 'pending') {
+    return undefined;
+  }
+  assert((entry.before?.length ?? 0) <= AI_LIMITS.fileCharsMax, 'diffOfTurns: the ledger only keeps files within the file bound');
+  assert((entry.after?.length ?? 0) <= AI_LIMITS.fileCharsMax, 'diffOfTurns: the ledger only keeps files within the file bound');
+  return { oldText: entry.before, newText: entry.after };
+}
+
+/** The reviews file, parsed; anything malformed is dropped (the edits themselves are already on disk). */
+export function parseLedgerTurns(input: unknown): readonly LedgerTurn[] {
+  const turns = toArray(toRecord(input)?.['turns']) ?? [];
+  const parsed: LedgerTurn[] = [];
+  for (const value of turns.slice(-AI_LIMITS.ledgerTurnsMax)) {
+    const turn = toRecord(value);
+    const entries = toArray(turn?.['entries']);
+    if (turn === undefined || entries === undefined || typeof turn['turn'] !== 'string') {
+      continue;
+    }
+    try {
+      parsed.push({ turn: toTurnId(turn['turn']), entries: entries.slice(0, AI_LIMITS.ledgerFilesMax).flatMap(parseEntry) });
+    } catch {
+      continue;
+    }
+  }
+  return parsed;
+}
+
+function parseEntry(input: unknown): readonly LedgerEntry[] {
+  const entry = toRecord(input);
+  const review = entry?.['review'];
+  if (entry === undefined || typeof entry['path'] !== 'string' || (review !== 'pending' && review !== 'kept' && review !== 'undone')) {
+    return [];
+  }
+  const before = entry['before'];
+  const after = entry['after'];
+  if ((before !== undefined && typeof before !== 'string') || (after !== undefined && typeof after !== 'string')) {
+    return [];
+  }
+  return [{ path: entry['path'], before, after, review }];
+}
+
+export function serializeLedger(turns: readonly LedgerTurn[]): string {
+  // Settled entries keep no content: only pending ones can still be undone.
+  const kept = turns.map((turn) => ({
+    turn: turn.turn,
+    entries: turn.entries.map((entry) => (entry.review === 'pending' ? entry : { path: entry.path, review: entry.review, before: '', after: '' })),
+  }));
+  return `${JSON.stringify({ version: 1, turns: kept })}\n`;
+}

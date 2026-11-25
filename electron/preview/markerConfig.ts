@@ -3,6 +3,7 @@
 // it serves to the canvas.
 
 import { assert } from '../../shared/core/assert';
+import { PREVIEW_SCOPE_LIMITS, SCOPE_STORE_KEY } from '../../shared/page/previewScope';
 
 // Wraps the project's Astro config (dev preview only) with a Vite plugin
 // that swaps each page's source for a marker-annotated equivalent — every
@@ -114,10 +115,15 @@ import { SAMPLE } from './paths.js';
 export async function GET({ url }) {
   const name = url.searchParams.get('c') || '';
   // A particular entry when the editor knows which one — a reference names it
-  // — and otherwise the first, which is enough to show what a collection has.
+  // — and otherwise the first one a page would show: a draft or an archived
+  // entry is what lists filter out, and its fields are often still empty.
   const id = url.searchParams.get('id') || '';
+  // Or a position in the collection, as the page's own code indexes it: the
+  // picker's entry pager shows \`stats[2]\`, and that is getCollection's third
+  // entry, drafts and all — not the third one a list would show.
+  const at = url.searchParams.get('i') || '';
   const body = { entry: null, error: null };
-  if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..')))) {
+  if (!/^[\\w-]+$/.test(name) || (id && (!/^[\\w\\-./]+$/.test(id) || id.includes('..'))) || (at && !/^\\d{1,6}$/.test(at))) {
     body.error = 'Bad collection or entry name';
     return json(body);
   }
@@ -129,9 +135,18 @@ export async function GET({ url }) {
     if (id) {
       const entry = await getEntry(name, id);
       body.entry = entry ? SAMPLE(entry) : null;
+    } else if (at) {
+      const entries = (await getCollection(name)) || [];
+      const entry = entries[Number(at)];
+      body.entry = entry ? SAMPLE(entry) : null;
     } else {
-      const entries = await getCollection(name);
-      body.entry = entries && entries.length ? SAMPLE(entries[0]) : null;
+      const entries = (await getCollection(name)) || [];
+      const hidden = (entry) => {
+        const data = (entry && entry.data) || {};
+        return data.draft === true || data.isDraft === true || data.isArchived === true;
+      };
+      const shown = entries.find((entry) => !hidden(entry)) || entries[0];
+      body.entry = shown ? SAMPLE(shown) : null;
     }
   } catch (err) {
     body.error = String((err && err.message) || err);
@@ -143,22 +158,200 @@ const json = (body) =>
   new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 `;
 
+// The fourth: what a file's frontmatter computed on its last render, as the
+// statement previewServer/scopeCapture.ts files it — every top-level value,
+// whatever produced it (a fetch, a JSON import, Astro.glob, a CMS client). This
+// runs nothing: the values are the render's own, already in memory, and only
+// read here. Reading is still bounded, because a value is whatever the page
+// made: only own data properties are followed (a getter is code, and could do
+// anything), a promise is never awaited, and the whole answer shares one node
+// budget on top of the per-value string, list, key and depth bounds.
+//
+// Asked for right after an edit, the record is the render before it; `since`
+// says how new a record the editor wants, and the route waits a bounded time
+// for the canvas's next render to file one before answering with what it has.
+//
+// Plain JavaScript with no imports and no exports of its own, so the value
+// route embeds it and a test can run it as it is.
+export const SCOPE_SOURCE = `
+const SCOPE_KEY = Symbol.for(${JSON.stringify(SCOPE_STORE_KEY)});
+const SCOPE_LIMITS = {
+  stringCharsMax: 160,
+  itemsMax: 8,
+  keysMax: 64,
+  depthMax: 6,
+  nodesMax: 4000,
+  namesMax: ${PREVIEW_SCOPE_LIMITS.namesMax},
+  waitMsMax: 8000,
+  pollMs: 100,
+};
+const SCOPE_FILE = /^[\\w@+()\\[\\]\\-. /]+\\.astro$/;
+
+function sampleScopeValue(value, budget, depth) {
+  if (budget.nodes <= 0) return { __stacki: 'deep' };
+  budget.nodes -= 1;
+  if (value === null || value === undefined) return null;
+  const t = typeof value;
+  if (t === 'string') {
+    return value.length > SCOPE_LIMITS.stringCharsMax ? value.slice(0, SCOPE_LIMITS.stringCharsMax) + '…' : value;
+  }
+  if (t === 'number') return Number.isFinite(value) ? value : null;
+  if (t === 'boolean') return value;
+  if (t !== 'object') return undefined; // functions, symbols, bigints
+  if (value instanceof Date) {
+    return { __stacki: 'date', value: isNaN(value.getTime()) ? null : value.toISOString() };
+  }
+  if (value instanceof URL) return value.href;
+  if (value instanceof Promise) return undefined; // never awaited: that would be running it
+  if (depth >= SCOPE_LIMITS.depthMax) return { __stacki: 'deep' };
+  if (Array.isArray(value)) {
+    const out = [];
+    const shown = Math.min(value.length, SCOPE_LIMITS.itemsMax);
+    for (let i = 0; i < shown; i++) {
+      const item = ownValue(value, String(i));
+      const s = item.data ? sampleScopeValue(item.value, budget, depth + 1) : undefined;
+      out.push(s === undefined ? null : s);
+    }
+    if (value.length > shown) out.push({ __stacki: 'more', count: value.length - shown });
+    return out;
+  }
+  const out = {};
+  const keys = Object.keys(value).slice(0, SCOPE_LIMITS.keysMax);
+  for (const key of keys) {
+    const field = ownValue(value, key);
+    const s = field.data ? sampleScopeValue(field.value, budget, depth + 1) : undefined;
+    if (s !== undefined) out[key] = s;
+  }
+  return out;
+}
+
+// A property's value when it is plain data; an accessor is not data:
+// reading a getter would run the page's code at a time the page never does.
+function ownValue(holder, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(holder, key);
+  return descriptor && 'value' in descriptor ? { data: true, value: descriptor.value } : { data: false, value: undefined };
+}
+
+function sampleCapture(capture) {
+  const budget = { nodes: SCOPE_LIMITS.nodesMax };
+  const values = {};
+  const names = Object.keys(capture.values).slice(0, SCOPE_LIMITS.namesMax);
+  for (const name of names) {
+    let value;
+    try {
+      // The capture's own getter: it only returns the binding.
+      value = capture.values[name];
+    } catch {
+      continue; // a binding the render never reached
+    }
+    const s = sampleScopeValue(value, budget, 0);
+    if (s !== undefined) values[name] = s;
+  }
+  return values;
+}
+
+// \`waitMs\` is how long to wait for a record as new as \`sinceMs\`, never more
+// than the bound; the route always waits the bound, and a test waits less.
+async function readScope(file, sinceMs, waitMs) {
+  if (!SCOPE_FILE.test(file) || file.includes('..')) {
+    return { value: null, error: 'Not a project .astro file' };
+  }
+  const waitedMs = Math.min(Math.max(waitMs, 0), SCOPE_LIMITS.waitMsMax);
+  const deadline = Date.now() + waitedMs;
+  const pollsMax = Math.ceil(waitedMs / SCOPE_LIMITS.pollMs) + 1;
+  for (let poll = 0; poll < pollsMax; poll++) {
+    const store = globalThis[SCOPE_KEY];
+    const capture = store instanceof Map ? store.get(file) : undefined;
+    const fresh = capture !== undefined && capture.at >= sinceMs;
+    if (fresh || Date.now() >= deadline) {
+      return capture === undefined
+        ? { value: null, error: 'The file has not rendered yet' }
+        : { value: sampleCapture(capture), error: null };
+    }
+    await new Promise((resolve) => setTimeout(resolve, SCOPE_LIMITS.pollMs));
+  }
+  return { value: null, error: 'The file has not rendered yet' };
+}
+`;
+
+// The third half: a page whose data comes from its own code rather than a
+// collection — `const pastors = await getCampusPastors()`, a CMS query in a
+// project module. Only the dev server can run it, so it does, the same way the
+// page does on every render: the one export, called with no arguments. Only
+// project modules under src are reachable, and only an export that takes no
+// arguments, so this never calls anything a render would not.
+export const VALUE_ENDPOINT = `// Generated by Stacki (dev preview only) — do not edit.
+export const prerender = false;
+
+import { SAMPLE } from './paths.js';
+
+const modules = import.meta.glob(['/src/**/*.{js,mjs,ts,mts}', '!/src/**/*.d.ts']);
+// A call that has not answered by now is not one a picker can wait for.
+const CALL_MS_MAX = 10000;
+
+export async function GET({ url }) {
+  // A file's own last-rendered values, by its project path (SCOPE_SOURCE).
+  const scoped = url.searchParams.get('p');
+  if (scoped !== null) {
+    const since = Number(url.searchParams.get('since') || '0');
+    return json(await readScope(scoped, Number.isSafeInteger(since) && since >= 0 ? since : 0, SCOPE_LIMITS.waitMsMax));
+  }
+  const rel = url.searchParams.get('m') || '';
+  const name = url.searchParams.get('f') || '';
+  const body = { value: null, error: null };
+  const load = modules[rel];
+  if (!load || !/^[A-Za-z_$][\\w$]*$/.test(name)) {
+    body.error = 'Unknown module or export';
+    return json(body);
+  }
+  try {
+    const mod = await load();
+    const fn = mod[name];
+    if (typeof fn !== 'function' || fn.length !== 0) {
+      body.error = 'Not an export the page calls with no arguments';
+      return json(body);
+    }
+    let timer;
+    const late = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('The call took too long')), CALL_MS_MAX);
+    });
+    try {
+      body.value = SAMPLE(await Promise.race([fn(), late]));
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    body.error = String((err && err.message) || err);
+  }
+  return json(body);
+}
+
+const json = (body) =>
+  new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+${SCOPE_SOURCE}`;
+
 // Keep static generated source outside functions so the assembly stays reviewable.
 export const MARKER_CONFIG_PARTS = [
   `// Generated by Stacki (dev preview only) — do not edit.
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 `,
   `
 
 const require = createRequire(import.meta.url);
 // Marking happens in electron/previewServer/previewMarkers.ts, in memory: it reads project
 // files and returns strings, and nothing it returns is ever written back.
-const { markSourceFile, markChunkFile } = require(`,
+const { loopbackGuardMiddleware, markCanvasSourceFile, markChunkFile, scanStyleBlocks, variantScopeMiddleware } = require(`,
   `);
-const { componentPreviewPlugin } = require(`,
-  `);
+const componentPreviewModule = `,
+  `;
+const { componentPreviewPlugin } = require(componentPreviewModule);
+const { readPackagePreviews } = require(require('node:path').join(
+  require('node:path').dirname(componentPreviewModule), '../lib/componentSources.js'));
 const { studioEntryPlugin } = require(`,
+  `);
+const { previewWarmupIntegration } = require(`,
   `);
 const PROJECT_DIRS = `,
   `;
@@ -200,6 +393,21 @@ const PROJECT_DIRS = `,
 // scope hash comes from the file's path, so identical style blocks compile to
 // identical CSS, and reading the file cannot disturb the module graph.
 const avbStyleText = new Map();
+// Outside writes are logged one line each, and no faster than a burst of agents writes: a bound on the log.
+const AVB_EXTERNAL_LOG_PER_SECOND = 20;
+let avbExternalWindow = 0;
+let avbExternalCount = 0;
+const avbNoteExternal = (file) => {
+  const second = Math.floor(Date.now() / 1000);
+  if (second !== avbExternalWindow) {
+    avbExternalWindow = second;
+    avbExternalCount = 0;
+  }
+  if (avbExternalCount < AVB_EXTERNAL_LOG_PER_SECOND) {
+    avbExternalCount += 1;
+    console.log('[stacki] file changed outside the app: ' + file);
+  }
+};
 const avbReadFile = (file) => {
   try {
     return readFileSync(file, 'utf8');
@@ -207,10 +415,153 @@ const avbReadFile = (file) => {
     return '';
   }
 };
-const avbStyleTextOf = (src) => (src.match(/<style[^>]*>[\\s\\S]*?<\\/style>/gi) || []).join('\\n');
+// The scan (previewServer/styleBlockScan.ts) finds the file's <style> elements. A file it cannot read compares every
+// "<style" through the "</style>" after it, as written: more than its blocks, never less, so a change to any block
+// still compares as a change. Both searches only move forward.
+const avbStyleTextMatched = (source) => {
+  const opening = /<style/gi;
+  const closing = /<\\/style\\s*>/gi;
+  const parts = [];
+  for (let found = opening.exec(source); found !== null && parts.length < source.length; found = opening.exec(source)) {
+    closing.lastIndex = found.index;
+    const end = closing.exec(source);
+    if (!end) {
+      parts.push(source.slice(found.index));
+      break;
+    }
+    parts.push(source.slice(found.index, end.index + end[0].length));
+    opening.lastIndex = end.index + end[0].length;
+  }
+  return parts.join('\\n');
+};
+const avbStyleTextOf = (source) => {
+  const scan = scanStyleBlocks(source);
+  return scan.kind === 'certain' ? scan.elements.map((element) => source.slice(element.start, element.end)).join('\\n') : avbStyleTextMatched(source);
+};
 const avbIsStyleModule = (m) => {
   const u = m.url || m.id || '';
   return u.indexOf('type=style') !== -1 || u.indexOf('lang.css') !== -1 || /\\.css($|\\?)/.test(u);
+};
+
+// Deleting a <style> block took the canvas to "No Astro CSS at index 0".
+// Astro serves block N of a file as \`File.astro?astro&type=style&index=N\`,
+// and the browser holds a module for every block of the last rendering. When
+// a block goes, Vite's update for the browser still names the old modules
+// (they are the file's modules); the browser asks for block N again, the file
+// has no block N any more, and Astro's load throws, which the dev server shows
+// as its error overlay over a page that is fine. Deleting block 0 of two is the
+// same bug at index 1. So the browser's update leaves out every block past the
+// file's last (avbVanishedStyles, a client-only hotUpdate: the server's update
+// keeps them, since Astro's reload logic needs them to refresh the page's
+// collected CSS), and the page's reload or patch takes the rendering's styles
+// from the server (refreshDevStyles). An ask that still comes (a document
+// rendered before the edit, a Vite without per-environment hooks) is answered
+// by the marker load with an empty stylesheet, which serves the server's
+// environment and a file Astro has not compiled again yet.
+//
+// "Past the file's last" must never be wrong the other way: a count one too
+// low emptied a block that exists (1.4.8: a self-closing <style is:inline … />
+// before a block read as no block at all, and the component rendered
+// unstyled). So the count is one that is certain, or there is none and Astro
+// serves the ask itself (avbStyleBlockCount):
+//   - Astro's own count, when it has compiled the bytes on disk: its compile
+//     imports one module per block it extracted (avbStyleCheck reads them);
+//   - otherwise the scan of the file on disk, which reads the template as the
+//     compiler does and says uncertain for anything it might read differently;
+//     a file whose last compile extracted a different count than the scan
+//     read is not scanned again until a compile agrees.
+// A deleted file has no blocks; a file that cannot be read for any other
+// reason has no count.
+const AVB_STYLE_CHECKS_MAX = 1024;
+const avbStyleLoaded = new Map(); // file -> { digest, scanned } of the text the marker load handed Astro
+const avbStyleCompiled = new Map(); // file -> { digest, count, agreed } from Astro's last compile of it
+let avbStyleScanTrusted = true; // false once a disagreement could not be kept: the scan is then never used alone
+const avbDigestOf = (text) => createHash('sha256').update(text).digest('hex');
+const avbScannedCountOf = (source) => {
+  const scan = scanStyleBlocks(source);
+  return scan.kind === 'certain' ? scan.count : undefined;
+};
+const avbStyleIndexOf = (query) => {
+  if (!/(?:^|&)type=style(?:&|$)/.test(query) || !/(?:^|&)astro(?:&|=|$)/.test(query)) return undefined;
+  const found = /(?:^|&)index=(\\d+)(?:&|$)/.exec(query);
+  return found ? Number(found[1]) : undefined;
+};
+const avbStyleBlockCount = (file) => {
+  if (!/\\.astro$/i.test(file)) return undefined;
+  let source;
+  try {
+    source = readFileSync(file, 'utf8');
+  } catch (error) {
+    // A deleted component has no blocks: the browser still holds their modules (the canvas patched the page rather
+    // than reloading it), and Vite's delete update would have it ask for them again.
+    return error && error.code === 'ENOENT' ? 0 : undefined;
+  }
+  const compiled = avbStyleCompiled.get(file);
+  if (compiled && compiled.digest === avbDigestOf(source)) return compiled.count;
+  if (!avbStyleScanTrusted || (compiled && !compiled.agreed)) return undefined;
+  return avbScannedCountOf(source);
+};
+const avbVanishedStyle = (file, query) => {
+  const index = avbStyleIndexOf(query);
+  if (index === undefined) return false;
+  const count = avbStyleBlockCount(file);
+  return count !== undefined && index >= count;
+};
+// What Astro extracted from a file it compiled for the server: its compiled module imports block N as
+// \`File.astro?astro&type=style&index=N&lang.css\`, once per block. Compared with the scan of the same bytes, so a
+// file the scan reads wrong is never answered from the scan. Runs after every other transform; an output that does
+// not number its blocks 0..N-1 is not trusted as a count.
+const avbCompiledCountOf = (code) => {
+  const indexes = new Set();
+  for (const found of code.matchAll(/[?&]astro&type=style&index=(\\d+)&lang\\.css\\b/g)) {
+    indexes.add(Number(found[1]));
+    if (indexes.size > AVB_STYLE_CHECKS_MAX) return undefined;
+  }
+  for (let index = 0; index < indexes.size; index++) {
+    if (!indexes.has(index)) return undefined;
+  }
+  return indexes.size;
+};
+const avbStyleCheck = {
+  name: 'avb-style-check',
+  enforce: 'post',
+  transform(code, id, options) {
+    if (id.indexOf('?') !== -1 || !/\\.astro$/i.test(id)) return;
+    const server = this && this.environment ? this.environment.config.consumer === 'server' : Boolean(options && options.ssr);
+    if (!server) return;
+    const loaded = avbStyleLoaded.get(id);
+    avbStyleLoaded.delete(id);
+    if (!loaded) return;
+    const count = avbCompiledCountOf(code);
+    // Not a count: what the last real one said, a disagreement included, still stands.
+    if (count === undefined) return;
+    // A scan that was uncertain of these bytes was not used for them, so it has not read them wrong.
+    const agreed = loaded.scanned === undefined || loaded.scanned === count;
+    if (!agreed) {
+      console.warn('[stacki] ' + id + ': Astro extracted ' + count + ' <style> blocks, the scan read ' + loaded.scanned + '; its stylesheets are served as Astro serves them.');
+    }
+    if (avbStyleCompiled.has(id) || avbStyleCompiled.size < AVB_STYLE_CHECKS_MAX) {
+      avbStyleCompiled.set(id, { digest: loaded.digest, count, agreed });
+    } else if (!agreed) {
+      avbStyleScanTrusted = false;
+    }
+  },
+};
+const avbVanishedStyles = {
+  name: 'avb-vanished-styles',
+  enforce: 'pre',
+  hotUpdate(options) {
+    if (!this.environment || this.environment.name !== 'client') return;
+    const count = avbStyleBlockCount(options.file);
+    if (count === undefined) return;
+    const kept = options.modules.filter((m) => {
+      const id = m.id || m.url || '';
+      const qi = id.indexOf('?');
+      const index = qi === -1 ? undefined : avbStyleIndexOf(id.slice(qi + 1));
+      return index === undefined || index < count;
+    });
+    return kept.length === options.modules.length ? undefined : kept;
+  },
 };
 
 // Astro hands the browser a component's <style> from the last compile of its
@@ -307,6 +658,65 @@ const avbMorph = {
     return rest.length === ctx.modules.length ? undefined : rest;
   },
   configureServer(server) {
+    // A hover preview asks for the page with one instance's prop changed, in a
+    // header; it renders inside that override's scope and writes nothing
+    // (shared/page/variantOverride.ts). Every other request passes untouched.
+    server.middlewares.use(variantScopeMiddleware);
+    // The app's own write is announced by the app, not left to the file watcher: a watcher
+    // reports a rename a beat later (measured: most of the time between a write and its
+    // render, docs/insert-latency.md), and a page fetched in that beat is still the old one.
+    // The watcher's later event for the same bytes is dropped, so the page is not compiled,
+    // announced and fetched twice for one edit.
+    const touched = new Map();
+    const ownEmit = server.watcher.emit.bind(server.watcher);
+    server.watcher.emit = (event, file, ...rest) => {
+      if (event === 'change' && typeof file === 'string' && touched.has(file)) {
+        const bytes = touched.get(file);
+        touched.delete(file);
+        if (bytes === avbReadFile(file)) return true;
+      }
+      // A change the app did not announce: an agent, an editor, a checkout. Each one can make Vite send a
+      // full reload, so a report of "it reloads" names the file that did it (avbNoteExternal).
+      if (event === 'change' && typeof file === 'string' && /\\.(astro|md|mdx|css|ts|js)$/i.test(file)) avbNoteExternal(file);
+      return ownEmit(event, file, ...rest);
+    };
+    // The canvas says why it reloaded instead of patching (morphClient.ts reloadFor): one bounded line
+    // on the server's stdout, which the preview's log keeps. Nothing is written to the project.
+    server.middlewares.use('/__avb/reload', (req, res) => {
+      const reason = new URL(req.url || '/', 'http://localhost').searchParams.get('r') || '';
+      let line = '';
+      for (const ch of reason.slice(0, 300)) {
+        line += ch.charCodeAt(0) < 32 ? ' ' : ch;
+      }
+      console.log('[stacki] canvas ' + line);
+      res.statusCode = 204;
+      res.end();
+    });
+    server.middlewares.use('/__avb/touch', (req, res) => {
+      const asked = new URL(req.url || '/', 'http://localhost').searchParams.get('f') || '';
+      // Both sides by their real paths: a project under a symlinked folder (macOS /var, a linked workspace)
+      // is the same project, and the watcher names files by the real path.
+      const real = (path) => {
+        try {
+          return realpathSync(path);
+        } catch {
+          return '';
+        }
+      };
+      const slashes = (text) => text.split(String.fromCharCode(92)).join('/');
+      const file = real(asked);
+      const root = slashes(real(server.config.root));
+      const inside = root !== '' && slashes(file).startsWith(root + '/') && /\\.(astro|md|mdx)$/i.test(file);
+      if (!inside) {
+        res.statusCode = 400;
+        res.end('no');
+        return;
+      }
+      if (touched.size < 256 || touched.has(file)) touched.set(file, avbReadFile(file));
+      ownEmit('change', file);
+      res.statusCode = 204;
+      res.end();
+    });
     const seen = new Set();
     const channels = [server.hot, server.ws];
     for (const env of Object.values(server.environments || {})) channels.push(env && env.hot);
@@ -317,6 +727,7 @@ const avbMorph = {
       ch.send = (...args) => {
         const payload = args[0];
         if (payload && payload.type === 'full-reload') {
+          console.log('[stacki] the dev server asked for a full reload (' + (typeof payload.path === 'string' ? payload.path : '?') + '); the canvas patches the page instead');
           return send({ type: 'custom', event: 'avb:page-changed' });
         }
         return send(...args);
@@ -327,11 +738,38 @@ const avbMorph = {
 
 const AVB_MORPH_TAG = `,
   `;
+// The hosts the preview answers to on the local network, or null while it answers this computer only
+// (devServers.ts setNetwork). Vite refuses a request whose Host header it does not know; it always knows
+// IP addresses and localhost, and naming them here keeps that true for a Vite that checks differently.
+// Never set otherwise: the project's own allowedHosts stays exactly what it wrote.
+const AVB_NETWORK_HOSTS = `,
+  `;
+const avbAllowedHosts = (own) => {
+  if (own === true || !Array.isArray(AVB_NETWORK_HOSTS)) return own;
+  return [...new Set([...(Array.isArray(own) ? own : []), ...AVB_NETWORK_HOSTS])];
+};
 
+// Stacki's own routes (/__avb/*, /studio, Vite's /__open-in-editor) answer this computer only, in every
+// mode: the guard runs before any of them and before Vite's own middleware (previewServer/loopbackGuard.ts).
+// First among the plugins and enforce:'pre', so its configureServer adds the first middleware of ours.
+const avbLoopbackGuard = {
+  name: 'avb-loopback-guard',
+  enforce: 'pre',
+  configureServer(server) {
+    server.middlewares.use(loopbackGuardMiddleware);
+  },
+};
+
+// \`order: 'pre'\` is load-bearing: Vite takes the first plugin that returns
+// source from \`load\`, and a project plugin that marks .astro files itself
+// (\`load: { order: 'pre' }\`, as component-navigator integrations do) sorts
+// ahead of a bare \`load\` even when both are enforce:'pre'. Then no file of
+// the page carried a stamp and every click ended in "the canvas isn't showing
+// this file". Marking from the bytes on disk, first, is what the stamp means.
 const avbMarkers = {
   name: 'avb-node-markers',
   enforce: 'pre',
-  load(id) {
+  load: { order: 'pre', handler(id) {
     const qi = id.indexOf('?');
     const file = qi === -1 ? id : id.slice(0, qi);
     const query = qi === -1 ? '' : id.slice(qi + 1);
@@ -340,6 +778,7 @@ const avbMarkers = {
     // the ?raw import with the Fragment's key; mark the chunk here so its
     // nodes outline like any other. Runs before vite:asset's own ?raw load.
     if (query) {
+      if (avbVanishedStyle(file, query)) return { code: '' };
       const m = /(?:^|&)avb=([^&]+)/.exec(query);
       if (!m) return null;
       try {
@@ -355,18 +794,22 @@ const avbMarkers = {
     // namespace, and each marked file carries its stamp — the checksum of the
     // bytes it was marked from, which the canvas's preview token is made of.
     try {
-      const marked = markSourceFile(file, PROJECT_DIRS);
+      const marked = markCanvasSourceFile(file, PROJECT_DIRS);
       if (!marked) return null;
       // Seeded here so the very first edit already has something to compare
       // against, rather than spending one stylesheet rewrite learning it.
       if (!avbStyleText.has(file)) avbStyleText.set(file, avbStyleTextOf(marked.source));
+      // What Astro is about to compile, for avbStyleCheck to compare with what it extracts.
+      if (avbStyleLoaded.has(file) || avbStyleLoaded.size < AVB_STYLE_CHECKS_MAX) {
+        avbStyleLoaded.set(file, { digest: avbDigestOf(marked.source), scanned: avbScannedCountOf(marked.source) });
+      }
       // The patcher rides along with a page — Astro hoists it into <head>,
       // so this adds a module to the page and no node to its markup.
       return marked.page ? marked.code + AVB_MORPH_TAG : marked.code;
     } catch {
       return null;
     }
-  },
+  } },
 };
 
 // Markdown can't use the load hook above: Astro's own \`astro:markdown\` plugin
@@ -455,6 +898,8 @@ const avbPreviewRoute = {
                 // 'project' is a file under src/pages, 'external' came from an
                 // integration, 'internal' is Astro's own (404, and friends).
                 origin: r.origin || null,
+                // 'page' or 'endpoint' (an integration's API route is not a page the editor lists).
+                type: r.type || null,
                 entrypoint: r.entrypoint || null,
                 params: r.params || [],
               }))
@@ -464,12 +909,39 @@ const avbPreviewRoute = {
         /* an Astro without this hook simply never calls it */
       }
     },
+    // Astro's glob loader stops at the first entry its schema rejects, and
+    // only then starts watching the folder: an entry saved while a required
+    // field was still empty leaves the collection empty for the session, even
+    // after the entry is fixed. The app asks for a fresh sync here when a
+    // collection it knows has entries reads as none.
+    'astro:server:setup': ({ server, refreshContent }) => {
+      if (typeof refreshContent !== 'function') {
+        return;
+      }
+      server.middlewares.use('/__avb/refresh', (request, response) => {
+        const done = (status, error) => {
+          response.statusCode = status;
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify({ error }));
+        };
+        if (request.method !== 'POST') {
+          done(405, 'POST only');
+          return;
+        }
+        refreshContent({ context: { source: 'stacki' } }).then(
+          () => done(200, null),
+          (err) => done(200, String((err && err.message) || err))
+        );
+      });
+    },
     'astro:config:setup': ({ injectRoute }) => {
       injectRoute({ pattern: '/__avb/preview', entrypoint: `,
   ` });
       injectRoute({ pattern: '/__avb/paths', entrypoint: `,
   ` });
       injectRoute({ pattern: '/__avb/data', entrypoint: `,
+  ` });
+      injectRoute({ pattern: '/__avb/value', entrypoint: `,
   ` });
     },
   },
@@ -489,7 +961,8 @@ export default {
   // so the canvas shows the spacing the source actually has; the project's
   // own dev server and build keep whatever it configured.
   compressHTML: false,
-  integrations: [...(base.integrations || []), avbPreviewRoute],
+  integrations: [...(base.integrations || []), avbPreviewRoute,
+    previewWarmupIntegration(PROJECT_DIRS[0])],
   markdown: {
     ...(base.markdown || {}),
     ...(avbMarkdownProcessor && !(base.markdown && base.markdown.processor)
@@ -498,8 +971,12 @@ export default {
   },
   vite: {
     ...(base.vite || {}),
-    plugins: [studioEntryPlugin(PROJECT_DIRS[0]), componentPreviewPlugin(PROJECT_DIRS),
-      avbMarkers, avbMorph,
+    ...(Array.isArray(AVB_NETWORK_HOSTS)
+      ? { server: { ...((base.vite && base.vite.server) || {}), allowedHosts: avbAllowedHosts(base.vite && base.vite.server && base.vite.server.allowedHosts) } }
+      : {}),
+    plugins: [avbLoopbackGuard, studioEntryPlugin(PROJECT_DIRS[0]),
+      componentPreviewPlugin(PROJECT_DIRS, readPackagePreviews),
+      avbMarkers, avbMorph, avbVanishedStyles, avbStyleCheck,
       ...((base.vite && base.vite.plugins) || [])],
   },
 };

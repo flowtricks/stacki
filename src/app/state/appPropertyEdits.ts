@@ -1,19 +1,24 @@
 // Editing a node's properties: its comment, classes, asset props, renames,
 // kind and tag, text, branches and content (App.tsx).
 
-import type { ClassOutcome } from '../../features/style/model/host';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import type { ClassOutcome, StyleBlockRequest } from '../../features/style/model/host';
+import { fileLayoutOf, styleBlockFileSupported, styleBlockInner, UNSUPPORTED_FILE } from '../../features/style/model/firstStyleBlock';
 import { useCallback, useRef } from 'react';
+import { labelsNode } from '../../../shared/page/leadingNote';
 import type { Attr } from '../../../shared/page/pageNode';
 import { findWithParent, noteValue } from '../../editor/treeSelection';
 import { assert } from '../../../shared/core/assert';
-import { ASTRO_ASSETS, ASTRO_ASSETS_MODULE } from '../../features/palette/astroAssets';
-import { getElementSchema, GLOBAL_ATTRS } from '../../editor/elementSchemas';
+import { ASTRO_ASSETS } from '../../features/palette/astroAssets';
+import { droppedForComponent, droppedForElement, toggledElseBranch, withComponentImport } from '../model/pageModelGestures';
 import {
   attributeRenameGesture,
   frontmatterGesture,
   inlineStyleGesture,
   insertGesture,
   loopRenameGesture,
+  variableRenameGesture,
   nodeGesture,
   propsGesture,
   removalGesture,
@@ -21,36 +26,35 @@ import {
   withChildren,
 } from '../../editor/editGestures';
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
-import { hasClass, withClass } from '../../editor/classAttr';
-import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
+import { isAttributeHost } from '../../../shared/engine/intent';
+import { hasClass, withClass, type ClassPlacement } from '../../editor/classAttr';
+import type { EditGesture } from '../../editor/pageEdits';
+import { attributeRemoval, classRemoval, type PropRemoval } from '../../editor/selectorRemoval';
+import { withAttributes } from '../../editor/attributesBinding';
+import { previewAddedClass, previewClassProps, previewRemovedClass } from '../../editor/previewClassPatch';
+import { reportActionToast } from '../../ui/errorNotices';
+import { attributeCodeRange } from '../../features/code/codePanelModel';
 import { cleanError } from '../../lib/cleanError';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
+import type { TextPiece } from '../../features/props/textConnect';
+import { textPiecesGesture } from '../model/textPieces';
 import type { Rename } from '../../features/props/propNodeEditors';
+import { renameProblemText } from '../../editor/renameProblems';
+import { checkLoopHead, planVariableRename, type VariableRename } from '../../../shared/engine/variableRename';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
-import {
-  newId,
-  inlineWithIds,
-  type BranchNode,
-  tagChangeGesture,
-  restatedText,
-  statedText,
-  frontmatterOf,
-} from '../model/nodeFactory';
-import { withPrunedImports, chooseImportPath } from '../model/pageGestures';
+import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
+import { withPrunedImports, chooseImportPath, styleTagNode } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useHistory } from './appNodeEdits';
 import { useNodeEdits } from './appShortcuts';
 
 // The note above a node.
-export function useComment(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useComment(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -67,7 +71,8 @@ export function useComment(
         return;
       }
       const previous = found.index > 0 ? found.siblings[found.index - 1] : undefined;
-      const existing = previous && previous.kind === 'comment' ? previous : undefined;
+      // The label by the Navigator's rule (shared/page/leadingNote.ts), the one a move carries.
+      const existing = previous !== undefined && labelsNode(previous.kind, found.node.kind) ? previous : undefined;
       const body = String(text ?? '').trim();
       if (!body) {
         if (existing) {
@@ -103,25 +108,17 @@ export function useComment(
 }
 
 // Classes and props.
-export function useClassEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
   const addClassToNode = useAddClassToNode(coreState, lifecycle, history);
+  const addStyleBlock = useAddStyleBlock(coreState, lifecycle, history);
+  const { removeClassFromNode, removeAttributeFromNode } = useRemoveFromNode(coreState, lifecycle, history);
 
   // Step 6, attribute: set or remove one prop, as an edit request when it has
   // an intent form (editGestures.ts), else as a whole-model save.
   const setProp = useCallback(
-    (
-      nodeId: string,
-      propName: string,
-      value: Attr | undefined,
-      immediate = false,
-      previewPath?: string,
-    ) => {
+    (nodeId: string, propName: string, value: Attr | undefined, immediate = false, previewPath?: string) => {
       const coalesceKey = `prop:${nodeId}:${propName}`;
       const options = { coalesceKey, urgency: immediate };
       const state = pageStateRef.current.pageState;
@@ -153,14 +150,27 @@ export function useClassEdits(
     },
     [commitEdit, pageStateRef],
   );
-  return { addClassToNode, setProp, setProps };
+  // An element's whole attribute list, in order: connecting it to an
+  // attributes prop puts the defaults before the spread and its own after,
+  // which a patch (new names last) cannot say. One node rewrite, one undo.
+  const replaceProps = useCallback(
+    (nodeId: string, props: Readonly<Record<string, Attr>>) => {
+      const state = pageStateRef.current.pageState;
+      const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+      if (node === undefined) {
+        return;
+      }
+      assert(node.id === nodeId, 'replaceProps: the node found is the one named');
+      const next = withAttributes(node, props);
+      commitEdit(nodeGesture(nodeId, next, { coalesceKey: undefined, urgency: true }));
+    },
+    [commitEdit, pageStateRef],
+  );
+  return { addClassToNode, addStyleBlock, removeClassFromNode, removeAttributeFromNode, setProp, setProps, replaceProps };
 }
 
-function useAddClassToNode(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  history: ReturnType<typeof useHistory>,
-) {
+function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { flushSave, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -173,33 +183,26 @@ function useAddClassToNode(
   // refused: the style panel writes the class's rule only after it applied
   // (step 6, plan §3.3 — outcome-gated, never a fabricated atomicity).
   return useCallback(
-    async (nodeId: string, className: string, previewPath?: string): Promise<ClassOutcome> => {
+    async (nodeId: string, className: string, placement: ClassPlacement, previewPath?: string): Promise<ClassOutcome> => {
       const clean = String(className || '').trim();
       const state = pageStateRef.current.pageState;
       if (!nodeId || !clean || !state?.editable) {
-        return { tag: 'refused', message: 'no element is selected' };
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
       }
       const node = findNodeById(state.model.nodes, nodeId);
       if (!node) {
-        return { tag: 'refused', message: 'the element is gone' };
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
       }
-      if (hasClass(node.props, clean)) {
+      const plan = planClassEdit(nodeId, node, clean, placement, translate);
+      if (plan.tag === 'present') {
         return { tag: 'applied' };
       }
-      const edit = withClass(node.props, clean);
-      if (!edit) {
-        const message = `Stacki couldn’t add the class “${clean}”. Check the class name and retry.`;
-        showToast(message, 'error');
-        return { tag: 'refused', message };
+      if (plan.tag === 'refused') {
+        showToast(plan.message, 'error');
+        return { tag: 'refused', message: plan.message };
       }
-      // Step 6, attribute: the class attribute, as its own edit request.
-      const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
-      const gesture = propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true });
-      // Migrating class to class:list must be one node rewrite, so a failed
-      // second attribute write cannot leave duplicate class attributes.
-      const request = edit.remove ? () => undefined : gesture.request;
-      if (!commitEdit({ ...gesture, request })) {
-        return { tag: 'refused', message: 'the edit could not be queued' };
+      if (!commitEdit(plan.gesture)) {
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
       }
       previewAddedClass(previewPath, clean);
       try {
@@ -209,18 +212,180 @@ function useAddClassToNode(
         return { tag: 'refused', message: cleanError(error) };
       }
     },
-    [commitEdit, flushSave, showToast, pageStateRef],
+    [commitEdit, flushSave, showToast, pageStateRef, translate],
   );
 }
 
+type ClassPlan = { readonly tag: 'present' } | { readonly tag: 'refused'; readonly message: string } | { readonly tag: 'edit'; readonly gesture: EditGesture };
+
+// The page edit that puts `clean` on a node, or why it cannot be: shared by the class typed in
+// the selector box and the first styles of a page (useAddStyleBlock), so both put a class on
+// an element the same way.
+function planClassEdit(nodeId: string, node: EditorNode, clean: string, placement: ClassPlacement, translate: Translator): ClassPlan {
+  // Bare text has no tag to hold the class. Refused here, so the panel can
+  // say why and the page never queues an edit it cannot state.
+  if (!isAttributeHost(node.kind)) {
+    return { tag: 'refused', message: translate('shell.refusal.plainText') };
+  }
+  if (hasClass(node.props, clean)) {
+    return { tag: 'present' };
+  }
+  const edit = withClass(node.props, clean, placement);
+  if (!edit) {
+    return { tag: 'refused', message: translate('shell.refusal.classAdd', { name: clean }) };
+  }
+  // Step 6, attribute: the class attribute, as its own edit request.
+  const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
+  const gesture = propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true });
+  // Migrating class to class:list must be one node rewrite, so a failed
+  // second attribute write cannot leave duplicate class attributes.
+  return { tag: 'edit', gesture: edit.remove ? { ...gesture, request: () => undefined } : gesture };
+}
+
+// The first styles of a page that has no style source (firstStyleBlock.ts), or the tag of its own that
+// "Create <style>" stands for (newStyleTarget.ts): a `<style>` block (`is:global` per the project's setting) at the end of the open file and, when the rule needs one, a class on the selected
+// element. Both are ONE gesture, so one edit on disk and one undo step: undoing the block
+// leaves no class behind that styles nothing, and undoing the class leaves no orphan rule.
+function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const { pageStateRef } = coreState;
+  const { flushSave } = lifecycle;
+  const { commitEdit } = history;
+  return useCallback(
+    async (nodeId: string, request: StyleBlockRequest, previewPath?: string): Promise<ClassOutcome> => {
+      const { currentPage, pageState: state } = pageStateRef.current;
+      if (!nodeId || !state?.editable) {
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
+      }
+      if (!styleBlockFileSupported(currentPage?.path)) {
+        return { tag: 'refused', message: translateDescribed(UNSUPPORTED_FILE) };
+      }
+      const node = findNodeById(state.model.nodes, nodeId);
+      if (!node) {
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
+      }
+      // The class is planned before anything is queued: a refusal must leave the page as it was.
+      const plan =
+        request.className === undefined ? ({ tag: 'present' } as const) : planClassEdit(nodeId, node, request.className, request.placement, translate);
+      if (plan.tag === 'refused') {
+        return { tag: 'refused', message: plan.message };
+      }
+      const block = styleTagNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)), request.attributes);
+      const insert = insertGesture(state.model, block, undefined, { urgency: true });
+      if (!commitEdit(plan.tag === 'edit' ? sequence(insert, plan.gesture) : insert)) {
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
+      }
+      if (request.className !== undefined) {
+        previewAddedClass(previewPath, request.className);
+      }
+      try {
+        await flushSave();
+        return { tag: 'applied' };
+      } catch (error: unknown) {
+        return { tag: 'refused', message: cleanError(error) };
+      }
+    },
+    [commitEdit, flushSave, pageStateRef, translate, translateDescribed],
+  );
+}
+
+// A chip selected in the Style panel's selector field, then Delete: the class or
+// attribute comes off the element's tag as written, as one attribute edit (one
+// undo step), `class` and `class:list` together when both name it. What decides
+// whether that is safe is selectorRemoval.ts; a refusal is shown as a toast and
+// nothing is written. A refusal about code (a computed class:list entry) offers
+// 'Show in code', which opens the Code panel on that exact piece of code.
+function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
+  const { pageStateRef, setCodeReveal, setLeftTab, setSelectedId } = coreState;
+  const { flushSave, showToast } = lifecycle;
+  const { commitEdit } = history;
+  const showRefusal = useCallback(
+    (nodeId: string, removal: Extract<PropRemoval, { readonly tag: 'refused' }>) => {
+      const site = removal.site;
+      if (site === undefined) {
+        showToast(removal.reason, 'error');
+        return;
+      }
+      reportActionToast(removal.reason, 'error', [
+        {
+          label: translate('editor.selectorRemoval.showInCode'),
+          run: () => {
+            const state = pageStateRef.current.pageState;
+            const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+            const range = state === undefined || node === undefined ? undefined : attributeCodeRange(state.source, node, site.attribute, site.snippet);
+            setSelectedId(nodeId);
+            setCodeReveal(range === undefined ? undefined : { nodeId, ...range, code: site.snippet.code });
+            setLeftTab('code');
+          },
+        },
+      ]);
+    },
+    [pageStateRef, setCodeReveal, setLeftTab, setSelectedId, showToast, translate],
+  );
+  const removeFromNode = useCallback(
+    async (
+      nodeId: string,
+      preview: { readonly path: string | undefined; readonly removedClass: string | undefined },
+      plan: (props: Readonly<Record<string, Attr>> | undefined) => PropRemoval,
+    ): Promise<ClassOutcome> => {
+      const state = pageStateRef.current.pageState;
+      if (!nodeId || !state?.editable) {
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
+      }
+      const node = findNodeById(state.model.nodes, nodeId);
+      if (!node) {
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
+      }
+      assert(node.id === nodeId, 'removeFromNode: the node found is the one named');
+      const removal = plan(node.props);
+      if (removal.tag === 'refused') {
+        showRefusal(nodeId, removal);
+        return { tag: 'refused', message: removal.reason };
+      }
+      const patch = removal.patch;
+      assert(Object.keys(patch).length > 0, 'removeFromNode: an edit names the props it writes');
+      if (!commitEdit(propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true }))) {
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
+      }
+      // The canvas drops the class at once rather than after the save's re-render.
+      // The static names cover `class="…"` and whole entries; the named class covers
+      // the rest (`cond && 'a'`, an object key), which the static read can't see.
+      previewClassProps(preview.path, node, patch);
+      if (preview.removedClass !== undefined) {
+        previewRemovedClass(preview.path, preview.removedClass);
+      }
+      try {
+        await flushSave();
+        return { tag: 'applied' };
+      } catch (error: unknown) {
+        // The write failed, so the canvas gets the class back rather than showing an edit that never landed.
+        if (preview.removedClass !== undefined) {
+          previewAddedClass(preview.path, preview.removedClass);
+        }
+        return { tag: 'refused', message: cleanError(error) };
+      }
+    },
+    [commitEdit, flushSave, showRefusal, pageStateRef, translate],
+  );
+  const removeClassFromNode = useCallback(
+    (nodeId: string, className: string, previewPath?: string) =>
+      removeFromNode(nodeId, { path: previewPath, removedClass: className }, (props) => classRemoval(props, className, translate)),
+    [removeFromNode, translate],
+  );
+  const removeAttributeFromNode = useCallback(
+    (nodeId: string, attributeName: string) =>
+      removeFromNode(nodeId, { path: undefined, removedClass: undefined }, (props) => attributeRemoval(props, attributeName, translate)),
+    [removeFromNode, translate],
+  );
+  return { removeClassFromNode, removeAttributeFromNode };
+}
+
 // Writing an asset pick into a prop.
-export function useAssetProp(
-  coreState: ReturnType<typeof useCoreState>,
-  classEdits: ReturnType<typeof useClassEdits>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEdits: ReturnType<typeof useClassEdits>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef, projectRef } = coreState;
-  const { setProp } = classEdits;
+  const { setProp, setProps } = classEdits;
   const { commitEdit } = history;
 
   // Writes an asset pick into a prop. The root decides the form:
@@ -230,17 +395,27 @@ export function useAssetProp(
   //
   // The src/ form is the one Astro wants for <Image>: it carries the file's
   // real dimensions, so nothing has to be typed in and MissingImageDimension
-  // can't happen. An element gets `hero.src` instead — a plain <img> needs the
-  // URL out of the imported object, not the object.
+  // can't happen. A plain <img>, or a component prop typed as a string, gets
+  // `hero.src` instead: it needs the URL out of the imported object, not the
+  // object (assetReferenceFor in elementState.ts decides).
+  //
+  // `also` are props written in the same edit, so one undo step: the alt text an
+  // app's image pick came with (assetPick.ts onPickWithAlt).
   const setAssetProp = useCallback(
-    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }) => {
+    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }, reference: AssetReference, also: PropValues = {}) => {
+      assert(also[propName] === undefined, 'setAssetProp: the picked prop is not also written beside itself');
       const { pageState: state, currentPage: page } = pageStateRef.current;
       if (!state?.editable || !page?.path || !picked?.rel) {
         return;
       }
       const withoutRoot = picked.rel.split('/').slice(1).join('/');
       if (picked.root !== 'src') {
-        setProp(nodeId, propName, { type: 'string', value: '/' + withoutRoot }, true);
+        const value: Attr = { type: 'string', value: '/' + withoutRoot };
+        if (Object.keys(also).length === 0) {
+          setProp(nodeId, propName, value, true);
+        } else {
+          setProps(nodeId, { [propName]: value, ...also }, true);
+        }
         return;
       }
       const projectPath = projectRef.current?.path;
@@ -281,10 +456,9 @@ export function useAssetProp(
       const binding = local;
       // Step 6, prop and frontmatter: the prop as a request, then the import
       // it needs and the one a replaced image leaves behind — one undo step.
-      const reference = node.kind === 'element' ? `${binding}.src` : binding;
-      const value = { type: 'expr' as const, value: reference };
+      const value = { type: 'expr' as const, value: reference === 'url' ? `${binding}.src` : binding };
       const options = { coalesceKey: undefined, urgency: true };
-      const prop = propsGesture(nodeId, { [propName]: value }, options);
+      const prop = propsGesture(nodeId, { [propName]: value, ...also }, options);
       const imported = (current: EditorModel): EditorModel => {
         const entry = { name: binding, path: spec, quote: "'" };
         const imports = added ? [...current.imports, entry] : current.imports;
@@ -296,16 +470,13 @@ export function useAssetProp(
       const changed = frontmatterOf(imported(afterProp)) !== frontmatterOf(afterProp);
       commitEdit(changed ? sequence(prop, frontmatterGesture(afterProp, options, imported)) : prop);
     },
-    [commitEdit, setProp, pageStateRef, projectRef],
+    [commitEdit, setProp, setProps, pageStateRef, projectRef],
   );
   return { setAssetProp };
 }
 
 // Renaming an attribute.
-export function useRenameProp(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useRenameProp(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -329,11 +500,7 @@ export function useRenameProp(
 }
 
 // Turning a tag into a component.
-export function useNodeKind(
-  coreState: ReturnType<typeof useCoreState>,
-  nodeEdits: ReturnType<typeof useNodeEdits>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useNodeKind(coreState: ReturnType<typeof useCoreState>, nodeEdits: ReturnType<typeof useNodeEdits>, history: ReturnType<typeof useHistory>) {
   const { insertables, pageStateRef } = coreState;
   const { resolveImportPath } = nodeEdits;
   const { commitEdit } = history;
@@ -376,26 +543,8 @@ export function useNodeKind(
       // Attributes that belonged to the old element's tag mean nothing to a
       // component; class, data- and aria- carry over the way they do for a
       // tag change.
-      const oldNames =
-        node.kind === 'element'
-          ? new Set(getElementSchema(node.name).map((field) => field.name))
-          : undefined;
-      const dropped = Object.keys(node.props || {}).filter(
-        (attr) => oldNames?.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr),
-      );
-      const imported = (pageModel: EditorModel): EditorModel => {
-        if (pageModel.imports.some((i) => i.name === name)) {
-          return withPrunedImports(pageModel);
-        }
-        const entry = paths
-          ? { name, path: chooseImportPath(pageModel, paths), quote: "'" }
-          : asset
-            ? { name, imported: name, path: ASTRO_ASSETS_MODULE, quote: "'", named: true }
-            : undefined;
-        return withPrunedImports(
-          entry ? { ...pageModel, imports: [...pageModel.imports, entry] } : pageModel,
-        );
-      };
+      const dropped = droppedForComponent(node);
+      const imported = (pageModel: EditorModel): EditorModel => withComponentImport(pageModel, name, { paths, asset });
       const change = { kind: 'component' as const, name, asset, dropped };
       commitEdit(tagChangeGesture(model, node, change, imported));
       return true;
@@ -406,10 +555,7 @@ export function useNodeKind(
 }
 
 // Changing an element’s tag.
-export function useElementTag(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useElementTag(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -430,18 +576,7 @@ export function useElementTag(
       // A component becoming a plain tag keeps only what a tag understands:
       // its props were the component's API, and they'd be junk attributes on
       // a <div>.
-      const wasComponent = node.kind !== 'element';
-      const oldNames = wasComponent
-        ? new Set(Object.keys(node.props || {}))
-        : new Set(getElementSchema(node.name).map((field) => field.name));
-      const newNames = new Set(getElementSchema(tag).map((field) => field.name));
-      const dropped = Object.keys(node.props || {}).filter(
-        (attr) =>
-          oldNames.has(attr) &&
-          !newNames.has(attr) &&
-          !GLOBAL_ATTRS.has(attr) &&
-          !/^(data-|aria-)/.test(attr),
-      );
+      const dropped = droppedForElement(node, tag);
       const change = { kind: 'element' as const, name: tag, asset: false, dropped };
       commitEdit(tagChangeGesture(model, node, change, withPrunedImports));
     },
@@ -451,10 +586,8 @@ export function useElementTag(
 }
 
 // A node’s text, and the frontmatter.
-export function useNodeText(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useNodeText(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { commitEdit, scheduleSave } = history;
 
@@ -466,22 +599,13 @@ export function useNodeText(
   // (the style panel writing a <style> block): waiting 300 ms there just delays the
   // canvas, since the next keystroke it was batching with never comes.
   const setNodeText = useCallback(
-    (
-      nodeId: string,
-      value: string,
-      renames: readonly Rename[] | undefined = undefined,
-      immediate: boolean | 'live' = false,
-    ) => {
-      const renaming = (renames || []).some(
-        (rename) => rename.from && rename.to && rename.from !== rename.to,
-      );
+    (nodeId: string, value: string, renames: readonly Rename[] | undefined = undefined, immediate: boolean | 'live' = false) => {
+      const renaming = (renames || []).some((rename) => rename.from && rename.to && rename.from !== rename.to);
       const state = pageStateRef.current.pageState;
       if (renaming && state?.editable) {
         // Step 6, loop rename (multi-span): the parameters and every reference
         // below, as rename-binding requests, when the head changed nothing else.
-        const pairs = (renames || []).flatMap((rename) =>
-          rename.from && rename.to ? [{ from: rename.from, to: rename.to }] : [],
-        );
+        const pairs = (renames || []).flatMap((rename) => (rename.from && rename.to ? [{ from: rename.from, to: rename.to }] : []));
         const change = { head: value, renames: pairs };
         const gesture = loopRenameGesture(state.model, nodeId, change, { urgency: true });
         if (gesture) {
@@ -522,21 +646,60 @@ export function useNodeText(
         return;
       }
       // Object.assign, as the legacy setFrontmatter did: the block's fields replace the model's.
-      const written = (model: EditorModel): EditorModel =>
-        Object.assign({}, model, readFrontmatter(code));
+      const written = (model: EditorModel): EditorModel => Object.assign({}, model, readFrontmatter(code));
       const options = { coalesceKey: 'frontmatter', urgency: false };
       commitEdit(frontmatterGesture(state.model, options, written));
     },
     [commitEdit, pageStateRef],
   );
-  return { setFrontmatter, setNodeText };
+
+  // A frontmatter variable renamed across the file, or why it can't be: the Code
+  // row and the declaration's popup both come through here, so they refuse the
+  // same things. Stated against the bytes the page's edits are stated against.
+  const renameVariable = useCallback(
+    (rename: VariableRename): string | undefined => {
+      const state = pageStateRef.current.pageState;
+      const origin = state?.editable ? state.origin : undefined;
+      if (origin === undefined) {
+        return translate('shell.history.waitForSave');
+      }
+      const plan = planVariableRename(origin, rename);
+      if (!plan.ok) {
+        return renameProblemText(plan.problem, translate);
+      }
+      return commitEdit(variableRenameGesture(origin, rename, plan.hunks)) ? undefined : translate('shell.loop.notEditable');
+    },
+    [commitEdit, pageStateRef, translate],
+  );
+
+  // The Code row: checked first, because this text compiles into the page and a
+  // wrong name there is a crash. `renames` are the loop's own parameters, which
+  // the ordinary edit carries into its children.
+  const setLoopHead = useCallback(
+    (nodeId: string, value: string, renames: readonly Rename[]): string | undefined => {
+      const state = pageStateRef.current.pageState;
+      const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+      if (node?.kind !== 'map') {
+        return translate('shell.loop.gone');
+      }
+      const origin = state?.editable ? state.origin : undefined;
+      const checked = origin === undefined ? undefined : checkLoopHead(origin, { id: nodeId, before: node.head, after: value });
+      if (checked?.kind === 'problem') {
+        return renameProblemText(checked.problem, translate);
+      }
+      if (checked?.kind === 'rename') {
+        return renameVariable(checked.rename);
+      }
+      setNodeText(nodeId, value, renames);
+      return undefined;
+    },
+    [pageStateRef, renameVariable, setNodeText, translate],
+  );
+  return { renameVariable, setFrontmatter, setLoopHead, setNodeText };
 }
 
 // A condition’s else branch, and the frontmatter’s declarations.
-export function useBranchEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useBranchEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -551,24 +714,7 @@ export function useBranchEdits(
       if (!node || node.kind !== 'cond') {
         return;
       }
-      const kids = node.children;
-      const thenBranch: BranchNode = kids[0] ?? {
-        id: newId(),
-        kind: 'branch',
-        name: 'then',
-        children: [],
-      };
-      let next: EditorNode | undefined;
-      if (want && kids.length < 2) {
-        const elseBranch: BranchNode = { id: newId(), kind: 'branch', name: 'else', children: [] };
-        next = { ...node, op: '?', children: [thenBranch, elseBranch] };
-      } else if (!want && kids.length > 1) {
-        const elseBranch = kids[1];
-        assert(elseBranch !== undefined, 'Else branch exists before removal');
-        const rescued = elseBranch.children || [];
-        const merged = { ...thenBranch, children: [...(thenBranch.children || []), ...rescued] };
-        next = { ...node, op: '&&', children: [merged] };
-      }
+      const next = toggledElseBranch(node, want ? 'else' : 'no-else', newId);
       if (!next) {
         return;
       }
@@ -593,14 +739,12 @@ export function useBranchEdits(
     },
     [commitEdit, pageStateRef],
   );
+
   return { setExtraFrontmatter, toggleElseBranch };
 }
 
 // A node’s text content and inline children.
-export function useContentEdits(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
+export function useContentEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -645,10 +789,7 @@ export function useContentEdits(
         return;
       }
       const back = textSlotRef.current[nodeId];
-      const index =
-        back !== undefined && Number.isInteger(back) && back <= children.length
-          ? back
-          : children.length;
+      const index = back !== undefined && Number.isInteger(back) && back <= children.length ? back : children.length;
       commitEdit(insertGesture(model, text, { parentId: nodeId, index }, { urgency: false }));
     },
     [commitEdit, pageStateRef],
@@ -665,9 +806,28 @@ export function useContentEdits(
         return;
       }
       const next = withChildren(node, inlineWithIds(kids, 0));
+      // Content was explicitly edited. The printer's layout-preservation comparison
+      // ignores whitespace, so keeping the old inner source could restore a deleted
+      // space on save and send a different value back to the focused field.
+      Reflect.deleteProperty(next, 'source');
       commitEdit(nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false }));
     },
     [commitEdit, pageStateRef],
   );
-  return { setNodeContent, setNodeInline };
+  // A text connected to data or back to words (TextConnectField.tsx): the node
+  // restated as its pieces, the nodes beside it left as they are (textPieces.ts).
+  const setNodeTextPieces = useCallback(
+    (nodeId: string, pieces: readonly TextPiece[]) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) {
+        return;
+      }
+      const gesture = textPiecesGesture(state.model, nodeId, pieces);
+      if (gesture !== undefined) {
+        commitEdit(gesture);
+      }
+    },
+    [commitEdit, pageStateRef],
+  );
+  return { setNodeContent, setNodeInline, setNodeTextPieces };
 }

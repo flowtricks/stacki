@@ -24,6 +24,7 @@
   color: var(--text);
   font: inherit;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
 }
 .studio-toast .studio-toast-action:hover {

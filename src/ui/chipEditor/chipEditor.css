@@ -1,0 +1,172 @@
+/* The chip editor (chipEditor.ts, ChipPicker.tsx). Chips are the purple pill the Style panel
+   draws for a bound value (`.conditional-chip`, props/conditionalValue.css): the same fill
+   and text, hover a brighter purple, no border. The values are lifted into custom
+   properties here so other chips (the sent-message chips) share one definition; the Style
+   panel's own file is not edited. */
+
+:root {
+  --chip-purple-fill: rgba(146, 116, 255, 0.28);
+  --chip-purple-fill-hover: rgba(146, 116, 255, 0.38);
+  --chip-purple-text: #c9bbff;
+  --chip-purple-text-hover: #d7ccff;
+}
+
+.chip-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 20px;
+  margin: 0 1px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: var(--chip-purple-fill);
+  color: var(--chip-purple-text);
+  font-family: var(--font, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  vertical-align: baseline;
+  white-space: nowrap;
+  user-select: none;
+}
+.chip-editor-chip[role='button'] {
+  cursor: pointer;
+}
+.chip-editor-chip:hover {
+  background: var(--chip-purple-fill-hover);
+  color: var(--chip-purple-text-hover);
+}
+.chip-editor-chip-label {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-editor-chip > svg {
+  flex: none;
+}
+.chip-picker {
+  z-index: 300;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  /* One step above the composer, as every composer popover: the menu surface. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text, #f5f5f5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+/* The filter tabs: one row on its own darker fill, scrolling sideways with no fade and no wrap. The active tab is
+   a lighter pill with white text; inactive labels and counts keep readable contrast, a tab with no match too. */
+.chip-picker-tabs {
+  flex: none;
+  margin-block-end: 4px;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+.chip-picker-tabs .ui-tabs {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  background: transparent;
+}
+.chip-picker-tabs .ui-tabs-indicator {
+  background: rgba(255, 255, 255, 0.16);
+}
+.chip-picker-tabs .ui-tab {
+  color: var(--text-dim, #b8b8b8);
+  font-size: 12px;
+}
+.chip-picker-tabs .ui-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.chip-picker-tabs .ui-tab.on {
+  color: #fff;
+}
+.chip-picker-tabs .ui-tab-badge {
+  color: #a3a3a3;
+}
+.chip-picker-tabs .ui-tab.is-dim {
+  opacity: 0.7;
+}
+/* The rows scroll inside the box's fixed height; the box itself never resizes. */
+.chip-picker-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.chip-picker-heading {
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 6px 8px 2px;
+  color: var(--text-dim, #b8b8b8);
+  font-size: 11px;
+  font-variant: small-caps;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+/* One line per row: the name, then the path muted beside it, the path cut first. */
+.chip-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: default;
+}
+.chip-picker-option.is-active {
+  background: color-mix(in srgb, var(--accent, #0099ff) 32%, transparent);
+  color: #fff;
+}
+.chip-picker-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text, #f5f5f5);
+}
+.chip-picker-text {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.chip-picker-label {
+  flex: 0 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-picker-description {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim, #b8b8b8);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-picker-option.is-active .chip-picker-description {
+  color: rgba(255, 255, 255, 0.85);
+}
+.chip-picker-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}

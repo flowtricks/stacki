@@ -1,0 +1,8 @@
+---
+export interface Props {
+  message: string;
+  urgent?: boolean;
+}
+const { message, urgent = false } = Astro.props;
+---
+<p class:list={['export-interface', { urgent }]}>{message}</p>

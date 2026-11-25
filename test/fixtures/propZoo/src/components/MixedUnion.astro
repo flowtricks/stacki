@@ -1,0 +1,9 @@
+---
+interface Props {
+  value: string | number;
+  flag?: boolean | 'auto';
+  size?: 'sm' | 'lg' | number;
+}
+const { value, flag = 'auto', size = 'sm' } = Astro.props;
+---
+<output class="mixed-union" data-flag={String(flag)} data-size={size}>{value}</output>

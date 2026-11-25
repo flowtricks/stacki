@@ -3,8 +3,7 @@ import { chromium } from 'playwright';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -69,9 +68,7 @@ try {
   assert.equal(await source(), original);
   await recoverSilentConnection();
   assert.deepEqual(errors, []);
-  console.log(
-    'Immediate selection during delayed edits, stale reply protection, correct edit targets and silent socket recovery passed.',
-  );
+  console.log('Immediate selection during delayed edits, stale reply protection, correct edit targets and silent socket recovery passed.');
 } finally {
   await browser.close();
 }
@@ -86,9 +83,7 @@ async function selected(name: string, timeout = 5000) {
 }
 
 async function source() {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', url).href);
   assert.equal(response.status(), 200);
   return string(record(await response.json())['source']);
 }

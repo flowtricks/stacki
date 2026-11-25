@@ -37,12 +37,7 @@ export async function cmsFixture(files: Readonly<Record<string, string>>) {
   return {
     root,
     rooms,
-    post: async (
-      operation: string,
-      payload: unknown,
-      versions: unknown = {},
-      expectedData?: unknown,
-    ) =>
+    post: async (operation: string, payload: unknown, versions: unknown = {}, expectedData?: unknown) =>
       record(
         await (
           await fetch(`http://127.0.0.1:${address.port}`, {

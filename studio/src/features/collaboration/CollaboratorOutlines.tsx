@@ -37,15 +37,11 @@ export function CollaboratorOutlines({
               outlineColor: presenceColor(peer),
             }}
           >
-            <span
-              className={`collaborator-outline-tag ${rect.y * scale < 24 ? 'inside' : ''}`}
-              style={{ backgroundColor: presenceColor(peer) }}
-            >
+            <span className={`collaborator-outline-tag ${rect.y * scale < 24 ? 'inside' : ''}`} style={{ backgroundColor: presenceColor(peer) }}>
               <span className="collaborator-avatar">
                 <Avatar id={peer.githubId} name={peer.name} />
               </span>
-              {(peer.file === file ? outlineInfo(nodes, peerPath(peer))?.label : undefined) ??
-                peer.name}
+              {(peer.file === file ? outlineInfo(nodes, peerPath(peer))?.label : undefined) ?? peer.name}
             </span>
           </div>
         );

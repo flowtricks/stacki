@@ -20,11 +20,7 @@ import {
   type SnapAxisResult,
   type SnapPointResult,
 } from './clipPathTypes';
-import {
-  EDGE_SNAP_DISTANCE,
-  SNAP_GUIDE_ALIGNMENT_EPSILON,
-  DUPLICATE_POINT_OFFSET,
-} from './clipPathConstants';
+import { EDGE_SNAP_DISTANCE, SNAP_GUIDE_ALIGNMENT_EPSILON, DUPLICATE_POINT_OFFSET } from './clipPathConstants';
 
 export function formatPercent(value: number) {
   const rounded = Math.round(value * 10) / 10;
@@ -54,18 +50,51 @@ export function formatCssCoordinatePoint(point: CssCoordinatePoint) {
 
 export function formatCssScaleNumber(value: number) {
   const rounded = Math.round(value * 10000) / 10000;
-  return Number.isInteger(rounded)
-    ? `${rounded}`
-    : `${rounded}`.replace(/0+$/, '').replace(/\.$/, '');
+  return Number.isInteger(rounded) ? `${rounded}` : `${rounded}`.replace(/0+$/, '').replace(/\.$/, '');
 }
 
 export function formatCqw(value: number) {
   return `${formatCssNumber(value)}cqw`;
 }
 
+const SHAPE_VARIABLE_NAME = /^--[A-Za-z0-9_-]+$/;
+
+// A shape-variable field's text as the custom-property name the shape() reads. The
+// field holds either a typed name (`--size`) or, once bound from the purple dot or
+// a `--` suggestion, a reference (`var(--size)`): both name the same property, so a
+// reference is unwrapped before the name is tidied.
+// Anything that is not yet a whole name (`--` mid-typing, `size` before blur adds
+// its dashes) is no name, so the shape() keeps its raw value rather than writing
+// `var(--, 100cqw)` or `var(size, 100cqw)`, which no browser reads.
 export function sanitizeShapeScaleVariableName(value: string) {
-  const trimmed = value.trim();
-  return trimmed.replace(/[^a-zA-Z0-9_-]/g, '');
+  const reference = shapeVariableReferenceName(value);
+  const name = (reference ?? value.trim()).replace(/[^a-zA-Z0-9_-]/g, '');
+  return SHAPE_VARIABLE_NAME.test(name) ? name : '';
+}
+
+// The name inside a field that is exactly one `var(--name)` reference (a fallback
+// after the name is allowed and dropped), or undefined for any other text.
+const SHAPE_VARIABLE_REFERENCE = /^var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,[^()]*)?\)$/;
+export function shapeVariableReferenceName(value: string): string | undefined {
+  const match = SHAPE_VARIABLE_REFERENCE.exec(value.trim());
+  return match?.[1];
+}
+
+// A custom-property name as the text its field shows: a reference, so the field
+// draws it as a variable chip. No name shows as an empty field (its placeholder).
+export function shapeVariableFieldText(name: string): string {
+  const formatted = formatShapeVariableName(name);
+  return formatted ? `var(${formatted})` : '';
+}
+
+// A shape-variable field's text tidied on blur: a reference stays as it is, and a
+// typed name becomes a reference to the property it names.
+export function formatShapeVariableField(value: string): string {
+  const reference = shapeVariableReferenceName(value);
+  if (reference !== undefined) {
+    return `var(${reference})`;
+  }
+  return shapeVariableFieldText(value);
 }
 
 // Coerce free-text into a valid CSS custom-property name (e.g. "Element Size" -> "--element-size").
@@ -99,11 +128,7 @@ export function addSnapGuide(guides: SnapGuides, axis: keyof SnapGuides, value: 
   guides[axis].push(value);
 }
 
-export function snapAxisToAnchors(
-  value: number,
-  anchors: number[],
-  _startValue?: number,
-): SnapAxisResult {
+export function snapAxisToAnchors(value: number, anchors: number[], _startValue?: number): SnapAxisResult {
   let closest = value;
   let guide: number | undefined = undefined;
   let closestDistance = EDGE_SNAP_DISTANCE;
@@ -120,13 +145,7 @@ export function snapAxisToAnchors(
   return { value: closest, guide };
 }
 
-export function snapPointToAnchors(
-  x: number,
-  y: number,
-  xAnchors: number[],
-  yAnchors: number[],
-  start?: Point,
-): SnapPointResult {
+export function snapPointToAnchors(x: number, y: number, xAnchors: number[], yAnchors: number[], start?: Point): SnapPointResult {
   const snappedX = snapAxisToAnchors(x, xAnchors, start?.x);
   const snappedY = snapAxisToAnchors(y, yAnchors, start?.y);
   const guides = emptySnapGuides();
@@ -173,12 +192,8 @@ export function mergeSnapGuides(...items: SnapGuides[]) {
 }
 
 export function normalizeSnapGuides(guides: SnapGuides): SnapGuides | undefined {
-  const x = guides.x.filter(
-    (value, index, values) => values.findIndex((item) => Math.abs(item - value) < 0.01) === index,
-  );
-  const y = guides.y.filter(
-    (value, index, values) => values.findIndex((item) => Math.abs(item - value) < 0.01) === index,
-  );
+  const x = guides.x.filter((value, index, values) => values.findIndex((item) => Math.abs(item - value) < 0.01) === index);
+  const y = guides.y.filter((value, index, values) => values.findIndex((item) => Math.abs(item - value) < 0.01) === index);
   return x.length || y.length ? { x, y } : undefined;
 }
 
@@ -198,12 +213,7 @@ export function rectFromPoints(start: Point, end: Point): SelectionRect {
 }
 
 export function pointInRect(point: Point, rect: SelectionRect) {
-  return (
-    point.x >= rect.left &&
-    point.x <= rect.left + rect.width &&
-    point.y >= rect.top &&
-    point.y <= rect.top + rect.height
-  );
+  return point.x >= rect.left && point.x <= rect.left + rect.width && point.y >= rect.top && point.y <= rect.top + rect.height;
 }
 
 export function addShapeSnapCandidate(
@@ -215,20 +225,12 @@ export function addShapeSnapCandidate(
   { sticky }: { sticky: boolean },
 ) {
   const distance = Math.abs(next - target);
-  if (
-    distance <= EDGE_SNAP_DISTANCE &&
-    (sticky || Math.abs(current - target) > SNAP_GUIDE_ALIGNMENT_EPSILON)
-  ) {
+  if (distance <= EDGE_SNAP_DISTANCE && (sticky || Math.abs(current - target) > SNAP_GUIDE_ALIGNMENT_EPSILON)) {
     candidates.push({ delta, distance, guide: target });
   }
 }
 
-export function addAlignedShapeGuide(
-  guides: SnapGuides,
-  axis: keyof SnapGuides,
-  value: number,
-  targets: number[],
-) {
+export function addAlignedShapeGuide(guides: SnapGuides, axis: keyof SnapGuides, value: number, targets: number[]) {
   targets.forEach((target) => {
     if (Math.abs(value - target) <= SNAP_GUIDE_ALIGNMENT_EPSILON) {
       addSnapGuide(guides, axis, target);
@@ -253,12 +255,7 @@ export function shapeSnapGuidesForBounds(bounds: SelectionRect) {
   return guides;
 }
 
-export function snappedShapeMoveDelta(
-  bounds: SelectionRect,
-  dx: number,
-  dy: number,
-  options: { sticky?: boolean } = {},
-) {
+export function snappedShapeMoveDelta(bounds: SelectionRect, dx: number, dy: number, options: { sticky?: boolean } = {}) {
   const sticky = options.sticky ?? false;
   const centerX = bounds.left + bounds.width / 2;
   const centerY = bounds.top + bounds.height / 2;
@@ -279,10 +276,7 @@ export function snappedShapeMoveDelta(
     addShapeSnapCandidate(yCandidates, centerY, centerY + dy, target, target - centerY, { sticky });
   });
 
-  const closest = (
-    candidates: Array<{ delta: number; distance: number; guide: number }>,
-    fallback: number,
-  ) =>
+  const closest = (candidates: Array<{ delta: number; distance: number; guide: number }>, fallback: number) =>
     candidates.sort((nearer, farther) => nearer.distance - farther.distance)[0] || {
       delta: fallback,
       distance: Infinity,
@@ -315,12 +309,7 @@ export function boundsClose(left: CanvasHandleBounds | undefined, right: CanvasH
 }
 
 export function pointInBounds(point: Point, bounds: CanvasHandleBounds) {
-  return (
-    point.x >= bounds.minX &&
-    point.x <= bounds.maxX &&
-    point.y >= bounds.minY &&
-    point.y <= bounds.maxY
-  );
+  return point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY;
 }
 
 export function distanceSquared(from: Point, to: Point) {
@@ -348,16 +337,10 @@ export function outsideBoundsSides(point: Point, bounds: CanvasHandleBounds) {
   return sides;
 }
 
-export function addUniqueIntersection(
-  intersections: Array<{ point: Point; side: BoundsSide }>,
-  intersection: { point: Point; side: BoundsSide },
-) {
+export function addUniqueIntersection(intersections: Array<{ point: Point; side: BoundsSide }>, intersection: { point: Point; side: BoundsSide }) {
   if (
     intersections.some(
-      (item) =>
-        item.side === intersection.side &&
-        Math.abs(item.point.x - intersection.point.x) < 0.01 &&
-        Math.abs(item.point.y - intersection.point.y) < 0.01,
+      (item) => item.side === intersection.side && Math.abs(item.point.x - intersection.point.x) < 0.01 && Math.abs(item.point.y - intersection.point.y) < 0.01,
     )
   ) {
     return;
@@ -391,15 +374,8 @@ export function segmentBoundsIntersections(start: Point, end: Point, bounds: Can
   return intersections;
 }
 
-export function closestPolygonProjection(
-  candidates: Array<{ point: Point; edge: PolygonDisplayEdge; side: BoundsSide }>,
-  target: Point,
-) {
-  return candidates.reduce((closest, candidate) =>
-    distanceSquared(candidate.point, target) < distanceSquared(closest.point, target)
-      ? candidate
-      : closest,
-  );
+export function closestPolygonProjection(candidates: Array<{ point: Point; edge: PolygonDisplayEdge; side: BoundsSide }>, target: Point) {
+  return candidates.reduce((closest, candidate) => (distanceSquared(candidate.point, target) < distanceSquared(closest.point, target) ? candidate : closest));
 }
 
 export function polygonHandleDisplayPoint(
@@ -431,9 +407,7 @@ export function polygonHandleDisplayPoint(
   ];
 
   if (preferred && sides.includes(preferred.side)) {
-    const preferredCandidate = candidatesForSide(preferred.side).find(
-      (candidate) => candidate.edge === preferred.edge,
-    );
+    const preferredCandidate = candidatesForSide(preferred.side).find((candidate) => candidate.edge === preferred.edge);
     if (preferredCandidate) {
       return { point: preferredCandidate.point, projection: preferred };
     }
@@ -473,41 +447,26 @@ export function polygonHandleDisplayPoint(
   };
 }
 
-export function snapDragPointForTarget(
-  shape: ClipShape,
-  target: DragTarget,
-  x: number,
-  y: number,
-): SnapPointResult {
+export function snapDragPointForTarget(shape: ClipShape, target: DragTarget, x: number, y: number): SnapPointResult {
   const start = target.dragOrigin?.handle;
   if (
-    (target.kind === 'circle-center' &&
-      (shape.kind === 'circle' || (shape.kind === 'raw' && shape.editable?.kind === 'circle'))) ||
-    (target.kind === 'ellipse-center' &&
-      (shape.kind === 'ellipse' || (shape.kind === 'raw' && shape.editable?.kind === 'ellipse')))
+    (target.kind === 'circle-center' && (shape.kind === 'circle' || (shape.kind === 'raw' && shape.editable?.kind === 'circle'))) ||
+    (target.kind === 'ellipse-center' && (shape.kind === 'ellipse' || (shape.kind === 'raw' && shape.editable?.kind === 'ellipse')))
   ) {
     return snapPointToAnchors(x, y, [0, 50, 100], [0, 50, 100]);
   }
 
   if (shape.kind === 'inset' && target.kind === 'inset-radius') {
     const { x0, y0, x1, y1, width, height } = insetBox(shape);
-    return snapPointToAnchors(
-      x,
-      y,
-      [0, x0, x0 + width / 2, 50, x1, 100],
-      [0, y0, y0 + height / 2, 50, y1, 100],
-      start,
-    );
+    return snapPointToAnchors(x, y, [0, x0, x0 + width / 2, 50, x1, 100], [0, y0, y0 + height / 2, 50, y1, 100], start);
   }
 
   return snapPointToAnchors(x, y, [0, 50, 100], [0, 50, 100], start);
 }
 
 export function offsetDuplicatePoint(point: Point) {
-  const dx =
-    point.x + DUPLICATE_POINT_OFFSET <= 100 ? DUPLICATE_POINT_OFFSET : -DUPLICATE_POINT_OFFSET;
-  const dy =
-    point.y + DUPLICATE_POINT_OFFSET <= 100 ? DUPLICATE_POINT_OFFSET : -DUPLICATE_POINT_OFFSET;
+  const dx = point.x + DUPLICATE_POINT_OFFSET <= 100 ? DUPLICATE_POINT_OFFSET : -DUPLICATE_POINT_OFFSET;
+  const dy = point.y + DUPLICATE_POINT_OFFSET <= 100 ? DUPLICATE_POINT_OFFSET : -DUPLICATE_POINT_OFFSET;
   return {
     x: clampValue(point.x + dx, 0, 100),
     y: clampValue(point.y + dy, 0, 100),

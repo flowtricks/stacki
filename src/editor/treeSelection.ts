@@ -1,5 +1,6 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { labelsNode } from '../../shared/page/leadingNote';
 import { treeBudget, type TreeView } from './treeView';
 // Tree questions the navigator and the editor both ask, kept apart from both
 // so they can be reasoned about (and tested) on their own: which nodes get a
@@ -8,12 +9,7 @@ import { treeBudget, type TreeView } from './treeView';
 // Children the Content field fully covers: plain text and simple {expr}
 // interpolations (single braces, no JSX). These get no navigator rows.
 export function isContentOnlyChild(child: TreeView): boolean {
-  return (
-    child.kind === 'text' ||
-    (child.kind === 'expr' &&
-      /^\{[^{}]*\}$/.test(child.value ?? '') &&
-      !(child.value ?? '').includes('<'))
-  );
+  return child.kind === 'text' || (child.kind === 'expr' && /^\{[^{}]*\}$/.test(child.value ?? '') && !(child.value ?? '').includes('<'));
 }
 
 /**
@@ -32,22 +28,7 @@ export function hidesChildRows(node: TreeView | undefined, kids: readonly TreeVi
 }
 
 // Tags the serializer keeps on one line with the words around them.
-const INLINE_TAGS = new Set([
-  'strong',
-  'em',
-  'b',
-  'i',
-  'sup',
-  'sub',
-  'code',
-  'a',
-  'span',
-  'br',
-  'small',
-  'mark',
-  'u',
-  's',
-]);
+const INLINE_TAGS = new Set(['strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br', 'small', 'mark', 'u', 's']);
 
 // Whether a child list is written out as a single inline run. The serializer
 // puts no markers inside one — each marker's own newlines would render as a
@@ -59,11 +40,7 @@ export function isInlineRun(nodes: readonly TreeView[] | undefined): boolean {
   return isInlineRunWalk(nodes, 0, treeBudget());
 }
 
-function isInlineRunWalk(
-  nodes: readonly TreeView[] | undefined,
-  depth: number,
-  visit: (depth: number) => void,
-): boolean {
+function isInlineRunWalk(nodes: readonly TreeView[] | undefined, depth: number, visit: (depth: number) => void): boolean {
   assert(depth <= LIMITS.treeDepthMax, 'Tree traversal exceeds depth limit');
   if (!nodes?.length) {
     return false;
@@ -92,15 +69,15 @@ function isInlineRunWalk(
 // someone else's note to whatever ends up next.
 export function noteIndexAbove(list: readonly TreeView[], index: number): number {
   const previous = index > 0 ? list[index - 1] : undefined;
-  return previous && previous.kind === 'comment' ? index - 1 : -1;
+  const node = list[index];
+  if (previous === undefined || node === undefined) {
+    return -1;
+  }
+  return labelsNode(previous.kind, node.kind) ? index - 1 : -1;
 }
 
 // Node plus the list it sits in and the node holding that list.
-export function findWithParent(
-  nodes: readonly TreeView[],
-  id: string,
-  parent?: TreeView,
-): FoundNode | undefined {
+export function findWithParent(nodes: readonly TreeView[], id: string, parent?: TreeView): FoundNode | undefined {
   return findWithParentWalk(nodes, id, parent, 0, treeBudget());
 }
 
@@ -139,10 +116,7 @@ function findWithParentWalk(
 // the list carries on downward from the hole. Reckoned in navigator rows, not
 // raw nodes: a comment folded into the row beneath it isn't somewhere the
 // selection can go.
-export function selectionAfterDelete(
-  model: { readonly nodes: readonly TreeView[] },
-  nodeId: string,
-): string | undefined {
+export function selectionAfterDelete(model: { readonly nodes: readonly TreeView[] }, nodeId: string): string | undefined {
   const found = findWithParent(model.nodes, nodeId);
   if (!found) {
     return undefined;
@@ -170,11 +144,8 @@ export function selectionAfterDelete(
   const folded = (i: number): boolean => {
     const node = rest[i];
     assert(node !== undefined, 'Selection index must name a surviving node');
-    return (
-      isContentOnlyChild(node) ||
-      (node.kind === 'comment' &&
-        (rest[i + 1]?.kind === 'element' || rest[i + 1]?.kind === 'component'))
-    );
+    const next = rest[i + 1];
+    return isContentOnlyChild(node) || (next !== undefined && labelsNode(node.kind, next.kind));
   };
   for (let i = at; i < rest.length; i++) {
     if (!folded(i)) {

@@ -1,18 +1,19 @@
 import type { MiddlewareHandler } from 'astro';
+import { renderBaselineScript } from './renderBaseline';
+import { renderScope } from './renderRequest';
 
 const MAX_RENDER_BYTES = 4_000_000;
 
-// Prerendered Astro routes intentionally hide request headers, so embed the
-// baseline for every HTML render and remove it from subsequent diff inputs.
 // Keep the exact initial server rendering. A second request can already contain
 // a collaborator's newer edit, making the first DOM patch incorrectly a no-op.
 export const onRequest: MiddlewareHandler = async ({ request }, next) => {
   const response = await next();
-  if (
-    request.method !== 'GET' ||
-    !response.headers.get('content-type')?.includes('text/html') ||
-    (!response.ok && response.status !== 404)
-  ) {
+  // Internal pushes already have an initial baseline in the browser. Streaming
+  // their response directly avoids copying and JSON-escaping the entire page twice.
+  if (renderScope.getStore() === 'patch') {
+    return response;
+  }
+  if (request.method !== 'GET' || !response.headers.get('content-type')?.includes('text/html') || (!response.ok && response.status !== 404)) {
     return response;
   }
   // An authored 404 page is an editable HTML rendering, despite its status.
@@ -45,10 +46,7 @@ export async function withRenderBaseline(response: Response): Promise<Response> 
     offset += chunk.byteLength;
   }
   const html = new TextDecoder().decode(bytes);
-  // Escaping '<' prevents page content from ending this inert JSON script.
-  const encoded = JSON.stringify(html).replaceAll('<', '\\u003c');
-  const baseline = `<script id="studio-render-baseline" type="application/json">${encoded}</script>`;
   const headers = new Headers(response.headers);
   headers.delete('content-length');
-  return new Response(html + baseline, { status: response.status, headers });
+  return new Response(html + renderBaselineScript(html), { status: response.status, headers });
 }

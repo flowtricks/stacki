@@ -10,7 +10,13 @@
 //   gone       no minimum edit script keeps the span whole: it was edited or
 //              deleted;
 //   ambiguous  some script keeps it and another does not, or they disagree
-//              on where.
+//              on where; also a span whose proof would cost more than the
+//              diff's work budget, which is refused, never guessed.
+//
+// A diff too costly to compute exactly degrades to a coarse one (diff.ts): the
+// blocks it can prove equal and aligned. A span inside one block resolves; a
+// span that touches anything else is `gone`, because nothing proves it kept.
+// Size never rejects: it only coarsens what can be proven.
 //
 // How, without enumerating scripts: every script crosses each source byte
 // exactly once, either matching it to one target byte or deleting it, and a
@@ -23,34 +29,61 @@
 // The brute-force reference checks every column of a full table instead, and
 // the tests assert the two agree (plan §10).
 import { assert } from '../core/assert';
-import { diffBytes, type ByteDiff, type DiffBudget } from './diff';
+import { diffBytes, type ByteDiff, type CoarseDiff, type DiffBudget, type DiffOutcome } from './diff';
 import { toByteSpan, type ByteSpan, type ByteString } from '../core/span';
 
-export type SpanMapping =
-  | { readonly tag: 'resolved'; readonly span: ByteSpan }
-  | { readonly tag: 'ambiguous' }
-  | { readonly tag: 'gone' }
-  | { readonly tag: 'too-costly' };
+export type SpanMapping = { readonly tag: 'resolved'; readonly span: ByteSpan } | { readonly tag: 'ambiguous' } | { readonly tag: 'gone' };
 
 /** Diff, then map. For several spans through one pair of files, diff once with
  * `diffBytes` and call `mapSpanThroughDiff` per span. */
-export function mapSpan(
-  source: ByteString,
-  target: ByteString,
-  span: ByteSpan,
-  budget: DiffBudget,
-): SpanMapping {
-  const outcome = diffBytes(source, target, budget);
+export function mapSpan(source: ByteString, target: ByteString, span: ByteSpan, budget: DiffBudget): SpanMapping {
+  return mapSpanThroughOutcome(diffBytes(source, target, budget), span);
+}
+
+/** Map a non-empty span through whichever diff `diffBytes` computed. */
+export function mapSpanThroughOutcome(outcome: DiffOutcome, span: ByteSpan): SpanMapping {
   switch (outcome.tag) {
     case 'computed':
       return mapSpanThroughDiff(outcome.diff, span);
-    case 'too-costly':
-      return { tag: 'too-costly' };
+    case 'coarse':
+      return mapSpanThroughCoarse(outcome.diff, span);
     default: {
       const exhaustive: never = outcome;
       return exhaustive;
     }
   }
+}
+
+/** Map a non-empty span through the blocks a coarse diff proves equal: kept
+ * whole inside one block, `gone` otherwise (see the header). */
+export function mapSpanThroughCoarse(diff: CoarseDiff, span: ByteSpan): SpanMapping {
+  assert(span.start < span.end, 'Only non-empty spans are mapped');
+  assert(span.end <= diff.source.length, 'The mapped span lies inside the authored bytes');
+  // Blocks ascend and are disjoint in the source: binary-search the last block
+  // that starts at or before the span.
+  let low = 0;
+  let high = diff.blocks.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const block = diff.blocks[middle];
+    assert(block !== undefined, 'The search stays inside the blocks');
+    if (block.sourceStart <= span.start) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  const block = low > 0 ? diff.blocks[low - 1] : undefined;
+  if (block === undefined) {
+    return { tag: 'gone' };
+  }
+  if (span.end > block.sourceStart + block.length) {
+    return { tag: 'gone' };
+  }
+  const target = block.targetStart + (span.start - block.sourceStart);
+  const mapped = toByteSpan(target, target + (span.end - span.start));
+  assert(mapped.end <= diff.target.length, 'A resolved span lies inside the current bytes');
+  return { tag: 'resolved', span: mapped };
 }
 
 /** Map a non-empty span. Zero-width insertion points are not mapped here: an
@@ -64,16 +97,14 @@ export function mapSpanThroughDiff(diff: ByteDiff, span: ByteSpan): SpanMapping 
     assert(diff.source.length === diff.target.length, 'Identical bytes have one length');
     return { tag: 'resolved', span };
   }
-  const workLeft = diff.budget.workMax - diff.workSpent;
+  const workLeft = diff.workLimit - diff.workSpent;
   const length = span.end - span.start;
   const first = crossings(diff, span.start);
   const target = soleMatch(first);
   if (target !== undefined) {
     const last = soleMatch(crossings(diff, span.end - 1));
     if (last === target + length - 1) {
-      if (length > workLeft) {
-        return { tag: 'too-costly' };
-      }
+      // One pass over the span, however long: linear work is never refused.
       if (runsAgree(diff, span.start, target, length)) {
         const mapped = toByteSpan(target, target + length);
         assert(mapped.end <= diff.target.length, 'A resolved span lies inside the current bytes');
@@ -164,12 +195,7 @@ function runsAgree(diff: ByteDiff, source: number, target: number, length: numbe
 // `ambiguous`. A script keeps it at j exactly when it matches the first byte at
 // j and the bytes agree from there: the free diagonal is then optimal to the
 // end of the span, because the distance after never grows along a match.
-function keptBySomeScript(
-  diff: ByteDiff,
-  span: ByteSpan,
-  first: Crossings,
-  workLeft: number,
-): SpanMapping {
+function keptBySomeScript(diff: ByteDiff, span: ByteSpan, first: Crossings, workLeft: number): SpanMapping {
   const length = span.end - span.start;
   assert(length > 0, 'A mapped span is non-empty');
   assert(first.matches.length <= 2 * diff.distance + 1, 'Matches come from the candidate band');
@@ -178,7 +204,9 @@ function keptBySomeScript(
     if (target + length <= diff.target.length) {
       work += length;
       if (work > workLeft) {
-        return { tag: 'too-costly' };
+        // Proving the span gone would cost more than the diff's budget: it is
+        // not proven kept either, so it is refused as ambiguous, never guessed.
+        return { tag: 'ambiguous' };
       }
       if (runsAgree(diff, span.start, target, length)) {
         return { tag: 'ambiguous' };

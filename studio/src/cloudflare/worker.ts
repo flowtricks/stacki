@@ -1,34 +1,143 @@
+import { PublishIdleGuard } from './publishIdleGuard';
 import { updateRoutes } from './updateRoutes';
 import { isStudioAPI, studioError } from './apiResponse';
-import { canEdit } from '../features/auth/repositoryAccess';
 import { Container } from '@cloudflare/containers';
-import { githubLogin, loginPage } from '../features/auth/githubLogin';
-import {
-  cookie,
-  sessionCookie,
-  signSession,
-  verifySession,
-  type Identity,
-} from '../features/auth/session';
+import { authRoutes, installedProviderName } from '../features/auth/authRoutes';
+import { loginPage } from '../features/auth/loginPage';
+import { mayEdit, mayManage, memberAliases, mintSession, principalFromToken, readPrincipal, SESSION_COOKIES } from '../features/auth/authRuntime';
+import { SESSION_LIFETIME_MS, SESSION_LIFETIME_SECONDS } from '../features/auth/principalSession';
+import type { Principal } from '../features/auth/authProvider';
+import { activeAuthRuntime, passkeyStoreFor } from './activeAuthRuntime';
+import { durableStorage } from './passkeyStorage';
+import { parsePasskeyAdminCommand, runPasskeyAdmin, type PasskeyAdminFailure, type PasskeyAdminResult } from '../features/auth/providers/passkeyAdmin';
+import { passkeyAdminRoute } from './passkeyAdminRoutes';
+import { routeLogin } from '../features/auth/loginRoute';
+import { cookie, previewSessionCookie } from '../features/auth/session';
 import type { Environment } from './environment';
 import { internal } from './internalRoutes';
+import { claimLoginAttempt, LoginAttempts } from '../features/auth/loginAttempts';
+import { warmupRequest } from './warmupRequest';
+import { cmsConnectionRoute, cmsVault } from './cmsConnectionRoutes';
+import { CmsUnavailable, cmsForwarded } from '../features/cms/cmsConnectionVault';
+import { mediaConnectionRoute } from './mediaConnectionRoutes';
+import { mediaForwarded } from '../features/assets/mediaConnectionVault';
+import { appFileLinkRoute, appFileRedirect } from './appFileRoutes';
+import { clientDiagnosticsRoute } from './clientDiagnostics';
+import { StartupLog, type ContainerPhase } from '../features/startup/startupLog';
+import { parseStartupReport, STARTUP_LIMITS } from '../features/startup/startupStages';
+
+// How long a container that no one is using stays up. A cold start restores the repository and
+// compiles the site (tens of seconds), a warm one answers at once, so a person who comes back
+// after a coffee should find it warm. Billing is for the time it is up: ten minutes of one
+// standard instance's memory and disk costs well under a cent. Open editors keep it alive on their own.
+// Not exported: a Worker module's exports must be classes and handlers.
+const CONTAINER_SLEEP_AFTER = '10m';
 
 export class PreviewContainer extends Container<Environment> {
+  private readonly loginAttempts = new LoginAttempts((state, expires) => this.ctx.storage.transaction((storage) => claimLoginAttempt(storage, state, expires)));
+  private readonly publishIdle = new PublishIdleGuard();
+  private readonly startup = new StartupLog();
+  // The authentication runtime inside the Durable Object: it alone has the storage passkeys live in.
+  private runtime() {
+    return activeAuthRuntime(this.env, { storage: durableStorage(this.ctx.storage) });
+  }
+  /** Worker to Durable Object: whether a passkey handle may still sign in and use Studio (a lock-out takes effect at once). */
+  async passkeyHandleActive(handle: string): Promise<boolean> {
+    return passkeyStoreFor(this.env, durableStorage(this.ctx.storage)).handleActive(handle, Date.now());
+  }
+  /** Worker to Durable Object: an admin command for passkeys. The Worker has already checked the session, origin and `canManage`. */
+  async passkeyAdmin(
+    actor: string,
+    input: unknown,
+  ): Promise<{ readonly ok: true; readonly result: PasskeyAdminResult } | { readonly ok: false; readonly error: PasskeyAdminFailure }> {
+    const command = parsePasskeyAdminCommand(input);
+    if (!command.ok) {
+      return { ok: false, error: command.error };
+    }
+    const store = passkeyStoreFor(this.env, durableStorage(this.ctx.storage));
+    const outcome = await runPasskeyAdmin(store, command.value, { origin: this.env.STUDIO_ORIGIN, actor, nowMs: Date.now() });
+    return outcome.ok ? { ok: true, result: outcome.value } : { ok: false, error: outcome.error };
+  }
   override defaultPort = 4350;
-  override sleepAfter = '3m';
+  override sleepAfter = CONTAINER_SLEEP_AFTER;
   // Port probes only need an HTTP response; the protected API rejects this
   // unauthenticated probe cheaply instead of rendering the Astro homepage.
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
+    // OAuth coordination uses the existing Durable Object without starting the preview Container.
+    const auth = await authRoutes(request, this.runtime(), this.loginAttempts);
+    if (auth) {
+      return auth;
+    }
+    // The start report and its readout are answered here, never by waiting for the container: the
+    // boot screen must be able to say what the container is doing while it is not answering yet.
+    const startup = await this.startupRoute(request);
+    if (startup) {
+      return startup;
+    }
     if ((await this.getState()).status !== 'healthy') {
-      await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 180_000 });
+      await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 });
     }
     return super.fetch(request);
+  }
+  private async startupRoute(request: Request): Promise<Response | undefined> {
+    const { pathname } = new URL(request.url);
+    if (pathname === '/studio/internal/startup' && request.method === 'POST') {
+      const body = await request.text();
+      if (body.length > STARTUP_LIMITS.reportBytesMax) {
+        return new Response('Report too large', { status: 413 });
+      }
+      let input: unknown;
+      try {
+        input = JSON.parse(body);
+      } catch {
+        return new Response('Invalid report', { status: 400 });
+      }
+      const report = parseStartupReport(input);
+      if (!report.ok) {
+        return new Response(report.error, { status: 400 });
+      }
+      this.startup.record(report.value);
+      return new Response(null, { status: 204 });
+    }
+    if (pathname === '/studio/api/startup' && request.method === 'GET') {
+      const phase = await this.phase();
+      if (phase === 'stopped') {
+        // The editor asking is as good a reason to wake the container as the page load that came first.
+        this.ctx.waitUntil(
+          this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 }).catch((error: unknown) => console.error('Studio start failed', String(error))),
+        );
+      }
+      return Response.json(this.startup.view(phase), { headers: { 'Cache-Control': 'no-store' } });
+    }
+    return undefined;
+  }
+  private async phase(): Promise<ContainerPhase> {
+    const { status } = await this.getState();
+    if (status === 'healthy') {
+      return 'serving';
+    }
+    return status === 'running' ? 'starting' : 'stopped';
+  }
+  override async onActivityExpired(): Promise<void> {
+    await this.publishIdle.expire({
+      read: () =>
+        this.containerFetch(
+          new Request('http://localhost/studio/api/publish', {
+            headers: { 'x-studio-token': this.env.CONTAINER_TOKEN },
+            signal: AbortSignal.timeout(10_000),
+          }),
+          4350,
+        ),
+      renew: () => this.renewActivityTimeout(),
+      stop: () => this.stop(),
+    });
   }
   override onStart() {
     console.info('Studio container ready');
   }
   override onStop({ exitCode, reason }: { exitCode: number; reason: string }) {
+    this.startup.reset();
     console.info('Studio container stopped', { exitCode, reason });
   }
   override envVars = {
@@ -38,34 +147,61 @@ export class PreviewContainer extends Container<Environment> {
     STUDIO_PARENT_ORIGIN: this.env.STUDIO_ORIGIN,
     STUDIO_PREVIEW_ORIGIN: this.env.PREVIEW_ORIGIN,
     STUDIO_DEPLOYMENT_URL: this.env.SITE_DEPLOYMENT_URL ?? '',
+    STUDIO_GITHUB_DEPLOY_WORKER: this.env.GITHUB_DEPLOY_WORKER ?? '',
+    STUDIO_GITHUB_DEPLOY_ACCOUNT: this.env.GITHUB_DEPLOY_ACCOUNT ?? '',
     CLOUDFLARE_API_TOKEN: this.env.PUBLISH_CLOUDFLARE_API_TOKEN ?? '',
     VERCEL_TOKEN: this.env.PUBLISH_VERCEL_TOKEN ?? '',
     PORT: '4350',
   };
 }
 export default {
-  async fetch(
-    request: Request,
-    environment: Environment,
-    context: ExecutionContext,
-  ): Promise<Response> {
+  async fetch(request: Request, environment: Environment, context: ExecutionContext): Promise<Response> {
     try {
-      return await route(request, environment, context);
+      const response = await route(request, environment, context);
+      logPreviewHost(request, environment, response);
+      return response;
     } catch (error) {
       console.error('Studio request failed', error instanceof Error ? error.message : 'Unknown');
-      return studioError(
-        request,
-        'Studio is restarting or temporarily unavailable. Please retry shortly.',
-        503,
-      );
+      return studioError(request, 'Studio is restarting or temporarily unavailable. Please retry shortly.', 503);
     }
   },
 };
-async function route(
-  request: Request,
-  environment: Environment,
-  context: ExecutionContext,
-): Promise<Response> {
+// `wrangler tail` shows a request as Ok even when the answer is a 401 or 403, so what the preview
+// host answered for its page and entry is logged with its status. Paths only: no query, no token.
+// Each (path, status) is logged at most once per window, so a flood of probes or a retrying page
+// cannot fill the log; the table is bounded because the paths a visitor asks for are not.
+const PREVIEW_LOG_WINDOW_MS = 10_000;
+const PREVIEW_LOG_KEYS_MAX = 64;
+const previewLogged = new Map<string, number>();
+function logPreviewHost(request: Request, environment: Environment, response: Response) {
+  const url = new URL(request.url);
+  if (url.origin !== environment.PREVIEW_ORIGIN) {
+    return;
+  }
+  if (!(response.status >= 400 || url.pathname === '/__studio-entry' || url.pathname === '/' || url.pathname === '/studio/preview.js')) {
+    return;
+  }
+  const key = `${request.method} ${url.pathname} ${response.status}`;
+  const now = Date.now();
+  const last = previewLogged.get(key);
+  if (last !== undefined && now - last < PREVIEW_LOG_WINDOW_MS) {
+    return;
+  }
+  if (previewLogged.size >= PREVIEW_LOG_KEYS_MAX) {
+    previewLogged.clear();
+  }
+  previewLogged.set(key, now);
+  console.log(
+    'preview-host',
+    JSON.stringify({
+      path: url.pathname,
+      status: response.status,
+      method: request.method,
+    }),
+  );
+}
+
+async function route(request: Request, environment: Environment, context: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/studio/internal/')) {
     return internal(request, environment);
@@ -77,10 +213,13 @@ async function route(
   if (previewHost && url.pathname === '/__studio-entry') {
     return previewEntry(url, environment);
   }
+  // Before the session check: an app frame's own loads carry no cookie (appFileLinks.ts).
+  const linked = previewHost ? undefined : await appFileLinkRoute(request, url, environment);
+  if (linked) {
+    return linked;
+  }
   if (!previewHost) {
-    const auth = await githubLogin(request, environment, (profile) =>
-      canEdit(profile, environment, true),
-    );
+    const auth = routeLogin(request, (forwarded) => environment.PREVIEW.getByName('project').fetch(forwarded));
     if (auth) {
       return auth;
     }
@@ -92,104 +231,112 @@ async function route(
   if (
     request.method !== 'GET' &&
     request.method !== 'HEAD' &&
-    request.headers.get('Origin') !==
-      (previewHost ? environment.PREVIEW_ORIGIN : environment.STUDIO_ORIGIN)
+    request.headers.get('Origin') !== (previewHost ? environment.PREVIEW_ORIGIN : environment.STUDIO_ORIGIN)
   ) {
     return studioError(request, 'Invalid request origin', 403);
   }
-  if (!previewHost && url.pathname === '/studio/api/updates') {
-    return authorizedUpdate(request, environment, identity);
-  }
-  if (!previewHost && url.pathname === '/studio/api/session') {
-    return Response.json(
-      { kind: 'github', id: identity.id, login: identity.login },
-      { headers: { 'Cache-Control': 'no-store' } },
-    );
-  }
-  if (!previewHost && url.pathname === '/studio/api/preview-url') {
-    return previewURL(url, environment, identity);
+  const answered = !previewHost && (await workerRoute(request, url, environment, identity));
+  if (answered) {
+    return answered;
   }
   const asset = !previewHost && studioAsset(request, environment);
   if (asset) {
     warmPreview(request, environment, identity, context);
     return asset;
   }
-  if (
-    previewHost &&
-    url.pathname.startsWith('/studio/') &&
-    !['/studio/preview.js', '/studio/morph.js'].includes(url.pathname)
-  ) {
+  if (previewHost && url.pathname.startsWith('/studio/') && !['/studio/preview.js', '/studio/morph.js'].includes(url.pathname)) {
     return new Response('Unavailable on preview host', { status: 403 });
   }
-  if (
-    request.headers.get('Upgrade') === 'websocket' &&
-    request.headers.get('Origin') !== environment.STUDIO_ORIGIN &&
-    !previewHost
-  ) {
+  if (request.headers.get('Upgrade') === 'websocket' && request.headers.get('Origin') !== environment.STUDIO_ORIGIN && !previewHost) {
     return new Response('Invalid socket origin', { status: 403 });
   }
-  return proxy(request, environment, identity, previewHost);
+  return forward(request, url, environment, identity, previewHost);
 }
 
-function warmPreview(
-  request: Request,
-  environment: Environment,
-  identity: Identity,
-  context: ExecutionContext,
-) {
-  if (
-    request.method !== 'GET' ||
-    !['/studio', '/studio/'].includes(new URL(request.url).pathname)
-  ) {
+// The Studio host's requests the Worker answers itself, without the container.
+async function workerRoute(request: Request, url: URL, environment: Environment, identity: Principal): Promise<Response | undefined> {
+  if (url.pathname === '/studio/api/updates') {
+    return authorizedUpdate(request, environment, identity);
+  }
+  if (url.pathname === '/studio/api/session') {
+    return Response.json(sessionView(identity, memberAliases(activeAuthRuntime(environment), identity)), { headers: { 'Cache-Control': 'no-store' } });
+  }
+  const authApi = await passkeyAdminRoute(request, url, environment, identity);
+  if (authApi) {
+    return authApi;
+  }
+  if (url.pathname === '/studio/api/preview-url') {
+    return previewURL(url, environment, identity);
+  }
+  if (url.pathname === '/studio/api/client-diagnostics') {
+    return clientDiagnosticsRoute(request, environment.DRAFTS, () => new Date().toISOString());
+  }
+  if (url.pathname === '/studio/api/startup' && request.method === 'GET') {
+    // Answered by the Durable Object itself, so reading it never waits for the container.
+    return environment.PREVIEW.getByName('project').fetch(request);
+  }
+  const appFile = await appFileRedirect(request, url, environment, identity);
+  if (appFile) {
+    return appFile;
+  }
+  // CMS and media hosting connections are kept here, never by the container
+  // (cmsConnectionRoutes.ts, mediaConnectionRoutes.ts).
+  return (await cmsConnectionRoute(request, url, environment, identity)) ?? mediaConnectionRoute(request, url, environment, identity);
+}
+
+// To the container: never with a client's CMS target, and with ours for a CMS
+// call (cmsConnectionRoutes.ts). A connection that cannot be used is answered here.
+async function forward(request: Request, url: URL, environment: Environment, identity: Principal, previewHost: boolean): Promise<Response> {
+  let forwarded: Request;
+  try {
+    forwarded = await mediaForwarded(await cmsForwarded(request, url, cmsVault(environment)), url, cmsVault(environment));
+  } catch (error) {
+    if (error instanceof CmsUnavailable) {
+      return Response.json({ ok: false, message: error.message });
+    }
+    throw error;
+  }
+  return proxy(forwarded, environment, identity, previewHost);
+}
+
+function warmPreview(request: Request, environment: Environment, identity: Principal, context: ExecutionContext) {
+  const warmup = warmupRequest(request, environment.PREVIEW_ORIGIN);
+  if (!warmup) {
     return;
   }
-  // Start restoration and compile the homepage while the browser downloads
-  // the editor, instead of waiting for React's first API/iframe request.
+  // Restore the workspace while the editor loads; only visible previews render.
   context.waitUntil(
-    proxy(
-      new Request(new URL('/', environment.PREVIEW_ORIGIN), request),
-      environment,
-      identity,
-      false,
-    )
+    proxy(warmup, environment, identity, false)
       .then((response) => response.body?.cancel())
       .catch(() => {}),
   );
 }
 
-async function studioIdentity(
-  request: Request,
-  environment: Environment,
-  previewHost: boolean,
-): Promise<Identity | Response> {
-  const identity = await verifySession(
-    cookie(request, previewHost ? '__Host-studio-preview' : '__Host-studio'),
-    environment.SESSION_SECRET,
-    previewHost ? 'preview' : 'studio',
-  );
+async function studioIdentity(request: Request, environment: Environment, previewHost: boolean): Promise<Principal | Response> {
+  const runtime = activeAuthRuntime(environment);
+  const identity = await readPrincipal(runtime, request, previewHost ? 'preview' : 'studio');
+  const provider = installedProviderName(runtime);
   if (!identity) {
     return isStudioAPI(request) || previewHost
       ? studioError(request, 'Your Studio session expired. Sign in again.', 401)
-      : loginPage();
+      : loginPage(undefined, 200, '', 0, undefined, provider);
   }
-  if (!(await canEdit(identity, environment))) {
+  if (!(await mayEdit(runtime, identity, 'cached'))) {
     return isStudioAPI(request) || previewHost
       ? studioError(request, 'Repository editing access is required.', 403)
-      : loginPage('access', 403);
+      : loginPage('access', 403, '', 0, undefined, provider);
   }
   return identity;
 }
 
 async function previewEntry(url: URL, environment: Environment): Promise<Response> {
+  const runtime = activeAuthRuntime(environment);
   const token = url.searchParams.get('token') ?? '';
-  const identity = await verifySession(token, environment.SESSION_SECRET, 'preview');
-  if (!identity || !(await canEdit(identity, environment))) {
+  const identity = await principalFromToken(runtime, token, 'preview');
+  if (!identity || !(await mayEdit(runtime, identity, 'cached'))) {
     return new Response('Preview sign-in expired', { status: 403 });
   }
-  const session = await signSession(
-    { ...identity, expires: Date.now() + 28_800_000 },
-    environment.SESSION_SECRET,
-  );
+  const session = await mintSession(runtime, identity, 'preview', Date.now() + SESSION_LIFETIME_MS);
   const page = url.searchParams.get('page') ?? '/';
   if (!page.startsWith('/') || page.startsWith('//') || page.includes('\\')) {
     return new Response('Invalid preview path', { status: 400 });
@@ -197,33 +344,21 @@ async function previewEntry(url: URL, environment: Environment): Promise<Respons
   return new Response(null, {
     status: 302,
     headers: {
-      Location:
-        page + (url.searchParams.get('mode') === 'interactive' ? '#avb-preview' : '#avb-design'),
-      'Set-Cookie': sessionCookie('__Host-studio-preview', session, 28_800),
+      Location: page + (url.searchParams.get('mode') === 'interactive' ? '#avb-preview' : '#avb-design'),
+      'Set-Cookie': previewSessionCookie(SESSION_COOKIES.preview, session, SESSION_LIFETIME_SECONDS),
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     },
   });
 }
 
-async function proxy(
-  request: Request,
-  environment: Environment,
-  identity: Identity,
-  previewHost: boolean,
-): Promise<Response> {
+async function proxy(request: Request, environment: Environment, identity: Principal, previewHost: boolean): Promise<Response> {
   const headers = new Headers(request.headers);
   headers.set('x-studio-token', environment.CONTAINER_TOKEN);
-  headers.set('x-studio-user', identity.login);
-  headers.set('x-studio-user-id', String(identity.id));
-  headers.set(
-    'x-studio-session',
-    cookie(request, previewHost ? '__Host-studio-preview' : '__Host-studio'),
-  );
+  identityHeaders(headers, environment, identity);
+  headers.set('x-studio-session', cookie(request, previewHost ? SESSION_COOKIES.preview : SESSION_COOKIES.studio));
   headers.delete('Cookie');
-  const response = await environment.PREVIEW.getByName('project').fetch(
-    new Request(request, { headers }),
-  );
+  const response = await environment.PREVIEW.getByName('project').fetch(new Request(request, { headers }));
   if (response.status === 101) {
     return response;
   }
@@ -235,42 +370,68 @@ async function proxy(
   return outgoing;
 }
 
-async function previewURL(url: URL, environment: Environment, identity: Identity) {
-  const token = await signSession(
-    { ...identity, audience: 'preview', expires: Date.now() + 30_000 },
-    environment.SESSION_SECRET,
-  );
+async function previewURL(url: URL, environment: Environment, identity: Principal) {
+  const token = await mintSession(activeAuthRuntime(environment), identity, 'preview', Date.now() + 30_000);
   const preview = new URL('/__studio-entry', environment.PREVIEW_ORIGIN);
   preview.searchParams.set('token', token);
   preview.searchParams.set('page', url.searchParams.get('page') ?? '/');
   if (url.searchParams.get('mode') === 'interactive') {
     preview.searchParams.set('mode', 'interactive');
   }
-  return Response.json(
-    { url: preview.href, origin: environment.PREVIEW_ORIGIN },
-    { headers: { 'Cache-Control': 'no-store' } },
-  );
+  return Response.json({ url: preview.href, origin: environment.PREVIEW_ORIGIN }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 function studioAsset(request: Request, environment: Environment) {
   const asset = new URL(request.url);
-  if (
-    !['/studio', '/studio/', '/studio/studio.js', '/studio/studio.css'].includes(asset.pathname)
-  ) {
+  if (!['/studio', '/studio/', '/studio/studio.js', '/studio/studio.css'].includes(asset.pathname)) {
     return undefined;
   }
-  asset.pathname =
-    asset.pathname === '/studio' || asset.pathname === '/studio/'
-      ? '/'
-      : asset.pathname.slice('/studio'.length);
+  asset.pathname = asset.pathname === '/studio' || asset.pathname === '/studio/' ? '/' : asset.pathname.slice('/studio'.length);
   return environment.ASSETS.fetch(new Request(asset, request));
 }
 
-async function authorizedUpdate(request: Request, environment: Environment, identity: Identity) {
-  if (!(await canEdit(identity, { ...environment, EDITOR_ACCESS: 'repository' }, true))) {
+async function authorizedUpdate(request: Request, environment: Environment, identity: Principal) {
+  if (!(await mayManage(activeAuthRuntime(environment), identity))) {
     return new Response('Repository write access is required to manage Studio updates', {
       status: 403,
     });
   }
   return updateRoutes(request, environment);
+}
+
+// Who the container is told is asking. Every header here is set by the Worker, never copied from the client: the
+// container trusts them only together with `x-studio-token`. A GitHub person keeps the headers the container has always
+// read; every person also carries `x-studio-identity`, the provider-qualified identity roles.json members are matched on.
+function identityHeaders(headers: Headers, environment: Environment, identity: Principal): void {
+  headers.set('x-studio-identity', identity.identity);
+  headers.set('x-studio-name', encodeURIComponent(identity.name));
+  const aliases = memberAliases(activeAuthRuntime(environment), identity);
+  if (aliases.length > 0) {
+    headers.set('x-studio-aliases', aliases.join(','));
+  } else {
+    headers.delete('x-studio-aliases');
+  }
+  if (identity.github) {
+    headers.set('x-studio-user', identity.github.login);
+    headers.set('x-studio-user-id', String(identity.github.id));
+  } else {
+    // A forged GitHub login must not survive in front of a non-GitHub person.
+    headers.delete('x-studio-user');
+    headers.delete('x-studio-user-id');
+  }
+}
+
+// The editor's view of who is signed in (`/studio/api/session`).
+function sessionView(identity: Principal, aliases: readonly string[]) {
+  if (identity.github) {
+    return { kind: 'github', id: identity.github.id, login: identity.github.login };
+  }
+  return {
+    kind: 'account',
+    identity: identity.identity,
+    aliases,
+    name: identity.name,
+    ...(identity.email === undefined ? {} : { email: identity.email }),
+    ...(identity.avatarUrl === undefined ? {} : { avatarUrl: identity.avatarUrl }),
+  };
 }

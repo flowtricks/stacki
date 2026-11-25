@@ -1,13 +1,5 @@
-import {
-  collectRegions,
-  focusPath,
-  announceMapped,
-} from '../../../vendor/stacki/electron/preload/frameRegions';
-import {
-  rectsForPath,
-  spacingForPath,
-  classesForPath,
-} from '../../../vendor/stacki/electron/preload/frameMeasure';
+import { collectRegions, focusPath, announceMapped } from '../../../vendor/stacki/electron/preload/frameRegions';
+import { rectsForPath, spacingForPath, classesForPath } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { outlineBoxPath } from '../../../vendor/stacki/src/features/preview/outlineBoxes';
 export interface OutlineTarget {
   readonly id: string;
@@ -30,33 +22,19 @@ export function createOutlines(post: (message: unknown) => void) {
   let collaborators: readonly string[] = [];
   const draw = () => {
     pending = 0;
-    const paths = new Set(
-      [current.selected, current.hovered].flatMap((target) =>
-        target ? [target.id, outlineBoxPath(target.id, target.nodeKind)] : [],
-      ),
-    );
+    const paths = new Set([current.selected, current.hovered].flatMap((target) => (target ? [target.id, outlineBoxPath(target.id, target.nodeKind)] : [])));
     if (focusPath) {
       paths.add(focusPath);
     }
     for (const path of collaborators) {
       paths.add(path);
     }
-    const rects = Object.fromEntries(
-      [...paths].map((path) => [path, rectsForPath(path)?.slice(0, 500) ?? []]),
-    );
-    const spacing = Object.fromEntries(
-      [...paths].map((path) => [path, spacingForPath(path).slice(0, 500)]),
-    );
-    const classes = Object.fromEntries(
-      [...paths].map((path) => [path, classesForPath(path).slice(0, 500)]),
-    );
+    const rects = Object.fromEntries([...paths].map((path) => [path, rectsForPath(path)?.slice(0, 500) ?? []]));
+    const spacing = Object.fromEntries([...paths].map((path) => [path, spacingForPath(path).slice(0, 500)]));
+    const classes = Object.fromEntries([...paths].map((path) => [path, classesForPath(path).slice(0, 500)]));
     post({ type: 'studio:outlines', ...current, rects, spacing, classes });
   };
-  return (
-    selected: OutlineTarget | undefined,
-    hovered: OutlineTarget | undefined,
-    paths: readonly string[] = [],
-  ) => {
+  return (selected: OutlineTarget | undefined, hovered: OutlineTarget | undefined, paths: readonly string[] = []) => {
     collaborators = paths;
     current = { selected, hovered };
     if (!pending) {

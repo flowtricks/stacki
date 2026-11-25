@@ -12,9 +12,13 @@ import type { Edit, NodeRef } from '../../shared/engine/editRequest';
 import { singleDeclarationChange } from '../../shared/engine/inlineStyle';
 import { LIMITS } from '../../shared/core/limits';
 import type { Attr } from '../../shared/page/pageNode';
+import { labelsNode } from '../../shared/page/leadingNote';
 import { renamedAttr } from './attrOrder';
 import { loopVarsAt, parseLoopHead, renamedLoopVar, strippedBindings } from './loopBindings';
 import type { EditGesture } from './pageEdits';
+import type { CodeHunk } from '../../shared/engine/codePatch';
+import { planVariableRename, type FileCode, type VariableRename } from '../../shared/engine/variableRename';
+import { predictedRename } from './predictedRename';
 import {
   type Urgency,
   withNode,
@@ -28,16 +32,7 @@ import {
   blank,
   findNode,
 } from './insertGestures';
-export {
-  withNode,
-  type InsertPlace,
-  insertGesture,
-  duplicateGesture,
-  removalGesture,
-  withoutNodes,
-  withInserted,
-  withChildren,
-} from './insertGestures';
+export { withNode, type InsertPlace, insertGesture, duplicateGesture, removalGesture, withoutNodes, withInserted, withChildren } from './insertGestures';
 
 /** Props to set (a value) or remove (undefined), by name. */
 export type PropPatch = Readonly<Record<string, Attr | undefined>>;
@@ -45,11 +40,7 @@ export type PropPatch = Readonly<Record<string, Attr | undefined>>;
 /** Set or remove attributes and props of one node: string values and
  * removals (the attribute step), expressions and bare props (the prop step).
  * A spread is rewritten through the gesture's minimal-node fallback. */
-export function propsGesture(
-  nodeId: string,
-  patch: PropPatch,
-  options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency },
-): EditGesture {
+export function propsGesture(nodeId: string, patch: PropPatch, options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency }): EditGesture {
   const names = Object.keys(patch);
   const [only] = names;
   return {
@@ -71,10 +62,7 @@ export function propsGesture(
       }
       return edits;
     },
-    apply: (model) =>
-      withNode(model, nodeId, (node) =>
-        Object.assign({}, node, { props: patchedProps(node.props, patch) }),
-      ),
+    apply: (model) => withNode(model, nodeId, (node) => Object.assign({}, node, { props: patchedProps(node.props, patch) })),
   };
 }
 
@@ -99,10 +87,7 @@ function attributeEdit(target: NodeRef, name: string, value: Attr | undefined): 
 
 /** Props in their order, patched: a set value keeps its slot, a new one goes
  * last, a removed one goes — what the legacy setProp did in place. */
-export function patchedProps(
-  props: Readonly<Record<string, Attr>> | undefined,
-  patch: PropPatch,
-): Record<string, Attr> {
+export function patchedProps(props: Readonly<Record<string, Attr>> | undefined, patch: PropPatch): Record<string, Attr> {
   const next: Record<string, Attr> = {};
   for (const [name, value] of Object.entries(props ?? {})) {
     if (Object.hasOwn(patch, name)) {
@@ -157,9 +142,9 @@ export function inlineStyleGesture(
     // One declaration is its own stream: coalescing it with another property's
     // edit would lose that one on disk.
     stream: single ? `style:${nodeId}:${change.property}` : whole.stream,
-    request: (refOf) => {
+    request: (refOf, origin) => {
       if (!single) {
-        return whole.request(refOf);
+        return whole.request(refOf, origin);
       }
       const target = refOf(nodeId);
       if (target === undefined) {
@@ -195,14 +180,11 @@ export function moveGesture(
   if (found === undefined) {
     return undefined;
   }
-  if (
-    place?.parentId === nodeId ||
-    (place?.parentId !== undefined && containsNode(found.node.children ?? [], place.parentId))
-  ) {
+  if (place?.parentId === nodeId || (place?.parentId !== undefined && containsNode(found.node.children ?? [], place.parentId))) {
     return undefined; // Into itself: nothing to do.
   }
   const previous = found.list[found.index - 1];
-  const note = previous?.kind === 'comment' ? previous : undefined;
+  const note = previous !== undefined && labelsNode(previous.kind, found.node.kind) ? previous : undefined;
   const moving = note === undefined ? [nodeId] : [note.id, nodeId];
   const landing = relocated(model, found, moving, place);
   const slot = found.node.props?.['slot'];
@@ -213,7 +195,7 @@ export function moveGesture(
     coalesceKey: undefined,
     urgency: options.urgency,
     stream: undefined,
-    request: (refOf) => moveRequest({ nodeId, noteId: note?.id, beside, dropSlot }, refOf),
+    request: (refOf) => moveRequest({ nodeId, beside, dropSlot }, refOf),
     apply: (current) => {
       const again = findWithList(current.nodes, nodeId);
       if (again === undefined) {
@@ -229,11 +211,13 @@ export function moveGesture(
 }
 
 /** A move's requests against a parse: the `slot` removal first when it goes,
- * then the node and its note, in the order that lands them as they stood. */
+ * then the node. One move carries the node's note too: the planner relocates a
+ * node with its label (shared/engine/planTree.ts), by the rule the Navigator
+ * folds it with (shared/page/leadingNote.ts). A second move of the note would
+ * land it under whatever the first move left above it. */
 function moveRequest(
   move: {
     readonly nodeId: string;
-    readonly noteId: string | undefined;
     readonly beside: { readonly anchorId: string; readonly placement: Placement } | undefined;
     readonly dropSlot: boolean;
   },
@@ -241,34 +225,17 @@ function moveRequest(
 ): readonly Edit[] | undefined {
   const { beside } = move;
   const target = refOf(move.nodeId);
-  const noteRef = move.noteId === undefined ? undefined : refOf(move.noteId);
   const destination = beside === undefined ? undefined : refOf(beside.anchorId);
   if (target === undefined || beside === undefined || destination === undefined) {
-    return undefined;
-  }
-  if (move.noteId !== undefined && noteRef === undefined) {
     return undefined;
   }
   const edits: Edit[] = [];
   if (move.dropSlot) {
     edits.push({ tag: 'remove-attribute', target, name: 'slot' });
   }
-  const moveOf = (ref: NodeRef): Edit => ({
-    tag: 'move-node',
-    target: ref,
-    destination,
-    placement: beside.placement,
-  });
-  // Before a node, the note goes first and the node after it; after a node
-  // or into a parent, the node goes first and the note lands in front of it.
-  const order =
-    noteRef === undefined
-      ? [target]
-      : beside.placement === 'before'
-        ? [noteRef, target]
-        : [target, noteRef];
-  edits.push(...order.map(moveOf));
+  edits.push({ tag: 'move-node', target, destination, placement: beside.placement });
   assert(edits.length > 0, 'A move states at least one edit');
+  assert(edits.at(-1)?.tag === 'move-node', 'A move ends with the relocation');
   return edits;
 }
 
@@ -295,10 +262,7 @@ function relocated(
   const removeAt = found.index - (moving.length - 1);
   const without = withoutNodes(model, moving);
   const parentId = place?.parentId;
-  const sameList =
-    parentId === undefined
-      ? found.list === model.nodes
-      : findNode(model.nodes, parentId)?.children === found.list;
+  const sameList = parentId === undefined ? found.list === model.nodes : findNode(model.nodes, parentId)?.children === found.list;
   let index = place?.index ?? Number.MAX_SAFE_INTEGER;
   if (sameList && index > removeAt) {
     index = Math.max(removeAt, index - moving.length);
@@ -327,8 +291,7 @@ function findWithList(
       readonly parentId: string | undefined;
     }
   | undefined {
-  const pending: { readonly list: readonly EditorNode[]; readonly parentId: string | undefined }[] =
-    [{ list, parentId: undefined }];
+  const pending: { readonly list: readonly EditorNode[]; readonly parentId: string | undefined }[] = [{ list, parentId: undefined }];
   for (let visited = 0; visited < pending.length; visited++) {
     assert(visited < LIMITS.treeNodesMax, 'A model stays inside its node bound');
     const entry = pending[visited];
@@ -378,9 +341,9 @@ export function sequence(first: EditGesture, second: EditGesture): EditGesture {
     coalesceKey: first.coalesceKey,
     urgency: first.urgency,
     stream: undefined,
-    request: (refOf) => {
-      const before = first.request(refOf);
-      const after = second.request(refOf);
+    request: (refOf, origin) => {
+      const before = first.request(refOf, origin);
+      const after = second.request(refOf, origin);
       if (before === undefined || after === undefined) {
         return undefined;
       }
@@ -429,10 +392,7 @@ export function loopRenameGesture(
     },
     apply: (current) =>
       withNode(current, nodeId, (loop) => {
-        const children = renames.reduce(
-          (list, { from, to }) => renamedLoopVar(list, from, to),
-          loop.children ?? [],
-        );
+        const children = renames.reduce((list, { from, to }) => renamedLoopVar(list, from, to), loop.children ?? []);
         return withChildren({ ...loop, head: change.head }, children);
       }),
   };
@@ -458,6 +418,30 @@ function onlyRenames(before: string, after: string, renames: readonly LoopRename
   return renamed(old.item) === next.item && renamed(old.index) === next.index;
 }
 
+// --- A file's variable renamed ----------------------------------------------------------
+
+/** A frontmatter variable renamed across the file, as one patch of its bytes: one
+ * write and one undo step, however many places read it. The patch is stated
+ * again against the bytes it is sent to, since an earlier gesture may have
+ * changed them since the check. If that plan fails, the checked hunks go as they
+ * are: main refuses them when the bytes they witness have moved, and the page's
+ * conflict notice says so, which beats writing half a rename. */
+export function variableRenameGesture(file: FileCode, rename: VariableRename, hunks: readonly CodeHunk[]): EditGesture {
+  assert(rename.from !== rename.to, 'A rename changes the name');
+  assert(hunks.length > 0, 'A rename changes the file');
+  return {
+    coalesceKey: undefined,
+    urgency: true,
+    stream: undefined,
+    request: (_refOf, origin) => {
+      const plan = origin.source === file.source ? undefined : planVariableRename(origin, rename);
+      const edit: Edit = { tag: 'code-patch', hunks: plan?.ok === true ? plan.hunks : hunks };
+      return [edit];
+    },
+    apply: (model) => predictedRename(model, rename),
+  };
+}
+
 // --- Step 9: the gestures the whole-model save carried --------------------------------
 
 /** A node restated: the request is the node as it should now read — main
@@ -466,11 +450,7 @@ function onlyRenames(before: string, after: string, renames: readonly LoopRename
  * model. Rewording a note, typing a text, a loop head or a condition, the
  * style panel's `<style>` body, a branch added or removed. Restatements of one
  * node coalesce while unsent: each states the whole node, so the last wins. */
-export function nodeGesture(
-  nodeId: string,
-  next: EditorNode,
-  options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency },
-): EditGesture {
+export function nodeGesture(nodeId: string, next: EditorNode, options: { readonly coalesceKey: string | undefined; readonly urgency: Urgency }): EditGesture {
   assert(next.id === nodeId, 'A restated node keeps its id');
   return {
     coalesceKey: options.coalesceKey,
@@ -491,11 +471,7 @@ export function nodeGesture(
 /** A prop renamed in place, keeping its value and its slot. A name the tag
  * already has gives up its slot to the rename (renamedAttr): its removal goes
  * first, since the engine never renames onto a name that is taken. */
-export function attributeRenameGesture(
-  model: EditorModel,
-  nodeId: string,
-  names: { readonly from: string; readonly to: string },
-): EditGesture | undefined {
+export function attributeRenameGesture(model: EditorModel, nodeId: string, names: { readonly from: string; readonly to: string }): EditGesture | undefined {
   const node = findNode(model.nodes, nodeId);
   const renamed = node === undefined ? undefined : renamedAttr(node, names.from, names.to);
   if (node === undefined || renamed === undefined) {
@@ -532,11 +508,7 @@ export function attributeRenameGesture(
  * side — void or self-closing, before or after — is restated instead:
  * renaming `<img>` to `<Image />` must close it, and a `<div>` becoming an
  * `<img>` loses its content, which only the printer knows how to write. */
-export function tagRenameGesture(
-  node: EditorNode,
-  next: EditorNode,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function tagRenameGesture(node: EditorNode, next: EditorNode, options: { readonly urgency: Urgency }): EditGesture {
   const nodeId = node.id;
   assert(next.id === nodeId, 'A renamed node keeps its id');
   const name = next.name;
@@ -607,11 +579,7 @@ export function unwrapGesture(nodeId: string): EditGesture {
 
 // The list with the node replaced by its children; recursion bounded by the
 // tree's depth bound, asserted.
-function unwrappedIn(
-  list: readonly EditorNode[],
-  nodeId: string,
-  depth: number,
-): readonly EditorNode[] {
+function unwrappedIn(list: readonly EditorNode[], nodeId: string, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, node] of list.entries()) {
     const children = node.children ?? [];

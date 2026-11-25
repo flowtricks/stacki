@@ -1,4 +1,6 @@
 import type { Attr } from '../../shared/page/pageNode';
+import { assert } from '../../shared/core/assert';
+import { classExpressionOccurrences } from '../../shared/engine/classExpressionRemoval';
 type ClassProps = Readonly<Record<string, Attr>>;
 interface ClassEdit {
   readonly key: string;
@@ -25,7 +27,28 @@ interface ClassEdit {
 
 const LIST = 'class:list';
 
+/**
+ * Where a new class goes among the ones already written: at the end, or next to
+ * a class the element carries. The selector field's caret can sit between two
+ * chips, and a class typed there is written there, so the element's class order
+ * (which is also the chips' order) matches what the person saw while typing.
+ */
+export type ClassPlacement =
+  { readonly kind: 'end' } | { readonly kind: 'before'; readonly className: string } | { readonly kind: 'after'; readonly className: string };
+
+export const PLACEMENT_END: ClassPlacement = { kind: 'end' };
+
 const quoted = (name: string): string => JSON.stringify(name);
+
+// A new entry is quoted the way the list already quotes its strings, so a list
+// written with single quotes does not gain the one double-quoted entry.
+function quotedLike(code: string, name: string): string {
+  const quote = /(['"])/.exec(code)?.[1];
+  if (quote === "'" && !name.includes("'") && !name.includes('\\')) {
+    return `'${name}'`;
+  }
+  return quoted(name);
+}
 
 /** Every class name the attribute mentions literally. */
 export function namesIn(prop: Attr | undefined): readonly string[] {
@@ -50,13 +73,28 @@ export function namesIn(prop: Attr | undefined): readonly string[] {
   return out;
 }
 
-/** Whether the element already carries `name`, however its classes are written. */
+/**
+ * Whether the element already carries `name`, however its classes are written.
+ * An expression is read the way removal reads it (classExpressionRemoval.ts): a
+ * class:list object key counts (`{ active: on }`), a string compared against
+ * (`kind === "b"`) does not. Code that does not parse falls back to its quoted words.
+ */
 export function hasClass(props: ClassProps | undefined, name: unknown): boolean {
   const clean = String(name || '').trim();
   if (!clean) {
     return true;
   }
-  return ['class', LIST].some((key) => namesIn(props?.[key]).includes(clean));
+  if (/\s/.test(clean)) {
+    return false;
+  }
+  return ['class', LIST].some((key) => {
+    const prop = props?.[key];
+    if (prop?.type !== 'expr') {
+      return namesIn(prop).includes(clean);
+    }
+    const count = classExpressionOccurrences(prop.value, clean, key === LIST ? 'list' : 'string');
+    return count === undefined ? namesIn(prop).includes(clean) : count > 0;
+  });
 }
 
 /**
@@ -66,7 +104,7 @@ export function hasClass(props: ClassProps | undefined, name: unknown): boolean 
  * Returns undefined for "already there" as well: the caller has `hasClass` for
  * telling those apart, and neither is an edit.
  */
-export function withClass(props: ClassProps | undefined, name: unknown): ClassEdit | undefined {
+export function withClass(props: ClassProps | undefined, name: unknown, placement: ClassPlacement = PLACEMENT_END): ClassEdit | undefined {
   const clean = String(name || '').trim();
   if (!clean || /\s/.test(clean)) {
     return undefined;
@@ -85,7 +123,7 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
     if (!text.startsWith('[') || at < 0) {
       // A list that isn't written as one — `class:list={props.classes}`. It
       // still takes an array, so wrap it in the one being added to.
-      return { key: LIST, value: { type: 'expr', value: `[${text}, ${quoted(clean)}]` } };
+      return { key: LIST, value: { type: 'expr', value: `[${text}, ${quotedLike(text, clean)}]` } };
     }
     const head = text.slice(0, at);
     const tail = text.slice(at);
@@ -97,7 +135,7 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
       const indent = (head.match(/\n([ \t]*)\S/) || [, '  '])[1];
       const comma = /,\s*$/.test(head) ? '' : ',';
       const closingIndent = last.match(/^[ \t]*/)?.[0] ?? '';
-      const opening = `${head.replace(/\s+$/, '')}${comma}\n${indent}${quoted(clean)},`;
+      const opening = `${head.replace(/\s+$/, '')}${comma}\n${indent}${quotedLike(text, clean)},`;
       return {
         key: LIST,
         value: {
@@ -106,8 +144,12 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
         },
       };
     }
+    const placed = placedInList(text, clean, placement);
+    if (placed !== undefined) {
+      return { key: LIST, value: { type: 'expr', value: placed } };
+    }
     const comma = /\[\s*$/.test(head) ? '' : ', ';
-    return { key: LIST, value: { type: 'expr', value: `${head}${comma}${quoted(clean)}${tail}` } };
+    return { key: LIST, value: { type: 'expr', value: `${head}${comma}${quotedLike(text, clean)}${tail}` } };
   }
 
   const cls = props?.['class'];
@@ -116,7 +158,7 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
   }
   if (cls.type === 'string') {
     const words = namesIn(cls);
-    return { key: 'class', value: { type: 'string', value: [...words, clean].join(' ') } };
+    return { key: 'class', value: { type: 'string', value: placedInWords(words, clean, placement).join(' ') } };
   }
   if (cls.type === 'expr') {
     const text = String(cls.value || '').trim();
@@ -128,6 +170,48 @@ export function withClass(props: ClassProps | undefined, name: unknown): ClassEd
     return withClassExpression(text, clean);
   }
   return undefined;
+}
+
+// The words of a plain `class="…"` with `name` placed where it was asked for.
+// An anchor the attribute doesn't hold places it at the end, as before.
+export function placedInWords(words: readonly string[], name: string, placement: ClassPlacement): readonly string[] {
+  assert(!words.includes(name), 'placedInWords: the class is not already written');
+  const anchor = placement.kind === 'end' ? -1 : words.indexOf(placement.className);
+  const at = anchor === -1 ? words.length : placement.kind === 'before' ? anchor : anchor + 1;
+  const placed = [...words.slice(0, at), name, ...words.slice(at)];
+  assert(placed.length === words.length + 1, 'placedInWords: exactly one class is added');
+  return placed;
+}
+
+// A one-line `class:list={[…]}` with the new entry beside the quoted anchor. A list
+// broken over lines, or one whose anchor is not a quoted entry of its own, is left
+// to the append path (undefined): the entry lands last, which is still correct CSS,
+// only not in the caret's order.
+function placedInList(text: string, name: string, placement: ClassPlacement): string | undefined {
+  if (placement.kind === 'end') {
+    return undefined;
+  }
+  if (text.includes('\n')) {
+    return undefined;
+  }
+  // A standalone entry only: `cond && "a"` holds the anchor too, and a name put
+  // beside it there would change what the condition guards.
+  const anchor = new RegExp(`([\\[,]\\s*)(["'])${escapeRegExp(placement.className)}\\2(?=\\s*[,\\]])`).exec(text);
+  if (anchor === null) {
+    return undefined;
+  }
+  const lead = anchor[1] ?? '';
+  const start = anchor.index + lead.length;
+  const end = anchor.index + anchor[0].length;
+  assert(start < end, 'placedInList: the anchor entry is not empty');
+  if (placement.kind === 'before') {
+    return `${text.slice(0, start)}${quotedLike(text, name)}, ${text.slice(start)}`;
+  }
+  return `${text.slice(0, end)}, ${quotedLike(text, name)}${text.slice(end)}`;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function withClassExpression(text: string, name: string): ClassEdit {

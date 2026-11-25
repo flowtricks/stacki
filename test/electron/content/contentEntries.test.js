@@ -26,9 +26,7 @@ const formats = {
 };
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
-const source = path.resolve(
-  process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE,
-);
+const source = path.resolve(process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE);
 
 const failures = [];
 let checked = 0;
@@ -74,9 +72,7 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-content-'));
   fs.cpSync(path.join(source, 'src'), path.join(root, 'src'), { recursive: true });
-  const by = Object.fromEntries(
-    config.collections.map((collection) => [collection.name, collection]),
-  );
+  const by = Object.fromEntries(config.collections.map((collection) => [collection.name, collection]));
   const entriesOf = (name) => listEntries(root, by[name]);
 
   // An edit to one entry, and what the file looked like before and after.
@@ -96,10 +92,7 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
     const listed = entriesOf(collection.name);
     if (listed.readOnly) {
       check(`${collection.name}: read-only`, listed.entries.length === 0);
-      check(
-        `${collection.name}: says why`,
-        typeof listed.reason === 'string' && listed.reason.length > 20,
-      );
+      check(`${collection.name}: says why`, typeof listed.reason === 'string' && listed.reason.length > 20);
       continue;
     }
     check(`${collection.name}: has entries`, listed.entries.length > 0);
@@ -113,28 +106,15 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
   // One field on one markdown post: one line, and the body is untouched.
   {
-    const { entry, before, after } = edit(
-      'blog',
-      (entry) => entry.id === 'schema-design-for-editors',
-      [{ path: ['title'], value: 'Schema design for editors, revised' }],
-    );
-    check(
-      'blog: a one-field edit is a one-line diff',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'blog: the body is byte-identical',
-      formats.frontmatter.parse(before).body === formats.frontmatter.parse(after).body,
-    );
-    check(
-      'blog: the value changed',
-      formats.frontmatter.parse(after).data.title.endsWith('revised'),
-    );
+    const { entry, before, after } = edit('blog', (entry) => entry.id === 'schema-design-for-editors', [
+      { path: ['title'], value: 'Schema design for editors, revised' },
+    ]);
+    check('blog: a one-field edit is a one-line diff', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
+    check('blog: the body is byte-identical', formats.frontmatter.parse(before).body === formats.frontmatter.parse(after).body);
+    check('blog: the value changed', formats.frontmatter.parse(after).data.title.endsWith('revised'));
     check(
       'blog: no defaults were written',
-      !/^draft:/m.test(formats.frontmatter.parse(after).frontmatter) ||
-        /^draft:/m.test(formats.frontmatter.parse(before).frontmatter),
+      !/^draft:/m.test(formats.frontmatter.parse(after).frontmatter) || /^draft:/m.test(formats.frontmatter.parse(before).frontmatter),
       'a key that was not in the file appeared in it',
     );
     check('blog: id unchanged by a field edit', entry.id === 'schema-design-for-editors');
@@ -143,10 +123,7 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
   // An MDX body holds imports and JSX. Nothing may touch it.
   {
     const { before, after } = edit('caseStudies', 0, [{ path: ['client'], value: 'atlas' }]);
-    check(
-      'caseStudies: the MDX body survives',
-      formats.frontmatter.parse(before).body === formats.frontmatter.parse(after).body,
-    );
+    check('caseStudies: the MDX body survives', formats.frontmatter.parse(before).body === formats.frontmatter.parse(after).body);
   }
 
   // Deleting a field removes it and nothing else.
@@ -156,182 +133,91 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
     const before = read(root, entry.file);
     writeEntry(root, entry, [{ path: ['readingTime'], value: undefined }]);
     const after = read(root, entry.file);
-    check(
-      'blog: deleting a field is a one-line diff',
-      changedLines(before, after) === 1,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'blog: the field is gone',
-      formats.frontmatter.parseData(after).readingTime === undefined,
-    );
+    check('blog: deleting a field is a one-line diff', changedLines(before, after) === 1, `${changedLines(before, after)} lines`);
+    check('blog: the field is gone', formats.frontmatter.parseData(after).readingTime === undefined);
     check('blog: its neighbours are not', formats.frontmatter.parseData(after).title !== undefined);
   }
 
   // A JSON array of records: one record edited, the file otherwise identical.
   {
-    const { before, after } = edit('authors', (entry) => entry.id === 'toshi-nakamura', [
-      { path: ['role'], value: 'Principal Developer Advocate' },
-    ]);
-    check(
-      'authors: one line',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'authors: still valid JSON',
-      formats.json.parseData(after)[2].role.startsWith('Principal'),
-    );
+    const { before, after } = edit('authors', (entry) => entry.id === 'toshi-nakamura', [{ path: ['role'], value: 'Principal Developer Advocate' }]);
+    check('authors: one line', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
+    check('authors: still valid JSON', formats.json.parseData(after)[2].role.startsWith('Principal'));
   }
 
   // A JSON object keyed by id, with a $schema key Astro ignores and an editor
   // must not eat.
   {
-    const { before, after } = edit('clients', (entry) => entry.id === 'helios', [
-      { path: ['employees'], value: 1200 },
-    ]);
-    check(
-      'clients: one line',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
+    const { before, after } = edit('clients', (entry) => entry.id === 'helios', [{ path: ['employees'], value: 1200 }]);
+    check('clients: one line', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
     const data = formats.json.parseData(after);
     check('clients: keyed record patched in place', data.helios.employees === 1200);
-    check(
-      'clients: sibling records untouched',
-      JSON.stringify(data.northwind) === JSON.stringify(formats.json.parseData(before).northwind),
-    );
+    check('clients: sibling records untouched', JSON.stringify(data.northwind) === JSON.stringify(formats.json.parseData(before).northwind));
     check('clients: $schema kept', before.includes('$schema') === after.includes('$schema'));
   }
 
   // Nested objects inside a keyed record.
   {
-    const { after } = edit('products', (entry) => entry.id === 'beacon', [
-      { path: ['pricing', 'currency'], value: 'EUR' },
-    ]);
-    check(
-      'products: nested field patched',
-      formats.json.parseData(after).beacon.pricing.currency === 'EUR',
-    );
+    const { after } = edit('products', (entry) => entry.id === 'beacon', [{ path: ['pricing', 'currency'], value: 'EUR' }]);
+    check('products: nested field patched', formats.json.parseData(after).beacon.pricing.currency === 'EUR');
   }
 
   // YAML with comments and block scalars.
   {
     const { before, after } = edit('team', 0, [{ path: ['title'], value: 'Head of Everything' }]);
-    check(
-      'team: one line',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'team: comments survive',
-      (before.match(/^\s*#/gm) || []).length === (after.match(/^\s*#/gm) || []).length,
-    );
+    check('team: one line', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
+    check('team: comments survive', (before.match(/^\s*#/gm) || []).length === (after.match(/^\s*#/gm) || []).length);
   }
 
   // The grouped YAML: the record is nested two levels down inside its category,
   // and has to be patched where it sits.
   {
-    const { entry, before, after } = edit('faqs', (entry) => entry.id === 'billing-refunds', [
-      { path: ['popularity'], value: 71 },
-    ]);
-    check(
-      'faqs: patched in place',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'faqs: found inside its category',
-      entry.locator.join('.') === 'categories.0.questions.1',
-    );
+    const { entry, before, after } = edit('faqs', (entry) => entry.id === 'billing-refunds', [{ path: ['popularity'], value: 71 }]);
+    check('faqs: patched in place', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
+    check('faqs: found inside its category', entry.locator.join('.') === 'categories.0.questions.1');
     const data = formats.yaml.parseData(after);
     check('faqs: the right question changed', data.categories[0].questions[1].popularity === 71);
-    check(
-      'faqs: block scalars survive',
-      (before.match(/: [|>]/g) || []).length === (after.match(/: [|>]/g) || []).length,
-    );
+    check('faqs: block scalars survive', (before.match(/: [|>]/g) || []).length === (after.match(/: [|>]/g) || []).length);
     check('faqs: the parser is declared', entriesOf('faqs').parsed === true);
   }
 
   // A value that would break the file if it were written unquoted.
   {
-    const { after } = edit('faqs', (entry) => entry.id === 'billing-cycle', [
-      { path: ['question'], value: 'What happens when draft: true?' },
-    ]);
-    check(
-      'faqs: a colon in a value is quoted',
-      !!formats.yaml.parseData(after),
-      'the file no longer parses',
-    );
-    check(
-      'faqs: and the value is intact',
-      formats.yaml.parseData(after).categories[0].questions[0].question ===
-        'What happens when draft: true?',
-    );
+    const { after } = edit('faqs', (entry) => entry.id === 'billing-cycle', [{ path: ['question'], value: 'What happens when draft: true?' }]);
+    check('faqs: a colon in a value is quoted', !!formats.yaml.parseData(after), 'the file no longer parses');
+    check('faqs: and the value is intact', formats.yaml.parseData(after).categories[0].questions[0].question === 'What happens when draft: true?');
   }
 
   // CSV: strings on disk, column order and quoting preserved.
   {
-    const { before, after } = edit('testimonials', (entry) => entry.id === 'tst-002', [
-      { path: ['featured'], value: 'false' },
-    ]);
-    check(
-      'testimonials: one row',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
+    const { before, after } = edit('testimonials', (entry) => entry.id === 'tst-002', [{ path: ['featured'], value: 'false' }]);
+    check('testimonials: one row', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
     check('testimonials: header untouched', before.split('\n')[0] === after.split('\n')[0]);
-    check(
-      'testimonials: comment lines kept',
-      (before.match(/^#/gm) || []).length === (after.match(/^#/gm) || []).length,
-    );
+    check('testimonials: comment lines kept', (before.match(/^#/gm) || []).length === (after.match(/^#/gm) || []).length);
     const rows = formats.csv.parseData(after);
     check('testimonials: the value is a string', rows[1].featured === 'false');
-    check(
-      'testimonials: quoted cells stay quoted',
-      (before.match(/"/g) || []).length === (after.match(/"/g) || []).length,
-    );
+    check('testimonials: quoted cells stay quoted', (before.match(/"/g) || []).length === (after.match(/"/g) || []).length);
   }
 
   // NDJSON: every other line byte-identical.
   {
-    const { before, after } = edit('jobs', (entry) => entry.id === 'design-systems-2026', [
-      { path: ['open'], value: false },
-    ]);
+    const { before, after } = edit('jobs', (entry) => entry.id === 'design-systems-2026', [{ path: ['open'], value: false }]);
     const beforeLines = before.split('\n');
     const afterLines = after.split('\n');
     check('jobs: same number of lines', beforeLines.length === afterLines.length);
-    check(
-      'jobs: exactly one line differs',
-      beforeLines.filter((line, i) => line !== afterLines[i]).length === 1,
-    );
-    check(
-      'jobs: the record is on one line',
-      afterLines[1].startsWith('{') && afterLines[1].endsWith('}'),
-    );
+    check('jobs: exactly one line differs', beforeLines.filter((line, i) => line !== afterLines[i]).length === 1);
+    check('jobs: the record is on one line', afterLines[1].startsWith('{') && afterLines[1].endsWith('}'));
     check('jobs: the value changed', formats.ndjson.parseData(after)[1].open === false);
   }
 
   // TOML: inline tables stay inline, sub-tables stay sub-tables.
   {
-    const { before, after } = edit('pricingPlans', (entry) => entry.id === 'team', [
-      { path: ['limits', 'projects'], value: 25 },
-    ]);
-    check(
-      'pricingPlans: one line',
-      changedLines(before, after) === 2,
-      `${changedLines(before, after)} lines`,
-    );
-    check(
-      'pricingPlans: the inline table is still inline',
-      /limits = \{ projects = 25,/.test(after),
-    );
+    const { before, after } = edit('pricingPlans', (entry) => entry.id === 'team', [{ path: ['limits', 'projects'], value: 25 }]);
+    check('pricingPlans: one line', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
+    check('pricingPlans: the inline table is still inline', /limits = \{ projects = 25,/.test(after));
     check('pricingPlans: sub-tables kept', after.includes('[team.addOns.extraSeats]'));
     check('pricingPlans: the file comment kept', after.startsWith('#'));
-    check(
-      'pricingPlans: value parsed back',
-      formats.toml.parseData(after).team.limits.projects === 25,
-    );
+    check('pricingPlans: value parsed back', formats.toml.parseData(after).team.limits.projects === 25);
   }
 
   // A landing page is JSON with a block union in it.
@@ -340,27 +226,17 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
     const entry = listed.entries.find((entry) => entry.id === 'home');
     const before = read(root, entry.file);
     const blocks = entry.data.blocks;
-    writeEntry(root, entry, [
-      { path: ['blocks'], value: [blocks[1], blocks[0], ...blocks.slice(2)] },
-    ]);
+    writeEntry(root, entry, [{ path: ['blocks'], value: [blocks[1], blocks[0], ...blocks.slice(2)] }]);
     const after = read(root, entry.file);
     const data = formats.json.parseData(after);
-    check(
-      'landingPages: blocks reordered',
-      data.blocks[0].type === blocks[1].type && data.blocks[1].type === blocks[0].type,
-    );
-    check(
-      'landingPages: nothing else moved',
-      data.title === entry.data.title && data.blocks.length === blocks.length,
-    );
+    check('landingPages: blocks reordered', data.blocks[0].type === blocks[1].type && data.blocks[1].type === blocks[0].type);
+    check('landingPages: nothing else moved', data.title === entry.data.title && data.blocks.length === blocks.length);
     check('landingPages: still one file', changedLines(before, after) > 0);
   }
 
   // A collection with no schema at all: unknown keys are just data.
   {
-    const { after } = edit('legal', (entry) => entry.id === 'privacy', [
-      { path: ['title'], value: 'Privacy notice' },
-    ]);
+    const { after } = edit('legal', (entry) => entry.id === 'privacy', [{ path: ['title'], value: 'Privacy notice' }]);
     const data = formats.frontmatter.parseData(after);
     check('legal: edited without a schema', data.title === 'Privacy notice');
     check('legal: its other keys survive', Object.keys(data).length > 1);
@@ -375,15 +251,8 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
       const before = read(root, entry.file);
       writeEntry(root, entry, [{ path: ['title'], value: 'Editor retro, revised' }]);
       const after = read(root, entry.file);
-      check(
-        'notes: the undeclared field survives a save',
-        formats.frontmatter.parseData(after).customFieldNobodyPlanned !== undefined,
-      );
-      check(
-        'notes: one line',
-        changedLines(before, after) === 2,
-        `${changedLines(before, after)} lines`,
-      );
+      check('notes: the undeclared field survives a save', formats.frontmatter.parseData(after).customFieldNobodyPlanned !== undefined);
+      check('notes: one line', changedLines(before, after) === 2, `${changedLines(before, after)} lines`);
     }
   }
 
@@ -407,9 +276,7 @@ const read = (root, rel) => fs.readFileSync(path.join(root, rel), 'utf8');
   fs.rmSync(root, { recursive: true, force: true });
 
   if (failures.length) {
-    console.error(
-      `\ncontent-entries: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncontent-entries: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     stopAllServices();
     process.exit(1);

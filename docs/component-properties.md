@@ -12,8 +12,7 @@ the same `ListField` rows and click-to-edit popover as component list props, inc
 Add item, drag-and-drop, and hover trash actions. The adapter keeps literal types
 and defaults intact even when string and non-string options share a visible label.
 Clicking the open option again closes its popover and commits the current edit.
-Unused props can be deleted;
-props still referenced by a component or consumer must be disconnected first.
+Deleting a prop asks first and removes it across the site (see "Deleting a prop").
 A required field and a default
 are independent: a runtime fallback does not remove the caller's type obligation.
 Locally declared fields stay visually editable when `Props` extends another type,
@@ -28,9 +27,35 @@ switches to a plain input for custom types such as `typeof theme` or imported
 aliases. Switching modes preserves the current type and union options; hovering
 a menu choice never changes the prop. Unsupported types open in input mode.
 Common fields in composite `Props` contracts stay editable when their declaration
-is local and shared by the public and runtime types. Variant-dependent fields show
-their conditions and explain why source editing is needed. Imported, generic, and
-ambiguous declarations remain restricted. Add and reorder operations on composite
+is local and shared by the public and runtime types. An imported or other named
+type in the intersection (`type Props = SeoProps & { theme?: … }`) only adds
+fields, so the local members beside it stay editable. Variant-dependent fields show
+their conditions and explain why source editing is needed. A member whose own type
+is imported, a local generic, or computed (mapped, conditional, indexed, `typeof`,
+`keyof`) stays read-only with the note "depends on a shared or computed type", as do
+ambiguous declarations and computed parts of the contract. Options kept in a
+same-file alias (`theme?: Theme`) are edited in the alias; when other declarations
+use it too, or it is exported, the form warns that the edit changes all of them.
+
+Members of an imported props type (`SeoProps` from `src/types.ts`, through the
+tsconfig `@/` alias) are listed under "From SeoProps · src/types.ts", with a link to
+the file, and use the same editors. Their name, type, options, Required and tooltip
+are written to the shared file; the form says so first ("Shared: edits SeoProps in
+src/types.ts, used by N components … and their instances", which expands to the
+list). A default is each component's own destructure, so it is written in the
+component edited when that component destructures the prop, and the other users'
+defaults are shown. A rename rewrites the type, every user's destructure,
+`Astro.props.x` and rest `seo.x` reads, and every instance, listed before it is
+applied, as one undo step; a computed read or another use of the rest variable
+refuses only the rename. Deleting a shared member is done in its file.
+
+Readonly is not offered: TypeScript's `readonly` has no effect on Astro props, and
+an existing modifier is kept as written. A Switch has no On/Off labels; legacy
+`@onLabel`/`@offLabel` tags are ignored, kept out of the tooltip, and the tooltip
+field offers to remove them once it is edited. Nothing in property settings has a
+Save button: an existing prop saves as it changes, and a new one is created when
+its name is committed (or as the form closes) and then saves itself. The `{}`
+toggle beside Options (or Kind) switches to the code type. Add and reorder operations on composite
 contracts still require source editing. Declaration locations appear in an information
 tooltip, not as runtime binding chips. Clicking a prop never opens the full source editor.
 Renames also update indexed and picked references to local contract types.
@@ -64,6 +89,135 @@ renames validate every revision, atomically replace each file in a synchronous
 batch, and restore written files if an operating error occurs. The renderer flushes pending page
 and code saves before making a request, then refreshes the model and schemas.
 File, byte, field, and AST limits cap project traversal and refactoring work.
+
+## A class list prop
+
+In a component, the purple dot on an element's Class field, and on a `class:list`
+attribute, offers **New Class list property** under New Plain Text property. It makes
+the prop an instance passes its own classes through (`<Card class="featured">`), as
+Lumos components do: `class?: string` in `interface Props`, read as `class: className`
+(`class` is a reserved word, so the destructure binds it by an alias; `propClass` when
+`className` is taken). The element's classes move into `class:list` with the prop
+last, so an instance's classes come after the element's:
+
+| Before | After |
+|---|---|
+| `class="card hero"` | `class:list={["card", "hero", className]}` |
+| no class | `class:list={[className]}` |
+| `class={tone}` | `class:list={[tone, className]}` |
+| `class:list={["card", on && "is-on"]}` | `class:list={["card", on && "is-on", className]}` (one entry per line stays so) |
+
+`class:list` takes the place of `class`; every other attribute keeps its place and
+bytes. A `class` beside an existing `class:list` stays as it was. The declaration and
+the rewrite are one undo step, and the write goes through main's pre-flight like any
+edit. Data picked from a `class:list`'s dot joins the list rather than replacing it.
+
+The row is drawn disabled, with the reason, where the rewrite would have to guess
+(`src/features/props/classListProp.ts`): a component tag (it reads `class` its own
+way), a spread other than the component's own rest props (it could pass a class of
+its own; the rest props are safe, since declaring `class` takes it out of them), a
+component that already declares `class`, or a value that does not read as one
+expression. Instances then edit the prop with the class field's token editor.
+
+## An attributes prop
+
+In a component, the purple dot right after an element's **Attributes** label connects
+all of the element's other attributes to one prop that spreads them, Astro's rest props
+(`src/editor/propDeclaration.ts`, `src/editor/attributesBinding.ts`). Connected, the
+header shows the prop as a purple `{} rest` chip (its menu: Edit settings, which renames
+the prop across the file and sets its tooltip, and Disconnect), and the list ends with the
+dim row **+ items in `{} rest`**, where an instance's attributes land.
+
+| | Before | After |
+|---|---|---|
+| frontmatter | `interface Props { title?: string }`<br>`const { title } = Astro.props;` | `import type { HTMLAttributes } from "astro/types";`<br>`interface Props extends HTMLAttributes<"img"> { title?: string }`<br>`const { title, ...rest } = Astro.props;` |
+| markup | `<img alt="Photo" class="hero" />` | `<img alt="Photo" {...rest} class="hero" />` |
+
+- **Order is precedence.** Astro lets a later attribute win, so the attributes before the
+  spread are defaults an instance overrides; the ones after it (class, style, directives)
+  stay the element's own. A new attribute added while connected goes before the spread.
+- **Typing.** `HTMLAttributes<"tag">` for a tag astro/types types; a custom element or
+  any other tag (`template`) extends the tag-less global `astroHTML.JSX.HTMLAttributes`,
+  with no import. An existing extends list gains it (`extends Base, HTMLAttributes<"img">`);
+  a `type Props` alias is intersected (`type Props = (A | B) & HTMLAttributes<"img">`). A
+  Props already typed keeps its first tag: an interface cannot extend two.
+- **One per component.** A component passes its other attributes on once; a second
+  element connects to the same rest prop from the picker, and its tag does not change
+  the typing.
+- **Refused, unchanged:** a frontmatter that does not parse, a component tag.
+- **Instances.** A component whose Props takes `HTMLAttributes<"img">` shows "img
+  attributes" in its instances' Attributes header, and a name `<img>` does not take gets
+  an advisory note (never a refusal); `data-*`, `aria-*`, events and global attributes
+  are always fine, and a component with no tag takes any name.
+- **Disconnect** takes out the spread alone. When nothing else reads the prop (no other
+  spread or expression in the markup, nothing in the frontmatter), the rest binding, the
+  HTMLAttributes typing and import and the `@attributes` tooltip go too, in the same undo
+  step; otherwise Props stays as written.
+
+## Deleting a prop
+
+The trash button (in the prop's settings, or on its row) never deletes at once.
+Main reads the site first (`component:previewPropertyRemoval`, which writes
+nothing) and the window's own confirmation (`ConfirmDialog`, never a native one)
+says what will happen, one short line each:
+
+- the prop, and that it leaves the component, every variant included;
+- when the component's own code reads it, the constant that keeps that code
+  working ("Kept as a constant: `direction = "forward"` (read on lines 122, 132)");
+- how many instances pass it, and in which files (six listed, then "and N more");
+- spreads to check by hand, by file and line;
+- that one Undo restores everything.
+
+Confirming sends the ordinary `{ kind: 'remove' }` batch on
+`component:editProperties`, planned again from disk
+(`electron/properties/propertyRemoval.ts`), so a file changed in between is read
+afresh and an outside edit refuses the batch. It removes:
+
+- every declaration of the prop: the `Props` member, each discriminated-union
+  branch's member (`direction?: never` included), the runtime type's member;
+- its destructure entry and default;
+- the value every instance passes, in every file that imports the component:
+  `direction="back"`, `direction={value}`, `` direction=`…` ``, `{direction}`, a
+  bare `direction`, and the key of an inline spread (`{...{ direction: 'back' }}`;
+  the whole spread when that key is all it holds). The space before an attribute
+  goes with it; every other byte is copied, not re-printed.
+
+When the component's own code reads the prop's local (`direction === 'back'`,
+`data-direction={direction}`), the deletion keeps that code working: a constant
+of the same name goes right after the destructure, holding what the prop would
+now always be, and the reads are left as written:
+
+```ts
+const direction = "forward" as "forward" | "back";
+```
+
+- **The value** is the prop's default expression, kept as written (a default
+  that reads other props works too: they are bound by then). With no default,
+  an optional prop's constant is `undefined` (typed `T | undefined`), as when
+  nothing passed it; a required one gets its first option, or `""`, `0`,
+  `false` or `[]` by kind. The dialog says which.
+- **The `as`** keeps the prop's declared type: a bare `"forward"` would narrow
+  it, and `direction === "back"` would stop type-checking.
+
+What no constant can stand in for is never guessed at:
+
+- **A read through the props object** (`Astro.props.direction`,
+  `props.direction`, `rest.direction`), **a default that reads the prop
+  itself**, **a required prop with no default and no zero value for its type**
+  (an object shape), and **a prop only an inherited type declares** (`class`
+  from `HTMLAttributes`, which instances still pass). Nothing is deleted: the
+  dialog lists each line ("can't be deleted yet") and the batch refuses with the
+  same lines (`props.edit.readsInCode`). The scan is syntactic and
+  conservative: a shadowing loop variable counts too. Keys, CSS
+  (`flex-direction`), markup text and client scripts do not.
+- **An instance spreads an object Stacki cannot see into** (`{...props}`). It may
+  or may not carry the prop; the deletion goes ahead, leaves that object alone,
+  and lists the line under "Check by hand".
+
+Each written file must parse again before the batch is written. The consumer
+scan is the rename's (`readPropertyConsumers`): the same refusals for consumers
+that use the component in code, re-export it or import it dynamically. A prop
+declared by a shared type is deleted in that type's file, as before.
 
 ## Runtime dependencies
 

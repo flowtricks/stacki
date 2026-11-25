@@ -1,3 +1,4 @@
+// i18n-ignore-file: shared/page is a pure layer with no catalog; the English here is a diagnostic for logs, tests and asserts. The stale-click notice shown to people is worded from keys by describeStaleClick (src/features/preview/previewMessages.ts).
 // The preview token (plan §9, step 7): which source state a canvas rendering
 // came from, so an event from a stale rendering is refused instead of being
 // applied to whatever node now sits at the path it names.
@@ -63,13 +64,28 @@ export const PREVIEW_STALE_REASONS = [
 
 export type PreviewStaleReason = (typeof PREVIEW_STALE_REASONS)[number];
 
+/** Why a frame announces no token for the rendering it shows (`avb:render-problem`). */
+export const FRAME_RENDER_PROBLEMS = [
+  /** One file stamped with two checksums: the rendering mixes versions of it. */
+  'conflicting-stamps',
+  /** Retired: a manifest has no size limit. The names stay in the list because
+   * the app's recovery planner still switches over them (parseFrameRenderProblem). */
+  'too-many-stamps',
+  /** Retired, like `too-many-stamps`: the stamp walk visits every element. */
+  'page-too-large',
+  /** The frame could not compute the manifest's digest. */
+  'no-digest',
+] as const;
+
+export type FrameRenderProblem = (typeof FRAME_RENDER_PROBLEMS)[number];
+
+/** Boundary parser for a frame's render problem; undefined for anything else. */
+export function parseFrameRenderProblem(input: unknown): FrameRenderProblem | undefined {
+  return FRAME_RENDER_PROBLEMS.find((known) => known === input);
+}
+
 /** What main found on disk for one stamped file. */
-export type StampedFileState =
-  | { readonly tag: 'present'; readonly checksum: Digest }
-  | { readonly tag: 'missing' }
-  /** Past `sourceBytesMax`: the dev plugin never stamps such a file, so it has
-   * changed since its stamp — and main does not read it to prove so. */
-  | { readonly tag: 'over-limit' };
+export type StampedFileState = { readonly tag: 'present'; readonly checksum: Digest } | { readonly tag: 'missing' };
 
 export type PreviewVerdict =
   | { readonly tag: 'current' }
@@ -85,7 +101,7 @@ export function stampPathProblem(file: string): string | undefined {
   if (file.length === 0) {
     return 'empty';
   }
-  if (LIMITS.previewStampPathCharsMax < file.length) {
+  if (LIMITS.ipcPathCharsMax < file.length) {
     return 'too long';
   }
   if (/[\0\\\r\n]/.test(file) || file.includes('-->')) {
@@ -133,18 +149,13 @@ export function parseStampData(data: string): PreviewStamp | undefined {
   return { file, checksum: toDigest(checksum) };
 }
 
-export type ManifestProblem = 'too-many-files' | 'conflicting-stamps';
+export type ManifestProblem = 'conflicting-stamps';
 
 /** The manifest of one rendering: its stamps sorted by path, one per file.
  * Every rendered copy of a component stamps the same entry; two different
  * checksums for one file mean the rendering mixes versions of it, which no
  * token can name. */
-export function manifestOf(
-  stamps: readonly PreviewStamp[],
-): Result<readonly PreviewStamp[], ManifestProblem> {
-  if (LIMITS.previewMarkersMax < stamps.length) {
-    return err('too-many-files');
-  }
+export function manifestOf(stamps: readonly PreviewStamp[]): Result<readonly PreviewStamp[], ManifestProblem> {
   const byFile = new Map<string, Digest>();
   for (const stamp of stamps) {
     const seen = byFile.get(stamp.file);
@@ -153,9 +164,6 @@ export function manifestOf(
     } else if (seen !== stamp.checksum) {
       return err('conflicting-stamps');
     }
-  }
-  if (LIMITS.previewManifestFilesMax < byFile.size) {
-    return err('too-many-files');
   }
   const files = [...byFile.keys()].sort(compareCodeUnits);
   const manifest = files.map((file) => {
@@ -188,9 +196,6 @@ export function parsePreviewRender(input: unknown): PreviewRender {
   if (!Array.isArray(stamps)) {
     throw new Error('PreviewRender.stamps: expected list');
   }
-  if (LIMITS.previewManifestFilesMax < stamps.length) {
-    throw new Error('PreviewRender.stamps: exceeds limit');
-  }
   const parsed = stamps.map(parseStamp);
   if (!manifestSorted(parsed)) {
     throw new Error('PreviewRender.stamps: expected sorted, one per file');
@@ -199,10 +204,7 @@ export function parsePreviewRender(input: unknown): PreviewRender {
 }
 
 /** Whether an event's token names the frame's latest rendering. */
-export function judgeEventToken(
-  eventToken: Digest | undefined,
-  render: PreviewRender | undefined,
-): PreviewVerdict {
+export function judgeEventToken(eventToken: Digest | undefined, render: PreviewRender | undefined): PreviewVerdict {
   if (render === undefined) {
     return stale('no-render', undefined);
   }
@@ -214,11 +216,7 @@ export function judgeEventToken(
 
 /** Whether the open file rendered from the bytes the editor shows. `shown` is
  * undefined when the editor shows no disk version (unsaved structure). */
-export function judgeShownFile(
-  render: PreviewRender,
-  file: string,
-  shown: Digest | undefined,
-): PreviewVerdict {
+export function judgeShownFile(render: PreviewRender, file: string, shown: Digest | undefined): PreviewVerdict {
   const stamp = render.stamps.find((entry) => entry.file === file);
   if (stamp === undefined) {
     return stale('unstamped-file', file);
@@ -250,8 +248,6 @@ export function judgePreviewRender(
         break;
       case 'missing':
         return stale('file-missing', stamp.file);
-      case 'over-limit':
-        return stale('file-changed', stamp.file);
       default: {
         const exhaustive: never = now;
         return exhaustive;

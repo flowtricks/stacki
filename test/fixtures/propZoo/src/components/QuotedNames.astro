@@ -1,0 +1,9 @@
+---
+interface Props {
+  'data-id': string;
+  'aria-label'?: string;
+  title?: string;
+}
+const { 'data-id': dataId, 'aria-label': ariaLabel = 'Zoo', title = 'Quoted' } = Astro.props;
+---
+<div class="quoted-names" data-id={dataId} aria-label={ariaLabel}>{title}</div>

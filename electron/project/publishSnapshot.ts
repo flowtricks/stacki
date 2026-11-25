@@ -1,77 +1,124 @@
-import { mkdtemp, rm, symlink, realpath, mkdir, lstat } from 'node:fs/promises';
+import { mkdtemp, symlink, realpath, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { git } from '../lib/nodeTools';
-import { PUBLISH_LIMITS } from '../../shared/properties/publishConfig';
+import { ok, type Result } from '../../shared/core/result';
+import { checkPublishTreeSize, checkPublishWorkingSize, type PublishPurpose } from './publishSize';
+import { PUBLISH_TEMPORARY_PREFIX, releasePublishTemporary } from './publishTemporary';
+import { parsePublishObject, publishFilesystemFailure, readPublishHead, runPublishGit } from './publishGitCommand';
 
-export interface PublishSnapshot {
-  readonly root: string;
+export interface PublishSource {
   readonly tree: string;
+  readonly head: string | undefined;
   readonly index: string;
   readonly temporary: string;
 }
 
-export async function createPublishSnapshot(root: string): Promise<PublishSnapshot> {
-  const temporary = await mkdtemp(path.join(tmpdir(), 'stacki-publish-'));
-  const snapshot = path.join(temporary, 'site');
-  const index = path.join(temporary, 'index');
-  try {
-    await mkdir(snapshot);
-    await initializePublishIndex(root, index);
-    const tree = await publishTree(root, index);
-    await checkSnapshotSize(root, index);
-    await git(root, ['checkout-index', '--all', `--prefix=${snapshot}${path.sep}`], {
-      env: { ...process.env, GIT_INDEX_FILE: index },
-    });
-    await symlink(
-      await realpath(path.join(root, 'node_modules')),
-      path.join(snapshot, 'node_modules'),
-      process.platform === 'win32' ? 'junction' : 'dir',
-    );
-    return { root: snapshot, tree, index, temporary };
-  } catch (error: unknown) {
-    await rm(temporary, { recursive: true, force: true });
-    throw error;
-  }
+export interface PublishSnapshot extends PublishSource {
+  readonly root: string;
 }
 
-async function checkSnapshotSize(root: string, index: string): Promise<void> {
-  const output = await git(root, ['ls-files', '--cached', '-z'], {
-    env: { ...process.env, GIT_INDEX_FILE: index },
-  });
-  const files = output.stdout.split('\0').filter(Boolean);
-  if (files.length > PUBLISH_LIMITS.filesMax) {
-    throw new Error('Publish exceeds the 10,000-file snapshot limit.');
+export async function readPublishTree(root: string): Promise<Result<string>> {
+  const source = await createPublishSource(root, 'github');
+  if (!source.ok) {
+    return source;
   }
-  let bytes = 0;
-  for (const file of files) {
-    bytes += (await lstat(path.join(root, file))).size;
-    if (bytes > PUBLISH_LIMITS.snapshotBytesMax) {
-      throw new Error('Publish exceeds the 256 MiB snapshot limit.');
+  // The tree is already read; a directory that will not go yet is swept later and must not fail the read.
+  await releasePublishTemporary(source.value.temporary);
+  return ok(source.value.tree);
+}
+
+export async function createPublishSource(root: string, purpose: PublishPurpose): Promise<Result<PublishSource>> {
+  const temporary = await mkdtemp(path.join(tmpdir(), PUBLISH_TEMPORARY_PREFIX)).then(ok, publishFilesystemFailure);
+  if (!temporary.ok) {
+    return temporary;
+  }
+  // Ownership transfers only on success; failures, including assertions, still clean up the index.
+  let retained = false;
+  let result: Result<PublishSource>;
+  try {
+    result = await capturePublishSource(root, temporary.value, purpose);
+    retained = result.ok;
+  } finally {
+    if (!retained) {
+      // The capture's own failure is the answer; a stuck directory is logged and swept, never allowed to replace it.
+      await releasePublishTemporary(temporary.value);
     }
   }
+  return result;
 }
 
-async function initializePublishIndex(root: string, index: string): Promise<void> {
-  let head: string | undefined;
-  try {
-    head = (await git(root, ['rev-parse', '--verify', '--quiet', 'HEAD'])).stdout.trim();
-  } catch {
-    // An initialized repository can legitimately have no first commit yet.
-    head = undefined;
+export async function createPublishSnapshot(root: string): Promise<Result<PublishSnapshot>> {
+  const source = await createPublishSource(root, 'hosting');
+  if (!source.ok) {
+    return source;
   }
-  await git(root, ['read-tree', head ?? '--empty'], {
+  let retained = false;
+  let result: Result<PublishSnapshot>;
+  try {
+    result = await materializePublishSource(root, source.value);
+    retained = result.ok;
+  } finally {
+    if (!retained) {
+      await releasePublishTemporary(source.value.temporary);
+    }
+  }
+  return result;
+}
+
+export async function publishTree(root: string, index: string): Promise<Result<string>> {
+  const options = { env: { ...process.env, GIT_INDEX_FILE: index }, timeout: 600_000 };
+  // A private index captures tracked and unignored files without disturbing staged changes.
+  const staged = await runPublishGit(root, ['add', '--all', '--', '.'], options);
+  if (!staged.ok) {
+    return staged;
+  }
+  const tree = await runPublishGit(root, ['write-tree'], options);
+  return tree.ok ? parsePublishObject(tree.value.trim()) : tree;
+}
+
+async function capturePublishSource(root: string, temporary: string, purpose: PublishPurpose): Promise<Result<PublishSource>> {
+  const index = path.join(temporary, 'index');
+  const head = await readPublishHead(root);
+  if (!head.ok) {
+    return head;
+  }
+  const initialized = await runPublishGit(root, ['read-tree', head.value ?? '--empty'], {
     env: { ...process.env, GIT_INDEX_FILE: index },
   });
+  if (!initialized.ok) {
+    return initialized;
+  }
+  const working = await checkPublishWorkingSize(root, index, purpose);
+  if (!working.ok) {
+    return working;
+  }
+  const tree = await publishTree(root, index);
+  if (!tree.ok) {
+    return tree;
+  }
+  const captured = await checkPublishTreeSize(root, tree.value, purpose);
+  return captured.ok ? ok({ tree: tree.value, head: head.value, index, temporary }) : captured;
 }
 
-export async function publishTree(root: string, index: string): Promise<string> {
-  const options = { env: { ...process.env, GIT_INDEX_FILE: index } };
-  // A private index captures tracked and unignored files without disturbing staged changes.
-  await git(root, ['add', '--all', '--', '.'], options);
-  const tree = (await git(root, ['write-tree'], options)).stdout.trim();
-  if (!/^[a-f0-9]{40,64}$/.test(tree)) {
-    throw new Error('Git returned an invalid publish tree.');
+async function materializePublishSource(root: string, source: PublishSource): Promise<Result<PublishSnapshot>> {
+  const snapshot = path.join(source.temporary, 'site');
+  const directory = await mkdir(snapshot).then(ok, publishFilesystemFailure);
+  if (!directory.ok) {
+    return directory;
   }
-  return tree;
+  const checkout = await runPublishGit(root, ['checkout-index', '--all', `--prefix=${snapshot}${path.sep}`], {
+    env: { ...process.env, GIT_INDEX_FILE: source.index },
+  });
+  if (!checkout.ok) {
+    return checkout;
+  }
+  const dependencies = await realpath(path.join(root, 'node_modules')).then(ok, publishFilesystemFailure);
+  if (!dependencies.ok) {
+    return dependencies;
+  }
+  const linked = await symlink(dependencies.value, path.join(snapshot, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir').then(
+    ok,
+    publishFilesystemFailure,
+  );
+  return linked.ok ? ok({ ...source, root: snapshot }) : linked;
 }

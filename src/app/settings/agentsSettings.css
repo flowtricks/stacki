@@ -1,0 +1,189 @@
+/* Settings > Agents (AgentsSettings.tsx): filled cards of rows, the New agent form. Backgrounds, never
+   borders; 16px card padding, 8px inside, as Settings > Instructions. */
+.agents-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.agents-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agents-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+}
+.agents-row:hover,
+.agents-row:focus-within {
+  background: var(--bg-active);
+}
+.agents-row-main {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+.agents-row-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+.agents-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.agents-pair .agents-row-text {
+  flex: 1;
+  padding: 8px 12px;
+}
+.agents-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-weight: 500;
+}
+.agents-row-description,
+.agents-row-path {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+.agents-row-path {
+  color: var(--text-faint);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  white-space: nowrap;
+}
+.agents-row-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--warning, #e5a23a);
+  font-size: 12px;
+}
+.agents-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+.agents-row-delete {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.agents-row:hover .agents-row-delete,
+.agents-row-delete:focus-visible {
+  opacity: 1;
+}
+.agents-row-delete:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.agents-pair-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.agents-pair-state {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.agents-pair-edited,
+.agents-pair-missing {
+  color: var(--warning, #e5a23a);
+}
+.agents-pair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-inline-end: 8px;
+}
+/* Below a list the New agent button starts at the rows' left edge; in the empty state it is centred with the text. */
+.agents-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.agents-form .agents-actions {
+  justify-content: flex-end;
+}
+.agents-new,
+.agents-actions button,
+.agents-pair-actions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agents-form {
+  gap: 12px;
+}
+.agents-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agents-field-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.agents-field label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+/* A refused field takes the error look: a soft red fill, never an outline; the reason is a toast on submit. */
+.agents-field[data-invalid] input,
+.agents-field[data-invalid] textarea {
+  background: rgba(255, 69, 58, 0.18);
+}
+.agents-field textarea {
+  min-height: 120px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  resize: vertical;
+  /* An agent's instructions are prose, not code (AGENTS.md, Code display): they keep the interface font. */
+  font-family: inherit;
+}

@@ -7,10 +7,7 @@ import assert from 'node:assert/strict';
 import { createRooms } from '../src/features/collaboration/rooms';
 import { propertyRoutes } from '../src/features/componentProperties/propertyServer';
 import { record } from '../src/shared/validation';
-import {
-  parseComponentProperties,
-  parsePropertiesResult,
-} from '../vendor/stacki/shared/properties/propertyEditing';
+import { parseComponentProperties, parsePropertiesResult } from '../vendor/stacki/shared/properties/propertyEditing';
 
 export const component = 'src/components/Card.astro';
 export const consumer = 'src/pages/index.astro';
@@ -22,10 +19,7 @@ export async function propertyFixture() {
   await mkdir(path.join(root, 'src/pages'), { recursive: true });
   await writeFile(path.join(root, component), source);
   await writeFile(path.join(root, consumer), instance);
-  await writeFile(
-    path.join(root, 'tsconfig.json'),
-    JSON.stringify({ compilerOptions: { paths: { '@/*': ['./src/*'] } } }),
-  );
+  await writeFile(path.join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { paths: { '@/*': ['./src/*'] } } }));
   const rooms = createRooms(root);
   const route = propertyRoutes(root, rooms);
   const server = createServer((req, res) => {
@@ -49,15 +43,11 @@ export async function propertyFixture() {
     root,
     rooms,
     get: async () => {
-      const result = parsePropertiesResult(
-        await (await fetch(url + '?file=' + component)).json(),
-        parseComponentProperties,
-      );
+      const result = parsePropertiesResult(await (await fetch(url + '?file=' + component)).json(), parseComponentProperties);
       assert.ok(result.ok);
       return result.value;
     },
-    post: async (body: unknown) =>
-      record(await (await fetch(url, { method: 'POST', body: JSON.stringify(body) })).json()),
+    post: async (body: unknown) => record(await (await fetch(url, { method: 'POST', body: JSON.stringify(body) })).json()),
     close: async () => {
       server.close();
       server.closeAllConnections();

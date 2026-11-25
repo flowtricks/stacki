@@ -1,0 +1,80 @@
+// Simplified Chinese `history` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/history';
+
+export const messages = {
+  'history.backToNow': '回到当前',
+  'history.commit.actions': '提交操作',
+  'history.commit.merge': '合并提交',
+  'history.commit.preview': '预览',
+  'history.commit.restoreProject': '将项目恢复到此提交…',
+  'history.commit.you': '你',
+  'history.day.today': '今天',
+  'history.day.yesterday': '昨天',
+  'history.dialog.close': '关闭已更改的文件',
+  'history.dialog.title': '已更改的文件（{count}）',
+  'history.diff.allFiles': '所有文件',
+  'history.diff.emptyTree': '空树',
+  'history.diff.firstParent': '与第一个父提交比较',
+  'history.diff.label': '文件差异',
+  'history.diff.noTextChanges': '此文件没有文本更改。',
+  'history.diff.restoreFile': '恢复文件…',
+  'history.error.diffUnreadable': '无法读取此提交的差异。',
+  'history.files.added': {
+    other: '已添加 {count} 个文件',
+  },
+  'history.files.changedLabel': '已更改的文件',
+  'history.files.count': {
+    other: '{count} 个文件',
+  },
+  'history.files.deleted': {
+    other: '已删除 {count} 个文件',
+  },
+  'history.files.from': '来自 {path}',
+  'history.files.listLabel': '已更改文件列表',
+  'history.files.noMatch': '没有与此筛选条件匹配的文件。',
+  'history.files.none': '没有文件更改。',
+  'history.files.unavailable': '此提交的已更改文件不可用。',
+  'history.files.updated': {
+    other: '已更新 {count} 个文件',
+  },
+  'history.files.view': '查看已更改的文件（{count}）',
+  'history.files.viewDiff': '查看 {path} 的差异',
+  'history.filter.added': '新增',
+  'history.filter.all': '全部',
+  'history.filter.deleted': '已删除',
+  'history.filter.label': '筛选已更改的文件',
+  'history.filter.updated': '已更改',
+  'history.scope.all': '所有分支',
+  'history.scope.ariaLabel': '按分支筛选提交',
+  'history.scope.current': '当前分支',
+  'history.scope.label': '筛选提交',
+  'history.scope.showing': '正在显示 {branch} 上的提交',
+  'history.sort.ariaLabel': '对已更改的文件排序',
+  'history.sort.label': '排序',
+  'history.sort.path': '文件路径',
+  'history.sort.status': '状态',
+  'history.summary.moreFiles': {
+    other: '{first} 及其他 {count} 个文件',
+  },
+  'history.summary.morePages': {
+    other: '{first} 及其他 {count} 个页面',
+  },
+  'history.summary.none': '没有文件更改',
+  'history.summary.two': '{first} 和 {second}',
+  'history.time.daysAgo': {
+    other: '{count} 天前',
+  },
+  'history.time.hoursAgo': {
+    other: '{count} 小时前',
+  },
+  'history.time.justNow': '刚刚',
+  'history.time.minutesAgo': {
+    other: '{count} 分钟前',
+  },
+  'history.time.yesterday': '昨天',
+  'history.timeline.empty': '尚未保存任何内容。保存第一个版本后，它会显示在这里，你可以随时回到该版本。',
+  'history.timeline.label': 'Git 历史',
+  'history.timeline.showOlder': '显示更早的',
+  'history.versionHistory': '版本历史',
+} as const satisfies CatalogOf<MessageKey>;

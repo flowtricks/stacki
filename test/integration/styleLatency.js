@@ -15,8 +15,11 @@
 //      it sends for another file's global styles),
 //   3. one text-only edit, which must not rewrite any stylesheet (the guard
 //      that keeps animations from restarting while typing).
-// Each edit waits for its own value through getComputedStyle, polling every
-// 20 ms for up to 3 s, then rests 600 ms (a person's pace between clicks). The
+// Each edit times from before the write starts and waits for its own computed
+// style (or literal text), polling every 20 ms for up to 3 s, then rests 600 ms.
+// This is write-to-observed-value latency, not input-to-paint: it includes the
+// save but bypasses the UI's input handling and debounce. Browser tests must
+// measure those separately from the actual input event. The
 // page counts its stylesheet rewrites and its page fetches (the morph).
 //
 // Outside the offline gate: it installs from the npm registry. Run it as
@@ -49,8 +52,7 @@ const PAGE = [
   '<style>.box { background-color: rgb(1, 0, 0); }</style>',
   '',
 ].join('\n');
-const THEME = (blue) =>
-  `<p>theme</p>\n<style is:global>.box { color: rgb(0, 0, ${blue}); }</style>\n`;
+const THEME = (blue) => `<p>theme</p>\n<style is:global>.box { color: rgb(0, 0, ${blue}); }</style>\n`;
 
 function versionsFromArguments() {
   const index = process.argv.indexOf('--astro');
@@ -227,19 +229,18 @@ async function openCanvas(BrowserWindow, url) {
   return canvas;
 }
 
-const readCounters = (canvas) =>
-  canvas.webContents.executeJavaScript('[window.__styleRewrites, window.__pageFetches]');
+const readCounters = (canvas) => canvas.webContents.executeJavaScript('[window.__styleRewrites, window.__pageFetches]');
 
-// How long until `.box`'s `property` reads `expected`: a number of
-// milliseconds, or what it read instead when it never did.
-async function timeToShow(canvas, property, expected) {
-  const started = Date.now();
-  const read = `getComputedStyle(document.querySelector('.box')).${property}`;
+// How long from starting the write until its exact expected value is observed.
+// Use one monotonic clock in the test process, never a server/browser timestamp.
+async function timeToShow(canvas, row, started) {
+  const read =
+    row.property === 'textContent' ? "document.querySelector('.box h1').textContent" : `getComputedStyle(document.querySelector('.box')).${row.property}`;
   let shown = '';
-  while (Date.now() - started <= WATCH_MS_MAX) {
+  while (performance.now() - started <= WATCH_MS_MAX) {
     shown = await canvas.webContents.executeJavaScript(read);
-    if (shown === expected) {
-      return { ms: Date.now() - started, shown };
+    if (shown === row.expected) {
+      return { ms: performance.now() - started, shown };
     }
     await sleep(POLL_MS);
   }
@@ -268,8 +269,10 @@ const STYLE_INVENTORY = `[...document.querySelectorAll('style')].map((style) =>
 async function measure(canvas, rows, row, write) {
   const [rewritesBefore, fetchesBefore] = await readCounters(canvas);
   const consoleFrom = canvas.consoleLines.length;
+  const started = performance.now();
   await write();
-  const shown = await timeToShow(canvas, row.property, row.expected);
+  const writeMs = performance.now() - started;
+  const shown = await timeToShow(canvas, row, started);
   if (shown.ms === undefined && !rows.some((earlier) => earlier.diagnosis)) {
     row = { ...row, diagnosis: true };
     const say = (message) => fs.writeSync(1, message + '\n');
@@ -285,6 +288,7 @@ async function measure(canvas, rows, row, write) {
   const [rewritesAfter, fetchesAfter] = await readCounters(canvas);
   rows.push({
     ...row,
+    writeMs,
     ms: shown.ms,
     shown: shown.shown,
     styleRewrites: rewritesAfter - rewritesBefore,
@@ -301,37 +305,32 @@ async function runEdits(invoke, canvas, project) {
     const red = edit * 20;
     const row = { path: 'page:edit', edit, property: 'backgroundColor' };
     await measure(canvas, rows, { ...row, expected: `rgb(${red}, 0, 0)` }, () =>
-      editPage(invoke, codePatch, pagePath, (source) =>
-        source.replace(/background-color: rgb\(\d+, 0, 0\)/, `background-color: rgb(${red}, 0, 0)`),
-      ),
+      editPage(invoke, codePatch, pagePath, (source) => source.replace(/background-color: rgb\(\d+, 0, 0\)/, `background-color: rgb(${red}, 0, 0)`)),
     );
   }
   for (let edit = 1; edit <= EDITS; edit += 1) {
     const blue = edit * 20;
     const row = { path: 'style:writeFile', edit, property: 'color' };
-    await measure(canvas, rows, { ...row, expected: `rgb(0, 0, ${blue})` }, () =>
-      invoke('style:writeFile', { filePath: themePath, css: THEME(blue) }),
-    );
+    await measure(canvas, rows, { ...row, expected: `rgb(0, 0, ${blue})` }, () => invoke('style:writeFile', { filePath: themePath, css: THEME(blue) }));
   }
-  const text = { path: 'text only', edit: 1, property: 'backgroundColor' };
-  await measure(canvas, rows, { ...text, expected: `rgb(${EDITS * 20}, 0, 0)` }, () =>
-    editPage(invoke, codePatch, pagePath, (source) =>
-      source.replace('<h1>Style latency</h1>', '<h1>Style latency, typed</h1>'),
-    ),
+  const text = { path: 'text only', edit: 1, property: 'textContent' };
+  await measure(canvas, rows, { ...text, expected: 'Style latency, typed' }, () =>
+    editPage(invoke, codePatch, pagePath, (source) => source.replace('<h1>Style latency</h1>', '<h1>Style latency, typed</h1>')),
   );
   return rows;
 }
 
 function report(version, rows) {
   const say = (message) => fs.writeSync(1, message + '\n');
-  say(`\nAstro ${version}: ms until the canvas shows the value just written`);
-  say('path             edit  expected            ms     shown instead       sheets  fetches');
+  say(`\nAstro ${version}: write-to-observed-value latency (not input-to-paint)`);
+  say('path             edit  expected            ms     write   shown instead       sheets  fetches');
   for (const row of rows) {
-    const ms = row.ms === undefined ? 'never' : String(row.ms);
+    const ms = row.ms === undefined ? 'never' : row.ms.toFixed(1);
     const instead = row.ms === undefined ? row.shown : '';
     say(
       `${row.path.padEnd(17)}${String(row.edit).padEnd(6)}${row.expected.padEnd(20)}` +
-        `${ms.padEnd(7)}${instead.padEnd(20)}${String(row.styleRewrites).padEnd(8)}` +
+        `${ms.padEnd(7)}${row.writeMs.toFixed(1).padEnd(8)}` +
+        `${instead.padEnd(20)}${String(row.styleRewrites).padEnd(8)}` +
         `${row.pageFetches}`,
     );
   }

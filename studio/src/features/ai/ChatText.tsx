@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { CodeBlock } from '../../../vendor/stacki/src/ui/CodeBlock';
+import { languageNamed } from '../../../vendor/stacki/src/ui/codeHighlight';
 
 // Render the useful Markdown subset without interpreting provider-authored HTML.
 export function ChatText({ text }: { readonly text: string }) {
@@ -6,12 +8,8 @@ export function ChatText({ text }: { readonly text: string }) {
     <div className="chat-markdown">
       {text.split(/(```[\s\S]*?```)/g).map((block, index) => {
         if (block.startsWith('```')) {
-          const code = block.slice(3, -3).replace(/^[\w+-]*\n/, '');
-          return (
-            <pre key={index}>
-              <code>{code}</code>
-            </pre>
-          );
+          const fence = /^([\w+-]*)\n/.exec(block.slice(3, -3));
+          return <CodeBlock key={index} text={block.slice(3 + (fence?.[0].length ?? 0), -3)} language={languageNamed(fence?.[1] ?? '')} />;
         }
         return block
           .split(/\n\s*\n/)

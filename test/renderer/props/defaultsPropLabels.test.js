@@ -1,11 +1,12 @@
 // Exercise real prop controls with both value policies. Explicit fallback choices in
-// defaults recipes stay blue; reset clears them and ordinary instances still omit them.
+// defaults recipes stay blue; reset reveals the fallback and instances still omit it.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { parsePropSchema } = require('#dist/electron/parse/astroParser.js');
 const directory = repoPath('node_modules/.stacki-test');
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'defaults-prop-labels.cjs');
@@ -70,6 +71,18 @@ const schema = [
   { name: 'render', type: 'boolean', default: true },
   { name: 'size', type: 'enum', default: 'small', options: ['small', 'large'] },
   { name: 'tag', type: 'enum', default: 'h2', options: ['h1', 'h2', 'h3'] },
+  ...parsePropSchema(
+    [
+      '---',
+      'interface Props {',
+      '  /** Defaults to `website`; use `article` for posts and news pages. */',
+      '  type?: "website" | "article" | "profile";',
+      '}',
+      'const { type } = Astro.props;',
+      '---',
+    ].join('\n'),
+  ).values(),
+  { name: 'loading', type: 'enum', options: ['auto', 'eager', 'lazy'] },
 ];
 function renderPanel() {
   root.render(
@@ -109,11 +122,7 @@ function field(name) {
   return label(name).closest('.props-field');
 }
 function pickSegment(name, text) {
-  act(() =>
-    [...field(name).querySelectorAll('button')]
-      .find((button) => button.textContent === text)
-      .click(),
-  );
+  act(() => [...field(name).querySelectorAll('button')].find((button) => button.textContent === text).click());
 }
 function reset(name) {
   act(() =>
@@ -130,20 +139,25 @@ function reset(name) {
 }
 async function checkDropdown() {
   await act(async () => field('tag').querySelector('.dd-trigger').click());
-  const option = [...document.querySelectorAll('.dd-option')].find(
-    (item) => item.textContent === 'h2',
-  );
+  const option = [...document.querySelectorAll('.dd-option')].find((item) => item.textContent === 'h2');
   assert.ok(option);
   await act(async () => option.click());
   assert.deepEqual(values.tag, { type: 'string', value: 'h2' });
   assert.ok(label('tag').classList.contains('set'));
   reset('tag');
+  assert.equal(field('tag').querySelector('.dd-label').textContent, 'h2');
+  assert.ok(field('tag').querySelector('.dd-label').classList.contains('dim'));
 }
 (async () => {
   act(renderPanel);
   assert.ok(label('Content').classList.contains('set'));
   assert.equal(field('render').querySelector('[aria-pressed="true"]').textContent, 'True');
-  assert.equal(field('tag').querySelector('.dd-label').textContent, '(not set)');
+  assert.equal(field('tag').querySelector('.dd-label').textContent, 'h2');
+  assert.equal(field('type').querySelector('.dd-label').textContent, 'website');
+  assert.equal(field('loading').querySelector('.dd-label').textContent, '(not set)');
+  assert.equal(field('size').querySelector('[aria-pressed="true"]').textContent, 'small');
+  assert.equal(label('type').classList.contains('set'), false);
+  assert.deepEqual(values, {});
   assert.equal(label('render').classList.contains('set'), false);
   pickSegment('render', 'True');
   assert.deepEqual(values.render, { type: 'expr', value: 'true' });
@@ -161,6 +175,7 @@ async function checkDropdown() {
   await checkDropdown();
   policy = 'instance';
   act(renderPanel);
+  assert.equal(field('type').querySelector('.dd-label').textContent, 'website');
   pickSegment('render', 'True');
   pickSegment('size', 'small');
   assert.equal(values.render, undefined);

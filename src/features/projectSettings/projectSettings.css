@@ -1,0 +1,256 @@
+/* The Settings rail panel, its Secrets and MCP detail views. Rows and blocks are set apart by background fills, as
+   across the app; none draws a border or a divider. */
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The panel's heading, including a view's back chevron, is the shared PanelHeader (src/ui/panelHeader.css), as in
+   the Collections item view: nothing here sets its geometry. */
+/* A root link: a row of the Pages list's own look (.list-item), not a button. Transparent at rest, the list's
+   hover fill and a pressed fill; icon, then the label left-aligned right after it, the muted chevron at the end.
+   The app's base button rule centres and fills, so each is set back here. */
+.list-item.settings-link {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  text-align: start;
+}
+.list-item.settings-link:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.list-item.settings-link:active {
+  background: var(--bg-active);
+}
+.list-item.settings-link .label {
+  text-align: start;
+}
+.settings-link > svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+.settings-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.settings-detail {
+  padding: 4px 12px 12px;
+}
+/* A view lives in the panel's own width (260px and up), so a secret's value stacks under its name. */
+.settings-detail .secrets-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.settings-detail .secrets-row > .secrets-value,
+.settings-detail .secrets-row > .secrets-input:not(.secrets-name-input) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.settings-detail .secrets-heading {
+  flex-basis: 100%;
+}
+.settings-detail .secrets-heading .secrets-file {
+  width: 100%;
+}
+
+.secrets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.secrets-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.secrets-heading {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.secrets-heading h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.secrets-heading p,
+.secrets-note {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.secrets-heading p {
+  margin-top: 2px;
+}
+.secrets-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* A button's text stays on one line however narrow the panel: the row wraps, the label never does. */
+.secrets button {
+  white-space: nowrap;
+}
+/* Wide enough for the longest dev env file name, so the dropdown never takes the row from the buttons. */
+.secrets-heading .secrets-file {
+  width: 190px;
+  max-width: 100%;
+  margin-top: 6px;
+}
+.secrets-actions .primary,
+.secrets-row-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* A row that is only its button: the button says what to do, its tooltip says why. */
+.secrets-action-row {
+  display: flex;
+  align-items: center;
+}
+.secrets-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-align: center;
+}
+.secrets-empty strong {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.secrets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.secrets-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.9fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 8px 4px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.secrets-row:hover,
+.secrets-row:focus-within {
+  background: var(--bg-active);
+}
+.secrets-name,
+.secrets-value,
+.secrets-input {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.secrets-name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.secrets-value {
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.secrets-value:hover {
+  background: var(--bg-input);
+}
+.secrets-value-static {
+  cursor: default;
+}
+.secrets-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.secrets-row-actions .ghost {
+  padding: 4px;
+}
+/* The placeholder row shares .secrets-row's grid; its slots are the size of the real controls (a 14px icon
+   in a ghost button's 4px padding and 1px border is 24px) so the list does not move when the names arrive. */
+.secrets-row-skeleton {
+  pointer-events: none;
+}
+.secrets-row-skeleton:hover {
+  background: var(--bg-hover);
+}
+.secrets-skeleton-value {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 6px;
+}
+.secrets-skeleton-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+.secrets-row-actions .ghost.danger:hover {
+  color: var(--red);
+}
+.secrets-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+}
+.secrets-draft {
+  background: var(--bg-panel-2);
+}
+
+/* A field whose value was refused takes the error tint: a fill, not a border. The reason is a toast. */
+.secrets-input.is-invalid,
+.mcp-add-input.is-invalid,
+.secrets-input[aria-invalid='true'] {
+  background: rgba(255, 90, 90, 0.16);
+}
+
+.shadcn-project-settings > summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+.shadcn-project-settings > summary::-webkit-details-marker {
+  display: none;
+}
+.shadcn-project-settings > summary .label {
+  flex: 1;
+}
+.shadcn-project-settings[open] > summary svg:last-child {
+  transform: rotate(90deg);
+}
+.shadcn-project-options {
+  display: grid;
+  gap: 8px;
+  padding: 6px 8px 8px;
+}

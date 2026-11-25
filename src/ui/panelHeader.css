@@ -1,0 +1,77 @@
+/* The heading row of every side panel (PanelHeader.tsx). Every measure is a token here, so a panel cannot drift
+   from the others by a pixel: the row is always --panel-header-height tall, the title is centred in the row's
+   --panel-header-row-height whether or not the panel has actions, and the actions end at the same right inset.
+   Values are Navigator's, the reference the majority of panels already had. Background fills only, no border. */
+:root {
+  --panel-header-height: 44px;
+  --panel-header-row-height: 24px;
+  --panel-header-padding-top: 12px;
+  --panel-header-padding-bottom: 8px;
+  --panel-header-padding-start: 12px;
+  --panel-header-padding-end: 12px;
+  --panel-header-gap: 4px;
+  --panel-header-action-size: 24px;
+  --panel-header-action-gap: 2px;
+  --panel-header-title-size: 11.5px;
+  --panel-header-title-weight: 600;
+  --panel-header-title-line-height: 16px;
+  /* The back chevron sits 4px into the inset so its glyph, not its 24px box, lines up with the list below. */
+  --panel-header-back-offset: -4px;
+  /* A panel's content starts exactly where its header ends (search, tabs and toolbars sit flush), and a body of rows
+     (.panel-body, the Git panel's body) keeps this much above its first row. */
+  --panel-content-offset: 2px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  padding-block: var(--panel-header-padding-top) var(--panel-header-padding-bottom);
+  padding-inline: var(--panel-header-padding-start) var(--panel-header-padding-end);
+  flex-shrink: 0;
+}
+.panel-header-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--panel-header-gap);
+  min-width: 0;
+}
+.panel.left .panel-header,
+.studio-left .panel-header {
+  min-height: var(--panel-header-height);
+}
+/* The row the title is centred in is as tall as an action button, so a panel with no actions centres its title
+   exactly where one with actions does. Left panels only: the inspector's section headings keep their own height. */
+.panel.left .panel-header-lead,
+.studio-left .panel-header-lead {
+  min-height: var(--panel-header-row-height);
+}
+.panel-header h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--panel-header-title-size);
+  font-weight: var(--panel-header-title-weight);
+  line-height: var(--panel-header-title-line-height);
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  /* Zero minimum, so a long item in the actions (the Code panel's file path) is cut instead of pushing the row wider. */
+  min-width: 0;
+  gap: var(--panel-header-action-gap);
+  margin-inline-start: auto;
+}
+.panel-header button {
+  box-sizing: border-box;
+  min-width: var(--panel-header-action-size);
+  height: var(--panel-header-action-size);
+  padding: 3px;
+}
+.panel-header .panel-header-back {
+  margin-inline-start: var(--panel-header-back-offset);
+}

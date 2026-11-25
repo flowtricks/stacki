@@ -1,6 +1,8 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { literalOptions } from '../../shared/properties/propertyOptions';
 
 interface TypeWork {
   readonly node: ts.TypeNode;
@@ -25,11 +27,7 @@ export function createPropertyTypeReader(document: ts.SourceFile): (type: ts.Typ
   return (type) => readPropertyType(type, aliases, duplicates);
 }
 
-function readPropertyType(
-  type: ts.TypeNode,
-  aliases: ReadonlyMap<string, ts.TypeAliasDeclaration>,
-  duplicates: ReadonlySet<string>,
-): string {
+function readPropertyType(type: ts.TypeNode, aliases: ReadonlyMap<string, ts.TypeAliasDeclaration>, duplicates: ReadonlySet<string>): string {
   const work: TypeWork[] = [{ node: type, aliases: [] }];
   const values: string[] = [];
   for (let count = 0; count < PROPERTY_LIMITS.nodesMax && work.length > 0; count++) {
@@ -81,10 +79,67 @@ function expandPropertyType(
   if (ts.isLiteralTypeNode(node)) {
     return [];
   }
-  const primitives = [
-    ts.SyntaxKind.StringKeyword,
-    ts.SyntaxKind.NumberKeyword,
-    ts.SyntaxKind.BooleanKeyword,
-  ];
+  const primitives = [ts.SyntaxKind.StringKeyword, ts.SyntaxKind.NumberKeyword, ts.SyntaxKind.BooleanKeyword];
   return primitives.includes(node.kind) ? [] : undefined;
+}
+
+/**
+ * A member typed by a same-file alias of literal options (`theme?: Theme` with
+ * `type Theme = "light" | "dark"`): the alias body is where its options are
+ * written, so an options edit keeps the alias rather than inlining it. `uses`
+ * counts every type reference to the alias in the file; above one, or when the
+ * alias is exported, an edit changes other declarations too and the panel
+ * says so.
+ */
+export interface OptionAlias {
+  readonly declaration: ts.TypeAliasDeclaration;
+  readonly uses: number;
+  readonly exported: boolean;
+}
+
+export function optionAliasOf(document: ts.SourceFile, member: ts.PropertySignature): OptionAlias | undefined {
+  const type = member.type;
+  if (type === undefined || !ts.isTypeReferenceNode(type) || !ts.isIdentifier(type.typeName) || type.typeArguments !== undefined) {
+    return undefined;
+  }
+  const name = type.typeName.text;
+  assert(document.statements.length <= PROPERTY_LIMITS.nodesMax, 'Type declarations are bounded');
+  const declarations = document.statements.filter(
+    (statement) => (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) && statement.name.text === name,
+  );
+  const declaration = declarations[0];
+  if (declarations.length !== 1 || declaration === undefined || !ts.isTypeAliasDeclaration(declaration)) {
+    return undefined;
+  }
+  if (declaration.typeParameters !== undefined || literalOptions(declaration.type.getText()) === undefined) {
+    return undefined;
+  }
+  let uses = 0;
+  const pending: ts.Node[] = [document];
+  for (let index = 0; index < pending.length; index += 1) {
+    assert(pending.length <= PROPERTY_LIMITS.nodesMax, 'Alias reference search is bounded');
+    const node = pending[index];
+    assert(node !== undefined, 'A queued node exists');
+    if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && node.typeName.text === name) {
+      uses += 1;
+    }
+    node.forEachChild((child) => {
+      pending.push(child);
+    });
+  }
+  assert(uses >= 1, 'The member itself references its alias');
+  const exported = declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  return { declaration, uses, exported };
+}
+
+/** What the panel says about editing an alias's options, when the edit reaches beyond this prop. */
+export function optionAliasWarning(alias: OptionAlias): Described | undefined {
+  const name = alias.declaration.name.text;
+  if (alias.exported) {
+    return described('props.contract.aliasExported', { name });
+  }
+  if (alias.uses > 1) {
+    return described('props.contract.aliasUsed', { name, uses: alias.uses });
+  }
+  return undefined;
 }

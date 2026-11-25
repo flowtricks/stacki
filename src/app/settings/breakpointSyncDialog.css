@@ -1,0 +1,191 @@
+/* The breakpoint sync dialog: filled rows and tints, never borders; paths and queries wrap, so nothing scrolls sideways. */
+.modal.breakpoint-sync {
+  width: 520px;
+  max-width: 92vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.breakpoint-sync .modal-header {
+  padding: 20px 20px 12px;
+}
+.breakpoint-sync-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 0 20px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.breakpoint-sync-bar {
+  display: flex;
+  gap: 6px;
+}
+.breakpoint-sync-bar button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.breakpoint-sync-bar button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+}
+.breakpoint-sync-bar button:focus-visible,
+.breakpoint-sync-open:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoint-sync-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.breakpoint-sync-file {
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.breakpoint-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-block: 0;
+  padding-inline: 4px 10px;
+}
+.breakpoint-sync-open {
+  /* Fixed width: a long path squeezes flex items by their size, and the icon column then shifts by a pixel or two on some fonts. */
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.breakpoint-sync-row > input[type='checkbox'] {
+  flex: none;
+}
+.breakpoint-sync-open:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.breakpoint-sync-flag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.breakpoint-sync-flag {
+  background: rgba(255, 214, 10, 0.14);
+  color: var(--amber);
+}
+.breakpoint-sync-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.breakpoint-sync-count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoint-sync-places {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding-block: 0 8px;
+  padding-inline: 38px 10px;
+  list-style: none;
+}
+.breakpoint-sync-place {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.breakpoint-sync-line {
+  flex: none;
+  min-width: 52px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoint-sync-change {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.breakpoint-sync-change code {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.breakpoint-sync-before {
+  color: var(--text-faint);
+  /* Highlighted tokens carry their own colours, so the old query is dimmed as a whole rather than recoloured. */
+  opacity: 0.6;
+}
+.breakpoint-sync-after {
+  color: var(--green);
+}
+.breakpoint-sync .modal-footer {
+  padding: 12px 20px 16px;
+}
+.breakpoint-sync-link {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.breakpoint-sync-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.breakpoint-sync-link:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+/* A file's kind is an icon in a column of its own, centered on the path's line. */
+.breakpoint-sync-kind {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-faint);
+}
+.breakpoint-sync-kind[data-kind='component'] {
+  color: var(--component-green);
+}
+.breakpoint-sync-style-tag {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 18px;
+  color: var(--text-faint);
+}

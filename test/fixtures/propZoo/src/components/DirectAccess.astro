@@ -1,0 +1,10 @@
+---
+interface Props {
+  title: string;
+  tagline?: string;
+}
+---
+<div class="direct-access">
+  <h4>{Astro.props.title}</h4>
+  {Astro.props.tagline && <p>{Astro.props.tagline}</p>}
+</div>

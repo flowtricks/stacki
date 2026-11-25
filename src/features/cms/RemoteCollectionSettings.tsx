@@ -1,0 +1,639 @@
+// A content collection's settings, in the main view where its items show:
+// its name, and its fields in order — dragged to reorder, clicked to open
+// their settings in place (name, help text, minimum and maximum, required),
+// deleted or duplicated, and new ones added. Changes are held in a copy until
+// Save collection (settingsDraft.ts), which takes any field form still open and
+// writes them to the content config, with the entries and code that depend on
+// them (astroCollectionSettings.ts).
+import InfoHint from '../../ui/InfoHint';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
+import { MEMBER_KINDS, newFieldMembers, newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
+import { useLocale, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator, MessageKey, Translator } from '../../lib/i18n/localeContext';
+import { confirmDialog } from '../../ui/ConfirmDialog';
+import { SkeletonRows } from '../../ui/Skeleton';
+import Dropdown from '../../ui/Dropdown';
+import { tooltipAnchor, tooltipHost, useDelayedPlacement, type TooltipAnchor } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { ChevronLeftIcon, CopyIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import useListReorder from '../../ui/useListReorder';
+import { labelize } from './cmsSchema';
+import { nameInSentence } from './remoteFieldTypes';
+import type { RemoteCmsSelection } from './remoteCmsShared';
+import { changeCollectionSettings, collectionSettings, remoteCollections } from '../../ipc/remoteSource';
+import { applyDrafts, plainItemKind, fieldSettingsOf, newFieldFormState, openFieldFormState, replayDrafts, type FieldFormState } from './settingsDraft';
+import { FieldInputs } from './RemoteFieldSettings';
+import { KIND_LABELS } from './settingsKindLabels';
+import { KIND_ICONS, KindIcon } from './settingsKindIcons';
+
+// Stages changes together, or none of them, and says whether it did.
+type Change = (changes: readonly SettingsChange[]) => boolean;
+
+// The two forms that can be open at once, and how each reports what it would save.
+type FormSlot = 'adding' | 'open';
+type FormReport = (slot: FormSlot, state: FieldFormState | undefined) => void;
+type OpenForms = Readonly<Record<FormSlot, FieldFormState | undefined>>;
+
+const NO_FORMS: OpenForms = { adding: undefined, open: undefined };
+
+export function RemoteCollectionSettings(props: {
+  readonly projectPath: string;
+  readonly selection: RemoteCmsSelection;
+  readonly onSelect: (selection: RemoteCmsSelection | undefined) => void;
+  /** After a save that went through whole, before the items show again. */
+  readonly onSaved: () => void;
+}) {
+  const { selection } = props;
+  const translate = useTranslate();
+  const editing = useSettingsDraft(props);
+  const { draft, error } = editing;
+  return (
+    <div className="cms-detail remote-cms-settings">
+      <div className="cms-detail-head remote-cms-toolbar">
+        <button
+          className="ghost cms-back"
+          title={translate('cmsRemote.settings.backToItems')}
+          onClick={() => props.onSelect({ ...selection, mode: undefined })}
+        >
+          <ChevronLeftIcon size={13} />
+        </button>
+        <span className="cms-detail-title">{translate('cmsRemote.settings.title', { collection: labelize(selection.collection) })}</span>
+        {/* Cancel drops any changes and leaves the settings, as a CMS's own does. */}
+        <button
+          disabled={editing.saving}
+          onClick={() => {
+            editing.cancel();
+            props.onSelect({ ...selection, mode: undefined });
+          }}
+        >
+          {translate('ui.cancel')}
+        </button>
+        <button className="primary" disabled={!editing.dirty || editing.blocked || editing.saving} onClick={() => void editing.save()}>
+          {translate(editing.saving ? 'cmsRemote.settings.saving' : 'cmsRemote.settings.save')}
+        </button>
+      </div>
+      <div className="cms-detail-body">
+        <div className="remote-cms-settings-body">
+          {error && <ErrorToast message={error} />}
+          {draft === undefined ? (
+            !error && (
+              <div className="remote-cms-loading">
+                <SkeletonRows count={4} />
+              </div>
+            )
+          ) : (
+            <>
+              <CollectionName settings={draft} name={editing.name} onName={editing.setName} />
+              <FieldList key={editing.formRound} settings={draft} collections={editing.collections} onChange={editing.stage} onForm={editing.reportForm} />
+              <div className="remote-cms-settings-danger">
+                <button className="danger" disabled={editing.saving} onClick={() => void editing.remove()}>
+                  <TrashIcon size={12} /> {translate('cmsRemote.settings.deleteCollection')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The settings as saved, the copy being edited and the changes made to it, in
+// order; Save sends them one by one, Cancel drops them (settingsDraft.ts).
+function useSettingsDraft(props: {
+  readonly projectPath: string;
+  readonly selection: RemoteCmsSelection;
+  readonly onSelect: (selection: RemoteCmsSelection | undefined) => void;
+  readonly onSaved: () => void;
+}) {
+  const { projectPath, selection } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const [saved, setSaved] = useState<CollectionSettings | undefined>(undefined);
+  const [draft, setDraft] = useState<CollectionSettings | undefined>(undefined);
+  const [changes, setChanges] = useState<readonly SettingsChange[]>([]);
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [forms, setForms] = useState<OpenForms>(NO_FORMS);
+  // Moves on when Save takes the open forms' fields, which closes those forms:
+  // left open, a field already staged would be staged again by the next Save.
+  const [formRound, setFormRound] = useState(0);
+  const collections = useCollectionNames(projectPath, selection.connection.id);
+  const show = (settings: CollectionSettings) => {
+    setSaved(settings);
+    setDraft(settings);
+    setChanges([]);
+    setName(settings.name);
+  };
+  useEffect(() => {
+    void collectionSettings(projectPath, selection.collection).then((read) => (read.ok ? show(read.value) : setError(translateDescribed(read))));
+  }, [projectPath, selection.collection, translateDescribed]);
+  const reportForm = useCallback<FormReport>((slot, state) => setForms((current) => ({ ...current, [slot]: state })), []);
+  const stage: Change = (made) => {
+    const next = draft === undefined ? undefined : applyDrafts(draft, made);
+    if (next !== undefined && !next.ok) {
+      setError(translateDescribed(next));
+    }
+    if (next?.ok === true) {
+      setError(undefined);
+      setDraft(next.value);
+      setChanges((staged) => [...staged, ...made]);
+    }
+    return next?.ok === true;
+  };
+  const renamed = saved !== undefined && name.trim() !== '' && name.trim() !== saved.name;
+  const pending = [...readyChanges(forms.open), ...readyChanges(forms.adding)];
+  const save = async () => {
+    if (pending.length > 0) {
+      if (!stage(pending)) {
+        return;
+      }
+      setFormRound((round) => round + 1);
+    }
+    setSaving(true);
+    const staged = [...changes, ...pending];
+    const all = renamed ? [...staged, { kind: 'renameCollection' as const, to: name.trim() }] : staged;
+    const result = await sendChanges(projectPath, selection.collection, all, translateDescribed);
+    setSaving(false);
+    setError(result.error);
+    if (result.settings === undefined) {
+      return;
+    }
+    // Refused: what reached the config is shown as saved, and what did not stays
+    // staged, the refused change with it, to be fixed and saved again. The
+    // collection's rename goes last, so nothing is ever left after it, and its
+    // typed name stays in its box.
+    if (result.error !== undefined) {
+      const kept = replayDrafts(result.settings, staged.slice(result.sent));
+      setSaved(result.settings);
+      setDraft(kept.value);
+      setChanges(kept.changes);
+      return;
+    }
+    // Saved whole: back to the items, which a field rename or delete may have
+    // rewritten, so they are read again.
+    show(result.settings);
+    props.onSaved();
+    props.onSelect({ ...selection, collection: result.settings.name, mode: undefined });
+  };
+  const cancel = () => (saved === undefined ? undefined : show(saved));
+  const remove = () => deleteWholeCollection({ ...props, setError, translate, translateDescribed });
+  const dirty = changes.length > 0 || renamed || pending.length > 0;
+  // A form that cannot be saved holds Save back rather than being dropped by it.
+  const blocked = forms.open?.kind === 'invalid' || forms.adding?.kind === 'invalid';
+  return { draft, error, saving, dirty, blocked, name, setName, collections, stage, save, cancel, remove, reportForm, formRound };
+}
+
+function readyChanges(state: FieldFormState | undefined): readonly SettingsChange[] {
+  return state?.kind === 'ready' ? state.changes : [];
+}
+
+function useCollectionNames(projectPath: string, connectionId: string): readonly string[] {
+  const [names, setNames] = useState<readonly string[]>([]);
+  useEffect(() => {
+    void remoteCollections(projectPath, connectionId).then((read) => setNames(read.ok ? read.value.map((each) => each.name) : []));
+  }, [projectPath, connectionId]);
+  return names;
+}
+
+// The changes, one by one and in order; the first refused stops the rest, and the
+// settings as they then stand come back with why, and how many changes landed.
+async function sendChanges(
+  projectPath: string,
+  collection: string,
+  changes: readonly SettingsChange[],
+  translateDescribed: DescribedTranslator,
+): Promise<{
+  readonly settings: CollectionSettings | undefined;
+  readonly error: string | undefined;
+  readonly sent: number;
+}> {
+  let name = collection;
+  let settings: CollectionSettings | undefined;
+  let sent = 0;
+  for (const change of changes) {
+    const changed = await changeCollectionSettings(projectPath, name, change);
+    if (!changed.ok) {
+      const read = await collectionSettings(projectPath, name);
+      return { settings: read.ok ? read.value : settings, error: translateDescribed(changed), sent };
+    }
+    settings = changed.value;
+    name = changed.value.name;
+    sent += 1;
+  }
+  return { settings, error: undefined, sent };
+}
+
+async function deleteWholeCollection(context: {
+  readonly projectPath: string;
+  readonly selection: RemoteCmsSelection;
+  readonly onSelect: (selection: RemoteCmsSelection | undefined) => void;
+  readonly setError: (message: string | undefined) => void;
+  readonly translate: Translator;
+  readonly translateDescribed: DescribedTranslator;
+}): Promise<void> {
+  const { selection, translate } = context;
+  const confirmed = await confirmDialog({
+    title: translate('cmsRemote.settings.deleteCollectionTitle', { collection: labelize(selection.collection) }),
+    body: translate('cmsRemote.settings.deleteCollectionBody'),
+    confirmLabel: translate('cmsRemote.settings.deleteCollection'),
+    danger: true,
+  });
+  if (!confirmed) {
+    return;
+  }
+  const deleted = await changeCollectionSettings(context.projectPath, selection.collection, {
+    kind: 'deleteCollection',
+  });
+  if (deleted.ok) {
+    context.onSelect(undefined);
+  } else {
+    context.setError(context.translateDescribed(deleted));
+  }
+}
+
+function CollectionName(props: { readonly settings: CollectionSettings; readonly name: string; readonly onName: (name: string) => void }) {
+  const translate = useTranslate();
+  return (
+    <section className="remote-cms-settings-section">
+      <label className="remote-cms-settings-label">
+        <span>
+          {translate('cmsRemote.collection.name')}
+          <InfoHint
+            text={
+              props.settings.source
+                ? translate('cmsRemote.settings.renameHintSource', { source: props.settings.source })
+                : translate('cmsRemote.settings.renameHint')
+            }
+          />
+        </span>
+        <input value={props.name} onChange={(event) => props.onName(event.target.value)} />
+      </label>
+    </section>
+  );
+}
+
+function FieldList(props: {
+  readonly settings: CollectionSettings;
+  readonly collections: readonly string[];
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+}) {
+  const { fields } = props.settings;
+  const translate = useTranslate();
+  const [open, setOpen] = useState<string | undefined>(undefined);
+  const [adding, setAdding] = useState(false);
+  const reorder = useListReorder({
+    count: fields.length,
+    disabled: open !== undefined,
+    onMove: (from, to) => void props.onChange([{ kind: 'reorder', order: moved(fields, from, to) }]),
+  });
+  return (
+    <section className="remote-cms-settings-section">
+      <h3 className="remote-cms-settings-label">{translate('cmsRemote.settings.fields')}</h3>
+      <div className="remote-cms-settings-fields">
+        {fields.map((field, index) =>
+          field.name === open ? (
+            <FieldEditor
+              key={field.name}
+              settings={props.settings}
+              field={field}
+              onChange={props.onChange}
+              onForm={props.onForm}
+              onClose={() => setOpen(undefined)}
+            />
+          ) : (
+            <div
+              key={field.name}
+              className={`remote-cms-settings-field ${reorder.rowClass(index)}`}
+              {...reorder.rowProps(index)}
+              onClick={() => setOpen(field.name)}
+            >
+              <span className="remote-cms-grip">
+                <DragIcon size={12} />
+              </span>
+              <KindIcon kind={field.kind} />
+              <span className="remote-cms-settings-name">{field.name}</span>
+              <span className="remote-cms-settings-kind">({translate(KIND_LABELS[field.kind])})</span>
+              {field.required && <span className="remote-cms-settings-required">{translate('cmsRemote.settings.required')}</span>}
+            </div>
+          ),
+        )}
+      </div>
+      {adding ? (
+        <AddField settings={props.settings} collections={props.collections} onChange={props.onChange} onForm={props.onForm} onClose={() => setAdding(false)} />
+      ) : (
+        <button className="remote-cms-settings-add" onClick={() => setAdding(true)}>
+          <PlusIcon size={12} /> {translate('cmsRemote.settings.addField')}
+        </button>
+      )}
+    </section>
+  );
+}
+
+// Tells the settings what an open form would save, for as long as the form is open.
+function useFormReport(slot: FormSlot, state: FieldFormState, onForm: FormReport): void {
+  useEffect(() => {
+    onForm(slot, state);
+    return () => onForm(slot, undefined);
+  }, [slot, state, onForm]);
+}
+
+// One field's settings, open in its row: saved together, renamed first when its name changed.
+function FieldEditor(props: {
+  readonly settings: CollectionSettings;
+  readonly field: SettingsField;
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+  readonly onClose: () => void;
+}) {
+  const { field, settings } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const [draft, setDraft] = useState(field);
+  const state = useMemo(() => openFieldFormState(settings, field, draft), [settings, field, draft]);
+  useFormReport('open', state, props.onForm);
+  const save = () => {
+    if (props.onChange(readyChanges(state))) {
+      props.onClose();
+    }
+  };
+  return (
+    <div className="remote-cms-settings-editor">
+      {/* The field keeps its row's icon, name and kind while it is open, with its actions. */}
+      <div className="remote-cms-settings-editor-head">
+        <KindIcon kind={field.kind} />
+        <span className="remote-cms-settings-name">{field.name}</span>
+        <span className="remote-cms-settings-kind">({translate(KIND_LABELS[field.kind])})</span>
+        <span className="remote-cms-settings-spacer" />
+        <button
+          className="ghost remote-cms-settings-tool"
+          title={translate('cmsRemote.settings.deleteField')}
+          onClick={() => void removeField(props, translate)}
+        >
+          <TrashIcon size={13} />
+        </button>
+        <button
+          className="ghost remote-cms-settings-tool"
+          title={translate('cmsRemote.settings.duplicateField')}
+          disabled={!duplicable(field.kind)}
+          onClick={() => duplicateField(props)}
+        >
+          <CopyIcon size={13} />
+        </button>
+        <button onClick={props.onClose}>{translate('ui.cancel')}</button>
+        <button className="primary" disabled={state.kind !== 'ready'} onClick={save}>
+          {translate('cmsRemote.settings.saveField')}
+        </button>
+      </div>
+      <FieldInputs field={field} draft={draft} nameProblem={state.kind === 'invalid' ? translateDescribed(state) : undefined} onDraft={setDraft} />
+    </div>
+  );
+}
+
+// Adding a field: first its kind, from a grid of every kind a collection can
+// hold, then its name, for a reference the collection it points at, and the
+// same settings an existing field opens with — written with the field at once.
+function AddField(props: {
+  readonly settings: CollectionSettings;
+  readonly collections: readonly string[];
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+  readonly onClose: () => void;
+}) {
+  const translate = useTranslate();
+  const [kind, setKind] = useState<NewFieldKind | undefined>(undefined);
+  if (kind === undefined) {
+    return (
+      <div className="remote-cms-settings-picker">
+        <div className="remote-cms-settings-editor-head">
+          <span className="remote-cms-settings-name">{translate('cmsRemote.settings.selectFieldType')}</span>
+          <span className="remote-cms-settings-spacer" />
+          <button className="ghost" onClick={props.onClose}>
+            {translate('ui.cancel')}
+          </button>
+        </div>
+        <div className="remote-cms-settings-kinds">
+          {NEW_KINDS.map((option) => (
+            <KindTile key={option} kind={option} onPick={() => setKind(option)} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return <NewFieldForm {...props} kind={kind} onBack={() => setKind(undefined)} />;
+}
+
+/** The tooltip's anchor: centred under the tile, as every delayed tooltip in the app is. */
+function placeUnder(element: HTMLElement): TooltipAnchor {
+  return tooltipAnchor(element.getBoundingClientRect());
+}
+
+/**
+ * One tile of the field-type grid: its icon and its name, nothing more, so every tile is the same shape. A kind
+ * that is not obvious from its name explains itself in a tooltip that waits for a resting pointer (or for the same
+ * pause on keyboard focus), and goes on leaving, clicking, blurring or Escape.
+ */
+function KindTile({ kind, onPick }: { readonly kind: NewFieldKind; readonly onPick: () => void }) {
+  const translate = useTranslate();
+  const tooltipId = useId();
+  const tip = useDelayedPlacement(placeUnder);
+  const button = useRef<HTMLButtonElement>(null);
+  const Icon = KIND_ICONS[kind];
+  const hint = KIND_HINTS[kind];
+  const withHint = hint === undefined ? undefined : translate(hint);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="remote-cms-settings-kind-tile"
+        aria-describedby={tip.value === undefined ? undefined : tooltipId}
+        onClick={() => {
+          tip.hide();
+          onPick();
+        }}
+        {...(withHint === undefined
+          ? {}
+          : {
+              onMouseEnter: (event: React.MouseEvent<HTMLElement>) => tip.show(event.currentTarget),
+              onMouseLeave: tip.hide,
+              onFocus: (event: React.FocusEvent<HTMLElement>) => tip.show(event.currentTarget),
+              onBlur: tip.hide,
+              onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+                if (event.key === 'Escape' && tip.value !== undefined) {
+                  event.stopPropagation();
+                  tip.hide();
+                }
+              },
+            })}
+      >
+        <Icon size={22} />
+        <span>{translate(KIND_LABELS[kind])}</span>
+      </button>
+      {withHint !== undefined &&
+        tip.value !== undefined &&
+        createPortal(
+          <FittedTooltip role="tooltip" id={tooltipId} anchor={tip.value}>
+            {withHint}
+          </FittedTooltip>,
+          // Inside a modal dialog the tip joins it, or it would be painted under the dialog's top layer.
+          tooltipHost(button.current ?? undefined),
+        )}
+    </>
+  );
+}
+
+function NewFieldForm(props: {
+  readonly settings: CollectionSettings;
+  readonly kind: NewFieldKind;
+  readonly collections: readonly string[];
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+  readonly onBack: () => void;
+  readonly onClose: () => void;
+}) {
+  const { settings, kind } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const { locale } = useLocale();
+  // The settings a new field of this kind is written with until they are changed.
+  const [field] = useState<SettingsField>(() => ({
+    name: '',
+    kind,
+    ...newFieldSettings(kind),
+    editable: true,
+    members: newFieldMembers(kind),
+    // A list holds plain text until its items are set to something else.
+    itemKind: kind === 'list' ? 'text' : undefined,
+  }));
+  const [draft, setDraft] = useState(field);
+  const pointing = pointsAtCollection(kind);
+  // The collections may still be loading when the form opens, so an unchosen target follows them.
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const target = chosen ?? props.collections[0] ?? '';
+  // A list given groups for items is saved as a repeater.
+  const savedKind: NewFieldKind = draft.kind === 'repeater' ? 'repeater' : kind;
+  const state = useMemo(() => newFieldFormState(settings, { draft, kind: savedKind, target }), [settings, draft, savedKind, target]);
+  useFormReport('adding', state, props.onForm);
+  const add = () => {
+    if (props.onChange(readyChanges(state))) {
+      props.onClose();
+    }
+  };
+  return (
+    <div className="remote-cms-settings-editor">
+      <div className="remote-cms-settings-editor-head">
+        <KindIcon kind={kind} />
+        <span className="remote-cms-settings-name">
+          {translate('cmsRemote.settings.newField', { kind: nameInSentence(translate(KIND_LABELS[kind]), locale) })}
+        </span>
+        <span className="remote-cms-settings-spacer" />
+        <button onClick={props.onBack}>{translate('cmsRemote.settings.back')}</button>
+        <button className="primary" disabled={state.kind !== 'ready'} onClick={add}>
+          {translate('cmsRemote.settings.addField')}
+        </button>
+      </div>
+      {pointing && (
+        <label className="remote-cms-settings-label">
+          {translate('cmsRemote.settings.collection')}
+          <Dropdown
+            value={target}
+            livePreview={false}
+            options={props.collections.map((each) => ({ value: each, label: labelize(each) }))}
+            onChange={setChosen}
+          />
+        </label>
+      )}
+      <FieldInputs
+        field={field}
+        draft={draft}
+        nameProblem={state.kind === 'invalid' ? translateDescribed(state) : undefined}
+        onDraft={setDraft}
+        autoFocusName
+      />
+    </div>
+  );
+}
+
+async function removeField(props: { readonly field: SettingsField; readonly onChange: Change }, translate: Translator) {
+  const confirmed = await confirmDialog({
+    title: translate('cmsRemote.settings.deleteFieldTitle', { name: props.field.name }),
+    body: translate('cmsRemote.settings.deleteFieldBody'),
+    confirmLabel: translate('cmsRemote.settings.deleteField'),
+    danger: true,
+  });
+  if (confirmed) {
+    props.onChange([{ kind: 'removeField', name: props.field.name }]);
+  }
+}
+
+// A copy: a new field of the same kind beside it, given the same settings.
+function duplicateField(props: { readonly field: SettingsField; readonly onChange: Change }) {
+  const { field } = props;
+  if (!duplicable(field.kind) || !(field.members ?? []).every((member) => MEMBER_KINDS.some((kind) => kind === member.kind))) {
+    return;
+  }
+  props.onChange([
+    {
+      kind: 'addField',
+      name: `${field.name}-copy`,
+      fieldKind: field.kind,
+      target: undefined,
+      settings: fieldSettingsOf(field),
+      members: field.members?.map((member) => ({ ...member, from: undefined })),
+      itemKind: plainItemKind(field),
+    },
+  ]);
+}
+
+// A reference is not duplicated: the collection it points at is not read back here.
+function duplicable(kind: SettingsFieldKind): kind is NewFieldKind {
+  return (NEW_KINDS.some((option) => option === kind) || kind === 'repeater') && !pointsAtCollection(kind);
+}
+
+// The order after a drag: `from` lands before the row at `to`.
+function moved(fields: readonly SettingsField[], from: number, to: number): readonly string[] {
+  const names = fields.map((field) => field.name);
+  const [name] = names.splice(from, 1);
+  if (name === undefined) {
+    return fields.map((field) => field.name);
+  }
+  names.splice(to > from ? to - 1 : to, 0, name);
+  return names;
+}
+
+// A tooltip on the kinds that are not obvious from their name: a list holds items of
+// its own, among them groups of fields, which is how a repeater is made.
+const KIND_HINTS: { readonly [K in SettingsFieldKind]?: MessageKey } = {
+  list: 'cmsRemote.fieldHint.list',
+  group: 'cmsRemote.fieldHint.group',
+};
+
+const NEW_KINDS: readonly NewFieldKind[] = [
+  'text',
+  'richText',
+  'image',
+  'multiImage',
+  'videoLink',
+  'link',
+  'email',
+  'phone',
+  'number',
+  'date',
+  'switch',
+  'color',
+  'option',
+  'file',
+  'reference',
+  'multiReference',
+  'list',
+  'group',
+  'keyValue',
+  'constant',
+  'any',
+];

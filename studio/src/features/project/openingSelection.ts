@@ -18,10 +18,7 @@ export function openingSelection(file: string, nodes: readonly ParserNode[]) {
     if (!node) {
       break;
     }
-    if (
-      transparent.has(node.kind) ||
-      (markup(node) && ['Fragment', 'slot', ''].includes(node.name ?? ''))
-    ) {
+    if (transparent.has(node.kind) || (markup(node) && ['Fragment', 'slot', ''].includes(node.name ?? ''))) {
       queue.unshift(...(node.children ?? []));
     } else if (markup(node) && !inert.has(node.name ?? '')) {
       return body ?? node;

@@ -3,57 +3,38 @@
 // page, copying the selection as a trail, layout and import gestures, and
 // whether focus is in an editable field (App.tsx).
 
+import type { Translator } from '../../lib/i18n/localeContext';
+import { REJECTION_KEYS } from '../rejectionMessages';
+import { canvasTextHasFocus } from '../../editor/canvasTextFocus';
 import React from 'react';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { readPage } from '../../ipc/bridge';
-import { type AppliedEdit, type PageOrigin, type EditGesture } from '../../editor/pageEdits';
-import { describeRejection } from '../../../shared/engine/intent';
-import {
-  type InsertPlace,
-  frontmatterGesture,
-  insertGesture,
-  sequence,
-  tagRenameGesture,
-  wrapGesture,
-} from '../../editor/editGestures';
-import type { PageEdited } from '../../../shared/ipc/pageSave';
+import { type AppliedEdit, type PageOrigin } from '../../editor/pageEdits';
+import type { RejectionReason } from '../../../shared/engine/intent';
+import { assert } from '../../../shared/core/assert';
+import { type InsertPlace, insertGesture } from '../../editor/editGestures';
+import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
-import {
-  type AppHistory,
-  type LeftTab,
-  type NodeClipboard,
-  type ProjectIdentity,
-  type RightTab,
-  type ToastKind,
-} from '../appTypes';
-import {
-  toEditorPageState,
-  carriedParse,
-  type EditorPageState,
-  type OpenFile,
-  type PageStateSnapshot,
-} from '../../editor/pageState';
-import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
-import {
-  copyEditorSelection,
-  runNativeEdit,
-  editProjectPage,
-  type ImportPaths,
-} from '../../ipc/appBridge';
-import { revertedOrigin, frontmatterOf } from './nodeFactory';
-import {
-  withPrunedImports,
-  chooseImportPath,
-  withLayoutField,
-  type PasteNeeds,
-} from './pageGestures';
+import { menuPasteClaimed } from '../../ui/menuPasteClaim';
+import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type PseudoPick, type RightTab, type ToastKind } from '../appTypes';
+import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
+import { type EditorModel, type EditorNode } from '../../editor/pageView';
+import { copyEditorSelection, runNativeEdit, editProjectPage } from '../../ipc/appBridge';
+import { revertedOrigin } from './nodeFactory';
+import { toggleFollowMode } from '../../features/style/embed/contextFollow';
+import { getHost } from '../../features/style/model/host';
+import { structuralSelection } from './selectionStructure';
+import { type PasteNeeds } from './pageGestures';
+import { type AppShortcutRoute, appShortcutRoute } from '../../features/apps/appsRuntime';
+export { layoutWrapperGesture, markdownLayoutGesture, withImportsGesture } from './pageModelGestures';
 
 // The app's own keys, read through refs at keypress time: see the keydown effect in App.
 export interface AppKeys {
   readonly historyRef: React.MutableRefObject<AppHistory>;
   readonly pageStateRef: React.MutableRefObject<PageStateSnapshot>;
   readonly selectedIdRef: React.MutableRefObject<string | undefined>;
+  readonly pseudoPickRef: React.MutableRefObject<PseudoPick | undefined>;
   readonly openCodeWindowRef: React.MutableRefObject<(() => boolean) | undefined>;
   readonly nodeClipboardRef: React.MutableRefObject<NodeClipboard | undefined>;
   readonly cmsOpenRef: React.MutableRefObject<boolean>;
@@ -87,11 +68,22 @@ export function handleAppKeyDown(event: KeyboardEvent, keys: AppKeys): void {
 // ⌘Z undoes, ⇧⌘Z / ⌘Y redoes. True when the key was one of those.
 export function handleHistoryKey(event: KeyboardEvent, keys: AppKeys): boolean {
   const mod = event.metaKey || event.ctrlKey;
-  // Undo/redo take priority over native field undo so history stays
-  // consistent no matter where focus is. Handled before the CMS check
-  // below and without requiring an open page: the stack also holds CSS,
-  // CMS and asset changes, which are undoable from anywhere.
+  // Handled before the CMS check below and without requiring an open page:
+  // the stack also holds CSS, CMS and asset changes, which are undoable from
+  // anywhere.
   if (mod && (event.key.toLowerCase() === 'z' || event.key.toLowerCase() === 'y')) {
+    // A field that answered the key itself (the token field, a code editor)
+    // has undone its own typing; undoing a page step as well would take two.
+    if (event.defaultPrevented) {
+      return true;
+    }
+    // Typing is the field's to undo, the same rule the menu's Undo follows: a
+    // value half-typed in a box is not a step on the page's stack, and taking
+    // the key for the page threw the typing's undo away whenever the page had
+    // anything to undo.
+    if (inEditable()) {
+      return true;
+    }
     const history = keys.historyRef.current;
     const wantsRedo = event.key.toLowerCase() === 'y' || event.shiftKey;
     if (!(wantsRedo ? history.future : history.past).length) {
@@ -109,12 +101,20 @@ export function handleHistoryKey(event: KeyboardEvent, keys: AppKeys): boolean {
   return false;
 }
 
-// ⌘F / ⌘E, ⌘⇧A and ⌘Enter, which work from inside fields too. True when the key was one.
+// The letters that open the insert palette with ⌘: F, E and K all do, so the
+// palette answers whichever a person's other tools taught them.
+export const INSERT_PALETTE_KEYS: ReadonlySet<string> = new Set(['f', 'e', 'k']);
+
+// ⌘F / ⌘E / ⌘K, ⌘⇧A and ⌘Enter, which work from inside fields too. True when the key was one.
 export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
   const mod = event.metaKey || event.ctrlKey;
-  // ⌘F / ⌘E open the insert palette (works from anywhere except the
+  // ⌘F / ⌘E / ⌘K open the insert palette (works from anywhere except the
   // code editor, which keeps its own find).
-  if (mod && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'e')) {
+  if (mod && INSERT_PALETTE_KEYS.has(event.key.toLowerCase())) {
+    // A rich text field claims ⌘K (link) and ⌘E (code) for itself first.
+    if (event.defaultPrevented) {
+      return true;
+    }
     if (!keys.pageStateRef.current.pageState?.editable) {
       return true;
     }
@@ -135,7 +135,7 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
     if (!keys.pageStateRef.current.pageState?.editable) {
       return true;
     }
-    if (!keys.selectedIdRef.current || keys.selectedIdRef.current === 'frontmatter') {
+    if (structuralSelection(keys.selectedIdRef.current, keys.pseudoPickRef.current) === undefined) {
       return true;
     }
     const element = event.target;
@@ -148,9 +148,9 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
     return true;
   }
 
-  // ⌘Enter goes straight to the class field: Settings tab, Settings group
-  // open, caret in the class input. Before the "am I typing" guard below,
-  // so it also works from another field in the panel.
+  // ⌘Enter goes straight to the selector field: Style tab, caret in its
+  // "Add a selector" input. Before the "am I typing" guard below, so it also
+  // works from another field in the panel.
   if (mod && !event.altKey && !event.shiftKey && event.key === 'Enter') {
     if (!keys.selectedIdRef.current) {
       return true;
@@ -160,7 +160,7 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
       return true;
     }
     event.preventDefault();
-    keys.setRightTab('settings');
+    keys.setRightTab('style');
     keys.setClassFocus((count) => count + 1);
     return true;
   }
@@ -171,11 +171,7 @@ export function handleCommandKey(event: KeyboardEvent, keys: AppKeys): boolean {
 export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
   const mod = event.metaKey || event.ctrlKey;
   const target = event.target;
-  if (
-    target instanceof HTMLElement &&
-    (target.closest('input, textarea, select, [contenteditable="true"]') ||
-      target.isContentEditable)
-  ) {
+  if (target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) {
     return;
   }
   const state = keys.pageStateRef.current.pageState;
@@ -183,7 +179,6 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
     return;
   }
   const selectionId = keys.selectedIdRef.current;
-  const hasNodeSelection = !!selectionId && selectionId !== 'frontmatter';
 
   // Enter opens the floating editor for a selection that has one
   // (frontmatter, <style>, <script>) — same as its "Edit code" button.
@@ -208,6 +203,14 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
     keys.setRightTab('style');
     return;
   }
+  // 0 turns Follow canvas size on or off (the toggle on the style panel's breakpoint dropdown). A plain
+  // key, so it only fires outside fields (the check above) and never collides with ⌘0 or a digit typed in one.
+  if (!mod && !event.altKey && !event.shiftKey && event.key === '0') {
+    if (toggleFollowMode(getHost().projectPath)) {
+      event.preventDefault();
+    }
+    return;
+  }
   if (!mod && !event.altKey && (event.key === 'd' || event.key === 'D')) {
     event.preventDefault();
     keys.setRightTab('settings');
@@ -215,30 +218,103 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
   }
 
   if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
-    if (!hasNodeSelection) {
+    const deletable = structuralSelection(selectionId, keys.pseudoPickRef.current);
+    if (deletable === undefined) {
       return;
     }
     event.preventDefault();
-    keys.removeNode(selectionId);
+    keys.removeNode(deletable);
   } else if (mod && event.key.toLowerCase() === 'c') {
+    const copyable = structuralSelection(selectionId, keys.pseudoPickRef.current);
+    if (copyable === undefined) {
+      return;
+    }
     // Let native copy win when actual text is selected.
-    if (!hasNodeSelection || String(window.getSelection() || '')) {
+    if (String(window.getSelection() || '')) {
       return;
     }
     event.preventDefault();
-    keys.copyNode(selectionId);
+    keys.copyNode(copyable);
   } else if (mod && event.key.toLowerCase() === 'd') {
-    if (!hasNodeSelection) {
+    const duplicable = structuralSelection(selectionId, keys.pseudoPickRef.current);
+    if (duplicable === undefined) {
       return;
     }
     event.preventDefault();
-    keys.duplicateNode(selectionId);
+    keys.duplicateNode(duplicable);
   } else if (mod && event.key.toLowerCase() === 'v') {
+    // An open tool that reads the clipboard (the clip-path editor) takes ⌘V: the
+    // key is left alone so the browser's paste reaches it (menuPasteClaim.ts).
+    if (menuPasteClaimed()) {
+      return;
+    }
     if (!keys.nodeClipboardRef.current) {
       return;
     }
     event.preventDefault();
     void keys.pasteNode().catch(keys.reportFailure);
+  }
+}
+
+// Why an undo or redo step did not land, and how loudly to say it. A step
+// that was declined (its element moved, the file changed outside Stacki, the
+// actor was busy) broke nothing: the file is as it was and the step waits, so
+// it is a warning. Only a write that failed, or may have, is an error.
+export interface UndoRefusal {
+  readonly message: string;
+  readonly kind: Extract<ToastKind, 'warning' | 'error'>;
+}
+
+// The refusal for a revert main did not apply (revertedSteps).
+export function undoRefusal(error: PageEditError, translate: Translator): UndoRefusal {
+  const refusal: UndoRefusal =
+    error.code === 'rejected'
+      ? { message: translate(REJECTION_KEYS[error.reason]), kind: rejectionToastKind(error.reason) }
+      : { message: error.message, kind: writeFailureToastKind(error.code) };
+  assert(refusal.message.length > 0, 'An undo refusal says why');
+  return refusal;
+}
+
+// A rejection refuses the step's content against the bytes on disk now; it
+// writes nothing. Only an editor error is a fault worth the red notice.
+function rejectionToastKind(reason: RejectionReason): UndoRefusal['kind'] {
+  switch (reason) {
+    case 'anchor-moved':
+    case 'anchor-ambiguous':
+    case 'region-externally-modified':
+    case 'source-invalid':
+    case 'resource-limit':
+    case 'write-race':
+    case 'merge-conflict':
+      return 'warning';
+    case 'would-break-page':
+    case 'unsupported-operation':
+    case 'write-failed':
+    case 'invalid-placement':
+      return 'error';
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
+}
+
+// A write failure: a race or a full queue means the write never started, so
+// the step only waits; a missing file, a filesystem error or an unverified
+// write is a genuine failure.
+function writeFailureToastKind(code: Exclude<PageEditError['code'], 'rejected'>): UndoRefusal['kind'] {
+  switch (code) {
+    case 'write-race':
+    case 'backpressured':
+      return 'warning';
+    case 'missing':
+    case 'filesystem':
+    case 'uncertain':
+      return 'error';
+    default: {
+      const exhaustive: never = code;
+      return exhaustive;
+    }
   }
 }
 
@@ -248,11 +324,12 @@ export async function revertedSteps(
   path: string,
   applied: readonly AppliedEdit[],
   startOrigin: PageOrigin | undefined,
+  translate: Translator,
 ): Promise<{
   readonly done: readonly AppliedEdit[];
   readonly written: PageEdited | undefined;
   readonly origin: PageOrigin | undefined;
-  readonly refusal: string | undefined;
+  readonly refusal: UndoRefusal | undefined;
 }> {
   const done: AppliedEdit[] = [];
   let origin = startOrigin;
@@ -268,9 +345,7 @@ export async function revertedSteps(
       edit: { tag: 'revert', hunks },
     });
     if (!answer.ok) {
-      const error = answer.error;
-      const why = error.code === 'rejected' ? describeRejection(error.reason) : error.message;
-      return { done, written, origin, refusal: why };
+      return { done, written, origin, refusal: undoRefusal(answer.error, translate) };
     }
     done.push({ checksum: answer.value.checksum, inverse: answer.value.inverse });
     written = answer.value;
@@ -329,6 +404,7 @@ export async function reloadChangedPage(
 
 // ⇧⌘C — the selection's file:line trail, for pasting into an AI chat.
 export async function copySelectionTrail(context: {
+  readonly translate: Translator;
   readonly flushSave: () => Promise<void>;
   readonly showToast: (message: string, kind?: ToastKind) => void;
   readonly projectRef: React.MutableRefObject<ProjectIdentity | undefined>;
@@ -339,7 +415,7 @@ export async function copySelectionTrail(context: {
   try {
     await context.flushSave();
   } catch (error: unknown) {
-    context.showToast(`Couldn’t copy the selection: ${cleanError(error)}`, 'error');
+    context.showToast(context.translate('shell.copy.failed', { message: cleanError(error) }), 'error');
     return;
   }
   const projectPath = context.projectRef.current?.path;
@@ -348,81 +424,16 @@ export async function copySelectionTrail(context: {
   }
   const copied = await copyEditorSelection(projectPath, [...context.selectionKeysRef.current]);
   if (copied) {
-    context.showToast('Selection copied — paste it into your AI chat.');
+    context.showToast(context.translate('shell.copy.done'));
   } else {
-    context.showToast('Nothing selected to copy.', 'error');
+    context.showToast(context.translate('shell.copy.nothing'), 'error');
   }
-}
-
-// A markdown page's layout, written into its `layout:` frontmatter key.
-export function markdownLayoutGesture(model: EditorModel, rel: string | undefined): EditGesture {
-  const framed = (pageModel: EditorModel): EditorModel => ({
-    ...pageModel,
-    extraFrontmatter: withLayoutField(pageModel.extraFrontmatter, rel),
-    layoutPath: rel,
-  });
-  return frontmatterGesture(model, { coalesceKey: undefined, urgency: true }, framed);
-}
-
-// The imports a wrapper change needs, and those it leaves unused, as the same
-// undo step (step 9: a frontmatter slot).
-export function withImportsGesture(
-  model: EditorModel,
-  gesture: EditGesture,
-  imports: (pageModel: EditorModel) => EditorModel,
-): EditGesture {
-  const after = gesture.apply(model);
-  const options = { coalesceKey: undefined, urgency: true };
-  return frontmatterOf(imports(after)) === frontmatterOf(after)
-    ? gesture
-    : sequence(gesture, frontmatterGesture(after, options, imports));
-}
-
-// The page's layout wrapper renamed to `layout`, or the page wrapped in it when it has
-// none; undefined when the wrapper already is that layout or is not a tag.
-export function layoutWrapperGesture(
-  model: EditorModel,
-  wrapper: EditorNode | undefined,
-  layout: { readonly name: string; readonly paths: ImportPaths },
-): EditGesture | undefined {
-  const { name, paths } = layout;
-  const imports = (pageModel: EditorModel): EditorModel =>
-    withPrunedImports(
-      pageModel.imports.some((i) => i.name === name)
-        ? pageModel
-        : {
-            ...pageModel,
-            imports: [
-              ...pageModel.imports,
-              { name, path: chooseImportPath(pageModel, paths), quote: "'" },
-            ],
-          },
-    );
-  if (wrapper) {
-    if (wrapper.kind !== 'component' && wrapper.kind !== 'element') {
-      return undefined;
-    }
-    if (wrapper.name === name) {
-      return undefined;
-    }
-    const renamed: EditorNode = { ...wrapper, name };
-    const options = { coalesceKey: undefined, urgency: true };
-    return withImportsGesture(model, tagRenameGesture(wrapper, renamed, options), imports);
-  }
-  // No wrapper yet — wrap the whole page in the new layout.
-  const created: EditorNode = {
-    id: nodeId('layout'),
-    kind: 'component',
-    name,
-    props: {},
-    children: [],
-  };
-  return withImportsGesture(model, wrapGesture(model, created), imports);
 }
 
 // Saves what is pending before a navigation goes on. False when the save failed —
 // said only while this navigation is still the latest — or a newer one took over.
 export async function savedForNavigation(
+  translate: Translator,
   flushSave: () => Promise<void>,
   latestRequest: () => boolean,
   showToast: (message: string, kind?: ToastKind) => void,
@@ -431,7 +442,7 @@ export async function savedForNavigation(
     await flushSave();
   } catch (error: unknown) {
     if (latestRequest()) {
-      showToast(`Save failed: ${cleanError(error)}`, 'error');
+      showToast(translate('shell.save.failed', { message: cleanError(error) }), 'error');
     }
     return false;
   }
@@ -441,36 +452,56 @@ export async function savedForNavigation(
 // Whether a text field, a box or anything a caret is in has focus.
 export function inEditable(): boolean {
   const active = document.activeElement;
-  return (
-    active instanceof HTMLElement &&
-    (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)
-  );
+  // Canvas text being edited is a field too: the menu's Copy, Cut and Paste go to it.
+  if (canvasTextHasFocus()) {
+    return true;
+  }
+  return active instanceof HTMLElement && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
 }
 
 // The component file a caller already named: the instances popup names a component by
 // where it lives, and two folders can hold the same basename.
-export function componentAtPath(
-  scan: ScanResult,
-  name: string,
-  filePath: string,
-): { readonly name: string; readonly path: string } {
+export function componentAtPath(scan: ScanResult, name: string, filePath: string): { readonly name: string; readonly path: string } {
   return (
-    scan.components.find((component) => component.path === filePath) ||
-    scan.layouts.find((layout) => layout.path === filePath) || { name, path: filePath }
+    scan.components.find((component) => component.path === filePath) || scan.layouts.find((layout) => layout.path === filePath) || { name, path: filePath }
   );
 }
 
 // The scanned component or layout with this name.
 export function componentNamed(scan: ScanResult, name: string): ScanComponent | undefined {
-  return (
-    scan.components.find((component) => component.name === name) ||
-    scan.layouts.find((layout) => layout.name === name)
-  );
+  return scan.components.find((component) => component.name === name) || scan.layouts.find((layout) => layout.name === name);
 }
 
 // The drill-down stack with `entry` on top, unless the file is already open in it.
 export function stackWith(entry: OpenFile): (stack: readonly OpenFile[]) => readonly OpenFile[] {
   return (stack) => (stack.some((open) => open.path === entry.path) ? stack : [...stack, entry]);
+}
+
+/**
+ * How a component is opened. `drill`: from one of its instances (a double-click on the canvas, the navigator, the code
+ * editor), so back steps out one level to the file that holds that instance. `jump`: from a list that names the file
+ * (an audit finding, the Components panel, a usage list), which is a sibling move with no instance to step out of.
+ */
+export type ComponentNavigation = 'drill' | 'jump';
+
+// The drill-down stack after a jump to `entry`. Why: every finding the Audits panel opened used to push another level,
+// so after seven findings the back arrow took seven presses to reach the page. A jump keeps the page-level origin (the
+// stack's root, recorded once) and replaces whatever components were open above it, so one back returns to that page.
+// A file already in the stack is stepped back to rather than opened twice: re-clicking the open component changes
+// nothing, and jumping to a component that is open lower down keeps the entry the user drilled into.
+export function stackAfterJump(entry: OpenFile): (stack: readonly OpenFile[]) => readonly OpenFile[] {
+  assert(entry.kind === 'component', 'A jump opens a component');
+  return (stack) => {
+    const index = stack.findIndex((open) => open.path === entry.path);
+    if (index >= 0) {
+      return stack.slice(0, index + 1);
+    }
+    const origin = stack[0];
+    // A stack rooted in a component has no page to return to: the jump replaces it outright.
+    const next = origin?.kind === 'page' ? [origin, entry] : [entry];
+    assert(next.at(-1) === entry, 'A jump leaves the jumped-to component on top');
+    return next;
+  };
 }
 
 // A pasted node without the bindings of loops it no longer sits in: pasted outside
@@ -489,23 +520,18 @@ export function pastedInScope(
 }
 
 // What a paste brought across from the page it was copied from, if anything.
-export function broughtMessage(needs: PasteNeeds): string | undefined {
-  const brought = [
-    ...needs.carriedImports.map((i) => i.name),
-    ...needs.carried.statements.map((statement) => statement.name),
-  ];
+export function broughtMessage(needs: PasteNeeds, translate: Translator): string | undefined {
+  const brought = [...needs.carriedImports.map((i) => i.name), ...needs.carried.statements.map((statement) => statement.name)];
   if (!brought.length) {
     return undefined;
   }
-  return (
-    `Brought ${brought.map((name) => `\`${name}\``).join(', ')} ` +
-    'across from the page it was copied from.'
-  );
+  return translate('shell.paste.brought', { names: brought.map((name) => `\`${name}\``).join(', ') });
 }
 
 // What the menu's Copy and Paste act on when no field has focus: see the menu effect in App.
 export interface MenuEdits {
   readonly selectedIdRef: React.MutableRefObject<string | undefined>;
+  readonly pseudoPickRef: React.MutableRefObject<PseudoPick | undefined>;
   readonly pageStateRef: React.MutableRefObject<PageStateSnapshot>;
   readonly cmsOpenRef: React.MutableRefObject<boolean>;
   readonly nodeClipboardRef: React.MutableRefObject<NodeClipboard | undefined>;
@@ -514,29 +540,64 @@ export interface MenuEdits {
   readonly reportFailure: (error: unknown) => void;
 }
 
+// Where the menu's Copy or Paste goes while an app's frame has focus. Why: the app
+// is another document, so here the focused element is only its frame, and the
+// editable check below says no even with the caret in the app's text field. The
+// menu then pasted the copied element, or nothing, and ⌘V never reached the field.
+// The app's SDK reports whether one of its fields has focus (appsRuntime.ts), the
+// same report the menu's Undo reads; `native` hands the key to the focused frame,
+// which pastes only what the person chose to paste, so no app reads the clipboard.
+function appFrameEditRoute(shortcut: 'Mod+C' | 'Mod+V'): AppShortcutRoute {
+  const route = appShortcutRoute(shortcut, document.activeElement ?? undefined);
+  assert(route === 'stacki' || route === 'native' || route === 'app', 'appFrameEditRoute: a route is one of the three');
+  return route;
+}
+
 // The menu's Copy: the field's own, selected text, or else the selected node.
 export function menuCopy(menu: MenuEdits): void {
+  const route = appFrameEditRoute('Mod+C');
+  if (route === 'app') {
+    return; // The app claims ⌘C and has heard it as `shortcut.press`.
+  }
+  if (route === 'native') {
+    runNativeEdit('copy');
+    return;
+  }
   if (inEditable() || String(window.getSelection() || '')) {
     runNativeEdit('copy');
     return;
   }
-  const selectionId = menu.selectedIdRef.current;
-  if (selectionId && menu.pageStateRef.current.pageState?.editable && !menu.cmsOpenRef.current) {
-    menu.copyNode(selectionId);
+  const copyable = structuralSelection(menu.selectedIdRef.current, menu.pseudoPickRef.current);
+  if (copyable === undefined) {
+    return;
+  }
+  if (menu.pageStateRef.current.pageState?.editable && !menu.cmsOpenRef.current) {
+    menu.copyNode(copyable);
   }
 }
 
-// The menu's Paste: into the focused field, or else the copied node.
+// The menu's Paste: into the focused field, or to an open tool that claims it,
+// or else the copied node. A claiming tool gets the browser's own paste, which
+// fires a `paste` event even with no field focused: ⌘V is this menu item, not
+// the stock Paste role, so without it the event never fires at all.
 export function menuPaste(menu: MenuEdits): void {
+  const route = appFrameEditRoute('Mod+V');
+  if (route === 'app') {
+    return; // The app claims ⌘V and has heard it as `shortcut.press`.
+  }
+  if (route === 'native') {
+    runNativeEdit('paste');
+    return;
+  }
   if (inEditable()) {
     runNativeEdit('paste');
     return;
   }
-  if (
-    menu.nodeClipboardRef.current &&
-    menu.pageStateRef.current.pageState?.editable &&
-    !menu.cmsOpenRef.current
-  ) {
+  if (menuPasteClaimed()) {
+    runNativeEdit('paste');
+    return;
+  }
+  if (menu.nodeClipboardRef.current && menu.pageStateRef.current.pageState?.editable && !menu.cmsOpenRef.current) {
     void menu.pasteNode().catch(menu.reportFailure);
   }
 }

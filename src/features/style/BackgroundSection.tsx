@@ -1,20 +1,19 @@
 import { useState } from 'react';
-import Select from './components/Select';
-import {
-  blankLayer,
-  layerLabel,
-  parseLayers,
-  serializeLayers,
-  splitBackgroundShorthand,
-  type BgLayer,
-} from './model/background';
+import { layerPreviewStyle, useResolvedCustomProperties } from './GradientCode';
+import { VariableSelect, variableIn } from './KeywordConnect';
+import { RatioOtherInput } from './AspectRatioField';
+import { blankLayer, layerLabel, parseLayers, serializeLayers, splitBackgroundShorthand, type BgLayer } from './model/background';
 import LayerList from './LayerList';
 import { PlusIcon } from './components/MenuParts';
 import { openAfterRemoval } from './model/fieldHooks';
 import { displayOf } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 import { type Props, BgLabel, BgField, LayerEditorModal } from './BackgroundKit';
 import { imageUrlOf, assetSourceCandidates, FallbackImg } from './BackgroundLayerFields';
 import { LayerEditor } from './BackgroundLayerEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The Backgrounds section — Webflow parity. `background` is a stack of layers
 // (images + gradients) painted over a single background-color. The layer list
@@ -28,19 +27,27 @@ import { LayerEditor } from './BackgroundLayerEditor';
 
 // ─────────────────────────── Section ───────────────────────────
 
+const TRANSPARENT_KEYWORD = 'transparent'; // i18n-ignore: the CSS keyword shown as the empty color.
+
 export default function BackgroundSection(props: Props) {
-  const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = props;
-  const stack = useLayerStack(props);
+  const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
+  const translate = useTranslate();
+  const layerWriters = keepingImportant(props);
+  const stack = useLayerStack({ ...props, ...layerWriters });
   const { layers, applyLayers, openLayer, setOpenLayer } = stack;
+  // The layers come from the `background` shorthand when no `background-image`
+  // is set (useLayerStack), so the label does too: `.divider::before { background:
+  // radial-gradient(…) }` set the layers and left "Image & gradient" unlit.
+  const labelProp = layerSourceProp(read);
   return (
     <div className="embed-editor_size embed-editor_background">
       {/* Image & gradient — the layer stack (top layer first). */}
       <div className="embed-editor_bg-layers-head">
         <BgLabel
-          label="Image & gradient"
-          prop="background-image"
-          d={displayOf(read('background-image'))}
-          contributors={read('background-image')?.contributors ?? []}
+          label={translate('style.backgroundSection.imageAndGradient')}
+          prop={labelProp}
+          d={displayOf(read(labelProp))}
+          contributors={read(labelProp)?.contributors ?? []}
           busy={busy}
           onClear={() => applyLayers([])}
           onProvenance={onProvenance}
@@ -51,8 +58,8 @@ export default function BackgroundSection(props: Props) {
           className="embed-editor_icon-btn"
           onClick={stack.addLayer}
           disabled={busy}
-          title="Add a layer"
-          aria-label="Add a background layer"
+          title={translate('style.backgroundSection.addLayer')}
+          aria-label={translate('style.backgroundSection.addBackgroundLayer')}
         >
           <PlusIcon />
         </button>
@@ -61,11 +68,11 @@ export default function BackgroundSection(props: Props) {
       <LayerList
         count={layers.length}
         busy={busy}
-        ariaLabel="Background layers"
+        ariaLabel={translate('style.backgroundSection.backgroundLayers')}
         onOpen={(i) => setOpenLayer((current) => (current === i ? undefined : i))}
         onReorder={stack.reorder}
         onRemove={stack.removeLayer}
-        renderRow={(i) => layerRow(layers, i)}
+        renderRow={(i) => layerRow(layers, i, translate)}
       />
 
       {openLayer !== undefined && layers[openLayer] ? (
@@ -74,9 +81,9 @@ export default function BackgroundSection(props: Props) {
             layers={layers}
             index={openLayer}
             busy={busy}
-            setProp={setProp}
+            setProp={layerWriters.setProp}
             clearProp={clearProp}
-            liveSetProp={props.liveSetProp}
+            liveSetProp={layerWriters.liveSetProp}
             applyLayers={applyLayers}
           />
         </LayerEditorModal>
@@ -87,9 +94,9 @@ export default function BackgroundSection(props: Props) {
         <BgField
           {...props}
           prop="background-color"
-          label="Color"
-          placeholder="transparent"
-          swatchLabel="Background color"
+          label={translate('style.backgroundSection.color')}
+          placeholder={TRANSPARENT_KEYWORD}
+          swatchLabel={translate('style.backgroundSection.backgroundColor')}
         />
       </div>
 
@@ -98,15 +105,32 @@ export default function BackgroundSection(props: Props) {
   );
 }
 
+// The writers the layer list and its editor use. A layer has no text to delete
+// `!important` from, so a write keeps the flag the longhand shows, or, while the
+// layers still come from the `background` shorthand, the shorthand's.
+function keepingImportant({ read, setProp, liveSetProp }: Props): Pick<Props, 'setProp' | 'liveSetProp'> {
+  const fromShorthand = layerSourceProp(read) === 'background';
+  const flagged = (prop: string): boolean => displayOf(read(prop)).important || (fromShorthand && displayOf(read('background')).important);
+  return {
+    setProp: (prop, value, important) => setProp(prop, value, important || flagged(prop)),
+    liveSetProp: (prop, value, important) => liveSetProp(prop, value, important || flagged(prop)),
+  };
+}
+
 // Clipping — background-clip. "None" writes border-box explicitly.
 function ClippingRow(props: Props) {
-  const { read, busy, setProp, clearProp } = props;
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
+  const { read, busy, setProp, clearProp, liveSetProp } = props;
+  const translate = useTranslate();
   const clipDisplay = displayOf(read('background-clip'));
+  // A variable has no row in the list: the chip field stands in for the label.
+  const clipVariable = clipDisplay.present && variableIn(clipDisplay.value) !== undefined;
   const clip = clipDisplay.present ? clipDisplay.value.trim() : 'border-box';
   return (
     <div className="embed-editor_size-row">
       <BgLabel
-        label="Clipping"
+        label={translate('style.backgroundSection.clipping')}
         prop="background-clip"
         d={clipDisplay}
         contributors={read('background-clip')?.contributors ?? []}
@@ -115,47 +139,76 @@ function ClippingRow(props: Props) {
         onProvenance={props.onProvenance}
         onSelectSelector={props.onSelectSelector}
       />
-      <Select
-        value={clip}
-        options={CLIP_OPTIONS}
-        onChange={(next) => setProp('background-clip', next, false)}
-        onPreview={(next) => props.liveSetProp('background-clip', next ?? undefined, false)}
-        ariaLabel="Background clipping"
-        disabled={busy}
-      />
+      {/* No custom field: a flagged value is marked, and picks keep the flag. */}
+      <ImportantMark important={clipDisplay.important}>
+        <VariableSelect
+          prop="background-clip"
+          rawValue={clipDisplay.present ? clipDisplay.value : ''}
+          onVariable={(binding) => setProp('background-clip', binding, clipDisplay.important)}
+          customInput={
+            clipVariable ? (
+              <RatioOtherInput
+                value={clipDisplay.value}
+                busy={busy}
+                prop="background-clip"
+                ariaLabel={translate('style.backgroundSection.backgroundClipping')}
+                onCommit={(value, important) => setProp('background-clip', value, important || clipDisplay.important)}
+                onLiveCommit={(value, important) => liveSetProp('background-clip', value, important || clipDisplay.important)}
+                onClear={() => clearProp('background-clip')}
+              />
+            ) : undefined
+          }
+          value={clip}
+          options={clipOptions(translate)}
+          onChange={(next) => setProp('background-clip', next, clipDisplay.important)}
+          onPreview={(next) => hoverPreview('background-clip', next ?? undefined, clipDisplay.important)}
+          ariaLabel={translate('style.backgroundSection.backgroundClipping')}
+          disabled={busy}
+        />
+      </ImportantMark>
     </div>
   );
 }
 
-const CLIP_OPTIONS = [
-  { value: 'border-box', label: 'None' },
-  { value: 'padding-box', label: 'Clip background to padding' },
-  { value: 'content-box', label: 'Clip background to content' },
-  { value: 'text', label: 'Clip background to text' },
+export const clipOptions = (translate: Translator) => [
+  { value: 'border-box', label: translate('style.backgroundSection.clipNone') },
+  { value: 'padding-box', label: translate('style.backgroundSection.clipPadding') },
+  { value: 'content-box', label: translate('style.backgroundSection.clipContent') },
+  { value: 'text', label: translate('style.backgroundSection.clipText') },
 ];
 
+/** The property the layer stack is read from: `background-image`, or the
+ *  `background` shorthand when only that sets the layers (as useLayerStack). */
+export function layerSourceProp(read: Props['read']): 'background-image' | 'background' {
+  const image = displayOf(read('background-image'));
+  if (image.present && image.value.trim() !== '' && image.value.trim().toLowerCase() !== 'none') {
+    return 'background-image';
+  }
+  return displayOf(read('background')).present ? 'background' : 'background-image';
+}
+
 // A row of the layer list: its thumbnail and its label.
-function layerRow(layers: BgLayer[], i: number) {
+export function layerRow(layers: BgLayer[], i: number, translate: Translator) {
   const layer = layers[i];
   if (layer === undefined) {
     throw new Error(`Background layer ${i} is missing`);
   }
-  return { preview: <LayerPreview image={layer.image} />, label: layerLabel(layer.image) };
+  return { preview: <LayerPreview layer={layer} />, label: layerLabel(layer.image, translate) };
 }
 
 // A layer's thumbnail in the list.
-function LayerPreview({ image }: { image: string }) {
-  const url = imageUrlOf(image);
-  // A gradient is CSS this window paints as it stands.
+function LayerPreview({ layer }: { layer: BgLayer }) {
+  const url = imageUrlOf(layer.image);
+  // A gradient is CSS this window paints, with the variables it reads filled in
+  // from the selected element (this document defines none of them, so a
+  // `var(--divider-size)` gradient painted nothing), at the layer's own size
+  // and tiling when it has them.
+  const values = useResolvedCustomProperties([layer.image, layer.size, layer.position]);
   if (!url) {
     return (
       <span
         className="embed-editor_bg-layer-preview"
-        style={{
-          background: image,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
+        style={{ backgroundSize: 'cover', backgroundPosition: 'center', ...layerPreviewStyle(layer, values) }}
         aria-hidden="true"
       />
     );
@@ -238,10 +291,7 @@ function useLayerStack({ read, setProp, clearProp }: Props) {
 // changed on the picked selector. Each setProp/clearProp is a separate native op that
 // toggles busy + re-reads from Webflow, so rewriting all five longhands on every change
 // flashes the panel and echoes unchanged values back to Webflow.
-function writeLonghands(
-  serialized: ReturnType<typeof serializeLayers>,
-  { read, setProp, clearProp }: Pick<Props, 'read' | 'setProp' | 'clearProp'>,
-) {
+function writeLonghands(serialized: ReturnType<typeof serializeLayers>, { read, setProp, clearProp }: Pick<Props, 'read' | 'setProp' | 'clearProp'>) {
   // The value the PICKED selector itself sets for `prop` (undefined when it doesn't set
   // it — a value inherited from another selector doesn't count).
   const ownValue = (prop: string): string | undefined => {

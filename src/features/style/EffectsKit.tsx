@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { type Hideable } from './model/hideable';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect, variableIn } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import { type SegOption } from './SegmentedField';
 import { CURSOR_ICONS } from './cursorIcons';
@@ -16,9 +17,13 @@ import { handleArrowStep } from './model/numberStep';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { openAfterRemoval, useExternalDraft } from './model/fieldHooks';
-import { displayOf, parseImportant } from './model/styleDisplay';
+import { displayOf, displayText, keepImportant, parseImportant } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -115,21 +120,19 @@ export function draftInputHandlers({
 }
 
 // Write a whole property value: live writes skip an empty value; a committed empty
-// value clears the property.
-export function writeValue(
-  prop: string,
-  value: string,
-  options: WriteOptions,
-  writers: Pick<Props, 'setProp' | 'clearProp' | 'liveSetProp'>,
-) {
+// value clears the property. A layered list (shadows, filters, transforms,
+// transitions) is edited row by row, with no text to delete `!important` from,
+// so the write keeps the flag the property already has.
+export function writeValue(prop: string, value: string, options: WriteOptions, writers: Pick<Props, 'read' | 'setProp' | 'clearProp' | 'liveSetProp'>) {
+  const kept = keepImportant(value, displayOf(writers.read(prop)));
   if (options.live) {
-    if (value) {
-      writers.liveSetProp(prop, value, false);
+    if (kept.value) {
+      writers.liveSetProp(prop, kept.value, kept.important);
     }
     return;
   }
-  if (value) {
-    writers.setProp(prop, value, false);
+  if (kept.value) {
+    writers.setProp(prop, kept.value, kept.important);
   } else {
     writers.clearProp(prop);
   }
@@ -152,6 +155,9 @@ export function useLayerRows<T>({
     const next = [...rows, { item: blank(), hidden: false }];
     write(next, { live: false });
     setOpenIndex(next.length - 1);
+    // Its row is not drawn yet: no editor shows until it is clicked, never one
+    // anchored under the row opened before it.
+    setAnchorElement(undefined);
   };
   const remove = (i: number) => {
     write(
@@ -183,8 +189,13 @@ export function useLayerRows<T>({
       rows.map((row, other) => (other === i ? { ...row, hidden: !row.hidden } : row)),
       { live: false },
     );
+  // A click on the open row closes it; on any other, or on a row marked open
+  // with no editor showing yet (one just added: its row had not been drawn to
+  // anchor to), it opens. Toggling on the index alone made a new layer's first
+  // click close an editor that was never shown, so it took two to open.
   const open = (i: number, element: HTMLElement) => {
-    setOpenIndex((previous) => (previous === i ? undefined : i));
+    const showing = openIndex === i && anchorElement === element;
+    setOpenIndex(showing ? undefined : i);
     setAnchorElement(element);
   };
   const close = () => setOpenIndex(undefined);
@@ -195,6 +206,7 @@ export function useLayerRows<T>({
 // The property label: blue/active when the picked selector sets it (with a clear
 // menu + provenance), orange when it's set through another selector.
 export function EffLabel({ label, prop, props }: { label: string; prop: string; props: Props }) {
+  const translate = useTranslate();
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read(prop));
   const contributors: Contributor[] = read(prop)?.contributors ?? [];
@@ -208,9 +220,9 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={() => clearProp(prop)}
-      resetLabel="Clear"
+      resetLabel={translate('style.effectsKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.effectsKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -228,22 +240,12 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
 }
 
 // A live text field bound to one property (raw CSS value editors).
-export function LiveText({
-  prop,
-  placeholder,
-  props,
-  dragging,
-}: {
-  prop: string;
-  placeholder: string;
-  props: Props;
-  dragging?: string;
-}) {
+export function LiveText({ prop, placeholder, props, dragging }: { prop: string; placeholder: string; props: Props; dragging?: string }) {
+  const translate = useTranslate();
   const { read, busy, setProp, clearProp, liveSetProp } = props;
   const display = displayOf(read(prop));
   // `dragging` is what a swatch beside this field is showing mid-drag.
-  const written = display.important ? `${display.value} !important` : display.value;
-  const external = dragging ?? (display.present ? written : '');
+  const external = dragging ?? displayText(display);
   const computed = useStyleHint(external ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(external);
   // Undelayed live write for the scrub, which throttles its own — see useScrub.
@@ -279,10 +281,14 @@ export function LiveText({
     <VariableConnect
       code
       className="is-fill"
-      ariaLabel={`Connect ${prop} to a variable`}
+      ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
+      canvasProperty={prop}
+      onPick={(binding) => {
+        const kept = keepImportant(binding, display);
+        setProp(prop, kept.value, kept.important);
+      }}
     >
       <input
         {...scrub.input}
@@ -301,6 +307,7 @@ export function LiveText({
 
 // ─────────────────────────── Option lists ───────────────────────────
 
+// The labels are the CSS blend-mode keywords, which designers read untranslated.
 export const BLEND_MODES: SelectOption<string>[] = [
   'normal',
   'darken',
@@ -320,6 +327,7 @@ export const BLEND_MODES: SelectOption<string>[] = [
   'luminosity',
 ].map((mode) => ({
   value: mode,
+  // i18n-ignore: the CSS blend-mode keywords, kept as designers write them.
   label:
     mode === 'color-burn'
       ? 'Color burn'
@@ -334,17 +342,19 @@ export const BLEND_MODES: SelectOption<string>[] = [
 
 // Grouped like Webflow's cursor menu: a non-selectable heading per group, each
 // cursor indented and shown with its Webflow glyph.
-export const CURSOR_GROUPS: ReadonlyArray<{ heading: string; values: string[] }> = [
-  { heading: 'General', values: ['auto', 'default', 'none'] },
+export const CURSOR_GROUPS: ReadonlyArray<{ id: string; headingKey: MessageKey; values: string[] }> = [
+  { id: 'general', headingKey: 'style.effectsKit.cursorGeneral', values: ['auto', 'default', 'none'] },
   {
-    heading: 'Links & Status',
+    id: 'links',
+    headingKey: 'style.effectsKit.cursorLinks',
     values: ['pointer', 'not-allowed', 'wait', 'progress', 'help', 'context-menu'],
   },
-  { heading: 'Selection', values: ['cell', 'crosshair', 'text', 'vertical-text'] },
-  { heading: 'Drag & Drop', values: ['grab', 'grabbing', 'alias', 'copy', 'move'] },
-  { heading: 'Zoom', values: ['zoom-in', 'zoom-out'] },
+  { id: 'selection', headingKey: 'style.effectsKit.cursorSelection', values: ['cell', 'crosshair', 'text', 'vertical-text'] },
+  { id: 'drag', headingKey: 'style.effectsKit.cursorDrag', values: ['grab', 'grabbing', 'alias', 'copy', 'move'] },
+  { id: 'zoom', headingKey: 'style.effectsKit.cursorZoom', values: ['zoom-in', 'zoom-out'] },
   {
-    heading: 'Resize',
+    id: 'resize',
+    headingKey: 'style.effectsKit.cursorResize',
     values: [
       'col-resize',
       'row-resize',
@@ -363,40 +373,41 @@ export const CURSOR_GROUPS: ReadonlyArray<{ heading: string; values: string[] }>
     ],
   },
 ];
-export const CURSORS: SelectOption<string>[] = CURSOR_GROUPS.flatMap((group) => [
-  { value: `__${group.heading}`, label: group.heading, heading: true },
-  ...group.values.map((cursor) => ({
-    value: cursor,
-    label: cursor,
-    icon: CURSOR_ICONS[cursor],
-    indent: true,
-  })),
-]);
+export const cursorOptions = (translate: Translator): SelectOption<string>[] =>
+  CURSOR_GROUPS.flatMap((group) => [
+    { value: `__${group.id}`, label: translate(group.headingKey), heading: true },
+    ...group.values.map((cursor) => ({
+      value: cursor,
+      label: cursor,
+      icon: CURSOR_ICONS[cursor],
+      indent: true,
+    })),
+  ]);
 
-export const OUTLINE_OPTIONS: readonly SegOption[] = [
-  { value: 'none', label: '✕', menuLabel: 'None', ariaLabel: 'None' },
+export const outlineOptions = (translate: Translator): readonly SegOption[] => [
+  { value: 'none', label: '✕', menuLabel: translate('style.effectsKit.outlineNone'), ariaLabel: translate('style.effectsKit.outlineNone') },
   {
     value: 'solid',
     label: <span className="embed-editor_border-style-line is-solid" />,
-    menuLabel: 'Solid',
-    ariaLabel: 'Solid',
+    menuLabel: translate('style.effectsKit.outlineSolid'),
+    ariaLabel: translate('style.effectsKit.outlineSolid'),
   },
   {
     value: 'dashed',
     label: <span className="embed-editor_border-style-line is-dashed" />,
-    menuLabel: 'Dashed',
-    ariaLabel: 'Dashed',
+    menuLabel: translate('style.effectsKit.outlineDashed'),
+    ariaLabel: translate('style.effectsKit.outlineDashed'),
   },
   {
     value: 'dotted',
     label: <span className="embed-editor_border-style-line is-dotted" />,
-    menuLabel: 'Dotted',
-    ariaLabel: 'Dotted',
+    menuLabel: translate('style.effectsKit.outlineDotted'),
+    ariaLabel: translate('style.effectsKit.outlineDotted'),
   },
 ];
-export const EVENTS_OPTIONS: readonly SegOption[] = [
-  { value: 'auto', label: 'Auto', menuLabel: 'Auto' },
-  { value: 'none', label: 'None', menuLabel: 'None' },
+export const eventsOptions = (translate: Translator): readonly SegOption[] => [
+  { value: 'auto', label: translate('style.effectsKit.eventsAuto'), menuLabel: translate('style.effectsKit.eventsAuto') },
+  { value: 'none', label: translate('style.effectsKit.eventsNone'), menuLabel: translate('style.effectsKit.eventsNone') },
 ];
 
 // The "Custom…" sentinel + preset value sets (values that ARE listed in the dropdown,
@@ -420,6 +431,7 @@ export interface CustomInputProps {
   onExit: () => void;
 }
 export function CustomInput(props: CustomInputProps) {
+  const translate = useTranslate();
   const { prop, value, placeholder, busy, setProp, liveSetProp, clearProp, onExit } = props;
   const computed = useStyleHint(value ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(value);
@@ -442,10 +454,14 @@ export function CustomInput(props: CustomInputProps) {
   };
   return (
     <VariableConnect
-      ariaLabel={`Connect ${prop} to a variable`}
+      ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
+      canvasProperty={prop}
+      onPick={(binding) => {
+        const kept = keepImportant(binding, parseImportant(value));
+        setProp(prop, kept.value, kept.important);
+      }}
     >
       <input
         className="u-input u-select-custom-input"
@@ -492,7 +508,10 @@ export interface PresetSelectRowProps {
   allowCustom?: boolean;
 }
 export function PresetSelectRow(row: PresetSelectRowProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { prop, label, options, presets, props, allowCustom = true } = row;
+  const translate = useTranslate();
   const { read, busy, setProp, liveSetProp, clearProp } = props;
   const display = displayOf(read(prop));
   const current = display.present ? display.value.trim() : '';
@@ -506,51 +525,64 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
   );
   const isPreset = !current || presets.has(current);
   const [forceCustom, setForceCustom] = useState(false);
-  const customMode = allowCustom && (forceCustom || (display.present && !isPreset));
+  // A flagged value opens the custom field, whose text shows `!important` —
+  // the convention the panel's segmented bars follow. A select with no custom
+  // field marks the flag instead, and its picks keep it: there is no text to
+  // delete the flag from, so a pick that dropped it would change more than asked.
+  // A variable is shown as its chip even where Custom is off: the list has no row for it.
+  const customMode = (allowCustom && (forceCustom || (display.present && !isPreset) || display.important)) || variableIn(current) !== undefined;
+  const keptImportant = !allowCustom && display.important;
   const pick = (choice: string) => {
     if (choice === CUSTOM) {
       setForceCustom(true);
       return;
     }
     setForceCustom(false);
-    setProp(prop, choice, false);
+    setProp(prop, choice, keptImportant);
   };
   // "Custom…" has no value of its own to show, so landing on it reverts the preview.
-  const preview = (option: string | undefined) =>
-    liveSetProp(prop, option === CUSTOM ? undefined : option, false);
-  const written = display.important ? `${display.value} !important` : display.value;
-  const inputValue = forceCustom && isPreset ? '' : display.present ? written : '';
+  const preview = (option: string | undefined) => hoverPreview(prop, option === CUSTOM ? undefined : option, keptImportant);
+  const inputValue = forceCustom && isPreset && !display.important ? '' : displayText(display);
   const selectOptions = presetSelectOptions({
     options,
     allowCustom,
-    stray: display.present && !isPreset ? current : undefined,
+    translate,
+    stray: display.present && !isPreset && variableIn(current) === undefined ? current : undefined,
   });
   return (
     <div className="embed-editor_size-row">
       <EffLabel label={label} prop={prop} props={props} />
-      <Select
-        value={customMode ? CUSTOM : shown}
-        options={selectOptions}
-        onChange={pick}
-        onPreview={(option) => preview(option ?? undefined)}
-        ariaLabel={label}
-        disabled={busy}
-        customInput={
-          customMode ? (
-            <CustomInput
-              prop={prop}
-              value={inputValue}
-              placeholder={row.placeholder}
-              busy={busy}
-              autoFocus={forceCustom}
-              setProp={setProp}
-              liveSetProp={liveSetProp}
-              clearProp={clearProp}
-              onExit={() => setForceCustom(false)}
-            />
-          ) : undefined
-        }
-      />
+      <ImportantMark important={keptImportant}>
+        <VariableSelect
+          prop={prop}
+          rawValue={current}
+          onVariable={(binding) => {
+            setForceCustom(false);
+            setProp(prop, binding, display.important);
+          }}
+          value={customMode ? CUSTOM : shown}
+          options={selectOptions}
+          onChange={pick}
+          onPreview={(option) => preview(option ?? undefined)}
+          ariaLabel={label}
+          disabled={busy}
+          customInput={
+            customMode ? (
+              <CustomInput
+                prop={prop}
+                value={inputValue}
+                placeholder={row.placeholder}
+                busy={busy}
+                autoFocus={forceCustom}
+                setProp={setProp}
+                liveSetProp={liveSetProp}
+                clearProp={clearProp}
+                onExit={() => setForceCustom(false)}
+              />
+            ) : undefined
+          }
+        />
+      </ImportantMark>
     </div>
   );
 }
@@ -562,13 +594,15 @@ export function presetSelectOptions({
   options,
   allowCustom,
   stray,
+  translate,
 }: {
   options: SelectOption<string>[];
   allowCustom: boolean;
+  translate: Translator;
   stray: string | undefined;
 }): SelectOption<string>[] {
   if (allowCustom) {
-    return [...options, { value: CUSTOM, label: 'Custom…' }];
+    return [...options, { value: CUSTOM, label: translate('style.effectsKit.custom') }];
   }
   if (stray !== undefined) {
     return [...options, { value: stray, label: stray }];

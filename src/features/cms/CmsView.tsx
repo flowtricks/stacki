@@ -10,24 +10,11 @@ import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toRecord } from '../../../shared/core/record';
 import { importCmsAsset, writeCmsMeta } from './cmsBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import {
-  PlusIcon,
-  CloseIcon,
-  ChevronRightIcon,
-  CopyIcon,
-  TrashIcon,
-  DragIcon,
-  CheckIcon,
-} from '../../ui/Icons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { PlusIcon, CloseIcon, FileIcon, ChevronRightIcon, CopyIcon, TrashIcon, DragIcon, CheckIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
-import {
-  contentFieldsOf,
-  titleOf,
-  blankItem,
-  duplicateItem,
-  inferType,
-  isPlainObject,
-} from './cmsSchema';
+import { contentFieldsOf, titleOf, blankItem, duplicateItem, inferType, isPlainObject } from './cmsSchema';
 import CmsSettings from './CmsSettings';
 import FieldRow from './CmsField';
 import { bestType, withDeclaredTypes } from './cmsTypes';
@@ -47,8 +34,7 @@ export interface CmsViewProps {
   readonly onClose?: (() => void) | undefined;
   readonly onRecordUndo?: ((command: CmsUndo) => void) | undefined;
 }
-type DocumentState =
-  { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly snapshot: CmsSnapshot };
+type DocumentState = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly snapshot: CmsSnapshot };
 
 export default function CmsView(props: CmsViewProps) {
   // A file owns its pending edits and cleanup. Switching files remounts this
@@ -92,9 +78,10 @@ function useCmsDocument(props: CmsViewProps) {
   const [state, setState] = useState<DocumentState>({ kind: 'loading' });
   const [selection, setSelection] = useState(0);
   const [query, setQuery] = useState('');
+  const translate = useTranslate();
   const { saved, markSaved } = useCmsSaved(props.onSaved);
-  const callbacks = useRef({ props, markSaved });
-  callbacks.current = { props, markSaved };
+  const callbacks = useRef({ props, markSaved, translate });
+  callbacks.current = { props, markSaved, translate };
   const reload = useRef<() => Promise<void>>(() => Promise.resolve());
   const [writer] = useState(() =>
     createCmsWriter({
@@ -104,6 +91,8 @@ function useCmsDocument(props: CmsViewProps) {
       refresh: () => reload.current(),
       saved: () => callbacks.current.markSaved(),
       record: (command) => callbacks.current.props.onRecordUndo?.(command),
+      // Read at the moment a label is made, so the language chosen since applies.
+      translate: (key, params) => callbacks.current.translate(key, params),
     }),
   );
   useCmsReload({ props, writer, callbacks, reloadRef: reload, setState, setSelection });
@@ -147,19 +136,12 @@ function useCmsDocument(props: CmsViewProps) {
 interface ReloadOptions {
   readonly props: CmsViewProps;
   readonly writer: ReturnType<typeof createCmsWriter>;
-  readonly callbacks: React.MutableRefObject<{ props: CmsViewProps; markSaved: () => void }>;
+  readonly callbacks: React.MutableRefObject<{ props: CmsViewProps; markSaved: () => void; translate: Translator }>;
   readonly reloadRef: React.MutableRefObject<() => Promise<void>>;
   readonly setState: React.Dispatch<React.SetStateAction<DocumentState>>;
   readonly setSelection: React.Dispatch<React.SetStateAction<number>>;
 }
-function useCmsReload({
-  props,
-  writer,
-  callbacks,
-  reloadRef,
-  setState,
-  setSelection,
-}: ReloadOptions) {
+function useCmsReload({ props, writer, callbacks, reloadRef, setState, setSelection }: ReloadOptions) {
   useEffect(() => {
     const reader = createCmsReader({
       projectPath: props.project.path,
@@ -171,11 +153,7 @@ function useCmsReload({
         const snapshot = result.ok
           ? result.value
           : {
-              collection: cmsCollection(
-                props.rel,
-                undefined,
-                `This file can't be read as content — ${detail}`,
-              ),
+              collection: cmsCollection(props.rel, undefined, callbacks.current.translate('cms.view.unreadable', { detail })),
               items: [],
               declared: {},
             };
@@ -201,6 +179,7 @@ interface ContentProps {
   readonly snapshot: CmsSnapshot;
 }
 function CmsContent({ model, snapshot }: ContentProps) {
+  const translate = useTranslate();
   const actions = useCmsItems(model, snapshot);
   const schema = createCmsSchemaOperations({
     items: snapshot.items,
@@ -208,6 +187,7 @@ function CmsContent({ model, snapshot }: ContentProps) {
     commit: model.commit,
     saveDeclared: model.saveDeclared,
     report: (message) => model.showToast(message, 'error'),
+    translate,
   });
   if (model.settings) {
     return (
@@ -228,7 +208,8 @@ function CmsContent({ model, snapshot }: ContentProps) {
   }
   return (
     <div className={`cms-view ${model.hidden ? 'hidden' : ''}`}>
-      <CmsItems model={model} snapshot={snapshot} actions={actions} />
+      {/* One object (not a list) has nothing to choose between: its fields fill the view. */}
+      {!snapshot.collection.single && <CmsItems model={model} snapshot={snapshot} actions={actions} />}
       <div className="cms-detail">
         <CmsDetailHead model={model} snapshot={snapshot} actions={actions} />
         <CmsDetailBody model={model} snapshot={snapshot} />
@@ -239,6 +220,7 @@ function CmsContent({ model, snapshot }: ContentProps) {
 function useCmsItems(model: CmsModel, snapshot: CmsSnapshot) {
   const { items, collection } = snapshot;
   const { selection, setSelection, query, setQuery, commit } = model;
+  const translate = useTranslate();
   const item = items[selection];
   const addItem = () => {
     assert(collection.error === undefined, 'CMS edit: unreadable collection cannot be edited');
@@ -259,9 +241,9 @@ function useCmsItems(model: CmsModel, snapshot: CmsSnapshot) {
   const removeItem = async () => {
     if (
       !(await confirmDialog({
-        title: `Delete “${titleOf(item, selection)}”?`,
-        body: 'It’s removed from this collection.',
-        confirmLabel: 'Delete',
+        title: translate('cms.view.deleteTitle', { title: titleOf(item, selection, translate) }),
+        body: translate('cms.view.deleteBody'),
+        confirmLabel: translate('cms.delete'),
         danger: true,
       }))
     ) {
@@ -288,10 +270,8 @@ function useCmsItems(model: CmsModel, snapshot: CmsSnapshot) {
   const reorder = useListReorder({ count: items.length, onMove: move, disabled: Boolean(query) });
   const filtered = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return items
-      .map((item, index) => ({ item, index }))
-      .filter(({ item, index }) => !text || titleOf(item, index).toLowerCase().includes(text));
-  }, [items, query]);
+    return items.map((item, index) => ({ item, index })).filter(({ item, index }) => !text || titleOf(item, index, translate).toLowerCase().includes(text));
+  }, [items, query, translate]);
   return { addItem, duplicate, removeItem, reorder, filtered };
 }
 type ItemActions = ReturnType<typeof useCmsItems>;
@@ -299,13 +279,14 @@ interface ItemProps extends ContentProps {
   readonly actions: ItemActions;
 }
 function CmsItems({ model, snapshot, actions }: ItemProps) {
+  const translate = useTranslate();
   const { collection, items } = snapshot;
   return (
     <div className="cms-items">
       <div className="cms-items-head">
         <span className="cms-items-title">{collection.label}</span>
         {!collection.single && !collection.error && (
-          <button className="ghost" title="New item" onClick={actions.addItem}>
+          <button className="ghost" title={translate('cms.view.newItem')} onClick={actions.addItem}>
             <PlusIcon size={14} />
           </button>
         )}
@@ -314,7 +295,7 @@ function CmsItems({ model, snapshot, actions }: ItemProps) {
         <div className="cms-search">
           <input
             value={model.query}
-            placeholder="Search items"
+            placeholder={translate('cms.view.search')}
             maxLength={BOUNDARY_LIMITS.textLengthMax}
             onChange={(event) => model.setQuery(event.target.value)}
           />
@@ -324,61 +305,59 @@ function CmsItems({ model, snapshot, actions }: ItemProps) {
         {actions.filtered.map(({ item, index }) => (
           <div
             key={index}
-            className={[
-              'cms-item',
-              index === model.selection ? 'on' : '',
-              actions.reorder.rowClass(index),
-            ].join(' ')}
+            className={['cms-item', index === model.selection ? 'on' : '', actions.reorder.rowClass(index)].join(' ')}
             {...actions.reorder.rowProps(index)}
             onClick={() => model.setSelection(index)}
           >
             <span className="cms-item-grip">
               <DragIcon size={12} />
             </span>
-            <span className="cms-item-title">{titleOf(item, index)}</span>
+            <span className="cms-item-title">{titleOf(item, index, translate)}</span>
             <ChevronRightIcon size={10} />
           </div>
         ))}
         {items.length === 0 && !collection.error && (
           <div className="props-empty">
-            Nothing here yet.
+            {translate('cms.view.nothingYet')}
             <div style={{ marginTop: 10 }}>
               <button className="primary" onClick={actions.addItem}>
-                Add the first item
+                {translate('cms.view.addFirst')}
               </button>
             </div>
           </div>
         )}
-        {items.length > 0 && actions.filtered.length === 0 && (
-          <div className="props-empty">No items match “{model.query}”.</div>
-        )}
+        {items.length > 0 && actions.filtered.length === 0 && <div className="props-empty">{translate('cms.view.noMatch', { query: model.query })}</div>}
       </div>
     </div>
   );
 }
 function CmsDetailHead({ model, snapshot, actions }: ItemProps) {
+  const translate = useTranslate();
   const { collection, items } = snapshot;
   const item = items[model.selection];
   return (
     <div className="cms-detail-head">
-      <button className="ghost cms-back" title="Close the CMS" onClick={model.onClose}>
+      <button className="ghost cms-back" title={translate('cms.view.close')} onClick={model.onClose}>
         <CloseIcon size={13} />
       </button>
-      <span className="cms-detail-title">
-        {item !== undefined ? titleOf(item, model.selection) : collection.label}
-      </span>
+      {collection.single && (
+        <span className="cms-detail-icon">
+          <FileIcon size={14} />
+        </span>
+      )}
+      <span className="cms-detail-title">{item !== undefined && !collection.single ? titleOf(item, model.selection, translate) : collection.label}</span>
       <span className={`cms-saved ${model.saved ? 'on' : ''}`}>
-        <CheckIcon size={11} /> Saved
+        <CheckIcon size={11} /> {translate('cms.saved')}
       </span>
-      <span className="cms-detail-path">src/{collection.rel}</span>
+      <span className="cms-detail-path">src/{filePath(collection.rel)}</span>
       {item !== undefined && !collection.single && (
         <>
-          <button className="ghost" title="Duplicate item" onClick={actions.duplicate}>
+          <button className="ghost" title={translate('cms.view.duplicate')} onClick={actions.duplicate}>
             <CopyIcon size={13} />
           </button>
           <button
             className="ghost danger"
-            title="Delete item"
+            title={translate('cms.view.deleteItem')}
             onClick={() => {
               // The confirm dialog answers; it never rejects, and a refusal changes nothing.
               void actions.removeItem();
@@ -391,7 +370,12 @@ function CmsDetailHead({ model, snapshot, actions }: ItemProps) {
     </div>
   );
 }
+// A file's single values are addressed `consts.ts#*general`; the file is what it is.
+function filePath(rel: string): string {
+  return rel.endsWith('#*general') ? rel.slice(0, -'#*general'.length) : rel;
+}
 function CmsDetailBody({ model, snapshot }: ContentProps) {
+  const translate = useTranslate();
   const { collection, items, declared } = snapshot;
   const item = items[model.selection];
   const fields = withDeclaredTypes(contentFieldsOf(items), declared, []);
@@ -403,54 +387,41 @@ function CmsDetailBody({ model, snapshot }: ContentProps) {
   const setItemValue = (key: string, value: unknown) => {
     const object = toRecord(item);
     assert(object !== undefined, 'CMS field: selected item must be an object');
-    model.commit(
-      items.map((entry, index) =>
-        index === model.selection ? { ...object, [key]: value } : entry,
-      ),
-    );
+    model.commit(items.map((entry, index) => (index === model.selection ? { ...object, [key]: value } : entry)));
   };
   return (
     <div className="cms-detail-body">
       {collection.error && <ErrorToast message={collection.error} />}
       {item !== undefined && !isPlainObject(item) && (
         <div className="cms-card">
-          <h3>{collection.single ? collection.label : 'Basic info'}</h3>
+          {!collection.single && <h3>{translate('cms.view.basicInfo')}</h3>}
           <FieldRow
             {...context}
-            label="Value"
+            label={translate('cms.view.value')}
             type={inferType(item)}
             value={item}
-            onChange={(value) =>
-              model.commit(items.map((entry, index) => (index === model.selection ? value : entry)))
-            }
+            onChange={(value) => model.commit(items.map((entry, index) => (index === model.selection ? value : entry)))}
           />
         </div>
       )}
       {isPlainObject(item) && (
         <div className="cms-card">
-          <h3>{collection.single ? collection.label : 'Basic info'}</h3>
+          {/* One object is the whole view: its title already names it. */}
+          {!collection.single && <h3>{translate('cms.view.basicInfo')}</h3>}
           {fields.map((field) => (
             <FieldRow
               key={field.key}
               {...context}
               label={field.label}
-              type={
-                item[field.key] === undefined ? field.type : bestType(field.type, item[field.key])
-              }
+              type={item[field.key] === undefined ? field.type : bestType(field.type, item[field.key])}
               value={item[field.key]}
               onChange={(value) => setItemValue(field.key, value)}
             />
           ))}
-          {fields.length === 0 && (
-            <div className="props-empty">
-              This collection has no fields yet — add them in its settings.
-            </div>
-          )}
+          {fields.length === 0 && <div className="props-empty">{translate('cms.view.noFields')}</div>}
         </div>
       )}
-      {item === undefined && !collection.error && (
-        <div className="props-empty">Select an item to edit it.</div>
-      )}
+      {item === undefined && !collection.error && <div className="props-empty">{translate('cms.view.select')}</div>}
     </div>
   );
 }

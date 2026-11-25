@@ -9,19 +9,7 @@
 import { POLICY_LIMITS } from './limits.mts';
 import { assert } from './assert.mts';
 
-export const COMMIT_TYPES = [
-  'build',
-  'chore',
-  'ci',
-  'docs',
-  'feat',
-  'fix',
-  'perf',
-  'refactor',
-  'revert',
-  'style',
-  'test',
-] as const;
+export const COMMIT_TYPES = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'style', 'test'] as const;
 
 export type CommitMessageProblem =
   | { readonly kind: 'empty' }
@@ -93,22 +81,13 @@ export function describeCommitMessageProblem(problem: CommitMessageProblem): str
     case 'empty':
       return 'The message is empty.';
     case 'subject-format':
-      return (
-        `The subject "${problem.subject}" must read "type(scope): summary", with type one of ` +
-        `${COMMIT_TYPES.join(', ')}.`
-      );
+      return `The subject "${problem.subject}" must read "type(scope): summary", with type one of ` + `${COMMIT_TYPES.join(', ')}.`;
     case 'subject-length':
-      return (
-        `The subject is ${problem.length} characters; keep it to ` +
-        `${POLICY_LIMITS.commitSubjectCharsMax} so it reads whole in git log.`
-      );
+      return `The subject is ${problem.length} characters; keep it to ` + `${POLICY_LIMITS.commitSubjectCharsMax} so it reads whole in git log.`;
     case 'separator':
       return 'Leave a blank line between the subject and the body.';
     case 'body-missing':
-      return (
-        'Add a body: what changed and why. A pull request description is invisible ' +
-        'in git blame (AGENTS.md §17).'
-      );
+      return 'Add a body: what changed and why. A pull request description is invisible ' + 'in git blame (AGENTS.md §17).';
     default: {
       const unreachable: never = problem;
       return unreachable;

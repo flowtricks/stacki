@@ -12,10 +12,7 @@ export const INSTANCE_PARAGRAPH =
 
 export function starterDefaults(catalog: readonly DefaultComponent[]): ComponentDefaults {
   assert(catalog.length <= DEFAULT_LIMITS.componentsMax, 'Starter catalog fits recipe storage');
-  assert(
-    new Set(catalog.map((item) => item.file)).size === catalog.length,
-    'Starter component paths are unique',
-  );
+  assert(new Set(catalog.map((item) => item.file)).size === catalog.length, 'Starter component paths are unique');
   // Ambiguous names are never guessed; project recipes use full relative paths.
   const unique = (name: string) => {
     const matches = catalog.filter((item) => item.name === name);
@@ -24,6 +21,7 @@ export function starterDefaults(catalog: readonly DefaultComponent[]): Component
   const text: Readonly<Record<string, string>> = {
     Heading: INSTANCE_HEADING,
     Paragraph: INSTANCE_PARAGRAPH,
+    // i18n-ignore: a component name written into the project as source code, not interface text.
     Button: 'Button Text',
   };
   const children: Readonly<Record<string, readonly string[]>> = {
@@ -42,20 +40,10 @@ export function starterDefaults(catalog: readonly DefaultComponent[]): Component
     components: Object.fromEntries(
       catalog.flatMap((component) => {
         const recipe: ComponentRecipe = {
-          props: Object.fromEntries(
-            Object.entries(props[component.name] ?? {}).filter(([name]) =>
-              component.props.includes(name),
-            ),
-          ),
-          ...(component.slots.includes('default')
-            ? starterContent(component, text, children, unique)
-            : {}),
+          props: Object.fromEntries(Object.entries(props[component.name] ?? {}).filter(([name]) => component.props.includes(name))),
+          ...(component.slots.includes('default') ? starterContent(component, text, children, unique) : {}),
         };
-        return Object.keys(recipe.props ?? {}).length > 0 ||
-          recipe.text !== undefined ||
-          recipe.children !== undefined
-          ? [[component.file, recipe]]
-          : [];
+        return Object.keys(recipe.props ?? {}).length > 0 || recipe.text !== undefined || recipe.children !== undefined ? [[component.file, recipe]] : [];
       }),
     ),
   };

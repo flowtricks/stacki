@@ -1,0 +1,181 @@
+// French `componentProps` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/componentProps';
+
+export const messages = {
+  'componentProps.attributes.addDefault': 'Ajouter un attribut par défaut',
+  'componentProps.attributes.connections': 'Connexions',
+  'componentProps.attributes.connectionsCount': { one: 'Connexions : {count} élément', other: 'Connexions : {count} éléments' },
+  'componentProps.attributes.defaultName': 'Nom de l’attribut par défaut {number}',
+  'componentProps.attributes.defaultValue': 'Valeur de l’attribut par défaut {number}',
+  'componentProps.attributes.defaults': 'Attributs par défaut',
+  'componentProps.attributes.defaultsDiffer': 'Les éléments connectés ont des valeurs par défaut différentes ; en modifier un les applique à tous.',
+  'componentProps.attributes.name': 'Nom',
+  'componentProps.attributes.namePlaceholder': 'nom',
+  'componentProps.attributes.noSpread': 'Aucun élément ne propage encore {spread}. Connectez-en un depuis le point de liaison de ses attributs.', // review
+  'componentProps.attributes.passThrough': 'Transmet tous les autres attributs via {spread}.',
+  'componentProps.attributes.removeDefault': 'Retirer l’attribut par défaut {name}',
+  'componentProps.attributes.rowKind': { one: 'Attributs · {count} élément', other: 'Attributs · {count} éléments' },
+  'componentProps.attributes.select': 'Sélectionner {name}',
+  'componentProps.attributes.title': 'Propriété d’attributs',
+  'componentProps.attributes.tooltipDefault': 'Attributs qu’une instance ajoute aux éléments connectés',
+  'componentProps.attributes.valuePlaceholder': 'valeur',
+  'componentProps.autosave.conflict': 'Ce fichier a changé sur le disque, le formulaire a donc été rechargé. Votre modification a été conservée.',
+  'componentProps.declaration.default': 'Par défaut (ligne {line}) : {expression}',
+  'componentProps.declaration.details': 'Détails de la déclaration',
+  'componentProps.declaration.source': '{label} (ligne {line}) : {expression}',
+  'componentProps.declaration.variantRules': 'Règles de variantes',
+  'componentProps.default.none': 'Aucune valeur par défaut',
+  'componentProps.default.number': 'Nombre par défaut',
+  'componentProps.default.search': 'Rechercher des valeurs…',
+  'componentProps.default.text': 'Texte par défaut',
+  'componentProps.default.useControl': 'Utiliser le contrôle de valeur par défaut',
+  'componentProps.default.value': 'Valeur par défaut',
+  'componentProps.default.writeExpression': 'Écrire une expression par défaut',
+  'componentProps.defaults.badCode': 'La valeur par défaut de {value} n’est pas du code valide.', // review
+  'componentProps.defaults.computed': 'Calculé', // review
+  'componentProps.defaults.conditional': 'Définir par conditions', // review
+  'componentProps.defaults.discard': 'Annuler les modifications',
+  'componentProps.defaults.entryRead': 'Le code lit {value} directement dans {name}. Modifiez-le dans le source.', // review
+  'componentProps.defaults.missingTable': '{name} n’a pas de valeurs par défaut par option à modifier.', // review
+  'componentProps.defaults.perOption': 'Commencez chaque groupe par {controller} et une option.', // review
+  'componentProps.defaults.return': 'Revenir aux valeurs par défaut',
+  'componentProps.defaults.saveFailed': 'Impossible d’enregistrer les valeurs par défaut du composant.',
+  'componentProps.defaults.saved': 'Valeurs par défaut enregistrées dans ce projet.',
+  'componentProps.defaults.tableReset':
+    'Le composant calcule cette valeur par défaut avec sa propre table : modifiez celle de chaque option dans les conditions, ou la table dans le source.', // review
+  'componentProps.dialog.close': 'Fermer les réglages de la propriété',
+  'componentProps.dialog.loading': 'Chargement de la propriété…',
+  'componentProps.dialog.title': 'Réglages de la propriété',
+  'componentProps.editor.delete': 'Supprimer la propriété',
+  'componentProps.editor.deleteNamed': 'Supprimer {name}',
+  'componentProps.editor.name': 'Nom',
+  'componentProps.editor.newProperty': 'Nouvelle propriété',
+  'componentProps.editor.renameHelp': 'Le renommage met à jour la propriété de ce composant, la variable qui la lit et ses instances dans tout le site.',
+  'componentProps.editor.renameShared': 'Le renommage réécrit {typeName} et chacune de ses lectures, dans ces fichiers :', // review
+  'componentProps.kind.attributes': 'Attributs',
+  'componentProps.kind.choice': 'Choix',
+  'componentProps.kind.code': 'Type de code…',
+  'componentProps.kind.color': 'Couleur',
+  'componentProps.kind.curated': 'Éléments choisis',
+  'componentProps.kind.date': 'Date', // same
+  'componentProps.kind.filter': 'Filtre',
+  'componentProps.kind.group': 'Groupe',
+  'componentProps.kind.image': 'Image', // same
+  'componentProps.kind.link': 'Lien',
+  'componentProps.kind.list': 'Liste',
+  'componentProps.kind.number': 'Nombre',
+  'componentProps.kind.record': 'Liste clé–valeur',
+  'componentProps.kind.sort': 'Tri',
+  'componentProps.kind.switch': 'Interrupteur',
+  'componentProps.kind.text': 'Texte',
+  'componentProps.kindHint.attributes': 'Depuis les attributs d’un élément',
+  'componentProps.kindHint.choice': 'Un élément d’une liste',
+  'componentProps.kindHint.code': 'Écrire un type TypeScript',
+  'componentProps.kindHint.curated': 'Choix de la liste de collection',
+  'componentProps.kindHint.filter': 'Filtres de la liste de collection',
+  'componentProps.kindHint.group': 'Champs d’un objet',
+  'componentProps.kindHint.list': 'Éléments avec champs',
+  'componentProps.kindHint.sort': 'Tri de la liste de collection',
+  'componentProps.kindSection.advanced': 'Avancé',
+  'componentProps.kindSection.basic': 'De base',
+  'componentProps.kindSection.collection': 'Liste de collection',
+  'componentProps.kindSection.element': 'Élément',
+  'componentProps.kindSection.media': 'Médias et liens',
+  'componentProps.kindSection.structure': 'Structure', // same
+  'componentProps.options.title': 'Options', // same
+  'componentProps.panel.add': 'Ajouter une propriété',
+  'componentProps.panel.deletedIn': '{name} se supprime dans {path}',
+  'componentProps.panel.empty': 'Aucune propriété pour le moment. Ajoutez-en une pour définir ce que chaque instance peut personnaliser.',
+  'componentProps.panel.from': 'De {typeName}',
+  'componentProps.panel.label': 'Propriétés du composant',
+  'componentProps.panel.loading': 'Chargement des propriétés…',
+  'componentProps.panel.openFile': 'Ouvrir {path}',
+  'componentProps.panel.propertyGone': 'Ce composant n’a plus de propriété {name}.',
+  'componentProps.panel.required': 'Obligatoire',
+  'componentProps.panel.saveBusy': 'Un autre enregistrement est encore en cours. Réessayez.',
+  'componentProps.panel.title': 'Propriétés',
+  'componentProps.panel.unused': 'Non utilisée dans ce composant',
+  'componentProps.problem.decimalsRange': 'Les décimales vont de 0 à {max}.',
+  'componentProps.problem.decimalsWhole': 'Les décimales sont un nombre entier.',
+  'componentProps.problem.minAboveMax': 'Le minimum dépasse le maximum.',
+  'componentProps.problem.nameShape': 'Utilisez un nom comme title, imageUrl ou isVisible.',
+  'componentProps.problem.typeMissing': 'Donnez un type à la propriété.',
+  'componentProps.reorder.hint': 'Faites glisser pour réordonner (ou utilisez les flèches)',
+  'componentProps.reorder.label': 'Réordonner {name}',
+  'componentProps.settings.auto': 'Auto', // same
+  'componentProps.settings.decimals': 'Décimales',
+  'componentProps.settings.decimalsHint': 'Combien de décimales le nombre conserve : 0 est un entier, au plus {max}.',
+  'componentProps.settings.defaultNote': 'La valeur par défaut : {note}',
+  'componentProps.settings.legacyRemove': { one: 'La retirer', other: 'Les retirer' },
+  'componentProps.settings.legacyTags': {
+    one: 'Ce commentaire contient une balise d’étiquette d’interrupteur inutilisée que rien ne lit.',
+    other: 'Ce commentaire contient des balises d’étiquette d’interrupteur inutilisées que rien ne lit.',
+  }, // review
+  'componentProps.settings.max': 'Max', // same
+  'componentProps.settings.min': 'Min', // same
+  'componentProps.settings.none': 'Aucun',
+  'componentProps.settings.numberGroup': 'Réglages du nombre',
+  'componentProps.settings.numberMalformed': 'Saisissez un nombre, ou laissez vide pour aucun.',
+  'componentProps.settings.tooltip': 'Info-bulle',
+  'componentProps.settings.tooltipPlaceholder': 'Décrivez comment utiliser cette propriété…',
+  'componentProps.settings.useControls': 'Utiliser les contrôles', // review
+  'componentProps.settings.viewCode': 'Voir le TypeScript', // review
+  'componentProps.share.components': 'Composants',
+  'componentProps.share.declaredIn': 'Déclarée dans',
+  'componentProps.share.defaults': 'Valeurs par défaut',
+  'componentProps.share.instancesIn': 'Instances dans',
+  'componentProps.share.summary': {
+    one: 'Partagée : modifie {typeName} dans {path}, utilisée par {count} composant ({names}) et ses instances.',
+    other: 'Partagée : modifie {typeName} dans {path}, utilisée par {count} composants ({names}) et leurs instances.',
+  }, // review
+  'componentProps.tooltips.perOption': 'Une info-bulle ne peut dépendre que de {controller}.', // review
+  'componentProps.type.attributesNote': 'Une propriété d’attributs se crée depuis un élément : ouvrez le point de liaison de ses attributs.',
+  'componentProps.type.codeType': 'Type de code',
+  'componentProps.type.controllerKind': 'Ses options décident de son genre', // review
+  'componentProps.type.defaultCleared': 'La valeur par défaut a été effacée : elle ne correspond pas à « {kind} ».',
+  'componentProps.type.kind': 'Genre', // review
+  'componentProps.type.noType': 'Aucun type',
+  'componentProps.type.search': 'Rechercher des genres…', // review
+  'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.badIndex': 'Cette position est en dehors des options.', // review
+  'componentProps.variants.badValue': 'Utilisez un nom court sans guillemets ni barres obliques inverses.', // review
+  'componentProps.variants.booleanOptions': '{name} vaut true ou false : ses deux options ne peuvent pas être ajoutées, renommées ni supprimées.', // review
+  'componentProps.variants.cannotAttach':
+    '{name} n’est pas déclarée dans les propriétés partagées par toutes les options ; elle ne peut donc pas recevoir de règles de variante ici.', // review
+  'componentProps.variants.cannotGroup': 'Props n’est pas écrit comme un type auquel Stacki peut ajouter des règles de variante.', // review
+  'componentProps.variants.condition': '{controller} : {options}', // review
+  'componentProps.variants.conditional': 'Conditionnelle', // review
+  'componentProps.variants.duplicateOption': 'Une option {value} existe déjà.', // review
+  'componentProps.variants.forbiddenPassed': '{file} transmet {name} avec {controller} {value}. Modifiez d’abord cette instance.', // review
+  'componentProps.variants.lastOptions': 'Gardez au moins deux options.', // review
+  'componentProps.variants.missingGroup': 'Aucune règle de variante n’est contrôlée par {name}.', // review
+  'componentProps.variants.missingOption': 'L’option {value} n’existe pas.', // review
+  'componentProps.variants.missingProp': '{name} ne fait pas partie de ces règles de variante.', // review
+  'componentProps.variants.noDestructure':
+    'Le composant ne lit pas ses propriétés par une seule déstructuration ; la propriété ne peut donc pas être ajoutée ici.', // review
+  'componentProps.variants.noRuntimeType': 'Le type d’exécution du composant ne peut pas recevoir de nouvelle propriété ici.', // review
+  'componentProps.variants.noType': '{name} n’a pas de type à autoriser. Donnez-lui d’abord un type.', // review
+  'componentProps.variants.notAllowedThere': '{name} n’est pas autorisé pour {value}.', // review
+  'componentProps.variants.optionInCode':
+    'Le code du composant utilise {value} d’une façon que Stacki ne peut pas mettre à jour. Modifiez-le dans le code source.', // review
+  'componentProps.variants.optionPassed': '{file} transmet {value} comme {name}. Modifiez d’abord cette instance.', // review
+  'componentProps.variants.optionsLimit': 'Une propriété peut avoir au plus {max} options.', // review
+  'componentProps.variants.readOnly': 'Les règles de variante contrôlées par {name} ne peuvent être modifiées que dans le code source.', // review
+  'componentProps.variants.reason.nested': 'Imbriqué', // review
+  'componentProps.variants.reason.runtime': 'Exécution', // review
+  'componentProps.variants.reason.shape': 'Complexe', // review
+  'componentProps.variants.reason.shared': 'Partagé', // review
+  'componentProps.variants.removeFallback': '{value} est l’option par défaut. Choisissez d’abord une autre option par défaut.', // review
+  'componentProps.variants.state.forbidden': 'Masquer', // review
+  'componentProps.variants.state.optional': 'Afficher', // review
+  'componentProps.variants.state.required': 'Obligatoire', // review
+  'componentProps.variants.switchForbidsAll': 'Aucune option de {name} n’autoriserait cette propriété.', // review
+  'componentProps.visibility.combination': 'TypeScript ne peut pas exprimer cette combinaison. Donnez à chaque choix ses propres groupes.', // review
+  'componentProps.visibility.hideNeedsCondition': 'Masquer demande une condition : ajoutez une propriété à choix ou un interrupteur selon lequel masquer.', // review
+  'componentProps.visibility.otherwise': '{state} sinon', // review
+  'componentProps.visibility.shape': 'Chaque groupe a besoin d’une condition sur un choix ou un interrupteur.', // review
+  'componentProps.visibility.subject': '{name} n’est ni un choix ni un interrupteur.', // review
+  'componentProps.visibility.title': 'Visibilité', // review
+  'componentProps.visibility.when': '{state} quand {conditions}', // review
+} as const satisfies CatalogOf<MessageKey>;

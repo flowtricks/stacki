@@ -6,20 +6,11 @@
 // Pure: bytes in, bytes out. Nothing here touches a disk or a clock.
 import { assert } from '../core/assert';
 import type { SourceEdit } from './intent';
-import { LIMITS } from '../core/limits';
 import type { Splice } from './planner';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { byteStringsEqual, decodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '../core/span';
 
 /** Whether every splice's range holds its expected bytes (plan §5.2 step 4). */
 export function witnessesHold(bytes: ByteString, splices: readonly Splice[]): boolean {
-  assert(splices.length <= LIMITS.splicesPerIntentMax, 'Splice count is inside its bound');
   return splices.every((splice) => {
     if (splice.range.end <= bytes.length) {
       const found = toByteString(bytes.subarray(splice.range.start, splice.range.end));
@@ -32,7 +23,6 @@ export function witnessesHold(bytes: ByteString, splices: readonly Splice[]): bo
 /** Splices sorted by start, checked disjoint. Overlapping splices would make the
  * result depend on application order — a planner bug, so it asserts. */
 export function orderedSplices(splices: readonly Splice[]): readonly Splice[] {
-  assert(splices.length <= LIMITS.splicesPerIntentMax, 'Splice count is inside its bound');
   const ordered = [...splices].sort((left, right) => left.range.start - right.range.start);
   for (let index = 1; index < ordered.length; index++) {
     const previous = ordered[index - 1];
@@ -102,8 +92,5 @@ export function inverseEdits(splices: readonly Splice[]): readonly SourceEdit[] 
 }
 
 function sizeDelta(splices: readonly Splice[]): number {
-  return splices.reduce(
-    (total, splice) => total + splice.replacementBytes.length - splice.expectedBytes.length,
-    0,
-  );
+  return splices.reduce((total, splice) => total + splice.replacementBytes.length - splice.expectedBytes.length, 0);
 }

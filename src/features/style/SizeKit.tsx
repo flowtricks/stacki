@@ -2,7 +2,7 @@
 // label, the live text field and its draft, and arrow-key steps
 // (SizeSection.tsx).
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip, ProvenanceLabel } from './components/CssPropertyTip';
@@ -12,10 +12,12 @@ import { useFieldDraft } from './model/fieldDraft';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
-import { useDebouncedLive } from './model/fieldHooks';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { commitInPlace } from './model/commitStyleInPlace';
+import { followWhileRendering, useDebouncedLive } from './model/fieldHooks';
+import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -58,6 +60,7 @@ export function SizeLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (display.present && !display.isSelected) {
     return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />;
   }
@@ -68,9 +71,9 @@ export function SizeLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
-      resetLabel="Clear"
+      resetLabel={translate('style.sizeKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.sizeKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -106,6 +109,7 @@ export function LivePropField({
   label: string;
   placeholder: string;
 } & Props) {
+  const translate = useTranslate();
   const display = displayOf(read(prop));
   const field = useLivePropEditing({ prop, display, busy, setProp, clearProp, liveSetProp });
   const computed = useStyleHint(display.present ? '' : prop);
@@ -124,10 +128,14 @@ export function LivePropField({
       />
       <VariableConnect
         code
-        ariaLabel={`Connect ${label} to a variable`}
+        ariaLabel={translate('style.sizeKit.connect', { name: label })}
         disabled={busy}
         prop={prop}
-        onPick={(binding) => setProp(prop, binding, false)}
+        canvasProperty={prop}
+        onPick={(binding) => {
+          const kept = keepImportant(binding, display);
+          setProp(prop, kept.value, kept.important);
+        }}
       >
         <input
           {...field.scrub.input}
@@ -165,11 +173,9 @@ export function useLivePropEditing({
   clearProp: ClearProp;
   liveSetProp: LiveSetProp;
 }) {
-  const external = display.present ? withImportant(display) : '';
+  const external = displayText(display);
   const { draft, setDraft, focused, cleared } = useFieldDraft(external, { busy });
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) =>
-    liveSetProp(prop, value, important),
-  );
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) => liveSetProp(prop, value, important));
   const commit = (text = draft) => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -220,19 +226,19 @@ export function useLivePropEditing({
 
 // ─────────────────── Shared field plumbing ───────────────────
 
-export const withImportant = ({ value, important }: { value: string; important: boolean }) =>
-  important ? `${value} !important` : value;
+// The join every field shares (model/styleDisplay.ts), re-exported for the size rows.
+export { withImportant };
 
 // A draft that follows `value` while the field is not focused, so an edit made
 // elsewhere shows up without overwriting what someone is typing.
 export function useFollowingDraft(value: string) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
-  useEffect(() => {
+  followWhileRendering(useState(value), value, () => {
     if (!focused.current) {
       setDraft(value);
     }
-  }, [value]);
+  });
   return { draft, setDraft, focused };
 }
 
@@ -254,11 +260,12 @@ export function stepSizeKey(event: ReactKeyboardEvent<HTMLInputElement>): string
   return stepped.text;
 }
 
-export const LENGTH_FIELDS: ReadonlyArray<{ prop: string; label: string; placeholder: string }> = [
-  { prop: 'width', label: 'Width', placeholder: 'Auto' },
-  { prop: 'height', label: 'Height', placeholder: 'Auto' },
-  { prop: 'min-width', label: 'Min W', placeholder: '0px' },
-  { prop: 'min-height', label: 'Min H', placeholder: '0px' },
-  { prop: 'max-width', label: 'Max W', placeholder: 'None' },
-  { prop: 'max-height', label: 'Max H', placeholder: 'None' },
+// The placeholders are the CSS keywords and values the empty field stands for.
+export const LENGTH_FIELDS: ReadonlyArray<{ prop: string; labelKey: MessageKey; placeholder: string }> = [
+  { prop: 'width', labelKey: 'style.sizeKit.width', placeholder: 'Auto' }, // i18n-ignore: CSS keyword.
+  { prop: 'height', labelKey: 'style.sizeKit.height', placeholder: 'Auto' }, // i18n-ignore: CSS keyword.
+  { prop: 'min-width', labelKey: 'style.sizeKit.minWidth', placeholder: '0px' },
+  { prop: 'min-height', labelKey: 'style.sizeKit.minHeight', placeholder: '0px' },
+  { prop: 'max-width', labelKey: 'style.sizeKit.maxWidth', placeholder: 'None' }, // i18n-ignore: CSS keyword.
+  { prop: 'max-height', labelKey: 'style.sizeKit.maxHeight', placeholder: 'None' }, // i18n-ignore: CSS keyword.
 ];

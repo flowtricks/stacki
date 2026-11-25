@@ -14,10 +14,7 @@ interface StudioCommand {
   readonly timeoutMs: number;
 }
 
-export function runStudioCommand(
-  options: StudioCommand,
-  onOutput: (output: string) => void,
-): Promise<Result<void, string>> {
+export function runStudioCommand(options: StudioCommand, onOutput: (output: string) => void): Promise<Result<void, string>> {
   assert(Number.isSafeInteger(options.timeoutMs), 'Studio command timeout is an integer');
   assert(options.timeoutMs > 0, 'Studio command timeout is positive');
   assert(options.timeoutMs <= COMMAND_TIMEOUT_MS_MAX, 'Studio command timeout stays bounded');

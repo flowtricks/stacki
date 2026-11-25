@@ -61,10 +61,7 @@ async function query(page: Page, input: Record<string, unknown>) {
           reject(new Error('Preview did not answer'));
         }, 5000);
         window.addEventListener('message', receive);
-        target.postMessage(
-          { type: 'avb:query', id, selectors: [], props: [], compute: [], ...input },
-          new URL(frame.src).origin,
-        );
+        target.postMessage({ type: 'avb:query', id, selectors: [], props: [], compute: [], ...input }, new URL(frame.src).origin);
       }),
     input,
   );

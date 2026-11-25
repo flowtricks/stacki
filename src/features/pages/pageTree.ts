@@ -1,6 +1,7 @@
 import type { ScanPage } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS, pathText, record } from '../../../shared/core/boundary';
+import { pageSegments } from '../../lib/pageName';
 
 export interface PageTreePage extends ScanPage {
   readonly base: string;
@@ -21,10 +22,7 @@ export interface PageDragPayload {
   readonly name: string;
 }
 
-export function buildPageTree(
-  pages: readonly ScanPage[],
-  folders: readonly string[],
-): PageTreeNode {
+export function buildPageTree(pages: readonly ScanPage[], folders: readonly string[]): PageTreeNode {
   const root = createNode();
   for (const folder of folders) {
     directoryNode(root, folder);
@@ -41,13 +39,16 @@ export function buildPageTree(
 
 export function countTreePages(node: PageTreeNode): number {
   const pending: PageTreeNode[] = [node];
-  let visited = 0;
+  // A tree reaches each directory once. A node seen twice is a cycle, which would otherwise
+  // run to the item limit (now the platform's array maximum, billions of visits) before failing.
+  const seen = new Set<PageTreeNode>();
   let count = 0;
   while (pending.length > 0) {
-    visited += 1;
-    assert(visited <= BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
+    assert(seen.size < BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
     const current = pending.pop();
     assert(current !== undefined, 'Page tree: pending directory exists');
+    assert(!seen.has(current), 'Page tree: a directory appears twice (cycle)');
+    seen.add(current);
     count += current.pages.length;
     assert(Number.isSafeInteger(count), 'Page tree: page count is a safe integer');
     pending.push(...current.directories.values());
@@ -59,10 +60,7 @@ export function collectPageTreeDirectories(node: PageTreeNode): ReadonlySet<stri
   const directories = new Set<string>();
   const pending: Array<readonly [string, PageTreeNode]> = [['', node]];
   while (pending.length > 0) {
-    assert(
-      directories.size <= BOUNDARY_LIMITS.itemsMax,
-      'Page tree: directory count exceeds limit',
-    );
+    assert(directories.size <= BOUNDARY_LIMITS.itemsMax, 'Page tree: directory count exceeds limit');
     const current = pending.pop();
     assert(current !== undefined, 'Page tree: pending directory exists');
     const [parent, currentNode] = current;
@@ -85,18 +83,6 @@ export function parsePageDragText(input: string): PageDragPayload | undefined {
   } catch {
     return undefined;
   }
-}
-
-export function pageDisplayName(page: ScanPage): string {
-  if (/^index\.(astro|mdx?)$/i.test(page.name)) {
-    return 'Home';
-  }
-  const title = page.title?.trim();
-  return title || stripPageExtension(page.name.split('/').at(-1) ?? page.name);
-}
-
-export function stripPageExtension(base: string): string {
-  return base.replace(/\.(astro|mdx?)$/i, '');
 }
 
 export function pageExtension(base: string): string {
@@ -127,16 +113,4 @@ function directoryNode(root: MutablePageTreeNode, rel: string): MutablePageTreeN
     }
   }
   return node;
-}
-
-function pageSegments(rel: string): readonly string[] {
-  pathText(rel);
-  const parts = rel.split('/');
-  if (parts.length > BOUNDARY_LIMITS.depthMax) {
-    throw new Error('Page tree: path depth exceeds limit');
-  }
-  if (parts.some((part) => part === '' || part === '.' || part === '..')) {
-    throw new Error('Page tree: expected relative path segments');
-  }
-  return parts;
 }

@@ -2,6 +2,9 @@
 // URL, reloading, opening a component, previewing a commit, git info, and
 // composing the lifecycle (App.tsx).
 
+import { markRenderer } from '../startupMarks';
+import { bootSnapshotFor } from '../../lib/bootSeed';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import type { WireCommitInfo, WireInjectedRoute } from '../../../shared/ipc/ipcResults';
@@ -9,21 +12,24 @@ import { readPage } from '../../ipc/bridge';
 import { readGitInfo } from '../../features/git/gitChipBridge';
 import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
+import { saveStateBase } from '../../editor/saveState';
+import { createCoalescedRun } from '../../lib/coalescedRun';
+import { onWindowReturn } from '../../lib/windowReturn';
 import { cleanError } from '../../lib/cleanError';
 import { toEditorPageState, carriedParse, type OpenFile } from '../../editor/pageState';
 import {
   addRecentProject,
-  installProjectDependencies,
   openProject,
   pendingProject,
   previewProjectCommit,
-  projectHasNodeModules,
   resolveProjectImport,
   stopProjectCommitPreview,
   watchProject,
 } from '../../ipc/appBridge';
 import { componentEntry } from '../model/pageGestures';
-import { savedForNavigation, componentAtPath, componentNamed, stackWith } from '../model/appKeys';
+import { offerStyleMoveRecovery } from './styleMoveRecovery';
+import { windowHeld } from '../../ui/busyLock';
+import { savedForNavigation, componentAtPath, componentNamed, stackAfterJump, stackWith, type ComponentNavigation } from '../model/appKeys';
 import {
   useCoreState,
   useAssetPick,
@@ -31,6 +37,7 @@ import {
   useDevEvents,
   useScans,
   usePreviewStart,
+  useBranchPreview,
   useSavers,
   useFlushing,
   useOpenFile,
@@ -43,15 +50,17 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
   const devEvents = useDevEvents(coreState, assetPickScope);
   const scans = useScans(coreState);
   const previewStart = usePreviewStart(coreState, toasts, assetPickScope);
+  const withBranchChange = useBranchPreview(coreState, previewStart.startPreview);
   const savers = useSavers(toasts, coreState);
   const flushing = useFlushing(savers, coreState, toasts);
-  const openFileScope = useOpenFile(flushing, toasts, coreState);
+  const openFileScope = useOpenFile(flushing, toasts, coreState, scans);
   return {
     ...assetPickScope,
     ...toasts,
     ...devEvents,
     ...scans,
     ...previewStart,
+    withBranchChange,
     ...savers,
     ...flushing,
     ...openFileScope,
@@ -59,12 +68,10 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
 }
 
 // Opening a page, and opening a project.
-export function useSelectPage(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
+  const translate = useTranslate();
   const { openFile, rescan, showToast, startPreview } = lifecycle;
-  const { setBusy, setDevice, setLeftTab, setProject } = coreState;
+  const { setDevice, setLeftTab, setProject } = coreState;
 
   // What's typed in the URL bar while it's being edited; undefined means "show the
   // real one". Kept separate so the bar keeps tracking the canvas until you
@@ -81,13 +88,15 @@ export function useSelectPage(
   );
 
   const loadProject = useCallback(
-    async (projectPath: string) => {
+    async (projectPath: string, options: { readonly keepLayout?: boolean } = {}) => {
       const name = projectPath.split(/[\\/]/).filter(Boolean).pop() ?? projectPath;
       setProject({ path: projectPath, name });
-      setLeftTab('navigator');
-      // Every project opens on desktop — a breakpoint left over from the
-      // last project isn't a choice the user made about this one.
-      setDevice('desktop');
+      // A window that opened with its last layout (src/lib/bootSeed.ts) keeps it; any other open starts on the
+      // navigator, on desktop: a panel or breakpoint left over from the last project isn't a choice made about this one.
+      if (options.keepLayout !== true) {
+        setLeftTab('navigator');
+        setDevice('desktop');
+      }
       void addRecentProject(projectPath).catch(() => {});
       // Starting the watch records the open project in the main process, which
       // allows file access only inside it. It goes out before the first await, so
@@ -95,34 +104,29 @@ export function useSelectPage(
       void watchProject(projectPath)
         .then((started) => {
           if (!started) {
-            showToast('Couldn’t watch project files. External edits may need a refresh.', 'error');
+            showToast(translate('shell.navigation.watchFailedHint'), 'error');
           }
         })
         .catch((error: unknown) => {
-          showToast(`Couldn’t watch project files: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.navigation.watchFailed', { message: cleanError(error) }), 'error');
         });
-      const result = await rescan(projectPath);
-
-      const hasDeps = await projectHasNodeModules(projectPath);
-      if (!hasDeps) {
-        try {
-          await installProjectDependencies(projectPath);
-        } catch (error: unknown) {
-          showToast(cleanError(error), 'error');
-        }
-        setBusy(undefined);
-      }
-      // startPreview reports its own failure in the preview area.
+      // Enter loading before the scan yields so opening never flashes offline.
+      // Main owns dependency installation and reports the final startup failure.
       void startPreview(projectPath);
+      const result = await rescan(projectPath);
+      markRenderer('stacki:project-ready');
+      // A "Move styles" this project left part way is offered to finish or undo before anything else is edited.
+      void offerStyleMoveRecovery(projectPath, { translate, showToast, rescan });
 
+      const remembered = options.keepLayout === true ? bootSnapshotFor(projectPath)?.pageName : undefined;
       const first =
-        result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
+        result.pages.find((page) => page.name === remembered) || result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
       if (first) {
         // Opening a page reports its own failures as toasts.
         void selectPage(first);
       }
     },
-    [rescan, startPreview, selectPage, showToast, setBusy, setDevice, setLeftTab, setProject],
+    [rescan, startPreview, selectPage, showToast, setDevice, setLeftTab, setProject, translate],
   );
 
   // A window can come up owing a project: one was picked from the menu and the
@@ -138,7 +142,7 @@ export function useSelectPage(
     pendingProject()
       .then((path) => {
         if (path) {
-          return loadProject(path);
+          return loadProject(path, { keepLayout: true });
         }
         return undefined;
       })
@@ -153,14 +157,16 @@ export function useProjectMenu(
   lifecycle: ReturnType<typeof useLifecycle>,
   selectPageScope: ReturnType<typeof useSelectPage>,
 ) {
+  const translate = useTranslate();
   const { projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
   const { flushSave, leaveProject, pageLoadRef, reportFailure, showToast } = lifecycle;
   const { loadProject } = selectPageScope;
 
   useEffect(() => {
+    // Leaving or switching the project waits while a cover holds the window: the work under it is this project's.
     const offClose = window.avb.onMenu('closeProject', () => {
-      if (projectRef.current) {
+      if (projectRef.current && !windowHeld()) {
         void leaveProject();
       }
     });
@@ -178,7 +184,9 @@ export function useProjectMenu(
       await leaveProject(next);
     };
     const offOpen = window.avb.onMenu('openProject', () => {
-      void openFromMenu().catch(reportFailure);
+      if (!windowHeld()) {
+        void openFromMenu().catch(reportFailure);
+      }
     });
     return () => {
       offClose?.();
@@ -194,7 +202,7 @@ export function useProjectMenu(
       const request = {};
       pageLoadRef.current = request;
       const latestRequest = () => request === pageLoadRef.current;
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
       }
       setEditStack([]);
@@ -203,16 +211,7 @@ export function useProjectMenu(
       setSelectedId(undefined);
       setHoverNodeId(undefined);
     },
-    [
-      flushSave,
-      showToast,
-      pageLoadRef,
-      setCurrentPage,
-      setEditStack,
-      setHoverNodeId,
-      setPageState,
-      setSelectedId,
-    ],
+    [flushSave, showToast, pageLoadRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId, translate],
   );
   return { selectRoute };
 }
@@ -223,6 +222,7 @@ export function useGoToUrl(
   coreState: ReturnType<typeof useCoreState>,
   lifecycle: ReturnType<typeof useLifecycle>,
 ) {
+  const translate = useTranslate();
   const { selectPage, setUrlDraft } = selectPageScope;
   const { scan } = coreState;
   const { showToast } = lifecycle;
@@ -255,18 +255,15 @@ export function useGoToUrl(
         void selectPage(page);
         return;
       }
-      showToast(`No page matches ${route}`, 'error');
+      showToast(translate('shell.navigation.noPageMatches', { route }), 'error');
     },
-    [scan.pages, showToast, selectPage, setUrlDraft],
+    [scan.pages, showToast, selectPage, setUrlDraft, translate],
   );
   return { goToUrl };
 }
 
 // Reading the open file again from disk.
-export function useReload(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useReload(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef, projectRef, setCodeWin, setCurrentPage, setEditStack } = coreState;
   const { setPageState, setRefreshKey, setSelectedId } = coreState;
   const { dropPageHistory, editDrafts, openFile, pageLoadRef, rescan } = lifecycle;
@@ -281,10 +278,7 @@ export function useReload(
     const proj = projectRef.current;
     const { currentPage: open, pageState: state } = pageStateRef.current;
     const request = pageLoadRef.current;
-    const stillCurrent = () =>
-      request === pageLoadRef.current &&
-      pageStateRef.current.currentPage === open &&
-      pageStateRef.current.pageState === state;
+    const stillCurrent = () => request === pageLoadRef.current && pageStateRef.current.currentPage === open && pageStateRef.current.pageState === state;
     if (!proj) {
       return;
     }
@@ -344,35 +338,27 @@ export function useReload(
 }
 
 // Drilling into a component.
-export function useOpenComponent(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { editStackRef, pageStateRef, projectRef, scan } = coreState;
   const { openFile, pageLoadRef, showToast } = lifecycle;
 
   // Drill into a component: its own file becomes the edited document, and the
   // stack remembers what to come back to (pages and components alike, so
-  // nesting works to any depth).
+  // nesting works to any depth). A jump (an audit finding, a panel that lists
+  // files) replaces the components above the page instead (stackAfterJump).
   const openComponent = useCallback(
-    async (
-      name: string,
-      hostPath: string | undefined,
-      hostOcc = 0,
-      filePath: string | undefined = undefined,
-    ) => {
+    async (name: string, hostPath: string | undefined, hostOcc = 0, filePath: string | undefined = undefined, navigation: ComponentNavigation = 'drill') => {
       // A tag is only a local binding — `import Layout from
       // '@/layouts/BaseLayout.astro'` renders as <Layout> — so follow the
       // page's own import first, and fall back to matching by filename.
       const { currentPage: host, pageState: state } = pageStateRef.current;
       if (host?.path?.includes('/.stacki/canvas/')) {
-        showToast('Edit this instance’s props and children, then save its defaults.', 'info');
+        showToast(translate('shell.navigation.editDefaults'), 'info');
         return;
       }
       const request = pageLoadRef.current;
-      const spec = (state?.editable ? state.model.imports : []).find(
-        (item) => item.name === name,
-      )?.path;
+      const spec = (state?.editable ? state.model.imports : []).find((item) => item.name === name)?.path;
       let comp = undefined;
       // A caller that already knows the file means THAT file — the instances
       // popup names a component by where it lives, and two folders can hold
@@ -395,33 +381,35 @@ export function useOpenComponent(
           comp = { name: fileName.replace(/\.astro$/i, ''), path: file };
         } else if (file) {
           // A framework island (.jsx/.svelte/…) has no Astro tree to show.
-          showToast(
-            `<${name}> is a ${file.split('.').pop()} component — edit it in code.`,
-            'error',
-          );
+          showToast(translate('shell.navigation.islandComponent', { name, extension: file.split('.').pop() ?? '' }), 'error');
           return;
         }
       }
       comp = comp || componentNamed(scan, name);
       if (!comp) {
-        showToast(`Can't find a file for <${name}>.`, 'error');
+        showToast(translate('shell.navigation.noComponentFile', { name }), 'error');
         return;
       }
       const nodes = state?.editable ? state.model.nodes : [];
       const instance = { path: hostPath, occurrence: hostOcc };
+      if (navigation === 'jump') {
+        assert(hostPath === undefined, 'A jump opens a component by its file, not from an instance');
+        // The focus is worked out against the page alone: the components the jump replaces are not around it.
+        const entry = componentEntry(editStackRef.current.slice(0, 1), nodes, comp, instance);
+        await openFile(entry, { nextStack: stackAfterJump(entry), selectionPath: undefined });
+        return;
+      }
       const entry = componentEntry(editStackRef.current, nodes, comp, instance);
       await openFile(entry, { nextStack: stackWith(entry), selectionPath: undefined });
     },
-    [scan, openFile, showToast, editStackRef, pageLoadRef, pageStateRef, projectRef],
+    [scan, openFile, showToast, editStackRef, pageLoadRef, pageStateRef, projectRef, translate],
   );
   return { openComponent };
 }
 
 // Backing out of a component, and previewing an earlier version.
-export function useCommitPreview(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useCommitPreview(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { editStackRef, project, setBusy, setPreviewInfo, setPreviewRef } = coreState;
   const { openFile, showToast } = lifecycle;
 
@@ -467,7 +455,7 @@ export function useCommitPreview(
         return;
       }
       assert(commit.hash, 'Previewed commit must have a hash');
-      setBusy('Getting that version ready…');
+      setBusy(translate('shell.navigation.versionReady'));
       try {
         const preview = await previewProjectCommit(project.path, commit.hash);
         setPreviewRef(commit.hash);
@@ -478,7 +466,7 @@ export function useCommitPreview(
         setBusy(undefined);
       }
     },
-    [project, showToast, setBusy, setPreviewInfo, setPreviewRef],
+    [project, showToast, setBusy, setPreviewInfo, setPreviewRef, translate],
   );
 
   // Named apart from exitPreview below, which is the app's own interactive
@@ -506,12 +494,13 @@ export function useCommitPreview(
 }
 
 // The git state the History panel and the branch chip share.
-export function useGitInfo(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
-  const { project, refreshKey, setGitInfo } = coreState;
+export function useGitInfo(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const { project, projectRef, refreshKey, setGitInfo, pageState } = coreState;
   const { showToast } = lifecycle;
+  const requestRefresh = useRef<() => void>(() => undefined);
+  // The refresh runs every 15 seconds; a failure that stays (git missing, a folder git refuses) must be said once, not at every tick.
+  const lastFailure = useRef<string | undefined>(undefined);
+  const savedChecksum = pageState === undefined ? undefined : saveStateBase(pageState.save);
 
   const refreshGit = useCallback(async () => {
     if (!project) {
@@ -519,16 +508,46 @@ export function useGitInfo(
     }
     const result = await readGitInfo(project.path);
     if (!result.ok) {
-      showToast(result.error, 'error');
+      if (lastFailure.current !== result.error) {
+        lastFailure.current = result.error;
+        showToast(result.error, 'error');
+      }
       return undefined;
     }
-    setGitInfo(result.value);
+    lastFailure.current = undefined;
+    if (projectRef.current?.path === project.path) {
+      setGitInfo(result.value);
+    }
     return result.value;
-  }, [project, showToast, setGitInfo]);
+  }, [project, projectRef, showToast, setGitInfo]);
 
   useEffect(() => {
-    // A failed read is reported by refreshGit itself.
-    void refreshGit();
-  }, [refreshGit, refreshKey]);
+    let closed = false;
+    const reader = createCoalescedRun(async () => {
+      if (!closed) {
+        await refreshGit();
+      }
+    });
+    const refresh = () => {
+      if (!document.hidden) {
+        void reader.request();
+      }
+    };
+    requestRefresh.current = () => void reader.request();
+    // Git changes need not touch source files; keep branch and HEAD current independently.
+    const offReturn = onWindowReturn(refresh);
+    const timer = window.setInterval(refresh, 15_000);
+    return () => {
+      closed = true;
+      requestRefresh.current = () => undefined;
+      offReturn();
+      window.clearInterval(timer);
+    };
+  }, [refreshGit]);
+  useEffect(() => {
+    // Self writes skip filesystem notifications. Read Git after the save advances its
+    // checksum, including undo/redo, without reading on every unsaved keystroke.
+    requestRefresh.current();
+  }, [refreshGit, refreshKey, savedChecksum]);
   return { refreshGit };
 }

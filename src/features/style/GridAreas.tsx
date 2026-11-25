@@ -3,49 +3,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GroupLabel } from './TypographySection';
-import {
-  parseAreas,
-  serializeAreas,
-  areaLabel,
-  nextAreaName,
-  type GridArea,
-  type GridAreaPatch,
-} from './model/gridTemplate';
-import {
-  type SetProp,
-  type ClearProp,
-  type LabelProps,
-  resolvedValue,
-  PlusIcon,
-  TrashIcon,
-} from './GridSettingsKit';
+import { parseAreas, serializeAreas, areaLabel, nextAreaName, type GridArea, type GridAreaPatch } from './model/gridTemplate';
+import { type SetProp, type ClearProp, type LabelProps, resolvedValue, PlusIcon, TrashIcon } from './GridSettingsKit';
 import { TrackPopover } from './TrackEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // A crosshair marker for area rows (Webflow's area glyph).
 export const AreaIcon = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
     <rect x="5.5" y="5.5" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.1" />
-    <path
-      d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3"
-      stroke="currentColor"
-      strokeWidth="1.1"
-      strokeLinecap="round"
-    />
+    <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
   </svg>
 );
 
 // The area's name field — commits on blur / Enter, keeps the old name if emptied.
 // Grid area names are single idents, so whitespace is stripped as you type (a typed
 // space would split the name into two cells in grid-template-areas).
-export function AreaNameInput({
-  value,
-  busy,
-  onCommit,
-}: {
-  value: string;
-  busy: boolean;
-  onCommit: (v: string) => void;
-}) {
+export function AreaNameInput({ value, busy, onCommit }: { value: string; busy: boolean; onCommit: (v: string) => void }) {
+  const translate = useTranslate();
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -67,7 +43,7 @@ export function AreaNameInput({
       value={text}
       spellCheck={false}
       disabled={busy}
-      aria-label="Area name"
+      aria-label={translate('style.gridAreas.areaName')}
       onChange={(event) => setText(event.target.value.replace(/\s+/g, ''))}
       onFocus={() => {
         focused.current = true;
@@ -78,7 +54,7 @@ export function AreaNameInput({
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
         }
       }}
     />
@@ -86,17 +62,7 @@ export function AreaNameInput({
 }
 
 // A 1-based grid-cell number field (Column/Row start/end) with ↑/↓ stepping.
-export function AreaNumberInput({
-  value,
-  ariaLabel,
-  busy,
-  onCommit,
-}: {
-  value: number;
-  ariaLabel: string;
-  busy: boolean;
-  onCommit: (n: number) => void;
-}) {
+export function AreaNumberInput({ value, ariaLabel, busy, onCommit }: { value: number; ariaLabel: string; busy: boolean; onCommit: (n: number) => void }) {
   const [text, setText] = useState(String(value));
   const focused = useRef(false);
   useEffect(() => {
@@ -131,7 +97,7 @@ export function AreaNumberInput({
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
           return;
         }
         if (event.key === 'ArrowUp') {
@@ -147,57 +113,50 @@ export function AreaNumberInput({
 }
 
 // The area editor popover body: Name + Position (Column start/end, Row start/end).
-export function AreaEditor({
-  area,
-  busy,
-  onChange,
-}: {
-  area: GridArea;
-  busy: boolean;
-  onChange: (patch: GridAreaPatch) => void;
-}) {
+export function AreaEditor({ area, busy, onChange }: { area: GridArea; busy: boolean; onChange: (patch: GridAreaPatch) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_grid-track-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Name</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gridAreas.name')}</span>
         <AreaNameInput value={area.name} busy={busy} onCommit={(name) => onChange({ name })} />
       </div>
       <div className="embed-editor_size-row embed-editor_grid-area-pos">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gridAreas.position')}</span>
         <div className="embed-editor_grid-area-fields">
           <div className="embed-editor_grid-area-pair">
             <div className="embed-editor_grid-area-inputs">
               <AreaNumberInput
                 value={area.colStart}
-                ariaLabel="Column start"
+                ariaLabel={translate('style.gridAreas.columnStart')}
                 busy={busy}
                 onCommit={(cell) => onChange({ colStart: cell })}
               />
               <AreaNumberInput
                 value={area.colEnd}
-                ariaLabel="Column end"
+                ariaLabel={translate('style.gridAreas.columnEnd')}
                 busy={busy}
                 onCommit={(cell) => onChange({ colEnd: cell })}
               />
             </div>
-            <span className="embed-editor_grid-area-cap">Column: start/end</span>
+            <span className="embed-editor_grid-area-cap">{translate('style.gridAreas.columnCaption')}</span>
           </div>
           <div className="embed-editor_grid-area-pair">
             <div className="embed-editor_grid-area-inputs">
               <AreaNumberInput
                 value={area.rowStart}
-                ariaLabel="Row start"
+                ariaLabel={translate('style.gridAreas.rowStart')}
                 busy={busy}
                 onCommit={(cell) => onChange({ rowStart: cell })}
               />
               <AreaNumberInput
                 value={area.rowEnd}
-                ariaLabel="Row end"
+                ariaLabel={translate('style.gridAreas.rowEnd')}
                 busy={busy}
                 onCommit={(cell) => onChange({ rowEnd: cell })}
               />
             </div>
-            <span className="embed-editor_grid-area-cap">Row: start/end</span>
+            <span className="embed-editor_grid-area-cap">{translate('style.gridAreas.rowCaption')}</span>
           </div>
         </div>
       </div>
@@ -209,17 +168,17 @@ export function AreaEditor({
 // serialized to grid-template-areas. Keyed by name so a reposition doesn't jump the
 // open editor.
 export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: LabelProps }) {
+  const translate = useTranslate();
   const { read, busy, clearProp, onProvenance, onSelectSelector } = labels;
   const areas = parseAreas(resolvedValue(read, 'grid-template-areas'));
   const edits = useAreaEdits({ areas, setProp, clearProp });
-  const openArea =
-    edits.openName !== undefined ? areas.find((area) => area.name === edits.openName) : undefined;
+  const openArea = edits.openName !== undefined ? areas.find((area) => area.name === edits.openName) : undefined;
   return (
     <section className="embed-editor_grid-section">
       <div className="embed-editor_grid-section-head">
         <span className="embed-editor_grid-section-title">
           <GroupLabel
-            label="Areas"
+            label={translate('style.gridAreas.areas')}
             props={['grid-template-areas']}
             read={read}
             busy={busy}
@@ -234,8 +193,8 @@ export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: La
           className="embed-editor_icon-btn"
           onClick={edits.add}
           disabled={busy}
-          title="Add an area"
-          aria-label="Add an area"
+          title={translate('style.gridAreas.addArea')}
+          aria-label={translate('style.gridAreas.addArea')}
         >
           <PlusIcon />
         </button>
@@ -247,18 +206,11 @@ export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: La
           ))}
         </ul>
       ) : (
-        <div className="embed-editor_grid-empty">No Areas</div>
+        <div className="embed-editor_grid-empty">{translate('style.gridAreas.noAreas')}</div>
       )}
       {openArea && edits.anchorElement ? (
-        <TrackPopover
-          anchorElement={edits.anchorElement}
-          onClose={() => edits.setOpenName(undefined)}
-        >
-          <AreaEditor
-            area={openArea}
-            busy={busy}
-            onChange={(patch) => edits.update(openArea.name, patch)}
-          />
+        <TrackPopover anchorElement={edits.anchorElement} onClose={() => edits.setOpenName(undefined)}>
+          <AreaEditor area={openArea} busy={busy} onChange={(patch) => edits.update(openArea.name, patch)} />
         </TrackPopover>
       ) : undefined}
     </section>
@@ -269,15 +221,7 @@ export type AreaEdits = ReturnType<typeof useAreaEdits>;
 
 // Which area's editor is open (and the row it hangs from), and the list edits — each
 // written back as grid-template-areas, or cleared when none are left.
-export function useAreaEdits({
-  areas,
-  setProp,
-  clearProp,
-}: {
-  areas: GridArea[];
-  setProp: SetProp;
-  clearProp: ClearProp;
-}) {
+export function useAreaEdits({ areas, setProp, clearProp }: { areas: GridArea[]; setProp: SetProp; clearProp: ClearProp }) {
   const [openName, setOpenName] = useState<string | undefined>(undefined);
   const [anchorElement, setAnchorElement] = useState<HTMLElement | undefined>(undefined);
   const write = (next: GridArea[]) => {
@@ -324,29 +268,17 @@ export function useAreaEdits({
   return { openName, setOpenName, anchorElement, add, update, remove, openAt };
 }
 
-export function AreaRow({
-  area,
-  busy,
-  edits,
-}: {
-  area: GridArea;
-  busy: boolean;
-  edits: AreaEdits;
-}) {
+export function AreaRow({ area, busy, edits }: { area: GridArea; busy: boolean; edits: AreaEdits }) {
+  const translate = useTranslate();
   const isOpen = edits.openName === area.name;
   return (
     <li className={`embed-editor_grid-track ${isOpen ? 'is-open' : ''}`}>
       <div className="embed-editor_grid-track-row">
-        <button
-          type="button"
-          className="embed-editor_grid-track-main"
-          onClick={(event) => edits.openAt(area.name, event.currentTarget)}
-          disabled={busy}
-        >
+        <button type="button" className="embed-editor_grid-track-main" onClick={(event) => edits.openAt(area.name, event.currentTarget)} disabled={busy}>
           <span className="embed-editor_grid-track-glyph" aria-hidden="true">
             <AreaIcon />
           </span>
-          <span className="embed-editor_grid-track-label">{areaLabel(area)}</span>
+          <span className="embed-editor_grid-track-label">{areaLabel(area, translate)}</span>
         </button>
         <div className="embed-editor_grid-track-actions">
           <button
@@ -354,8 +286,8 @@ export function AreaRow({
             className={'embed-editor_grid-track-action ' + 'embed-editor_grid-track-action-danger'}
             onClick={() => edits.remove(area.name)}
             disabled={busy}
-            title="Remove area"
-            aria-label="Remove area"
+            title={translate('style.gridAreas.removeArea')}
+            aria-label={translate('style.gridAreas.removeArea')}
           >
             <TrashIcon />
           </button>

@@ -1,13 +1,18 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import React, { useState } from 'react';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { assert } from '../../../shared/core/assert';
+import { buildCommitSubject, COMMIT_CONVENTION_NONE, type CommitConvention } from './commitType';
+import { CommitSubjectPreview } from './CommitTypePicker';
 
 export interface SwitchBranchProps {
   readonly from: string;
   readonly to: string;
   readonly files: readonly string[];
   readonly busy: string | undefined;
+  /** The Git panel's commit type, applied to "Commit first"; none when the panel has none picked. */
+  readonly convention?: CommitConvention;
   readonly onCancel: () => void;
   readonly onLeaveHere: () => void;
   readonly onCommitFirst: (message: string) => void;
@@ -26,6 +31,7 @@ function SwitchBranchBody({
   to,
   files,
   busy,
+  convention = COMMIT_CONVENTION_NONE,
   onCancel,
   onLeaveHere,
   onCommitFirst,
@@ -35,27 +41,25 @@ function SwitchBranchBody({
   readonly message: string;
   readonly setMessage: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const working = !!busy;
 
   return (
     <Popup className="modal" onClose={onCancel} dismissible={!working}>
       {({ close }) => (
         <>
-          <div className="modal-header">These changes can’t come with you</div>
+          <div className="modal-header">{translate('git.switch.title')}</div>
           <div className="modal-body">
-            <div className="hint-text">
-              {from} and {to} have different versions of{' '}
-              {files.length === 1 ? 'this file' : 'these files'}, so your unsaved work can’t follow
-              you across. It can wait here until you come back — no commit needed.
-            </div>
+            <div className="hint-text">{translate('git.switch.body', { count: files.length, from, to })}</div>
 
             <SwitchBranchFiles files={files} />
 
             <div>
-              <label>Or commit them first</label>
+              <label>{translate('git.switch.commitFirstLabel')}</label>
               <input
                 autoFocus
                 maxLength={BOUNDARY_LIMITS.textLengthMax}
+                // i18n-ignore: the default commit message Stacki writes into the user's git history stays English.
                 placeholder={`Update ${from}`}
                 value={message}
                 disabled={working}
@@ -66,6 +70,7 @@ function SwitchBranchBody({
                   }
                 }}
               />
+              <CommitSubjectPreview convention={convention} subject={buildCommitSubject(message, convention, `Update ${from}`)} />
             </div>
 
             {working && (
@@ -75,14 +80,7 @@ function SwitchBranchBody({
               </div>
             )}
           </div>
-          <SwitchBranchFooter
-            from={from}
-            busy={busy}
-            onCancel={close}
-            onLeaveHere={onLeaveHere}
-            onCommitFirst={onCommitFirst}
-            message={message}
-          />
+          <SwitchBranchFooter from={from} busy={busy} onCancel={close} onLeaveHere={onLeaveHere} onCommitFirst={onCommitFirst} message={message} />
         </>
       )}
     </Popup>
@@ -99,32 +97,25 @@ function SwitchBranchFooter({
 }: Pick<SwitchBranchProps, 'from' | 'busy' | 'onCancel' | 'onLeaveHere' | 'onCommitFirst'> & {
   readonly message: string;
 }) {
+  const translate = useTranslate();
   const working = Boolean(busy);
   return (
     <div className="modal-footer">
       <button onClick={onCancel} disabled={working}>
-        Cancel
+        {translate('ui.cancel')}
       </button>
-      <button
-        onClick={() => onCommitFirst(message.trim() || `Update ${from}`)}
-        disabled={working}
-        title={`Commit to ${from}, then switch`}
-      >
-        Commit first
+      <button onClick={() => onCommitFirst(message.trim() || `Update ${from}`)} disabled={working} title={translate('git.switch.commitFirstTitle', { from })}>
+        {translate('git.switch.commitFirst')}
       </button>
-      <button
-        className="primary"
-        disabled={working}
-        onClick={onLeaveHere}
-        title={`Set them aside on ${from} and pick them up when you return`}
-      >
-        Leave them on {from}
+      <button className="primary" disabled={working} onClick={onLeaveHere} title={translate('git.switch.leaveTitle', { from })}>
+        {translate('git.switch.leave', { from })}
       </button>
     </div>
   );
 }
 
 function SwitchBranchFiles({ files }: Pick<SwitchBranchProps, 'files'>) {
+  const translate = useTranslate();
   assert(files.length <= BOUNDARY_LIMITS.itemsMax, 'Branch switch: file limit exceeded');
   const shown = files.slice(0, 5);
   const rest = files.length - shown.length;
@@ -136,7 +127,7 @@ function SwitchBranchFiles({ files }: Pick<SwitchBranchProps, 'files'>) {
       {shown.map((file) => (
         <li key={file}>{file}</li>
       ))}
-      {rest > 0 && <li className="more">+{rest} more</li>}
+      {rest > 0 && <li className="more">{translate('git.switch.more', { count: rest })}</li>}
     </ul>
   );
 }

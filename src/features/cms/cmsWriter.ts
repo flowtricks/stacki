@@ -4,6 +4,8 @@ import { writeCms } from './cmsBridge';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { createCoalescedRun } from '../../lib/coalescedRun';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 export interface CmsUndo {
   readonly label: string;
@@ -18,6 +20,8 @@ interface WriterOptions {
   readonly refresh: () => Promise<void>;
   readonly saved: () => void;
   readonly record: (command: CmsUndo) => void;
+  /** Words the undo label in the person's language; read when the label is made, so a language change applies at once. */
+  readonly translate?: Translator | undefined;
 }
 type Snapshot =
   | { readonly kind: 'empty' }
@@ -29,12 +33,9 @@ type Snapshot =
 /** What the next write puts on disk: the panel's items, reassembled into the
  * file's shape, or a whole value an undo restores. */
 type QueuedWrite =
-  | { readonly kind: 'items'; readonly items: readonly unknown[] }
-  | { readonly kind: 'data'; readonly data: unknown; readonly expected: unknown };
+  { readonly kind: 'items'; readonly items: readonly unknown[] } | { readonly kind: 'data'; readonly data: unknown; readonly expected: unknown };
 type WriteState =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'queued'; readonly write: QueuedWrite }
-  | { readonly kind: 'writing'; pending: QueuedWrite | undefined };
+  { readonly kind: 'idle' } | { readonly kind: 'queued'; readonly write: QueuedWrite } | { readonly kind: 'writing'; pending: QueuedWrite | undefined };
 const SAVE_DELAY_MS = 400;
 
 export function createCmsWriter(options: WriterOptions) {
@@ -99,15 +100,9 @@ class CmsWriter {
     assert(this.snapshot.kind === 'ready', 'CMS save: a loaded snapshot is required');
     const write = this.state.write;
     const before = this.snapshot.data;
-    const after =
-      write.kind === 'items' ? reassemble(this.snapshot.collection, write.items) : write.data;
+    const after = write.kind === 'items' ? reassemble(this.snapshot.collection, write.items) : write.data;
     this.state = { kind: 'writing', pending: undefined };
-    const result = await writeCms(
-      this.options.projectPath,
-      this.options.rel,
-      after,
-      write.kind === 'data' ? write.expected : undefined,
-    );
+    const result = await writeCms(this.options.projectPath, this.options.rel, after, write.kind === 'data' ? write.expected : undefined);
     assert(this.state.kind === 'writing', 'CMS save: active write lost its state');
     const pending = this.state.pending;
     if (!result.ok) {
@@ -125,7 +120,7 @@ class CmsWriter {
   }
   private record(before: unknown, after: unknown): void {
     this.options.record({
-      label: 'content edit',
+      label: (this.options.translate ?? ENGLISH_TRANSLATE)('cms.undo.edit'),
       coalesceKey: `cms:${this.options.rel}`,
       undo: () => this.restore(before, after),
       redo: () => this.restore(after, before),

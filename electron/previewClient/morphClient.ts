@@ -22,25 +22,12 @@
 // and hands it to the dev plugin as virtual:avb-morph, which has no folder for
 // an import to resolve against.
 
-import { stripTemplateMarkers, asDocument } from './morphNodes';
+import { stripTemplateMarkers, asDocument, inertNoscripts } from './morphNodes';
 import { parsePreviewRoute } from '../../shared/properties/previewRoute';
-import { type ReloadReason, OverCap, refillMorphWork, checkMarkerCap } from './morphBudget';
-import {
-  previewHost,
-  stripAnchors,
-  stripPreviewInstrumentation,
-  syncAnchors,
-  syncStamps,
-} from './morphAnchors';
+import { dismissErrorOverlay, previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
 import { patchAttrs, patchChildren } from './morphPatch';
-import {
-  addedScripts,
-  noteScripts,
-  runScripts,
-  noteStyles,
-  loadStyles,
-  refreshDevStyles,
-} from './morphAssets';
+import { addedScripts, describeScriptChange, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
+import { createVariantPreview } from './morphVariant';
 
 declare global {
   // Vite's import.meta.hot; only .on is used here, so only .on is declared.
@@ -61,22 +48,40 @@ if (host === 'browser') {
   stripPreviewInstrumentation(document);
 }
 
-function fetchDocument(initialHTML?: string): Promise<FetchedDocument> {
+// Desktop's prop hover preview (morphVariant.ts): a rendering of the page with
+// one prop changed is painted like any other, and cancel pulls the real one.
+// Made before fetchDocument can run: the page's first pull, at load, asks it for
+// headers, and a const declared below that pull would not exist yet.
+const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update(), supersede: () => activePull?.abort() });
+
+// The dev server answered with an error (a file mid-edit does not compile): not a rendering to patch in, and not a
+// reason to reload. The page on show stays as it is, with its intro played and its scroll kept; the app's own
+// check names the error, and the next good rendering patches as always.
+class HeldRendering extends Error {
+  constructor(readonly status: number) {
+    super('dev server answered ' + status);
+  }
+}
+
+function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =
     initialHTML === undefined
-      ? fetch(location.href, { cache: 'no-store' }).then((response) => {
+      ? // A hover preview on show stays on show through a pull (morphVariant.ts).
+        fetch(location.href, { cache: 'no-store', headers: variantPreview.headers(), ...(signal ? { signal } : {}) }).then((response) => {
           // Studio edits authored 404 pages too. Reject transport/server failures,
           // but retain Astro's intentional 404 status for an HTML page rendering.
-          const html404 =
-            response.status === 404 && response.headers.get('content-type')?.includes('text/html');
+          const html404 = response.status === 404 && response.headers.get('content-type')?.includes('text/html');
           if (!response.ok && !html404) {
-            throw new Error('dev server answered ' + response.status);
+            throw new HeldRendering(response.status);
           }
           return response.text();
         })
       : Promise.resolve(initialHTML);
   return rendering.then((html) => {
     const withAnchors = new DOMParser().parseFromString(html, 'text/html');
+    // Before anything reads the tree: the canvas parsed <noscript> as text, and
+    // every comparison and insertion below must see it the same way.
+    inertNoscripts(withAnchors);
     withAnchors.getElementById('studio-render-baseline')?.remove();
     stripTemplateMarkers(withAnchors);
     const clone = withAnchors.cloneNode(true);
@@ -121,15 +126,32 @@ const ready =
       )
     : Promise.resolve();
 
-// A reload is honest: the app hears why before the page goes, and shows it when
-// a cap was the reason — the canvas lost its running state on purpose, not by
-// accident.
-function reloadFor(reason: ReloadReason): void {
+// Why the page reloaded instead of patching. There is no size at which it does:
+// the patch scales with the page (morphPatch.ts), so these are the only two.
+type ReloadReason = 'scripts-changed' | 'patch-failed';
+
+// A reload is honest: the app hears why before the page goes, so the canvas
+// shows that it lost its running state on purpose, not by accident.
+//
+// A reload also leaves one line in the dev server's log (stdout, so the preview's own log shows it):
+// every reload replays the page's intro and drops its state, and a report of "it reloads" needs the
+// reason to be diagnosed. A keepalive fetch to the page's own dev server, because it must outlive the page that sends it
+// (Studio ships this file and its no-tracking scan forbids the beacon API; the request never leaves the dev server).
+const RELOAD_DETAIL_CHARS_MAX = 240;
+function logToDevServer(line: string): void {
+  try {
+    fetch('/__avb/reload?r=' + encodeURIComponent(line.slice(0, RELOAD_DETAIL_CHARS_MAX)), { cache: 'no-store', keepalive: true }).catch(() => undefined);
+  } catch {
+    /* the log line is a courtesy */
+  }
+}
+function reloadFor(reason: ReloadReason, detail: string): void {
   try {
     window.parent.postMessage({ type: 'avb:preview-reload', reason }, '*');
   } catch {
     /* no parent to tell */
   }
+  logToDevServer('reloaded instead of patching (' + reason + ': ' + detail + ')');
   location.reload();
 }
 
@@ -138,11 +160,21 @@ let again = false;
 let pushedHTML: string | undefined;
 let pushReady = false;
 let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+let activePull: AbortController | undefined;
+let renderDeadline: number | undefined;
+
+function clearFallback(): void {
+  clearTimeout(fallbackTimer);
+  fallbackTimer = undefined;
+  renderDeadline = undefined;
+}
 
 // The hosted preview receives Astro renders on its existing socket. Keep the
 // pull path for old servers, disconnected sockets and failed pushed renders.
 function requestUpdate(): void {
   if (!pushReady) {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = undefined;
     void update();
   } else if (!fallbackTimer) {
     fallbackTimer = setTimeout(() => {
@@ -153,23 +185,41 @@ function requestUpdate(): void {
 }
 document.addEventListener('studio:render-push', (event) => {
   pushReady = event instanceof CustomEvent && event.detail === true;
+  if (!pushReady && fallbackTimer !== undefined) {
+    clearFallback();
+    void update();
+  }
 });
-document.addEventListener('studio:render-html', (event) => {
-  if (
-    !(event instanceof CustomEvent) ||
-    typeof event.detail !== 'string' ||
-    event.detail.length > 4_000_000
-  ) {
+document.addEventListener('studio:render-pending', () => {
+  if (!pushReady || renderDeadline !== undefined) {
     return;
   }
+  // Only an acknowledged server render earns this grace period. Its fetch has a
+  // 15-second deadline; leave room for delivery without multiplying SSR work for
+  // every collaborator. Repeated pending events cannot extend the watchdog.
+  renderDeadline = performance.now() + 20_000;
   clearTimeout(fallbackTimer);
-  fallbackTimer = undefined;
-  pushedHTML = event.detail;
+  fallbackTimer = setTimeout(() => {
+    clearFallback();
+    void update();
+  }, 20_000);
+});
+function paintRendering(html: string): void {
+  clearFallback();
+  pushedHTML = html;
+  // A structural edit can start a WAN refresh before its socket render arrives.
+  // Cancel that redundant pull so completed HTML never waits behind the network.
+  activePull?.abort();
   void update();
+}
+document.addEventListener('studio:render-html', (event) => {
+  if (!(event instanceof CustomEvent) || typeof event.detail !== 'string' || event.detail.length > 4_000_000) {
+    return;
+  }
+  paintRendering(event.detail);
 });
 document.addEventListener('studio:render-fallback', () => {
-  clearTimeout(fallbackTimer);
-  fallbackTimer = undefined;
+  clearFallback();
   void update();
 });
 document.dispatchEvent(new window.Event('studio:render-listening'));
@@ -183,6 +233,7 @@ async function update(): Promise<void> {
     return;
   }
   busy = true;
+  let pull: AbortController | undefined;
   try {
     await ready;
     if (!previousDocument) {
@@ -194,7 +245,9 @@ async function update(): Promise<void> {
       again = false;
     }
     const renderingURL = location.href;
-    const next = await fetchDocument(html);
+    pull = html === undefined ? new AbortController() : undefined;
+    activePull = pull;
+    const next = await fetchDocument(html, pull?.signal);
     // A newer push arrived while a fallback fetch was in flight.
     if (pushedHTML === undefined && location.href === renderingURL) {
       applyRendering(next);
@@ -202,15 +255,24 @@ async function update(): Promise<void> {
       again = true;
     }
   } catch (error: unknown) {
-    // Whatever went wrong, the page must still end up showing what the file
-    // says. Falling back to the reload this replaced is always safe.
-    // The original called console.warn, which no browser implements — the
-    // throw it caused skipped the reload line below, which is the whole point
-    // of the catch. Log and reload.
-    console.error('[stacki] could not patch the page, reloading:', error);
-    reloadFor(error instanceof OverCap ? error.reason : 'patch-failed');
-    return;
+    if (error instanceof HeldRendering && error.status >= 500 && previousDocument !== undefined) {
+      logToDevServer('kept the page (the rendering failed: ' + error.message + ')');
+    } else if (pull?.signal.aborted) {
+      // Our own cancellation is supersession, not a failed preview. The next
+      // pass consumes the newest push or fetches the newly selected route.
+      again = true;
+    } else {
+      // Whatever went wrong, the page must still end up showing what the file
+      // says. Falling back to the reload this replaced is always safe.
+      // The original called console.warn, which no browser implements — the
+      // throw it caused skipped the reload line below, which is the whole point
+      // of the catch. Log and reload.
+      console.error('[stacki] could not patch the page, reloading:', error);
+      reloadFor('patch-failed', error instanceof Error ? error.message : String(error));
+      return;
+    }
   } finally {
+    activePull = undefined;
     busy = false;
   }
   if (again) {
@@ -225,19 +287,22 @@ function applyRendering(next: FetchedDocument): void {
   if (!previousDocument) {
     throw new Error('no baseline rendering to compare against');
   }
-  checkMarkerCap(next.withAnchors);
   const added = addedScripts(previousDocument, next.clean);
   if (added === undefined) {
-    reloadFor('scripts-changed');
+    reloadFor('scripts-changed', describeScriptChange(previousDocument, next.clean));
     return;
   }
-  refillMorphWork();
   const liveRoot = document.documentElement;
   const previousRoot = previousDocument.documentElement;
   const nextRoot = next.clean.documentElement;
   if (!liveRoot || !previousRoot || !nextRoot) {
     throw new Error('missing <html> in one of the renderings');
   }
+  // The patch assumes the live page is the previous rendering plus what the page's
+  // own scripts did. A reorder the canvas showed before this rendering arrived
+  // (electron/preload/frameMove.ts) is taken back here, in this task, and shown again
+  // after it when this is still a rendering of the old file: nothing paints between.
+  document.dispatchEvent(new CustomEvent('avb:before-morph', { detail: next.withAnchors }));
   patchAttrs(liveRoot, previousRoot, nextRoot);
   patchChildren(document.head, previousDocument.head, next.clean.head);
   patchChildren(document.body, previousDocument.body, next.clean.body);
@@ -255,6 +320,8 @@ function applyRendering(next: FetchedDocument): void {
   }
   syncAnchors(liveBody, serverBody);
   syncStamps(document, next.withAnchors);
+  dismissErrorOverlay(liveBody);
+  document.dispatchEvent(new CustomEvent('avb:after-patch', { detail: next.withAnchors }));
   document.dispatchEvent(new CustomEvent('avb:morphed', { detail: next.withAnchors }));
 }
 
@@ -272,6 +339,7 @@ function applyRendering(next: FetchedDocument): void {
 // Patching twice for one edit costs a fetch and a diff that finds nothing.
 if (import.meta.hot) {
   import.meta.hot.on('avb:page-changed', () => {
+    variantPreview.forget();
     if (host === 'stacki') {
       // update() reports its own failures and reloads; nothing is left to catch.
       requestUpdate();
@@ -288,24 +356,25 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
   const data: unknown = event.data;
   if (event.source === window.parent) {
+    if (variantPreview.receive(data)) {
+      return;
+    }
     const route = parsePreviewRoute(data, location.href);
     if (route && route !== location.pathname + location.search + location.hash) {
       // Reset queued renders before changing subscriptions so an old response cannot
       // repaint the previous mode after the source has changed.
       pushedHTML = undefined;
+      clearFallback();
+      activePull?.abort();
       history.replaceState(history.state, '', route);
       document.dispatchEvent(new Event('avb:preview-route'));
       void update();
       return;
     }
   }
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    'type' in data &&
-    data['type'] === 'avb:patch-now'
-  ) {
-    // update() reports its own failures and reloads; nothing is left to catch.
+  if (typeof data === 'object' && data !== null && 'type' in data && data['type'] === 'avb:patch-now') {
+    // A connected Studio already renders accepted writes. Starting a second
+    // render here competes for container CPU; Desktop still pulls immediately.
     requestUpdate();
   }
 });

@@ -19,8 +19,7 @@ const document = dom.window.document;
 global.document = document;
 // The client's modules, bundled for jsdom; main prepends the patcher's bounds
 // from shared/core/limits.ts (step 7).
-const { LIMITS } = require('#dist/shared/core/limits.js');
-const morph = loadMorphModules(LIMITS);
+const morph = loadMorphModules();
 // The diff alone, with a counting Int32Array, from its own module's source.
 const source = transpileSource('electron/previewClient/morphPatch.ts');
 
@@ -34,10 +33,7 @@ test('large unchanged sibling lists and appends stay within a linear allocation 
   let allocated = 0;
   const diff = new Function(
     'Int32Array',
-    `${source.slice(
-      source.indexOf('function diffChildren('),
-      source.indexOf('// Raised when the live document'),
-    )}\nreturn diffChildren;`,
+    `${source.slice(source.indexOf('function diffChildren('), source.indexOf('// Raised when the live document'))}\nreturn diffChildren;`,
   )(function BudgetedArray(size) {
     allocated += size;
     assert.ok(allocated < 100_000, 'unchanged siblings allocated a quadratic matrix');
@@ -78,16 +74,26 @@ test('a missing explicit id cannot redirect an edit onto an unrelated live eleme
 });
 
 test('a comment cannot stand in for missing text', () => {
-  assert.equal(
-    morph.findLive(tree('<!--before-->').firstChild, tree('before').firstChild),
-    undefined,
-  );
+  assert.equal(morph.findLive(tree('<!--before-->').firstChild, tree('before').firstChild), undefined);
 });
 
 test('script identity cannot collide with separators inside source text', () => {
   const before = tree('<script>one\n@@\n |  | two</script>');
   const after = tree('<script>one</script><script>two</script>');
   assert.equal(morph.addedScripts(before, after), undefined);
+});
+
+// stacki.build's BaseHead spreads the page's props onto its JSON-LD <script>, so the
+// page's stamp (data-avb-d, the checksum of the file's bytes) rides on a script. Every
+// save changes the stamp; a signature that counted it reloaded the canvas on every prop
+// edit. Only the marker attributes are ignored: a real attribute or text change still
+// cannot be patched in.
+test('a script whose marker attributes alone changed is the same script', () => {
+  const json = (stamp, text) => `<script type="application/ld+json" data-avb-p="0.1 0" data-avb-d="avb-d:${stamp}:src/pages/index.astro">${text}</script>`;
+  assert.deepEqual(morph.addedScripts(tree(json('aaa', '{"a":1}')), tree(json('bbb', '{"a":1}'))), []);
+  assert.equal(morph.addedScripts(tree(json('aaa', '{"a":1}')), tree(json('bbb', '{"a":2}'))), undefined, 'new text still reloads');
+  const module = (nonce) => `<script type="module" src="/a.js" data-avb-d="avb-d:x" nonce="${nonce}"></script>`;
+  assert.equal(morph.addedScripts(tree(module('one')), tree(module('two'))), undefined, 'a real attribute still counts');
 });
 
 test('instrumentation remains only in the Stacki design frame', () => {
@@ -110,20 +116,18 @@ test('instrumentation remains only in the Stacki design frame', () => {
 test('scripts retain ordering, multiplicity, and loading attributes', () => {
   const first = '<script type="module" src="/first.js"></script>';
   const second = '<script type="module" src="/second.js"></script>';
-  assert.equal(morph.addedScripts(tree(first + second), tree(second + first)), undefined);
-  assert.equal(morph.addedScripts(tree(first + first), tree(first)), undefined);
-  assert.equal(morph.addedScripts(tree(first), tree(first + first)), undefined);
-  assert.equal(
-    morph.addedScripts(
-      tree(first),
-      tree(first.replace('type="module"', 'type="module" integrity="new"')),
-    ),
-    undefined,
-  );
-  assert.deepEqual(
-    morph.addedScripts(tree(first), tree('<script src="/first.js" type="module"></script>')),
-    [],
-  );
+  // An external module runs once per URL, so its order and its count do not matter: nothing is added, nothing reloads.
+  assert.deepEqual(morph.addedScripts(tree(first + second), tree(second + first)), []);
+  assert.deepEqual(morph.addedScripts(tree(first + first), tree(first)), []);
+  assert.deepEqual(morph.addedScripts(tree(first), tree(first + first)), []);
+  assert.equal(morph.addedScripts(tree(first + second), tree(second)), undefined, 'a module that is gone cannot be un-run');
+  // Every other script keeps its order and count: a reorder or a second execution cannot be patched.
+  const classicFirst = '<script src="/classic-first.js"></script>';
+  const classicSecond = '<script src="/classic-second.js"></script>';
+  assert.equal(morph.addedScripts(tree(classicFirst + classicSecond), tree(classicSecond + classicFirst)), undefined);
+  assert.equal(morph.addedScripts(tree(classicFirst), tree(classicFirst + classicFirst)), undefined);
+  assert.equal(morph.addedScripts(tree(first), tree(first.replace('type="module"', 'type="module" integrity="new"'))), undefined);
+  assert.deepEqual(morph.addedScripts(tree(first), tree('<script src="/first.js" type="module"></script>')), []);
 
   const script =
     '<script type="module" src="/with | separator.js" integrity="sha256-value" ' +

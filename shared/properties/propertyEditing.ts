@@ -1,8 +1,12 @@
 // Source text is the revision token: edits cannot overwrite a newer disk revision.
+import { assert } from '../core/assert';
 import { boolean, count, list, object, optional, text } from '../core/boundary';
 import { LIMITS } from '../core/limits';
 import { toRecord } from '../core/record';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import type { Result } from '../core/result';
+import { parseRefusal, type PropertyError } from './propertyErrors';
+import { parseVariantDefaults, parseVariantGroups, parseVariantRuleEdit, type VariantDefault, type VariantGroup, type VariantRuleEdit } from './variantRules';
 
 export const PROPERTY_LIMITS = {
   fieldsMax: LIMITS.propSchemaFieldsMax,
@@ -24,11 +28,37 @@ export interface ComponentProperty {
   readonly origin?: PropertyOrigin;
   readonly editing?: PropertyEditing;
   readonly conditions?: readonly string[];
+  /** `conditions` as message references, in step with it (a condition the server wrote in English has none); the English strings stay as the fallback. */
+  readonly conditionRefs?: ReadonlyArray<MessageRef | undefined>;
+  /** Declared by a type another file owns (`type Props = SeoProps & {…}`): edits write that file. */
+  readonly shared?: PropertyShare;
 }
+/**
+ * Editable, overridable here, or source-only. An editable prop may carry a
+ * warning: its options live in an alias other declarations use too, so an
+ * edit changes all of them.
+ */
 export type PropertyEditing =
-  | { readonly kind: 'editable' }
-  | { readonly kind: 'override'; readonly reason: string }
-  | { readonly kind: 'restricted'; readonly reason: string };
+  | { readonly kind: 'editable'; readonly warning?: string; readonly warningRef?: MessageRef | undefined }
+  | { readonly kind: 'override'; readonly reason: string; readonly reasonRef?: MessageRef | undefined }
+  | { readonly kind: 'restricted'; readonly reason: string; readonly reasonRef?: MessageRef | undefined };
+/**
+ * Where a shared prop is declared and who else reads it. Paths are
+ * project-relative. `users` are the components whose Props use the type;
+ * `instances` the files that place one of those components; `defaults` the
+ * fallbacks each user's destructure gives the prop.
+ */
+export interface PropertyShare {
+  readonly typeName: string;
+  readonly path: string;
+  readonly users: readonly string[];
+  readonly instances: readonly string[];
+  readonly defaults: readonly PropertyShareDefault[];
+}
+export interface PropertyShareDefault {
+  readonly path: string;
+  readonly expression: string;
+}
 export interface PropertySource {
   readonly label: string;
   readonly expression: string;
@@ -43,6 +73,10 @@ export interface ComponentProperties {
   readonly properties: readonly ComponentProperty[];
   readonly frontmatter: string;
   readonly advanced: boolean;
+  /** The discriminated unions the props combine, which the panel edits as variant rules (variantRules.ts). */
+  readonly variantGroups?: readonly VariantGroup[];
+  /** Defaults the component computes per option (`label ?? named[variant]`) or otherwise, by prop (variantRules.ts). */
+  readonly variantDefaults?: readonly VariantDefault[];
 }
 export interface PropertyOptionRename {
   readonly from: string;
@@ -58,7 +92,8 @@ export type PropertyChange =
   | { readonly kind: 'remove'; readonly name: string }
   | { readonly kind: 'order'; readonly names: readonly string[] }
   | { readonly kind: 'options'; readonly name: string; readonly type: string }
-  | { readonly kind: 'source'; readonly frontmatter: string };
+  | { readonly kind: 'source'; readonly frontmatter: string }
+  | { readonly kind: 'variantRules'; readonly edit: VariantRuleEdit };
 
 export function propertyText(input: unknown): string {
   const value = text(input);
@@ -95,18 +130,48 @@ export function parseComponentProperty(input: unknown): ComponentProperty {
     origin: optional(parsePropertyOrigin),
     editing: optional(parsePropertyEditing),
     conditions: optional((value) => propertyList(value, propertyText)),
+    conditionRefs: optional(parseConditionRefs),
+    shared: optional(parsePropertyShare),
   })(input);
+}
+
+function parsePropertyShare(input: unknown): PropertyShare {
+  const share = object({
+    typeName: propertyName,
+    path: propertyLabel,
+    users: (value) => propertyPaths(value),
+    instances: (value) => propertyPaths(value),
+    defaults: (value) => propertyList(value, object({ path: propertyLabel, expression: propertyText })),
+  })(input);
+  if (share.path.startsWith('/') || share.path.split('/').includes('..')) {
+    throw new Error('Shared property path must be project-relative');
+  }
+  return share;
+}
+
+function propertyPaths(input: unknown): readonly string[] {
+  const values = list(propertyLabel)(input);
+  if (values.length > PROPERTY_LIMITS.filesMax) {
+    throw new Error('Too many shared property files');
+  }
+  return values;
 }
 
 function parsePropertyEditing(input: unknown): PropertyEditing {
   const value = toRecord(input);
   if (value?.['kind'] === 'editable') {
-    return { kind: 'editable' };
+    const warning = optional(propertyText)(value['warning']);
+    const warningRef = parseOptionalMessageRef(value['warningRef']);
+    if (warning === undefined || warning.trim() === '') {
+      return { kind: 'editable' };
+    }
+    return warningRef === undefined ? { kind: 'editable', warning } : { kind: 'editable', warning, warningRef };
   }
   if (value?.['kind'] === 'override' || value?.['kind'] === 'restricted') {
     const reason = propertyText(value['reason']);
+    const reasonRef = parseOptionalMessageRef(value['reasonRef']);
     if (reason.trim()) {
-      return { kind: value['kind'], reason };
+      return reasonRef === undefined ? { kind: value['kind'], reason } : { kind: value['kind'], reason, reasonRef };
     }
   }
   throw new Error('Invalid property editing permission');
@@ -151,9 +216,7 @@ export function parsePropertyChange(input: unknown): PropertyChange {
           property: parseEditableProperty,
         })(input),
       } as const;
-      const optionRenames = optional((item) => propertyList(item, parsePropertyOptionRename))(
-        value['optionRenames'],
-      );
+      const optionRenames = optional((item) => propertyList(item, parsePropertyOptionRename))(value['optionRenames']);
       return optionRenames === undefined ? saved : { ...saved, optionRenames };
     }
     case 'remove':
@@ -174,6 +237,8 @@ export function parsePropertyChange(input: unknown): PropertyChange {
         kind: 'source',
         frontmatter: propertySource(value['frontmatter']),
       };
+    case 'variantRules':
+      return { kind: 'variantRules', edit: parseVariantRuleEdit(value['edit']) };
     default:
       throw new Error('Unknown component property change');
   }
@@ -195,20 +260,25 @@ export function parseComponentProperties(input: unknown): ComponentProperties {
     frontmatter: propertySource,
     advanced: boolean,
     properties: (value) => propertyList(value, parseComponentProperty),
+    variantGroups: optional(parseVariantGroups),
+    variantDefaults: optional(parseVariantDefaults),
   })(input);
 }
-export function parsePropertiesResult<T>(input: unknown, parse: (value: unknown) => T): Result<T> {
+export function parsePropertiesResult<T>(input: unknown, parse: (value: unknown) => T): Result<T, PropertyError> {
   const value = toRecord(input);
   if (value?.['ok'] === true) {
     return { ok: true, value: parse(value['value']) };
   }
   if (value?.['ok'] === false) {
-    return {
-      ok: false,
-      error: object({ code: propertyText, message: propertyText })(value['error']),
-    };
+    return { ok: false, error: parseRefusal(value['error']) };
   }
   throw new Error('Invalid component properties result');
+}
+
+function parseConditionRefs(input: unknown): ReadonlyArray<MessageRef | undefined> {
+  const refs = list((value) => value)(input);
+  assert(refs.length <= PROPERTY_LIMITS.fieldsMax, 'Property condition references are bounded');
+  return refs.map(parseOptionalMessageRef);
 }
 
 function propertyLabel(input: unknown): string {

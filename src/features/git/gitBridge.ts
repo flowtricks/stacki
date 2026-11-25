@@ -1,23 +1,11 @@
+import { gitTransport } from '../../ipc/gitTransport';
 // Renderer Git actions parse invoke results before deciding whether a merge can
 // continue. Payload types share the main-process inventory; responses stay unknown
 // until this boundary because preload does not validate response data.
-import {
-  boolean,
-  count,
-  BOUNDARY_LIMITS,
-  pathText,
-  list,
-  object,
-  optional,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, BOUNDARY_LIMITS, pathText, list, object, optional, record, text } from '../../../shared/core/boundary';
+import { parseOptionalMessageRef, type MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { IpcPayloads } from '../../../shared/ipc/ipcPayloads';
-import type {
-  WireMergeOutcome,
-  WireDeleteOutcome,
-  WireConflictPart,
-} from '../../../shared/ipc/ipcResults';
+import type { WireMergeOutcome, WireDeleteOutcome, WireConflictPart } from '../../../shared/ipc/ipcResults';
 
 const mergeFile = object({ path: pathText });
 const commonPart = object({ text });
@@ -71,7 +59,11 @@ const parkResult = object({
   branch: optional(text),
   error: optional(text),
 });
-const unparkResult = object({ restored: boolean, error: optional(text) });
+const unparkFields = object({ restored: boolean, error: optional(text) });
+const unparkResult = (input: unknown): { readonly restored: boolean; readonly error?: string | undefined; readonly errorRef?: MessageRef | undefined } => {
+  const fields = unparkFields(input);
+  return { ...fields, errorRef: parseOptionalMessageRef(record(input)['errorRef']) };
+};
 
 export function parseMergeResult(input: unknown): WireMergeOutcome {
   const value = record(input);
@@ -96,21 +88,21 @@ export function parseDeleteResult(input: unknown): WireDeleteOutcome {
     return { ok: true };
   }
   if (value['ok'] === false && value['unmerged'] === true) {
-    return { ok: false, unmerged: true, message: text(value['message']) };
+    const messageRef = parseOptionalMessageRef(value['messageRef']);
+    const message = text(value['message']);
+    return messageRef === undefined ? { ok: false, unmerged: true, message } : { ok: false, unmerged: true, message, messageRef };
   }
   throw new Error('Delete result must declare success or unmerged commits');
 }
 export async function gitMerge(payload: IpcPayloads['git:merge']): Promise<WireMergeOutcome> {
-  return parseMergeResult(await window.avb.gitMerge(payload));
+  return parseMergeResult(await gitTransport.gitMerge(payload));
 }
-export async function gitDeleteBranch(
-  payload: IpcPayloads['git:deleteBranch'],
-): Promise<WireDeleteOutcome> {
-  return parseDeleteResult(await window.avb.gitDeleteBranch(payload));
+export async function gitDeleteBranch(payload: IpcPayloads['git:deleteBranch']): Promise<WireDeleteOutcome> {
+  return parseDeleteResult(await gitTransport.gitDeleteBranch(payload));
 }
 export async function gitPark(payload: IpcPayloads['git:park']) {
-  return parkResult(await window.avb.gitPark(payload));
+  return parkResult(await gitTransport.gitPark(payload));
 }
 export async function gitUnpark(payload: IpcPayloads['git:unpark']) {
-  return unparkResult(await window.avb.gitUnpark(payload));
+  return unparkResult(await gitTransport.gitUnpark(payload));
 }

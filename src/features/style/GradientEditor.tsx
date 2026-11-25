@@ -2,28 +2,30 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import ColorSwatch from './components/ColorSwatch';
 import {
+  clampedPercent,
+  formatPercent,
   gradientCenter,
   serializeGradient,
   stopPercent,
+  stopPositionWritable,
   stopsBarCss,
   type Gradient,
   type GradientPatch,
   type GradientStop,
   type GradientStopPatch,
 } from './model/gradient';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
+import VariableConnect from './VariableConnect';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import { RadialSizeControl, RepeatIcon, type WriteOptions, AngleControl } from './GradientControls';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 export { AngleControl } from './GradientControls';
 
 function gradientBarStyle(image: string): CSSProperties & { readonly '--grad-image': string } {
   return { '--grad-image': image };
 }
 
-function stopStyle(
-  left: number,
-  color: string,
-): CSSProperties & { readonly '--stop-color': string } {
+function stopStyle(left: number, color: string): CSSProperties & { readonly '--stop-color': string } {
   return { left: `${left}%`, '--stop-color': color };
 }
 
@@ -84,15 +86,7 @@ export default function GradientEditor({ gradient, busy, onChange }: Props) {
         removeStop={removeStop}
       />
       <RepeatRow gradient={current} busy={busy} patch={patch} patchStops={patchStops} />
-      <StopFields
-        stop={stop}
-        stops={stops}
-        selectedIndex={selectedIndex}
-        busy={busy}
-        editingRef={editingRef}
-        setStop={setStop}
-        sortStops={sortStops}
-      />
+      <StopFields stop={stop} stops={stops} selectedIndex={selectedIndex} busy={busy} editingRef={editingRef} setStop={setStop} sortStops={sortStops} />
     </div>
   );
 }
@@ -121,10 +115,8 @@ function useGradientDraft(gradient: Gradient, onChange: Props['onChange']) {
     setDraft(next);
     onChange(next, options.live);
   };
-  const patch: Patch = (changes, options = { live: false }) =>
-    push({ ...draft, ...changes }, options);
-  const patchStops: PatchStops = (next, options = { live: false }) =>
-    push({ ...draft, stops: next }, options);
+  const patch: Patch = (changes, options = { live: false }) => push({ ...draft, ...changes }, options);
+  const patchStops: PatchStops = (next, options = { live: false }) => push({ ...draft, stops: next }, options);
   const setStop: SetStop = (index, changes, options = { live: false }) =>
     patchStops(
       draft.stops.map((stop, other) => (other === index ? { ...stop, ...changes } : stop)),
@@ -134,10 +126,7 @@ function useGradientDraft(gradient: Gradient, onChange: Props['onChange']) {
 }
 
 // Stops sorted by position (ties keep their order), and where the stop at `keep` lands.
-function sortedStops(
-  stops: GradientStop[],
-  keep: number,
-): { stops: GradientStop[]; selected: number } {
+function sortedStops(stops: GradientStop[], keep: number): { stops: GradientStop[]; selected: number } {
   const tagged = stops.map((stop, index) => ({
     stop,
     index,
@@ -152,10 +141,7 @@ function sortedStops(
 
 // The stops after inserting one at `percent`, sorted by position, with the new stop's
 // color copied from the nearest existing stop.
-function insertedStops(
-  stops: GradientStop[],
-  percent: number,
-): { stops: GradientStop[]; selected: number } {
+function insertedStops(stops: GradientStop[], percent: number): { stops: GradientStop[]; selected: number } {
   let nearest = 0;
   let best = Infinity;
   stops.forEach((_, index) => {
@@ -165,20 +151,27 @@ function insertedStops(
       nearest = index;
     }
   });
-  const next = [...stops, { color: stops[nearest]?.color ?? '#000000', pos: `${percent}%` }];
+  const position = formatPercent(percent);
+  const next = [...stops, { color: stops[nearest]?.color ?? '#000000', pos: position }];
   const tagged = next.map((stop, index) => ({
     stop,
     percent: index === next.length - 1 ? percent : stopPercent(next, index),
   }));
   tagged.sort((left, right) => left.percent - right.percent);
   const sorted = tagged.map((entry) => entry.stop);
-  return { stops: sorted, selected: sorted.findIndex((stop) => stop.pos === `${percent}%`) };
+  return { stops: sorted, selected: sorted.findIndex((stop) => stop.pos === position) };
 }
 
-// Where along the bar a pointer is, as a whole percentage clamped to 0–100.
-function barPercent(bar: HTMLElement, clientX: number): number {
+// Where along the bar a pointer is, as a whole percentage clamped to 0–100: a drag far
+// past either end is that end. Undefined while the bar has no width (collapsed, or not
+// laid out yet), where the division would be NaN or Infinity and write `NaN%`.
+function barPercent(bar: HTMLElement, clientX: number): number | undefined {
   const rect = bar.getBoundingClientRect();
-  return Math.round(Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)));
+  if (rect.width > 0) {
+    const fraction = (clientX - rect.left) / rect.width;
+    return Number.isFinite(fraction) ? clampedPercent(Math.round(fraction * 100)) : undefined;
+  }
+  return undefined;
 }
 
 // Delete / Backspace removes the selected stop (a gradient needs ≥ 2, so it's a no-op
@@ -186,12 +179,7 @@ function barPercent(bar: HTMLElement, clientX: number): number {
 // preventDefaults), but guarded so it never steals the keystroke while a text field
 // (color / position) is focused. The listener reads the latest render's values
 // through a ref, so it is added once.
-function useDeleteStopKey(state: {
-  busy: boolean;
-  selectedIndex: number;
-  stopCount: number;
-  removeStop: (index: number) => void;
-}) {
+function useDeleteStopKey(state: { busy: boolean; selectedIndex: number; stopCount: number; removeStop: (index: number) => void }) {
   const latest = useRef(state);
   useEffect(() => {
     latest.current = state;
@@ -229,26 +217,15 @@ function isTextEntry(element: Element | undefined): boolean {
 
 // Radial = position grid + size presets; linear = the angle control; conic = its
 // `from` angle.
-function GradientGeometry({
-  gradient,
-  busy,
-  patch,
-}: {
-  gradient: Gradient;
-  busy: boolean;
-  patch: Patch;
-}) {
+function GradientGeometry({ gradient, busy, patch }: { gradient: Gradient; busy: boolean; patch: Patch }) {
+  const translate = useTranslate();
   if (gradient.type === 'radial') {
     return (
       <>
         <RadialPosition gradient={gradient} busy={busy} patch={patch} />
         <div className="embed-editor_size-row">
-          <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
-          <RadialSizeControl
-            value={gradient.size.trim() || 'farthest-corner'}
-            busy={busy}
-            onChange={(size) => patch({ size })}
-          />
+          <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.size')}</span>
+          <RadialSizeControl value={gradient.size.trim() || 'farthest-corner'} busy={busy} onChange={(size) => patch({ size })} />
         </div>
       </>
     );
@@ -256,22 +233,18 @@ function GradientGeometry({
   if (gradient.type === 'linear') {
     return (
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
-        <AngleControl
-          angle={gradient.angle}
-          busy={busy}
-          onChange={(angle, live) => patch({ angle }, { live })}
-        />
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.angle')}</span>
+        <AngleControl angle={gradient.angle} busy={busy} onChange={(angle, live) => patch({ angle }, { live })} />
       </div>
     );
   }
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.angle')}</span>
       <NumberField
         value={gradient.from.replace(/deg$/i, '') || '0'}
         unit="deg"
-        label="Gradient angle"
+        label={translate('style.gradientEditor.gradientAngle')}
         busy={busy}
         onLive={(next) => patch({ from: next }, { live: true })}
         onCommit={(next) => patch({ from: next })}
@@ -280,26 +253,14 @@ function GradientGeometry({
   );
 }
 
-function RadialPosition({
-  gradient,
-  busy,
-  patch,
-}: {
-  gradient: Gradient;
-  busy: boolean;
-  patch: Patch;
-}) {
+function RadialPosition({ gradient, busy, patch }: { gradient: Gradient; busy: boolean; patch: Patch }) {
+  const translate = useTranslate();
   const center = gradientCenter(gradient);
   return (
     <div className="embed-editor_size-row embed-editor_grad-pos-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.position')}</span>
       <div className="embed-editor_grad-pos">
-        <PositionGrid
-          x={center.x}
-          y={center.y}
-          busy={busy}
-          onPick={(px, py) => patch({ posX: px, posY: py })}
-        />
+        <PositionGrid x={center.x} y={center.y} busy={busy} onPick={(px, py) => patch({ posX: px, posY: py })} />
         <div className="embed-editor_grad-pos-fields">
           {/* A <div>, not a <label>: the field here is VariableConnect's contenteditable
               editor, and the plain input behind it is opacity:0 / pointer-events:none.
@@ -308,22 +269,22 @@ function RadialPosition({
               into one you cannot. The caption is decorative; the input carries its
               own aria-label. */}
           <div className="embed-editor_grad-pos-field">
-            <span>Left</span>
+            <span>{translate('style.gradientEditor.left')}</span>
             <NumberField
               value={center.x}
               unit="%"
-              label="Position left"
+              label={translate('style.gradientEditor.positionLeft')}
               busy={busy}
               onLive={(next) => patch({ posX: next }, { live: true })}
               onCommit={(next) => patch({ posX: next })}
             />
           </div>
           <div className="embed-editor_grad-pos-field">
-            <span>Top</span>
+            <span>{translate('style.gradientEditor.top')}</span>
             <NumberField
               value={center.y}
               unit="%"
-              label="Position top"
+              label={translate('style.gradientEditor.positionTop')}
               busy={busy}
               onLive={(next) => patch({ posY: next }, { live: true })}
               onCommit={(next) => patch({ posY: next })}
@@ -359,15 +320,20 @@ function StopsBar({
   sortStops: (keep: number) => void;
   removeStop: (index: number) => void;
 }) {
+  const translate = useTranslate();
   const barRef = useRef<HTMLDivElement>(null);
-  const drag = useStopDrag({ barRef, busy, editingRef, setSelected, setStop, sortStops });
+  const drag = useStopDrag({ barRef, stops, busy, editingRef, setSelected, setStop, sortStops });
   // Click the bar background → insert a stop there (color = nearest stop's).
   const onBarClick = (event: React.MouseEvent) => {
     const bar = barRef.current;
     if (busy || drag.dragStop.current !== undefined || !bar) {
       return;
     }
-    const inserted = insertedStops(stops, barPercent(bar, event.clientX));
+    const percent = barPercent(bar, event.clientX);
+    if (percent === undefined) {
+      return;
+    }
+    const inserted = insertedStops(stops, percent);
     setSelected(inserted.selected);
     patchStops(inserted.stops, { live: false });
   };
@@ -387,7 +353,7 @@ function StopsBar({
           className={`embed-editor_grad-handle ${i === selectedIndex ? 'is-active' : ''}`}
           style={stopStyle(stopPercent(stops, i), stop.color.trim() || 'transparent')}
           disabled={busy}
-          aria-label={`Stop ${i + 1} at ${stopPercent(stops, i)}%`}
+          aria-label={translate('style.gradientEditor.stopAt', { number: i + 1, percent: stopPercent(stops, i) })}
           onClick={(event) => {
             event.stopPropagation();
             setSelected(i);
@@ -407,6 +373,7 @@ function StopsBar({
 // index being dragged, so a click that ends a drag does not also insert a stop.
 function useStopDrag({
   barRef,
+  stops,
   busy,
   editingRef,
   setSelected,
@@ -414,6 +381,7 @@ function useStopDrag({
   sortStops,
 }: {
   barRef: React.RefObject<HTMLDivElement>;
+  stops: GradientStop[];
   busy: boolean;
   editingRef: React.MutableRefObject<boolean>;
   setSelected: (index: number) => void;
@@ -437,7 +405,16 @@ function useStopDrag({
     if (index === undefined || !bar) {
       return;
     }
-    setStop(index, { pos: `${barPercent(bar, event.clientX)}%` }, { live: true });
+    const percent = barPercent(bar, event.clientX);
+    if (percent === undefined) {
+      return;
+    }
+    const position = formatPercent(percent);
+    // Past an end every move is that end: the stop is already there, so nothing is written.
+    if (stops[index]?.pos === position) {
+      return;
+    }
+    setStop(index, { pos: position }, { live: true });
   };
   const onHandleUp = (event: React.PointerEvent) => {
     const index = dragStop.current;
@@ -453,40 +430,26 @@ function useStopDrag({
 }
 
 // The repeat toggle and the reverse-stops button.
-function RepeatRow({
-  gradient,
-  busy,
-  patch,
-  patchStops,
-}: {
-  gradient: Gradient;
-  busy: boolean;
-  patch: Patch;
-  patchStops: PatchStops;
-}) {
+function RepeatRow({ gradient, busy, patch, patchStops }: { gradient: Gradient; busy: boolean; patch: Patch; patchStops: PatchStops }) {
+  const translate = useTranslate();
   const stops = gradient.stops;
   return (
     <div className="embed-editor_size-row embed-editor_grad-repeat">
       <label className="embed-editor_grad-check">
-        <input
-          type="checkbox"
-          checked={gradient.repeating}
-          disabled={busy}
-          onChange={(event) => patch({ repeating: event.target.checked })}
-        />
-        <span>Repeat</span>
+        <input type="checkbox" checked={gradient.repeating} disabled={busy} onChange={(event) => patch({ repeating: event.target.checked })} />
+        <span>{translate('style.gradientEditor.repeat')}</span>
       </label>
       <button
         type="button"
         className="embed-editor_icon-btn"
         disabled={busy}
-        title="Reverse stops"
-        aria-label="Reverse gradient stops"
+        title={translate('style.gradientEditor.reverseStops')}
+        aria-label={translate('style.gradientEditor.reverseGradientStops')}
         onClick={() =>
           patchStops(
             [...stops].reverse().map((stop, i) => ({
               ...stop,
-              pos: stop.pos.trim() ? `${100 - stopPercent(stops, stops.length - 1 - i)}%` : '',
+              pos: stop.pos.trim() ? formatPercent(100 - stopPercent(stops, stops.length - 1 - i)) : '',
             })),
           )
         }
@@ -515,48 +478,65 @@ function StopFields({
   setStop: SetStop;
   sortStops: (keep: number) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.color')}</span>
       <div className="embed-editor_grad-stop">
         <ColorSwatch
           value={stop.color}
           busy={busy}
-          ariaLabel="Stop color"
+          ariaLabel={translate('style.gradientEditor.stopColor')}
           onChange={(color, live) => {
             editingRef.current = live;
             setStop(selectedIndex, { color }, { live });
           }}
         />
-        <input
-          className="u-input embed-editor_grad-color"
-          value={stop.color}
-          spellCheck={false}
+        {/* One stop of the gradient: a colour variable here is a chip like anywhere else. */}
+        <VariableConnect
+          className="is-fill"
+          prop="color"
           disabled={busy}
-          aria-label="Stop color"
-          onFocus={() => {
-            editingRef.current = true;
-          }}
-          onChange={(event) =>
-            setStop(selectedIndex, { color: event.target.value }, { live: true })
-          }
-          onBlur={() => {
-            editingRef.current = false;
-            setStop(selectedIndex, { color: stop.color });
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              commitInPlace(event.currentTarget);
-            }
-          }}
-        />
+          ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.gradientEditor.stopColor') })}
+          onPick={(binding) => setStop(selectedIndex, { color: binding })}
+        >
+          <input
+            className="u-input embed-editor_grad-color"
+            value={stop.color}
+            spellCheck={false}
+            disabled={busy}
+            aria-label={translate('style.gradientEditor.stopColor')}
+            onFocus={() => {
+              editingRef.current = true;
+            }}
+            onChange={(event) => setStop(selectedIndex, { color: event.target.value }, { live: true })}
+            onBlur={() => {
+              editingRef.current = false;
+              setStop(selectedIndex, { color: stop.color });
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitInPlace(event.currentTarget);
+              }
+            }}
+          />
+        </VariableConnect>
         <NumberField
           value={stop.pos || `${Math.round(stopPercent(stops, selectedIndex))}%`}
           unit="%"
-          label="Stop position"
+          label={translate('style.gradientEditor.stopPosition')}
           busy={busy}
-          onLive={(next) => setStop(selectedIndex, { pos: next }, { live: true })}
+          onLive={(next) => {
+            // A half-typed number (`-`, `.`) waits in the field; only a position the
+            // page can read is written.
+            if (stopPositionWritable(next)) {
+              setStop(selectedIndex, { pos: next }, { live: true });
+            }
+          }}
           onCommit={(next) => {
+            if (!stopPositionWritable(next)) {
+              return;
+            }
             setStop(selectedIndex, { pos: next });
             sortStops(selectedIndex);
           }}

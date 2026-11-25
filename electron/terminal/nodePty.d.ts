@@ -20,9 +20,5 @@ declare module 'node-pty' {
     readonly cwd?: string;
     readonly env?: Record<string, string | undefined>;
   }
-  export function spawn(
-    shell: string,
-    args: readonly string[],
-    options: SpawnOptions,
-  ): PseudoTerminal;
+  export function spawn(shell: string, args: readonly string[], options: SpawnOptions): PseudoTerminal;
 }

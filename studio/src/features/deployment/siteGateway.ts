@@ -1,3 +1,4 @@
+import { translatorForLanguages } from '../../shared/requestTranslate';
 interface Service {
   fetch(request: Request): Promise<Response>;
 }
@@ -11,12 +12,7 @@ export function serveSite(request: Request, environment: SiteEnvironment): Promi
   const pathname = new URL(request.url).pathname;
   if (pathname === '/__studio-deployment') {
     const tag = environment.SITE_VERSION?.tag;
-    return Promise.resolve(
-      Response.json(
-        { sha: tag && /^[a-f0-9]{40}$/.test(tag) ? tag : null },
-        { headers: { 'Cache-Control': 'no-store' } },
-      ),
-    );
+    return Promise.resolve(Response.json({ sha: tag && /^[a-f0-9]{40}$/.test(tag) ? tag : null }, { headers: { 'Cache-Control': 'no-store' } }));
   }
   if (pathname !== '/studio' && !pathname.startsWith('/studio/')) {
     return environment.ASSETS.fetch(request);
@@ -26,7 +22,7 @@ export function serveSite(request: Request, environment: SiteEnvironment): Promi
     return environment.STUDIO.fetch(request);
   }
   return Promise.resolve(
-    new Response('The studio is not available yet. Deployment setup is still in progress.', {
+    new Response(translatorForLanguages(request.headers.get('Accept-Language')).translate('studio.gateway.unavailable'), {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     }),

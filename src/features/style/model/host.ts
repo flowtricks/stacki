@@ -8,6 +8,10 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
+import { PX_LENGTHS, type LengthUnit } from '../../../../shared/properties/lengthUnit';
+import type { ClassPlacement } from '../../../editor/classAttr';
+import type { TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
+import type { StyleTagAttribute } from '../../../../shared/properties/newStyleTag';
 
 type HostAttr = { readonly type: string; readonly value?: string };
 
@@ -46,8 +50,22 @@ export type StyleNodeTarget = {
   readonly filePath: string | undefined;
 };
 
-export type ClassOutcome =
-  { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
+/** A `style` attribute as the panel writes it: a declaration string, or an expression (`style={…}`). */
+export type InlineStyleAttr = { readonly type: 'string' | 'expr'; readonly value: string };
+
+/** A new style block for the open file, and the class its rule needs on the selected element. */
+export type StyleBlockRequest = {
+  /** The block's CSS as the panel builds it: tab-indented rule lines ended by `\n`. The host
+   *  sets it between the tags in the file's own indent and line ending (styleBlockInner). */
+  readonly css: string;
+  /** The opening tag's attributes (`is:global`, `lang="scss"`): the project's `newStyleTag` setting at the time of the write. */
+  readonly attributes: readonly StyleTagAttribute[];
+  /** The class to put on the selected element, or undefined when it already carries the selector. */
+  readonly className: string | undefined;
+  readonly placement: ClassPlacement;
+};
+
+export type ClassOutcome = { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
 
 export type HostState = {
   projectPath: string | undefined;
@@ -56,6 +74,8 @@ export type HostState = {
   selectedId: string | undefined;
   /** Canvas breakpoint: desktop | tablet | phone. */
   device: string;
+  /** The canvas's rendered width in CSS pixels (fit and custom included), or undefined while unknown. The panel follows it (embed/contextFollow.ts). */
+  canvasWidthPx: number | undefined;
   /** Stylesheets in the project, from style:listFiles. */
   files: Array<{ rel: string; name: string; path: string; size: number }>;
   /** Component files holding a `<style is:global>` block, from
@@ -68,6 +88,14 @@ export type HostState = {
   /** Whether the open editable file is a page or a component. Style nodes have
    *  the same model shape in both, so their provenance must be carried separately. */
   openFileKind: 'page' | 'component' | undefined;
+  /** While a component is open, the page the canvas shows it on. Selectors of
+   *  that page's scoped `<style>` that the user wrote `:global(…)` reach the
+   *  component's markup, so they are in its cascade. */
+  contextPagePath: string | undefined;
+  /** The component file a selected instance renders, resolved through the page's
+   *  import (or the one component of its name), for its markup (componentMarkup.ts).
+   *  Undefined when the selection is not an instance or the file is not known. */
+  selectedComponentPath: string | undefined;
   /**
    * Bumped by the app whenever undo or redo runs. The panel reads its rules
    * from files and from the page model, and an undo rewrites both behind its
@@ -92,16 +120,51 @@ export type HostState = {
    *  that node isn't in the file currently open (a page's block while a component
    *  is being edited) — the panel then keeps the edit and flushes it on exit
    *  rather than reporting a save that never happened. */
-  writeStyleNode:
-    ((target: StyleNodeTarget, css: string, immediate?: boolean) => boolean | void) | undefined;
+  writeStyleNode: ((target: StyleNodeTarget, css: string, immediate?: boolean) => boolean | void) | undefined;
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | undefined;
+  /** Set the canvas to a width, as typing it into the width field does (the
+   *  device becomes `custom`). Picking a media query in the context dropdown
+   *  moves the canvas inside it (model/queryWidth.ts). Absent where the host
+   *  has no canvas to size. */
+  setCanvasWidth: ((widthPx: number) => void) | undefined;
+  /** Put the canvas on the desktop preset, exactly as the toolbar's desktop device does
+   *  (one handler, so the width, the active device and the readout change together).
+   *  Choosing Base with no single query convention lands there (model/baseWidth.ts).
+   *  Absent where the host has no canvas to size. */
+  showDesktopCanvas: (() => void) | undefined;
   /** Put a class on the selected element. Typing a bare class in the selector
    *  box should land it on the element, the way a class field would — a rule
    *  for a class the element doesn't carry would never apply. Resolves once the
    *  page edit reached disk or was refused: the stylesheet rule for that class
    *  is written only after it applied (step 6, plan §3.3 — outcome-gated). */
-  addClass: ((className: string) => Promise<ClassOutcome>) | undefined;
+  addClass: ((className: string, placement: ClassPlacement) => Promise<ClassOutcome>) | undefined;
+  /** Create the page's first `<style>` tag (model/firstStyleBlock.ts, newStyleTarget.ts), global or not as
+   *  `request.attributes` say: add a block holding `css` at the end of the open file and, when
+   *  `className` is given, put that class on the selected element, as ONE page edit and so
+   *  one undo step. The CSS is the block's whole text, rule included. Resolves once the edit
+   *  reached disk or was refused; a refusal says why. Absent where the host cannot add a node. */
+  addStyleBlock: ((request: StyleBlockRequest) => Promise<ClassOutcome>) | undefined;
+  /** Open the project's settings for new `<style>` tags (Desktop's Settings → New style locations), from the
+   *  "Add custom styles in" list. Absent where the host has no such settings: the list then has no link. */
+  openStyleTagSettings: (() => void) | undefined;
+  /** Take a class, or an attribute, off the selected element: a chip selected in
+   *  the selector field and then Delete. Only a name written literally on the
+   *  element is removed; anything computed is refused, and the refusal says why
+   *  (the host shows it). One page edit, so one undo step. */
+  removeClass: ((className: string) => Promise<ClassOutcome>) | undefined;
+  removeAttribute: ((attributeName: string) => Promise<ClassOutcome>) | undefined;
+  /** Write the selected element's `style` attribute: its whole next text, or
+   *  undefined to remove it. One page edit, the Settings style field's own, so
+   *  one undo step (model/inlineTarget.ts makes the text). Absent where the host
+   *  cannot edit attributes; the panel then offers no "Inline styles" chip. */
+  setInlineStyle: ((nodeId: string, style: InlineStyleAttr | undefined) => void) | undefined;
+  /** The files of the components the open page uses (componentReference.ts), read
+   *  as the page loads so an instance's chips are first drawn in their settled colours. */
+  pageComponentPaths: readonly string[];
+  /** Whether renderedClasses is the canvas's answer for the selected node, rather
+   *  than not yet reported. An instance's green waits on it (selectedInstanceMarkupPending). */
+  renderedClassesKnown: boolean;
   /** What the spacing box is pointing at, for the canvas to draw over the
    *  selected element: hovering `padding-top` lights the strip of the page that
    *  padding-top holds open. Undefined when the pointer leaves it. */
@@ -116,10 +179,28 @@ export type HostState = {
    *  don't go through the page model, so without this ⌘Z would skip straight
    *  past them to the last layout change. */
   recordUndo: ((command: UndoCommand) => void) | undefined;
+  /**
+   * A ::before or ::after picked in the navigator: when its element is the
+   * selection, the panel picks that pseudo-element's selector. `serial` makes
+   * picking it again a new request.
+   */
+  pseudoRequest: PseudoRequest | undefined;
+  /** Whether the navigator lists ::before and ::after as rows of their own. Where
+   *  it does, their rules show on those rows and not in the element's list. Studio's
+   *  navigator has none, so its selector list stays the way to reach them. */
+  pseudoRows: boolean;
+  /** What the panel writes lengths in: rem in a Lumos project, px elsewhere.
+   *  One project-level setting from the scan (shared/properties/lengthUnit.ts),
+   *  read through model/lengthUnit.ts so no control decides it for itself. */
+  lengthUnit: LengthUnit;
 };
+
+export type PseudoRequest = { readonly nodeId: string; readonly pseudo: 'before' | 'after'; readonly serial: number };
 
 export type UndoCommand = {
   label?: string;
+  /** The step's name as a reference: the app words it in the language in force when the step is undone. Wins over `label`. */
+  labelRef?: TypedMessageRef | undefined;
   /** Edits sharing a key inside one burst collapse into a single step. */
   coalesceKey?: string;
   undo: () => void | Promise<void>;
@@ -133,16 +214,31 @@ const state: HostState = {
   pathOf: undefined,
   historyTick: 0,
   device: 'desktop',
+  canvasWidthPx: undefined,
   files: [],
   astroFiles: [],
   openFilePath: undefined,
   openFileKind: undefined,
+  contextPagePath: undefined,
+  selectedComponentPath: undefined,
   renderedClasses: [],
   projectClasses: [],
   writeStyleNode: undefined,
   selectNode: undefined,
+  setCanvasWidth: undefined,
+  showDesktopCanvas: undefined,
   recordUndo: undefined,
   addClass: undefined,
+  addStyleBlock: undefined,
+  openStyleTagSettings: undefined,
+  removeClass: undefined,
+  removeAttribute: undefined,
+  setInlineStyle: undefined,
+  pageComponentPaths: [],
+  renderedClassesKnown: true,
+  pseudoRequest: undefined,
+  pseudoRows: false,
+  lengthUnit: PX_LENGTHS,
   onSpacingHover: undefined,
 };
 
@@ -201,10 +297,7 @@ export function onHostChange(listener: () => void): () => void {
 
 // Depth-first walk of the page model. Page trees are parsed at the boundary with
 // LIMITS.treeDepthMax, so a deeper walk means the model was built wrong.
-export function walkNodes(
-  nodes: readonly HostNode[] | undefined,
-  visit: (node: HostNode, parent: HostNode | undefined) => void,
-) {
+export function walkNodes(nodes: readonly HostNode[] | undefined, visit: (node: HostNode, parent: HostNode | undefined) => void) {
   walkNodesFrom(nodes, undefined, 0, visit);
 }
 
@@ -223,11 +316,7 @@ function walkNodesFrom(
   }
 }
 
-export function findNode(
-  nodes: readonly HostNode[] | undefined,
-  id: string,
-  depth = 0,
-): HostNode | undefined {
+export function findNode(nodes: readonly HostNode[] | undefined, id: string, depth = 0): HostNode | undefined {
   assert(depth <= LIMITS.treeDepthMax, 'findNode: depth limit');
   for (const node of nodes || []) {
     if (node.id === id) {

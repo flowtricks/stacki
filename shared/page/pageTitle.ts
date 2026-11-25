@@ -10,13 +10,16 @@ interface TitleNode {
   readonly props?: Readonly<Record<string, Attr>> | undefined;
 }
 
-export function layoutPageTitle(nodes: readonly TitleNode[]): string | undefined {
+export function layoutPageTitle(nodes: readonly TitleNode[], inheritedTitle?: string): string | undefined {
   assert(nodes.length <= LIMITS.treeNodesMax, 'Page title: node count is bounded');
   const layout = nodes.find((node) => node.id === 'layout');
   if (layout?.kind !== 'component') {
     return undefined;
   }
   const title = layout.props?.['title'];
+  if (title === undefined) {
+    return inheritedTitle;
+  }
   if (title?.type !== 'string') {
     // Runtime expressions cannot supply a stable page label without executing site code.
     return undefined;

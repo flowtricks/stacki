@@ -80,6 +80,7 @@ async function frame(hash) {
   global.MutationObserver = window.MutationObserver;
   global.Element = window.Element;
   global.Node = window.Node;
+  global.getComputedStyle = window.getComputedStyle.bind(window);
   global.MouseEvent = window.MouseEvent;
   global.requestAnimationFrame = window.requestAnimationFrame.bind(window);
   const sent = [];
@@ -117,28 +118,27 @@ const press = (window, target, init = {}) => {
     const { window } = await frame('#avb-design');
     const link = window.document.querySelector('[data-box="link"]');
     const event = press(window, link);
-    check(
-      'a press on the canvas is refused',
-      event.defaultPrevented,
-      'the browser focuses the link and scrolls to it',
-    );
+    check('a press on the canvas is refused', event.defaultPrevented, 'the browser focuses the link and scrolls to it');
     const onNothing = press(window, window.document.querySelector('[data-box="hero"]'));
     check('and so is one on anything else', onNothing.defaultPrevented, 'only links were covered');
+    // Editing fields now live in the host; a page cannot opt out by copying their ID.
+    const editor = window.document.createElement('div');
+    editor.id = 'stacki-canvas-text-editor';
+    const input = window.document.createElement('textarea');
+    editor.append(input);
+    window.document.body.append(editor);
+    check('a page field cannot impersonate the host editor', press(window, input).defaultPrevented);
+    window.document.body.append(input);
+    check('an ordinary page field remains inert', press(window, input).defaultPrevented);
+    input.remove();
+    editor.remove();
     // A right-click is the context menu's, not ours.
     const right = press(window, link, { button: 2 });
-    check(
-      'a right-click is left alone',
-      !right.defaultPrevented,
-      'the context menu would never open',
-    );
+    check('a right-click is left alone', !right.defaultPrevented, 'the context menu would never open');
     // The click after it is still refused — that is what stops navigation.
     const click = new window.MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(click);
-    check(
-      'and the click still is, so a link goes nowhere',
-      click.defaultPrevented,
-      'the canvas would navigate',
-    );
+    check('and the click still is, so a link goes nowhere', click.defaultPrevented, 'the canvas would navigate');
   }
 
   {
@@ -152,12 +152,12 @@ const press = (window, target, init = {}) => {
     check('and the click with it', !click.defaultPrevented, 'links would not work in the preview');
   }
 
-  // --- and asking for something is how you get back -----------------------------
+  // --- and asking for something reveals it downward only ---------------------
   //
-  // A press no longer travels, but a page can be scrolled sideways all the same
-  // — a trackpad, a slider's own script, a site that is simply wider than the
-  // frame. There is no scrollbar in the canvas to say so, so the way back has
-  // to be the thing you would do anyway: select what you want to look at.
+  // Selecting a node scrolls the page down to it, never across. A site wider
+  // than the frame clips its overflow on purpose, and a viewport scrolled
+  // sideways by script has no way back on the canvas (revealScrollsDown.test.js
+  // measures it in a real browser).
   {
     const { window } = await frame('#avb-design');
     const scrolls = [];
@@ -191,29 +191,10 @@ const press = (window, target, init = {}) => {
     window.dispatchEvent(go);
     await settle(30);
     const last = scrolls[scrolls.length - 1];
-    check(
-      'asking for a node off to the side scrolls sideways to it',
-      last && typeof last.left === 'number',
-      JSON.stringify(scrolls),
-    );
-    check(
-      'far enough to put it on screen',
-      last && last.left < 1200 && last.left >= 0,
-      JSON.stringify(last),
-    );
-    check(
-      'and it says where vertically too, in the same move',
-      last && typeof last.top === 'number',
-      JSON.stringify(last),
-    );
+    check('asking for a node off to the side never scrolls sideways', last === undefined || last.left === undefined, JSON.stringify(scrolls));
   }
 
   const source = readFolderSource('electron/preload');
-  check(
-    'the press is refused where the click already was',
-    /addEventListener\(\s*'mousedown'[\s\S]{0,200}preventDefault\(\)/.test(source),
-    'nothing stops the focus that comes with a press',
-  );
   check(
     'and the frame still takes focus itself, so the modifiers keep arriving',
     /preventDefault\(\);\s*\n\s*window\.focus\(\);/.test(source),
@@ -221,9 +202,7 @@ const press = (window, target, init = {}) => {
   );
 
   if (failures.length) {
-    console.error(
-      `\npress-does-not-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npress-does-not-scroll: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

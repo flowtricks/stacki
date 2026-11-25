@@ -1,0 +1,10 @@
+---
+interface Props {
+  variant?: 'primary' | 'secondary';
+  size?: 'sm' | 'md' | 'lg';
+  rounded?: boolean;
+  class?: string;
+}
+const { variant = 'primary', size = 'md', rounded = false, class: className } = Astro.props;
+---
+<button class:list={['class-list-variants', `v-${variant}`, `s-${size}`, { rounded }, className]}>Variant</button>

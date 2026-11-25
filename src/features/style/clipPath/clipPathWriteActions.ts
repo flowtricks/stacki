@@ -34,22 +34,13 @@ import {
 } from './clipPathHandles';
 import { hasContainerQueryUnit } from './shapeFunctionPatterns';
 import { shapeCssBounds } from './shapeFunctionModel';
-import {
-  PRESETS,
-  PRESET_NAMES,
-  addPreviewVariableFallbacks,
-  previewCssCoordinateToken,
-} from './clipPathFormat';
+import { PRESETS, PRESET_NAMES, addPreviewVariableFallbacks, previewCssCoordinateToken } from './clipPathFormat';
 import { insetRadiusToCanvas } from './clipPathCanvasUnits';
 import { isNoneClipPathValue } from './svgContours';
 import { presetOptionId } from './clipPathShortcuts';
 import { isSpaceKey, stopKeyboardEvent, isArrowKey } from './shapeKeyboard';
 import { writeClipPathToStyle, canWriteClipPathValue, getStyleNamePath } from './clipPathStyleRead';
-import {
-  styleOptionsForBreakpoint,
-  resolveWritableClipPathStyleForElement,
-  resolveOrCreateStyleForClassPath,
-} from './clipPathStyleWrite';
+import { styleOptionsForBreakpoint, resolveWritableClipPathStyleForElement, resolveOrCreateStyleForClassPath } from './clipPathStyleWrite';
 import { type EditorAfterWindowKeyListeners } from './clipPathSelectionRead';
 
 // Writing the clip-path.
@@ -86,10 +77,7 @@ export function useClipPathWrite(editor: EditorAfterWindowKeyListeners) {
 export type ClipPathWriter = EditorAfterWindowKeyListeners;
 
 // Writes the latest CSS once the throttle has passed.
-export function scheduleClipPathFlush(
-  writerRef: MutableRefObject<ClipPathWriter>,
-  webflowApi: WebflowApi | undefined,
-): void {
+export function scheduleClipPathFlush(writerRef: MutableRefObject<ClipPathWriter>, webflowApi: WebflowApi | undefined): void {
   writerRef.current.writeTimerRef.current = window.setTimeout(() => {
     // Nothing to handle here: the flush catches its own failures, and a failed
     // write is retried by the next change.
@@ -98,26 +86,18 @@ export function scheduleClipPathFlush(
 }
 
 // Writes the latest CSS, then schedules another write if it changed meanwhile.
-export async function flushClipPathWrite(
-  writerRef: MutableRefObject<ClipPathWriter>,
-  webflowApi: WebflowApi | undefined,
-): Promise<void> {
+export async function flushClipPathWrite(writerRef: MutableRefObject<ClipPathWriter>, webflowApi: WebflowApi | undefined): Promise<void> {
   const writer = writerRef.current;
   const valueToWrite = writer.latestCssRef.current;
   writer.writeTimerRef.current = undefined;
   if (writer.lastWrittenRef.current === valueToWrite) {
     return;
   }
-  const settled = writer.onApplyRef.current
-    ? applyClipPathToEmbed(writer, valueToWrite)
-    : await writeClipPathToWebflow(writer, webflowApi, valueToWrite);
+  const settled = writer.onApplyRef.current ? applyClipPathToEmbed(writer, valueToWrite) : await writeClipPathToWebflow(writer, webflowApi, valueToWrite);
   if (settled === 'stop') {
     return;
   }
-  if (
-    writer.latestCssRef.current !== writer.lastWrittenRef.current &&
-    writer.writeTimerRef.current === undefined
-  ) {
+  if (writer.latestCssRef.current !== writer.lastWrittenRef.current && writer.writeTimerRef.current === undefined) {
     scheduleClipPathFlush(writerRef, webflowApi);
   }
 }
@@ -146,11 +126,7 @@ export function applyClipPathToEmbed(writer: ClipPathWriter, valueToWrite: strin
 // Writes to the element's clip-path style in the Designer, resolving (or creating)
 // the style first when the one in hand can't take the value. 'stop' when there is
 // nothing that can.
-export async function writeClipPathToWebflow(
-  writer: ClipPathWriter,
-  webflowApi: WebflowApi | undefined,
-  valueToWrite: string,
-): Promise<'continue' | 'stop'> {
+export async function writeClipPathToWebflow(writer: ClipPathWriter, webflowApi: WebflowApi | undefined, valueToWrite: string): Promise<'continue' | 'stop'> {
   const { localWritePendingRef, pastedShapeSvgCacheRef, lastWrittenRef } = writer;
   try {
     const targetStyle = await resolveClipPathWriteTarget(writer, webflowApi, valueToWrite);
@@ -195,11 +171,7 @@ export async function resolveClipPathWriteTarget(
     if (targetStyle) {
       styleRef.current = targetStyle;
     }
-  } else if (
-    !selectedNames.length &&
-    !canWriteClipPathValue(targetStyle, valueToWrite) &&
-    webflowApi
-  ) {
+  } else if (!selectedNames.length && !canWriteClipPathValue(targetStyle, valueToWrite) && webflowApi) {
     targetStyle = await resolveWritableClipPathStyleForElement(
       (await webflowApi.getSelectedElement?.()) || undefined,
       webflowApi,
@@ -215,16 +187,8 @@ export async function resolveClipPathWriteTarget(
 
 // After a write: the label's origin (none, or set at this breakpoint) and the class
 // it was written to.
-export async function recordClipPathWrite(
-  writer: ClipPathWriter,
-  targetStyle: StyleHandle | undefined,
-  valueToWrite: string,
-): Promise<void> {
-  const nextOrigin =
-    isNoneClipPathValue(valueToWrite) &&
-    !styleOptionsForBreakpoint(writer.activeBreakpointRef.current)
-      ? 'none'
-      : 'current';
+export async function recordClipPathWrite(writer: ClipPathWriter, targetStyle: StyleHandle | undefined, valueToWrite: string): Promise<void> {
+  const nextOrigin = isNoneClipPathValue(valueToWrite) && !styleOptionsForBreakpoint(writer.activeBreakpointRef.current) ? 'none' : 'current';
   writer.setClipPathStyleOrigin(nextOrigin);
   if (nextOrigin === 'current' && targetStyle) {
     const writtenStyleNamePath = await getStyleNamePath(targetStyle);
@@ -274,11 +238,7 @@ export function useTimerCleanup(editor: EditorAfterWindowKeyListeners) {
     if (handle.kind === 'polygon-point') {
       return polygonPointColorClass(handle.index, polygonPointColors);
     }
-    if (
-      handle.kind === 'inset-radius' &&
-      shape.kind === 'inset' &&
-      !hasRoundedCorners(shape.radii)
-    ) {
+    if (handle.kind === 'inset-radius' && shape.kind === 'inset' && !hasRoundedCorners(shape.radii)) {
       return HANDLE_COLOR_CLASSES[4];
     }
     return handleColorClass(handle);
@@ -288,17 +248,13 @@ export function useTimerCleanup(editor: EditorAfterWindowKeyListeners) {
       'clip-path_handle',
       handleDisplayColorClass(handle),
       extra,
-      handlesMatch(selectedHandle, handle) ||
-      selectedCodeHandles.some((selected) => handlesMatch(selected, handle))
-        ? 'is-selected'
-        : '',
+      handlesMatch(selectedHandle, handle) || selectedCodeHandles.some((selected) => handlesMatch(selected, handle)) ? 'is-selected' : '',
       isInsetHandleAffected(selectedHandle, handle, activeInsetModifierMode) ? 'is-affected' : '',
     ]
       .filter(Boolean)
       .join(' ');
   const isHandleSelected = (handle: HandleTarget) =>
-    handlesMatch(selectedHandle, handle) ||
-    selectedCodeHandles.some((selected) => handlesMatch(selected, handle));
+    handlesMatch(selectedHandle, handle) || selectedCodeHandles.some((selected) => handlesMatch(selected, handle));
   return {
     selectedPresetShape,
     activePresetOptionName,
@@ -309,8 +265,7 @@ export function useTimerCleanup(editor: EditorAfterWindowKeyListeners) {
   };
 }
 
-export type EditorAfterTimerCleanup = EditorAfterWindowKeyListeners &
-  ReturnType<typeof useTimerCleanup>;
+export type EditorAfterTimerCleanup = EditorAfterWindowKeyListeners & ReturnType<typeof useTimerCleanup>;
 
 // Adding and removing polygon points.
 export function pointEditActions(editor: EditorAfterTimerCleanup) {
@@ -343,27 +298,14 @@ export function pointEditActions(editor: EditorAfterTimerCleanup) {
       return;
     }
     const indexesToDelete = new Set([index]);
-    const previousOldIndex = previousSurvivingPolygonIndex(
-      shape.points.length,
-      indexesToDelete,
-      index,
-    );
-    const previousNewIndex =
-      previousOldIndex === undefined
-        ? undefined
-        : remapPolygonIndexAfterDelete(previousOldIndex, indexesToDelete);
-    const nextSelectedHandle: HandleTarget | undefined =
-      previousNewIndex === undefined
-        ? undefined
-        : { kind: 'polygon-point', index: previousNewIndex };
+    const previousOldIndex = previousSurvivingPolygonIndex(shape.points.length, indexesToDelete, index);
+    const previousNewIndex = previousOldIndex === undefined ? undefined : remapPolygonIndexAfterDelete(previousOldIndex, indexesToDelete);
+    const nextSelectedHandle: HandleTarget | undefined = previousNewIndex === undefined ? undefined : { kind: 'polygon-point', index: previousNewIndex };
     const next: ClipShape = {
       kind: 'polygon',
       points: shape.points.filter((_, i) => i !== index),
     };
-    const nextColors = normalizePolygonPointColors(
-      shape.points.length,
-      polygonPointColorsRef.current,
-    ).filter((_, i) => i !== index);
+    const nextColors = normalizePolygonPointColors(shape.points.length, polygonPointColorsRef.current).filter((_, i) => i !== index);
 
     markLocalShapeChange();
     setHandleSelection(nextSelectedHandle);
@@ -379,8 +321,7 @@ export function pointEditActions(editor: EditorAfterTimerCleanup) {
   return { onAddPoint, onRemovePoint };
 }
 
-export type EditorAfterPointEditActions = EditorAfterTimerCleanup &
-  ReturnType<typeof pointEditActions>;
+export type EditorAfterPointEditActions = EditorAfterTimerCleanup & ReturnType<typeof pointEditActions>;
 
 // Starting a marquee selection.
 export function marqueeStartActions(editor: EditorAfterPointEditActions) {
@@ -411,9 +352,7 @@ export function marqueeStartActions(editor: EditorAfterPointEditActions) {
     closePresetDropdown();
     stopCodeTransition();
     stopKeyboardMoveLoop();
-    const baseHandles = event.shiftKey
-      ? selectedHandlesRef.current.filter(isPolygonPointHandle)
-      : [];
+    const baseHandles = event.shiftKey ? selectedHandlesRef.current.filter(isPolygonPointHandle) : [];
 
     polygonSelectionDragRef.current = {
       pointerId: event.pointerId,
@@ -430,11 +369,7 @@ export function marqueeStartActions(editor: EditorAfterPointEditActions) {
 
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
-      event.currentTarget.addEventListener(
-        'lostpointercapture',
-        () => finishPolygonSelectionDrag(false),
-        { once: true },
-      );
+      event.currentTarget.addEventListener('lostpointercapture', () => finishPolygonSelectionDrag(false), { once: true });
     } catch {
       /* setPointerCapture can fail if the host has already cancelled the pointer */
     }
@@ -442,8 +377,7 @@ export function marqueeStartActions(editor: EditorAfterPointEditActions) {
   return { beginPolygonSelectionDrag };
 }
 
-export type EditorAfterMarqueeStartActions = EditorAfterPointEditActions &
-  ReturnType<typeof marqueeStartActions>;
+export type EditorAfterMarqueeStartActions = EditorAfterPointEditActions & ReturnType<typeof marqueeStartActions>;
 
 // Starting a shape move or resize.
 export function transformStartActions(editor: EditorAfterMarqueeStartActions) {
@@ -453,77 +387,63 @@ export function transformStartActions(editor: EditorAfterMarqueeStartActions) {
   const { stopCodeTransition, stopKeyboardMoveLoop, setShapeTransformSelection } = editor;
   const { currentShapeScaleOptions, activePointerIdRef, activePointerCaptureRef } = editor;
   const { finishShapeTransformDrag } = editor;
-  const beginShapeTransformDrag =
-    (mode: ShapeTransformDrag['mode'], corner?: ShapeResizeCorner) =>
-    (event: React.PointerEvent<HTMLElement>) => {
-      if (event.pointerType === 'mouse' && event.button !== 0) {
-        return;
-      }
-      if (
-        dragTargetRef.current ||
-        polygonSelectionDragRef.current ||
-        shapeTransformDragRef.current
-      ) {
-        return;
-      }
+  const beginShapeTransformDrag = (mode: ShapeTransformDrag['mode'], corner?: ShapeResizeCorner) => (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+    if (dragTargetRef.current || polygonSelectionDragRef.current || shapeTransformDragRef.current) {
+      return;
+    }
 
-      const currentShape = shapeRef.current;
-      if (currentShape.kind !== 'shape') {
-        return;
-      }
-      if (shapeFitModeRef.current === 'stretch' && !hasContainerQueryUnit(currentShape.value)) {
-        return;
-      }
+    const currentShape = shapeRef.current;
+    if (currentShape.kind !== 'shape') {
+      return;
+    }
+    if (shapeFitModeRef.current === 'stretch' && !hasContainerQueryUnit(currentShape.value)) {
+      return;
+    }
 
-      const start = canvasPointFromClient(event.clientX, event.clientY);
-      const bounds = shapeCssBounds(currentShape);
-      if (!start || !bounds) {
-        return;
-      }
+    const start = canvasPointFromClient(event.clientX, event.clientY);
+    const bounds = shapeCssBounds(currentShape);
+    if (!start || !bounds) {
+      return;
+    }
 
-      event.preventDefault();
-      event.stopPropagation();
-      cancelPendingSelectionRead();
-      closePresetDropdown();
-      clearPastedShapeSvgCache();
-      selectHandle(undefined);
-      stopCodeTransition();
-      stopKeyboardMoveLoop();
-      setShapeTransformSelection(true);
+    event.preventDefault();
+    event.stopPropagation();
+    cancelPendingSelectionRead();
+    closePresetDropdown();
+    clearPastedShapeSvgCache();
+    selectHandle(undefined);
+    stopCodeTransition();
+    stopKeyboardMoveLoop();
+    setShapeTransformSelection(true);
 
-      const fitMode: ShapeFitMode =
-        shapeFitModeRef.current === 'contain' || hasContainerQueryUnit(currentShape.value)
-          ? 'contain'
-          : 'stretch';
-      shapeTransformDragRef.current = {
-        pointerId: event.pointerId,
-        mode,
-        ...(corner ? { corner } : {}),
-        start,
-        before: currentShape,
-        bounds,
-        fitMode,
-        scaleOptions: currentShapeScaleOptions(),
-      };
-      activePointerIdRef.current = event.pointerId;
-      activePointerCaptureRef.current = event.currentTarget;
-
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-        event.currentTarget.addEventListener(
-          'lostpointercapture',
-          () => finishShapeTransformDrag(false),
-          { once: true },
-        );
-      } catch {
-        /* setPointerCapture can fail if the host has already cancelled the pointer */
-      }
+    const fitMode: ShapeFitMode = shapeFitModeRef.current === 'contain' || hasContainerQueryUnit(currentShape.value) ? 'contain' : 'stretch';
+    shapeTransformDragRef.current = {
+      pointerId: event.pointerId,
+      mode,
+      ...(corner ? { corner } : {}),
+      start,
+      before: currentShape,
+      bounds,
+      fitMode,
+      scaleOptions: currentShapeScaleOptions(),
     };
+    activePointerIdRef.current = event.pointerId;
+    activePointerCaptureRef.current = event.currentTarget;
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.addEventListener('lostpointercapture', () => finishShapeTransformDrag(false), { once: true });
+    } catch {
+      /* setPointerCapture can fail if the host has already cancelled the pointer */
+    }
+  };
   return { beginShapeTransformDrag };
 }
 
-export type EditorAfterTransformStartActions = EditorAfterMarqueeStartActions &
-  ReturnType<typeof transformStartActions>;
+export type EditorAfterTransformStartActions = EditorAfterMarqueeStartActions & ReturnType<typeof transformStartActions>;
 
 // Starting a handle drag.
 export function dragStartActions(editor: EditorAfterTransformStartActions) {
@@ -564,12 +484,8 @@ export function dragStartActions(editor: EditorAfterTransformStartActions) {
       nextSelection = selectHandleFromPointer(handle, { additive: event.shiftKey });
     }
 
-    const selectedPolygonIndexes = isPolygonPointHandle(handle)
-      ? nextSelection.filter(isPolygonPointHandle).map((selected) => selected.index)
-      : undefined;
-    const nextTarget = selectedPolygonIndexes?.length
-      ? { ...dragStartTarget, polygonPointIndexes: selectedPolygonIndexes }
-      : dragStartTarget;
+    const selectedPolygonIndexes = isPolygonPointHandle(handle) ? nextSelection.filter(isPolygonPointHandle).map((selected) => selected.index) : undefined;
+    const nextTarget = selectedPolygonIndexes?.length ? { ...dragStartTarget, polygonPointIndexes: selectedPolygonIndexes } : dragStartTarget;
 
     if (nextTarget.kind === 'polygon-point') {
       const projectionIndexes = nextTarget.polygonPointIndexes || [nextTarget.index];
@@ -594,31 +510,29 @@ export function dragStartActions(editor: EditorAfterTransformStartActions) {
   return { beginDrag };
 }
 
-export type EditorAfterDragStartActions = EditorAfterTransformStartActions &
-  ReturnType<typeof dragStartActions>;
+export type EditorAfterDragStartActions = EditorAfterTransformStartActions & ReturnType<typeof dragStartActions>;
 
 // The handles' keys, and where the inset handles sit.
 export function handleGeometry(editor: EditorAfterDragStartActions) {
   const { handledKeyboardEventsRef, selectHandleForKeyboard, spaceKeyPressedRef } = editor;
   const { pressKeyboardMoveKey, updateKeyboardModifierRefs, releaseKeyboardMoveKey } = editor;
   const { shape } = editor;
-  const onHandleKeyDown =
-    (handle: HandleTarget) => (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (isSpaceKey(event.key, event.code)) {
-        handledKeyboardEventsRef.current.add(event.nativeEvent);
-        stopKeyboardEvent(event);
-        selectHandleForKeyboard(handle);
-        spaceKeyPressedRef.current = true;
-        return;
-      }
-
-      if (!isArrowKey(event.key) || event.metaKey || event.ctrlKey) {
-        return;
-      }
+  const onHandleKeyDown = (handle: HandleTarget) => (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (isSpaceKey(event.key, event.code)) {
       handledKeyboardEventsRef.current.add(event.nativeEvent);
       stopKeyboardEvent(event);
-      pressKeyboardMoveKey(handle, event.key, event);
-    };
+      selectHandleForKeyboard(handle);
+      spaceKeyPressedRef.current = true;
+      return;
+    }
+
+    if (!isArrowKey(event.key) || event.metaKey || event.ctrlKey) {
+      return;
+    }
+    handledKeyboardEventsRef.current.add(event.nativeEvent);
+    stopKeyboardEvent(event);
+    pressKeyboardMoveKey(handle, event.key, event);
+  };
 
   const onHandleKeyUp = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (isSpaceKey(event.key, event.code)) {
@@ -672,43 +586,24 @@ export function handleGeometry(editor: EditorAfterDragStartActions) {
   };
 }
 
-export type EditorAfterHandleGeometry = EditorAfterDragStartActions &
-  ReturnType<typeof handleGeometry>;
+export type EditorAfterHandleGeometry = EditorAfterDragStartActions & ReturnType<typeof handleGeometry>;
 
 // Where the circle handle and the shape bounds sit, and the source label.
 export function renderGeometry(editor: EditorAfterHandleGeometry) {
   const { shape, circleRadiusAngle, handleBounds, canvasSize, clipPathStyleOrigin } = editor;
   const { selectedClassNames } = editor;
-  const circleRadiusHandleX =
-    shape.kind === 'circle' ? shape.cx + Math.cos(circleRadiusAngle) * shape.radius : 0;
-  const circleRadiusHandleY =
-    shape.kind === 'circle' ? shape.cy + Math.sin(circleRadiusAngle) * shape.radius : 0;
+  const circleRadiusHandleX = shape.kind === 'circle' ? shape.cx + Math.cos(circleRadiusAngle) * shape.radius : 0;
+  const circleRadiusHandleY = shape.kind === 'circle' ? shape.cy + Math.sin(circleRadiusAngle) * shape.radius : 0;
   const handlePositionStyle = (x: number, y: number) => {
-    const nextX =
-      handleBounds && handleBounds.minX <= handleBounds.maxX
-        ? clampValue(x, handleBounds.minX, handleBounds.maxX)
-        : x;
-    const nextY =
-      handleBounds && handleBounds.minY <= handleBounds.maxY
-        ? clampValue(y, handleBounds.minY, handleBounds.maxY)
-        : y;
+    const nextX = handleBounds && handleBounds.minX <= handleBounds.maxX ? clampValue(x, handleBounds.minX, handleBounds.maxX) : x;
+    const nextY = handleBounds && handleBounds.minY <= handleBounds.maxY ? clampValue(y, handleBounds.minY, handleBounds.maxY) : y;
     return { left: `${nextX}%`, top: `${nextY}%` };
   };
   const handleCssPositionStyle = (x: string, y: string) => {
-    const previewX = canvasSize
-      ? previewCssCoordinateToken(x, 'x', canvasSize)
-      : addPreviewVariableFallbacks(x);
-    const previewY = canvasSize
-      ? previewCssCoordinateToken(y, 'y', canvasSize)
-      : addPreviewVariableFallbacks(y);
-    const left =
-      handleBounds && handleBounds.minX <= handleBounds.maxX
-        ? `clamp(${handleBounds.minX}%, ${previewX}, ${handleBounds.maxX}%)`
-        : previewX;
-    const top =
-      handleBounds && handleBounds.minY <= handleBounds.maxY
-        ? `clamp(${handleBounds.minY}%, ${previewY}, ${handleBounds.maxY}%)`
-        : previewY;
+    const previewX = canvasSize ? previewCssCoordinateToken(x, 'x', canvasSize) : addPreviewVariableFallbacks(x);
+    const previewY = canvasSize ? previewCssCoordinateToken(y, 'y', canvasSize) : addPreviewVariableFallbacks(y);
+    const left = handleBounds && handleBounds.minX <= handleBounds.maxX ? `clamp(${handleBounds.minX}%, ${previewX}, ${handleBounds.maxX}%)` : previewX;
+    const top = handleBounds && handleBounds.minY <= handleBounds.maxY ? `clamp(${handleBounds.minY}%, ${previewY}, ${handleBounds.maxY}%)` : previewY;
     return { left, top };
   };
   const activeShapeBounds = shape.kind === 'shape' ? shapeCssBounds(shape) : undefined;
@@ -728,9 +623,7 @@ export function renderGeometry(editor: EditorAfterHandleGeometry) {
   ]
     .filter(Boolean)
     .join(' ');
-  const selectedSelector = selectedClassNames.length
-    ? selectedClassNames.map((name) => `.${name}`).join('')
-    : undefined;
+  const selectedSelector = selectedClassNames.length ? selectedClassNames.map((name) => `.${name}`).join('') : undefined;
   return {
     circleRadiusHandleX,
     circleRadiusHandleY,
@@ -743,8 +636,7 @@ export function renderGeometry(editor: EditorAfterHandleGeometry) {
   };
 }
 
-export type EditorAfterRenderGeometry = EditorAfterHandleGeometry &
-  ReturnType<typeof renderGeometry>;
+export type EditorAfterRenderGeometry = EditorAfterHandleGeometry & ReturnType<typeof renderGeometry>;
 
 // The editor as the view components read it.
 export type ClipPathEditor = EditorAfterRenderGeometry;

@@ -1,0 +1,61 @@
+---
+import type { HTMLAttributes, SvgComponent } from "astro/types";
+
+interface Props extends HTMLAttributes<"svg"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Imported SVG. Omit to render nothing. */
+  src?: SvgComponent;
+  /** Icon size. */
+  variant?: "small" | "medium" | "large" | "full-width";
+}
+
+const {
+  render = true,
+  src: Svg,
+  variant = "medium",
+  class: className,
+  ...rest
+} = Astro.props;
+
+const labelled = Boolean(rest["aria-label"] ?? rest["aria-labelledby"]);
+
+if (import.meta.env.DEV && render && !Svg) {
+  console.warn("[lumos] <Icon> rendered without a `src`; nothing was output.");
+}
+---
+
+{render && Svg && (
+  <Svg
+    class:list={["icon", variant, className]}
+    aria-hidden={labelled ? undefined : "true"}
+    {...rest}
+  />
+)}
+
+<style is:global>
+  @layer components {
+    .icon {
+      --_size: 1.5em;
+      flex: none;
+      display: block;
+      width: var(--_size);
+      height: auto;
+      aspect-ratio: 1 / 1;
+      max-width: 100%;
+
+      &.small {
+        --_size: 1em;
+      }
+
+      &.large {
+        --_size: 2em;
+      }
+
+      &.full-width {
+        width: 100%;
+        aspect-ratio: unset;
+      }
+    }
+  }
+</style>

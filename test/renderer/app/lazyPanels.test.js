@@ -52,17 +52,15 @@ const LAZY_PANELS = [
   'ContentView',
   'VariablesPanel',
   'VariablesView',
+  'SelectorsPanel',
   'CodePanel',
+  'InstructionsDocument',
+  'AuditsPanel',
+  'DesktopSettings',
+  'AiPanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
-const REAL_PREVIEW = new Set([
-  'PreviewPane',
-  'CanvasView',
-  'DevOffline',
-  'PreviewOverlays',
-  'PreviewToolbar',
-  'PreviewSizeControls',
-]);
+const REAL_PREVIEW = new Set(['PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar', 'PreviewSizeControls']);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 test('all optional editors load without hiding the app or replacing its preview', async () => {
@@ -82,11 +80,7 @@ test('all optional editors load without hiding the app or replacing its preview'
       await settle();
     });
   try {
-    await act(() =>
-      root.render(
-        React.createElement(React.Suspense, { fallback: undefined }, React.createElement(App)),
-      ),
-    );
+    await act(() => root.render(React.createElement(React.Suspense, { fallback: undefined }, React.createElement(App))));
     await act(() => __lazyPanels.WelcomeScreen.onOpen('/project'));
     const stable = captureEditor();
     const context = { act, gates, stable, bridge: window.avb };
@@ -96,20 +90,32 @@ test('all optional editors load without hiding the app or replacing its preview'
     assertPending(context, 'PropsPanel');
     await releasePanel(context, 'PropsPanel');
     await checkVariables(context);
+    await checkSelectors(context);
     await checkCMS(context);
     await checkCodePanel(context);
     await checkCodeWindow(context);
+    await checkInstructions(context);
+    await checkAudits(context);
+    await checkAi(context);
     assert.equal(gates.requested.size, LAZY_PANELS.length, 'Every lazy editor was exercised');
   } finally {
     await act(() => root.unmount());
     dom.window.close();
     delete global.__loadTestPanel;
     delete global.__lazyPanels;
+    delete global.__selectInstruction;
   }
 });
 
+async function checkSelectors(context) {
+  await context.act(() => railButton('selectors').click());
+  assertPending(context, 'SelectorsPanel');
+  await releasePanel(context, 'SelectorsPanel');
+  assert.equal(__lazyPanels.SelectorsPanel.project.path, '/project');
+}
+
 async function checkVariables(context) {
-  await context.act(() => railButton(5).click());
+  await context.act(() => railButton('variables').click());
   assertPending(context, 'VariablesPanel');
   await releasePanel(context, 'VariablesPanel');
   await context.act(() =>
@@ -124,7 +130,7 @@ async function checkVariables(context) {
 }
 
 async function checkCodePanel(context) {
-  await context.act(() => railButton(6).click());
+  await context.act(() => railButton('code').click());
   assertPending(context, 'CodePanel');
   await releasePanel(context, 'CodePanel');
   assert.equal(__lazyPanels.CodePanel.relativePath, 'src/pages/index.astro');
@@ -144,14 +150,8 @@ async function checkCodePanel(context) {
       }),
     );
   });
-  assert.ok(
-    document.querySelector('[data-test-panel="CodePanel"]'),
-    'canvas selection keeps the code panel open',
-  );
-  const changed = __lazyPanels.CodePanel.source.replace(
-    '<main>Content</main>',
-    '<main><h1>Changed</h1></main>',
-  );
+  assert.ok(document.querySelector('[data-test-panel="CodePanel"]'), 'canvas selection keeps the code panel open');
+  const changed = __lazyPanels.CodePanel.source.replace('<main>Content</main>', '<main><h1>Changed</h1></main>');
   await context.act(async () => {
     await __lazyPanels.CodePanel.onChange(changed, changed.indexOf('<h1>') + 2);
   });
@@ -159,25 +159,18 @@ async function checkCodePanel(context) {
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   assert.equal(context.bridge.codeSaves, 1, 'typed code is saved as a patch (step 8)');
   assert.equal(context.bridge.disk(), changed, 'the patch leaves exactly the typed text');
-  assert.ok(
-    document.querySelector('.property-saving-overlay') === null,
-    'visual edits are enabled',
-  );
+  assert.ok(document.querySelector('.property-saving-overlay') === null, 'visual edits are enabled');
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 200)));
   await context.act(() => __lazyPanels.PropsPanel.onSetContent('Visual edit'));
   await context.act(() => new Promise((resolve) => setTimeout(resolve, 350)));
-  assert.match(
-    __lazyPanels.CodePanel.source,
-    /<h1>Visual edit<\/h1>/,
-    'visual edits serialize back into the code panel',
-  );
+  assert.match(__lazyPanels.CodePanel.source, /<h1>Visual edit<\/h1>/, 'visual edits serialize back into the code panel');
   const shown = __lazyPanels.CodePanel.source;
   assert.equal(context.bridge.disk(), shown, 'as the request left the disk');
   context.stable();
 }
 
 async function checkCMS(context) {
-  await context.act(() => railButton(4).click());
+  await context.act(() => railButton('cms').click());
   assertPending(context, 'CmsPanel');
   await releasePanel(context, 'CmsPanel');
   await context.act(() => __lazyPanels.CmsPanel.onSelect('src/data/services.json'));
@@ -192,7 +185,7 @@ async function checkCMS(context) {
 }
 
 async function checkCodeWindow(context) {
-  await context.act(() => railButton(1).click());
+  await context.act(() => railButton('navigator').click());
   await context.act(() => __lazyPanels.StructurePanel.onSelect('frontmatter'));
   await context.act(() => __lazyPanels.PropsPanel.onOpenCode());
   assertPending(context, 'CodeWindow');
@@ -200,6 +193,40 @@ async function checkCodeWindow(context) {
   assert.equal(__lazyPanels.CodeWindow.title, 'Frontmatter');
   await context.act(() => __lazyPanels.CodeWindow.onClose());
   context.stable();
+}
+
+// Option+I opens Settings at its Instructions view, and a file chosen there opens over the canvas. The
+// stub panel hands the test the real selection store (see buildApp).
+async function checkInstructions(context) {
+  await context.act(() => pressOption('KeyI'));
+  assertPending(context, 'DesktopSettings');
+  await releasePanel(context, 'DesktopSettings');
+  assert.equal(__lazyPanels.DesktopSettings.projectPath, '/project');
+  await context.act(() => globalThis.__selectInstruction({ projectPath: '/project', file: 'AGENTS.md' }));
+  assertPending(context, 'InstructionsDocument');
+  await releasePanel(context, 'InstructionsDocument');
+  assert.equal(__lazyPanels.InstructionsDocument.file, 'AGENTS.md');
+  await context.act(() => __lazyPanels.InstructionsDocument.onClose());
+}
+
+async function checkAudits(context) {
+  await context.act(() => pressOption('KeyA'));
+  assertPending(context, 'AuditsPanel');
+  await releasePanel(context, 'AuditsPanel');
+  assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');
+}
+
+// The AI button sits at the foot of the rail, outside the numbered tabs. Its label carries its shortcut, so it is found by id.
+async function checkAi(context) {
+  const button = railButton('ai');
+  await context.act(() => button.click());
+  assertPending(context, 'AiPanel');
+  await releasePanel(context, 'AiPanel');
+  assert.equal(__lazyPanels.AiPanel.projectPath, '/project');
+}
+
+function pressOption(code) {
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { code, key: code.slice(-1).toLowerCase(), altKey: true, bubbles: true }));
 }
 
 function assertPending(context, name) {
@@ -214,9 +241,10 @@ async function releasePanel(context, name) {
   context.stable();
 }
 
-function railButton(index) {
-  const button = document.querySelectorAll('.rail-btn')[index];
-  assert.ok(button, `Rail button ${index} exists`);
+// A rail button by its panel id, never by position: the rail's order is the person's to change and has grown by a button before.
+function railButton(id) {
+  const button = document.querySelector(`.rail-btn[data-rail-id="${id}"]`);
+  assert.ok(button, `Rail button ${id} exists`);
   return button;
 }
 
@@ -249,7 +277,7 @@ function createImportGates() {
       assert.ok(LAZY_PANELS.includes(name), `Unexpected lazy module: ${name}`);
       assert.equal(requested.has(name), false, `${name} should request its module once`);
       requested.add(name);
-      // Nine fixed entries bound the queue, and release owns its only mutation.
+      // The fixed LAZY_PANELS entries bound the queue, and release owns its only mutation.
       return new Promise((resolve) => pending.set(name, () => resolve(load())));
     },
     release(name) {
@@ -293,10 +321,26 @@ async function buildApp() {
           contents: panelStub('CodeWindow'),
           loader: 'tsx',
         }),
+        // The newer panels are not among the shared panel stubs; the Instructions
+        // stub also exposes the real selection store, which opens its document.
+        'src/app/shell/InstructionsDocument.tsx': () => ({
+          contents: panelStub('InstructionsDocument'),
+          loader: 'tsx',
+        }),
+        'src/features/audits/AuditsPanel.tsx': () => ({
+          contents: panelStub('AuditsPanel'),
+          loader: 'tsx',
+        }),
+        'src/app/shell/DesktopSettings.tsx': () => ({
+          contents: `import { selectInstruction } from '../../features/instructions/instructionSelection';\nglobalThis.__selectInstruction = selectInstruction;\n${panelStub('DesktopSettings')}`,
+          loader: 'tsx',
+        }),
+        'src/features/ai/AiPanel.tsx': () => ({
+          contents: panelStub('AiPanel'),
+          loader: 'tsx',
+        }),
       }),
-      stubPanels('lazy-panel-bodies', (name) =>
-        REAL_PREVIEW.has(name) ? undefined : { contents: panelStub(name), loader: 'tsx' },
-      ),
+      stubPanels('lazy-panel-bodies', (name) => (REAL_PREVIEW.has(name) ? undefined : { contents: panelStub(name), loader: 'tsx' })),
     ],
   });
   return bundle;
@@ -319,14 +363,7 @@ function installDOM() {
     pretendToBeVisual: true,
   });
   global.window = dom.window;
-  const browserGlobals = [
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ];
+  const browserGlobals = ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver'];
   for (const name of browserGlobals) {
     global[name] = dom.window[name];
   }
@@ -371,7 +408,6 @@ function createBridge() {
       components: [],
       layouts: [],
     }),
-    hasNodeModules: async () => true,
     startDevServer: async () => ({ url: 'http://localhost:4321' }),
     listProjectClasses: async () => [],
     // Disk replies carry the SHA-256 of the bytes, as main's do.
@@ -394,6 +430,7 @@ function createBridge() {
       return { ok: true, ...onDisk(disk), inverse: applied.inverse };
     },
     gitInfo: async () => ({ isRepo: false }),
+    publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
     onCssChanged: () => () => {},
   };
   return new Proxy(bridge, {

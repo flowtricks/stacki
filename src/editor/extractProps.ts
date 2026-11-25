@@ -23,12 +23,8 @@ import { parseDeclarations, scopeChips } from './dataSuggest';
 // bindings, which is the safe way to be wrong (a prop too many, never one too
 // few).
 function loopHead(head: unknown) {
-  const match = String(head || '').match(
-    /^([\s\S]*?)\.map\(\s*\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*([A-Za-z_$][\w$]*)\s*)?\)\s*=>\s*\($/,
-  );
-  return match?.[1] !== undefined && match[2] !== undefined
-    ? { data: match[1].trim(), item: match[2], index: match[3] || '' }
-    : undefined;
+  const match = String(head || '').match(/^([\s\S]*?)\.map\(\s*\(\s*([A-Za-z_$][\w$]*)\s*(?:,\s*([A-Za-z_$][\w$]*)\s*)?\)\s*=>\s*\($/);
+  return match?.[1] !== undefined && match[2] !== undefined ? { data: match[1].trim(), item: match[2], index: match[3] || '' } : undefined;
 }
 
 /** Every expression a node states in its OWN scope (its children may differ). */
@@ -66,10 +62,7 @@ function expressionsOf(node: TreeView): readonly string[] {
  * `scope` is what the page has at that point: its frontmatter declarations,
  * its imports, and the item of any loop the piece sits inside.
  */
-export function propsForExtraction(
-  node: TreeView | undefined,
-  scope: Iterable<string> | undefined,
-): readonly string[] {
+export function propsForExtraction(node: TreeView | undefined, scope: Iterable<string> | undefined): readonly string[] {
   const inScope = scope instanceof Set ? new Set(scope) : new Set(scope || []);
   if (!inScope.size || !node) {
     return [];

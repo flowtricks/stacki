@@ -4,11 +4,12 @@
 // composes the hook groups in order; each later group takes the earlier
 // groups' results.
 
+import { useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { assert } from '../../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadEmbedSource } from '../model/toolPreferences';
 import { computeRuleModel } from '../model/cascade';
-import { type ContextKey, type StateKey, type StyleContext } from '../model/resolved';
+import { type ContextKey, type StateKey } from '../model/resolved';
 import { type MatchTarget } from '../model/selectors';
 import {
   loadEmbedDocs,
@@ -23,8 +24,13 @@ import {
   type EmbedDocument,
   type EmbedScan,
 } from '../model/webflow';
-import type { BreakpointId, ElementSnapshot, NativeModel } from '../model/styleTypes';
+import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
+import type { ManualSourcePick } from '../model/selectorHome';
 import { type ScanState, type Phase } from './EditorBasics';
+import { rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { forgetDocuments, rememberDocuments } from './memoryContent';
+import { getHost } from '../model/host';
+import { elementSelectionKey } from '../model/webflowElement';
 import {
   streamDocs,
   loadComponentDocs,
@@ -86,6 +92,9 @@ export function useEditorRefs() {
   const primedRef = useRef<{ target: MatchTarget; key: string } | undefined>(undefined);
   const lastSnapSigRef = useRef('');
   const lastScanAtRef = useRef(editorSession.scan?.scanAt ?? 0);
+  // The element whose settled answer is on screen ('' while none is): an unsettled pass
+  // for it (source-only, a streamed partial) is a step back and is not drawn over it.
+  const settledElementKeyRef = useRef('');
   return {
     appliedKeyRef,
     busyRef,
@@ -106,8 +115,26 @@ export function useEditorRefs() {
     selectedElementKeyRef,
     selectedRef,
     seqRef,
+    settledElementKeyRef,
     targetRef,
   };
+}
+
+// The text field holding the focus, if one does: an input, a textarea or a contentEditable. Read by tag name and
+// property, not `instanceof`: the DOM constructors are globals a non-browser test window does not define, and the
+// busy timer must not throw there.
+function focusedTextField(): Element | undefined {
+  const active = document.activeElement;
+  if (active === null) {
+    return undefined;
+  }
+  if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
+    return active;
+  }
+  if ('isContentEditable' in active && active.isContentEditable === true) {
+    return active;
+  }
+  return undefined;
 }
 
 // The busy flag (shown, deferred) and the last save failure.
@@ -126,7 +153,23 @@ export function useBusyState(editorRefs: ReturnType<typeof useEditorRefs>) {
         if (busyTimerRef.current === undefined) {
           busyTimerRef.current = window.setTimeout(() => {
             busyTimerRef.current = undefined;
-            setBusy(true);
+            // Disabling the field someone is typing in throws the focus out of it (the caret and the
+            // arrow keys go with it) — what Enter then looked like on a slow write. The lock waits
+            // for that field to be left; the poll gate (busyRef) already holds either way.
+            const typing = focusedTextField();
+            if (typing === undefined) {
+              setBusy(true);
+              return;
+            }
+            typing.addEventListener(
+              'focusout',
+              () => {
+                if (busyRef.current) {
+                  setBusy(true);
+                }
+              },
+              { once: true },
+            );
           }, 300);
         }
       } else {
@@ -159,9 +202,7 @@ export function useScanState(editorRefs: ReturnType<typeof useEditorRefs>) {
   // A fast, scan-independent snapshot (tag + classes) read straight off the
   // selected element so the chips appear immediately, before the embed scan's
   // fuller rootSnapshot arrives.
-  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | undefined>(
-    restoredRef.current?.quick,
-  );
+  const [quickSnapshot, setQuickSnapshot] = useState<ElementSnapshot | undefined>(restoredRef.current?.quick);
   // Classes removed since the panel last resolved — hidden from the chips at once.
   const removedClasses = useRemovedClasses();
   const [, setStatus] = useState('Select an element to inspect its embed styles.');
@@ -220,22 +261,25 @@ export function useSelectionState() {
   // stateKey follows the active selector's own pseudo-classes (see the selection
   // handlers) so native reads/writes target the right (breakpoint, pseudo).
   const [context, setContext] = useState<ContextKey>('');
-  // The selected context's full object, remembered so the query stays selected when
-  // the element changes (re-injected into the rebuilt list if the new element lacks it).
-  const stickyContextRef = useRef<StyleContext | undefined>(undefined);
+  // Set when the selected element changed, until the new element's queries are known and the
+  // chosen query has been checked against them (model/activeQuery.ts). It is state, not a ref, so
+  // the check runs in the render that first sees the element's settled list: no frame draws the
+  // previous element's query on this one.
+  const [contextStale, setContextStale] = useState(false);
   const [stateKey, setStateKey] = useState<StateKey>('');
   return {
     context,
+    contextStale,
     defaultTokensRef,
     pendingDefaultRef,
     selectedSelectorText,
     selectedTokens,
     setContext,
+    setContextStale,
     setSelectedSelectorText,
     setSelectedTokens,
     setStateKey,
     stateKey,
-    stickyContextRef,
     tokenIdentityRef,
     typedClassRef,
   };
@@ -261,9 +305,7 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   // embed). Reset when the selected element changes.
   // Restore the last-targeted embed so a chosen source (e.g. a global-CSS embed)
   // persists across reloads; effectiveSourceSel still falls back if it's unavailable.
-  const [sourceSelection, setSourceSelection] = useState<string | undefined>(
-    () => loadEmbedSource() ?? undefined,
-  );
+  const [sourceSelection, setSourceSelection] = useState<string | undefined>(() => loadEmbedSource() ?? undefined);
   // Auto-switch the "create styles in" source to the open component's embed while
   // inside a component, and restore the page pick on exit. Refs so the transition
   // effect reads live values without re-running on every source change.
@@ -272,10 +314,13 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
     sourceSelectionRef.current = sourceSelection;
   }, [sourceSelection]);
   const previousInComponentRef = useRef(false);
+  // The person's own pick of "Add custom styles in", with the selection it was made for, and
+  // the current selection: a pick holds until the element or selector changes (model/selectorHome.ts).
+  const manualSourcePickRef = useRef<ManualSourcePick | undefined>(undefined);
+  const selectionKeyRef = useRef('');
   // The page pick, stashed while in a component.
   const pageSourceRef = useRef<string | undefined>(undefined);
   const wantCompSourceRef = useRef(false); // pending switch until the component embed loads
-  const [currentBreakpoint, setCurrentBreakpoint] = useState<BreakpointId>('main');
   const nativeModelRef = useRef<NativeModel | undefined>(undefined);
   // The element identity `nativeModel` was last read for. Native styles load via a
   // separate async effect that lags the embed model on an element switch, so this lets
@@ -293,14 +338,14 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   const activeSelectorRef = useRef('');
   return {
     activeSelectorRef,
-    currentBreakpoint,
+    manualSourcePickRef,
     nativeIdentityRef,
     nativeModel,
     nativeModelRef,
     pageSourceRef,
     pendingKeys,
     previousInComponentRef,
-    setCurrentBreakpoint,
+    selectionKeyRef,
     setNativeModel,
     setPendingKeys,
     setSourceSelection,
@@ -317,6 +362,7 @@ export function usePendingWrites(
   scanState: ReturnType<typeof useScanState>,
   nativeState: ReturnType<typeof useNativeState>,
 ) {
+  const translateDescribed = useTranslateDescribed();
   const { docsRef, inComponentRef, pendingKeysRef } = editorRefs;
   const { setSaveError } = busyState;
   const { scan, setStatus } = scanState;
@@ -356,16 +402,13 @@ export function usePendingWrites(
       }
       if (inComponentRef.current && !embedDocument.source.fromComponent) {
         markPending(embedDocument.source.key);
-        setStatus(
-          `Held — this ${held} lives in the page, so the canvas shows it once you ` +
-            'leave the component.',
-        );
+        setStatus(`Held — this ${held} lives in the page, so the canvas shows it once you ` + 'leave the component.');
         return false;
       }
-      setSaveError(result.error);
+      setSaveError(translateDescribed({ message: result.error, messageRef: result.errorRef }));
       return false;
     },
-    [clearPending, markPending, inComponentRef, setSaveError, setStatus],
+    [clearPending, markPending, inComponentRef, setSaveError, setStatus, translateDescribed],
   );
 
   const documentByKey = useMemo(() => {
@@ -392,7 +435,8 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
   // concurrently (bounded by the read limiter in webflow.ts).
   const buildContent = useCallback(
     async (
-      { rescanComponents = false }: RescanOptions,
+      // Every build lists its sources afresh, so a forced rescan reads the same way.
+      _rescan: RescanOptions,
       onPartial?: (content: Content) => void,
     ): Promise<Content> => {
       const page = await scanPage();
@@ -406,11 +450,9 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
       };
       const onDocument = streamDocs(pageScan, onPartial);
       // Page and component embeds both re-read their CODE fresh so out-of-app edits
-      // show up; only the component tree DFS (finding which embeds exist) is cached.
-      const [pageResult, componentResult] = await Promise.all([
-        loadEmbedDocs(page.pageEmbeds, onDocument),
-        loadComponentDocs({ rescanComponents }, onDocument),
-      ]);
+      // show up.
+      const pageKeys = new Set(page.pageEmbeds.map((source) => source.key));
+      const [pageResult, componentResult] = await Promise.all([loadEmbedDocs(page.pageEmbeds, onDocument), loadComponentDocs(pageKeys, onDocument)]);
       return mergedContent(pageScan, [pageResult, componentResult]);
     },
     [pageInstancesRef],
@@ -426,9 +468,7 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
         return content.docs;
       }
       const seen = new Set(content.docs.map((embedDocument) => embedDocument.source.key));
-      const remembered = pageDocsRef.current.filter(
-        (embedDocument) => !seen.has(embedDocument.source.key),
-      );
+      const remembered = pageDocsRef.current.filter((embedDocument) => !seen.has(embedDocument.source.key));
       return [...content.docs, ...remembered];
     },
     [pageDocsRef],
@@ -437,16 +477,23 @@ export function useContentBuild(editorRefs: ReturnType<typeof useEditorRefs>) {
 }
 
 // Store a scan's content, deriving its rules from the active embeds.
-export function useContentStore(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  contentBuild: ReturnType<typeof useContentBuild>,
-) {
+export function useContentStore(editorRefs: ReturnType<typeof useEditorRefs>, contentBuild: ReturnType<typeof useContentBuild>) {
   const { contentRef, docsRef, inComponentRef, lastScanAtRef, pageDocsRef } = editorRefs;
   const { composeDocs } = contentBuild;
+  // The documents a switch builds from (memoryContent.ts) are the ones this panel read: a new
+  // panel (a reopen, another project) starts without them, from editorSession.scan, rather than
+  // drawing another session's copy of a file that may have changed since. Once, while mounting.
+  const memoryOwnedRef = useRef(false);
+  if (!memoryOwnedRef.current) {
+    memoryOwnedRef.current = true;
+    forgetDocuments();
+  }
 
-  // Returns the content with its rules and counts derived from the active embeds.
+  // Returns the content with its rules and counts derived from the active embeds. Content built
+  // from memory (memoryContent.ts) is not a read: it leaves the time of the last read alone, so
+  // the background refresh that revalidates it is not held back by its throttle.
   const storeContent = useCallback(
-    (scanned: Content): Content => {
+    (scanned: Content, options: { readonly fromMemory?: boolean } = {}): Content => {
       // Only a complete (non-partial) page scan refreshes the remembered page
       // embeds; while in a component we keep the previous ones (they hold any
       // unsaved edits), and a partial snapshot must not clobber them either.
@@ -458,13 +505,15 @@ export function useContentStore(
         ...scanned,
         rules: rebuildRules(active),
         embedCount: active.length,
-        componentEmbedCount: active.filter((embedDocument) => embedDocument.source.fromComponent)
-          .length,
+        componentEmbedCount: active.filter((embedDocument) => embedDocument.source.fromComponent).length,
       };
       contentRef.current = content;
       docsRef.current = active;
       inComponentRef.current = content.scan.inComponentContext;
-      lastScanAtRef.current = Date.now();
+      rememberDocuments(active, getHost().openFilePath);
+      if (options.fromMemory !== true) {
+        lastScanAtRef.current = Date.now();
+      }
       // Persist completed scans so a reopen restores them (see editorSession.scan). Skip
       // partials — restoring a page-only snapshot would drop the component chips.
       if (!content.partial) {
@@ -492,10 +541,7 @@ const REBUILD_AFTER_WRITE_ATTEMPTS_MAX = 3;
 // before the write: read again, since storing it would roll the panel back and
 // the next edit would write the old CSS over the new. Undefined when writes
 // kept landing past the cap.
-async function rereadPastWrites(
-  first: { readonly content: Content; readonly writes: number },
-  read: () => Promise<Content>,
-): Promise<Content | undefined> {
+async function rereadPastWrites(first: { readonly content: Content; readonly writes: number }, read: () => Promise<Content>): Promise<Content | undefined> {
   let { content, writes } = first;
   for (let attempt = 0; writes !== embedWritesStarted(); attempt++) {
     if (attempt >= REBUILD_AFTER_WRITE_ATTEMPTS_MAX) {
@@ -523,9 +569,7 @@ function useFlushPending(
     if (!keys.length) {
       return;
     }
-    const byKey = new Map(
-      pageDocsRef.current.map((embedDocument) => [embedDocument.source.key, embedDocument]),
-    );
+    const byKey = new Map(pageDocsRef.current.map((embedDocument) => [embedDocument.source.key, embedDocument]));
     let failed = 0;
     for (const key of keys) {
       const embedDocument = byKey.get(key);
@@ -539,11 +583,7 @@ function useFlushPending(
     }
     pendingKeysRef.current = new Set();
     setPendingKeys(new Set());
-    setStatus(
-      failed
-        ? `Saved your page-embed edits — ${failed} couldn't be written.`
-        : 'Saved the page-embed edits you made inside the component.',
-    );
+    setStatus(failed ? `Saved your page-embed edits — ${failed} couldn't be written.` : 'Saved the page-embed edits you made inside the component.'); // i18n-ignore: write-only status, never rendered.
   }, [pageDocsRef, pendingKeysRef, setPendingKeys, setStatus]);
 }
 
@@ -566,10 +606,7 @@ export function useContentRebuild(
   // (foreground only) renders the page-level rules as soon as they're ready,
   // before component embeds finish loading.
   const rebuildAndStore = useCallback(
-    async (
-      rescan: RescanOptions = {},
-      onPartial?: (content: Content) => void,
-    ): Promise<Content> => {
+    async (rescan: RescanOptions = {}, onPartial?: (content: Content) => void): Promise<Content> => {
       const wasInComponent = inComponentRef.current;
       let writes = embedWritesStarted();
       // A partial is shown only while no write has landed since the read began:
@@ -597,39 +634,43 @@ export function useContentRebuild(
       // deleted stylesheet: replacing the last complete scan with that partial
       // inventory makes its chips and values disappear until the next poll.
       // Foreground scans still show available sources and their read errors.
-      return storeContent(
-        completeRefresh(fresh ?? content, { allowPartial: !!onPartial || !contentRef.current }),
-      );
+      return storeContent(completeRefresh(fresh ?? content, { allowPartial: !!onPartial || !contentRef.current }));
     },
     [buildContent, flushPending, storeContent, contentRef, inComponentRef, pendingKeysRef],
   );
-  return { rebuildAndStore };
+  return { rebuildAndStore, storeContent };
 }
 
 // Resolve the selected element against the cached content.
-export function useApplyResolve(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  scanState: ReturnType<typeof useScanState>,
-) {
-  const { appliedKeyRef, classListRef, pageDocsRef, primedRef, seqRef, targetRef } = editorRefs;
+export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
+  const { appliedKeyRef, classListRef, docsRef, pageDocsRef, primedRef, seqRef, settledElementKeyRef, targetRef } = editorRefs;
   const { setPhase, setScan, setScanningMore, setStatus } = scanState;
 
   // The cheap part — resolve the selected element against cached content.
   const applyResolve = useCallback(
-    async (
-      element: unknown,
-      content: Content,
-      seq: number,
-      options: { readonly silent?: boolean; readonly sourceOnly?: boolean } = {},
-    ) => {
+    async (element: unknown, content: Content, seq: number, options: { readonly silent?: boolean; readonly sourceOnly?: boolean } = {}) => {
       // Source-known selectors show first when a cached scan is available.
       // The rendered page then supplies component markup, runtime classes and
       // exact DOM matches in one round trip rather than two back to back.
-      const asked = options.sourceOnly
-        ? ({ kind: 'unasked' } as const)
-        : await askCanvasAbout(serializeElementId(element), content.rules);
+      const asked = options.sourceOnly ? ({ kind: 'unasked' } as const) : await askCanvasAbout(serializeElementId(element), content.rules);
       const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
       if (seq !== seqRef.current) {
+        return;
+      }
+      // A streamed partial is a step on the way (EditorBasics.tsx). So is every
+      // source-only pass, even one that read the element's classes: the source
+      // matcher cannot see past a component's edge or a class added at runtime, so a
+      // rule only the page can match (`.section .title { font-weight: var(--w) }`)
+      // is missing from it. Drawn, it showed the plain Weight dropdown until the
+      // canvas answered and the chip replaced it; replacing a remembered answer, it
+      // flipped a chip to that dropdown and back on every switch. Only the canvas's
+      // answer (or its deadline passing, which answers `undefined`) settles.
+      const settled = !content.partial && options.sourceOnly !== true;
+      // Keyed with its document (elementSelectionKey): the same path in another file is another element.
+      const elementKey = elementSelectionKey(element);
+      // This element's settled answer is already drawn (a remembered one, or an earlier
+      // pass): a step on the way to the next one must not replace it with less.
+      if (!settled && settledElementKeyRef.current === elementKey) {
         return;
       }
       targetRef.current = target;
@@ -652,25 +693,29 @@ export function useApplyResolve(
       // Scaffolds come from the current context's own (writable) embeds — the
       // component's embeds while inside one, the page's otherwise.
       classListRef.current = rootSnapshot.classList;
-      setScan(scanStateFor(content, { rootSnapshot, model }, pageDocsRef.current.length));
+      // Still waiting for this element's first settled answer if the selection reset said so
+      // and this step is not it: a rescan of an element already shown never sets it.
+      const landed: ScanState = {
+        ...scanStateFor(content, { rootSnapshot, model, settled }, pageDocsRef.current.length),
+        awaitingFirstAnswer: false,
+      };
+      setScan((previous) => ({ ...landed, awaitingFirstAnswer: !settled && previous?.awaitingFirstAnswer === true }));
+      if (settled) {
+        settledElementKeyRef.current = elementKey;
+        rememberScanSnapshot(scanSnapshotKey(elementKey, docsRef.current), {
+          scan: landed,
+          target,
+          classList: rootSnapshot.classList,
+          primed: options.sourceOnly ? undefined : { target, key: selectorKeyOf(content.rules) },
+        });
+      }
       setPhase('ready');
       setScanningMore(!!content.partial);
       if (!options.silent) {
         setStatus(resolveStatus(content, model));
       }
     },
-    [
-      appliedKeyRef,
-      classListRef,
-      pageDocsRef,
-      primedRef,
-      seqRef,
-      setPhase,
-      setScan,
-      setScanningMore,
-      setStatus,
-      targetRef,
-    ],
+    [appliedKeyRef, classListRef, docsRef, pageDocsRef, primedRef, seqRef, setPhase, setScan, setScanningMore, setStatus, settledElementKeyRef, targetRef],
   );
   return { applyResolve };
 }

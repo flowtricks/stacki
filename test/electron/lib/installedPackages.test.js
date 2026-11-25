@@ -35,8 +35,7 @@ test('a segment that only contains the word is the user’s own', () => {
 });
 
 test('the package named is the innermost one, pnpm layout included', () => {
-  const pnpm =
-    '/site/node_modules/.pnpm/@scope+engine@file+..+engine/node_modules/@scope/engine/Hero.astro';
+  const pnpm = '/site/node_modules/.pnpm/@scope+engine@file+..+engine/node_modules/@scope/engine/Hero.astro';
   assert.equal(packageOf(pnpm), '@scope/engine');
   assert.equal(packageOf('/site/src/Card.astro'), undefined);
 });

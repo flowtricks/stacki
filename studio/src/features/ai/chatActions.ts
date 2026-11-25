@@ -1,11 +1,6 @@
+import { studioTranslate } from './studioWords';
 import { request } from '../project/projectClient';
-import {
-  chatState,
-  updateChat,
-  parseProposal,
-  type ChatThread,
-  type ChatMessage,
-} from './chatState';
+import { chatState, updateChat, parseProposal, type ChatThread, type ChatMessage } from './chatState';
 import type { ChatContext } from './chatContracts';
 
 const running = new Map<string, AbortController>();
@@ -21,18 +16,13 @@ function context(chat: ChatThread): readonly ChatContext[] {
 }
 export async function sendChat(id: string, file: string) {
   const chat = chatState().threads.find((thread) => thread.id === id);
-  if (
-    !chat ||
-    chat.status !== 'idle' ||
-    (!chat.draft.trim() && !chat.images.length) ||
-    !chat.model
-  ) {
+  if (!chat || chat.status !== 'idle' || (!chat.draft.trim() && !chat.images.length) || !chat.model) {
     return;
   }
   if (running.size >= 3) {
     updateChat(id, (thread) => ({
       ...thread,
-      error: 'Three chats are already working. Wait for one to finish.',
+      error: studioTranslate()('ai.studio.threeWorking'),
     }));
     return;
   }
@@ -44,15 +34,17 @@ export async function sendChat(id: string, file: string) {
     content: chat.draft.trim(),
     images: chat.images,
   };
+  const startedAt = Date.now();
   updateChat(id, (thread) => ({
     ...thread,
     draft: '',
+    segments: [],
     images: [],
     status: 'working',
+    startedAt,
+    updatedAt: startedAt,
     error: '',
-    title: thread.messages.length
-      ? thread.title
-      : (message.content || 'Image conversation').slice(0, 60),
+    title: thread.messages.length || thread.title !== 'New chat' ? thread.title : (message.content || 'Image conversation').slice(0, 60),
     messages: [...thread.messages, message].slice(-39),
   }));
   try {
@@ -69,6 +61,7 @@ export async function sendChat(id: string, file: string) {
           role: 'assistant' as const,
           content: proposal.summary,
           images: [],
+          durationMs: Date.now() - startedAt,
           ...(proposal.changes.length ? { proposal } : {}),
         },
       ].slice(-40),
@@ -77,23 +70,24 @@ export async function sendChat(id: string, file: string) {
     updateChat(id, (thread) => ({
       ...thread,
       error: controller.signal.aborted
-        ? 'Response stopped.'
+        ? studioTranslate()('ai.studio.stopped')
         : error instanceof Error
           ? error.message
-          : 'Could not send message.',
+          : studioTranslate()('ai.studio.sendFailed'),
       draft: thread.draft || chat.draft,
+      segments: thread.segments.length ? thread.segments : chat.segments,
       images: thread.images.length ? thread.images : chat.images,
     }));
   } finally {
     running.delete(id);
-    updateChat(id, (thread) => ({ ...thread, status: 'idle' }));
+    updateChat(id, (thread) => ({ ...thread, status: 'idle', startedAt: undefined, updatedAt: Date.now() }));
   }
 }
 export function stopChat(id: string) {
   running.get(id)?.abort();
 }
 export function discardProposal(id: string, messageId: string) {
-  finishProposal(id, messageId, 'Discarded. No changes were applied.');
+  finishProposal(id, messageId, studioTranslate()('ai.studio.discarded'));
 }
 function finishProposal(id: string, messageId: string, outcome: string) {
   updateChat(id, (thread) => ({
@@ -120,12 +114,12 @@ export async function applyProposal(id: string, messageId: string, refresh: () =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: proposal.id }),
     });
-    finishProposal(id, messageId, 'Applied to the shared draft. Ready to preview.');
+    finishProposal(id, messageId, studioTranslate()('ai.studio.applied'));
     refresh();
   } catch (error) {
     updateChat(id, (chat) => ({
       ...chat,
-      error: error instanceof Error ? error.message : 'Could not apply changes.',
+      error: error instanceof Error ? error.message : studioTranslate()('ai.studio.applyFailed'),
     }));
   } finally {
     updateChat(id, (chat) => ({ ...chat, status: 'idle' }));
@@ -141,12 +135,11 @@ async function generateReply(chat: ChatThread, file: string, signal: AbortSignal
       body: JSON.stringify({
         file,
         model: chat.model,
+        // i18n-ignore: the instruction sent to the model when the person sends images alone, not interface text.
         prompt: chat.draft.trim() || 'Describe these images and how they relate to this page.',
         images: chat.images.length
           ? chat.images
-          : ([...chat.messages]
-              .reverse()
-              .find((message) => message.role === 'user' && message.images.length)?.images ?? []),
+          : ([...chat.messages].reverse().find((message) => message.role === 'user' && message.images.length)?.images ?? []),
         history: context(chat),
       }),
     }),

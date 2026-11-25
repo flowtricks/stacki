@@ -1,0 +1,10 @@
+---
+type HeadingLevel = 'h1' | 'h2' | 'h3';
+type Emphasis = 'none' | 'italic';
+interface Props {
+  level?: HeadingLevel;
+  emphasis?: Emphasis;
+}
+const { level = 'h2', emphasis = 'none' } = Astro.props;
+---
+<p class="local-alias-union" data-level={level} data-emphasis={emphasis}>Level {level}</p>

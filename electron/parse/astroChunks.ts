@@ -9,7 +9,7 @@ import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, ParserPageModel } from './astroParserTypes';
 import { makeId, assignPathIds, required } from './astroAttrs';
 import { parseTemplate } from './astroTemplate';
-import { serializeNodeMarked } from './astroSerializeMarked';
+import { serializeNodesMarked } from './astroSerializeMarked';
 
 // ---------------------------------------------------------------------------
 // HTML chunks
@@ -19,19 +19,12 @@ import { serializeNodeMarked } from './astroSerializeMarked';
 // is parsed into the Fragment's children so it's editable in the navigator;
 // edits are written back to the chunk file, never the page.
 
-export function resolveChunks(
-  model: ParserPageModel,
-  pagePath: string,
-  options: { readonly locs?: boolean } = {},
-): void {
+export function resolveChunks(model: ParserPageModel, pagePath: string, options: { readonly locs?: boolean } = {}): void {
   // Identifier to absolute chunk file path.
   const rawImports = new Map<string, string>();
   for (const imp of model.imports) {
     if (/\.html\?raw$/i.test(imp.path) && imp.path.startsWith('.')) {
-      rawImports.set(
-        imp.name,
-        path.resolve(path.dirname(pagePath), imp.path.replace(/\?raw$/i, '')),
-      );
+      rawImports.set(imp.name, path.resolve(path.dirname(pagePath), imp.path.replace(/\?raw$/i, '')));
     }
   }
   if (!rawImports.size) {
@@ -46,11 +39,7 @@ export function resolveChunks(
   const walk = (list: readonly ParserNode[], depth: number): void => {
     assert(depth <= LIMITS.treeDepthMax, 'resolveChunks: depth limit');
     for (const node of list) {
-      if (
-        node.kind === 'component' &&
-        node.props?.['set:html']?.type === 'expr' &&
-        node.children === undefined
-      ) {
+      if (node.kind === 'component' && node.props?.['set:html']?.type === 'expr' && node.children === undefined) {
         const ref = node.props['set:html'].value.trim();
         if (rawImports.has(ref)) {
           const file = required(rawImports.get(ref), 'Chunk import exists');
@@ -99,9 +88,7 @@ export function resolveChunks(
 // import's identifier: the Fragment's own path for a lone chunk, the
 // chunk-group's path for each member of a joined aggregate. Requires a model
 // that's been through resolveChunks.
-export function chunkImportMarks(
-  model: ParserPageModel,
-): Map<string, { path: string; group: boolean }> {
+export function chunkImportMarks(model: ParserPageModel): Map<string, { path: string; group: boolean }> {
   const marks = new Map<string, { path: string; group: boolean }>();
   // The model has been through resolveChunks, whose path ids bound the joined tree's depth.
   const walk = (list: readonly ParserNode[], prefix: string, depth: number): void => {
@@ -111,11 +98,7 @@ export function chunkImportMarks(
       if (node.chunkFile) {
         const group = node.kind === 'chunk-group';
         const html = node.props?.['set:html'];
-        const ident = group
-          ? node.name
-          : html && html.type !== 'bare'
-            ? html.value.trim()
-            : undefined;
+        const ident = group ? node.name : html && html.type !== 'bare' ? html.value.trim() : undefined;
         if (ident) {
           marks.set(ident, { path: childPath, group });
         }
@@ -135,38 +118,21 @@ export function chunkImportMarks(
 // "<file>#<path>" key — the file half rides along untouched. A group also gets
 // a marker pair of its own — nothing in the page wraps it. Returns undefined when
 // the chunk isn't representable, so the caller can serve it unmarked.
-export function markChunkHtml(
-  source: string,
-  prefix: string,
-  { group }: { readonly group: boolean },
-): string | undefined {
-  const { nodes, clean } = parseTemplate(source);
+export function markChunkHtml(source: string, prefix: string, { group }: { readonly group: boolean }): string | undefined {
+  // Located from offset 0, so the whitespace between the chunk's nodes is the
+  // chunk file's own (see MarkedSource): a chunk renders as set:html, and a
+  // space the file doesn't have is a space on the page.
+  const { nodes, clean } = parseTemplate(source, 0);
   if (!clean) {
     return undefined;
   }
-  const lines: string[] = [];
-  if (group) {
-    lines.push(`<!--avb-s:${prefix}-->`);
-  }
-  nodes.forEach((node, i) =>
-    serializeNodeMarked(node, '', lines, {
-      path: `${prefix}.${i}`,
-      inSlot: false,
-      atRoot: false,
-      depth: 0,
-      stamp: undefined,
-    }),
-  );
-  if (group) {
-    lines.push(`<!--avb-e:${prefix}-->`);
-  }
-  return lines.join('\n') + '\n';
+  const roots = serializeNodesMarked(nodes, { pathOf: (i) => `${prefix}.${i}`, atRoot: false, stamp: undefined, source });
+  const marked = group ? `<!--avb-s:${prefix}-->${roots}<!--avb-e:${prefix}-->` : roots;
+  assert(group || nodes.length === 0 || marked.length > 0, 'markChunkHtml: a chunk with nodes prints them');
+  return `${marked}\n`;
 }
 
-function resolveChunksParseFile(
-  filePath: string,
-  options: { readonly locs?: boolean },
-): ParserNode[] | undefined {
+function resolveChunksParseFile(filePath: string, options: { readonly locs?: boolean }): ParserNode[] | undefined {
   let source: string;
   try {
     source = fs.readFileSync(filePath, 'utf8');

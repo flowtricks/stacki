@@ -1,0 +1,5 @@
+/* For the frame of an AI composer screenshot, the editor's transient tooltips step aside. The canvas's own outlines,
+   tag labels and text marks are drawn as usual: the capture shows what the person sees (aiScreenshotSource.ts). */
+body.is-taking-screenshot .rail-tooltip {
+  visibility: hidden;
+}

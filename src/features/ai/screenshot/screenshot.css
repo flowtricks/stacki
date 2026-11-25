@@ -1,0 +1,504 @@
+/* Screenshots in the composer: image chips, the lightbox and the region selector (Desktop only). */
+.ai-attachment.is-image {
+  padding: 2px 2px 2px 2px;
+}
+.ai-attachment-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 11px;
+}
+.ai-attachment-open img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: var(--bg-input);
+}
+.ai-attachment-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The lightbox is as large as its image: the image is sized by AttachmentChips (fitContain to the window), so the
+   whole image shows at its own aspect; `.modal.` out-ranks the shared dialog's fixed 420 px width and clipping. */
+.modal.ai-lightbox {
+  position: relative;
+  width: auto;
+  max-width: none;
+  padding: 8px;
+  background: var(--bg-panel);
+}
+.ai-lightbox-image {
+  display: block;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.ai-lightbox-close {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  background: var(--bg-active);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-tool-button.is-busy {
+  opacity: 0.5;
+}
+/* Above popups (10000) and tooltips (10001): the selector covers everything it can photograph. */
+.ai-region-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  cursor: crosshair;
+  background: rgba(0, 0, 0, 0.18);
+  outline: none;
+  user-select: none;
+}
+.ai-region-box {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+.ai-region-size {
+  position: absolute;
+  top: calc(100% + 4px);
+  inset-inline-end: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-region-hint {
+  position: absolute;
+  top: 16px;
+  left: 50%; /* physical: centred by translateX(-50%), the same in either direction */
+  transform: translateX(-50%);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+/* The capture bar: Screenshot and Record as one segmented track with a sliding pill (ScreenshotButton.tsx), and
+   what recording draws: the bar beside the region and the "Pick frames" sheet. Background fills only, no
+   borders; logical properties for right to left. */
+.ai-capture-bar {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+/* The bar sits on the microphone's slot, anchored at its bottom: closed it is the microphone alone, with no fill;
+   open, its height grows upward to show Screenshot and Record above (160 ms ease-out), over whatever is above, so
+   nothing moves. Closing waits 180 ms first, the hover-intent delay. A running recording keeps it open. The
+   document orders the segments bottom up (column-reverse), so Tab goes microphone, Screenshot, Record. */
+.ai-capture-track {
+  position: absolute;
+  bottom: 0;
+  inset-inline-start: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: transparent;
+  transition:
+    height 160ms ease-out 180ms,
+    background-color 160ms ease-out 180ms,
+    box-shadow 160ms ease-out 180ms;
+}
+.ai-capture-bar:is(:hover, :focus-within, .is-recording-mode) .ai-capture-track {
+  height: 82px;
+  /* Opaque, so whatever it grows over never shows through, and a clear step above the composer's own fill
+     (--bg-input lifted 5% towards --text): the raised surface lifted 14% towards the text colour, so it stands out
+     in either theme. The pill is one step more. */
+  background: color-mix(in srgb, var(--bg-panel-2), var(--text) 14%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition:
+    height 160ms ease-out,
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+.ai-capture-slot {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+}
+.ai-capture-track button.ai-capture-segment {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+/* Open, the pill is the only fill a segment gets (the microphone keeps its own colours, red while it listens). */
+.ai-capture-bar:is(:hover, :focus-within, .is-recording-mode)
+  .ai-capture-track
+  button.ai-capture-segment:not(.is-on):is(:hover, :focus-visible, :active):not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.ai-capture-bar:is(:hover, :focus-within, .is-recording-mode) .ai-capture-slot > button:is(:hover, :focus-visible, :active):not(:disabled) {
+  background: transparent;
+}
+.ai-capture-track button.ai-capture-segment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Closed, Screenshot and Record are hidden: not seen, not tabbable, not in the pointer's way. */
+.ai-capture-track .ai-capture-segment {
+  visibility: hidden;
+  transition: visibility 0s linear 340ms;
+}
+.ai-capture-bar:is(:hover, :focus-within, .is-recording-mode) .ai-capture-segment {
+  visibility: visible;
+  transition: visibility 0s;
+}
+/* The pill: under the microphone, or slid up under Screenshot or Record (a segment and the gap each). Hidden until
+   the bar is open and something is pointed at. */
+.ai-capture-thumb {
+  position: absolute;
+  bottom: 0;
+  inset-inline-start: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-panel-2), var(--text) 22%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 160ms ease-out,
+    opacity 120ms ease-out;
+}
+.ai-capture-bar:is(:hover, :focus-within, .is-recording-mode) .ai-capture-thumb:is(.is-on-mic, .is-on-photo, .is-on-record) {
+  opacity: 1;
+}
+.ai-capture-thumb.is-on-photo {
+  transform: translateY(-28px);
+}
+.ai-capture-thumb.is-on-record {
+  transform: translateY(-56px);
+}
+/* While it records, Record is red, and red it stays in every state. */
+.ai-capture-track button.ai-capture-mode.is-on,
+.ai-capture-track button.ai-capture-mode.is-on:is(:hover, :focus-visible, :active):not(:disabled) {
+  background: color-mix(in srgb, var(--red) 26%, var(--bg-panel));
+  color: var(--red);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-capture-track,
+  .ai-capture-bar:is(:hover, :focus-within, .is-recording-mode) .ai-capture-track,
+  .ai-capture-thumb {
+    transition: none;
+  }
+}
+.ai-record-bar {
+  position: fixed;
+  z-index: 10003;
+  transform: translateX(-50%); /* physical: centred on the region, the same in either direction */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding-inline: 10px 4px;
+  background: var(--bg-panel);
+  color: var(--text);
+  border-radius: 16px;
+  font-size: 12px;
+  /* Reaches at most 8px from the bar, the gap to the region (RecordingBar.tsx): a wider shadow would darken the region's edge in every frame. */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.ai-record-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.ai-record-dot.is-paused {
+  background: var(--text-muted, #888);
+}
+.ai-record-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-record-stop {
+  height: 24px;
+  padding-inline: 10px;
+  border-radius: 12px;
+  background: var(--bg-active);
+}
+.modal.ai-frame-picker {
+  width: min(92vw, 720px);
+  padding: 0;
+  background: var(--bg-panel);
+}
+.ai-frame-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  outline: none;
+}
+.ai-frame-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ai-frame-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-frame-count {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-active);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-frame-empty {
+  padding: 24px;
+  text-align: center;
+}
+/* One fixed frame for every image: the recording's own aspect, letterboxed on a dark fill, the whole frame always
+   visible (contain, never cover), so scrubbing swaps pixels and never moves or resizes anything. */
+.ai-frame-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: min(360px, 46vh);
+  border-radius: 8px;
+  background: #0b0b0c;
+}
+/* Sized by FramePicker (fitContain) to the frame's own aspect within the stage; contain as well, so a thumbnail
+   standing in while the full frame loads is never cropped either. */
+.ai-frame-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.ai-frame-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-frame-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The chevrons point along the reading direction. */
+:dir(rtl) .ai-frame-step svg {
+  transform: scaleX(-1);
+}
+.ai-frame-time {
+  flex: none;
+  min-width: 48px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-frame-spacer {
+  flex: 1;
+}
+.ai-frame-sheet button.ai-frame-use {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text);
+  white-space: nowrap;
+}
+.ai-frame-sheet button.ai-frame-use.is-on,
+.ai-frame-sheet button.ai-frame-use.is-on:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-frame-evenly {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding-inline: 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+/* The timeline: the whole recording across the width, never scrolled. Tiles sample it evenly, chosen ticks sit
+   above, a time scale beneath, and the playhead is a line moved by transform only (it spans the strip, so a
+   share of its own width is a share of the strip). */
+.ai-frame-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ai-frame-marks {
+  position: relative;
+  height: 6px;
+}
+.ai-frame-mark {
+  position: absolute;
+  top: 0;
+  width: 3px;
+  height: 6px;
+  margin-inline-start: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+/* The track: the strip plus its own handle row above it. The row's height is reserved by the padding, so the
+   playhead's triangle sits above the thumbnails (never over or under them) and nothing shifts as it moves. A press
+   anywhere on the track, the handle row included, scrubs. */
+.ai-frame-track {
+  --ai-handle-height: 8px;
+  position: relative;
+  padding-top: var(--ai-handle-height);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+.ai-frame-strip {
+  position: relative;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0b0b0c;
+}
+.ai-frame-tiles {
+  display: flex;
+  height: 100%;
+}
+.ai-frame-tile {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.ai-frame-playhead {
+  --ai-playhead-direction: 1;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(calc(var(--ai-playhead, 0%) * var(--ai-playhead-direction)));
+  will-change: transform;
+}
+:dir(rtl) .ai-frame-playhead,
+[dir='rtl'] .ai-frame-playhead {
+  --ai-playhead-direction: -1;
+}
+/* The line runs from the triangle's tip down through the thumbnails. */
+.ai-frame-playhead::before {
+  content: '';
+  position: absolute;
+  top: var(--ai-handle-height);
+  bottom: 0;
+  inset-inline-start: -1px;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+/* The playhead's handle: a small white triangle in the track's own row above the strip, pointing down onto the
+   line and centred on it. It ends where the strip begins, so it never covers a thumbnail. */
+.ai-frame-playhead::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: -5px;
+  width: 10px;
+  height: var(--ai-handle-height);
+  background: #fff;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.ai-frame-scale {
+  position: relative;
+  height: 14px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.ai-frame-scale-tick {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.ai-frame-scale-tick:first-child {
+  transform: none;
+}
+.ai-frame-scale-tick:last-child {
+  transform: translateX(-100%);
+}
+:dir(rtl) .ai-frame-scale-tick,
+[dir='rtl'] .ai-frame-scale-tick {
+  transform: translateX(50%);
+}
+:dir(rtl) .ai-frame-scale-tick:first-child,
+[dir='rtl'] .ai-frame-scale-tick:first-child {
+  transform: none;
+}
+:dir(rtl) .ai-frame-scale-tick:last-child,
+[dir='rtl'] .ai-frame-scale-tick:last-child {
+  transform: translateX(100%);
+}
+.ai-frame-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ai-frame-actions button {
+  height: 30px;
+  padding-inline: 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+/* The dim kept over the window while a recording runs (RecordScrim.tsx): the region drag's grey, with a hole over
+   the region and the capture bar. It takes no pointer events, so the app stays usable and the pointer is the
+   ordinary one. Below the recording bar (10003) and above popups and tooltips, as the region layer was. */
+.ai-record-scrim {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10002;
+  pointer-events: none;
+}
+.ai-record-scrim-fill {
+  fill: rgba(0, 0, 0, 0.36);
+}

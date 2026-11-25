@@ -3,7 +3,7 @@
 //   node test/renderer/style/panelSections.test.js
 //
 // A rule holding `inset: 0` showed nothing for it. Not in Position, which is
-// where `inset` sorts; not in Custom properties, which is where everything the
+// where `inset` sorts; not in Other properties, which is where everything the
 // panel has no control for goes; nowhere. The declaration was in the file, the
 // panel drew no row, and the only way to find out it was there was to read the
 // CSS.
@@ -13,7 +13,7 @@
 // top, right, bottom and left one side at a time. They have never asked for the
 // shorthand.
 //
-// So: a property with no control belongs in Custom properties, where it can at
+// So: a property with no control belongs in Other properties, where it can at
 // least be read and changed as text. This checks both halves — the ones known
 // to have no control land there, and no property is quietly claimed by a
 // section that never draws it.
@@ -57,28 +57,17 @@ const check = (what, condition, detail) => {
     { prop: 'inset', value: '0' },
     { prop: 'content', value: '""' },
   ];
-  const groups = Object.fromEntries(
-    groupDeclarations(decls).map((group) => [
-      group.def.label,
-      group.decls.map((declaration) => declaration.prop),
-    ]),
-  );
+  const groups = Object.fromEntries(groupDeclarations(decls).map((group) => [group.def.label, group.decls.map((declaration) => declaration.prop)]));
   check('inset is drawn', Object.values(groups).flat().includes('inset'), JSON.stringify(groups));
   check(
-    'under Custom properties, with the rest the panel has no control for',
-    (groups['Custom properties'] || []).join(',') === 'inset,content',
+    'under Other properties, with the rest the panel has no control for',
+    (groups['Other properties'] || []).join(',') === 'inset,content',
     JSON.stringify(groups),
   );
-  check(
-    'and Position still has what it does draw',
-    (groups.Position || []).join(',') === 'position',
-    JSON.stringify(groups),
-  );
+  check('and Position still has what it does draw', (groups.Position || []).join(',') === 'position', JSON.stringify(groups));
   check(
     'the same holds for the resolved model',
-    groupProps(['inset', 'top']).some(
-      (group) => group.def.id === 'other' && group.props.includes('inset'),
-    ),
+    groupProps(['inset', 'top']).some((group) => group.def.id === 'other' && group.props.includes('inset')),
     JSON.stringify(groupProps(['inset', 'top']).map((group) => [group.def.id, group.props])),
   );
 
@@ -94,19 +83,11 @@ const check = (what, condition, detail) => {
     ['columns', 'column-count'],
     ['column-rule', 'column-rule-width'],
   ]) {
-    check(`${prop} goes to Custom properties`, sectionOf(prop) === 'other', sectionOf(prop));
-    check(
-      `while ${longhand} keeps its section`,
-      sectionOf(longhand) !== 'other',
-      sectionOf(longhand),
-    );
+    check(`${prop} goes to Other properties`, sectionOf(prop) === 'other', sectionOf(prop));
+    check(`while ${longhand} keeps its section`, sectionOf(longhand) !== 'other', sectionOf(longhand));
   }
   check('an unknown property still goes there too', sectionOf('--brand') === 'other');
-  check(
-    'and a property with a control does not',
-    sectionOf('box-shadow') === 'effects',
-    sectionOf('box-shadow'),
-  );
+  check('and a property with a control does not', sectionOf('box-shadow') === 'effects', sectionOf('box-shadow'));
 
   // Generated property names cannot be found as string literals. Mount their
   // actual controls, show each value and commit an edit before treating them as
@@ -131,14 +112,7 @@ const check = (what, condition, detail) => {
     url: 'http://localhost/',
   });
   global.window = dom.window;
-  for (const key of [
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ]) {
+  for (const key of ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver']) {
     global[key] = dom.window[key];
   }
   global.getComputedStyle = dom.window.getComputedStyle;
@@ -154,12 +128,8 @@ const check = (what, condition, detail) => {
   const { act } = React;
   const { createRoot } = require('react-dom/client');
   const root = createRoot(document.getElementById('root'));
-  const BordersSection = require(
-    path.join(buildDirectory, 'section-controls', 'BordersSection.js'),
-  ).default;
-  const FlexChildSection = require(
-    path.join(buildDirectory, 'section-controls', 'FlexChildSection.js'),
-  ).default;
+  const BordersSection = require(path.join(buildDirectory, 'section-controls', 'BordersSection.js')).default;
+  const FlexChildSection = require(path.join(buildDirectory, 'section-controls', 'FlexChildSection.js')).default;
   const declared = (value) => ({
     source: 'selected',
     overridden: false,
@@ -200,10 +170,7 @@ const check = (what, condition, detail) => {
       input.focus();
     });
     await act(async () => {
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(
-        input,
-        value,
-      );
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
     await act(async () => {
@@ -216,11 +183,7 @@ const check = (what, condition, detail) => {
   }
   await render(BordersSection);
   for (const [i, side] of ['top', 'right', 'bottom', 'left'].entries()) {
-    await click(
-      document.querySelector(
-        `button[aria-label="${side[0].toUpperCase() + side.slice(1)} border"]`,
-      ),
-    );
+    await click(document.querySelector(`button[aria-label="${side[0].toUpperCase() + side.slice(1)} border"]`));
     for (const [facet, value, next] of [
       ['width', `${i + 1}px`, '9px'],
       ['color', '#123456', '#abcdef'],
@@ -254,9 +217,7 @@ const check = (what, condition, detail) => {
       ['end', end],
     ]) {
       const prop = `grid-${axis}-${position}`;
-      const label =
-        `${axis[0].toUpperCase() + axis.slice(1)} ` +
-        `${position[0].toUpperCase() + position.slice(1)}`;
+      const label = `${axis[0].toUpperCase() + axis.slice(1)} ` + `${position[0].toUpperCase() + position.slice(1)}`;
       const input = inputFor(label);
       check(`${prop} has a field showing its value`, input?.value === value, input?.value);
       if (input?.value === value) {
@@ -300,20 +261,12 @@ const check = (what, condition, detail) => {
 
   const sectionsSource = fs.readFileSync(sectionsFile, 'utf8');
   const ordered = [
-    ...new Set(
-      [...sectionsSource.matchAll(/order: \[([\s\S]*?)\]/g)].flatMap((match) =>
-        [...match[1].matchAll(/'([^']+)'/g)].map((x) => x[1]),
-      ),
-    ),
+    ...new Set([...sectionsSource.matchAll(/order: \[([\s\S]*?)\]/g)].flatMap((match) => [...match[1].matchAll(/'([^']+)'/g)].map((x) => x[1]))),
   ];
   check('the sections name properties to sort', ordered.length > 40, `${ordered.length}`);
 
   const swallowed = ordered.filter(
-    (prop) =>
-      sectionOf(prop) !== 'other' &&
-      !dynamicControls.has(prop) &&
-      !text.includes(`'${prop}'`) &&
-      !text.includes(`"${prop}"`),
+    (prop) => sectionOf(prop) !== 'other' && !dynamicControls.has(prop) && !text.includes(`'${prop}'`) && !text.includes(`"${prop}"`),
   );
   check(
     'and every one of them is drawn by the section that claims it',
@@ -322,9 +275,7 @@ const check = (what, condition, detail) => {
   );
 
   if (failures.length) {
-    console.error(
-      `\npanel-sections: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npanel-sections: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

@@ -1,19 +1,10 @@
 // Disk and dev-server data are untrusted, even when a previous app run wrote
 // them. Keep bounds and parsing separate from handlers so failures are testable.
-import {
-  boolean,
-  count,
-  data,
-  dictionary,
-  list,
-  nullable,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../shared/core/boundary';
+import { boolean, count, data, dictionary, list, nullable, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { Data } from '../../shared/core/boundary';
+import type { LocalePreference } from '../../shared/core/i18n/locales';
+import { parseAutoCompactPercent } from '../../shared/properties/ai/autoCompact';
+import { parseLocalePreferenceValue } from '../../shared/ipc/localeChannel';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
 
@@ -24,6 +15,20 @@ export interface AppSettings {
   readonly usageCountsEnabled: boolean;
   readonly usageNoticeVersion: number;
   readonly usageLastAttemptDay?: string;
+  /** Apps read the person's id only, never their Git name, email or GitHub account (docs/apps.md, "The person"). */
+  readonly appsPersonHidden: boolean;
+  /** Ask before AI agents may work in a project opened for the first time; off: opening the panel allows it. */
+  readonly aiAskBeforeTrust: boolean;
+  /** Snapshot the project before and after each AI turn so the panel can show and undo its changes; on unless turned off. */
+  readonly aiTrackChanges: boolean;
+  /** Ask the person to Keep each AI change; off (the default): edits apply at once and show "Applied", with Undo. */
+  readonly aiReviewChanges: boolean;
+  /** The share of the context window at which Claude compacts by itself (30 to 95); absent: the agent's own default. */
+  readonly aiAutoCompactPercent?: number;
+  /** Draw CSS values in code editors as chips (variables, easings, shadows, gradients, clip-paths); on unless turned off. */
+  readonly codeChips: boolean;
+  /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
+  readonly localePreference: LocalePreference;
 }
 
 export function parseSettings(input: unknown): AppSettings {
@@ -32,25 +37,51 @@ export function parseSettings(input: unknown): AppSettings {
     usageCountsEnabled: optional(boolean),
     usageNoticeVersion: optional(count),
     usageLastAttemptDay: optional(text),
+    appsPersonHidden: optional(boolean),
+    aiAskBeforeTrust: optional(boolean),
+    // A damaged value of a convenience preference falls back to its default alone, rather than resetting every setting.
+    // The privacy and trust fields above stay strict: a damaged file must never quietly turn their protection off.
+    // A key this version does not know (an old `canvasScrollbar`) is never read at all.
+    aiTrackChanges: defaultWhenInvalid(boolean),
+    aiReviewChanges: defaultWhenInvalid(boolean),
+    aiAutoCompactPercent: optional(parseAutoCompactPercent), // Strict: the in-app setter relies on it (main.ts withAutoCompactPercent).
+    codeChips: defaultWhenInvalid(boolean),
+    localePreference: defaultWhenInvalid(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
   }
-  if (
-    value.usageLastAttemptDay !== undefined &&
-    !/^\d{4}-\d{2}-\d{2}$/.test(value.usageLastAttemptDay)
-  ) {
+  if (value.usageLastAttemptDay !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value.usageLastAttemptDay)) {
     throw new Error('Settings: invalid usage day');
   }
   return {
     sound: value.sound,
     usageCountsEnabled: value.usageCountsEnabled ?? true,
     usageNoticeVersion: value.usageNoticeVersion ?? 0,
-    ...(value.usageLastAttemptDay === undefined
-      ? {}
-      : { usageLastAttemptDay: value.usageLastAttemptDay }),
+    appsPersonHidden: value.appsPersonHidden ?? false,
+    aiAskBeforeTrust: value.aiAskBeforeTrust ?? false,
+    aiTrackChanges: value.aiTrackChanges ?? true,
+    aiReviewChanges: value.aiReviewChanges ?? false,
+    codeChips: value.codeChips ?? true,
+    localePreference: value.localePreference ?? 'system',
+    ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
+    ...(value.aiAutoCompactPercent === undefined ? {} : { aiAutoCompactPercent: value.aiAutoCompactPercent }),
   };
 }
+// An absent value, or one its parser refuses, reads as absent, so the caller's default applies to that field only.
+function defaultWhenInvalid<T>(parse: (input: unknown) => T): (input: unknown) => T | undefined {
+  return (input) => {
+    if (input === undefined) {
+      return undefined;
+    }
+    try {
+      return parse(input);
+    } catch {
+      return undefined; // A refused value is expected data on disk, not a programmer error.
+    }
+  };
+}
+
 export const parseRecents = list(object({ path: pathText, name: text, openedAt: count }));
 
 export interface Collection extends ContentCollection {
@@ -147,12 +178,20 @@ export function parseSampleEntry(input: unknown): {
   return { entry: data(source['entry']), ...(error === undefined ? {} : { error }) };
 }
 
+export function parseSampleValue(input: unknown): {
+  readonly value: Data;
+  readonly error?: string;
+} {
+  const source = record(input);
+  // The dev server's JSON writes `null` for no error; absence is `undefined` here.
+  const error = optional(nullable(text))(source['error']) ?? undefined;
+  return { value: data(source['value']), ...(error === undefined ? {} : { error }) };
+}
+
 export const parseValidationResult = object({
   issues: list(
     object({
-      path: list((input): string | number =>
-        typeof input === 'number' ? count(input) : text(input),
-      ),
+      path: list((input): string | number => (typeof input === 'number' ? count(input) : text(input))),
       message: text,
       code: text,
     }),

@@ -2,19 +2,24 @@ import { spacingHover } from '../preview/spacingHover';
 import { LockedSettings } from './LockedSettings';
 import { useEffect, useMemo } from 'react';
 import StylePanel from '../../../vendor/stacki/src/features/style/StylePanel';
+import PanelBoundary from '../../../vendor/stacki/src/ui/PanelBoundary';
 import { parsePageTree } from '../../../vendor/stacki/shared/page/pageNode';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeTextEdit } from './settingsEdits';
-import { addStyleClass } from './styleClassEdit';
+import { attributeEdit } from '../source/source';
+import { addStyleClass, removeStyleClass } from './styleClassEdit';
+import { addStyleBlockSource } from './styleBlockEdit';
 import type { ParserNode } from '../source/source';
 import type { OutlineState } from '../preview/outlineState';
 import { pathFor } from '../project/previewSelection';
+import type { LengthUnit } from '../../../vendor/stacki/shared/properties/lengthUnit';
 
 export function StyleSettings({
   document,
   nodes,
   selected,
   classes,
+  lengthUnit,
   select,
   device,
   report,
@@ -24,6 +29,8 @@ export function StyleSettings({
   readonly nodes: readonly ParserNode[];
   readonly selected: string;
   readonly classes: readonly string[];
+  /** What the panel writes lengths in, from the project scan: rem in a Lumos project. */
+  readonly lengthUnit: LengthUnit | undefined;
   readonly select: (id: string) => void;
   readonly device: string;
   readonly report: (error: unknown) => void;
@@ -37,46 +44,78 @@ export function StyleSettings({
   return notice ? (
     <LockedSettings notice={notice} report={report} />
   ) : (
-    <StylePanel
-      project={{ path: 'studio' }}
-      model={model}
-      node={{ id: selected }}
-      device={device}
-      openFilePath={document.file}
-      openFileKind={document.file.startsWith('src/pages/') ? 'page' : 'component'}
-      projectClasses={classes}
-      renderedClasses={
-        preview.selected?.id === path
-          ? preview.classes[path]?.[preview.selected.occurrence ?? 0]
-          : []
-      }
-      historyTick={document.revision}
-      onSelectNode={select}
-      pathOf={(id) => prefix + pathFor(id)}
-      onWriteStyleNode={(target, css) => {
-        if (target.filePath && target.filePath !== document.file) {
-          return false;
-        }
-        try {
-          document.edit(nodeTextEdit(document.text.toString(), target.nodeId, css));
-          return true;
-        } catch (error) {
-          report(error);
-          return false;
-        }
-      }}
-      onAddClass={async (name) => {
-        try {
-          const source = document.text.toString();
-          document.replaceSource(addStyleClass(source, selected, name));
-          await document.whenSaved();
-          return { tag: 'applied' };
-        } catch (error) {
-          return { tag: 'refused', message: String(error) };
-        }
-      }}
-      onSpacingHover={spacingHover.set}
-      onRecordUndo={(command) => document.recordCommand(command)}
-    />
+    <PanelBoundary name="The Style panel" resetKey={selected}>
+      <StylePanel
+        project={{ path: 'studio' }}
+        model={model}
+        node={{ id: selected }}
+        device={device}
+        openFilePath={document.file}
+        openFileKind={document.file.startsWith('src/pages/') ? 'page' : 'component'}
+        projectClasses={classes}
+        lengthUnit={lengthUnit}
+        renderedClasses={preview.selected?.id === path ? preview.classes[path]?.[preview.selected.occurrence ?? 0] : []}
+        historyTick={document.revision}
+        onSelectNode={select}
+        pathOf={(id) => prefix + pathFor(id)}
+        onWriteStyleNode={(target, css) => {
+          if (target.filePath && target.filePath !== document.file) {
+            return false;
+          }
+          try {
+            document.edit(nodeTextEdit(document.text.toString(), target.nodeId, css));
+            return true;
+          } catch (error) {
+            report(error);
+            return false;
+          }
+        }}
+        onAddClass={async (name) => {
+          try {
+            const source = document.text.toString();
+            document.replaceSource(addStyleClass(source, selected, name));
+            await document.whenSaved();
+            return { tag: 'applied' };
+          } catch (error) {
+            return { tag: 'refused', message: String(error) };
+          }
+        }}
+        onRemoveClass={async (name, nodeId) => {
+          // A chip selected, then Delete: the same removal Desktop makes, refusals included,
+          // on the element the panel shows (StylePanel passes its id).
+          try {
+            const removal = removeStyleClass(document.text.toString(), nodeId, name);
+            if (removal.tag === 'refused') {
+              report(new Error(removal.message));
+              return { tag: 'refused', message: removal.message };
+            }
+            document.replaceSource(removal.source);
+            await document.whenSaved();
+            return { tag: 'applied' };
+          } catch (error) {
+            return { tag: 'refused', message: error instanceof Error ? error.message : String(error) };
+          }
+        }}
+        onAddStyleBlock={async (request) => {
+          try {
+            document.replaceSource(addStyleBlockSource(document.text.toString(), document.file, selected, request));
+            await document.whenSaved();
+            return { tag: 'applied' };
+          } catch (error) {
+            return { tag: 'refused', message: error instanceof Error ? error.message : String(error) };
+          }
+        }}
+        onSetInlineStyle={(nodeId, style) => {
+          // Desktop's own write: the attribute's whole next text, or removed (inlineTarget.ts).
+          try {
+            document.edit(attributeEdit(document.text.toString(), nodeId, 'style', style?.value, style?.type === 'expr'));
+          } catch (error) {
+            report(error);
+          }
+        }}
+        onSpacingHover={spacingHover.set}
+        onRecordUndo={(command) => document.recordCommand(command)}
+      />
+    </PanelBoundary>
   );
 }

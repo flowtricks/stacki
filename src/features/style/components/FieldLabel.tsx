@@ -1,3 +1,6 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { arrowRotateCounterClockwise as centralArrowRotateCounterClockwise } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
@@ -5,7 +8,10 @@ import { useInheritedSource } from '../model/computedStyle';
 import InheritedPropertyLabel from './InheritedPropertyLabel';
 import { panelBounds } from '../model/panelBox';
 import { useHoverTip } from './CssPropertyTip';
+import { useShortcutTip } from '../../../ui/shortcutTip';
 import type { ScrubHandlers } from './useScrub';
+
+const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
 
 type Props = {
   children: ReactNode;
@@ -51,12 +57,7 @@ export default function FieldLabel(props: Props) {
   const source = useInheritedSource(property);
   if (source) {
     return (
-      <InheritedPropertyLabel
-        property={property}
-        source={source}
-        disabled={props.disabled ?? false}
-        className={props.className ?? ''}
-      >
+      <InheritedPropertyLabel property={property} source={source} disabled={props.disabled ?? false} className={props.className ?? ''}>
         {props.children}
       </InheritedPropertyLabel>
     );
@@ -65,6 +66,7 @@ export default function FieldLabel(props: Props) {
 }
 
 function ClearableFieldLabel(props: Props) {
+  const translate = useTranslate();
   const { children, active, disabled = false, title, onMouseDown, scrubProps, tooltip } = props;
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -102,20 +104,20 @@ function ClearableFieldLabel(props: Props) {
   });
 
   return (
-    <span
-      ref={hoverTip.ref}
-      className={['u-field-label-wrap', props.className].filter(Boolean).join(' ')}
-      {...hoverTip.hoverProps}
-    >
+    <span ref={hoverTip.ref} className={['u-field-label-wrap', props.className].filter(Boolean).join(' ')} {...hoverTip.hoverProps}>
       <button
         type="button"
         className="u-field-label is-active"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        disabled={disabled}
+        // Inert while the panel saves, but never natively disabled: `button:disabled` dims every
+        // button to 0.4 (controls.css), so each commit's busy flag flashed the blue pill grey and
+        // back (a slider drag's release, liveLabelStable.test.js). The click handler and the
+        // drag handle below refuse a press instead; the scrub checks busy itself (useScrub).
+        aria-disabled={disabled ? true : undefined}
         title={nativeTitle}
-        onMouseDown={onMouseDown}
+        onMouseDown={disabled ? undefined : onMouseDown}
         {...scrubProps}
         onClick={onLabelClick}
       >
@@ -126,7 +128,7 @@ function ClearableFieldLabel(props: Props) {
           id={menuId}
           menuRef={menuRef}
           dropUp={dropUp}
-          resetLabel={props.resetLabel ?? 'Reset'}
+          resetLabel={props.resetLabel ?? translate('ui.reset')}
           menuNote={props.menuNote}
           onReset={reset}
           onClose={() => setOpen(false)}
@@ -140,12 +142,7 @@ function ClearableFieldLabel(props: Props) {
 }
 
 // A click on the active label toggles its menu; Option/Alt-click resets at once.
-function labelClickHandler(actions: {
-  readonly disabled: boolean;
-  readonly reset: () => void;
-  readonly toggle: () => void;
-  readonly hideTip: () => void;
-}) {
+function labelClickHandler(actions: { readonly disabled: boolean; readonly reset: () => void; readonly toggle: () => void; readonly hideTip: () => void }) {
   return (event: MouseEvent<HTMLButtonElement>) => {
     // preventDefault so this works even when nested in a <label>.
     event.preventDefault();
@@ -176,9 +173,7 @@ function DimCaption({
   return (
     <span
       ref={hoverTip.ref}
-      className={['u-field-label', props.tooltip ? 'is-hoverable' : '', props.className]
-        .filter(Boolean)
-        .join(' ')}
+      className={['u-field-label', props.tooltip ? 'is-hoverable' : '', props.className].filter(Boolean).join(' ')}
       title={nativeTitle}
       onMouseDown={props.onMouseDown}
       {...props.scrubProps}
@@ -215,13 +210,10 @@ function useMenuPlacement({
     const naturalLeft = rootRect.right - element.offsetWidth;
     const leftLimit = bounds.left + margin;
     const rightLimit = bounds.right - margin;
-    const next =
-      naturalLeft < leftLimit
-        ? leftLimit - naturalLeft
-        : naturalRight > rightLimit
-          ? rightLimit - naturalRight
-          : 0;
-    element.style.transform = next ? `translateX(${next}px)` : '';
+    const next = naturalLeft < leftLimit ? leftLimit - naturalLeft : naturalRight > rightLimit ? rightLimit - naturalRight : 0;
+    // `translate`, not `transform`: the popup's own open motion is a transform
+    // it transitions, so a transform here replaced it and slid the menu in sideways.
+    element.style.translate = next ? `${next}px 0` : '';
     // Vertical flip: if opening below would overflow the container's bottom and
     // there's more room above (a bottom-row label), open the menu above the label.
     const overflowsBelow = rootRect.bottom + element.offsetHeight + margin > bounds.bottom;
@@ -249,6 +241,9 @@ function FieldLabelMenu({
   onReset: () => void;
   onClose: () => void;
 }) {
+  const translate = useTranslate();
+  // The Option-click gesture is told in the row's tooltip after a rest, not printed in the row.
+  const resetTip = useShortcutTip(resetLabel, translate('styleModel.shared.optionClick'));
   return (
     <Popup
       mode="popover"
@@ -268,19 +263,15 @@ function FieldLabelMenu({
           event.preventDefault();
           onReset();
         }}
+        {...resetTip.props}
+        // A gesture (Option-click), not a key chord, so there is nothing for aria-keyshortcuts to name.
+        aria-keyshortcuts={undefined}
       >
-        <svg className="u-field-label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M5.2 5.2H2.2V2.2" />
-          <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-        </svg>
+        <ResetGlyph className="u-field-label-menu-icon" />
         <span>{resetLabel}</span>
-        <span className="u-field-label-menu-shortcut">Option + click</span>
+        {resetTip.tip}
       </button>
-      {menuNote ? (
-        <div className="u-field-label-menu-note">
-          {typeof menuNote === 'function' ? menuNote(onClose) : menuNote}
-        </div>
-      ) : undefined}
+      {menuNote ? <div className="u-field-label-menu-note">{typeof menuNote === 'function' ? menuNote(onClose) : menuNote}</div> : undefined}
     </Popup>
   );
 }

@@ -10,6 +10,7 @@ export function createVariantPreview(hot: PreviewHot) {
   return new VariantPreview(hot);
 }
 class VariantPreview {
+  private connected = true;
   private request = '';
   private key = '';
   private baseline: string | undefined;
@@ -31,10 +32,12 @@ class VariantPreview {
     this.request = '';
     this.cache.clear();
     this.bytes = 0;
-    this.hot.send('studio:variants-cancel', {});
+    if (this.connected) {
+      this.hot.send('studio:variants-cancel', {});
+    }
   }
   receive(command: unknown) {
-    if (!object(command)) {
+    if (!this.connected || !object(command)) {
       return;
     }
     if (command['action'] === 'prepare') {
@@ -112,7 +115,15 @@ class VariantPreview {
       }
     });
     hot.on('studio:variants-invalidated', () => this.reset());
-    hot.on('vite:ws:disconnect', () => this.reset());
+    hot.on('vite:ws:disconnect', () => {
+      // A disconnect already discards the server job. Sending its cancellation
+      // on a closed Vite transport throws and disrupts preview recovery.
+      this.connected = false;
+      this.reset();
+    });
+    hot.on('vite:ws:connect', () => {
+      this.connected = true;
+    });
   }
   authoritative(html: string) {
     this.baseline = html;

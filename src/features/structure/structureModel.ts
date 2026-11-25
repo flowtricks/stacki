@@ -5,6 +5,7 @@ import { LIMITS } from '../../../shared/core/limits';
 import { treeBudget } from '../../editor/treeView';
 import { rowChildren, rowHost } from '../../editor/branches';
 import { hidesChildRows } from '../../editor/treeSelection';
+import { isDataBound } from '../../editor/bindings';
 
 export type NavigatorNode = PageNode;
 export type NavigatorModel = Pick<PageModel, 'nodes' | 'imports'>;
@@ -49,8 +50,7 @@ export type DropLocation = {
 };
 
 export type DropTarget =
-  | { readonly kind: 'gap'; readonly parentId: string | undefined; readonly index: number }
-  | { readonly kind: 'into'; readonly intoId: string };
+  { readonly kind: 'gap'; readonly parentId: string | undefined; readonly index: number } | { readonly kind: 'into'; readonly intoId: string };
 
 export interface FoundNavigatorNode {
   readonly node: NavigatorNode;
@@ -86,24 +86,15 @@ export function initialCollapseMap(nodes: readonly NavigatorNode[]): ReadonlyMap
   return toggled;
 }
 
-export function findNavigatorNode(
-  nodes: readonly NavigatorNode[],
-  id: string,
-): NavigatorNode | undefined {
+export function findNavigatorNode(nodes: readonly NavigatorNode[], id: string): NavigatorNode | undefined {
   return findNodeWalk(nodes, id, 0, treeBudget());
 }
 
-export function findVisibleNode(
-  nodes: readonly NavigatorNode[],
-  id: string,
-): FoundNavigatorNode | undefined {
+export function findVisibleNode(nodes: readonly NavigatorNode[], id: string): FoundNavigatorNode | undefined {
   return findVisibleWalk(nodes, id, undefined, 0, treeBudget());
 }
 
-export function navigatorAncestors(
-  nodes: readonly NavigatorNode[],
-  id: string,
-): readonly NavigatorNode[] {
+export function navigatorAncestors(nodes: readonly NavigatorNode[], id: string): readonly NavigatorNode[] {
   return findAncestorWalk(nodes, id, [], 0, treeBudget()) ?? [];
 }
 
@@ -111,21 +102,13 @@ export interface CollapseOptions {
   readonly collapsed: boolean;
 }
 
-export function collapseMap(
-  nodes: readonly NavigatorNode[],
-  options: CollapseOptions,
-): ReadonlyMap<string, boolean> {
+export function collapseMap(nodes: readonly NavigatorNode[], options: CollapseOptions): ReadonlyMap<string, boolean> {
   const result = new Map<string, boolean>();
   collapseMapWalk(nodes, options, result, 0, treeBudget());
   return result;
 }
 
-function findNodeWalk(
-  nodes: readonly NavigatorNode[],
-  id: string,
-  depth: number,
-  visit: (depth: number) => void,
-): NavigatorNode | undefined {
+function findNodeWalk(nodes: readonly NavigatorNode[], id: string, depth: number, visit: (depth: number) => void): NavigatorNode | undefined {
   assert(depth <= LIMITS.treeDepthMax, 'Navigator: tree depth limit exceeded');
   for (const node of nodes) {
     visit(depth);
@@ -199,4 +182,31 @@ function collapseMapWalk(
       collapseMapWalk(children, options, result, depth + 1, visit);
     }
   }
+}
+
+/** The colour family a row and its open subtree block share. Plain markup has none: it uses the accent. */
+export type NavigatorFamily = 'component' | 'loop' | 'cond';
+
+/**
+ * Which family a row belongs to. Why one function: the row's own colour and its subtree's tint both read this
+ * answer, so a block can never be drawn in a different colour than the row that heads it. Loops and conditions (and
+ * their else) share one purple, a component is green; a row bound to data without being a component reads as a loop.
+ */
+export function navigatorFamily(node: NavigatorNode, options: { readonly componentRow: boolean }): NavigatorFamily | undefined {
+  if (options.componentRow) {
+    return 'component';
+  }
+  if (node.kind === 'cond' || node.kind === 'branch') {
+    return 'cond';
+  }
+  if (node.kind === 'map') {
+    return 'loop';
+  }
+  const props = 'props' in node ? node.props : undefined;
+  const children = 'children' in node ? node.children : undefined;
+  const bound = isDataBound({
+    ...(props === undefined ? {} : { props }),
+    ...(children === undefined ? {} : { children }),
+  });
+  return bound ? 'loop' : undefined;
 }

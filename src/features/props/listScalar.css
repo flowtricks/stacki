@@ -1,0 +1,5 @@
+/* A plain value of a list, in the popup a row opens: its own prop field, with the type icon and
+   the binding dot a field has. An emptied number is shown as the invalid state it is. A fill, not a border. */
+.list-scalar-item.is-invalid input {
+  background: rgba(255, 90, 90, 0.16);
+}

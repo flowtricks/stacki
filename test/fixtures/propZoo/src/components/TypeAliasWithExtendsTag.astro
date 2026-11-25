@@ -1,0 +1,8 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+type Props = HTMLAttributes<'button'> & {
+  label: string;
+};
+const { label, ...rest } = Astro.props;
+---
+<button class="type-alias-with-extends-tag" {...rest}>{label}</button>

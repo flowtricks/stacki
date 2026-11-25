@@ -1,0 +1,114 @@
+/* A drag over the canvas (CanvasDropOverlay.tsx): the node being moved, the container the drop lands in, the
+   insertion line, an empty container's placeholder and the chips that say what is happening. Drawn in the
+   overlay layer in the frame's own coordinates, above the outlines, and never a target for the pointer. */
+
+.canvas-drop {
+  position: absolute;
+  inset: 0;
+  z-index: calc(var(--canvas-layer-outline) + 1);
+  pointer-events: none;
+}
+
+/* The node being moved stays where it is, tinted, as Webflow shows it: the page does not reflow mid-drag. */
+.canvas-drop-moving {
+  position: absolute;
+  background: rgba(48, 193, 88, 0.28);
+}
+
+.canvas-drop-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* The container the drop lands in: its outline and its name, as the selection draws them. */
+.canvas-drop-parent {
+  position: absolute;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.canvas-drop-parent[data-kind='component'] {
+  outline-color: var(--green);
+}
+.canvas-drop-parent[data-kind='map'] {
+  outline-color: #8b5cf6;
+}
+.canvas-drop-tag {
+  position: absolute;
+  left: 0; /* physical: tag drawn in page coordinates */
+  bottom: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.canvas-drop-tag.inside {
+  bottom: auto;
+  top: 0;
+  border-radius: 0 0 3px 0; /* physical: tag drawn in page coordinates */
+}
+.canvas-drop-parent[data-kind='component'] .canvas-drop-tag {
+  background: var(--green);
+}
+.canvas-drop-parent[data-kind='map'] .canvas-drop-tag {
+  background: #8b5cf6;
+}
+
+/* The insertion line: the Navigator's drop indicator (styles.css .drop-indicator), drawn on the page. */
+.canvas-drop-line {
+  position: absolute;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(0, 153, 255, 0.6);
+}
+.canvas-drop-line[data-refused] {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(255, 69, 58, 0.6);
+}
+
+/* A container the drop cannot go into (a component without a slot): outlined in red, as its line would be. */
+.canvas-drop-refused {
+  position: absolute;
+  outline: 2px solid var(--red);
+  outline-offset: -2px;
+}
+
+/* An empty container: a filled placeholder, not a border, where the node will go. */
+.canvas-drop-empty {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+}
+
+/* Why the drop goes nowhere, or where it goes instead: beside the pointer. */
+.canvas-drop-reason {
+  position: absolute;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+  line-height: 15px;
+}
+.canvas-drop-reason[data-tone='note'] {
+  background: var(--bg-panel-2);
+  color: var(--text);
+}

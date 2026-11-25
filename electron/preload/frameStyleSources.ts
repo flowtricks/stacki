@@ -5,11 +5,7 @@ import { inspectAuthoredProperties } from './frameAuthoredStyles';
 import { ownClasses } from './frameMeasure';
 import { inScope, pathsOf } from './frameRegions';
 
-export function queryAuthoredStyles(
-  element: Element,
-  properties: readonly string[],
-  target: 'element' | 'text',
-) {
+export function queryAuthoredStyles(element: Element, properties: readonly string[], target: 'element' | 'text') {
   const inspection = inspectAuthoredProperties(element, properties);
   const inheritedSources: Record<string, StyleSource> = {};
   for (const [property, source] of Object.entries(inspection.sources)) {
@@ -31,5 +27,5 @@ export function queryAuthoredStyles(
       ...(path === undefined ? {} : { path }),
     };
   }
-  return { authoredProps: inspection.values, inheritedSources };
+  return { authoredProps: inspection.values, inheritedSources, authoredOrigins: inspection.origins };
 }

@@ -2,13 +2,15 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { requestCanvasReports } from '../../editor/canvasQuery';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { isFragmentNode, liveClassesById as classesByNodeId } from '../../editor/liveClasses';
 import { isDataBound } from '../../editor/bindings';
 import { thenBranch } from '../../editor/branches';
 import { canvasEventSelectsSource, type CanvasEventRequest } from '../../editor/canvasClick';
 import { nodeAtPath } from '../../editor/editorTree';
-import { elementLabel } from '../../editor/classNames';
+import { classLabel, elementLabel } from '../../editor/classNames';
 import type { OverlayInfo } from '../../features/preview/PreviewOverlays';
 import type { PreviewCrumb } from '../../features/preview/PreviewToolbar';
 import type { SpacingHover } from '../../features/preview/PreviewOverlays';
@@ -16,23 +18,24 @@ import { projectRelativePath } from '../../lib/projectPath';
 import { isOpenFile } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { writeProjectFile, checkPreviewRender } from '../../ipc/appBridge';
-import {
-  judgeCanvasEvent,
-  type CheckRender,
-  type ShownFile,
-} from '../../features/preview/previewGate';
-import { describePreviewStale, type PreviewVerdict } from '../../../shared/page/previewToken';
+import { judgeCanvasEvent, type CheckRender, type ShownFile } from '../../features/preview/previewGate';
+import { type PreviewVerdict } from '../../../shared/page/previewToken';
+import { PreviewOrigins, judgeRememberedClick } from '../../features/preview/previewSelection';
 import type { JudgeCanvasEvent } from '../../features/preview/previewRuntime';
-import {
-  describePreviewReload,
-  type PreviewReloadReason,
-} from '../../features/preview/previewMessages';
+import { describePreviewReload, type PreviewReloadReason } from '../../features/preview/previewMessages';
+import type { CanvasNoticeEvent } from '../../features/preview/canvasClickRetry';
+import type { CanvasNotice } from '../../features/preview/canvasClickRecovery';
+import { canvasClickLogText } from '../../features/preview/canvasClickLog';
+import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { trailOf } from '../model/pageGestures';
 import { emptyNodeIdsOf } from '../model/pageQueries';
+import { nodeStateIds } from '../model/canvasNodeStates';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useShortcuts } from './appPageOps';
 import type { useCodeWindow, usePageOps } from './appViewModel';
+import { pageDisplayLabel } from '../../lib/pageName';
 
 // Asset file edits, and the preview-token gate.
 export function useCanvasGate(
@@ -43,6 +46,7 @@ export function useCanvasGate(
   const { codeWin, pageStateRef, projectRef, setCodeWin, setFileText } = coreState;
   const { fileSaverRef } = lifecycle;
   const { codeWinValue, isFileWin } = codeWindow;
+  const origins = usePreviewOrigins(coreState);
 
   // File edits stream to disk (debounced) — the dev server picks them up.
   const setAssetFileText = useCallback(
@@ -61,9 +65,7 @@ export function useCanvasGate(
       if (!projectPath || !saver) {
         return;
       }
-      saver.schedule(`${projectPath}|${area || 'public'}|${rel}`, () =>
-        writeProjectFile(area ?? 'public', projectPath, rel, text),
-      );
+      saver.schedule(`${projectPath}|${area || 'public'}|${rel}`, () => writeProjectFile(area ?? 'public', projectPath, rel, text));
     },
     [codeWin, fileSaverRef, projectRef, setFileText],
   );
@@ -93,18 +95,26 @@ export function useCanvasGate(
         return {
           file,
           state,
+          scope: open.kind === 'component' ? `${file}|` : '',
         };
       };
       const projectPath = projectRef.current?.path;
       const check: CheckRender = (checked) =>
-        projectPath
-          ? checkPreviewRender(projectPath, checked)
-          : Promise.resolve<PreviewVerdict>({ tag: 'stale', reason: 'no-render', file: undefined });
-      return judgeCanvasEvent(token, render, check, shown);
+        projectPath ? checkPreviewRender(projectPath, checked) : Promise.resolve<PreviewVerdict>({ tag: 'stale', reason: 'no-render', file: undefined });
+      return request.kind === 'click'
+        ? judgeRememberedClick(token, render, request.path, origins.current, check, shown)
+        : judgeCanvasEvent(token, render, check, shown);
     },
-    [pageStateRef, projectRef],
+    [pageStateRef, projectRef, origins],
   );
   return { judgeEvent, setAssetFileText };
+}
+
+// Retain only this file session's saved models while its canvas catches up.
+function usePreviewOrigins({ currentPage, pageState }: Pick<ReturnType<typeof useCoreState>, 'currentPage' | 'pageState'>) {
+  const origins = useRef(new PreviewOrigins());
+  origins.current.remember(currentPage?.path, pageState?.editable ? pageState.origin : undefined);
+  return origins;
 }
 
 function eventSelectsShownFile(
@@ -126,17 +136,30 @@ export function useCanvasNotices(
   shortcuts: ReturnType<typeof useShortcuts>,
 ) {
   const { showToast } = lifecycle;
-  const { editStack, nodeClasses, project } = coreState;
+  const translate = useTranslate();
+  const { editStack, nodeClasses, project, setRefreshKey } = coreState;
   const { model } = shortcuts;
 
-  const onStaleEvent = useCallback(
-    (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => {
-      // Visible, never silent — and never a claim that anything was lost: the
-      // click simply did not select. The canvas catches up on its own.
-      const where = verdict.file ? ` (${verdict.file})` : '';
-      showToast(`Click not applied: ${describePreviewStale(verdict.reason)}${where}`);
+  // A click the canvas could not recover by itself (canvasClickRecovery.ts):
+  // said once, in plain words, with what to do about it — and taken down as
+  // soon as a click selects again.
+  const noticeId = useRef<string | undefined>(undefined);
+  const onCanvasNotice = useCallback(
+    (event: CanvasNoticeEvent) => {
+      const shown = noticeId.current;
+      if (shown !== undefined) {
+        dismissErrorToast(shown);
+        noticeId.current = undefined;
+      }
+      if (event.kind === 'recovered') {
+        return;
+      }
+      noticeId.current = reportActionToast(describeCanvasNotice(event.notice, translate), 'warning', [
+        { label: translate('shell.canvas.reload'), run: () => setRefreshKey((count) => count + 1) },
+        { label: translate('shell.canvas.copyDetails'), run: () => navigator.clipboard.writeText(canvasClickLogText()) },
+      ]);
     },
-    [showToast],
+    [setRefreshKey, translate],
   );
 
   // Past the patcher's caps the canvas reloads instead of patching (step 7):
@@ -145,30 +168,21 @@ export function useCanvasNotices(
   // are what the canvas always did, and stay quiet.
   const onPreviewReload = useCallback(
     (reason: PreviewReloadReason) => {
-      const why = describePreviewReload(reason);
+      const why = describePreviewReload(reason, translate);
       if (why !== undefined) {
         showToast(why);
       }
     },
-    [showToast],
+    [showToast, translate],
   );
 
   const editedRel =
-    editStack.length > 1 && project?.path
-      ? projectRelativePath(
-          project.path,
-          editStack[editStack.length - 1]?.path ?? '',
-          window.avb.platform,
-        )
-      : undefined;
+    editStack.length > 1 && project?.path ? projectRelativePath(project.path, editStack[editStack.length - 1]?.path ?? '', window.avb.platform) : undefined;
 
   // The reported classes, keyed by node id — same walk as the render report,
   // so a path only has to be resolved once.
   const liveClassesById = React.useMemo(
-    () =>
-      nodeClasses && model
-        ? classesByNodeId(nodeClasses, model.nodes, editedRel ? `${editedRel}|` : '')
-        : undefined,
+    () => (nodeClasses && model ? classesByNodeId(nodeClasses, model.nodes, editedRel ? `${editedRel}|` : '') : undefined),
     [nodeClasses, model, editedRel],
   );
 
@@ -180,10 +194,10 @@ export function useCanvasNotices(
     if (fromSource && fromSource !== node.name) {
       return fromSource;
     }
-    const live = liveClassesById?.get(node.id);
-    return live?.[0] ?? fromSource;
+    const live = liveClassesById?.get(node.id)?.[0];
+    return live === undefined ? fromSource : classLabel(live);
   };
-  return { editedRel, liveClassesById, liveLabel, onPreviewReload, onStaleEvent };
+  return { editedRel, liveClassesById, liveLabel, onCanvasNotice, onPreviewReload };
 }
 
 // Breadcrumb labels and the file being edited.
@@ -191,13 +205,12 @@ export function useCrumbLabels(
   pageOps: ReturnType<typeof usePageOps>,
   canvasNotices: ReturnType<typeof useCanvasNotices>,
   coreState: ReturnType<typeof useCoreState>,
-  shortcuts: ReturnType<typeof useShortcuts>,
+  _shortcuts: ReturnType<typeof useShortcuts>,
 ) {
-  const { currentLayoutName } = pageOps;
+  const { currentLayoutName, tree } = pageOps;
   const { liveLabel } = canvasNotices;
   const { currentPage, editStack, project, setNodeClasses, setNodeStates } = coreState;
   const { setRenderedPaths } = coreState;
-  const { model } = shortcuts;
 
   // Breadcrumb trail for the canvas toolbar: page → ancestors → selection.
   const crumbLabel = (node: EditorNode): string => {
@@ -239,8 +252,7 @@ export function useCrumbLabels(
 
   // The file being edited, relative to src/ — how the CMS addresses a page's
   // own data (`pages/index.astro#rotatingWords`).
-  const openEditableFile =
-    editStack[editStack.length - 1] ?? (currentPage?.kind === 'route' ? undefined : currentPage);
+  const openEditableFile = editStack[editStack.length - 1] ?? (currentPage?.kind === 'route' ? undefined : currentPage);
   const openFileSourceRel = (() => {
     const path = openEditableFile?.path;
     if (!path || !project?.path) {
@@ -249,14 +261,23 @@ export function useCrumbLabels(
     const rel = projectRelativePath(project.path, path, window.avb.platform);
     return rel.startsWith('src/') ? rel.slice(4) : rel;
   })();
-  // An edit renumbers paths, so a report from before it describes nodes that
-  // have since moved. Drop it and show nothing until the page has re-rendered
-  // and said so again — a marker on the wrong row is worse than none.
+  // An edit that renumbers paths leaves a report from before it describing
+  // nodes that have since moved. Drop it and show nothing until the page has
+  // re-rendered and said so again — a marker on the wrong row is worse than
+  // none. An edit that keeps every path (a style, a text, an attribute) keeps
+  // the report: the canvas only re-sends what changed, so dropping it there
+  // lost the navigator's ::before rows, and its hidden and inert marks, until
+  // something else changed.
+  const structure = React.useMemo(() => [...tree.byPath.keys()].join('|'), [tree]);
   useEffect(() => {
     setRenderedPaths(undefined);
     setNodeStates(undefined);
     setNodeClasses(undefined);
-  }, [model, setNodeClasses, setNodeStates, setRenderedPaths]);
+    // The canvas sends a report only when it changes, so one dropped here was
+    // never sent again when the page's answer stayed the same: ask for all of
+    // them. They arrive after the page has re-rendered to the new tree.
+    requestCanvasReports();
+  }, [structure, setNodeClasses, setNodeStates, setRenderedPaths]);
 
   // What the spacing box is pointing at, drawn over the selected element on the
   // canvas — see spacingBands.js.
@@ -273,6 +294,7 @@ export function useCanvasMarks(
   canvasNotices: ReturnType<typeof useCanvasNotices>,
 ) {
   const { currentPage, nodeStates, renderedPaths, selectedId } = coreState;
+  const translate = useTranslate();
   const { model } = shortcuts;
   const { selectedAncestors, tree } = pageOps;
   const { crumbLabel } = crumbLabels;
@@ -280,23 +302,20 @@ export function useCanvasMarks(
 
   const crumbs: PreviewCrumb[] = [];
   if (currentPage) {
+    const page = coreState.scan.pages.find((entry) => entry.path === currentPage.path);
     crumbs.push({
       id: undefined,
-      label: currentPage.name.replace(/\.(astro|md)$/i, ''),
+      label: page ? pageDisplayLabel(page, translate) : currentPage.name.replace(/\.(astro|mdx?)$/i, ''),
     });
   }
   if (model && selectedId === 'frontmatter') {
-    crumbs.push({ id: 'frontmatter', label: 'Frontmatter' });
+    crumbs.push({ id: 'frontmatter', label: 'Frontmatter' }); // i18n-ignore: the file format's own word, shown as written.
   } else if (model && selectedId) {
     const chain = selectedAncestors;
     // A then has no row in the navigator, so the trail doesn't name it either —
     // "if command › then › hero-command" said "then" to no one (see
     // branches.js).
-    crumbs.push(
-      ...chain
-        .filter((node, i) => node !== thenBranch(chain[i - 1]))
-        .map((node) => ({ id: node.id, label: crumbLabel(node) })),
-    );
+    crumbs.push(...chain.filter((node, i) => node !== thenBranch(chain[i - 1])).map((node) => ({ id: node.id, label: crumbLabel(node) })));
   }
 
   // Canvas outlines: nodes are addressed by their index path in the tree
@@ -313,32 +332,19 @@ export function useCanvasMarks(
   // including nodes inside a component that never evaluated its slot, whose
   // markers were never emitted at all.
   const emptyNodeIds = React.useMemo(
-    () =>
-      renderedPaths && model ? emptyNodeIdsOf(renderedPaths, model.nodes, editedRel) : undefined,
+    () => (renderedPaths && model ? emptyNodeIdsOf(renderedPaths, model.nodes, editedRel) : undefined),
     [renderedPaths, model, editedRel],
   );
 
   // The reported paths as node ids, so the navigator can mark rows without
   // knowing anything about index paths.
   const stateIds = React.useMemo(() => {
-    const empty = { hidden: new Set<string>(), inert: new Set<string>() };
+    const empty = { hidden: new Set<string>(), inert: new Set<string>(), before: new Set<string>(), after: new Set<string>() };
     if (!nodeStates || !model) {
       return empty;
     }
-    const prefix = editedRel ? `${editedRel}|` : '';
-    const local = (path: string): string =>
-      prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
-    const ids = (paths: readonly string[]): ReadonlySet<string> => {
-      const set = new Set<string>();
-      for (const path of paths || []) {
-        const id = tree.byPath.get(local(path))?.id;
-        if (id) {
-          set.add(id);
-        }
-      }
-      return set;
-    };
-    return { hidden: ids(nodeStates.hidden), inert: ids(nodeStates.inert) };
+    // A ::before or ::after is kept only for a node that is one HTML element (canvasNodeStates.ts).
+    return nodeStateIds(nodeStates, tree.byPath, editedRel ? `${editedRel}|` : '');
   }, [nodeStates, model, editedRel, tree]);
   return { crumbs, emptyNodeIds, stateIds };
 }
@@ -353,8 +359,8 @@ export function useSelectionPaths(
   const { model } = shortcuts;
   const { tree } = pageOps;
   const { editedRel } = canvasNotices;
-  const { currentPage, editStack, pageState, project, rightTab, rightTabRefs } = coreState;
-  const { selectedId, selectionKeysRef, setRightTabInd } = coreState;
+  const { currentPage, editStack, project } = coreState;
+  const { selectedId, selectionKeysRef, canvasPathForRef } = coreState;
 
   const pathFor = (id: string | undefined): string | undefined => {
     if (!model || !id) {
@@ -366,6 +372,8 @@ export function useSelectionPaths(
     }
     return editedRel ? `${editedRel}|${path}` : path;
   };
+  // Read by edits bound before this tree existed (appState.ts).
+  canvasPathForRef.current = pathFor;
   // The right panel stays on whichever tab the user picked, whatever gets
   // selected next. (S / D switch it by hand.)
 
@@ -391,36 +399,12 @@ export function useSelectionPaths(
           .slice(1)
           .map((entry, i) => {
             const host = relOf(editStack[i]?.path);
-            return entry.hostKey && host
-              ? `${host}#${trailOf(entry.hostKey).join('.')}`
-              : undefined;
+            return entry.hostKey && host ? `${host}#${trailOf(entry.hostKey).join('.')}` : undefined;
           })
           .filter((key): key is string => key !== undefined),
-        selectedId === 'frontmatter'
-          ? `${openRel}#frontmatter`
-          : leafPath !== undefined
-            ? `${openRel}#${leafPath}`
-            : `${openRel}#`,
+        selectedId === 'frontmatter' ? `${openRel}#frontmatter` : leafPath !== undefined ? `${openRel}#${leafPath}` : `${openRel}#`,
       ];
 
-  // Position the Style/Settings highlight: on tab change, when the panel first
-  // appears, and whenever the tab strip's width changes.
-  useLayoutEffect(() => {
-    const measure = () => {
-      const tabButton = rightTabRefs.current[rightTab];
-      setRightTabInd(
-        tabButton ? { left: tabButton.offsetLeft, width: tabButton.offsetWidth } : undefined,
-      );
-    };
-    measure();
-    const strip = rightTabRefs.current[rightTab]?.parentElement;
-    if (!strip || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const ro = new ResizeObserver(measure);
-    ro.observe(strip);
-    return () => ro.disconnect();
-  }, [rightTab, pageState?.editable, rightTabRefs, setRightTabInd]);
   return { openRel, pathFor };
 }
 
@@ -442,8 +426,7 @@ export function useOverlayInfo(
     if (!node) {
       return undefined;
     }
-    const label =
-      node.id === 'layout' ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
+    const label = node.id === 'layout' ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
     // Fragments group inline content rather than referring to another component.
     // Their outlines use ordinary element styling, as dynamic tags already do.
     const kind = isFragmentNode(node)
@@ -462,9 +445,31 @@ export function useOverlayInfo(
       astroAsset: !!node.astroAsset,
       dynamicTag: !!node.dynamicTag,
       nodeKind: node.kind,
+      childCount: 'children' in node && Array.isArray(node.children) ? node.children.length : 0,
       isLayout: node.id === 'layout',
       bound: kind === 'element' && isDataBound(node),
+      hostContent: node.kind === 'element' && node.name === 'slot',
     };
   };
   return { overlayInfo };
+}
+
+/** What the person reads when a click could not be applied: what happened, never whose fault. */
+export function describeCanvasNotice(notice: CanvasNotice, translate: Translator): string {
+  switch (notice.kind) {
+    case 'out-of-step':
+      return translate('shell.canvas.outOfStep');
+    case 'other-page':
+      return translate('shell.canvas.otherPage', { file: notice.file });
+    case 'unmarked':
+      return translate('shell.canvas.unmarked', { file: notice.file });
+    case 'too-large':
+      return translate('shell.canvas.tooLarge');
+    case 'unreachable':
+      return translate('shell.canvas.unreachable');
+    default: {
+      const exhaustive: never = notice;
+      return exhaustive;
+    }
+  }
 }

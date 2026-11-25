@@ -2,20 +2,13 @@
 // padding, margins and gap bands, and the thin elements that get a wider hit
 // area so they can still be pointed at.
 
+import { assert } from '../../shared/core/assert';
 import type { Box, GapBand, GapRow, Rect, Spacing, ThinTarget } from './frameBasics';
-import { isElement } from './frameBasics';
-import {
-  PATH_ATTR,
-  addNode,
-  elementsWithPath,
-  inFocus,
-  inScope,
-  pathsOf,
-  regions,
-  runsOf,
-  taggedPlaces,
-  toRect,
-} from './frameRegions';
+import { PROBE_ATTR, isElement } from './frameBasics';
+import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, placesOf, regions, runsOf, toRect } from './frameRegions';
+import { inlineTextRuns } from './inlineText';
+import { rectsForPseudo } from './framePseudo';
+import { splitPseudoPath } from '../../shared/page/pseudoPath';
 
 // One rect per marker-pair occurrence (a loop child renders once per
 // item — each instance gets its own box), unioned across the nodes
@@ -69,11 +62,113 @@ const withoutHollow = (list: Rect[]): Rect[] => {
   return real.length ? real : list;
 };
 
+// One box per place the unmarked text run renders, around its words only.
+const rectsForInlineText = (nodePath: string): Rect[] => {
+  const out: Rect[] = [];
+  for (const run of inlineTextRuns(nodePath)) {
+    let acc: Box | undefined = undefined;
+    for (const node of run) {
+      acc = addNode(acc, node);
+    }
+    if (acc) {
+      out.push(toRect(acc));
+    }
+  }
+  return out;
+};
+
+// The box one occurrence draws: its run, and when the path has only that run,
+// every tagged piece of it too (see rectsForPath). The outline and the hit test
+// both read this, so the space a click can land in is the space outlined.
+export const boxOfRun = (nodePath: string, run: readonly Node[], runCount: number): Box | undefined => {
+  let acc = run.reduce<Box | undefined>((grown, node) => addNode(grown, node), undefined);
+  if (runCount === 1) {
+    for (const element of elementsWithPath(nodePath)) {
+      acc = addNode(acc, element);
+    }
+  }
+  return acc;
+};
+
+// Where a node that generates no box sits, so a selection still has a place to draw.
+//
+// An empty block with no width or height (a new `div` in a centred flex column,
+// say) measures nothing, and so did its node: no rectangle came back, no outline
+// was drawn, and the navigator showed a selection the canvas could not. A
+// collapsed element still HAS a position (its rect is 0x0 but sits at a point),
+// and the app draws a minimum-size marker there (outlineBoxes.ts, markerBox).
+// An element with no rect at all is `display: none` (nothing to show) or
+// `display: contents`, which has no box of its own and no children with one;
+// that one sits where the next thing in its parent would, so it is anchored on
+// the end of the sibling before it, or the start of its parent's content.
+// `tagged` is elementsWithPath(nodePath) when the caller already asked the document for it: a scroll
+// re-measures every tracked node, and asking twice is a page walk the scroll does not need.
+const collapsedRects = (nodePath: string, tagged?: readonly Element[]): Rect[] | undefined => {
+  const elements: Element[] = [];
+  for (const run of runsOf(nodePath) || []) {
+    for (const node of run) {
+      if (isElement(node) && node.tagName !== 'TEMPLATE') {
+        elements.push(node);
+      }
+    }
+  }
+  if (!elements.length) {
+    elements.push(...(tagged ?? elementsWithPath(nodePath)));
+  }
+  const out: Rect[] = [];
+  for (const element of elements) {
+    if (!element.isConnected) {
+      continue;
+    }
+    const own = element.getClientRects()[0];
+    if (own) {
+      out.push({ x: own.left, y: own.top, w: own.width, h: own.height });
+      continue;
+    }
+    if (window.getComputedStyle(element).display === 'contents') {
+      out.push(contentsAnchor(element));
+    }
+  }
+  return out.length ? out : undefined;
+};
+
+const contentsAnchor = (element: Element): Rect => {
+  const before = element.previousElementSibling;
+  const beforeRect = before?.getBoundingClientRect();
+  if (beforeRect && (beforeRect.width > 0 || beforeRect.height > 0)) {
+    return { x: beforeRect.left, y: beforeRect.bottom, w: 0, h: 0 };
+  }
+  const parent = element.parentElement;
+  if (!parent) {
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+  const parentRect = parent.getBoundingClientRect();
+  const style = window.getComputedStyle(parent);
+  return {
+    x: parentRect.left + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0),
+    y: parentRect.top + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.paddingTop) || 0),
+    w: 0,
+    h: 0,
+  };
+};
+
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
+  // A ::before or ::after layer (shared/page/pseudoPath.ts) is measured on its element.
+  const pseudo = splitPseudoPath(nodePath);
+  if (pseudo !== undefined) {
+    const boxes = rectsForPseudo(pseudo.nodePath, pseudo.pseudo);
+    return boxes.length > 0 ? boxes : undefined;
+  }
   const runs = runsOf(nodePath);
   if (!runs) {
-    const places = taggedPlaces(nodePath);
-    return places.length ? places.map((place) => place.rect) : rectsFromDescendants(nodePath);
+    const tagged = elementsWithPath(nodePath);
+    const places = placesOf(tagged);
+    if (places.length) {
+      return places.map((place) => place.rect);
+    }
+    // A text run in an inline run has neither markers nor a tag (inlineText.ts).
+    const inline = rectsForInlineText(nodePath);
+    return inline.length ? inline : (rectsFromDescendants(nodePath) ?? collapsedRects(nodePath, tagged));
   }
   const out: Rect[] = [];
   for (const run of runs) {
@@ -91,13 +186,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // box. Repeated occurrences (a loop child, once per item) are meant to
   // stay separate boxes, so they keep the per-run rects above.
   if (runs.length === 1) {
-    let acc = (runs[0] || []).reduce<Box | undefined>(
-      (grown, node) => addNode(grown, node),
-      undefined,
-    );
-    for (const element of elementsWithPath(nodePath)) {
-      acc = addNode(acc, element);
-    }
+    const acc = boxOfRun(nodePath, runs[0] || [], runs.length);
     // Nothing measurable: fall through to the children (see below).
     if (acc) {
       return [toRect(acc)];
@@ -129,7 +218,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A region that exists but contains nothing with a box — the layout case:
   // its start marker is orphaned in <head>, so the walk collected the head's
   // scripts and links rather than the page. Its children still measure.
-  return rectsFromDescendants(nodePath);
+  return rectsFromDescendants(nodePath) ?? collapsedRects(nodePath, tagged);
 };
 
 // The classes actually on the page for a node, one entry per occurrence (a
@@ -142,15 +231,12 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
 // selector well, and in the navigator's labels as if the project had written
 // them.
 export const STACKI_CLASSES = new Set(['stacki-opened', 'stacki-designer', 'stacki-preview']);
-export const ownClasses = (element: Element): string[] =>
-  Array.from(element.classList).filter((className) => !STACKI_CLASSES.has(className));
+export const ownClasses = (element: Element): string[] => Array.from(element.classList).filter((className) => !STACKI_CLASSES.has(className));
 
 export const classesForPath = (nodePath: string): string[][] => {
   const out: string[][] = [];
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element) {
       out.push(ownClasses(element));
     }
@@ -276,13 +362,94 @@ const rowGapBands = (rows: GapRow[], rowGap: number): GapBand[] => {
   return bands;
 };
 
+// A gap in px, as the page lays it out.
+//
+// The authored value is never parsed: `var(--site-gutter)`, `calc()` and
+// `clamp()` are all the engine's to resolve. But the computed value of
+// `column-gap` and `row-gap` is not always pixels either. Variables, `em`,
+// `rem`, `vw` and container units are resolved, while a percentage is kept,
+// because it resolves against the box only at layout time. So a gutter written
+// as `min(5%, 40px)` or `calc(2% + 4px)` computes to that same text, and
+// `parseFloat` read it as no gap at all (or `8.33333%` as 8px): hovering the
+// field drew nothing, or a sliver, while a plain `16px` drew its bands.
+//
+// Pixels are read directly. Anything else is handed back to the engine on a
+// probe the size of this element's content box, which is what a percentage gap
+// resolves against: the width for the column gap, the height for the row gap.
+const PX_LENGTH = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?px$/i;
+const gapPx = (cs: CSSStyleDeclaration, axis: GapBand['axis']): number => {
+  const value = (axis === 'column' ? cs.columnGap : cs.rowGap).trim();
+  // `normal` is zero in flex and grid, which is the only place a gap is drawn.
+  if (value === '' || value === 'normal') {
+    return 0;
+  }
+  if (PX_LENGTH.test(value)) {
+    return Math.max(0, parseFloat(value));
+  }
+  const basisPx = contentBoxPx(cs, axis);
+  const resolved = probeLengthPx(value, basisPx, axis);
+  assert(Number.isFinite(resolved), 'gapPx: a probed gap is a finite number');
+  return Math.max(0, resolved);
+};
+
+// The element's content box along one axis, in px: what a percentage gap on
+// that axis is a percentage of. `width` and `height` are used values here, so
+// they are px; with `border-box` they include padding and border, taken off.
+const contentBoxPx = (cs: CSSStyleDeclaration, axis: GapBand['axis']): number => {
+  const sides = axis === 'column' ? (['left', 'right'] as const) : (['top', 'bottom'] as const);
+  const size = parseFloat(axis === 'column' ? cs.width : cs.height) || 0;
+  if (cs.boxSizing !== 'border-box') {
+    return Math.max(0, size);
+  }
+  let edges = 0;
+  for (const side of sides) {
+    edges += (parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0) + (parseFloat(cs.getPropertyValue(`border-${side}-width`)) || 0);
+  }
+  return Math.max(0, size - edges);
+};
+
+// What `value` is in px inside a box `basisPx` wide (or tall, for the row
+// axis). The probe is the canvas's own (PROBE_ATTR): adding and removing it
+// never starts a page walk. Its outer box fixes the percentage basis, and the
+// inner one takes the value as its width or height; a value the engine
+// rejects leaves the inner box at zero, which is no gap.
+const probeLengthPx = (value: string, basisPx: number, axis: GapBand['axis']): number => {
+  assert(basisPx >= 0, 'probeLengthPx: a percentage basis is never negative');
+  const body = document.body;
+  if (!body) {
+    return 0;
+  }
+  const reset = 'margin:0;padding:0;border:0;box-sizing:content-box;';
+  const outer = document.createElement('div');
+  outer.setAttribute(PROBE_ATTR, '');
+  outer.setAttribute(
+    'style',
+    `position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;overflow:hidden;${reset}width:${basisPx}px;height:${basisPx}px`,
+  );
+  const inner = document.createElement('div');
+  inner.setAttribute(PROBE_ATTR, '');
+  inner.setAttribute('style', `display:block;${reset}width:0;height:0`);
+  inner.style.setProperty(axis === 'column' ? 'width' : 'height', value);
+  outer.appendChild(inner);
+  body.appendChild(outer);
+  try {
+    const rect = inner.getBoundingClientRect();
+    const size = axis === 'column' ? rect.width : rect.height;
+    return Number.isFinite(size) ? size : 0;
+  } finally {
+    outer.remove();
+  }
+};
+
 export const gapBandsFor = (element: Element, cs: CSSStyleDeclaration): GapBand[] => {
   const display = cs.display;
   if (!/(^|\s)(flex|grid|inline-flex|inline-grid)$/.test(display)) {
     return [];
   }
-  const colGap = parseFloat(cs.columnGap) || 0;
-  const rowGap = parseFloat(cs.rowGap) || 0;
+  const colGap = gapPx(cs, 'column');
+  const rowGap = gapPx(cs, 'row');
+  assert(colGap >= 0, 'gapBandsFor: a column gap is never negative');
+  assert(rowGap >= 0, 'gapBandsFor: a row gap is never negative');
   if (colGap <= 0 && rowGap <= 0) {
     return [];
   }
@@ -291,18 +458,91 @@ export const gapBandsFor = (element: Element, cs: CSSStyleDeclaration): GapBand[
     return [];
   }
   const rows = visualRows(kids);
-  return [
-    ...(colGap > 0 ? columnGapBands(rows, colGap) : []),
-    ...(rowGap > 0 ? rowGapBands(rows, rowGap) : []),
-  ];
+  return [...(colGap > 0 ? columnGapBands(rows, colGap) : []), ...(rowGap > 0 ? rowGapBands(rows, rowGap) : [])];
+};
+
+// Which margin an element's top and bottom margins are adjoining, so the app can say that a margin that
+// adds no space is not missing but collapsed. CSS 2.1 §8.3.1: vertical margins of in-flow block boxes
+// collapse with the next or previous in-flow sibling's, and with the parent's when no border, padding or
+// formatting context stands between. Flex and grid items, floats and positioned boxes never collapse.
+//
+// The parent case is read from the layout rather than from rules: when the child's border box starts
+// exactly where the parent's content starts, its margin was pushed outside the parent, which is what
+// collapsing through it means.
+const COLLAPSING_DISPLAYS = new Set(['block', 'list-item', 'flow-root']);
+const ADJOINING_SLACK_PX = 0.5;
+
+// A style that reports no float (an engine without the property) is not floated.
+const floated = (cs: CSSStyleDeclaration): boolean => cs.float !== 'none' && cs.float !== '';
+
+const inNormalFlow = (cs: CSSStyleDeclaration): boolean =>
+  COLLAPSING_DISPLAYS.has(cs.display) && !floated(cs) && (cs.position === 'static' || cs.position === 'relative' || cs.position === 'sticky');
+
+// The nearest sibling in `direction` that takes part in the flow; text between is only skipped when blank.
+const flowSibling = (element: Element, direction: 'previous' | 'next'): Element | 'text' | undefined => {
+  let node: Node | undefined = (direction === 'previous' ? element.previousSibling : element.nextSibling) ?? undefined;
+  for (let steps = 0; node && steps < 1000; steps++) {
+    if (isElement(node)) {
+      const cs = window.getComputedStyle(node);
+      if (cs.display !== 'none' && cs.position !== 'absolute' && cs.position !== 'fixed' && !floated(cs)) {
+        return node;
+      }
+    } else if (node.nodeType === 3 && (node.textContent || '').trim() !== '') {
+      return 'text';
+    }
+    node = (direction === 'previous' ? node.previousSibling : node.nextSibling) ?? undefined;
+  }
+  return undefined;
+};
+
+const sideMargin = (cs: CSSStyleDeclaration, side: 'top' | 'bottom'): number => parseFloat(cs.getPropertyValue(`margin-${side}`)) || 0;
+
+const collapseOnSide = (element: Element, cs: CSSStyleDeclaration, side: 'top' | 'bottom') => {
+  const parent = element.parentElement;
+  if (!parent || !inNormalFlow(cs)) {
+    return undefined;
+  }
+  const parentStyle = window.getComputedStyle(parent);
+  if (parentStyle.display !== 'block' && parentStyle.display !== 'flow-root' && parentStyle.display !== 'list-item') {
+    return undefined; // Flex, grid, table and inline parents lay their children out without collapsing.
+  }
+  const sibling = flowSibling(element, side === 'top' ? 'previous' : 'next');
+  if (sibling === 'text') {
+    return undefined;
+  }
+  if (sibling) {
+    const siblingStyle = window.getComputedStyle(sibling);
+    if (!inNormalFlow(siblingStyle)) {
+      return undefined;
+    }
+    return { partner: side === 'top' ? ('previous' as const) : ('next' as const), margin: sideMargin(siblingStyle, side === 'top' ? 'bottom' : 'top') };
+  }
+  const box = element.getBoundingClientRect();
+  const parentBox = parent.getBoundingClientRect();
+  const edge = side === 'top' ? box.top - parentBox.top : parentBox.bottom - box.bottom;
+  const inset =
+    side === 'top'
+      ? (parseFloat(parentStyle.borderTopWidth) || 0) + (parseFloat(parentStyle.paddingTop) || 0)
+      : (parseFloat(parentStyle.borderBottomWidth) || 0) + (parseFloat(parentStyle.paddingBottom) || 0);
+  if (Math.abs(edge - inset) > ADJOINING_SLACK_PX) {
+    return undefined; // The margin sits inside the parent: nothing it collapses with.
+  }
+  return { partner: 'parent' as const, margin: sideMargin(parentStyle, side) };
+};
+
+export const marginCollapses = (element: Element, cs: CSSStyleDeclaration): Spacing['collapse'] => {
+  const top = collapseOnSide(element, cs, 'top');
+  const bottom = collapseOnSide(element, cs, 'bottom');
+  if (!top && !bottom) {
+    return undefined;
+  }
+  return { ...(top ? { top } : {}), ...(bottom ? { bottom } : {}) };
 };
 
 export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
   const out: Element[] = [];
   for (const run of runsOf(nodePath) || []) {
-    const element = run.find(
-      (node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE',
-    );
+    const element = run.find((node): node is Element => isElement(node) && node.tagName !== 'TEMPLATE');
     if (element) {
       out.push(element);
     }
@@ -313,13 +553,7 @@ export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
   return out.map((element) => {
     try {
       const cs = window.getComputedStyle(element);
-      const box = (kind: string) =>
-        Object.fromEntries(
-          SIDES.map((side): [string, number] => [
-            side,
-            parseFloat(cs.getPropertyValue(`${kind}-${side}`)) || 0,
-          ]),
-        );
+      const box = (kind: string) => Object.fromEntries(SIDES.map((side): [string, number] => [side, parseFloat(cs.getPropertyValue(`${kind}-${side}`)) || 0]));
       // What a length is worth here, so a value being dragged in the panel can
       // be drawn in pixels before the page has laid it out (withLiveSpacing in
       // the app): em is this element's font, rem the root's, vw and vh the frame.
@@ -331,7 +565,8 @@ export const spacingForPath = (nodePath: string): (Spacing | undefined)[] => {
         vh: window.innerHeight / 100,
       };
       const gaps = gapBandsFor(element, cs);
-      return { padding: box('padding'), margin: box('margin'), gaps, units };
+      const collapse = marginCollapses(element, cs);
+      return { padding: box('padding'), margin: box('margin'), ...(collapse ? { collapse } : {}), gaps, units };
     } catch {
       // Whatever went wrong measuring one element, the boxes everything else
       // depends on still have to be reported.

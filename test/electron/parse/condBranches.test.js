@@ -42,24 +42,17 @@ const check = (what, condition, detail) => {
   }
 };
 
-const {
-  parsePage,
-  serializePage,
-  serializePageMarked,
-} = require('#dist/electron/parse/astroParser.js');
+const { parsePage, serializePage, serializePageMarked } = require('#dist/electron/parse/astroParser.js');
 
 const page = (body) => `---\n---\n<div>\n${body}\n</div>\n`;
-const first = (source) =>
-  parsePage(source).model.nodes[0].children.find((child) => child.kind !== 'text');
+const first = (source) => parsePage(source).model.nodes[0].children.find((child) => child.kind !== 'text');
 // What the tree looks like, flattened: `cond(then:a, else:expr)`.
 const shape = (node) => {
   if (!node) {
     return 'nothing';
   }
   if (node.kind === 'cond') {
-    const branches = (node.children || []).map(
-      (branch) => `${branch.name}:${(branch.children || []).map(shape).join('+') || 'empty'}`,
-    );
+    const branches = (node.children || []).map((branch) => `${branch.name}:${(branch.children || []).map(shape).join('+') || 'empty'}`);
     return `cond(${branches.join(', ')})`;
   }
   if (node.kind === 'element' || node.kind === 'component') {
@@ -70,10 +63,7 @@ const shape = (node) => {
 
 (async () => {
   // ── What the tree makes of it ─────────────────────────────────────────────
-  const LINK = page(
-    '  {href ? (\n    <a class="link-card_link" href={href}>{heading}</a>\n' +
-      '  ) : (\n    heading\n  )}',
-  );
+  const LINK = page('  {href ? (\n    <a class="link-card_link" href={href}>{heading}</a>\n' + '  ) : (\n    heading\n  )}');
   const cond = first(LINK);
   check('the conditional is a conditional', shape(cond) === 'cond(then:a, else:expr)', shape(cond));
   check('it keeps its test', cond?.test === 'href', cond?.test);
@@ -86,8 +76,7 @@ const shape = (node) => {
   // The other way round, and both ways at once.
   check(
     'a value on the THEN side works the same',
-    shape(first(page('  {href ? (heading) : (<a href={href}>x</a>)}'))) ===
-      'cond(then:expr, else:a)',
+    shape(first(page('  {href ? (heading) : (<a href={href}>x</a>)}'))) === 'cond(then:expr, else:a)',
     shape(first(page('  {href ? (heading) : (<a href={href}>x</a>)}'))),
   );
   check(
@@ -103,16 +92,8 @@ const shape = (node) => {
 
   // A conditional between two VALUES is a value, not markup. Drawing it as a
   // branch of the tree would say you could put an element in it.
-  check(
-    'two values is still code',
-    shape(first(page('  {big ? "large" : "small"}'))) === 'expr',
-    shape(first(page('  {big ? "large" : "small"}'))),
-  );
-  check(
-    'and so is a value guarded by &&',
-    shape(first(page('  {isOpen && label}'))) === 'expr',
-    shape(first(page('  {isOpen && label}'))),
-  );
+  check('two values is still code', shape(first(page('  {big ? "large" : "small"}'))) === 'expr', shape(first(page('  {big ? "large" : "small"}'))));
+  check('and so is a value guarded by &&', shape(first(page('  {isOpen && label}'))) === 'expr', shape(first(page('  {isOpen && label}'))));
   check(
     'while markup guarded by && is a conditional, as before',
     shape(first(page('  {isOpen && (<a/>)}'))) === 'cond(then:a)',
@@ -127,10 +108,7 @@ const shape = (node) => {
   );
 
   // ── What gets written back ────────────────────────────────────────────────
-  check(
-    'an untouched file is written exactly as it was',
-    serializePage(parsePage(LINK).model) === LINK,
-  );
+  check('an untouched file is written exactly as it was', serializePage(parsePage(LINK).model) === LINK);
 
   // Edited, the writer has to produce it from the tree — and a branch's parens
   // are JS, so the braces come off.
@@ -142,31 +120,15 @@ const shape = (node) => {
   } // what an edit does
   const written = serializePage(edited.model);
   check('the value goes back in as itself', /\) : \(\n\s+heading\n\s+\)/.test(written), written);
-  check(
-    'not wrapped in braces, which there would be a block',
-    !/\{heading\}\s*\n\s*\)/.test(written),
-    written,
-  );
-  check(
-    'and what comes back is the same tree',
-    shape(first(written)) === 'cond(then:a, else:expr)',
-    shape(first(written)),
-  );
+  check('not wrapped in braces, which there would be a block', !/\{heading\}\s*\n\s*\)/.test(written), written);
+  check('and what comes back is the same tree', shape(first(written)) === 'cond(then:a, else:expr)', shape(first(written)));
 
   // ── What the canvas is given ──────────────────────────────────────────────
   // Every branch is wrapped in a <Fragment> there, which is JSX: the value
   // needs its braces back, or it renders as the word "heading".
   const marked = serializePageMarked(parsePage(LINK).model);
-  check(
-    'the canvas form keeps the braces',
-    /<Fragment>[\s\S]*\{heading\}[\s\S]*<\/Fragment>/.test(marked),
-    marked,
-  );
-  check(
-    'and both branches are marked, so both can be selected',
-    /avb-s:0\.0\.0/.test(marked) && /avb-s:0\.0\.1/.test(marked),
-    marked,
-  );
+  check('the canvas form keeps the braces', /<Fragment>[\s\S]*\{heading\}[\s\S]*<\/Fragment>/.test(marked), marked);
+  check('and both branches are marked, so both can be selected', /avb-s:0\.0\.0/.test(marked) && /avb-s:0\.0\.1/.test(marked), marked);
 
   // The compilers are the only thing that can say the emitted JSX is real.
   for (const [label, mod] of [
@@ -184,9 +146,7 @@ const shape = (node) => {
   }
 
   if (failures.length) {
-    console.error(
-      `\ncond-branches: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncond-branches: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

@@ -1,0 +1,38 @@
+---
+import { SITE_LOCALE } from "@/consts.ts";
+
+interface Props {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Date to format. */
+  date: Date;
+  /** BCP 47 locale. Defaults to `SITE_LOCALE`. */
+  locale?: string;
+  /** IANA time zone. Defaults to `UTC`. */
+  timeZone?: string;
+  /** `Intl.DateTimeFormat` options. Defaults to long date style. */
+  format?: Intl.DateTimeFormatOptions;
+}
+
+const {
+  render = true,
+  date,
+  locale = SITE_LOCALE,
+  timeZone = "UTC",
+  format = { dateStyle: "long" },
+} = Astro.props;
+
+const isValid = date instanceof Date && !Number.isNaN(date.getTime());
+
+if (import.meta.env.DEV && !isValid) {
+  console.warn(
+    "[lumos] <FormattedDate> rendered without a valid `date`; nothing was output.",
+  );
+}
+
+const formatted = isValid
+  ? new Intl.DateTimeFormat(locale, { ...format, timeZone }).format(date)
+  : "";
+---
+
+{render && isValid && <time datetime={date.toISOString()}>{formatted}</time>}

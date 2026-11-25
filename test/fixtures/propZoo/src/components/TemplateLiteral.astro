@@ -1,0 +1,8 @@
+---
+interface Props {
+  width?: `${number}px`;
+  anchor: `section-${string}`;
+}
+const { width = '120px', anchor } = Astro.props;
+---
+<div class="template-literal" id={anchor} style={`width:${width}`}>#{anchor}</div>

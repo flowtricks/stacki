@@ -24,10 +24,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { DocumentActors } = require('#dist/electron/documents/documentActors.js');
 const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
-const {
-  createDocumentTelemetry,
-  hashPath,
-} = require('#dist/electron/documents/documentTelemetry.js');
+const { createDocumentTelemetry, hashPath } = require('#dist/electron/documents/documentTelemetry.js');
 const { LIMITS } = require('#dist/shared/core/limits.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
 
@@ -72,11 +69,7 @@ test('a replace applies, returns the new checksum, and the actor holds it', () =
     const file = path.join(root, 'index.astro');
     fs.writeFileSync(file, '<h1 title="Old">Hi</h1>\n');
     const { documents, lines } = host();
-    const report = documents.writeText(
-      file,
-      '<h1 title="New">Hi</h1>\n',
-      sha256(fs.readFileSync(file)),
-    );
+    const report = documents.writeText(file, '<h1 title="New">Hi</h1>\n', sha256(fs.readFileSync(file)));
     // The inverse is the replacement's changed region only (minimal splices).
     assert.deepEqual(report, {
       tag: 'applied',
@@ -93,23 +86,43 @@ test('a replace applies, returns the new checksum, and the actor holds it', () =
     assert.equal(line.file, hashPath(fs.realpathSync.native(file)));
     assert.equal(lines[0].includes(root), false, 'no raw path');
     assert.equal(lines[0].includes('New'), false, 'no source bytes');
-    assert.deepEqual(fs.readdirSync(root).sort(), ['.stacki-io', 'index.astro']);
-    assert.deepEqual(fs.readdirSync(path.join(root, '.stacki-io')), [], 'no save files remain');
+    assert.deepEqual(fs.readdirSync(root).sort(), ['.stacki', 'index.astro']);
+    assert.deepEqual(fs.readdirSync(path.join(root, '.stacki', 'io')), [], 'no save files remain');
   });
 });
 
-test('a text identical to the file rewrites it unchanged, as one empty hunk', () => {
+test('a text identical to the file is applied without touching the file', () => {
   directory((root) => {
     const file = path.join(root, 'index.astro');
     fs.writeFileSync(file, '<h1>Hi</h1>\n');
-    const { documents } = host();
-    const report = documents.writeText(file, '<h1>Hi</h1>\n', sha256('<h1>Hi</h1>\n'));
-    assert.deepEqual(report, {
-      tag: 'applied',
-      checksum: sha256('<h1>Hi</h1>\n'),
-      inverse: [], // Nothing changed, so there is nothing to undo.
-    });
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(file, past, past); // An mtime a rewrite would visibly move.
+    const before = fs.statSync(file);
+    const { documents, lines } = host();
+    let renames = 0;
+    withFailure(
+      'renameSync',
+      (original, ...argumentsList) => {
+        renames += 1;
+        return original(...argumentsList);
+      },
+      () => {
+        const report = documents.writeText(file, '<h1>Hi</h1>\n', sha256('<h1>Hi</h1>\n'));
+        assert.deepEqual(report, {
+          tag: 'applied',
+          checksum: sha256('<h1>Hi</h1>\n'),
+          inverse: [], // Nothing changed, so there is nothing to undo.
+        });
+      },
+    );
+    const after = fs.statSync(file);
+    assert.equal(renames, 0, 'no save file is renamed over the page');
+    assert.equal(after.mtimeMs, before.mtimeMs, 'the mtime is unchanged');
+    assert.equal(after.ino, before.ino, 'the same file, not a replacement');
     assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Hi</h1>\n');
+    assert.deepEqual(fs.readdirSync(root), ['index.astro'], 'no lock or save file was made');
+    assert.equal(documents.echoes(file), false, 'the actor wrote nothing it could hear back');
+    assert.equal(JSON.parse(lines[0]).outcome, 'unchanged', 'the log tells a no-op from a write');
   });
 });
 
@@ -155,33 +168,29 @@ test('another writer landing right after the rename is a write-race', () => {
 });
 
 const posixOnly = { skip: process.platform === 'win32' };
-test(
-  'a replace whose folder cannot be flushed is uncertain, reconciled by comparison',
-  posixOnly,
-  () => {
-    directory((root) => {
-      const file = path.join(root, 'page.astro');
-      fs.writeFileSync(file, 'authored\n');
-      const { documents, lines } = host();
-      withFailure(
-        'fsyncSync',
-        (fsync, descriptor) => {
-          if (fs.fstatSync(descriptor).isDirectory()) {
-            throw Object.assign(new Error('Simulated EIO'), { code: 'EIO' });
-          }
-          return fsync(descriptor);
-        },
-        () => {
-          const report = documents.writeText(file, 'mine\n', sha256('authored\n'));
-          assert.equal(report.tag, 'uncertain');
-          assert.equal(report.candidateChecksum, sha256('mine\n'));
-          assert.equal(report.reconciliation, 'applied', 'the candidate is on disk');
-        },
-      );
-      assert.equal(JSON.parse(lines.at(-1)).outcome, 'uncertain');
-    });
-  },
-);
+test('a replace whose folder cannot be flushed is uncertain, reconciled by comparison', posixOnly, () => {
+  directory((root) => {
+    const file = path.join(root, 'page.astro');
+    fs.writeFileSync(file, 'authored\n');
+    const { documents, lines } = host();
+    withFailure(
+      'fsyncSync',
+      (fsync, descriptor) => {
+        if (fs.fstatSync(descriptor).isDirectory()) {
+          throw Object.assign(new Error('Simulated EIO'), { code: 'EIO' });
+        }
+        return fsync(descriptor);
+      },
+      () => {
+        const report = documents.writeText(file, 'mine\n', sha256('authored\n'));
+        assert.equal(report.tag, 'uncertain');
+        assert.equal(report.candidateChecksum, sha256('mine\n'));
+        assert.equal(report.reconciliation, 'applied', 'the candidate is on disk');
+      },
+    );
+    assert.equal(JSON.parse(lines.at(-1)).outcome, 'uncertain');
+  });
+});
 
 test('a missing file: writeText refuses, writeCurrent and create make it', () => {
   directory((root) => {
@@ -259,10 +268,7 @@ test('a full queue answers backpressured; draining gives each accepted intent on
     for (let index = 0; index <= LIMITS.intentsPendingMax; index++) {
       answers.push(documents.submitDeferred(file, `v${index + 1}\n`, base));
     }
-    assert.equal(
-      answers.filter((answer) => answer === 'accepted').length,
-      LIMITS.intentsPendingMax,
-    );
+    assert.equal(answers.filter((answer) => answer === 'accepted').length, LIMITS.intentsPendingMax);
     assert.equal(answers.at(-1), 'backpressured');
     documents.drain();
     assert.equal(documents.quiescent(), true);
@@ -288,18 +294,12 @@ test('a batch leases in sorted canonical order, whatever order it names its file
     const order = [];
     const { documents } = host({ onLease: (file) => order.push(path.basename(file)) });
     const seen = [];
-    const run = (items) =>
-      documents.withLeases(items, (ordered) =>
-        seen.push(ordered.map((item) => path.basename(item.file))),
-      );
+    const run = (items) => documents.withLeases(items, (ordered) => seen.push(ordered.map((item) => path.basename(item.file))));
     assert.equal(run(files.map((file) => ({ file }))).ok, true);
     assert.equal(run([...files].reverse().map((file) => ({ file }))).ok, true);
     assert.deepEqual(order.slice(0, 3), order.slice(3), 'both batches acquire in one order');
     assert.deepEqual(seen[0], seen[1], 'and run their items in it');
-    assert.throws(
-      () => documents.withLeases([{ file: files[0] }, { file: files[0] }], () => undefined),
-      /Assertion failed: A batch names each file once/,
-    );
+    assert.throws(() => documents.withLeases([{ file: files[0] }, { file: files[0] }], () => undefined), /Assertion failed: A batch names each file once/);
   });
 });
 
@@ -325,16 +325,9 @@ test('the actor count stays inside its bound; idle actors are dropped first', ()
       fs.writeFileSync(file, `/* ${index} */\n`);
       assert.equal(documents.current(file).ok, true);
     }
-    assert.ok(
-      documents.actorCount() <= LIMITS.documentActorsMax,
-      `${documents.actorCount()} actors`,
-    );
+    assert.ok(documents.actorCount() <= LIMITS.documentActorsMax, `${documents.actorCount()} actors`);
     const first = path.join(root, 'f0.css');
-    assert.equal(
-      documents.writeText(first, 'y\n', sha256('/* 0 */\n')).tag,
-      'applied',
-      'a dropped actor re-reads',
-    );
+    assert.equal(documents.writeText(first, 'y\n', sha256('/* 0 */\n')).tag, 'applied', 'a dropped actor re-reads');
   });
 });
 

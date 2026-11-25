@@ -1,37 +1,32 @@
 // The editor for one background layer: its type switch, the fields for its
 // kind, its raw value and tiling (BackgroundSection.tsx).
 
-import SegmentedControl from './components/SegmentedControl';
-import {
-  blankLayer,
-  layerKind,
-  serializeLayers,
-  type BgLayer,
-  type LayerKind,
-} from './model/background';
-import {
-  blankGradientOf,
-  parseGradient,
-  serializeGradient,
-  type GradientType,
-} from './model/gradient';
+import { assert } from '../../../shared/core/assert';
+import SegmentedControl from '../../ui/SegmentedControl';
+import { blankLayer, layerKind, serializeLayers, type BgLayer, type LayerKind } from './model/background';
+import { gradientFitsEditor, parseGradient, serializeGradient, type GradientType } from './model/gradient';
+import { GradientCode } from './GradientCode';
 import GradientEditor from './GradientEditor';
 import { type WriteOptions, replaceLayer } from './BackgroundKit';
 import {
   LayerLonghandField,
-  TYPE_OPTIONS,
+  typeOptions,
   type LayerFieldProps,
   LayerSizeField,
   LayerPositionField,
-  TILE_OPTIONS,
-  FIXED_OPTIONS,
+  tileOptions,
+  fixedOptions,
   LayerImageField,
   LayerColorField,
 } from './BackgroundLayerFields';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+
+const GRADIENT_PLACEHOLDER = 'gradient(…)'; // i18n-ignore: CSS function syntax.
 
 export type LayerEditorProps = LayerFieldProps & { applyLayers: (layers: BgLayer[]) => void };
 
 export function LayerEditor(props: LayerEditorProps) {
+  const translate = useTranslate();
   const { layers, index, busy, setProp, liveSetProp } = props;
   const layer = layers[index];
   if (!layer) {
@@ -41,12 +36,12 @@ export function LayerEditor(props: LayerEditorProps) {
   const displayKind = displayKindOf(kind);
   const typeRow = (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Type</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.type')}</span>
       <SegmentedControl
-        options={TYPE_OPTIONS}
+        options={typeOptions(translate)}
         value={displayKind}
         onChange={(next) => setLayerKind({ next, displayKind, props })}
-        ariaLabel="Layer type"
+        ariaLabel={translate('style.backgroundLayerEditor.layerType')}
         disabled={busy}
       />
     </div>
@@ -58,14 +53,8 @@ export function LayerEditor(props: LayerEditorProps) {
       <div className="embed-editor_bg-editor">
         {typeRow}
         <div className="embed-editor_size-row">
-          <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
-          <LayerColorField
-            layers={layers}
-            index={index}
-            busy={busy}
-            setProp={setProp}
-            liveSetProp={liveSetProp}
-          />
+          <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.color')}</span>
+          <LayerColorField layers={layers} index={index} busy={busy} setProp={setProp} liveSetProp={liveSetProp} />
         </div>
       </div>
     );
@@ -89,18 +78,16 @@ export function LayerEditor(props: LayerEditorProps) {
   return (
     <div className="embed-editor_bg-editor">
       {typeRow}
-      {gradient ? (
-        <GradientEditor
-          gradient={gradient}
-          busy={busy}
-          onChange={(next, live) => writeImage(serializeGradient(next), { live })}
-        />
+      {gradient !== undefined && gradientFitsEditor(gradient) ? (
+        <GradientEditor gradient={gradient} busy={busy} onChange={(next, live) => writeImage(serializeGradient(next), { live })} />
+      ) : isGradient ? (
+        <GradientCode layers={layers} index={index} busy={busy} applyLayers={props.applyLayers} liveSetProp={liveSetProp} />
       ) : (
         <LayerRawFields displayKind={displayKind} props={props} />
       )}
       {/* Tile (background-repeat) + Fixed (background-attachment) apply to image
-          layers only — Webflow omits them for gradients (which have their own
-          repeat toggle inside the gradient editor). */}
+          layers only: the visual gradient editor has its own repeat toggle, and
+          a gradient edited as code writes its tiling in the code. */}
       {!isGradient ? <LayerTileFields layer={layer} props={props} /> : undefined}
     </div>
   );
@@ -114,86 +101,53 @@ export function displayKindOf(kind: ReturnType<typeof layerKind>): LayerKind {
   return kind === 'conic' ? 'linear' : 'image';
 }
 
-export const isGradientType = (value: LayerKind): value is GradientType =>
-  value === 'linear' || value === 'radial' || value === 'conic';
+export const isGradientType = (value: LayerKind): value is GradientType => value === 'linear' || value === 'radial' || value === 'conic';
 
-// Switch a layer's kind. Switching between gradient kinds keeps the colours.
-//
-// The stops are the work — picked, positioned, adjusted — and the kind is just how
-// they are painted. Seeding a blank layer threw them away, so trying radial to see how
-// it looked cost the whole gradient and there was no way back to it.
-//
-// The geometry does NOT carry, because it does not mean the same thing: an angle is a
-// direction for a linear gradient and nothing at all for a radial one, and a centre
-// point is the reverse. Each kind starts on its own defaults and keeps the colours.
-export function setLayerKind({
-  next,
-  displayKind,
-  props,
-}: {
-  next: LayerKind;
-  displayKind: LayerKind;
-  props: LayerEditorProps;
-}) {
+// Switch a layer's kind. The layer starts over as that kind's default: its
+// image, and its size, position and tiling cleared. Colours used to carry
+// between gradient kinds, but a switch is a choice of a different thing, and a
+// gradient carried into a kind it does not fit (a `var()` stop position, a
+// tiled pattern's size) kept the old one's parts under the new type's buttons.
+// Undo returns the layer as it was.
+export function setLayerKind({ next, displayKind, props }: { next: LayerKind; displayKind: LayerKind; props: LayerEditorProps }) {
   const { layers, index, applyLayers } = props;
   const layer = layers[index];
   if (next === displayKind || layer === undefined) {
     return;
   }
-  if (isGradientType(next) && isGradientType(displayKind)) {
-    const current = parseGradient(layer.image);
-    if (current?.stops?.length) {
-      const carried = serializeGradient({
-        ...blankGradientOf(next),
-        repeating: current.repeating,
-        stops: current.stops,
-      });
-      applyLayers(replaceLayer(layers, index, { image: carried }));
-      return;
-    }
-  }
   const seeded = blankLayer(next);
-  applyLayers(replaceLayer(layers, index, { image: seeded.image }));
+  assert(layerKind(seeded.image) === next, 'setLayerKind: the new layer is of the kind asked for');
+  applyLayers(layers.map((entry, i) => (i === index ? seeded : entry)));
 }
 
 // An image layer's picker, or an unparsed gradient's raw text; then Size and Position.
-export function LayerRawFields({
-  displayKind,
-  props,
-}: {
-  displayKind: LayerKind;
-  props: LayerEditorProps;
-}) {
+export function LayerRawFields({ displayKind, props }: { displayKind: LayerKind; props: LayerEditorProps }) {
+  const translate = useTranslate();
   const { applyLayers, ...fieldProps } = props;
   return (
     <>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
         <span className="embed-editor_size-label embed-editor_bg-caption">
-          {displayKind === 'image' ? 'Image' : 'Gradient'}
+          {displayKind === 'image' ? translate('style.backgroundLayerEditor.image') : translate('style.backgroundLayerEditor.gradient')}
         </span>
         {displayKind === 'image' ? (
-          <LayerImageField
-            layers={fieldProps.layers}
-            index={fieldProps.index}
-            busy={fieldProps.busy}
-            applyLayers={applyLayers}
-          />
+          <LayerImageField layers={fieldProps.layers} index={fieldProps.index} busy={fieldProps.busy} applyLayers={applyLayers} />
         ) : (
           <LayerLonghandField
             {...fieldProps}
             field="image"
             prop="background-image"
-            label="Layer value"
-            placeholder="gradient(…)"
+            label={translate('style.backgroundLayerEditor.layerValue')}
+            placeholder={GRADIENT_PLACEHOLDER}
           />
         )}
       </div>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.size')}</span>
         <LayerSizeField {...fieldProps} />
       </div>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.position')}</span>
         <LayerPositionField {...fieldProps} />
       </div>
     </>
@@ -203,34 +157,27 @@ export function LayerRawFields({
 // Tile (background-repeat) and Fixed (background-attachment); each default is written
 // as an empty value.
 export function LayerTileFields({ layer, props }: { layer: BgLayer; props: LayerEditorProps }) {
+  const translate = useTranslate();
   const { layers, index, busy, applyLayers } = props;
   return (
     <>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Tile</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.tile')}</span>
         <SegmentedControl
-          options={TILE_OPTIONS}
-          value={
-            ['repeat-x', 'repeat-y', 'no-repeat'].includes(layer.repeat.trim())
-              ? layer.repeat.trim()
-              : 'repeat'
-          }
-          onChange={(next) =>
-            applyLayers(replaceLayer(layers, index, { repeat: next === 'repeat' ? '' : next }))
-          }
-          ariaLabel="Layer tile"
+          options={tileOptions(translate)}
+          value={['repeat-x', 'repeat-y', 'no-repeat'].includes(layer.repeat.trim()) ? layer.repeat.trim() : 'repeat'}
+          onChange={(next) => applyLayers(replaceLayer(layers, index, { repeat: next === 'repeat' ? '' : next }))}
+          ariaLabel={translate('style.backgroundLayerEditor.layerTile')}
           disabled={busy}
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Fixed</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.fixed')}</span>
         <SegmentedControl
-          options={FIXED_OPTIONS}
+          options={fixedOptions(translate)}
           value={layer.attachment.trim() === 'fixed' ? 'fixed' : 'scroll'}
-          onChange={(next) =>
-            applyLayers(replaceLayer(layers, index, { attachment: next === 'scroll' ? '' : next }))
-          }
-          ariaLabel="Layer fixed"
+          onChange={(next) => applyLayers(replaceLayer(layers, index, { attachment: next === 'scroll' ? '' : next }))}
+          ariaLabel={translate('style.backgroundLayerEditor.layerFixed')}
           disabled={busy}
         />
       </div>

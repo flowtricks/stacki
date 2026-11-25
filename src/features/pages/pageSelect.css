@@ -1,0 +1,111 @@
+/* The Pages panel's Select mode: a checkbox starts each row, and an action bar sits under the list. Fills only, no borders. */
+.pages-select-mode {
+  outline: none;
+}
+.list-item.page-selecting {
+  gap: 8px;
+}
+.list-item.page-selecting.page-selected {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.list-item.page-selecting.page-selected .icon {
+  color: var(--accent);
+}
+.list-item.page-selecting.page-refused {
+  cursor: not-allowed;
+}
+.list-item.page-selecting.page-refused .page-list-copy,
+.list-item.page-selecting.page-refused .icon {
+  opacity: 0.45;
+}
+.page-select-box {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  pointer-events: none;
+}
+.page-select-folder-toggle {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding: 2px;
+  margin: -2px;
+  border-radius: 4px;
+}
+.page-select-folder-toggle:hover {
+  background: var(--bg-hover);
+}
+.page-select-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  background: var(--bg-panel-2);
+  font-size: 12px;
+}
+.page-select-bar .page-select-box {
+  pointer-events: auto;
+}
+.page-select-count {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.page-select-bar button {
+  flex: none;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.page-select-bar button.danger {
+  background: var(--red);
+  color: #fff;
+}
+.page-select-bar button.danger:hover:not(:disabled) {
+  background: var(--red);
+  filter: brightness(1.08);
+}
+.page-select-bar button.danger:disabled {
+  opacity: 0.4;
+}
+.page-select-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-select-confirm p {
+  margin: 0;
+}
+.page-select-confirm ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 160px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg-panel-2);
+  border-radius: 6px;
+}
+.page-select-confirm li {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.page-select-confirm-place {
+  flex: none;
+  color: var(--text-dim);
+}
+.page-select-confirm-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

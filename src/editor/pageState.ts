@@ -1,6 +1,7 @@
 // The open page as the editor holds it: which file is open, and its state —
 // an editable model with the origin its edits are stated against, or the raw
 // source of a page the visual model cannot hold.
+import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParsePageResult } from '../../shared/page/pageNode';
@@ -19,6 +20,14 @@ export interface OpenFile {
   readonly focusOcc?: number;
   readonly focusWhole?: boolean;
   readonly hostKey?: string | undefined;
+  /**
+   * Which copy of the instance the user opened, among the copies of its host
+   * node, when the focus above it could not be narrowed to that copy: opening
+   * a component inside a component keeps the outermost instance as the focus,
+   * so a loop's copies of the inner one all stay in view and this says which
+   * one was meant. Absent where the focus already holds a single copy.
+   */
+  readonly hostOcc?: number | undefined;
 }
 
 export interface OpenRoute {
@@ -66,10 +75,7 @@ export interface PageStateSnapshot {
 
 export type TrailingSlash = 'always' | 'never' | 'ignore';
 
-export function findEditorNodeById(
-  nodes: readonly EditorNode[] | undefined,
-  id: string,
-): EditorNode | undefined {
+export function findEditorNodeById(nodes: readonly EditorNode[] | undefined, id: string): EditorNode | undefined {
   const pending = [...(nodes ?? [])];
   let visited = 0;
   while (pending.length > 0) {
@@ -92,10 +98,7 @@ export function findEditorNodeById(
   return undefined;
 }
 
-export function findEditorParentList(
-  model: EditorModel,
-  id: string,
-): { readonly list: readonly EditorNode[]; readonly index: number } | undefined {
+export function findEditorParentList(model: EditorModel, id: string): { readonly list: readonly EditorNode[]; readonly index: number } | undefined {
   const pending: (readonly EditorNode[])[] = [model.nodes];
   let visited = 0;
   while (pending.length > 0) {
@@ -122,9 +125,7 @@ export function findEditorParentList(
 }
 
 /** A page as a read or a reply left it: clean, and its own origin. */
-export function toEditorPageState(
-  input: ParsePageResult & { readonly source: string; readonly checksum: Digest },
-): EditorPageState {
+export function toEditorPageState(input: ParsePageResult & { readonly source: string; readonly checksum: Digest }): EditorPageState {
   const save = saveStateClean(input.checksum);
   const source = input.source;
   if (!input.editable) {
@@ -154,6 +155,30 @@ export function carriedParse<Parsed extends ParsePageResult & { readonly source:
   const after = { source: parsed.source, seed, model: parsed.model };
   const model = carryHandles({ before, after, own: undefined, predicted: undefined });
   return { ...parsed, model };
+}
+
+/**
+ * The page the canvas shows while a component is open: the bottom of the edit
+ * stack. Opening a component makes it the current page, so the current page
+ * is the component itself, never where it is rendered; the Style panel needs
+ * the page, whose selectors written `:global(…)` reach the component's
+ * markup. Undefined when the open file is not a
+ * component, or the stack does not start at a page.
+ */
+export function canvasPageOf(stack: readonly OpenFile[]): string | undefined {
+  const open = stack.at(-1);
+  const bottom = stack[0];
+  if (open === undefined || bottom === undefined) {
+    return undefined;
+  }
+  if (open.kind === 'component') {
+    if (bottom.kind === 'page') {
+      assert(bottom.path !== open.path, 'canvasPageOf: a component is not the page it is shown on');
+      return bottom.path;
+    }
+    return undefined;
+  }
+  return undefined;
 }
 
 export function isOpenFile(page: CurrentPage | undefined): page is OpenFile {

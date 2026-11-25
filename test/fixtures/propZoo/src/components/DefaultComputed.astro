@@ -1,0 +1,12 @@
+---
+const SITE = 'Zoo';
+const MAX = 4;
+interface Props {
+  brand?: string;
+  prefix?: string;
+  limit?: number;
+  heading?: string;
+}
+const { brand = SITE, prefix = `${SITE}:`, limit = MAX * 2, heading = SITE.toUpperCase() } = Astro.props;
+---
+<p class="default-computed">{prefix} {brand} — {heading} (up to {limit})</p>

@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { componentReference } from '../model/componentReference';
 // What the shell is drawn from: the scope context, an instance's props, tag
 // options, the code window, a symbol's file, the canvas gate, notices,
@@ -5,21 +6,18 @@ import { componentReference } from '../model/componentReference';
 // the page operations (App.tsx).
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { readPage, readSymbol } from '../../ipc/bridge';
-import { ASTRO_ASSETS } from '../../features/palette/astroAssets';
-import { HTML_TAGS } from '../../editor/elementSchemas';
+import { readPage, readSymbol, readText } from '../../ipc/bridge';
+import { tagOptionsOf } from '../model/pageModelGestures';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
 import { findImportOf } from '../../editor/dataSuggest';
+import type { DataContext } from '../../editor/dataScope';
 import type { TagOption } from '../../features/props/propNodeEditors';
-import {
-  codeWindowFor,
-  FRONTMATTER_SUBJECT,
-  type CodeSubject,
-} from '../../features/code/codeWindowTarget';
+import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject, type CodeWindowState } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
-import { readProjectAsset } from '../../ipc/appBridge';
+import { readDynamicPaths, readProjectAsset } from '../../ipc/appBridge';
+import { linkEntriesFromAnswer, type LinkEntryLoader } from '../../features/props/linkEntries';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -31,19 +29,11 @@ import {
   usePageCreation,
   usePageMoves,
   useRenamePageFolder,
-  useDeletePageFolder,
   useSelectionModel,
   useCreateFrom,
   useSelectedSchema,
 } from './appPageOps';
-export {
-  useCanvasGate,
-  useCanvasNotices,
-  useCrumbLabels,
-  useCanvasMarks,
-  useSelectionPaths,
-  useOverlayInfo,
-} from './appCanvasModel';
+export { useCanvasGate, useCanvasNotices, useCrumbLabels, useCanvasMarks, useSelectionPaths, useOverlayInfo } from './appCanvasModel';
 
 // The page’s layout, pages and folders, and the selection.
 export function usePageOps(
@@ -58,25 +48,34 @@ export function usePageOps(
   const pageCreation = usePageCreation(coreState, lifecycle, navigation);
   const pageMoves = usePageMoves(coreState, lifecycle, navigation);
   const renamePageFolderScope = useRenamePageFolder(coreState, lifecycle, navigation);
-  const deletePageFolderScope = useDeletePageFolder(coreState, lifecycle, navigation);
   const selectionModel = useSelectionModel(shortcuts, coreState, history);
   const createFromScope = useCreateFrom(shortcuts, coreState, selectionModel, nodeEdits);
-  const selectedSchemaScope = useSelectedSchema(
-    selectionModel,
-    layoutChange,
-    shortcuts,
-    coreState,
-    createFromScope,
-  );
+  const selectedSchemaScope = useSelectedSchema(selectionModel, layoutChange, shortcuts, coreState, createFromScope);
   return {
     ...layoutChange,
     ...pageCreation,
     ...pageMoves,
     ...renamePageFolderScope,
-    ...deletePageFolderScope,
     ...selectionModel,
     ...createFromScope,
     ...selectedSchemaScope,
+  };
+}
+
+/**
+ * The scope at the selection: the file's frontmatter and imports, and the loops around the selected
+ * node, outermost first, each by its head and by its node id (the canvas names a pass by its loop).
+ */
+export function loopScopeOf(
+  model: { readonly extraFrontmatter?: string | undefined; readonly imports?: DataContext['imports'] | undefined },
+  selectedAncestors: readonly { readonly kind: string; readonly head?: string; readonly id: string }[],
+) {
+  const loops = selectedAncestors.slice(0, -1).filter((node) => node.kind === 'map');
+  return {
+    frontmatter: model.extraFrontmatter || '',
+    imports: model.imports || [],
+    ancestorHeads: loops.map((node) => String(node.head)),
+    ancestorIds: loops.map((node) => node.id),
   };
 }
 
@@ -97,8 +96,7 @@ export function useScopeContext(
     const parent = selectedId ? tree.parent(selectedId) : undefined;
     if (parent) {
       if (parent.id === 'layout') {
-        slotOptions =
-          scan.layouts.find((layout) => layout.name === currentLayoutName)?.slots || undefined;
+        slotOptions = scan.layouts.find((layout) => layout.name === currentLayoutName)?.slots || undefined;
       } else if (parent.kind === 'component') {
         slotOptions = componentReference({
           name: parent.name,
@@ -114,17 +112,7 @@ export function useScopeContext(
   // In-scope data at the selection: the file's frontmatter declarations and
   // imports, plus the item/index variables of every enclosing loop. Feeds the
   // loop editor's source list and the content editor's expression chips.
-  const loopContext =
-    model && selectedNode
-      ? {
-          frontmatter: model.extraFrontmatter || '',
-          imports: model.imports || [],
-          ancestorHeads: selectedAncestors
-            .slice(0, -1)
-            .filter((node) => node.kind === 'map')
-            .map((node) => node.head),
-        }
-      : undefined;
+  const loopContext = model && selectedNode ? loopScopeOf(model, selectedAncestors) : undefined;
 
   // What the instance being edited is given.
   //
@@ -133,25 +121,23 @@ export function useScopeContext(
   // field showing `{heading}` could not say what heading was. The instance
   // says: it is in the file this one was opened from, at the focused path, and
   // the page's own scope is what its expressions come to.
-  const [instanceProps, setInstanceProps] = useState<Readonly<Record<string, unknown>> | undefined>(
-    undefined,
-  );
+  const [instanceProps, setInstanceProps] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
+  // The props that instance passes, by name, resolved or not; undefined when no instance is known.
+  const [instancePassed, setInstancePassed] = useState<readonly string[] | undefined>(undefined);
   const focusOf = currentPage?.kind === 'component' ? currentPage.focusPath : undefined;
   const hostFile = editStack.length > 1 ? editStack[0] : undefined;
-  return { focusOf, hostFile, instanceProps, loopContext, setInstanceProps, slotOptions };
+  return { focusOf, hostFile, instancePassed, instanceProps, loopContext, setInstancePassed, setInstanceProps, slotOptions };
 }
 
 // What the instance being edited is given.
-export function useInstanceProps(
-  scopeContext: ReturnType<typeof useScopeContext>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
-  const { focusOf, hostFile, setInstanceProps } = scopeContext;
+export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext>, coreState: ReturnType<typeof useCoreState>) {
+  const { focusOf, hostFile, setInstancePassed, setInstanceProps } = scopeContext;
   const { collectionSamples, collections, scan } = coreState;
 
   useEffect(() => {
     if (!focusOf || !hostFile?.path) {
       setInstanceProps(undefined);
+      setInstancePassed(undefined);
       return undefined;
     }
     let dropped = false;
@@ -167,8 +153,11 @@ export function useInstanceProps(
         const instance = nodeAtPath(hostModel.nodes, trail);
         if (!instance) {
           setInstanceProps(undefined);
+          setInstancePassed(undefined);
           return;
         }
+        // `class:list` reaches the component as its `class` prop.
+        setInstancePassed([...new Set(Object.keys(instance.props ?? {}).map((name) => (name.startsWith('class:') ? 'class' : name)))]);
         // The scope at the instance: the file's frontmatter, and the loops
         // around it — `project` inside `projects.map(…)` is what its props are
         // written against.
@@ -188,34 +177,50 @@ export function useInstanceProps(
       } catch {
         if (!dropped) {
           setInstanceProps(undefined);
+          setInstancePassed(undefined);
         }
       }
     })();
     return () => {
       dropped = true;
     };
-  }, [focusOf, hostFile?.path, collectionSamples, collections, scan, setInstanceProps]);
+  }, [focusOf, hostFile?.path, collectionSamples, collections, scan, setInstanceProps, setInstancePassed]);
 }
 
 // Link targets and the Tag field’s options.
-export function useTagOptions(
-  coreState: ReturnType<typeof useCoreState>,
-  pageOps: ReturnType<typeof usePageOps>,
-  shortcuts: ReturnType<typeof useShortcuts>,
-) {
-  const { insertables, project, scan } = coreState;
+export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, shortcuts: ReturnType<typeof useShortcuts>) {
+  const { devStatus, devUrl, insertables, project, scan } = coreState;
   const { tree } = pageOps;
   const { model } = shortcuts;
 
   // Link settings (href fields): pages to link to and the ids on this page
   // that anchor links can target.
+  // A template page's entries come from the same dev-server read the canvas's entry picker uses
+  // (page:dynamicPaths). It only reads; with no dev server the template stays one row of its own.
+  const loadEntries = useCallback<LinkEntryLoader>(
+    async (route) => {
+      const page = scan.pages.find((candidate) => candidate.route === route);
+      if (project === undefined || page === undefined || devStatus !== 'on' || devUrl === undefined) {
+        return { kind: 'unavailable' };
+      }
+      try {
+        const answer = await readDynamicPaths(project.path, page.path, devUrl);
+        return linkEntriesFromAnswer(route, answer);
+      } catch {
+        // A page that cannot answer stays a template row, as the canvas previews it at its pattern.
+        return { kind: 'unavailable' };
+      }
+    },
+    [scan.pages, project, devStatus, devUrl],
+  );
   const linkContext = useMemo(
     () => ({
       pages: scan.pages,
       sectionIds: tree.sectionIds,
+      loadEntries,
       projectPath: project?.path ?? '',
     }),
-    [scan.pages, tree, project?.path],
+    [scan.pages, tree, project?.path, loadEntries],
   );
 
   // What the Tag field offers: every HTML tag, the project's components,
@@ -223,34 +228,16 @@ export function useTagOptions(
   // is how `<AstroLogo />` from an imported .svg becomes reachable.
   // Each option carries what it is, so the list can wear the same icons the
   // insert palette does — a tag, a component, a layout, one of Astro's.
-  const tagOptions = React.useMemo<readonly TagOption[]>(() => {
-    const out: TagOption[] = [];
-    const seen = new Set<string>();
-    const add = (name: string, kind: string): void => {
-      if (!name || seen.has(name)) {
-        return;
-      }
-      seen.add(name);
-      out.push({ name, kind });
-    };
-    for (const tag of HTML_TAGS) {
-      add(tag, 'element');
-    }
-    for (const component of insertables) {
-      add(component.name, component.isLayout ? 'layout' : 'component');
-    }
-    for (const asset of ASTRO_ASSETS) {
-      add(asset.name, 'astroAsset');
-    }
-    for (const i of model?.imports || []) {
-      add(i.name, 'component');
-    }
-    return out;
-  }, [insertables, model]);
+  const tagOptions = React.useMemo<readonly TagOption[]>(() => tagOptionsOf(insertables, model?.imports || []), [insertables, model]);
   return { linkContext, tagOptions };
 }
 
 // The floating code window.
+// A node's code window, when it has one: undefined for a node that is gone or is markup.
+function codeWindowForNode(node: CodeSubject | undefined): CodeWindowState | undefined {
+  return node === undefined ? undefined : codeWindowFor(node);
+}
+
 export function useCodeWindow(
   coreState: ReturnType<typeof useCoreState>,
   shortcuts: ReturnType<typeof useShortcuts>,
@@ -265,10 +252,7 @@ export function useCodeWindow(
   // Floating code window target value: page frontmatter, a raw node's inner
   // content, or a text file from public/ (loaded into fileText).
   const isFileWin = codeWin?.kind === 'file';
-  const codeWinNode =
-    codeWin && !isFileWin && codeWin.targetId && codeWin.targetId !== 'frontmatter' && model
-      ? tree.node(codeWin.targetId)
-      : undefined;
+  const codeWinNode = codeWin && !isFileWin && codeWin.targetId && codeWin.targetId !== 'frontmatter' && model ? tree.node(codeWin.targetId) : undefined;
   const codeWinValue = !codeWin
     ? undefined
     : isFileWin
@@ -300,6 +284,16 @@ export function useCodeWindow(
   };
   // Read by the keydown effect, which is set up long before this exists.
   openCodeWindowRef.current = openCodeWindow;
+  // An audit's go-to for a declaration in a <style> block: the block's window, at `line` of the block's own text (the line
+  // the window counts, not the .astro file's). The serial makes a second go-to to the line already shown select it again.
+  const openCodeWindowAt = (id: string, line: number): boolean => {
+    const codeWindow = codeWindowForNode(tree.node(id));
+    if (codeWindow === undefined) {
+      return false;
+    }
+    setCodeWin((current) => ({ ...codeWindow, revealLine: line, revealSerial: (current?.revealSerial ?? 0) + 1 }));
+    return true;
+  };
 
   // Opens a public/ text file in the floating editor.
   const openAssetFile = useCallback(
@@ -316,6 +310,7 @@ export function useCodeWindow(
           rel,
           title: name,
           language: /\.css$/i.test(name) ? 'css' : 'javascript',
+          ...fileWindowIndentation(rel),
         });
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');
@@ -323,15 +318,12 @@ export function useCodeWindow(
     },
     [showToast, projectRef, setCodeWin, setFileText],
   );
-  return { codeWinValue, isFileWin, openAssetFile, openCodeWindow, openCodeWindowById };
+  return { codeWinValue, isFileWin, openAssetFile, openCodeWindow, openCodeWindowAt, openCodeWindowById };
 }
 
 // Opening the file an imported symbol comes from.
-export function useSymbolFile(
-  coreState: ReturnType<typeof useCoreState>,
-  pageOps: ReturnType<typeof usePageOps>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { currentPage, editStackRef, projectRef, setCodeWin, setFileText } = coreState;
   const { frontmatterCode } = pageOps;
   const { showToast } = lifecycle;
@@ -359,9 +351,7 @@ export function useSymbolFile(
         const symbol = await readSymbol(projectPath, fromFile, imp.spec, name);
         if (!symbol?.ok) {
           showToast(
-            symbol?.reason === 'too-large'
-              ? 'That file is too large to edit in the app.'
-              : `Couldn't find where ${name} is defined (${imp.spec}).`,
+            symbol?.reason === 'too-large' ? translate('shell.symbol.tooLarge') : translate('shell.symbol.notFound', { name, spec: imp.spec }),
             'error',
           );
           return false;
@@ -373,6 +363,7 @@ export function useSymbolFile(
           rel: symbol.rel,
           title: symbol.rel,
           language: /\.css$/i.test(symbol.rel) ? 'css' : 'javascript',
+          ...fileWindowIndentation(symbol.rel),
           revealLine: symbol.line,
         });
         return true;
@@ -381,7 +372,33 @@ export function useSymbolFile(
         return false;
       }
     },
-    [frontmatterCode, currentPage, showToast, editStackRef, projectRef, setCodeWin, setFileText],
+    [frontmatterCode, currentPage, showToast, editStackRef, projectRef, setCodeWin, setFileText, translate],
   );
-  return { openSymbolFile };
+  // Opens one project file, named project-relative, in the code panel: Settings → Folders
+  // opens astro.config and the content config this way.
+  // With a line (an audit finding in a stylesheet), the window opens scrolled to it with it selected.
+  const openProjectFile = useCallback(
+    async (rel: string, at?: { readonly line: number }) => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath) {
+        return;
+      }
+      try {
+        setFileText(await readText(projectPath, rel));
+        setCodeWin({
+          kind: 'file',
+          area: 'src',
+          rel,
+          title: rel,
+          language: /\.css$/i.test(rel) ? 'css' : 'javascript',
+          ...fileWindowIndentation(rel),
+          ...(at === undefined ? {} : { revealLine: at.line, revealSerial: Date.now() }),
+        });
+      } catch (error: unknown) {
+        showToast(cleanError(error), 'error');
+      }
+    },
+    [showToast, projectRef, setCodeWin, setFileText],
+  );
+  return { openSymbolFile, openProjectFile };
 }

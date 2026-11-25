@@ -67,8 +67,19 @@ export interface MapNode {
   readonly headSource?: string;
   readonly bare?: boolean;
   readonly body?: readonly string[];
+  /** JavaScript between callback markup roots, including the closing call/braces. */
+  readonly bodyParts?: readonly string[];
   readonly source?: string;
+  /**
+   * How the loop's body was wrapped when it is not a single element: `<>` or
+   * `<Fragment>`. The wrapper is unwrapped on reading, so the loop's own
+   * children are what the Navigator shows, and written back on saving.
+   */
+  readonly fragment?: LoopFragment;
 }
+
+/** The two spellings of a loop body's wrapper (see MapNode.fragment; LOOP_FRAGMENTS in pageNode.ts). */
+export type LoopFragment = '<>' | 'Fragment';
 
 /** Conditional markup: one 'then' branch, and an 'else' branch for ternaries. */
 export interface CondNode {
@@ -160,9 +171,7 @@ export interface SourceNodeMetadata {
   readonly attrSpans?: readonly AttrSpan[];
 }
 
-export type PageNode = (
-  PairedNode | RawNode | ValueNode | CommentNode | MapNode | CondNode | BranchNode | ChunkGroupNode
-) &
+export type PageNode = (PairedNode | RawNode | ValueNode | CommentNode | MapNode | CondNode | BranchNode | ChunkGroupNode) &
   MarkdownNodeMetadata &
   SourceNodeMetadata;
 

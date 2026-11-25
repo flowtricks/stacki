@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const bridge = require('../../helpers/rendererModule')('src/features/git/gitChipBridge.ts');
 const { repoPath } = require('../../helpers/sources.js');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -43,15 +45,13 @@ test('GitChip parsers cover status and checkout variants', () => {
     error: 'restore failed',
   });
   assert.deepEqual(bridge.parseGitCheckout(blocked), blocked);
-  for (const value of [
-    jsonNull,
-    {},
-    [{ ...status, kind: 'mystery' }],
-    [{ ...status, staged: 'no' }],
-    Array(100001).fill(status),
-  ]) {
+  for (const value of [jsonNull, {}, [{ ...status, kind: 'mystery' }], [{ ...status, staged: 'no' }]]) {
     assert.throws(() => bridge.parseGitStatus(value));
   }
+  // Stacki has no product size limit: a status or file list is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseGitStatus(Array(100001).fill(status)).length, 100001);
+  assert.equal(bridge.parseGitCheckout({ ...blocked, files: Array(100001).fill('file') }).files.length, 100001);
   for (const value of [
     jsonNull,
     {},
@@ -59,7 +59,6 @@ test('GitChip parsers cover status and checkout variants', () => {
     { ...switched, parkedFrom: 1 },
     // Absence is `undefined` (AGENTS.md §6): main never sends a null origin.
     { ...switched, parkedFrom: jsonNull },
-    { ...blocked, files: Array(100001).fill('file') },
   ]) {
     assert.throws(() => bridge.parseGitCheckout(value));
   }
@@ -85,6 +84,10 @@ test('GitChip operations forward validated payloads for each action mode', async
         calls.push(['init', payload]);
         return { ok: true };
       },
+      gitPull: async (payload) => {
+        calls.push(['pull', payload]);
+        return { ok: true, into: 'main', changed: false };
+      },
       gitPush: async (payload) => {
         calls.push(['push', payload]);
         return { ok: true };
@@ -102,6 +105,7 @@ test('GitChip operations forward validated payloads for each action mode', async
   assert.equal((await bridge.commitGitChanges('/project', 'Update', ['src/a.astro'])).ok, true);
   assert.equal((await bridge.initializeGit('/project')).ok, true);
   assert.equal((await bridge.pushGitBranch('/project', 'main')).ok, true);
+  assert.equal((await bridge.pullGitBranch('/project', 'main')).ok, true);
   assert.equal((await bridge.resolveGitMerge('/project', 'topic', { 'a.astro': 'ours' })).ok, true);
   assert.deepEqual(calls, [
     ['status', { projectPath: '/project' }],
@@ -111,6 +115,7 @@ test('GitChip operations forward validated payloads for each action mode', async
     ['commit', { projectPath: '/project', message: 'Update', paths: ['src/a.astro'] }],
     ['init', '/project'],
     ['push', { projectPath: '/project', branch: 'main' }],
+    ['pull', { projectPath: '/project', branch: 'main' }],
     ['resolve', { projectPath: '/project', branch: 'topic', choices: { 'a.astro': 'ours' } }],
   ]);
 });
@@ -129,26 +134,55 @@ test('GitChip transport failures are values and malformed replies throw', async 
   });
   global.window = { avb: { gitPush: async () => ({ ok: false }) } };
   await assert.rejects(bridge.pushGitBranch('/project', 'main'), /expected success/i);
-  assert.throws(
-    () => bridge.checkoutGitBranch('/project\0bad', 'topic', { kind: 'switch' }),
-    /NUL/,
-  );
+  assert.throws(() => bridge.checkoutGitBranch('/project\0bad', 'topic', { kind: 'switch' }), /NUL/);
 });
 
 test('GitChip routes every direct Git operation through the parsed bridge', () => {
   const source = fs.readFileSync(repoPath('src/features/git/GitChip.tsx'), 'utf8');
-  assert.doesNotMatch(
-    source,
-    /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/,
-  );
-  for (const operation of [
-    'readGitStatus',
-    'checkoutGitBranch',
-    'commitGitChanges',
-    'initializeGit',
-    'pushGitBranch',
-    'resolveGitMerge',
-  ]) {
+  assert.doesNotMatch(source, /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/);
+  for (const operation of ['readGitStatus', 'checkoutGitBranch', 'commitGitChanges', 'initializeGit', 'resolveGitMerge']) {
     assert.match(source, new RegExp(`\\b${operation}\\(`));
   }
+});
+
+test('Pull validates requests, response variants and failures', async () => {
+  global.window = { avb: { gitPull: async () => ({ ok: true, changed: 'yes' }) } };
+  await assert.rejects(bridge.pullGitBranch('/project', 'main'), /boolean/i);
+  assert.throws(() => bridge.pullGitBranch('/project', 1));
+  // A longer branch name than the platform's string ceiling cannot be built.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.throws(() => bridge.pullGitBranch('/project\0bad', 'main'), /NUL/);
+  const dirty = { ok: false, dirty: true, from: 'main', branch: 'origin/main', files: ['a'] };
+  global.window.avb.gitPull = async () => dirty;
+  assert.deepEqual(await bridge.pullGitBranch('/project', 'main'), { ok: true, value: dirty });
+  global.window.avb.gitPull = async () => {
+    throw new Error('offline');
+  };
+  assert.deepEqual(await bridge.pullGitBranch('/project', 'main'), { ok: false, error: 'offline' });
+});
+
+test('Incoming counts parse bounded integers and distinguish offline from zero', async () => {
+  const requests = [];
+  global.window = {
+    avb: {
+      gitIncoming: async (payload) => {
+        requests.push(payload);
+        return 0;
+      },
+    },
+  };
+  assert.deepEqual(await bridge.readIncomingGitCommits('/project', 'main'), { ok: true, value: 0 });
+  assert.deepEqual(requests, [{ projectPath: '/project', branch: 'main' }]);
+  for (const count of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', undefined]) {
+    window.avb.gitIncoming = async () => count;
+    await assert.rejects(bridge.readIncomingGitCommits('/project', 'main'));
+  }
+  window.avb.gitIncoming = async () => {
+    throw new Error('Offline');
+  };
+  assert.deepEqual(await bridge.readIncomingGitCommits('/project', 'main'), {
+    ok: false,
+    error: 'Offline',
+  });
+  assert.throws(() => bridge.readIncomingGitCommits('/project', undefined));
 });

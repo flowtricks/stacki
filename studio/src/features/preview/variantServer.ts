@@ -43,18 +43,13 @@ export function configureVariants(
     const version = revision;
     jobs.set(client, job);
     running++;
-    const current = () =>
-      version === revision && jobs.get(client) === job && client.socket.readyState === 1;
+    const current = () => version === revision && jobs.get(client) === job && client.socket.readyState === 1;
     void prepareVariants(
       root,
       request,
       render,
       renderVariant,
-      (value, html) => {
-        if (current() && client.socket.bufferedAmount < 8_000_000) {
-          sendVariant(client, request, value, html);
-        }
-      },
+      (value, html) => sendVariant(client, request, value, html, current),
       current,
       () => job.priority,
     )
@@ -78,16 +73,15 @@ export function configureVariants(
   };
 }
 
-function sendVariant(
-  client: WebSocketClient,
-  request: VariantRequest,
-  value: string | number | null | undefined,
-  html: string,
-) {
+async function sendVariant(client: WebSocketClient, request: VariantRequest, value: string | number | null | undefined, html: string, current: () => boolean) {
+  const encoded = request.gzip ? await encodeRenderedHTML(html) : { html };
+  if (!current() || client.socket.bufferedAmount >= 8_000_000) {
+    return;
+  }
   client.send('studio:variant-render', {
     request: request.request,
     value,
-    ...(request.gzip ? encodeRenderedHTML(html) : { html }),
+    ...encoded,
   });
 }
 
@@ -96,27 +90,18 @@ async function prepareVariants(
   request: VariantRequest,
   render: (path: string) => Promise<string>,
   renderVariant: (request: VariantRequest, value: string | number | null) => Promise<string>,
-  send: (value: string | number | null | undefined, html: string) => void,
+  send: (value: string | number | null | undefined, html: string) => Promise<void>,
   current: () => boolean,
   priority: () => string | number | null | undefined,
 ) {
   if ((await readSource(root, request.file)) !== request.source) {
     throw new Error('Draft changed');
   }
-  const schema = await componentSchema(
-    request.component,
-    await readSource(root, request.component),
-    (file) => readSource(root, file),
-  );
+  const schema = await componentSchema(request.component, await readSource(root, request.component), (file) => readSource(root, file));
   const field = schema.find((field) => field.name === request.prop);
   if (
     !field?.options ||
-    request.values.some(
-      (value) =>
-        value !== null &&
-        (!field.options?.includes(String(value)) ||
-          (typeof value === 'number') !== !!field.numeric),
-    )
+    request.values.some((value) => value !== null && (!field.options?.includes(String(value)) || (typeof value === 'number') !== !!field.numeric))
   ) {
     throw new Error('Not an enum option');
   }
@@ -130,31 +115,25 @@ async function prepareVariants(
     if (!current()) {
       return;
     }
-    const html =
-      value === undefined ? await render(request.path) : await renderVariant(request, value);
+    const html = value === undefined ? await render(request.path) : await renderVariant(request, value);
     bytes += Buffer.byteLength(html);
     if (bytes > 16_000_000) {
       throw new Error('Variant cache limit exceeded');
     }
     if (current()) {
-      send(value, html);
+      await send(value, html);
     }
   }
 }
 
-function variantRenderer(
-  scopes: Map<string, VariantOverride>,
-  render: (path: string, headers?: Record<string, string>) => Promise<string>,
-) {
+function variantRenderer(scopes: Map<string, VariantOverride>, render: (path: string, headers?: Record<string, string>) => Promise<string>) {
   return async (request: VariantRequest, value: string | number | null) => {
     const token = randomUUID();
     scopes.set(token, {
       component: request.component,
       prop: request.prop,
       value,
-      target: isCanvasPage(request.file)
-        ? pathFor(request.node)
-        : `${request.file}|${pathFor(request.node)}`,
+      target: isCanvasPage(request.file) ? pathFor(request.node) : `${request.file}|${pathFor(request.node)}`,
     });
     try {
       return await render(request.path, { 'x-studio-variant': token });
@@ -181,27 +160,14 @@ interface VariantJob {
   priority?: string | number | null;
 }
 function installVariantControls(server: ViteDevServer, jobs: Map<WebSocketClient, VariantJob>) {
-  server.ws.on('studio:variants-cancel', (_input: unknown, client: WebSocketClient) =>
-    jobs.delete(client),
-  );
+  server.ws.on('studio:variants-cancel', (_input: unknown, client: WebSocketClient) => jobs.delete(client));
   server.ws.on('studio:variants-prioritize', (input: unknown, client: WebSocketClient) => {
     const job = jobs.get(client);
-    if (
-      !job ||
-      !input ||
-      typeof input !== 'object' ||
-      !('request' in input) ||
-      input.request !== job.request ||
-      !('value' in input)
-    ) {
+    if (!job || !input || typeof input !== 'object' || !('request' in input) || input.request !== job.request || !('value' in input)) {
       return;
     }
     const value = input.value;
-    if (
-      value === null ||
-      (typeof value === 'string' && value.length <= 500) ||
-      (typeof value === 'number' && Number.isFinite(value))
-    ) {
+    if (value === null || (typeof value === 'string' && value.length <= 500) || (typeof value === 'number' && Number.isFinite(value))) {
       job.priority = value;
     }
   });

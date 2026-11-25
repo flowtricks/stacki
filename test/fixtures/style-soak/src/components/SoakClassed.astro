@@ -1,0 +1,6 @@
+---
+// A component that receives its class from the page and merges it with its own (the pattern
+// class:list exists for): the page's attribute is an expression the panel can only show.
+const { class: className, ...rest } = Astro.props;
+---
+<div class:list={["soak-classed", className]} {...rest}><slot /></div>

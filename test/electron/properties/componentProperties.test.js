@@ -6,14 +6,8 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  readComponentProperties,
-  editPropertyDefinition,
-} = require('#dist/electron/properties/propertyDefinitions.js');
-const {
-  renameComponentOptionValues,
-  renameComponentReferences,
-} = require('#dist/electron/properties/propertyRename.js');
+const { readComponentProperties, editPropertyDefinition } = require('#dist/electron/properties/propertyDefinitions.js');
+const { renameComponentOptionValues, renameComponentReferences } = require('#dist/electron/properties/propertyRename.js');
 const {
   inverseBatch,
   loadComponentProperties,
@@ -53,12 +47,7 @@ function failNthReplace(failAt, message, run, before = () => {}) {
     fs.renameSync = rename;
   }
 }
-const {
-  parseComponentProperties,
-  parsePropertyChange,
-  parsePropertiesResult,
-  PROPERTY_LIMITS,
-} = require('#dist/shared/properties/propertyEditing.js');
+const { parseComponentProperties, parsePropertyChange, parsePropertiesResult, PROPERTY_LIMITS } = require('#dist/shared/properties/propertyEditing.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -187,19 +176,11 @@ test('reorders fields and literal options while preserving their docs and defaul
   );
   assert.match(reordered, /readonly variant: 'outline' \| 'solid'/);
   assert.match(reordered, /variant = 'solid'/);
-  assert.equal(
-    editPropertyDefinition(source, { kind: 'order', names: ['title', 'title'] }).ok,
-    false,
-  );
+  assert.equal(editPropertyDefinition(source, { kind: 'order', names: ['title', 'title'] }).ok, false);
 });
 
-test('invalid syntax, duplicate fields and complex contracts refuse destructive edits', () => {
-  for (const change of [
-    save({ name: 'variant' }),
-    save({ type: 'string; const x = 1' }),
-    save({ type: '{broken' }),
-    save({ defaultValue: '{broken' }),
-  ]) {
+test('invalid syntax and duplicate fields are refused; complex contracts take an added prop', () => {
+  for (const change of [save({ name: 'variant' }), save({ type: 'string; const x = 1' }), save({ type: '{broken' }), save({ defaultValue: '{broken' })]) {
     assert.equal(editPropertyDefinition(source, change).ok, false);
   }
   for (const type of [
@@ -209,12 +190,20 @@ test('invalid syntax, duplicate fields and complex contracts refuse destructive 
   ]) {
     const complex = `---\n${type}\n---\n<slot/>`;
     assert.equal(readComponentProperties(complex).advanced, true);
-    assert.equal(editPropertyDefinition(complex, save()).ok, false);
+    // A combined or imported props type is still editable: the declaration goes into the type the file has.
+    const added = editPropertyDefinition(complex, {
+      kind: 'save',
+      originalName: '',
+      property: { ...property, name: 'extra', type: 'string', required: false, defaultValue: '' },
+    });
+    assert.equal(added.ok, true, type);
+    assert.equal(
+      readComponentProperties(added.value).properties.some((field) => field.name === 'extra'),
+      true,
+      type,
+    );
   }
-  assert.equal(
-    editPropertyDefinition(source, { kind: 'source', frontmatter: 'const = ' }).ok,
-    false,
-  );
+  assert.equal(editPropertyDefinition(source, { kind: 'source', frontmatter: 'const = ' }).ok, false);
   const output = value(
     editPropertyDefinition(source, {
       kind: 'source',
@@ -225,60 +214,26 @@ test('invalid syntax, duplicate fields and complex contracts refuse destructive 
   assert.match(output, /<slot \/>/);
 });
 
-test('rename keeps lexical aliases, and updates direct and computed Astro.props references', () => {
+test('rename takes the local with it, and updates direct and computed Astro.props references', () => {
   const output = value(editPropertyDefinition(source, save({ name: 'heading', defaultValue: '' })));
-  const renamed = value(
-    renameComponentReferences(output, new Set(), { from: 'title', to: 'heading' }, 'definition'),
-  );
-  assert.match(renamed, /heading: title/);
-  assert.match(renamed, /\{title\} \{Astro.props.heading\}/);
-  const computed = value(
-    renameComponentReferences(
-      '<p>{Astro.props["title"]}</p>',
-      new Set(),
-      { from: 'title', to: 'heading' },
-      'definition',
-    ),
-  );
+  const renamed = value(renameComponentReferences(output, new Set(), { from: 'title', to: 'heading' }, 'definition'));
+  assert.doesNotMatch(renamed, /heading: title/);
+  assert.match(renamed, /\{heading\} \{Astro.props.heading\}/);
+  const computed = value(renameComponentReferences('<p>{Astro.props["title"]}</p>', new Set(), { from: 'title', to: 'heading' }, 'definition'));
   assert.match(computed, /Astro.props\["heading"\]/);
 });
 
 test('rename handles expressions, shorthand, literal spreads, comments and UTF-8', () => {
-  const original =
-    `<!-- <Card title="keep"/> -->😀 é <Card {title} />` +
-    `<Card {...{title: 'x', nested: { title: 3 }}} /><Other title="keep"/>`;
-  const output = value(
-    renameComponentReferences(
-      original,
-      new Set(['Card']),
-      { from: 'title', to: 'heading' },
-      'consumer',
-    ),
-  );
+  const original = `<!-- <Card title="keep"/> -->😀 é <Card {title} />` + `<Card {...{title: 'x', nested: { title: 3 }}} /><Other title="keep"/>`;
+  const output = value(renameComponentReferences(original, new Set(['Card']), { from: 'title', to: 'heading' }, 'consumer'));
   assert.match(output, /<!-- <Card title="keep"\/> -->/);
   assert.match(output, /😀 é <Card heading=\{title\}/);
   assert.match(output, /heading: 'x', nested: \{ title: 3 \}/);
   assert.match(output, /<Other title="keep"/);
   for (const invalid of ['<Card {...data}/>', '<Card title="a" heading="b"/>']) {
-    assert.equal(
-      renameComponentReferences(
-        invalid,
-        new Set(['Card']),
-        { from: 'title', to: 'heading' },
-        'consumer',
-      ).ok,
-      false,
-    );
+    assert.equal(renameComponentReferences(invalid, new Set(['Card']), { from: 'title', to: 'heading' }, 'consumer').ok, false);
   }
-  assert.equal(
-    renameComponentReferences(
-      '<p>{Astro.props[key]}</p>',
-      new Set(),
-      { from: 'title', to: 'heading' },
-      'definition',
-    ).ok,
-    false,
-  );
+  assert.equal(renameComponentReferences('<p>{Astro.props[key]}</p>', new Set(), { from: 'title', to: 'heading' }, 'definition').ok, false);
 });
 
 test('option rename updates static values on only the resolved component prop', () => {
@@ -288,22 +243,13 @@ test('option rename updates static values on only the resolved component prop', 
     '<Card variant={ready ? "solid" : "outline"} />' +
     '<Card {...{variant: `solid`, other: "solid"}} />' +
     '<Other variant="solid" />';
-  const output = value(
-    renameComponentOptionValues(original, new Set(['Card']), 'variant', [
-      { from: "'solid'", to: "'filled'" },
-    ]),
-  );
+  const output = value(renameComponentOptionValues(original, new Set(['Card']), 'variant', [{ from: "'solid'", to: "'filled'" }]));
   assert.match(output, /<!-- <Card variant="solid"\/> -->/);
   assert.match(output, /😀 <Card variant="filled" other="solid"/);
   assert.match(output, /ready \? 'filled' : "outline"/);
   assert.match(output, /variant: 'filled', other: "solid"/);
   assert.match(output, /<Other variant="solid"/);
-  assert.equal(
-    renameComponentOptionValues('<Card {...props} />', new Set(['Card']), 'variant', [
-      { from: "'solid'", to: "'filled'" },
-    ]).ok,
-    false,
-  );
+  assert.equal(renameComponentOptionValues('<Card {...props} />', new Set(['Card']), 'variant', [{ from: "'solid'", to: "'filled'" }]).ok, false);
 });
 
 test('project-wide rename follows import aliases and does not touch unrelated components', () => {
@@ -334,9 +280,7 @@ test('project-wide option rename updates every static instance value and the def
         `<Alias variant="solid"/><Alias variant={ready ? 'solid' : 'outline'}/>` +
         `<Other variant="solid"/>`,
     );
-    const variant = readComponentProperties(source).properties.find(
-      (field) => field.name === 'variant',
-    );
+    const variant = readComponentProperties(source).properties.find((field) => field.name === 'variant');
     const result = updateComponentProperties(
       {
         projectPath: root,
@@ -355,10 +299,7 @@ test('project-wide option rename updates every static instance value and the def
       },
       writer,
     );
-    assert.equal(
-      value(result).properties.find((field) => field.name === 'variant').type,
-      "'filled' | 'outline'",
-    );
+    assert.equal(value(result).properties.find((field) => field.name === 'variant').type, "'filled' | 'outline'");
     assert.match(fs.readFileSync(component, 'utf8'), /variant = 'filled'/);
     const content = fs.readFileSync(page, 'utf8');
     assert.match(content, /<Alias variant="filled"/);
@@ -369,12 +310,9 @@ test('project-wide option rename updates every static instance value and the def
 
 test('failed option rename writes restore the component and its instances', () => {
   project(({ root, component, page }) => {
-    const beforePage =
-      `---\nimport Alias from '../components/Card.astro';\n---\n` + `<Alias variant="solid"/>`;
+    const beforePage = `---\nimport Alias from '../components/Card.astro';\n---\n` + `<Alias variant="solid"/>`;
     fs.writeFileSync(page, beforePage);
-    const variant = readComponentProperties(source).properties.find(
-      (field) => field.name === 'variant',
-    );
+    const variant = readComponentProperties(source).properties.find((field) => field.name === 'variant');
     failNthReplace(2, 'Simulated option write failure', () => {
       const result = updateComponentProperties(
         {
@@ -411,10 +349,7 @@ test('source conflicts and unresolved spreads leave every project file untouched
       source,
       change: save({ name: 'heading' }),
     };
-    assert.equal(
-      updateComponentProperties({ ...request, source: source + '\n' }, writer).ok,
-      false,
-    );
+    assert.equal(updateComponentProperties({ ...request, source: source + '\n' }, writer).ok, false);
     fs.writeFileSync(page, before + '<Alias {...props}/>');
     assert.equal(updateComponentProperties(request, writer).ok, false);
     assert.equal(fs.readFileSync(component, 'utf8'), source);
@@ -459,13 +394,10 @@ test('rollback leaves a file another program changed and names it', () => {
       2,
       'Simulated disk failure',
       (replaced) => {
-        const result = updateComponentProperties(
-          { projectPath: root, file: component, source, change: save({ name: 'heading' }) },
-          writer,
-        );
+        const result = updateComponentProperties({ projectPath: root, file: component, source, change: save({ name: 'heading' }) }, writer);
         assert.equal(result.ok, false);
         assert.equal(result.error.code, 'rollback');
-        assert.match(result.error.message, /changed by another program, left as is: /);
+        assert.match(result.error.message, /changed by another program, so they were left as is: /);
         assert.ok(result.error.message.includes(path.basename(replaced[0])), result.error.message);
         assert.equal(fs.readFileSync(replaced[0], 'utf8'), 'EXTERNAL');
         const untouched = replaced[0] === canonicalComponent ? canonicalPage : canonicalComponent;
@@ -494,10 +426,7 @@ test('a read-back mismatch is a write-race that rolls back instead of asserting'
       }
     };
     try {
-      const result = updateComponentProperties(
-        { projectPath: root, file: component, source, change: save({ name: 'heading' }) },
-        writer,
-      );
+      const result = updateComponentProperties({ projectPath: root, file: component, source, change: save({ name: 'heading' }) }, writer);
       assert.equal(result.ok, false);
       assert.equal(result.error.code, 'write-race');
       assert.match(result.error.message, /changes restored/);
@@ -533,10 +462,7 @@ const { element = "button", render = true, extra } = Astro.props as AllProps;
     expression: '"button"',
     line: 6,
   });
-  assert.equal(
-    data.properties.find((field) => field.name === 'extra').origin.declarations[0].label,
-    'AllProps.extra',
-  );
+  assert.equal(data.properties.find((field) => field.name === 'extra').origin.declarations[0].label, 'AllProps.extra');
   assert.deepEqual(parseComponentProperties(data), data);
 });
 
@@ -546,9 +472,7 @@ test('source tracing terminates cycles and avoids inventing generic or imported 
     'type Base = { title?: number }; type Props = Omit<Base, "title">;',
     'import type { Props } from "./shared";',
   ]) {
-    const data = readComponentProperties(
-      `---\n${declaration}\n` + 'const { title = "Hello" } = Astro.props;\n---\n<div />',
-    );
+    const data = readComponentProperties(`---\n${declaration}\n` + 'const { title = "Hello" } = Astro.props;\n---\n<div />');
     const title = data.properties.find((field) => field.name === 'title');
     assert.equal(title.origin.declarations.length, declaration.startsWith('type Props') ? 1 : 0);
     assert.equal(title.origin.defaultValue.expression, '"Hello"');
@@ -606,7 +530,7 @@ const { eyebrow, theme = "inherit", variant = "default", image, ...rest } = Astr
 ---
 <div>{eyebrow} {Astro.props.eyebrow}</div>`;
 
-test('common props remain editable while variant restrictions stay specific to each prop', () => {
+test('common props stay editable and variant rules are described, not locked', () => {
   const data = readComponentProperties(compositeCard);
   assert.equal(data.advanced, true);
   const eyebrow = data.properties.find((field) => field.name === 'eyebrow');
@@ -614,30 +538,24 @@ test('common props remain editable while variant restrictions stay specific to e
   assert.equal(eyebrow.description, 'Small text above the heading.');
   assert.deepEqual(eyebrow.conditions, []);
   const image = data.properties.find((field) => field.name === 'image');
-  assert.equal(image.editing.kind, 'restricted');
-  assert.deepEqual(image.conditions, [
-    'variant = "default": not allowed',
-    'variant = "cover": optional',
-    'variant = "stacked": optional',
-  ]);
+  assert.equal(image.editing.kind, 'editable');
+  assert.deepEqual(image.conditions, ['variant = "default": not allowed', 'variant = "cover": optional', 'variant = "stacked": optional']);
   const theme = data.properties.find((field) => field.name === 'theme');
-  assert.equal(theme.editing.kind, 'restricted');
+  assert.equal(theme.editing.kind, 'editable');
   assert.equal(theme.conditions.at(-1), 'variant = "stacked": not allowed');
   assert.equal(
     editPropertyDefinition(compositeCard, {
       kind: 'save',
       originalName: 'image',
-      property: { ...image, editing: { kind: 'editable' } },
+      property: { ...image, description: 'Cover image' },
     }).ok,
-    false,
+    true,
   );
   assert.deepEqual(parseComponentProperties(data), data);
 });
 
 test('common declaration edits preserve variants, runtime assertions and unrelated types', () => {
-  const eyebrow = readComponentProperties(compositeCard).properties.find(
-    (property) => property.name === 'eyebrow',
-  );
+  const eyebrow = readComponentProperties(compositeCard).properties.find((property) => property.name === 'eyebrow');
   const changed = value(
     editPropertyDefinition(compositeCard, {
       kind: 'save',
@@ -659,9 +577,7 @@ test('common declaration edits preserve variants, runtime assertions and unrelat
   assert.equal(variants(changed), variants(compositeCard));
   assert.match(changed, /Astro.props as AllProps/);
   assert.match(changed, /type Other = \{ eyebrow: number \}/);
-  const reread = readComponentProperties(changed).properties.find(
-    (property) => property.name === 'eyebrow',
-  );
+  const reread = readComponentProperties(changed).properties.find((property) => property.name === 'eyebrow');
   assert.equal(reread.required, true);
   assert.equal(reread.readonly, true);
   assert.equal(reread.description, 'New tooltip');
@@ -671,79 +587,61 @@ test('common declaration edits preserve variants, runtime assertions and unrelat
   assert.equal(variants(removed), variants(compositeCard));
 });
 
-test(
-  'renaming a common prop updates its instances, ' + 'runtime binding and related type references',
-  () => {
-    project(({ root, component, page }) => {
-      fs.writeFileSync(component, compositeCard);
-      fs.writeFileSync(
-        page,
-        '---\nimport Card from "../components/Card.astro";\n---\n' +
-          '<Card eyebrow="Hello"/><Card eyebrow="Again"/>',
-      );
-      const eyebrow = readComponentProperties(compositeCard).properties.find(
-        (property) => property.name === 'eyebrow',
-      );
-      const updated = value(
-        updateComponentProperties(
-          {
-            projectPath: root,
-            file: component,
-            source: compositeCard,
-            change: {
-              kind: 'save',
-              originalName: 'eyebrow',
-              property: { ...eyebrow, name: 'kicker' },
-            },
+test('renaming a common prop updates its instances, ' + 'runtime binding and related type references', () => {
+  project(({ root, component, page }) => {
+    fs.writeFileSync(component, compositeCard);
+    fs.writeFileSync(page, '---\nimport Card from "../components/Card.astro";\n---\n' + '<Card eyebrow="Hello"/><Card eyebrow="Again"/>');
+    const eyebrow = readComponentProperties(compositeCard).properties.find((property) => property.name === 'eyebrow');
+    const updated = value(
+      updateComponentProperties(
+        {
+          projectPath: root,
+          file: component,
+          source: compositeCard,
+          change: {
+            kind: 'save',
+            originalName: 'eyebrow',
+            property: { ...eyebrow, name: 'kicker' },
           },
-          writer,
-        ),
-      );
-      assert.equal(
-        updated.properties.find((property) => property.name === 'kicker').editing.kind,
-        'editable',
-      );
-      const after = fs.readFileSync(component, 'utf8');
-      assert.match(after, /kicker: eyebrow/);
-      assert.match(after, /Astro.props.kicker/);
-      assert.match(after, /Base\["kicker"\]/);
-      assert.match(after, /AllProps\["kicker"\]/);
-      assert.match(after, /Pick<Base, "kicker">/);
-      assert.match(after, /Other\["eyebrow"\]/);
-      assert.match(after, /\{eyebrow\}/);
-      assert.equal(fs.readFileSync(page, 'utf8').match(/kicker=/g).length, 2);
-    });
-  },
-);
+        },
+        writer,
+      ),
+    );
+    assert.equal(updated.properties.find((property) => property.name === 'kicker').editing.kind, 'editable');
+    const after = fs.readFileSync(component, 'utf8');
+    assert.doesNotMatch(after, /kicker: eyebrow/);
+    assert.match(after, /Astro.props.kicker/);
+    assert.match(after, /Base\["kicker"\]/);
+    assert.match(after, /AllProps\["kicker"\]/);
+    assert.match(after, /Pick<Base, "kicker">/);
+    assert.match(after, /Other\["eyebrow"\]/);
+    assert.match(after, /\{kicker\}/);
+    assert.equal(fs.readFileSync(page, 'utf8').match(/kicker=/g).length, 2);
+  });
+});
 
-test('ambiguous common declarations remain restricted without flattening their contracts', () => {
+test('ambiguous common declarations stay editable without flattening their contracts', () => {
   for (const declaration of [
     'type Props = { eyebrow?: string } & { eyebrow?: "narrow" };',
     'type Props = Base; type Base = Props & { eyebrow?: string };',
     'type Base<T> = { eyebrow?: T }; type Props = Base<string>;',
     'export type Base = { eyebrow?: string }; type Props = Base;',
-    'import type { Shared } from "./shared"; type Props = Shared & { eyebrow?: string };',
-    'import type { HTMLAttributes } from "./shared"; ' +
-      'type Props = HTMLAttributes & { eyebrow?: string };',
-    'import type { Omit } from "./shared"; ' +
-      'import type { HTMLAttributes } from "astro/types"; ' +
-      'type Props = Omit<HTMLAttributes<"div">, "eyebrow"> & { eyebrow?: string };',
-    'type Props = { eyebrow?: string }; type AllProps = { eyebrow?: string };',
+    'type Props = { [Key in "eyebrow" | "other"]?: string } & { eyebrow?: string };',
+    'import type { Theme } from "./shared"; type Props = { a?: string } & { eyebrow?: Theme };',
   ]) {
-    const assertion = declaration.includes('type AllProps') ? ' as AllProps' : '';
+    const assertion = '';
     const source = `---\n${declaration}\nconst { eyebrow } = Astro.props${assertion};\n---\n`;
-    const eyebrow = readComponentProperties(source).properties.find(
-      (property) => property.name === 'eyebrow',
-    );
-    assert.equal(eyebrow.editing.kind, 'restricted', declaration);
-    assert.equal(
+    const eyebrow = readComponentProperties(source).properties.find((property) => property.name === 'eyebrow');
+    assert.equal(eyebrow.editing.kind, 'editable', declaration);
+    const saved = value(
       editPropertyDefinition(source, {
         kind: 'save',
         originalName: 'eyebrow',
         property: { ...eyebrow, description: 'Changed' },
-      }).ok,
-      false,
+      }),
     );
+    assert.match(saved, /Changed/, declaration);
+    assert.equal(readComponentProperties(saved).properties.find((property) => property.name === 'eyebrow').description, 'Changed', declaration);
   }
 });
 
@@ -751,9 +649,7 @@ test('common props support aliased Astro attribute imports without changing thei
   const source = compositeCard
     .replace('import type { HTMLAttributes }', 'import type { HTMLAttributes as Attributes }')
     .replace('HTMLAttributes<"div">', 'Attributes<"div">');
-  const eyebrow = readComponentProperties(source).properties.find(
-    (field) => field.name === 'eyebrow',
-  );
+  const eyebrow = readComponentProperties(source).properties.find((field) => field.name === 'eyebrow');
   assert.equal(eyebrow.editing.kind, 'editable');
   const output = value(
     editPropertyDefinition(source, {
@@ -775,9 +671,7 @@ type Props = HTMLAttributes<"div"> & {
 const { render = true, class: className, ...rest } = Astro.props;
 ---
 <div class={className} {...rest} />`;
-  const inherited = readComponentProperties(source).properties.find(
-    (field) => field.name === 'class',
-  );
+  const inherited = readComponentProperties(source).properties.find((field) => field.name === 'class');
   assert.equal(inherited.editing.kind, 'override');
   const output = value(
     editPropertyDefinition(source, {
@@ -799,14 +693,15 @@ const { render = true, class: className, ...rest } = Astro.props;
   const reread = readComponentProperties(output).properties.find((field) => field.name === 'class');
   assert.equal(reread.editing.kind, 'editable');
   assert.equal(reread.defaultValue, '"eyebrow"');
-  assert.equal(
+  const renamed = value(
     editPropertyDefinition(source, {
       kind: 'save',
       originalName: 'class',
       property: { ...inherited, name: 'className' },
-    }).ok,
-    false,
+    }),
   );
+  assert.match(renamed, /className\?: /, 'the renamed prop is declared locally');
+  // Deleting is refused only while the component still reads the value.
   assert.equal(editPropertyDefinition(source, { kind: 'remove', name: 'class' }).ok, false);
 });
 
@@ -826,9 +721,7 @@ type AllProps = Base & { variant?: "default" | "cover" };
 const { src, width, variant = "default", ...rest } = Astro.props as AllProps;
 ---
 <img {src} {width} {...rest} />`;
-  const imageSource = readComponentProperties(source).properties.find(
-    (field) => field.name === 'src',
-  );
+  const imageSource = readComponentProperties(source).properties.find((field) => field.name === 'src');
   assert.deepEqual(imageSource.editing, { kind: 'editable' });
   const output = value(
     editPropertyDefinition(source, {
@@ -847,10 +740,7 @@ const { src, width, variant = "default", ...rest } = Astro.props as AllProps;
   assert.match(output, /readonly src\?: ImageMetadata \| string \| URL/);
   assert.match(output, /src = "\/placeholder\.png"/);
   assert.match(output, /Updated image tooltip\./);
-  assert.equal(
-    readComponentProperties(output).properties.find((field) => field.name === 'src').editing.kind,
-    'editable',
-  );
+  assert.equal(readComponentProperties(output).properties.find((field) => field.name === 'src').editing.kind, 'editable');
 });
 
 test('property permissions and conditions are validated at the boundary', () => {
@@ -869,12 +759,7 @@ test('property permissions and conditions are validated at the boundary', () => 
   ]) {
     assert.throws(() => parseComponentProperties({ ...data, properties: [{ ...field, editing }] }));
   }
-  for (const conditions of [
-    'bad',
-    [42],
-    Array(PROPERTY_LIMITS.fieldsMax + 1).fill('rule'),
-    ['x'.repeat(PROPERTY_LIMITS.textCharsMax + 1)],
-  ]) {
+  for (const conditions of ['bad', [42], Array(PROPERTY_LIMITS.fieldsMax + 1).fill('rule'), ['x'.repeat(PROPERTY_LIMITS.textCharsMax + 1)]]) {
     assert.throws(() =>
       parseComponentProperties({
         ...data,
@@ -885,10 +770,7 @@ test('property permissions and conditions are validated at the boundary', () => 
 });
 
 test('contracts reject malformed payloads and enforce resource bounds', () => {
-  assert.deepEqual(
-    parseComponentProperties(readComponentProperties(source)),
-    readComponentProperties(source),
-  );
+  assert.deepEqual(parseComponentProperties(readComponentProperties(source)), readComponentProperties(source));
   assert.deepEqual(parsePropertyChange(save()), save());
   assert.deepEqual(
     parsePropertyChange({
@@ -957,9 +839,7 @@ test('contracts reject malformed payloads and enforce resource bounds', () => {
 });
 
 test('defaults apply to direct reads without being shadowed by template locals', () => {
-  const input =
-    '---\ninterface Props { title?: string }\n---\n' +
-    '<p>{Astro.props.title}</p>{[1].map((title) => <b>{Astro.props.title} {title}</b>)}';
+  const input = '---\ninterface Props { title?: string }\n---\n' + '<p>{Astro.props.title}</p>{[1].map((title) => <b>{Astro.props.title} {title}</b>)}';
   const output = value(editPropertyDefinition(input, save()));
   assert.match(output, /const \{ title = "New title" \} = Astro.props/);
   assert.match(output, /const _stackiDefault0 = title/);
@@ -976,10 +856,10 @@ test('defaults apply to direct reads without being shadowed by template locals',
   assert.equal(evaluate({ props: {} }), 'New title');
   assert.equal(evaluate({ props: { title: 'Instance' } }), 'Instance');
   assert.equal(evaluate({ props: { title: jsonNull } }), jsonNull);
-  const before =
-    '---\ninterface Props { title?: string }\n' +
-    'const value = Astro.props.title;\n---\n<p>{value}</p>';
-  assert.equal(editPropertyDefinition(before, save()).ok, false);
+  const before = '---\ninterface Props { title?: string }\n' + 'const value = Astro.props.title;\n---\n<p>{value}</p>';
+  // A read that precedes the default no longer blocks it: the binding goes before the first statement of code.
+  const early = value(editPropertyDefinition(before, save()));
+  assert.ok(early.indexOf('const { title = "New title" }') < early.indexOf('const value'), early);
 });
 
 test('adding a prop creates its binding, and unused bindings can be removed', () => {
@@ -1024,9 +904,7 @@ test('untyped props can be ordered and quoted keys remain in source mode', () =>
     readComponentProperties(output).properties.map((field) => field.name),
     ['count', 'title'],
   );
-  const quoted = readComponentProperties(
-    '---\ninterface Props { "aria-label"?: string }\n---\n<div/>',
-  );
+  const quoted = readComponentProperties('---\ninterface Props { "aria-label"?: string }\n---\n<div/>');
   assert.equal(quoted.advanced, true);
   assert.equal(parseComponentProperties(quoted).properties[0].name, 'aria-label');
 });
@@ -1036,9 +914,7 @@ test('renames indexed Props references without changing unrelated string literal
     '---\ninterface Props { title?: string }\n' +
     'type Value = Props["title"];\ntype Chosen = Pick<Props, "title">;\n' +
     'type Unrelated = "title";\n---\n<p>{Astro.props.title}</p>';
-  const output = value(
-    renameComponentReferences(input, new Set(), { from: 'title', to: 'heading' }, 'definition'),
-  );
+  const output = value(renameComponentReferences(input, new Set(), { from: 'title', to: 'heading' }, 'definition'));
   assert.match(output, /Props\["heading"\]/);
   assert.match(output, /Pick<Props, "heading">/);
   assert.match(output, /Unrelated = "title"/);
@@ -1056,10 +932,7 @@ test('renames resolve tsconfig aliases and MDX instances', () => {
       }),
     );
     const mdx = path.join(root, 'src/pages/article.mdx');
-    fs.writeFileSync(
-      mdx,
-      'import Feature from "@/components/Card.astro";\n\n# Hello\n\n' + '<Feature title="Story" />',
-    );
+    fs.writeFileSync(mdx, 'import Feature from "@/components/Card.astro";\n\n# Hello\n\n' + '<Feature title="Story" />');
     const result = updateComponentProperties(
       {
         projectPath: root,
@@ -1099,7 +972,7 @@ test('re-exports, runtime aliases, and dynamic imports cannot cause partial rena
   }
 });
 
-test('deleting a property refuses live instance values', () => {
+test('deleting a property removes live instance values in the same batch (propertyRemoval.test.ts covers every form)', () => {
   project(({ root, component, page }) => {
     const input = '---\ninterface Props { title?: string }\n---\n<slot/>';
     fs.writeFileSync(component, input);
@@ -1112,10 +985,9 @@ test('deleting a property refuses live instance values', () => {
       },
       writer,
     );
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /still passes title/);
-    assert.equal(fs.readFileSync(component, 'utf8'), input);
-    assert.match(fs.readFileSync(page, 'utf8'), /title=\{title\}/);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(fs.readFileSync(component, 'utf8'), '---\ninterface Props { }\n---\n<slot/>');
+    assert.match(fs.readFileSync(page, 'utf8'), /<Alias\/><Other title="untouched"\/><p>title<\/p>/);
   });
 });
 
@@ -1162,7 +1034,7 @@ const { gap = 'small', otherGap = 'large', render = true, ...rest } = Astro.prop
     }),
   );
   assert.match(options, /spacing: 'large' \| 'compact' \| 'medium'/);
-  assert.match(options, /spacing: gap = 'compact'/);
+  assert.match(options, /const \{ spacing = 'compact',/);
   assert.match(options, /type ContainerGap = GapBase \| 'large'/);
   assert.match(options, /otherGap\?: ContainerGap/);
   const reordered = value(
@@ -1188,14 +1060,7 @@ test('type aliases resolve within bounds without expanding imported or recursive
     ["import type { Options } from './types';", 'Options', 'Options'],
     ['type Options = { value: string };', 'Options', 'Options'],
     ["type Options = 'one'; type Options = 'two';", 'Options', 'Options'],
-    [
-      Array.from(
-        { length: 70 },
-        (_, index) => `type A${index} = ${index === 69 ? "'last'" : `A${index + 1}`};`,
-      ).join('\n'),
-      'A0',
-      'A0',
-    ],
+    [Array.from({ length: 70 }, (_, index) => `type A${index} = ${index === 69 ? "'last'" : `A${index + 1}`};`).join('\n'), 'A0', 'A0'],
   ]) {
     const input = `---\n${aliases}\ninterface Props { value?: ${type} }\n---\n<div/>`;
     assert.equal(readComponentProperties(input).properties[0].type, expected);
@@ -1204,10 +1069,7 @@ test('type aliases resolve within bounds without expanding imported or recursive
 
 test('renaming a local prop on inherited Props updates website instances', () => {
   project(({ root, component, page }) => {
-    const input = source.replace(
-      'interface Props {',
-      "interface Props extends HTMLAttributes<'section'> {",
-    );
+    const input = source.replace('interface Props {', "interface Props extends HTMLAttributes<'section'> {");
     fs.writeFileSync(component, input);
     value(
       updateComponentProperties(
@@ -1263,7 +1125,7 @@ test('the inverse batch undoes a rename, redoes it, and refuses a changed file',
       revertComponentProperties(token, store, writer),
       {
         ok: false,
-        error: { code: 'expired', message: 'This property change can no longer be undone.' },
+        error: { code: 'expired', message: 'This property change can no longer be undone.', messageRef: { key: 'props.edit.expired' } },
       },
       'a token is spent once',
     );
@@ -1288,4 +1150,57 @@ test('the undo store keeps at most LIMITS.undoEntriesMax batches, oldest out fir
     store.record([]);
   }
   assert.equal(store.take(first), undefined, 'the oldest went');
+});
+
+// Goal: a prop the public Props type and the runtime `as AllProps` type both declare is
+// editable, and a save writes both declarations, the destructure default and every
+// usage together.
+// Method: the Lumos Button's shape (a Props intersection beside a flat AllProps), saved
+// through each field, renamed and removed; plus the shapes the writer cannot keep in
+// step (a runtime type that omits the prop or states it per variant) stay read-only.
+const mirrored = `---
+type Kind = { variant?: "main" } | { variant: "link" };
+type Props = {
+  /** Set to \`false\` to omit. */
+  render?: boolean;
+} & Kind;
+type AllProps = {
+  render?: boolean;
+  variant?: "main" | "link";
+};
+const { render = true, variant = "main" } = Astro.props as AllProps;
+---
+{render && <b>{variant}</b>}`;
+
+test('a prop declared in both the public and the runtime type is editable and written in both', () => {
+  const render = readComponentProperties(mirrored).properties.find((property) => property.name === 'render');
+  assert.deepEqual(render.editing, { kind: 'editable' });
+  const saved = value(
+    editPropertyDefinition(mirrored, {
+      kind: 'save',
+      originalName: 'render',
+      property: { ...render, type: 'boolean | undefined', required: true, defaultValue: 'false', description: 'Show it' },
+    }),
+  );
+  assert.equal((saved.match(/render: boolean \| undefined/g) ?? []).length, 2, 'both declarations take the type and required mark');
+  assert.match(saved, /render = false/);
+  assert.match(saved, /Show it/);
+  assert.equal((saved.match(/Show it/g) ?? []).length, 1, 'the tooltip is written once, on the public type');
+  assert.match(saved, /variant\?: "main" \| "link"/, 'neighbours are untouched');
+  const renamed = value(editPropertyDefinition(mirrored, { kind: 'save', originalName: 'render', property: { ...render, name: 'visible' } }));
+  assert.equal((renamed.match(/visible\?: boolean/g) ?? []).length, 2);
+  assert.match(renamed, /\{visible &&/);
+  assert.doesNotMatch(renamed, /render/);
+  const removed = value(editPropertyDefinition(mirrored.replace('{render && <b>{variant}</b>}', '<b>{variant}</b>'), { kind: 'remove', name: 'render' }));
+  assert.doesNotMatch(removed, /render/, 'both declarations and the default go');
+});
+
+test('a runtime type that omits the prop or states it per variant stays editable', () => {
+  for (const runtime of ['type AllProps = { variant?: string };', 'type AllProps = { render?: boolean; variant: "a" } | { render: boolean; variant: "b" };']) {
+    const source = `---\ntype Props = { render?: boolean; variant?: string };\n${runtime}\nconst { render = true } = Astro.props as AllProps;\n---\n`;
+    const render = readComponentProperties(source).properties.find((property) => property.name === 'render');
+    assert.equal(render.editing.kind, 'editable', runtime);
+    const saved = value(editPropertyDefinition(source, { kind: 'save', originalName: 'render', property: { ...render, type: 'string' } }));
+    assert.equal(readComponentProperties(saved).properties.find((property) => property.name === 'render').type, 'string', runtime);
+  }
 });

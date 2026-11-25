@@ -1,0 +1,877 @@
+/* Settings → Roles: one compact card per role on a soft fill (a header, then flat summary rows that open a detail
+   view), and the detail views themselves (back + title, search, list) on the dialog's own surface. One level of
+   filled surface: the card, or the add field; rows are transparent with a hover wash. Rhythm: 16px card padding,
+   12px between a card's header and rows, 12px between cards. Space and fills, never lines. */
+.app-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+/* "View as" and "People in no role" are Settings rows (SettingsRow); their
+   pickers share one fixed width so the two line up. */
+.app-roles .app-roles-dropdown {
+  width: 180px;
+}
+/* The two Access cards sit side by side in equal columns (the section's own 8px gap between them), each stacking its
+   label above its picker so the label never truncates. Under 520px of panel width they stack one under another.
+   The wrapper is the query container; the grid inside it is what changes columns. */
+.app-roles-access {
+  container-type: inline-size;
+}
+.app-roles-access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.app-roles-access-grid .app-settings-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+.app-roles-access-grid .app-settings-row-control {
+  justify-content: flex-start;
+}
+.app-roles-access-grid .app-roles-dropdown {
+  inline-size: 100%;
+  max-inline-size: 180px;
+}
+@container (inline-size < 520px) {
+  .app-roles-access-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-role {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+/* Cards sit 12px apart: the section's own 8px gap plus this. */
+.app-role + .app-role {
+  margin-top: 4px;
+}
+/* The header shares the rows' columns: its icon sits in the same 16px column as theirs, and its buttons end where
+   their chevrons do (rows pad 8px a side; the 24px buttons' glyphs centre 12px from the edge, the chevrons 14px). */
+.app-role-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding-inline: 8px 2px;
+}
+.app-role-heading .app-role-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--text-faint);
+}
+.app-role-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+/* The member count: dim, beside the name. */
+.app-role-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-role-name {
+  flex: 1 1 auto;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.app-role-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+/* A role card is itself the hover fill, so its "…" brightens on a lighter wash. */
+.app-settings .app-role .more-menu-button:hover:not(:disabled),
+.app-settings .app-role .more-menu-button:focus-visible,
+.app-settings .app-role .more-menu-button.is-open {
+  background: #ffffff14;
+}
+.app-role-icon:hover:not(:disabled) {
+  background: #ffffff14;
+  color: var(--text);
+}
+/* The members view: the people as flat rows, then the add field as the one filled row. The custom properties are
+   solid so their text contrast is exact (test/renderer/app/rolesContrast.test.js). */
+.app-role-members {
+  --people-add: #262626;
+  --people-add-focus: #303030;
+  --people-button-off: #3a3a3a;
+  --people-button-on: #006fba;
+  --people-button-hover: #0077c7;
+  --people-you: #1b4a73;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.app-role-people-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-role-chip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.app-role-chip:hover {
+  background: var(--bg-hover);
+}
+.app-role-chip .history-avatar {
+  width: 24px;
+  height: 24px;
+  margin-inline-start: 0;
+  font-size: 10px;
+  line-height: 24px;
+}
+.app-role-person-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The signed-in person's own row says so quietly. */
+.app-role-you {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--people-you);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+}
+/* The remove × sits at the row's end and shows on hover and keyboard focus only. */
+.app-role-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.app-role-chip:hover button,
+.app-role-chip button:focus-visible {
+  opacity: 1;
+}
+.app-role-chip button:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+/* The empty state is one dim line inside the card, above the add row. */
+.app-role-none {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+/* The new-role form (RolesSettings.tsx) and, inside a card, the compact member field (MemberPicker.tsx). */
+.app-role-add {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+.app-role-add input {
+  flex: 0 1 220px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 12px;
+}
+.app-role-add button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 12px;
+}
+.app-role-add button:hover:not(:disabled) {
+  background: #ffffff1a;
+}
+.app-role-add button:disabled {
+  opacity: 0.45;
+}
+/* In a card the add field is the card's last row, a step lighter than the people above it: a person-plus mark,
+   the input, and the Add button at the row's end, quiet until there is text and accent once it can add. */
+.app-role-members .app-role-add {
+  margin-top: 0;
+}
+.app-role-members .app-role-member-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-block: 0;
+  padding-inline: 10px 4px;
+  border-radius: 6px;
+  background: var(--people-add);
+}
+.app-role-members .app-role-member-field:focus-within {
+  background: var(--people-add-focus);
+}
+.app-role-members .app-role-member-field:has(input[aria-invalid='true']) {
+  /* A refused address takes the error look (a fill, never an outline); the reason is a toast. */
+  background: rgba(255, 69, 58, 0.18);
+}
+.app-role-add-icon {
+  flex: none;
+  color: var(--text-dim);
+}
+.app-role-members .app-role-add input::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.app-role-members .app-role-add input {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.app-role-members .app-role-add input:focus-visible {
+  outline: none;
+}
+.app-role-members .app-role-add .app-role-add-button {
+  flex: none;
+  min-height: 26px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--people-button-off);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.app-role-members .app-role-add .app-role-add-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.app-role-members .app-role-add .app-role-add-button:not(:disabled) {
+  background: var(--people-button-on);
+  color: #fff;
+}
+.app-role-members .app-role-add .app-role-add-button:hover:not(:disabled) {
+  background: var(--people-button-hover);
+}
+/* The permissions view: one group under another, each a header (name, a muted count, the group switch) over its
+   rows, one column, so every group reads the same way down the list. */
+.app-role-access {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-role-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-role-group {
+  display: flex;
+  flex-direction: column;
+}
+/* The group's header: its name in sentence case, a muted count, then its switch at the end. */
+.app-role-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+.app-role-group h4 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-group-count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* A permission: its feature's icon in a fixed column, the label, then the switch. */
+.app-role-toggle {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.app-role-toggle:hover {
+  background: var(--bg-hover);
+}
+.app-role-toggle-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+.app-role-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An app's own permissions (RoleAppPermissions.tsx): the app's icon and name as
+   the heading, then rows of a label over a muted description, then the switch. */
+.app-role-app-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app-role-app-heading > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-app-permission {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 0;
+}
+.app-role-app-permission-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-role-app-permission-description {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.35;
+}
+/* A role's name, renamed in place: it reads as a heading until clicked. */
+.app-role-name-button {
+  min-height: 26px;
+  margin-block: 0;
+  margin-inline: -6px 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: text;
+}
+button.app-role-name-button:hover:not(:disabled) {
+  background: #ffffff10;
+}
+.app-role button:focus-visible,
+.app-role input:focus-visible,
+.app-roles-new button:focus-visible,
+.app-roles-new input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* "Pinned to sidebar" (RolePinnedApps.tsx): on every card under its members, the role's
+   pins as rows in rail order on fills, each with a grip, its tile and name and a remove
+   button, then the "Add app" dropdown. Fills, never lines. */
+.app-role-pins {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.app-role-pins-skeleton {
+  display: flex;
+  gap: 6px;
+}
+.app-role-pin-list {
+  max-height: min(384px, calc(100dvh - 300px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* A pin is a flat row across the view, transparent at rest with a hover wash, like every other row here. */
+.app-role-pin {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  cursor: grab;
+}
+.app-role-pin:hover {
+  background: var(--bg-hover);
+}
+/* The grip and the remove × show on hover and keyboard focus; at rest a pin reads as its logo and name. */
+.app-role-pin .app-role-pin-grip,
+.app-role-pin .app-role-pin-remove {
+  opacity: 0;
+}
+.app-role-pin:hover .app-role-pin-grip,
+.app-role-pin:hover .app-role-pin-remove,
+.app-role-pin:focus-visible .app-role-pin-grip,
+.app-role-pin:focus-visible .app-role-pin-remove,
+.app-role-pin .app-role-pin-remove:focus-visible {
+  opacity: 1;
+}
+.app-role-pin:focus-visible {
+  outline: none;
+  background: #ffffff1a;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.app-role-pin.is-ignored .app-role-pin-name,
+.app-role-pin.is-ignored .app-role-app-icon {
+  opacity: 0.5;
+}
+/* While dragging, the row being moved fades; where it would land is the Navigator's
+   drop line (src/ui/DropLine.tsx), drawn in the 2px gap between rows. */
+.app-role-pin.is-dragging {
+  opacity: 0.4;
+}
+.app-role-pin-gap {
+  position: absolute;
+  inset-inline: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.app-role-pin-gap.is-before {
+  top: -1px;
+}
+.app-role-pin-gap.is-after {
+  bottom: -1px;
+}
+.app-role-pin-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-pin-reason {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.app-role-pin-grip,
+.app-role-pin-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.app-role-pin-grip {
+  cursor: grab;
+}
+.app-role-pin-remove:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+/* "+ Add app": a ghost trigger sized to its content, the first row above the pins. */
+.app-role-pins-add {
+  display: flex;
+}
+.app-role-pins-dropdown.dd-trigger {
+  width: auto;
+  min-height: 24px;
+  padding-block: 0;
+  padding-inline: 6px 8px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-role-pins-dropdown.dd-trigger::before {
+  content: '+';
+  font-size: 14px;
+  line-height: 1;
+}
+.app-role-pins-dropdown.dd-trigger:hover {
+  background: #ffffff10;
+  color: var(--text);
+}
+.app-role-pins-dropdown .dd-label.dim {
+  flex: none;
+  color: inherit;
+}
+.app-role-pins-dropdown .dd-chevron {
+  display: none;
+}
+.app-role-pins-empty {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+/* An app the role may not use: its section reads muted, its permission switches read
+   off while keeping their saved values (RoleAppPermissions.tsx). The access switch in
+   the heading stays at full strength, since it is the one that turns the app on. */
+.app-role-app-group.is-off .app-role-app-heading,
+.app-role-app-group.is-off .app-role-app-permission {
+  opacity: 0.5;
+}
+
+/* A role's Components view (RoleComponents.tsx): a windowed tree of 32px rows (COMPONENT_ROW_HEIGHT) on the view's
+   own surface; a row gets a hover wash. Switches are fills, never lines. */
+.app-role-components-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.app-role-components-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-role-components-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-role-components-tree {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.app-role-components-row:hover {
+  background: var(--bg-hover);
+  border-radius: 6px;
+}
+.app-role-components-row {
+  position: absolute;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-inline-end: 8px;
+  font-size: 13px;
+}
+.app-role-components-missing-row {
+  position: static;
+  padding-inline-start: 8px;
+}
+.app-role-components-missing h4 {
+  margin: 0 0 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+.app-role-components-twist {
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+}
+.app-role-components-twist[data-open='true'] svg {
+  transform: rotate(90deg);
+}
+.app-role-components-icon {
+  display: grid;
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+.app-role-components-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-components-folder-count,
+.app-role-components-note {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.app-role-components-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-role-components-check {
+  position: relative;
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-active);
+}
+.app-role-components-check span {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.app-role-components-check[data-state='visible'] {
+  background: var(--accent);
+}
+/* An on switch stays blue under the pointer: the app-wide button:hover grey wash would outweigh the rule above. */
+button.app-role-components-check[data-state='visible']:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+button.app-role-components-check[data-state='visible']:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+.app-role-components-check[data-state='visible'] span {
+  inset-inline-start: 14px;
+  background: #fff;
+}
+.app-role-components-check[data-state='mixed'] span {
+  inset-inline-start: 8px;
+  background: var(--text);
+}
+.app-role-components-check:disabled {
+  opacity: 0.5;
+}
+
+/* The card's summary rows: icon and label at the left, a muted summary and a chevron at the right. Transparent at
+   rest, a wash on hover, the same 32px rhythm as every list row. */
+.app-role-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: start;
+}
+button.app-role-row:hover:not(:disabled) {
+  background: #ffffff10;
+}
+.app-role-row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--text-faint);
+}
+.app-role-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-row-summary {
+  flex: none;
+  min-inline-size: 56px;
+  text-align: end;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.app-role-row > svg:last-child {
+  flex: none;
+  inline-size: 12px;
+  color: var(--text-faint);
+}
+
+/* A detail view (RoleDetail.tsx): header, search, then the list, which scrolls inside the view while the header
+   and search stay put. Every scroll container reserves its scrollbar gutter, so rows never shift sideways. */
+.app-role-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.app-role-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.app-role-detail-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.app-role-detail-role {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-detail-count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.app-role-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin-inline-start: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+button.app-role-back:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.app-role-detail-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+.app-role-detail-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.app-role-detail-actions button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.app-role-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.app-role-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.app-role-detail-list {
+  max-height: min(384px, calc(100dvh - 300px));
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.app-role-detail-empty {
+  margin: 0;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-role-components-tree {
+  max-height: min(384px, calc(100dvh - 300px));
+}
+/* The Roles tab's placeholder (RolesSkeleton in RolesSettings.tsx): a picker's shape at the picker's own width, and
+   summary rows at the real rows' height, so the first read swaps content in place without moving anything. */
+.app-roles .app-roles-skeleton-picker {
+  display: block;
+}
+.app-role-row.app-role-skeleton-row {
+  cursor: default;
+}

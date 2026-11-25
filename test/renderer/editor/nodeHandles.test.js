@@ -39,9 +39,7 @@ function session(source) {
     assert.ok(depth <= LIMITS.treeDepthMax, 'session: depth limit');
     return list.map((node) => {
       const id = node.id === 'layout' ? 'layout' : handle(next++); // Before its children.
-      const children = Array.isArray(node.children)
-        ? { children: visit(node.children, depth + 1) }
-        : {};
+      const children = Array.isArray(node.children) ? { children: visit(node.children, depth + 1) } : {};
       return { ...node, id, ...children };
     });
   };
@@ -148,16 +146,7 @@ test('a removal drops only the removed handles; an insertion takes the gestureâ€
     ],
   };
   const afterInsert = carried(before, inserted.source, inserted.own, predicted);
-  assert.deepEqual(ids(afterInsert), [
-    handle(0),
-    handle(1),
-    handle(2),
-    handle(3),
-    handle(4),
-    NEW,
-    handle(5),
-    handle(6),
-  ]);
+  assert.deepEqual(ids(afterInsert), [handle(0), handle(1), handle(2), handle(3), handle(4), NEW, handle(5), handle(6)]);
 });
 
 test('a moved node keeps its handle at its new place', () => {

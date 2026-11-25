@@ -1,0 +1,12 @@
+---
+interface Props {
+  /** The heading. Defaults to "Welcome". */
+  heading?: string;
+  // Line comment documentation. Defaults to 12.
+  size?: number;
+  /** Whether to show the date. Defaults to true. */
+  dated?: boolean;
+}
+const { heading, size, dated } = Astro.props;
+---
+<h2 class="jsdoc-prose-default" style={`font-size:${size ?? 12}px`}>{heading ?? 'Welcome'}{(dated ?? true) && ' · today'}</h2>

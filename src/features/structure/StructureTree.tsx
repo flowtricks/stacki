@@ -1,31 +1,22 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { TreeDragRow, TreeDropGap, TreeDragHandle } from '../../ui/TreeDragDrop';
 import React, { useEffect, useRef } from 'react';
-import type { PairedNode } from '../../../shared/page/pageNode';
 import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
-import { canContainTag } from '../../editor/elementSchemas';
-import { isDataBound } from '../../editor/bindings';
-import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
-import { elementLabel } from '../../editor/classNames';
+import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
-import { thenBranch } from '../../editor/branches';
-import {
-  BranchIcon,
-  CodeIcon,
-  CornerIcon,
-  CustomElementIcon,
-  ElementComponentIcon,
-  FileIcon,
-  HideIcon,
-  LayoutIcon,
-  PointerEventsNoneIcon,
-  RepeatIcon,
-  TextIcon,
-  CommentIcon,
-  astroAssetIcon,
-  elementIcon,
-} from '../../ui/Icons';
-import { defaultCollapsed, navigatorChildren, navigatorHost } from './structureModel';
+import { PseudoElementIcon, LayoutIcon, VariableTextSizeIcon } from '../../ui/Icons';
+import { pureBindingPath } from '../../editor/bindingPath';
+import NodeStatus from './NodeStatus';
+import { defaultCollapsed, navigatorChildren, navigatorFamily, navigatorHost } from './structureModel';
+import type { NavigatorFamily } from './structureModel';
+import { navigatorHostsDrop } from './navigatorDrop';
+import type { DropPlacement } from './dropPlacement';
 import { isFragmentNode } from '../../editor/liveClasses';
+import { labelsNode } from '../../../shared/page/leadingNote';
+import { assertPseudoLayerHost } from '../../../shared/page/pseudoElements';
+import { describeNode, truncate, type NodeDescription } from '../../ui/navigatorLabel';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { highlightSegments } from '../../lib/searchText';
 
 export interface StructureTreeContext {
   readonly clientMode?: boolean;
@@ -35,20 +26,43 @@ export interface StructureTreeContext {
   readonly emptyNodeIds?: ReadonlySet<string>;
   readonly hiddenNodeIds?: ReadonlySet<string>;
   readonly inertNodeIds?: ReadonlySet<string>;
+  /** Elements whose ::before, and whose ::after, the canvas draws: rows of their own. */
+  readonly pseudoNodeIds?: PseudoNodeIds;
+  /** The pseudo-element row picked, when its element is the selection. */
+  readonly selectedPseudo?: PseudoKind | undefined;
+  readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
   readonly currentLayoutName: string;
+  /** The search's folded words: rows draw them marked in their label. Absent when nothing is searched. */
+  readonly highlightWords?: readonly string[];
+  /** Rows that matched by their content, each with the matched words and a little context, by node id. */
+  readonly searchSnippets?: ReadonlyMap<string, string>;
   readonly dropTarget: DropTarget | undefined;
   readonly setDropTarget: React.Dispatch<React.SetStateAction<DropTarget | undefined>>;
+  /** The node a canvas drag is moving: its row is muted while the drag lasts (src/editor/canvasDragSession.ts). */
+  readonly movingId?: string | undefined;
   readonly isCollapsed: (node: NavigatorNode) => boolean;
   readonly isDndPayload: (event: React.DragEvent<HTMLElement>) => boolean;
   readonly performDrop: (event: React.DragEvent<HTMLElement>, target: DropLocation) => void;
+  /** What the drag in flight may do at a place: the placement rule's answer (dropPlacement.ts). */
+  readonly placementFor: (location: DropLocation) => DropPlacement;
+  /** The note the Navigator shows about the drop in flight: why a target refuses, or where it will land instead. */
+  readonly noteDrop: (placement: DropPlacement) => void;
   readonly nodeById: (id: string) => NavigatorNode | undefined;
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | undefined) => void;
+  readonly onHoverPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
   readonly onOpenCode?: (id: string) => void;
   readonly toggleCollapse: (node: NavigatorNode) => void;
   readonly openContextMenu: (left: number, top: number, nodeId: string) => void;
+}
+
+export type PseudoKind = 'before' | 'after';
+
+export interface PseudoNodeIds {
+  readonly before: ReadonlySet<string>;
+  readonly after: ReadonlySet<string>;
 }
 
 interface NodeListProps extends StructureTreeContext {
@@ -58,8 +72,6 @@ interface NodeListProps extends StructureTreeContext {
   readonly depth: number;
 }
 
-const ANNOTATABLE = new Set(['element', 'component']);
-
 export function NodeList({ nodes, parentId, depth, ...context }: NodeListProps) {
   const { noteFor, folded } = foldedNotes(nodes);
   return (
@@ -67,19 +79,12 @@ export function NodeList({ nodes, parentId, depth, ...context }: NodeListProps) 
       {nodes.map((node, index) =>
         folded.has(index) ? undefined : (
           <React.Fragment key={node.id}>
-            <Gap
-              parentId={parentId}
-              index={noteFor.has(index) ? index - 1 : index}
-              depth={depth}
-              {...context}
-            />
+            <Gap parentId={parentId} index={noteFor.has(index) ? index - 1 : index} depth={depth} {...context} />
             <TreeNode node={node} note={noteFor.get(index)} depth={depth} {...context} />
           </React.Fragment>
         ),
       )}
-      {nodes.length > 0 && (
-        <Gap parentId={parentId} index={nodes.length} depth={depth} {...context} />
-      )}
+      {nodes.length > 0 && <Gap parentId={parentId} index={nodes.length} depth={depth} {...context} />}
     </>
   );
 }
@@ -92,7 +97,7 @@ function foldedNotes(nodes: readonly NavigatorNode[]): {
   const folded = new Set<number>();
   for (const [index, node] of nodes.entries()) {
     const next = nodes[index + 1];
-    if (node.kind === 'comment' && next && ANNOTATABLE.has(next.kind)) {
+    if (next !== undefined && labelsNode(node.kind, next.kind)) {
       noteFor.set(index + 1, node);
       folded.add(index);
     }
@@ -108,10 +113,13 @@ interface GapProps extends StructureTreeContext {
 
 function Gap(props: GapProps) {
   const { parentId, index, depth, dropTarget, setDropTarget, isDndPayload, performDrop } = props;
-  const active =
-    dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
-  const accepted = acceptsDrag(parentId === undefined ? undefined : props.nodeById(parentId));
+  const active = dropTarget?.kind === 'gap' && dropTarget.parentId === parentId && dropTarget.index === index;
+  const parent = parentId === undefined ? undefined : props.nodeById(parentId);
+  // A gap is a drop inside its parent, so the parent's own rule decides it too.
+  const hosted = parent === undefined || navigatorHostsDrop(parent);
   const location = { parentId, index };
+  // Read when the pointer moves, not when the row draws: the drag it asks about starts after the tree rendered.
+  const placementNow = (): DropPlacement => (hosted ? props.placementFor(location) : { kind: 'open' });
   if (props.editRootId && (!parentId || !props.canEdit(parentId))) {
     return undefined;
   }
@@ -120,28 +128,24 @@ function Gap(props: GapProps) {
   }
   return (
     <TreeDropGap
+      layout="overlay"
       depth={depth}
       parent={parentId}
       index={index}
       behavior={{
         active,
-        accepts: (event) => accepted && isDndPayload(event),
-        enter: () => setDropTarget({ kind: 'gap', ...location }),
+        accepts: (event) => hosted && placementNow().kind !== 'refused' && isDndPayload(event),
+        // A place that cannot take the drag but has a valid neighbour shows its indicator there, and the drop lands there.
+        enter: () => {
+          const placement = placementNow();
+          props.noteDrop(placement);
+          setDropTarget({ kind: 'gap', ...(placement.kind === 'snap' ? placement.to : location) });
+        },
         drop: (event) => performDrop(event, location),
+        refuse: () => props.noteDrop(placementNow()),
       }}
     />
   );
-}
-
-function acceptsDrag(parent: NavigatorNode | undefined): boolean {
-  const drag = getDrag();
-  if (!drag || drag.kind !== 'node' || drag.nodeKind !== 'element' || !drag.tag) {
-    return true;
-  }
-  if (!parent || parent.kind !== 'element') {
-    return true;
-  }
-  return canContainTag(parent.name, drag.tag);
 }
 
 interface TreeNodeProps extends StructureTreeContext {
@@ -150,27 +154,127 @@ interface TreeNodeProps extends StructureTreeContext {
   readonly depth: number;
 }
 
+// Brings a row into view inside the tree's own scroller and nothing else.
+// Why not `scrollIntoView`: it also scrolls every overflow ancestor, including
+// the clipped panel shell, which slid the "Navigator" header out of sight when
+// the selection moved. Only the `.panel-body` scroller moves here, and only
+// when the row is outside it.
+export function scrollRowIntoScroller(row: HTMLElement | undefined): void {
+  const scroller = row?.closest<HTMLElement>('.panel-body');
+  if (!row || !scroller) {
+    return;
+  }
+  const scrollerBounds = scroller.getBoundingClientRect();
+  const rowBounds = row.getBoundingClientRect();
+  if (rowBounds.top < scrollerBounds.top) {
+    scroller.scrollTop -= scrollerBounds.top - rowBounds.top;
+  } else if (rowBounds.bottom > scrollerBounds.bottom) {
+    scroller.scrollTop += rowBounds.bottom - scrollerBounds.bottom;
+  }
+}
+
 function TreeNode(props: TreeNodeProps) {
+  const translate = useTranslate();
   const { node, depth } = props;
   const context = treeContextFromRow(props);
   const rowRef = useRef<HTMLDivElement>(null);
   const selected = props.selectedId === node.id;
   useEffect(() => {
     if (selected) {
-      rowRef.current?.scrollIntoView({ block: 'nearest' });
+      scrollRowIntoScroller(rowRef.current ?? undefined);
     }
   }, [selected]);
   const children = navigatorChildren(node);
   const host = navigatorHost(node);
-  const showChildren = children.length > 0 && !hidesChildRows(node, children);
-  const view = nodeView(props, { children, host, showChildren, selected });
+  const listsChildren = children.length > 0 && !hidesChildRows(node, children);
+  // A ::before sits above an element's children and an ::after below them, as
+  // the browser draws them: rows of their own, so an element with one opens.
+  const pseudos = pseudoKindsOf(node, props.pseudoNodeIds);
+  const showChildren = listsChildren || pseudos.length > 0;
+  const view = nodeView(props, { children, host, showChildren, selected }, translate);
+  const pseudoRow = (pseudo: PseudoKind): React.ReactNode =>
+    pseudos.includes(pseudo) ? (
+      <PseudoRow
+        nodeId={node.id}
+        pseudo={pseudo}
+        depth={depth + 1}
+        selected={selected && props.selectedPseudo === pseudo}
+        onHover={(id, kind) => props.onHoverPseudo?.(id, kind)}
+        onLeave={() => props.onHoverNode?.(undefined)}
+        onSelect={props.onSelectPseudo ?? ((id) => props.onSelect(id))}
+      />
+    ) : undefined;
+  const rowSelected = selected && props.selectedPseudo === undefined;
   return (
     <>
-      <TreeRow {...props} {...view} rowRef={rowRef} />
+      <TreeRow {...props} {...view} selected={rowSelected} rowRef={rowRef} />
       {showChildren && !view.collapsed && (
-        <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />
+        // The selected row's subtree sits in a tinted block under the row, so the
+        // selection reads as one container. The tint follows the row's own colour.
+        <div className={subtreeClassName({ rowSelected, family: navigatorFamily(node, { componentRow: view.component }) })}>
+          {/* The guide drops from the parent's chevron; CSS shows it while the pointer is over the tree. */}
+          <span className="structure-guide" aria-hidden="true" style={{ insetInlineStart: navigatorGuideLeft(depth) }} />
+          {pseudoRow('before')}
+          {listsChildren && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
+          {pseudoRow('after')}
+        </div>
       )}
     </>
+  );
+}
+
+// The ::before and ::after rows of `node`. Only an HTML element owns them: the
+// canvas filters its report (src/app/model/canvasNodeStates.ts) and this row
+// asserts it, so a loop, component or `img` that ever reached here would crash
+// loudly instead of drawing a row the page has no box for.
+function pseudoKindsOf(node: NavigatorNode, pseudoNodeIds: PseudoNodeIds | undefined): readonly PseudoKind[] {
+  if (pseudoNodeIds === undefined) {
+    return [];
+  }
+  const kinds: PseudoKind[] = [];
+  if (pseudoNodeIds.before.has(node.id)) {
+    kinds.push('before');
+  }
+  if (pseudoNodeIds.after.has(node.id)) {
+    kinds.push('after');
+  }
+  for (const kind of kinds) {
+    assertPseudoLayerHost(node, kind, 'Navigator');
+  }
+  return kinds;
+}
+
+// A pseudo-element: drawn by CSS, so it is selected (its element, with its
+// selector in the Style panel) and never dragged, renamed or deleted.
+function PseudoRow(props: {
+  readonly nodeId: string;
+  readonly pseudo: PseudoKind;
+  readonly depth: number;
+  readonly selected: boolean;
+  readonly onHover: (id: string, pseudo: PseudoKind) => void;
+  readonly onLeave: () => void;
+  readonly onSelect: (id: string, pseudo: PseudoKind) => void;
+}) {
+  return (
+    <div
+      className={`structure-node is-pseudo${props.selected ? ' selected' : ''}`}
+      data-pseudo-of={props.nodeId}
+      data-pseudo={props.pseudo}
+      data-depth={props.depth}
+      style={{ paddingInlineStart: navigatorIndent(props.depth) }}
+      onMouseEnter={() => props.onHover(props.nodeId, props.pseudo)}
+      onMouseLeave={props.onLeave}
+      onClick={(event) => {
+        event.stopPropagation();
+        props.onSelect(props.nodeId, props.pseudo);
+      }}
+    >
+      <span className="drag-handle is-empty" aria-hidden="true" />
+      <span className="icon">
+        <PseudoElementIcon size={12} />
+      </span>
+      <span className="label">::{props.pseudo}</span>
+    </div>
   );
 }
 
@@ -183,16 +287,25 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     ...(props.emptyNodeIds === undefined ? {} : { emptyNodeIds: props.emptyNodeIds }),
     ...(props.hiddenNodeIds === undefined ? {} : { hiddenNodeIds: props.hiddenNodeIds }),
     ...(props.inertNodeIds === undefined ? {} : { inertNodeIds: props.inertNodeIds }),
+    ...(props.pseudoNodeIds === undefined ? {} : { pseudoNodeIds: props.pseudoNodeIds }),
+    selectedPseudo: props.selectedPseudo,
+    ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
     currentLayoutName: props.currentLayoutName,
+    ...(props.highlightWords === undefined ? {} : { highlightWords: props.highlightWords }),
+    ...(props.searchSnippets === undefined ? {} : { searchSnippets: props.searchSnippets }),
     dropTarget: props.dropTarget,
     setDropTarget: props.setDropTarget,
+    movingId: props.movingId,
     isCollapsed: props.isCollapsed,
     isDndPayload: props.isDndPayload,
     performDrop: props.performDrop,
+    placementFor: props.placementFor,
+    noteDrop: props.noteDrop,
     nodeById: props.nodeById,
     onSelect: props.onSelect,
     ...(props.onHoverNode === undefined ? {} : { onHoverNode: props.onHoverNode }),
+    ...(props.onHoverPseudo === undefined ? {} : { onHoverPseudo: props.onHoverPseudo }),
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: props.toggleCollapse,
@@ -211,40 +324,36 @@ interface NodeView {
   readonly layout: boolean;
   readonly selected: boolean;
   readonly dropInto: boolean;
-  readonly description: { readonly icon: React.ReactNode; readonly label: string };
+  readonly moving: boolean;
+  readonly description: NodeDescription;
   readonly hint: string | undefined;
 }
 
-function nodeView(
-  props: TreeNodeProps,
-  shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>,
-): NodeView {
+function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host' | 'showChildren' | 'selected'>, translate: Translator): NodeView {
   const { children, host, showChildren, selected } = shape;
   const { node } = props;
   const fragment = isFragmentNode(node);
   const layout = node.id === 'layout';
   const component = node.kind === 'component' && !node.dynamicTag && !fragment;
-  let description = describeNode(node, props.liveClassesById?.get(node.id));
+  let description = describeNode(node, props.liveClassesById?.get(node.id), translate);
   let hint: string | undefined;
   if (layout) {
     const label = node.kind === 'component' || node.kind === 'element' ? node.name : '';
     description = { icon: <LayoutIcon size={13} />, label: label || props.currentLayoutName };
-    hint =
-      props.currentLayoutName && props.currentLayoutName !== description.label
-        ? props.currentLayoutName
-        : undefined;
+    hint = props.currentLayoutName && props.currentLayoutName !== description.label ? props.currentLayoutName : undefined;
   }
   return {
     children,
     host,
     showChildren,
-    canHostChildren: canHostChildren(node),
+    canHostChildren: navigatorHostsDrop(node),
     collapsed: props.isCollapsed(node),
     component,
     fragment,
     layout,
     selected,
     dropInto: props.dropTarget?.kind === 'into' && props.dropTarget.intoId === node.id,
+    moving: props.movingId === node.id,
     description,
     hint,
   };
@@ -255,7 +364,10 @@ interface TreeRowProps extends TreeNodeProps, NodeView {
 }
 
 function TreeRow(props: TreeRowProps) {
+  const translate = useTranslate();
   const { node, description } = props;
+  // A pure `{a.b}` is a data binding: its row reads as its plain path, no braces and no chip (text never wears a chip here).
+  const bindingPath = node.kind === 'expr' ? pureBindingPath(node.value) : undefined;
   const handlers = treeRowHandlers(props);
   return (
     <TreeDragRow
@@ -264,7 +376,8 @@ function TreeRow(props: TreeRowProps) {
       aria-disabled={!props.canEdit(node.id)}
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
-      style={{ paddingLeft: 6 + props.depth * 16 }}
+      data-depth={props.depth}
+      style={{ paddingInlineStart: navigatorIndent(props.depth) }}
       dropBehavior={treeRowDropBehavior(props)}
       draggable={
         props.canEdit(node.id) &&
@@ -275,19 +388,24 @@ function TreeRow(props: TreeRowProps) {
       }
       {...handlers}
     >
-      <TreeDragHandle
-        {...(props.showChildren
-          ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } }
-          : {})}
+      <TreeDragHandle {...(props.showChildren ? { expansion: { collapsed: props.collapsed, toggle: () => props.toggleCollapse(node) } } : {})} />
+      <span className="icon">{bindingPath === undefined ? description.icon : <VariableTextSizeIcon size={12} />}</span>
+      <RowLabel
+        node={node}
+        label={description.label}
+        highlightWords={props.highlightWords}
+        snippet={props.searchSnippets?.get(node.id)}
+        note={props.note}
+        {...(description.title === undefined ? {} : { title: description.title })}
+        {...(bindingPath === undefined ? {} : { bindingPath })}
       />
-      <span className="icon">{description.icon}</span>
-      <RowLabel node={node} label={description.label} note={props.note} />
       {props.hint && (
-        <span className="prop-preview" title={`Imported from ${props.hint}.astro`}>
+        <span className="prop-preview" title={translate('structure.row.imported', { file: `${props.hint}.astro` })}>
           {props.hint}
         </span>
       )}
       <NodeStatus
+        node={node}
         rendersNothing={props.emptyNodeIds?.has(node.id) ?? false}
         hidden={props.hiddenNodeIds?.has(node.id) ?? false}
         inert={props.inertNodeIds?.has(node.id) ?? false}
@@ -300,11 +418,7 @@ function treeRowHandlers(props: TreeRowProps) {
   const { node } = props;
   return {
     onDragStart: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (
-        !props.canEdit(node.id) ||
-        node.id === props.editRootId ||
-        (props.clientMode && node.id === 'layout')
-      ) {
+      if (!props.canEdit(node.id) || node.id === props.editRootId || (props.clientMode && node.id === 'layout')) {
         event.preventDefault();
         return;
       }
@@ -371,16 +485,19 @@ function openComponent(event: React.MouseEvent<HTMLDivElement>, props: TreeRowPr
 }
 
 function treeRowDropBehavior(props: TreeRowProps) {
+  const location = { parentId: props.host.id, index: props.children.length };
+  const hosted = props.canEdit(props.node.id) && props.canHostChildren;
+  const placementNow = (): DropPlacement => (hosted ? props.placementFor(location) : { kind: 'open' });
   return {
     active: props.dropInto,
-    accepts: (event: React.DragEvent<HTMLDivElement>) =>
-      props.canEdit(props.node.id) &&
-      props.canHostChildren &&
-      acceptsDrag(props.node) &&
-      props.isDndPayload(event),
-    enter: () => props.setDropTarget({ kind: 'into', intoId: props.node.id }),
-    drop: (event: React.DragEvent<HTMLDivElement>) =>
-      props.performDrop(event, { parentId: props.host.id, index: props.children.length }),
+    accepts: (event: React.DragEvent<HTMLDivElement>) => hosted && placementNow().kind !== 'refused' && props.isDndPayload(event),
+    enter: () => {
+      const placement = placementNow();
+      props.noteDrop(placement);
+      props.setDropTarget(placement.kind === 'snap' ? { kind: 'gap', ...placement.to } : { kind: 'into', intoId: props.node.id });
+    },
+    drop: (event: React.DragEvent<HTMLDivElement>) => props.performDrop(event, location),
+    refuse: () => props.noteDrop(placementNow()),
   };
 }
 
@@ -388,158 +505,98 @@ function RowLabel({
   node,
   label,
   note,
+  bindingPath,
+  title,
+  highlightWords,
+  snippet,
 }: {
   readonly node: NavigatorNode;
   readonly label: string;
+  readonly highlightWords: readonly string[] | undefined;
+  readonly snippet: string | undefined;
+  readonly title?: string;
   readonly note: NavigatorNode | undefined;
+  readonly bindingPath?: string;
 }) {
   const noteValue = note?.kind === 'comment' ? note.value : undefined;
   return (
-    <span
-      className="label"
-      style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}
-    >
-      {label}
+    <span className="label" title={title} style={node.kind === 'text' ? { fontWeight: 400, fontStyle: 'italic' } : {}}>
+      <MarkedLabel label={bindingPath ?? label} words={highlightWords} />
+      {snippet !== undefined && (
+        <span className="node-note" title={snippet}>
+          {' / '}
+          <MarkedLabel label={snippet} words={highlightWords} />
+        </span>
+      )}
       {noteValue !== undefined && (
         <span className="node-note" title={noteValue.trim()}>
           {' / '}
-          {truncate(noteText(noteValue).replace(/\s+/g, ' '), 44)}
+          <MarkedLabel label={truncate(noteText(noteValue).replace(/\s+/g, ' '), 44)} words={highlightWords} />
         </span>
       )}
     </span>
   );
 }
 
-function NodeStatus({
-  rendersNothing,
-  hidden,
-  inert,
-}: {
-  readonly rendersNothing: boolean;
-  readonly hidden: boolean;
-  readonly inert: boolean;
-}) {
-  if (!rendersNothing && !hidden && !inert) {
-    return undefined;
+// The row's label with the search's words marked; without a search it is the plain text, as before.
+function MarkedLabel({ label, words }: { readonly label: string; readonly words: readonly string[] | undefined }) {
+  if (words === undefined) {
+    return <>{label}</>;
   }
   return (
-    <span className="node-empty">
-      {rendersNothing && (
-        <span title="Renders nothing on the page with its current props">
-          <HideIcon size={13} />
-        </span>
+    <>
+      {highlightSegments(label, words).map((segment, position) =>
+        segment.hit ? (
+          <mark key={position} className="search-hit">
+            {segment.text}
+          </mark>
+        ) : (
+          <React.Fragment key={position}>{segment.text}</React.Fragment>
+        ),
       )}
-      {hidden && !rendersNothing && (
-        <span title="display: none — on the page, not drawn">
-          <HideIcon size={13} />
-        </span>
-      )}
-      {inert && (
-        <span title="pointer-events: none — drawn, but takes no clicks">
-          <PointerEventsNoneIcon size={13} />
-        </span>
-      )}
-    </span>
-  );
-}
-
-function canHostChildren(node: NavigatorNode): boolean {
-  return (
-    node.kind === 'component' ||
-    node.kind === 'element' ||
-    node.kind === 'chunk-group' ||
-    node.kind === 'map' ||
-    node.kind === 'branch' ||
-    thenBranch(node) !== undefined
+    </>
   );
 }
 
 function rowClassName(view: NodeView & { readonly node: NavigatorNode }): string {
-  const { node } = view;
-  const mapped =
-    node.kind === 'map' ||
-    node.kind === 'cond' ||
-    node.kind === 'branch' ||
-    (nodeIsDataBound(node) && !view.component);
+  const family = navigatorFamily(view.node, { componentRow: view.component });
   return [
     'structure-node',
-    view.component ? 'is-component' : '',
-    mapped ? 'is-map' : '',
+    family === undefined ? '' : `is-${family}`,
     view.layout ? 'layout-node' : '',
+    isSlotRow(view.node) ? 'is-slot' : '',
     view.selected ? 'selected' : '',
+    view.moving ? 'is-moving' : '',
   ].join(' ');
 }
 
-function describeNode(
-  node: NavigatorNode,
-  live: readonly string[] | undefined,
-): { readonly icon: React.ReactNode; readonly label: string } {
-  if (isFragmentNode(node)) {
-    return { icon: <CustomElementIcon size={12} />, label: 'Fragment' };
-  }
-  switch (node.kind) {
-    case 'text':
-      return { icon: <TextIcon size={12} />, label: truncate(node.value, 34) };
-    case 'comment':
-      return { icon: <CommentIcon size={12} />, label: truncate(node.value.trim(), 30) };
-    case 'raw':
-      return { icon: <CodeIcon size={12} />, label: node.name };
-    case 'raw-line':
-      return { icon: <CodeIcon size={12} />, label: truncate(node.value, 30) };
-    case 'element':
-      return describeElement(node, live);
-    case 'chunk-group':
-      return { icon: <FileIcon size={12} />, label: node.name };
-    case 'expr':
-      return { icon: <CodeIcon size={12} />, label: truncate(node.value.replace(/\s+/g, ' '), 34) };
-    case 'map': {
-      const at = node.head.indexOf('.map');
-      return {
-        icon: <RepeatIcon size={12} />,
-        label: at > 0 ? node.head.slice(0, at + 4) : truncate(node.head, 24),
-      };
-    }
-    case 'cond':
-      return { icon: <BranchIcon size={12} />, label: truncate(`if ${node.test}`, 40) };
-    case 'branch':
-      return { icon: <CornerIcon size={12} />, label: node.name === 'else' ? 'else' : 'then' };
-    case 'component':
-      return describeComponent(node, live);
-  }
+// A `<slot>` shows the host page's content, which this file cannot pick: hovering its row reads muted (styles.css).
+function isSlotRow(node: NavigatorNode): boolean {
+  return node.kind === 'element' && node.name === 'slot';
 }
 
-function describeElement(node: PairedNode, live?: readonly string[]) {
-  const source = elementLabel(node);
-  const label = source === node.name ? (live?.[0] ?? source) : source;
-  return { icon: elementIcon(node.name), label: truncate(label, 40) };
-}
-
-function describeComponent(node: PairedNode, live?: readonly string[]) {
-  if (node.dynamicTag) {
-    const source = elementLabel(node);
-    const label = source === node.name ? (live?.[0] ?? source) : source;
-    return { icon: <CustomElementIcon size={12} />, label: truncate(label, 40) };
-  }
-  if (node.astroAsset) {
-    return { icon: astroAssetIcon(node.name, 14), label: node.name };
-  }
-  return { icon: <ElementComponentIcon size={14} />, label: node.name };
-}
-
-function nodeIsDataBound(node: NavigatorNode): boolean {
-  const props = 'props' in node ? node.props : undefined;
-  const children = 'children' in node ? node.children : undefined;
-  return isDataBound({
-    ...(props === undefined ? {} : { props }),
-    ...(children === undefined ? {} : { children }),
-  });
-}
-
-function truncate(value: string, lengthMax: number): string {
-  return value.length > lengthMax ? `${value.slice(0, lengthMax - 1)}…` : value;
-}
-
-const fragmentTitle =
-  'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
+const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
 
 export { defaultCollapsed };
+
+// Only the selected row's subtree is tinted, in its row's own family (component green, loops and
+// conditions one flow purple); plain markup takes the accent. The class is `is-<family>`, the one the row carries.
+function subtreeClassName(row: { readonly rowSelected: boolean; readonly family: NavigatorFamily | undefined }): string {
+  if (row.rowSelected) {
+    // i18n-ignore: CSS class names, not text.
+    return row.family === undefined ? 'structure-children structure-subtree' : `structure-children structure-subtree is-${row.family}`;
+  }
+  return 'structure-children';
+}
+
+// The indent step lives in CSS (`--navigator-indent` in styles.css), so the
+// navigator's density is tuned in one stylesheet, not in TSX.
+function navigatorIndent(depth: number): string {
+  return `calc(var(--navigator-row-padding) + ${depth} * var(--navigator-indent))`;
+}
+
+// The guide runs under the centre of the parent row's chevron: the row's left
+// padding, its 1px border, then half the 18px handle less its -4px margin.
+function navigatorGuideLeft(depth: number): string {
+  return `calc(${navigatorIndent(depth)} + 6px)`;
+}

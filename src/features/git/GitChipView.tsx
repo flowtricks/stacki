@@ -1,11 +1,15 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { GitPullControl } from './GitPullControl';
+import type { GitIncomingState } from './useGitIncoming';
 import React from 'react';
+import { gitBranchColors, gitBranchColor } from '../../lib/gitBranchColors';
 import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
-import { branchNameError, sanitizeBranchName } from './branchName';
+import BranchCreate from './BranchCreate';
 import BranchActions from './BranchActions';
 import type FileBrowser from './FileBrowser';
 import CommitFilePicker from './CommitFilePicker';
-import { BranchIcon, CheckIcon, ExternalIcon } from '../../ui/Icons';
-import { repoSlug, webUrl } from './gitPublish';
+import { CommitSubjectPreview, CommitTypeDetails, CommitTypeScopeError, CommitTypeSelect, type CommitTypeControl } from './CommitTypePicker';
+import { BranchIcon } from '../../ui/Icons';
 import Tooltip from '../../ui/Tooltip';
 
 type ChangedFiles = React.ComponentProps<typeof FileBrowser>['files'];
@@ -15,6 +19,9 @@ interface GitChipViewProps {
   readonly busy: string | undefined;
   readonly error: string | undefined;
   readonly commitMessage: string;
+  readonly commitType: CommitTypeControl;
+  /** The subject a commit would carry now; undefined while the scope is invalid. */
+  readonly commitSubject: string | undefined;
   readonly newBranch: string;
   readonly picking: boolean;
   readonly picked: readonly string[] | undefined;
@@ -30,12 +37,12 @@ interface GitChipViewProps {
   readonly onTogglePicking: () => void;
   readonly onPick: (paths: readonly string[]) => void;
   readonly onCommit: () => void;
-  readonly onOpenRemote: (remote: string) => void;
-  readonly onPush: () => void;
-  readonly onPublish: () => void;
+  readonly onPull: () => void;
+  readonly incoming: GitIncomingState;
 }
 
 interface BranchesProps {
+  readonly colors: ReadonlyMap<string, number>;
   readonly info: WireGitInfo;
   readonly working: boolean;
   readonly newBranch: string;
@@ -47,10 +54,16 @@ interface BranchesProps {
 }
 
 interface CommitProps {
+  /** The running action's label: the Commit button says it in place, so no status row is added. */
+  readonly busy: string | undefined;
+  readonly branch: string;
+  readonly color: number;
   readonly error: string | undefined;
   readonly dirty: boolean;
   readonly working: boolean;
   readonly message: string;
+  readonly commitType: CommitTypeControl;
+  readonly subject: string | undefined;
   readonly picking: boolean;
   readonly picked: readonly string[] | undefined;
   readonly changed: ChangedFiles;
@@ -61,105 +74,69 @@ interface CommitProps {
   readonly onCommit: () => void;
 }
 
-function Branches({
-  info,
-  working,
-  newBranch,
-  onSwitch,
-  onMerge,
-  onDelete,
-  onNewBranch,
-  onCreateBranch,
-}: BranchesProps) {
-  const branchError = branchNameError(newBranch, info.branches);
+function Branches({ colors, info, working, newBranch, onSwitch, onMerge, onDelete, onNewBranch, onCreateBranch }: BranchesProps) {
+  const translate = useTranslate();
   return (
-    <>
+    <section className="git-branches" aria-label={translate('git.branch.heading')}>
       <div className="history-branches-heading">
-        <h3>Branches</h3>
-        <span>Click to switch</span>
+        <h3>{translate('git.branch.heading')}</h3>
+        <span>{translate('git.branch.localCount', { count: info.branches.length })}</span>
       </div>
-      {info.branches.map((branch) => (
-        <BranchRow
-          key={branch}
-          branch={branch}
-          info={info}
-          working={working}
-          onSwitch={onSwitch}
-          onMerge={onMerge}
-          onDelete={onDelete}
-        />
-      ))}
-      <div className="dropdown-row git-create-branch">
-        <input
-          aria-label="New branch name"
-          disabled={working}
-          placeholder="new-branch-name"
-          value={newBranch}
-          aria-invalid={Boolean(branchError)}
-          onChange={(event) => onNewBranch(sanitizeBranchName(event.target.value))}
-          onKeyDown={(event) => {
-            const name = newBranch.trim();
-            if (event.key === 'Enter' && name && !branchError && !working) {
-              onCreateBranch(name);
-            }
-          }}
-        />
-        <button
-          disabled={working || !newBranch.trim() || Boolean(branchError)}
-          onClick={() => onCreateBranch(newBranch.trim())}
-        >
-          Create
-        </button>
+      <div className="git-branch-list">
+        {info.branches.map((branch) => (
+          <BranchRow key={branch} branch={branch} colors={colors} info={info} working={working} onSwitch={onSwitch} onMerge={onMerge} onDelete={onDelete} />
+        ))}
       </div>
-      {branchError && <div className="git-hint">{branchError}</div>}
-    </>
+      <BranchCreate branches={info.branches} working={working} name={newBranch} onName={onNewBranch} onCreate={onCreateBranch} />
+    </section>
   );
 }
 
 function BranchRow({
+  colors,
   branch,
   info,
   working,
   onSwitch,
   onMerge,
   onDelete,
-}: Pick<BranchesProps, 'info' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
+}: Pick<BranchesProps, 'info' | 'colors' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
   readonly branch: string;
 }) {
+  const translate = useTranslate();
   const current = branch === info.branch;
   return (
     <div className={`history-branch-row ${current ? 'active' : ''}`}>
       <button
         className="history-branch-switch"
         disabled={working || current}
-        aria-label={current ? `${branch}, current branch` : `Switch to ${branch}`}
+        aria-current={current ? true : undefined}
+        aria-label={current ? translate('git.branch.currentLabel', { branch }) : translate('git.branch.switchTo', { branch })}
         onClick={() => onSwitch(branch)}
       >
-        {current ? <CheckIcon size={12} /> : <BranchIcon size={12} />}
+        <span className="history-branch-icon" style={{ color: gitBranchColor(colors.get(branch) ?? 0) }}>
+          <BranchIcon size={14} />
+        </span>
         <Tooltip className="history-branch-name" text={branch} />
-        {current && <span className="history-branch-current">Current</span>}
         {info.parked.includes(branch) && !current && (
-          <span className="branch-parked" title="Changes waiting on this branch">
-            Saved changes
+          <span className="branch-parked" title={translate('git.branch.parkedTitle')}>
+            {translate('git.branch.parkedLabel')}
           </span>
         )}
       </button>
-      <BranchActions
-        branch={branch}
-        current={info.branch}
-        trunk={info.trunk}
-        disabled={working}
-        onMerge={onMerge}
-        onDelete={onDelete}
-      />
+      <BranchActions branch={branch} current={info.branch} trunk={info.trunk} disabled={working} onMerge={onMerge} onDelete={onDelete} />
     </div>
   );
 }
 
 function CommitControls({
+  branch,
+  color,
   dirty,
   working,
   message,
+  commitType,
+  subject,
   picking,
   picked,
   changed,
@@ -169,37 +146,53 @@ function CommitControls({
   onPick,
   onCommit,
   error,
+  busy,
 }: CommitProps) {
+  const translate = useTranslate();
   const pickedCount = picked?.length ?? 0;
-  const label = !dirty
-    ? 'Nothing to commit'
-    : !picking
-      ? 'Commit all changes'
-      : `Commit ${pickedCount} file${pickedCount === 1 ? '' : 's'}`;
+  const blocked = commitType.state.kind === 'invalid';
+  const label = !dirty ? translate('git.commit.nothing') : !picking ? translate('git.commit.all') : translate('git.commit.files', { count: pickedCount });
   return (
     <>
       <div className="divider" />
-      <h3>Commit</h3>
+      <h3 className="git-commit-destination">
+        {translate('git.commit.to')}{' '}
+        <span className={`history-graph-color-${color}`} style={{ color: gitBranchColor(color) }}>
+          <BranchIcon size={12} />
+          {branch}
+        </span>
+      </h3>
       <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
         <input
-          placeholder="Commit message"
-          aria-label="Commit message"
+          placeholder={translate('git.commit.message')}
+          aria-label={translate('git.commit.message')}
           disabled={working}
           value={message}
           onChange={(event) => onMessage(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && dirty && !working) {
+            // Enter that confirms an input-method candidate (Japanese, Chinese, Korean) is not a request to commit.
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing && dirty && !working && !blocked) {
               onCommit();
             }
           }}
         />
+        {/* The message keeps the full width; the optional type and its scope share the row beneath. */}
+        <div className="git-commit-type-row">
+          <CommitTypeSelect control={commitType} disabled={working} />
+          <CommitTypeDetails control={commitType} disabled={working} />
+        </div>
+        <CommitTypeScopeError control={commitType} />
+        <CommitSubjectPreview subject={subject} convention={commitType.state.kind === 'ready' ? commitType.state.convention : undefined} />
         <div className="git-commit-action-row">
-          <button
-            className="primary"
-            disabled={working || !dirty || (picking && pickedCount === 0)}
-            onClick={onCommit}
-          >
-            {label}
+          <button className="primary" disabled={working || blocked || !dirty || (picking && pickedCount === 0)} onClick={onCommit}>
+            {busy === undefined ? (
+              label
+            ) : (
+              <>
+                <span className="mini-spinner" />
+                {busy}
+              </>
+            )}
           </button>
           {dirty && (
             <CommitFilePicker
@@ -219,69 +212,15 @@ function CommitControls({
   );
 }
 
-function GitHubControls({
-  info,
-  working,
-  onOpenRemote,
-  onPush,
-  onPublish,
-}: Pick<GitChipViewProps, 'info' | 'onOpenRemote' | 'onPush' | 'onPublish'> & {
-  readonly working: boolean;
-}) {
-  const canPush = info.hasUpstream ? info.ahead > 0 : true;
-  const pushLabel = !info.hasUpstream
-    ? `Push ${info.branch} to origin`
-    : info.ahead > 0
-      ? `Push ${info.ahead} commit${info.ahead === 1 ? '' : 's'}`
-      : 'Everything pushed';
-  return (
-    <>
-      <div className="divider" />
-      <h3>GitHub</h3>
-      <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
-        {info.remote ? (
-          <>
-            <button
-              className="repo-link"
-              title={`Open ${repoSlug(info.remote)} on GitHub`}
-              onClick={() => onOpenRemote(info.remote ?? '')}
-            >
-              <span className="repo-slug">{repoSlug(info.remote)}</span>
-              <ExternalIcon size={11} />
-            </button>
-            <button className="primary" disabled={working || !canPush} onClick={onPush}>
-              {pushLabel}
-            </button>
-            {info.dirty && (
-              <div className="hint-text">
-                You have uncommitted changes — commit them first to include them.
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="hint-text">This project isn’t on GitHub yet.</div>
-            <button className="primary" disabled={working} onClick={onPublish}>
-              Publish to GitHub…
-            </button>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
 export default function GitChipView(props: GitChipViewProps) {
+  const translate = useTranslate();
   const working = props.busy !== undefined;
+  const colors = gitBranchColors(props.info.branches, props.info.trunk ?? 'main');
   return (
-    <div className="git-panel-controls" aria-label="Repository controls">
-      {props.busy && (
-        <p className="history-note" role="status">
-          {props.busy}
-        </p>
-      )}
-
+    <div className="git-panel-controls" aria-label={translate('git.chip.controls')} aria-busy={working}>
+      {props.info.remote && <GitPullControl incoming={props.incoming} busy={props.busy} info={props.info} onPull={props.onPull} />}
       <Branches
+        colors={colors}
         info={props.info}
         working={working}
         newBranch={props.newBranch}
@@ -292,11 +231,16 @@ export default function GitChipView(props: GitChipViewProps) {
         onCreateBranch={props.onCreateBranch}
       />
       <CommitControls
+        branch={props.info.branch}
+        color={colors.get(props.info.branch) ?? 0}
         error={props.error}
         onRefreshFiles={props.onRefreshFiles}
         dirty={props.info.dirty}
         working={working}
+        busy={props.busy}
         message={props.commitMessage}
+        commitType={props.commitType}
+        subject={props.commitSubject}
         picking={props.picking}
         picked={props.picked}
         changed={props.changed}
@@ -305,22 +249,6 @@ export default function GitChipView(props: GitChipViewProps) {
         onPick={props.onPick}
         onCommit={props.onCommit}
       />
-      <GitHubControls
-        info={props.info}
-        working={working}
-        onOpenRemote={props.onOpenRemote}
-        onPush={props.onPush}
-        onPublish={props.onPublish}
-      />
     </div>
   );
-}
-
-export function openGitRemote(remote: string): void {
-  const url = webUrl(remote);
-  if (url) {
-    void window.avb.openExternal(url);
-  } else {
-    throw new Error('Git remote: expected a GitHub URL');
-  }
 }

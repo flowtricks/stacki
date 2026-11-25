@@ -36,9 +36,7 @@ const check = (what, condition, detail) => {
   const out = path.join(buildDirectory, 'custom-property.cjs');
   await esbuild.build({
     stdin: {
-      contents:
-        'export { filterCssProperties, CSS_PROPERTIES } from ' +
-        "'./src/features/style/model/cssProperties'",
+      contents: 'export { filterCssProperties, CSS_PROPERTIES } from ' + "'./src/features/style/model/cssProperties'",
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -54,26 +52,10 @@ const check = (what, condition, detail) => {
   const first = (query, count = 4) => filterCssProperties(query, VARS).slice(0, count);
 
   // --- the project's own properties are properties ---------------------------------
-  check(
-    'typing a dash offers this project first',
-    first('-', 3).join() === '--brand-500,--light-300,--space-4',
-    first('-', 6).join(),
-  );
-  check(
-    'and the vendor-prefixed ones after it',
-    first('-', 4)[3].startsWith('-webkit-'),
-    first('-', 4)[3],
-  );
-  check(
-    'a name narrows to the one',
-    filterCssProperties('--l', VARS).join() === '--light-300',
-    filterCssProperties('--l', VARS).join(),
-  );
-  check(
-    'and the middle of a name finds it too',
-    filterCssProperties('brand', VARS).join() === '--brand-500',
-    filterCssProperties('brand', VARS).join(),
-  );
+  check('typing a dash offers this project first', first('-', 3).join() === '--brand-500,--light-300,--space-4', first('-', 6).join());
+  check('and the vendor-prefixed ones after it', first('-', 4)[3].startsWith('-webkit-'), first('-', 4)[3]);
+  check('a name narrows to the one', filterCssProperties('--l', VARS).join() === '--light-300', filterCssProperties('--l', VARS).join());
+  check('and the middle of a name finds it too', filterCssProperties('brand', VARS).join() === '--brand-500', filterCssProperties('brand', VARS).join());
   check(
     'a standard property is still what a standard query offers',
     first('align', 3).join() === 'align-content,align-items,align-self',
@@ -86,8 +68,7 @@ const check = (what, condition, detail) => {
   );
   check(
     'an empty field opens on everything, this project included',
-    filterCssProperties('', VARS)[0] === '--brand-500' &&
-      filterCssProperties('', VARS).length === VARS.length + CSS_PROPERTIES.length,
+    filterCssProperties('', VARS)[0] === '--brand-500' && filterCssProperties('', VARS).length === VARS.length + CSS_PROPERTIES.length,
     `${filterCssProperties('', VARS).length}`,
   );
   check(
@@ -95,22 +76,15 @@ const check = (what, condition, detail) => {
     filterCssProperties('align').join() === filterCssProperties('align', []).join(),
     'the two disagree',
   );
-  check(
-    'and nothing is offered twice',
-    new Set(filterCssProperties('-', VARS)).size === filterCssProperties('-', VARS).length,
-    'a duplicate',
-  );
+  check('and nothing is offered twice', new Set(filterCssProperties('-', VARS)).size === filterCssProperties('-', VARS).length, 'a duplicate');
 
   // --- Enter goes where the rest of the answer is ------------------------------------
   // The style editor and the modules it was split into (src/features/style/embed).
   const source = readSourceFolder('src/features/style/EmbedEditor.tsx', 'src/features/style/embed');
   check(
     'Enter on a named property with no value moves to the value field',
-    containsCode(
-      source,
-      'const enterName = () => { if (prop.trim() && !value.trim()) ' +
-        '{ valueRef.current?.focus(); return } submit() }',
-    ) && containsCode(source, 'onEnter={row.enterName}'),
+    containsCode(source, 'const enterName = () => { if (prop.trim() && !value.trim()) ' + '{ valueRef.current?.focus(); return } submit() }') &&
+      containsCode(source, 'onEnter={row.enterName}'),
     'Enter still calls a submit that has nothing to write',
   );
   check(
@@ -130,14 +104,10 @@ const check = (what, condition, detail) => {
   );
 
   if (failures.length) {
-    console.error(
-      `\ncustom-property: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncustom-property: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }
-  console.log(
-    `custom-property: ${checked} passed  [a project's own properties, and a key that moves on]`,
-  );
+  console.log(`custom-property: ${checked} passed  [a project's own properties, and a key that moves on]`);
   process.exit(0);
 })();

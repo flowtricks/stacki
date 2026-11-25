@@ -1,0 +1,7 @@
+---
+interface Props {
+  big: bigint;
+}
+const { big } = Astro.props;
+---
+<p class="prim-bigint">Big: {big.toString()}</p>

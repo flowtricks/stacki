@@ -1,0 +1,314 @@
+/* Settings → Breakpoints: one card per device, filled surfaces and tints, never borders (the rest of Settings reads the same).
+   The cards share the Folders and Roles card language: --bg-hover fill, 12px padding rhythm, an 8px gap between cards. */
+.breakpoints-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.breakpoints-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.breakpoints-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
+  min-height: 64px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  transition: background-color 120ms ease;
+}
+.breakpoints-card:hover:not([data-breakpoint='desktop']),
+.breakpoints-card:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+}
+.breakpoints-card[data-invalid] {
+  background: rgba(255, 69, 58, 0.12);
+}
+.breakpoints-tile {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.breakpoints-card[data-invalid] .breakpoints-tile {
+  color: var(--red);
+}
+.breakpoints-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.breakpoints-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.breakpoints-query {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoints-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.breakpoints-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.breakpoints-input {
+  width: 112px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.breakpoints-input:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+.breakpoints-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.breakpoints-input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
+.breakpoints-input[aria-invalid='true']:focus-visible {
+  outline-color: var(--red);
+}
+.breakpoints-input:disabled {
+  opacity: 0.5;
+}
+.breakpoints-canvas {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A card's name is an input that reads as a title until it is hovered or focused. */
+.breakpoints-name-input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  margin: -2px -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+.breakpoints-name-input:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.breakpoints-name-input:focus-visible {
+  background: var(--bg-input);
+  outline: 2px solid var(--accent);
+}
+.breakpoints-name-input[aria-invalid='true'] {
+  background: rgba(255, 69, 58, 0.18);
+}
+.breakpoints-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.breakpoints-remove:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.14);
+  color: var(--red);
+}
+.breakpoints-remove:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.breakpoints-card[data-breakpoint='desktop'] .breakpoints-pill {
+  grid-column: 3 / -1;
+}
+.breakpoints-add-card {
+  background: rgba(255, 255, 255, 0.07);
+}
+.breakpoints-spacer {
+  width: 28px;
+  height: 1px;
+}
+.breakpoints-add-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.breakpoints-add-confirm,
+.breakpoints-add,
+.breakpoints-add-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+/* Add is the primary button: blue at rest, the brighter blue hovered and the darker one pressed (it is only ever dimmed, while there is
+   nothing to add), never grey. The shades are the shared accent tokens, as for every primary button (controls.css). */
+.breakpoints-add-confirm.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.breakpoints-add-confirm.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.breakpoints-add-confirm.primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+.breakpoints-add-confirm:disabled,
+.breakpoints-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.breakpoints-add:hover:not(:disabled),
+.breakpoints-add-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.breakpoints-add:focus-visible,
+.breakpoints-add-confirm:focus-visible,
+.breakpoints-add-cancel:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Where a breakpoint is used: one quiet line under the subtitle, and a list of files across the card that opens from its chevron. */
+.breakpoints-usage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 16px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.breakpoints-usage-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 16px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+  text-align: start;
+  cursor: pointer;
+}
+.breakpoints-usage-toggle:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.breakpoints-usage-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.breakpoints-usage-chevron {
+  flex: none;
+  transition: transform 120ms ease;
+}
+.breakpoints-usage-toggle[aria-expanded='true'] .breakpoints-usage-chevron {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .breakpoints-usage-chevron {
+    transition: none;
+  }
+}
+.breakpoints-usage-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  min-width: 0;
+}
+.breakpoints-usage-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 14rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.breakpoints-usage-list .breakpoint-sync-row {
+  min-height: 28px;
+}
+.breakpoints-usage-list .breakpoint-sync-places {
+  padding-inline-start: 30px;
+}
+
+/* In a narrow Settings window the card has no room for its text and its field side by side: the field goes on a second line, under the
+   text, and the remove button stays at the top right. */
+@media (max-width: 760px) {
+  .breakpoints-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .breakpoints-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .breakpoints-spacer {
+    display: none;
+  }
+  .breakpoints-field {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .breakpoints-card[data-breakpoint='desktop'] .breakpoints-pill {
+    grid-column: 3;
+  }
+}

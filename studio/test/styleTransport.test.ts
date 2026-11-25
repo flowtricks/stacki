@@ -48,17 +48,13 @@ test('style writes keep the originating source version despite background reads'
   assert.ok(address && typeof address !== 'string');
   const fetchOriginal = globalThis.fetch;
   const windowOriginal = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  globalThis.fetch = (input, options) =>
-    fetchOriginal(new URL(String(input), `http://127.0.0.1:${address.port}`), options);
+  globalThis.fetch = (input, options) => fetchOriginal(new URL(String(input), `http://127.0.0.1:${address.port}`), options);
   Object.defineProperty(globalThis, 'window', { value: new EventTarget(), configurable: true });
   try {
     const before = string(record(await styleTransport.readStyleFile(file))['css']);
     await room.setSource('.one { color: green; }');
     await styleTransport.readStyleFile(file);
-    await assert.rejects(
-      styleTransport.writeStyleFile({ filePath: file, css: '.one { color: blue; }', base: before }),
-      /Another editor changed/,
-    );
+    await assert.rejects(styleTransport.writeStyleFile({ filePath: file, css: '.one { color: blue; }', base: before }), /Another editor changed/);
     assert.equal(room.text.toString(), '.one { color: green; }');
     await styleTransport.writeStyleFile({
       filePath: file,

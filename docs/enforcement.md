@@ -10,11 +10,14 @@ a person, for Claude Code, for Codex, and for Pi, because every gate calls the s
 |---|---|---|---|
 | Agent pre-tool | Before an agent runs a command or edits a file | `scripts/agent/core.mts` verdicts | No: refusals come from the harness |
 | Agent post-tool | After an agent edits a file | Prettier (writes), policy scan, ESLint on the file | No |
-| Agent stop | When an agent tries to finish | Prettier check, scan, ESLint on every changed file, then `tsc` | After 3 refusals for the same findings the session may end, and the human is told; new findings start a new round |
+| Agent stop | When an agent tries to finish | Changed-file formatting, scan and lint; all Desktop compiler targets and test source paths | After 3 refusals for the same findings the session may end, and the human is told; new findings start a new round |
 | `pre-commit` | `git commit` | Prettier check, scan, ESLint on staged files | `--no-verify`, which agent hooks refuse |
 | `commit-msg` | `git commit` | Typed subject ≤ 72 characters, blank line, body | As above |
-| `pre-push` | `git push` | `tsc`, full ESLint, full scan | As above |
-| CI (`npm test`) | Every pull request and push to `main` | Builds, `tsc` (app and scripts), ESLint, Prettier, scan, every test | **No**, once `main` requires the `Check` workflow |
+| Local development | `npm run dev` or `npm run check:local` | All Desktop compiler targets, full lint, formatting, policy, test source paths, Studio static checks | Run directly at any time |
+| `pre-push` | `git push` | Full CI gate: clean builds, Desktop and Studio static checks and tests; a pushed version tag (`refs/tags/v<digit>…`) then runs the Linux preflight. Skipped only when every pushed tree already passed the full gate here (a marker keyed by tree hash and gate version, `scripts/gate/gateMarker.ts`) or a tag names a commit on `origin/main` that `Check` passed; `npm run check:local` (and the static Linux preflight for a tag) still runs | As above |
+| Release (`npm run release:ship`) | Every release | The bump is a GitHub commit made from origin's files (version lines only, read back; subject fixed at 37 characters), so no local hook runs on it; the tag is created only when `Check` and `Candidate` are green on that exact SHA (`promote.mts` proves it again before publishing). The pre-push gate's job moves to CI on the exact commit | None: `release.yml` refuses to publish without both proofs |
+| Quarantine (`scripts/gate/quarantine.json`) | Every gate run | A listed suite's failure is reported and tolerated only with an owner, a reason, two red run URLs and an expiry at most 7 days after it was added; an expired, invalid or protected (correctness, safety, data-write) entry fails the gate (`scripts/gate/quarantine.ts`) | Renewing an entry needs a new commit with a new reason |
+| CI (`npm test -- --shard=k/4`) | Every pull request and push to `main` | Builds, `tsc` (app and scripts), ESLint, Prettier, scan, every test: a desktop static-checks job (`npm test -- --checks=desktop`), a Studio verify job (`--checks=studio`, 25-minute limit) and four test shards per platform, together exactly `npm test` (`scripts/gate/testShard.ts`); `test (<os>)` passes only when all six did | **No**, once `main` requires the `Check` workflow |
 
 The adapters are thin: `.claude/settings.json` and `.codex/hooks.json` call
 `scripts/agent/{claude,codex}.mts`; `.pi/extensions/stacki-policy/` imports the same modules. Git
@@ -23,13 +26,30 @@ hooks live in `.githooks/` and are installed by `npm install` (`scripts/policy/i
 Commands for people and agents:
 
 - `npm run check:changed` — what the stop hook runs. Use it before you finish.
+- `npm run check:local` — fast, repository-wide checks before starting development.
+  `npm run dev` runs these automatically before building and launching the app.
+- `npm run typecheck` — checks the root, scripts, contracts, Electron, preload and preview
+  compiler configurations with separate incremental caches. The broad root program alone
+  cannot catch differences in the build targets' library and module settings.
 - `npm run check:policy` — the repository policy scan.
 - `npm run lint`, `npm run typecheck`, `npm run format` — the individual tools.
+- Files this clone hides from git for itself (`.git/info/exclude`, the global excludes file; a
+  local notes folder, say) are skipped by every gate, not only by the scan: ESLint's config ignores
+  them (`scripts/policy/gitExcludes.mts`), and Prettier runs over git's file list
+  (`scripts/policy/formatTree.mts`, behind `npm run format`, `format:check`, `check:local` and the
+  gate) because it walks the folder and reads no exclude list. `.gitignore` and `.prettierignore`
+  apply as before, so a clean checkout is checked exactly as it was.
 - `env -u ELECTRON_RUN_AS_NODE npm test` — the full gate CI runs.
 - `env -u ELECTRON_RUN_AS_NODE npm test -- <suite or folder/>` — only the named suites, for
   iterating. It builds over the existing tree (incrementally) and skips the clean and the
   whole-tree static checks, so it is no substitute for `check:changed` or the full gate
   (`scripts/gate/gatePlan.ts`).
+
+The push hook compiles the test runner and runs the full gate (unless the marker or green-tag proof above holds), with live output and a 30-minute
+limit per command. It clears `ELECTRON_RUN_AS_NODE` for its children so agent terminals do not
+silently run browser probes as Node programs. A failed build or test stops the push. This costs
+several minutes, but catches local regressions before GitHub starts a release. CI still checks
+clean dependency installation and all three operating systems; local checks cover the host OS.
 
 ### The gate files
 
@@ -43,6 +63,11 @@ hooks run in the harness's environment, not the agent's shell).
 
 The shell check is a heuristic — a shell can write a file in more ways than any list names — and
 the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be argued with.
+
+The command check reads the checkout's own path as data: every spelling a shell accepts for it
+(raw, backslash-escaped, inside single or double quotes) is read as `.` before the command is split,
+so a root such as `/Users/Lilian's Home/stacki` cannot turn `tee <root>/.claude/settings.json` into
+an allow (`withRootAsDot` in `scripts/agent/core.mts`; issue #78).
 
 ## Rule map
 
@@ -71,7 +96,7 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 |---|---|
 | Required tsconfig flags | tsc: every `tsconfig*.json`; `scripts/tsconfig.json` adds `verbatimModuleSyntax` for scripts |
 | Required ESLint rules | lint: `eslint.config.mjs` is the source of truth |
-| Prettier, width 100 | scan: `line-width` (hard limit, code and config); CI: `prettier --check` |
+| Prettier, width 160 | CI: `prettier --check` through `scripts/policy/formatTree.mts` (a width target, not a limit: no check holds line width) |
 
 ### Core patterns
 
@@ -91,8 +116,6 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 | 9 | Split compound assertions | lint: `stacki/no-compound-assert` |
 | 9 | Paired assertions | review |
 | 10 | Bounded loops and recursion | lint: `stacki/no-unbounded-loop`, `stacki/bounded-recursion` (direct recursion; mutual recursion is review) |
-| 11 | 70 lines per function | lint: `max-lines-per-function` |
-| 11 | 800 lines per source file | lint: `max-lines` in `src/`, `electron/`, `shared/` and `scripts/` (blank and comment lines not counted) |
 | 11 | Braces always | lint: `curly` |
 | 11 | Simple, positive conditions | review |
 | 12 | No abbreviations | lint: `stacki/naming` (word list in `eslint.config.mjs`) |
@@ -113,6 +136,10 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 | 17 | Scripts are TypeScript | scan: `no-shell-script` |
 | 17 | Descriptive commit messages | hook: `commit-msg` |
 | — | No `@ts-nocheck`; `@ts-expect-error` says why | scan: `no-ts-nocheck`; lint: `ban-ts-comment` |
+| — | Code display: code in the UI is syntax highlighted | test: `test/renderer/ui/codeDisplayRule.test.js` (source scan with named allowlists); `test/renderer/ui/codeBlock.test.js` for each site; review for code that looks like a label |
+| — | Dropdowns: the custom dropdown, never a native `<select>` | lint: `stacki/no-native-select` (JSX `<select>` and `createElement('select')`) in `src/` via `eslint.config.mjs`, and in `studio/src/` and `studio/demo/` via `studio/eslint.config.ts`, which loads the vendored rule file |
+| — | Scroll containers keep a stable scrollbar gutter | test: `test/renderer/ui/scrollGutter.test.ts` (scanner `test/helpers/scrollGutter.ts`, exceptions in `test/helpers/scrollGutterAllowlist.json`) |
+| — | Studio's AI chat shows Desktop's components, not copies: the shared menu, diff view, chip editor, sessions list classes and styles reach Studio only through `studio/scripts/shared-source.json`, assembled into `studio/vendor/stacki` | `npm --prefix studio run assemble` fails on a listed file that no longer exists, and `check` and `lint` fail on an adapter that imports one that moved or lost an export; test: `studio/test/chatState.test.ts` (stored history, pin and reorder, mentions), `studio/test/ai.browser.ts` (the panel in a real browser); review for look, since no check compares pixels |
 
 ## Changing a rule
 

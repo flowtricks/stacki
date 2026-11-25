@@ -1,3 +1,6 @@
+// Goal: publish jobs return promptly and reject duplicate work.
+// Method: block the repository boundary and inspect HTTP progress without external services.
+import { ok } from '../vendor/stacki/shared/core/result';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -9,7 +12,7 @@ import { Publisher, type PublishState } from '../src/features/publishing/publish
 import { publishRoute } from '../src/features/publishing/publishRoutes';
 import { parsePublishState } from '../src/features/publishing/publishClient';
 
-test('publish HTTP returns a job before the build finishes and duplicate starts share it', async () => {
+test('publish HTTP returns a job before the commit finishes and duplicate starts share it', async (context) => {
   const root = await publishFixture();
   let release = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -22,8 +25,9 @@ test('publish HTTP returns a job before the build finishes and duplicate starts 
     {
       async commit() {
         stages.push(publisher.state);
+        await gate;
         commits++;
-        return { sha: 'b'.repeat(40), url: 'https://example.test/commit' };
+        return ok({ sha: 'b'.repeat(40), url: 'https://example.test/commit' });
       },
       async incoming() {
         throw new Error('Unexpected sync');
@@ -44,6 +48,7 @@ test('publish HTTP returns a job before the build finishes and duplicate starts 
       return 'live';
     },
   );
+  const publish = context.mock.method(publisher, 'publish');
   const { server, url } = await publishServer(publisher);
   try {
     const start = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(2000) });
@@ -70,22 +75,23 @@ test('publish HTTP returns a job before the build finishes and duplicate starts 
     assert.deepEqual(stages, expectedStages(first.id));
   } finally {
     release();
-    server.closeAllConnections();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections();
+    });
+    // Publish runs after the HTTP response and can still use the fixture if an assertion fails early.
+    await Promise.all(publish.mock.calls.map(({ result }) => result));
     await rm(root, { recursive: true, force: true });
   }
 });
 
 async function publishFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-http-'));
-  for (const directory of ['src/pages', 'public', '.studio-state', 'node_modules']) {
+  for (const directory of ['src/pages', 'public', '.stacki/studio/state', 'node_modules']) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   await writeFile(path.join(root, 'src/pages/index.astro'), '<h1>Draft</h1>');
-  await writeFile(
-    path.join(root, '.studio-state/github-base.json'),
-    JSON.stringify({ sha: 'a'.repeat(40) }),
-  );
+  await writeFile(path.join(root, '.stacki/studio/state/github-base.json'), JSON.stringify({ sha: 'a'.repeat(40) }));
   return root;
 }
 
@@ -102,7 +108,7 @@ async function publishServer(publisher: Publisher) {
 }
 
 function expectedStages(id: string | undefined) {
-  return ['building', 'committing', 'cleanup', 'deploying'].map((stage) => ({
+  return ['committing', 'cleanup', 'deploying'].map((stage) => ({
     kind: 'building',
     id,
     stage,

@@ -1,9 +1,10 @@
 import fs from 'fs';
-import { once } from 'node:events';
 import path from 'path';
+import { once } from 'node:events';
 import { createRequire } from 'module';
 import { spawn, type ChildProcess } from 'child_process';
 
+import { assert } from '../../shared/core/assert';
 import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { contentWorkerPath } from '../../../../src/features/cms/cmsRuntime';
@@ -47,36 +48,57 @@ function configPathOf(projectPath: string): { abs: string; rel: string } | undef
   return undefined;
 }
 
-// `esbuild` comes with Vite, which comes with Astro, so any project that can
-// build can do this. Resolving it from the project (rather than shipping our
-// own) keeps us on the version the project already runs. The build surface
-// used here is the one every esbuild version this app supports exposes.
-interface ProjectEsbuild {
-  build(
-    options: Record<string, unknown>,
-  ): Promise<{ metafile?: { inputs?: Record<string, unknown> } }>;
-}
+// The bundler comes with the project's Vite, which comes with Astro, so any
+// project that can build can do this. Resolving it from the project (rather
+// than shipping our own) keeps us on the version the project already runs.
+// Vite 7 and older (Astro 6 and older) bring esbuild; Vite 8 (Astro 7) brings
+// rolldown instead and no esbuild at all, so a new Astro 7 project has only
+// rolldown. Either one is enough. The build surface used here is the one every
+// version of each that this app supports exposes.
+type BuildFunction = (options: Record<string, unknown>) => Promise<unknown>;
 
-function isProjectEsbuild(input: unknown): input is ProjectEsbuild {
+/** The project's own bundler, by which tool it is. */
+export type ProjectBundler = { readonly kind: 'esbuild'; readonly build: BuildFunction } | { readonly kind: 'rolldown'; readonly build: BuildFunction };
+
+// Where each bundler sits in a project, in the order they are tried: esbuild
+// first, because a project that has it has always been read with it.
+const BUNDLER_SPECS = [
+  { kind: 'esbuild', spec: 'esbuild' },
+  { kind: 'esbuild', spec: 'vite/node_modules/esbuild' },
+  { kind: 'rolldown', spec: 'rolldown' },
+  { kind: 'rolldown', spec: 'vite/node_modules/rolldown' },
+] as const;
+
+function buildFunctionOf(input: unknown): BuildFunction | undefined {
   const candidate = toRecord(input);
-  return candidate !== undefined && candidate !== null && typeof candidate['build'] === 'function';
+  const build = candidate?.['build'];
+  if (typeof build !== 'function') {
+    return undefined;
+  }
+  // The module's own build, called with an options object; what it answers is narrowed by bundle().
+  return (options) => Promise.resolve(build.call(candidate, options));
 }
 
-function esbuildOf(projectPath: string): ProjectEsbuild | undefined {
+/** The project's bundler: its esbuild, else its rolldown; undefined when it has neither installed. */
+export function bundlerOf(projectPath: string): ProjectBundler | undefined {
+  assert(path.isAbsolute(projectPath), 'A bundler is resolved from a project by its full path');
   const projectRequire = createRequire(path.join(projectPath, 'package.json'));
-  for (const spec of ['esbuild', 'vite/node_modules/esbuild']) {
+  for (const { kind, spec } of BUNDLER_SPECS) {
+    let mod: unknown;
     try {
-      let mod: unknown;
-      try {
-        mod = projectRequire(spec);
-      } catch {
-        mod = createRequire(import.meta.url)(spec);
-      }
-      if (isProjectEsbuild(mod)) {
-        return mod;
-      }
+      // Rolldown is an ES module; Node (22.12 and later, every Electron this app ships) requires one directly.
+      mod = projectRequire(spec);
     } catch {
-      /* try the next */
+      try {
+        // Studio's own copy, for a stage whose project brings neither.
+        mod = createRequire(import.meta.url)(spec);
+      } catch {
+        continue;
+      }
+    }
+    const build = buildFunctionOf(mod);
+    if (build !== undefined) {
+      return { kind, build };
     }
   }
   return undefined;
@@ -85,8 +107,7 @@ function esbuildOf(projectPath: string): ProjectEsbuild | undefined {
 // The generated bundle lives in the project so that `astro/zod` — left
 // external, so the config and our stubs share one zod instance — resolves
 // against the project's node_modules.
-const workDirectoryOf = (projectPath: string): string =>
-  path.join(projectPath, '.studio-cms-runner');
+const workDirectoryOf = (projectPath: string): string => path.join(projectPath, '.studio-cms-runner');
 
 // The stubs are copied into the project rather than bundled from where they
 // sit, because in a packaged build they sit inside app.asar, which esbuild (a
@@ -94,17 +115,8 @@ const workDirectoryOf = (projectPath: string): string =>
 function stageRunner(projectPath: string, configAbs: string): { directory: string; entry: string } {
   const directory = workDirectoryOf(projectPath);
   fs.mkdirSync(directory, { recursive: true });
-  for (const name of [
-    'stubAstroContent.mjs',
-    'stubAstroLoaders.mjs',
-    'schemaTools.mjs',
-    'introspect.mjs',
-  ]) {
-    fs.writeFileSync(
-      path.join(directory, name),
-      fs.readFileSync(contentWorkerPath(name), 'utf8'),
-      'utf8',
-    );
+  for (const name of ['stubAstroContent.mjs', 'stubAstroLoaders.mjs', 'schemaTools.mjs', 'introspect.mjs']) {
+    fs.writeFileSync(path.join(directory, name), fs.readFileSync(contentWorkerPath(name), 'utf8'), 'utf8');
   }
   const entry = path.join(directory, 'read-config.entry.mjs');
   fs.writeFileSync(
@@ -130,12 +142,10 @@ function stageRunner(projectPath: string, configAbs: string): { directory: strin
       '    let request;',
       '    try { request = JSON.parse(line); } catch { continue; }',
       '    try {',
-      '      const value = request.op === "validate" ? validate(config, request) : ' +
-        '{ error: "unknown request" };',
+      '      const value = request.op === "validate" ? validate(config, request) : ' + '{ error: "unknown request" };',
       '      send({ type: "reply", id: request.id, value });',
       '    } catch (err) {',
-      '      send({ type: "reply", id: request.id, value: ' +
-        '{ error: String(err && err.message || err) } });',
+      '      send({ type: "reply", id: request.id, value: ' + '{ error: String(err && err.message || err) } });',
       '    }',
       '  }',
       '});',
@@ -147,52 +157,110 @@ function stageRunner(projectPath: string, configAbs: string): { directory: strin
   return { directory, entry };
 }
 
-async function bundle(
-  esbuild: ProjectEsbuild,
-  projectPath: string,
-  directory: string,
-  entry: string,
-): Promise<{ outfile: string; inputs: string[] }> {
+// A CommonJS dependency pulled in by a loader still calls require(), which an
+// ESM bundle has no such thing as. Give it one, resolving from where the bundle
+// sits — inside the project.
+const REQUIRE_BANNER = ["import { createRequire as __stackiRequire } from 'node:module';", 'const require = __stackiRequire(import.meta.url);'].join('\n');
+
+async function bundle(bundler: ProjectBundler, projectPath: string, directory: string, entry: string): Promise<{ outfile: string; inputs: string[] }> {
   const outfile = path.join(directory, 'read-config.mjs');
-  const tsconfig = ['tsconfig.json', 'jsconfig.json']
-    .map((fileName) => path.join(projectPath, fileName))
-    .find((candidate) => fs.existsSync(candidate));
-  const result = await esbuild.build({
-    entryPoints: [entry],
-    outfile,
-    bundle: true,
-    write: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node20',
-    absWorkingDir: projectPath,
-    // The project's aliases (`@/loaders/events.ts`) are how the config reaches
-    // its own code.
-    tsconfig,
-    alias: {
-      'astro:content': path.join(directory, 'stubAstroContent.mjs'),
-      'astro/loaders': path.join(directory, 'stubAstroLoaders.mjs'),
-    },
-    // One zod, resolved from the project — the schemas the config builds have
-    // to be the same objects our introspection walks.
-    external: ['astro/zod', 'astro:*'],
-    // A CommonJS dependency pulled in by a loader still calls require(), which
-    // an ESM bundle has no such thing as. Give it one, resolving from where the
-    // bundle sits — inside the project.
-    banner: {
-      js: [
-        "import { createRequire as __stackiRequire } from 'node:module';",
-        'const require = __stackiRequire(import.meta.url);',
-      ].join('\n'),
-    },
-    logLevel: 'silent',
-    // Which files went in, so the answer can be cached until one of them
-    // changes.
-    metafile: true,
-    sourcemap: false,
-  });
-  return { outfile, inputs: Object.keys(result.metafile?.inputs ?? {}) };
+  const tsconfig = ['tsconfig.json', 'jsconfig.json'].map((fileName) => path.join(projectPath, fileName)).find((candidate) => fs.existsSync(candidate));
+  const alias = {
+    'astro:content': path.join(directory, 'stubAstroContent.mjs'),
+    'astro/loaders': path.join(directory, 'stubAstroLoaders.mjs'),
+  };
+  switch (bundler.kind) {
+    case 'esbuild':
+      return bundleWithEsbuild(bundler.build, { projectPath, entry, outfile, tsconfig, alias });
+    case 'rolldown':
+      return bundleWithRolldown(bundler.build, { projectPath, entry, outfile, tsconfig, alias });
+    default: {
+      const exhaustive: never = bundler;
+      return exhaustive;
+    }
+  }
 }
+
+interface BundleJob {
+  readonly projectPath: string;
+  readonly entry: string;
+  readonly outfile: string;
+  readonly tsconfig: string | undefined;
+  readonly alias: Readonly<Record<string, string>>;
+}
+
+async function bundleWithEsbuild(build: BuildFunction, job: BundleJob): Promise<{ outfile: string; inputs: string[] }> {
+  const { projectPath, entry, outfile, tsconfig, alias } = job;
+  const result = toRecord(
+    await build({
+      entryPoints: [entry],
+      outfile,
+      bundle: true,
+      write: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node20',
+      absWorkingDir: projectPath,
+      // The project's aliases (`@/loaders/events.ts`) are how the config reaches
+      // its own code.
+      tsconfig,
+      alias,
+      // One zod, resolved from the project — the schemas the config builds have
+      // to be the same objects our introspection walks.
+      external: ['astro/zod', 'astro:*'],
+      banner: { js: REQUIRE_BANNER },
+      logLevel: 'silent',
+      // Which files went in, so the answer can be cached until one of them
+      // changes.
+      metafile: true,
+      sourcemap: false,
+    }),
+  );
+  const inputs = Object.keys(toRecord(toRecord(result?.['metafile'])?.['inputs']) ?? {});
+  assert(inputs.length <= MAIN_LIMITS.runnerInputsMax, 'A content config bundle has bounded inputs');
+  return { outfile, inputs };
+}
+
+// The same bundle through rolldown, whose options differ in name only. An
+// alias is resolved before the external check in esbuild but after it in
+// rolldown, so the two stubbed `astro:` modules are kept out of the external
+// test by hand.
+async function bundleWithRolldown(build: BuildFunction, job: BundleJob): Promise<{ outfile: string; inputs: string[] }> {
+  const { projectPath, entry, outfile, tsconfig, alias } = job;
+  const external = (id: string): boolean => {
+    if (id in alias) {
+      return false;
+    }
+    return id === 'astro/zod' || id.startsWith('astro:');
+  };
+  const result = toRecord(
+    await build({
+      input: entry,
+      cwd: projectPath,
+      platform: 'node',
+      ...(tsconfig === undefined ? {} : { tsconfig }),
+      resolve: { alias },
+      external,
+      logLevel: 'silent',
+      transform: { target: 'node20' },
+      write: true,
+      // One file, as esbuild writes: a dynamic import in the config is inlined, not split off.
+      output: { file: outfile, format: 'esm', banner: REQUIRE_BANNER, sourcemap: false, codeSplitting: false },
+    }),
+  );
+  const chunks = toArray(result?.['output']) ?? [];
+  assert(chunks.length > 0, 'A rolldown build answers with the chunk it wrote');
+  // Which files went in, so the answer can be cached until one of them changes.
+  // Rolldown names its own runtime with a leading NUL; that is no file.
+  const inputs = chunks
+    .flatMap((chunk) => toArray(toRecord(chunk)?.['moduleIds']) ?? [])
+    .filter((id): id is string => typeof id === 'string' && !id.startsWith('\0'))
+    .map((id) => toPosix(path.relative(projectPath, id)));
+  assert(inputs.length <= MAIN_LIMITS.runnerInputsMax, 'A content config bundle has bounded inputs');
+  return { outfile, inputs };
+}
+
+const toPosix = (file: string): string => file.split(path.sep).join('/');
 
 // `esbuild` and Node both decorate what they print; the first real lines are the
 // part that names what went wrong.
@@ -334,16 +402,12 @@ class ConfigService {
         this.pending.delete(id);
         callback(value);
       };
-      const timer = setTimeout(
-        () => finish(new Error('Checking the entry timed out.'), reject),
-        RUN_TIMEOUT,
-      );
+      const timer = setTimeout(() => finish(new Error('Checking the entry timed out.'), reject), RUN_TIMEOUT);
       timer.unref?.();
       this.pending.set(id, {
         // The child's reply is an object or nothing; the boundary narrows it.
         resolve: (value) => finish(toRecord(value) ?? {}, resolve),
-        reject: (error) =>
-          finish(error instanceof Error ? error : new Error(String(error)), reject),
+        reject: (error) => finish(error instanceof Error ? error : new Error(String(error)), reject),
       });
       try {
         this.child?.stdin?.write(message, (error) => {
@@ -363,12 +427,12 @@ class ConfigService {
     if (this.stopped) {
       throw new Error(RELOADED);
     }
-    const esbuild = esbuildOf(projectPath);
-    if (!esbuild) {
+    const bundler = bundlerOf(projectPath);
+    if (bundler === undefined) {
       throw new Error('Reading the content config needs the project dependencies installed.');
     }
     const { directory, entry } = stageRunner(projectPath, configAbs);
-    const { outfile, inputs } = await bundle(esbuild, projectPath, directory, entry);
+    const { outfile, inputs } = await bundle(bundler, projectPath, directory, entry);
     // Closing a project while esbuild is running must not leave a new child
     // behind once the asynchronous build eventually finishes.
     if (this.stopped) {
@@ -399,13 +463,8 @@ class ConfigService {
     });
     child.on('error', fail);
     child.stdin.on('error', fail);
-    child.on('exit', () =>
-      fail(new Error(cleanError(this.stderr) || 'The content config could not be read.')),
-    );
-    this.timer = setTimeout(
-      () => fail(new Error('Reading the content config timed out.')),
-      RUN_TIMEOUT,
-    );
+    child.on('exit', () => fail(new Error(cleanError(this.stderr) || 'The content config could not be read.')));
+    this.timer = setTimeout(() => fail(new Error('Reading the content config timed out.')), RUN_TIMEOUT);
     this.timer.unref?.();
     return manifest;
   }
@@ -449,32 +508,24 @@ class ConfigService {
 const services = new Map<string, ConfigService>();
 const IDLE_TIMEOUT = 5 * 60 * 1000;
 
-export async function stopServiceAndWait(projectPath: string): Promise<void> {
-  await services.get(projectPath)?.stopAndWait(new Error(RELOADED));
-}
-
 function stopService(projectPath: string): void {
   services.get(projectPath)?.stop(new Error(RELOADED));
 }
 
+export async function stopServiceAndWait(projectPath: string): Promise<void> {
+  await services.get(projectPath)?.stopAndWait(new Error(RELOADED));
+}
+
 // Publish the pending service before doing any asynchronous work. Readers and
 // validation requests then share its bundle, process, and completed manifest.
-function serviceFor(
-  projectPath: string,
-  { force = false }: { readonly force?: boolean } = {},
-): Promise<ConfigService | undefined> {
+function serviceFor(projectPath: string, { force = false }: { readonly force?: boolean } = {}): Promise<ConfigService | undefined> {
   const found = configPathOf(projectPath);
   const existing = services.get(projectPath);
   if (!found) {
     stopService(projectPath);
     return Promise.resolve(undefined);
   }
-  if (
-    existing &&
-    !force &&
-    existing.configAbs === found.abs &&
-    (!existing.manifest || existing.stamp === stampOf(projectPath, existing.inputs))
-  ) {
+  if (existing && !force && existing.configAbs === found.abs && (!existing.manifest || existing.stamp === stampOf(projectPath, existing.inputs))) {
     const ready = existing.ready ?? Promise.reject(new Error(RELOADED));
     return ready.then((service) => {
       if (service.stopped) {
@@ -489,9 +540,7 @@ function serviceFor(
   services.set(projectPath, service);
   // A service in the map always has ready assigned just after construction;
   // the branch is for the compiler.
-  service.ready = existing?.ready
-    ? existing.ready.catch(() => undefined).then(() => service.start())
-    : service.start();
+  service.ready = existing?.ready ? existing.ready.catch(() => undefined).then(() => service.start()) : service.start();
   return service.ready;
 }
 
@@ -504,10 +553,7 @@ export type ContentConfigResult =
  * { collections: [...] } for a project, { missing: true } when it has no
  * content config, or { error } when the config could not be read.
  */
-async function readContentConfig(
-  projectPath: string,
-  { force = false }: { readonly force?: boolean } = {},
-): Promise<ContentConfigResult> {
+async function readContentConfig(projectPath: string, { force = false }: { readonly force?: boolean } = {}): Promise<ContentConfigResult> {
   const found = configPathOf(projectPath);
   if (!found) {
     stopService(projectPath);

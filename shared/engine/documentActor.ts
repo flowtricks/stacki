@@ -13,6 +13,9 @@
 //   written → re-read, verify the checksum, release the lock, commit
 //                                                      (§5.2 steps 9–10)
 //
+// A plan whose candidate is the base, byte for byte, never leaves idle: it is
+// applied without a write (`unchanged` below), so a no-op can never touch disk.
+//
 // Honest limit, a product contract (plan §5.2): a byte check cannot close the
 // kernel's check-to-use race against an uncooperative writer, because no
 // portable API offers compare-and-swap on a pathname. The lock excludes only
@@ -27,7 +30,7 @@
 // deliberate resubmission by the persistence layer.
 import { assert } from '../core/assert';
 import type { Digest, FilePath } from '../core/brand';
-import type { Intent, Outcome, RejectionReason, SubmissionResult } from './intent';
+import type { Intent, Operation, Outcome, RejectionReason, SubmissionResult } from './intent';
 import { LIMITS } from '../core/limits';
 import type { Plan, PlanningBase } from './planner';
 import { err, ok, type Result } from '../core/result';
@@ -58,17 +61,13 @@ export interface DiskLock {
   readonly token: string;
 }
 
-export type LockError =
-  | { readonly code: 'held'; readonly message: string }
-  | { readonly code: 'failed'; readonly message: string };
+export type LockError = { readonly code: 'held'; readonly message: string } | { readonly code: 'failed'; readonly message: string };
 
 /** A replace either left the target untouched (`failed`) or replaced it and
  * cannot promise the replacement survives a power loss (`not-durable`: the
  * directory could not be flushed). The second is the crash window of plan
  * §3.5 made visible, so it reaches the caller as `uncertain`. */
-export type ReplaceError =
-  | { readonly code: 'failed'; readonly message: string }
-  | { readonly code: 'not-durable'; readonly message: string };
+export type ReplaceError = { readonly code: 'failed'; readonly message: string } | { readonly code: 'not-durable'; readonly message: string };
 
 export interface DocumentDisk {
   read(path: FilePath): Result<DiskRead, DiskError>;
@@ -92,10 +91,22 @@ export interface Projector {
   candidate(path: FilePath, base: Snapshot, plan: Plan, bytes: ByteString): Snapshot;
 }
 
+/**
+ * Pre-flight (shared/engine/preflight.ts, docs/error-proofing.md): the candidate checked before it
+ * is written. `refuse` carries the plain-language reason for the notice; anything else lets the
+ * write go ahead. Optional, so the simulator's actor runs the protocol alone.
+ */
+export type PreflightGate = (
+  base: Snapshot,
+  candidate: Snapshot,
+  operation: Operation,
+) => { readonly tag: 'pass' } | { readonly tag: 'refuse'; readonly message: string };
+
 export interface ActorDependencies {
   readonly disk: DocumentDisk;
   readonly planner: Planner;
   readonly projector: Projector;
+  readonly preflight?: PreflightGate;
 }
 
 // --- State -----------------------------------------------------------------------
@@ -120,9 +131,7 @@ export interface InFlight {
 }
 
 export type ActorPhase =
-  | { readonly tag: 'idle' }
-  | ({ readonly tag: 'planned' } & InFlight)
-  | ({ readonly tag: 'written'; readonly lock: DiskLock } & InFlight);
+  { readonly tag: 'idle' } | ({ readonly tag: 'planned' } & InFlight) | ({ readonly tag: 'written'; readonly lock: DiskLock } & InFlight);
 
 /** The watcher is a hint (plan §2): it only says "read again before trusting". */
 export type WatcherHint = 'clean' | 'dirty';
@@ -145,8 +154,14 @@ export type ActorEffect =
       readonly generation: number;
     } & InFlight)
   | { readonly tag: 'refreshed'; readonly previousGeneration: number; readonly generation: number }
+  /** A plan whose candidate is its base, byte for byte: applied with no write
+   * and no commit. It carries what was planned so a judge (the simulator) can
+   * still check the plan; nothing about it reaches the disk or the commit log. */
+  | ({ readonly tag: 'unchanged' } & InFlight)
   /** Why a disk call failed, for the rejection notice; never logged. */
   | { readonly tag: 'disk-error'; readonly intentId: Intent['id']; readonly message: string }
+  /** Why pre-flight held the write, in plain words, for the rejection notice; never logged. */
+  | { readonly tag: 'preflight-refused'; readonly intentId: Intent['id']; readonly message: string }
   /** The lock could not be released. The real disk breaks a lock whose owner is
    * gone, so this costs cooperating writers a `write-race`, never a deadlock. */
   | { readonly tag: 'lock-leaked'; readonly path: FilePath };
@@ -173,18 +188,12 @@ export function createActor(path: FilePath): ActorState {
 
 /** Accept the intent or push back: a full queue is backpressure, not rejection,
  * and never a silent drop — the caller still holds the draft (plan §3.5). */
-export function submitIntent(
-  state: ActorState,
-  submission: Submission,
-): { readonly state: ActorState; readonly result: SubmissionResult } {
+export function submitIntent(state: ActorState, submission: Submission): { readonly state: ActorState; readonly result: SubmissionResult } {
   const intent = submission.intent;
   assert(intent.file === state.path, 'An intent is submitted to its own file actor');
   if (submission.authored !== undefined) {
     assert(submission.authored.path === intent.file, 'The authored snapshot is of the file');
-    assert(
-      submission.authored.checksum === intent.authoredChecksum,
-      'The authored snapshot is the one the intent names',
-    );
+    assert(submission.authored.checksum === intent.authoredChecksum, 'The authored snapshot is the one the intent names');
   }
   assert(state.queue.length <= LIMITS.intentsPendingMax, 'The queue never exceeds its bound');
   if (state.queue.length < LIMITS.intentsPendingMax) {
@@ -233,10 +242,7 @@ export function stepActor(state: ActorState, dependencies: ActorDependencies): A
 /** Re-read the file now (§5.2 step 1, and the watcher tick of §7: one read and
  * at most one parse). Only an idle actor refreshes; a failed read changes
  * nothing and is returned, so the caller can tell a missing file apart. */
-export function refreshActor(
-  state: ActorState,
-  dependencies: ActorDependencies,
-): Result<ActorStep, DiskError> {
+export function refreshActor(state: ActorState, dependencies: ActorDependencies): Result<ActorStep, DiskError> {
   assert(state.phase.tag === 'idle', 'Only an idle actor refreshes');
   const refreshed = refresh(state, dependencies);
   if ('code' in refreshed) {
@@ -361,28 +367,39 @@ function stepIdle(state: ActorState, dependencies: ActorDependencies): ActorStep
     return reject(current, intent, planned.error, parses, earlier);
   }
   const plan = planned.value;
-  if (plan.splices.length > LIMITS.splicesPerIntentMax) {
-    return reject(current, intent, 'resource-limit', parses, earlier);
+  const checked = candidateOf(state.path, base, plan, dependencies.projector);
+  if (!checked.ok) {
+    return reject(current, intent, checked.error.reason, parses + checked.error.parses, earlier);
   }
-  if (!witnessesHold(base.bytes, plan.splices)) {
-    return reject(current, intent, 'region-externally-modified', parses, earlier);
+  const candidate = checked.value;
+  if (candidate.checksum === base.checksum) {
+    return unchanged(current, { intent, base, plan, candidate }, parses + 1, earlier);
   }
-  const bytes = applySplices(base.bytes, plan.splices);
-  if (bytes.length > LIMITS.sourceBytesMax) {
-    return reject(current, intent, 'resource-limit', parses, earlier);
-  }
-  const candidate = dependencies.projector.candidate(state.path, base, plan, bytes);
-  assert(candidate.bytes === bytes, 'The candidate is the applied bytes');
-  if (plan.candidate === 'must-parse') {
-    if (candidate.projection.tag === 'parse-error') {
-      return reject(current, intent, 'source-invalid', parses + 1, earlier);
-    }
-    if (!postKindsHold(candidate, plan)) {
-      return reject(current, intent, 'unsupported-operation', parses + 1, earlier);
-    }
+  const verdict = dependencies.preflight?.(base, candidate, intent.operation) ?? { tag: 'pass' };
+  if (verdict.tag === 'refuse') {
+    assert(verdict.message.length > 0, 'A pre-flight refusal says why');
+    const refused: ActorEffect = { tag: 'preflight-refused', intentId: intent.id, message: verdict.message };
+    return reject(current, intent, 'would-break-page', parses + 1, [...earlier, refused]);
   }
   const phase: ActorPhase = { tag: 'planned', intent, base, plan, candidate };
   return { state: { ...current, phase }, effects: earlier, parses: parses + 1 };
+}
+
+// A plan that leaves the file's bytes exactly as they are (a value set to the
+// value it has, a text equal to the file's) is applied by writing nothing: no
+// lock, no replace, no commit. A replace of identical bytes still renames a
+// new file over the old one, which changes its mtime, wakes every watcher (the
+// dev server re-renders the canvas twice) and looks like an edit to git and to
+// the editor's own history, all for a change that does not exist. The bytes
+// were read in this very step, and the outcome says the file holds what the
+// intent wanted; it carries no changed range, because no byte changed.
+function unchanged(state: ActorState, planned: InFlight, parses: number, earlier: readonly ActorEffect[]): ActorStep {
+  assert(state.snapshot === planned.base, 'An unchanged plan is planned against the snapshot just read');
+  assert(planned.candidate.bytes.length === planned.base.bytes.length, 'An unchanged candidate has the base length');
+  assert(state.phase.tag === 'idle', 'An unchanged plan leaves the actor idle');
+  assert(parses <= LIMITS.parseTasksInFlightMax, 'A step runs at most the parse bound');
+  const outcome: Outcome = { tag: 'applied', intentId: planned.intent.id, changedRanges: [], checksum: planned.base.checksum };
+  return { state, effects: [...earlier, { tag: 'unchanged', ...planned }, { tag: 'outcome', outcome }], parses };
 }
 
 // The authored snapshot: the one the client sent, or the current one when it
@@ -426,6 +443,41 @@ function staleWithoutBytes(intent: Intent): RejectionReason {
   }
 }
 
+/** The bytes `plan` leaves on `base`, checked as a write would check them
+ * (§5.2 steps 4–6): within the splice and size bounds, every witness still on
+ * `base`, and, where the plan says so, a candidate that parses with its targets'
+ * kinds intact. The actor's step and a batch planned in memory
+ * (electron/documents/editPreview.ts) share it, so a batch is held to exactly
+ * what each of its edits would be held to alone. `parses` counts the parse a
+ * refusal cost. */
+export function candidateOf(
+  path: FilePath,
+  base: Snapshot,
+  plan: Plan,
+  projector: Pick<ActorDependencies['projector'], 'candidate'>,
+): Result<Snapshot, { readonly reason: RejectionReason; readonly parses: 0 | 1 }> {
+  assert(base.path === path, 'A candidate is of the file its base is');
+  if (!witnessesHold(base.bytes, plan.splices)) {
+    return err({ reason: 'region-externally-modified', parses: 0 });
+  }
+  const bytes = applySplices(base.bytes, plan.splices);
+  if (bytes.length > LIMITS.sourceBytesMax) {
+    return err({ reason: 'resource-limit', parses: 0 });
+  }
+  const candidate = projector.candidate(path, base, plan, bytes);
+  assert(candidate.bytes === bytes, 'The candidate is the applied bytes');
+  if (plan.candidate === 'must-parse') {
+    if (candidate.projection.tag === 'parse-error') {
+      return err({ reason: 'source-invalid', parses: 1 });
+    }
+    if (!postKindsHold(candidate, plan)) {
+      return err({ reason: 'unsupported-operation', parses: 1 });
+    }
+  }
+  assert(candidate.path === path, 'The candidate is the same file');
+  return ok(candidate);
+}
+
 // The target is still there, with its expected kind (§5.2 step 6). Until step 8
 // this asserted: a candidate without it meant a broken planner. The step-8 long
 // run found bytes that reach it with a correct plan: outside edits had left
@@ -457,11 +509,7 @@ function postKindsHold(candidate: Snapshot, plan: Plan): boolean {
 // §5.2 steps 7–8. The lock is taken first, so the re-read and the replace see
 // no cooperating writer between them; it stays held through the verifying read
 // of the next step and is released there.
-function stepPlanned(
-  state: ActorState,
-  phase: Extract<ActorPhase, { tag: 'planned' }>,
-  dependencies: ActorDependencies,
-): ActorStep {
+function stepPlanned(state: ActorState, phase: Extract<ActorPhase, { tag: 'planned' }>, dependencies: ActorDependencies): ActorStep {
   const disk = dependencies.disk;
   const idle: ActorState = { ...state, phase: { tag: 'idle' }, hint: 'dirty' };
   const intent = phase.intent;
@@ -497,11 +545,7 @@ function stepPlanned(
 }
 
 // §5.2 steps 9–10: verify, release, commit.
-function stepWritten(
-  state: ActorState,
-  phase: Extract<ActorPhase, { tag: 'written' }>,
-  dependencies: ActorDependencies,
-): ActorStep {
+function stepWritten(state: ActorState, phase: Extract<ActorPhase, { tag: 'written' }>, dependencies: ActorDependencies): ActorStep {
   const disk = dependencies.disk;
   const idle: ActorState = { ...state, phase: { tag: 'idle' }, hint: 'dirty' };
   const intent = phase.intent;
@@ -547,11 +591,7 @@ function stepWritten(
   };
 }
 
-function release(
-  disk: DocumentDisk,
-  lock: DiskLock,
-  effects: readonly ActorEffect[],
-): readonly ActorEffect[] {
+function release(disk: DocumentDisk, lock: DiskLock, effects: readonly ActorEffect[]): readonly ActorEffect[] {
   const released = disk.unlock(lock);
   return released.ok ? effects : [...effects, { tag: 'lock-leaked', path: lock.path }];
 }
@@ -569,13 +609,7 @@ function uncertain(state: ActorState, phase: InFlight, earlier: readonly ActorEf
   return { state, effects: [...earlier, { tag: 'outcome', outcome }], parses: 0 };
 }
 
-function reject(
-  state: ActorState,
-  intent: Intent,
-  reason: RejectionReason,
-  parses: number,
-  earlier: readonly ActorEffect[] = [],
-): ActorStep {
+function reject(state: ActorState, intent: Intent, reason: RejectionReason, parses: number, earlier: readonly ActorEffect[] = []): ActorStep {
   assert(parses <= LIMITS.parseTasksInFlightMax, 'A step runs at most the parse bound');
   const outcome: Outcome = { tag: 'rejected', intentId: intent.id, reason };
   return { state, effects: [...earlier, { tag: 'outcome', outcome }], parses };

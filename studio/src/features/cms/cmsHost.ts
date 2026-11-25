@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { IpcChannel, IpcPayloads } from '../../../vendor/stacki/shared/ipc/ipcPayloads';
 import { parseIpcPayload } from '../../../vendor/stacki/shared/ipc/ipcPayloads';
@@ -9,10 +9,7 @@ import { string } from '../../shared/validation';
 
 export interface MainHost {
   readonly ipcMain: {
-    readonly handle: <K extends IpcChannel>(
-      channel: K,
-      handler: (event: unknown, payload: IpcPayloads[K]) => Promise<IpcResults[K]>,
-    ) => void;
+    readonly handle: <K extends IpcChannel>(channel: K, handler: (event: unknown, payload: IpcPayloads[K]) => Promise<IpcResults[K]>) => void;
   };
   readonly send: (channel: string, payload?: unknown) => void;
   readonly noteAppWrite: () => void;
@@ -35,11 +32,15 @@ export function cmsHandlers() {
     },
   };
   registerCmsHandlers(host);
-  registerContentHandlers(host);
+  // Studio's dev server is not Desktop's DevServers; it has no restart here.
+  registerContentHandlers(host, { restartForNewContentConfig: async () => false });
   return handlers;
 }
 // Only imported by the upstream engine running in an isolated staging directory.
-export function writeProjectText(file: string, text: string) {
+export function writeProjectText(file: string, text: string, expectedSource?: string) {
+  if (expectedSource !== undefined && readFileSync(file, 'utf8') !== expectedSource) {
+    throw new Error('Content changed before it could be saved');
+  }
   writeFileSync(file, string(text), 'utf8');
 }
 export function createProjectText(file: string, text: string) {

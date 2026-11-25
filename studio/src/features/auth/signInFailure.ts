@@ -1,5 +1,7 @@
-export type SignInProblem =
-  'expired' | 'cancelled' | 'configuration' | 'unavailable' | 'access' | 'email' | 'rate-limit';
+import { GitHubRateLimitError } from './githubRateLimit';
+import type { MessageKey } from '../../../vendor/stacki/shared/properties/i18n/messages/en/studio';
+
+export type SignInProblem = 'expired' | 'cancelled' | 'configuration' | 'unavailable' | 'access' | 'email' | 'rate-limit';
 type SignInStage = 'callback' | 'token' | 'profile' | 'repository' | 'session';
 
 export class SignInFailure extends Error {
@@ -15,6 +17,10 @@ export class SignInFailure extends Error {
   }
 }
 
+function rethrowRateLimit(stage: SignInStage, error: GitHubRateLimitError): never {
+  throw new SignInFailure('rate-limit', stage, error.status, error.signal, error.retryAt);
+}
+
 export async function signInStep<T>(stage: SignInStage, action: () => Promise<T>): Promise<T> {
   try {
     return await action();
@@ -22,24 +28,32 @@ export async function signInStep<T>(stage: SignInStage, action: () => Promise<T>
     if (error instanceof SignInFailure) {
       throw new SignInFailure(error.problem, stage, error.status, error.code, error.retryAt);
     }
-    const code =
-      error instanceof Error && ['AbortError', 'TimeoutError', 'TypeError'].includes(error.name)
-        ? error.name
-        : 'unexpected';
+    if (error instanceof GitHubRateLimitError) {
+      return rethrowRateLimit(stage, error);
+    }
+    const code = error instanceof Error && ['AbortError', 'TimeoutError', 'TypeError'].includes(error.name) ? error.name : 'unexpected';
     throw new SignInFailure('unavailable', stage, 0, code);
   }
 }
 
-export const signInMessages: Record<SignInProblem, string> = {
-  expired: 'This sign-in link expired or was already used. Start a new GitHub sign-in below.',
-  cancelled: 'GitHub authorization was cancelled. Try again and authorize Stacki Studio.',
-  configuration:
-    'GitHub sign-in needs attention from the site owner. Please ask them to check the GitHub App credentials and callback URL.',
-  unavailable:
-    'GitHub sign-in is temporarily unavailable. Please try again below. If it continues, contact the site owner.',
-  access:
-    'Your GitHub account needs Write access to this repository. Accept its invitation, then sign in again.',
-  email:
-    'GitHub requires you to verify your primary email address before signing in. Open GitHub Settings → Emails, verify the address, then try again.',
-  'rate-limit': 'GitHub is temporarily limiting sign-in requests. Please wait before trying again.',
+// Each problem's sentence is a catalog key: the sign-in page is rendered by the Worker in the visitor's language (loginPage).
+export const signInMessageKeys: Record<SignInProblem, MessageKey> = {
+  expired: 'studio.login.problem.expired',
+  cancelled: 'studio.login.problem.cancelled',
+  configuration: 'studio.login.problem.configuration',
+  unavailable: 'studio.login.problem.unavailable',
+  access: 'studio.login.problem.access',
+  email: 'studio.login.problem.email',
+  'rate-limit': 'studio.login.problem.rateLimit',
+};
+
+// The same sentences without GitHub's name, for an instance that signs people in with another provider.
+export const signInNeutralMessageKeys: Record<SignInProblem, MessageKey> = {
+  expired: 'studio.login.neutral.expired',
+  cancelled: 'studio.login.neutral.cancelled',
+  configuration: 'studio.login.neutral.configuration',
+  unavailable: 'studio.login.neutral.unavailable',
+  access: 'studio.login.neutral.access',
+  email: 'studio.login.neutral.email',
+  'rate-limit': 'studio.login.neutral.rateLimit',
 };

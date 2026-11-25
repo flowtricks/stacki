@@ -1,5 +1,6 @@
 import { SpacingFill, useSpacingBox } from './SpacingBox';
 import type { ClearProp, LiveSetProp, Read, SelectSelector, SetProp } from './SpacingBox';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Spacing section — Webflow's nested margin/padding box. Composes the shared
 // SpacingBox primitives: two frames (margin, then padding nested in its centre
@@ -26,13 +27,7 @@ const CENTER_HORIZONTALLY_BOX_PATH =
 function CenterHorizontallyIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={CENTER_HORIZONTALLY_FRAME_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={CENTER_HORIZONTALLY_FRAME_PATH} fill="currentColor" />
       <path d={CENTER_HORIZONTALLY_BOX_PATH} fill="currentColor" />
       <path d="M16 8H13V7H16V8Z" fill="currentColor" />
       <path d="M1 8H4V7H1V8Z" fill="currentColor" />
@@ -46,28 +41,15 @@ function sideValue(read: Read, prop: string): string {
   if (!resolved) {
     return '';
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return effective.value.trim().toLowerCase();
 }
 
 // "Center horizontally" = margin-left/right auto. Rendered in the Spacing section
 // header, next to the collapse arrow. Toggle: set both to auto, or clear both.
-export function SpacingCenterButton({
-  read,
-  busy,
-  setProp,
-  clearProp,
-}: {
-  read: Read;
-  busy: boolean;
-  setProp: SetProp;
-  clearProp: ClearProp;
-}) {
-  const centered =
-    sideValue(read, 'margin-left') === 'auto' && sideValue(read, 'margin-right') === 'auto';
+export function SpacingCenterButton({ read, busy, setProp, clearProp }: { read: Read; busy: boolean; setProp: SetProp; clearProp: ClearProp }) {
+  const translate = useTranslate();
+  const centered = sideValue(read, 'margin-left') === 'auto' && sideValue(read, 'margin-right') === 'auto';
   const toggle = () => {
     if (centered) {
       clearProp(['margin-left', 'margin-right']);
@@ -81,8 +63,8 @@ export function SpacingCenterButton({
       type="button"
       className={`embed-editor_spacing-center ${centered ? 'is-active' : ''}`}
       disabled={busy}
-      title="Center element horizontally. Requires fixed width."
-      aria-label="Center horizontally (margin left and right auto)"
+      title={translate('style.spacingSection.centerTitle')}
+      aria-label={translate('style.spacingSection.centerAria')}
       aria-pressed={centered}
       onClick={toggle}
     >
@@ -92,6 +74,7 @@ export function SpacingCenterButton({
 }
 
 export default function SpacingSection(props: Props) {
+  const translate = useTranslate();
   const { label, fillHandlers, editor } = useSpacingBox(props, { variableLabels: true });
 
   return (
@@ -106,7 +89,7 @@ export default function SpacingSection(props: Props) {
           liveSetProp={props.liveSetProp}
           {...fillHandlers}
         />
-        <span className="embed-editor_spacing-tag">Margin</span>
+        <span className="embed-editor_spacing-tag">{translate('style.spacingSection.margin')}</span>
         {label('margin-top', 'top')}
         {label('margin-right', 'right')}
         {label('margin-bottom', 'bottom')}
@@ -122,7 +105,7 @@ export default function SpacingSection(props: Props) {
             liveSetProp={props.liveSetProp}
             {...fillHandlers}
           />
-          <span className="embed-editor_spacing-tag">Padding</span>
+          <span className="embed-editor_spacing-tag">{translate('style.spacingSection.padding')}</span>
           {label('padding-top', 'top')}
           {label('padding-right', 'right')}
           {label('padding-bottom', 'bottom')}

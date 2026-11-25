@@ -12,6 +12,9 @@ const files = [
   'electron/content/workers/schemaTools.mjs',
   'electron/content/workers/stubAstroContent.mjs',
   'electron/content/workers/stubAstroLoaders.mjs',
+  // The AI panel's pinned adapter lockfiles (electron/handlers/ai/agentRegistry.ts).
+  'resources/agents/claude-agent-acp.lock.json',
+  'resources/agents/codex-acp.lock.json',
   'resources/icon-dock.png',
   'resources/icon.icns',
   'resources/icon.ico',

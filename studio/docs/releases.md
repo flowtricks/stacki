@@ -16,15 +16,19 @@ The root Stacki version identifies both release artifacts. The release workflow
 publishes `stacki-studio-VERSION.json` beside the desktop installers only after both
 packages pass their gates. Publishing an artifact never updates customer projects.
 
+Every installed Desktop and Studio refuses a release file over 32,000,000 bytes, and
+that bound is fixed in their code, so raising it never reaches them. The release
+therefore carries `vendor/stacki`'s TypeScript without prose comments (each file must
+compile to the same JavaScript; `scripts/releaseComments.ts`), and
+`test/releaseSize.test.ts` fails the gate once the file passes 31,000,000 bytes or
+2,950 files (installed clients refuse more than 3,000). `scripts/shared-source.json`
+lists only the shared files Studio imports; drop entries nothing in Studio reaches.
+
 ## Accepting an update
 
-In hosted Studio, open the account menu and choose **Check for updates**. An accepted
-update replaces the entire Studio implementation, including added or customized
-files. Confirm **Replace Studio customizations**, then choose **Prepare update for
-review**. Studio creates a GitHub branch. Review and merge it into the configured
-deployment branch, then deploy the updated CMS. The current deployment stays on its
-existing version until that deployment finishes. **Keep current version** makes no
-repository changes. Managing updates always requires repository write permission.
+The hosted account menu shows the installed Studio version. Updates are managed
+through the CLI described below. Review and commit the updated Studio source, then
+deploy the CMS. Publishing a new Stacki release does not change a hosted installation.
 
 The replacement keeps website source/content/assets outside `studio/`, the project's
 `studio/cloudflare/` configuration, `.env*`, `.dev.vars*`, `.studio`, `.studio-state`,
@@ -54,7 +58,7 @@ node dist/cli.mjs update /path/to/site /path/to/stacki/studio/release/stacki-stu
 The installer stages a clean release and runs dependency installation, both compiler
 checks, and the build before replacing `site/studio`. A failure during validation
 leaves the existing installation intact. The previous code is backed up under
-`site/.stacki-studio/backup-VERSION-ID`; settings and runtime state move to the new
+`site/.stacki/studio/updates/backup-VERSION-ID`; settings and runtime state move to the new
 installation. This metadata directory ignores its contents in Git. Review the
 website's Git diff, commit the Studio replacement, and deploy when ready.
 
@@ -70,7 +74,7 @@ Then install dependencies and rebuild. Backups contain the previous code, not a
 second copy of live drafts. Do not restore old draft snapshots over newer work.
 
 An interrupted filesystem swap may leave staging, backup, and an `update.lock` in
-`.stacki-studio`. These are deliberately retained. Inspect the directories, restore
+`.stacki/studio/updates` (`.stacki-studio` before it moved there). These are deliberately retained. Inspect the directories, restore
 `studio` and its retained state from them, and remove the stale lock only after
 confirming the original updater is no longer running. No automatic garbage collection
 removes backups or incomplete update directories.

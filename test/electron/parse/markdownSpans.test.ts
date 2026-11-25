@@ -20,12 +20,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import {
-  parseMarkdownPage,
-  printMarkdownItem,
-  printMarkdownNode,
-  serializeMarkdownPage,
-} from '#dist/electron/parse/markdownParser.js';
+import { parseMarkdownPage, printMarkdownItem, printMarkdownNode, serializeMarkdownPage } from '#dist/electron/parse/markdownParser.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import { markdownPrefix } from '#dist/shared/engine/markdownLayout.js';
 import { parsePageResult, type PageModel, type PageNode } from '#dist/shared/page/pageNode.js';
@@ -69,9 +64,7 @@ function parsed(document: MarkdownDocument): { model: PageModel; located: readon
   assert.ok(result.editable);
   const projection = projectPage(document.text, result);
   assert.equal(projection.tag, 'valid', `${document.name} projects`);
-  const byPath = new Map(
-    projection.tag === 'valid' ? projection.nodes.map((node) => [node.path.join('/'), node]) : [],
-  );
+  const byPath = new Map(projection.tag === 'valid' ? projection.nodes.map((node) => [node.path.join('/'), node]) : []);
   const located: Located[] = [];
   type Parent = Located['parent'];
   const walk = (nodes: readonly PageNode[], parent: Parent, prefix: readonly number[]) => {
@@ -113,8 +106,7 @@ function printedAt(bytes: ByteString, model: PageModel, entry: Located): string 
     return printMarkdownItem(node, { marker, number, indent }, { prefix, eol });
   }
   // Inline text shares its block's lines (a heading's text starts after `# `).
-  const lineStart =
-    projected.list === 'inline' ? parent?.projected.span.start : projected.span.start;
+  const lineStart = projected.list === 'inline' ? parent?.projected.span.start : projected.span.start;
   assert.ok(lineStart !== undefined, 'Inline text has its block');
   const prefix = markdownPrefix(bytes, lineStart);
   assert.ok(prefix !== undefined, 'A Markdown block starts after container syntax alone');
@@ -210,9 +202,7 @@ function checkDocument(document: MarkdownDocument, scope: CheckScope): Counts {
       checkMarkup(slice, node, where, markupPrefix(bytes, located, entry));
     }
     for (const attribute of projected.attributes) {
-      const value = Buffer.from(
-        bytes.subarray(attribute.valueSpan?.start ?? 0, attribute.valueSpan?.end ?? 0),
-      ).toString();
+      const value = Buffer.from(bytes.subarray(attribute.valueSpan?.start ?? 0, attribute.valueSpan?.end ?? 0)).toString();
       if (attribute.type === 'markdown') {
         assert.equal(value, attributeValue(node, attribute.name), `${where}: ${attribute.name}`);
         attributes += 1;
@@ -227,10 +217,7 @@ function checkDocument(document: MarkdownDocument, scope: CheckScope): Counts {
 function markupPrefix(bytes: ByteString, located: readonly Located[], entry: Located): string {
   const path = entry.projected.path;
   const root = located.find(
-    (candidate) =>
-      candidate.projected.syntax === 'markup' &&
-      candidate.projected.list !== 'markup' &&
-      startsWithPath(path, candidate.projected.path),
+    (candidate) => candidate.projected.syntax === 'markup' && candidate.projected.list !== 'markup' && startsWithPath(path, candidate.projected.path),
   );
   assert.ok(root !== undefined, 'Markup in Markdown stands in a block');
   return markdownPrefix(bytes, root.projected.span.start) ?? '';

@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React from 'react';
 import { arrayItems, arrayText, objectFields, objectText } from './arrayValue';
 import type { ObjectRow } from './arrayValue';
@@ -5,6 +6,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import ListField from './ListField';
 import SegSwitch from './SegSwitch';
+import { commitInPlace } from '../../ui/commitInPlace';
 
 // A prop whose value is an object, edited as the fields it holds.
 //
@@ -28,11 +30,7 @@ interface ObjectFieldProps {
 export default function ObjectField({ value, onChange }: ObjectFieldProps) {
   assert((value?.length ?? 0) <= LIMITS.attrCharsMax, 'ObjectField: value limit exceeded');
   const fields = objectFields(value) || [];
-  const change = (
-    index: number,
-    next: ObjectRow,
-    options: { readonly immediate: boolean },
-  ): void => {
+  const change = (index: number, next: ObjectRow, options: { readonly immediate: boolean }): void => {
     assert(index >= 0, 'ObjectField: field index is nonnegative');
     assert(index < fields.length, 'ObjectField: field index exists');
     const text = objectText(fields.map((field, current) => (current === index ? next : field)));
@@ -42,11 +40,7 @@ export default function ObjectField({ value, onChange }: ObjectFieldProps) {
   return (
     <div className="object-field">
       {fields.map((field, index) => (
-        <ObjectRowField
-          key={field.key}
-          field={field}
-          onChange={(next, options) => change(index, next, options)}
-        />
+        <ObjectRowField key={field.key} field={field} onChange={(next, options) => change(index, next, options)} />
       ))}
     </div>
   );
@@ -66,13 +60,14 @@ function ObjectRowField(props: RowProps) {
   );
 }
 function ObjectRowControl({ field, onChange }: RowProps) {
+  const translate = useTranslate();
   if (field.kind === 'list') {
     assert(field.items !== undefined, 'ObjectField: list field has items');
     return (
       <ListField
         value={arrayText(field.items)}
         onChange={(text, immediate) => {
-          const items = arrayItems(text);
+          const items = arrayItems(text, 0, 'bindable');
           assert(items !== undefined, 'ObjectField: list editor produces an array literal');
           onChange({ ...field, items }, { immediate: immediate !== false });
         }}
@@ -85,13 +80,11 @@ function ObjectRowControl({ field, onChange }: RowProps) {
     return (
       <SegSwitch
         options={[
-          { value: true, label: 'True' },
-          { value: false, label: 'False' },
+          { value: true, label: translate('props.newProp.form.true') },
+          { value: false, label: translate('props.newProp.form.false') },
         ]}
         current={text === 'true'}
-        onPick={(next) =>
-          onChange({ ...field, text: next ? 'true' : 'false' }, { immediate: true })
-        }
+        onPick={(next) => onChange({ ...field, text: next ? 'true' : 'false' }, { immediate: true })}
       />
     );
   }
@@ -105,15 +98,12 @@ function ObjectRowControl({ field, onChange }: RowProps) {
       onChange={(event) => onChange({ ...field, text: event.target.value }, { immediate: false })}
       onBlur={() => {
         // Invalid numeric text must be quoted before it is written back into source.
-        const next: ObjectRow =
-          field.kind === 'number' && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text.trim())
-            ? { ...field, kind: 'text', quote: '"' }
-            : field;
+        const next: ObjectRow = field.kind === 'number' && !/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text.trim()) ? { ...field, kind: 'text', quote: '"' } : field;
         onChange(next, { immediate: true });
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.currentTarget.blur();
+          commitInPlace(event.currentTarget);
         }
       }}
     />

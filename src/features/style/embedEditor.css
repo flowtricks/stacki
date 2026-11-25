@@ -8,6 +8,15 @@
      (.app_body, overflow-y: scroll) is the single scroll container. */
 }
 
+/* Room at the end that an element switch keeps for the rows under the pointer when the
+   next element is shorter (StylePanel useSwitchScrollAnchor); 0 otherwise. */
+.embed-editor_root::after {
+  content: '';
+  flex: none;
+  height: var(--switch-scroll-reserve, 0px);
+  margin-top: calc(var(--space-5) * -1);
+}
+
 /* ── Header ── */
 
 .embed-editor_header {
@@ -90,7 +99,7 @@
 .embed-editor_tip {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: var(--z-tooltip);
   width: max-content;
   max-width: 220px;
@@ -101,7 +110,7 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-normal);
-  text-align: left;
+  text-align: start;
   white-space: normal;
   box-shadow: var(--shadow-md);
   opacity: 0;
@@ -115,49 +124,6 @@
 .embed-editor_save:focus-visible .embed-editor_tip {
   opacity: 1;
   transform: translateY(0);
-}
-
-.embed-editor_pending-note {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-/* Native (Webflow class) write couldn't apply and fell back to an embed — shown
-   inline (the status line was retired for the header indicator) so it isn't silent. */
-.embed-editor_fallback-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  line-height: 1.4;
-}
-
-.embed-editor_fallback-dismiss {
-  flex: none;
-  margin-left: auto;
-  padding: 0 var(--space-1);
-  border: 0;
-  background: none;
-  color: inherit;
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-  cursor: pointer;
-  opacity: 0.7;
-}
-
-.embed-editor_fallback-dismiss:hover {
-  opacity: 1;
 }
 
 /* ── Sections ── */
@@ -355,7 +321,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_section-chevron-btn {
@@ -440,7 +406,7 @@
 /* The Sizing "…" customize panel — Grow / Shrink / Basis inputs, offset to align
    under the segmented bar (past the fixed label column). */
 .embed-editor_flex-custom {
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 
 /* ── Layout section (bespoke, conditional on display) ── */
@@ -454,6 +420,8 @@
 /* ── Spacing section (Webflow-style nested margin / padding box) ── */
 
 .embed-editor_spacing {
+  /* Its left box edits margin-left: the sides map to the site's physical CSS, so it never mirrors. */
+  direction: ltr;
   position: relative; /* anchor for the editor popover */
   padding-top: var(--space-2);
 }
@@ -515,11 +483,15 @@
   pointer-events: none;
 }
 
-/* Each trapezoid is a drag handle: opt into pointer events, show a resize cursor
-   along its axis, and suppress touch scrolling so a drag doesn't pan the panel. */
+/* Each trapezoid is a drag handle: opt into pointer events and show a resize cursor
+   along its axis. On touch the panel keeps its vertical swipe (`pan-y`): the band takes
+   a horizontal drag or a held press, and cancels the pan itself once it has (useSideDrag,
+   ui/touchClaim.ts). With `none`, a swipe across the box edited a side instead of
+   scrolling, and on a phone the box fills much of the panel. */
 .embed-editor_spacing-tri {
   pointer-events: auto;
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
   transition: fill var(--transition-fast);
 }
 .embed-editor_spacing-tri.is-top,
@@ -564,7 +536,7 @@
 .embed-editor_spacing-tag {
   position: absolute;
   top: 4px;
-  left: 7px;
+  left: 7px; /* physical: tag inside LTR spacing box */
   z-index: 2;
   font-size: 9px;
   letter-spacing: var(--letter-spacing-wide);
@@ -641,9 +613,11 @@
 /* The number still drags (see useSideDrag), but it reads as a button first —
    clicking it opens the editor — so it keeps the plain pointer. The resize cursor
    belongs to the band around it (.embed-editor_spacing-tri), which is only a drag
-   handle. `touch-action: none` stays: a drag from here must not pan the panel. */
+   handle. On touch it scrolls with the panel like the band does, until a horizontal
+   drag or a held press claims it (ui/touchClaim.ts). */
 .embed-editor_spacing-label {
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 
 /* Unset ("0") — dim with a faint neutral hover so it still reads as clickable. */
@@ -730,8 +704,7 @@
    an input row for the side, then the shared Reset item. */
 .embed-editor_spacing-popover {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   top: calc(100% + var(--space-2));
   z-index: var(--z-tooltip);
   display: flex;
@@ -884,7 +857,7 @@
   color: var(--color-info);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   overflow-wrap: anywhere;
   transition: background var(--transition-fast);
@@ -971,10 +944,8 @@
   border: var(--border-width-thin) solid var(--color-border-default);
   background-color: #fff;
   background-image:
-    linear-gradient(45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #bdbdbd 75%),
-    linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
   background-size: 10px 10px;
   background-position:
     0 0,
@@ -1007,15 +978,18 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: var(--radius-md);
-  /* Blend with the panel and outline the whole group with a border (Webflow's native
-     look) instead of a dark inset fill. */
-  border: var(--border-width-thin) solid var(--color-border-strong);
+  /* Each row is its own filled tile with a small gap between: a fill marks the rows, never a
+     border round the list or a divider between them, as every control in the app is marked. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 0;
   background: transparent;
-  overflow: hidden;
 }
-.embed-editor_bg-layer:not(:last-child) {
-  border-bottom: var(--border-width-thin) solid var(--color-border-default);
+.embed-editor_bg-layer {
+  border-radius: var(--radius-md);
+  background: var(--color-bg-hover);
+  overflow: hidden;
 }
 .embed-editor_bg-layer.is-drop-target {
   box-shadow: inset 0 2px 0 var(--color-border-focus);
@@ -1036,7 +1010,7 @@
   transition: background var(--transition-fast);
 }
 .embed-editor_bg-layer-row:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-active);
 }
 /* The whole row opens the layer, not just the label: the button's hit area is
    stretched over the row (padding and gaps included) rather than nesting the icons
@@ -1072,13 +1046,15 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  /* The icon at the row's start and the label after it, whatever reset a button around it has. */
+  justify-content: flex-start;
   gap: var(--space-3);
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_bg-layer-preview {
   flex: none;
@@ -1154,11 +1130,13 @@
   flex-direction: column;
 }
 .embed-editor_bg-editor > .embed-editor_size-row,
-.embed-editor_bg-editor > .embed-editor_grad {
+.embed-editor_bg-editor > .embed-editor_grad,
+.embed-editor_bg-editor > .embed-editor_gradient-code {
   padding: var(--space-3) var(--space-4);
 }
 .embed-editor_bg-editor > .embed-editor_size-row:not(:last-child),
-.embed-editor_bg-editor > .embed-editor_grad:not(:last-child) {
+.embed-editor_bg-editor > .embed-editor_grad:not(:last-child),
+.embed-editor_bg-editor > .embed-editor_gradient-code:not(:last-child) {
   border-bottom: var(--border-width-thin) solid var(--color-border-default);
 }
 
@@ -1180,6 +1158,8 @@
 }
 /* 3×3 position picker. */
 .embed-editor_grad-grid {
+  /* The position grid picks physical left/center/right positions. */
+  direction: ltr;
   flex: none;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1273,6 +1253,8 @@
 }
 /* Stops bar. */
 .embed-editor_grad-bar {
+  /* Stops sit at physical percentages of the gradient, read from pointer x. */
+  direction: ltr;
   position: relative;
   height: 22px;
   border-radius: var(--radius-sm);
@@ -1282,16 +1264,46 @@
      under the gradient — the gradient itself paints on ::before above this. */
   background-color: #fff;
   background-image:
-    linear-gradient(45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #bdbdbd 75%),
-    linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
   background-size: 10px 10px;
   background-position:
     0 0,
     0 5px,
     5px -5px,
     -5px 0;
+}
+/* A gradient edited as code (GradientCode.tsx): the layer painted at its own
+   size and tiling over the same checkerboard as the stops bar, so a pattern
+   with transparent parts reads as one. */
+.embed-editor_gradient-code-preview {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #bdbdbd 25%, transparent 25%), linear-gradient(-45deg, #bdbdbd 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #bdbdbd 75%), linear-gradient(-45deg, transparent 75%, #bdbdbd 75%);
+  background-size: 10px 10px;
+  background-position:
+    0 0,
+    0 5px,
+    5px -5px,
+    -5px 0;
+}
+.embed-editor_gradient-code-preview > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* The whole layer as one block of code, full width under the preview, padded
+   like the editor's other rows (.embed-editor_bg-editor > …). */
+.embed-editor_gradient-code {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
 }
 /* The gradient preview, painted over the checkerboard and under the handles. */
 .embed-editor_grad-bar::before {
@@ -1356,8 +1368,10 @@
   display: grid;
   place-content: center;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-bg-inset);
+  /* A filled box, lighter than the panel: the black inset fill with a hairline
+     border vanished against the panel's own dark background. */
+  border: 0;
+  background: rgba(255, 255, 255, 0.18);
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -1422,6 +1436,8 @@
   min-width: 0;
 }
 .embed-editor_grad-dial {
+  /* The angle dial draws a CSS angle, which is physical. */
+  direction: ltr;
   position: relative;
   flex: none;
   width: 28px;
@@ -1542,6 +1558,7 @@
   max-width: none;
   max-height: 100vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -1559,6 +1576,7 @@
 }
 .embed-editor_layer-popover-box.is-scrolling {
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_layer-popover-box {
   --embed-editor_size-label-w: 42px;
@@ -1605,7 +1623,7 @@
    than as the rest of the Ratio answer. */
 .embed-editor_ratio-custom {
   padding-top: var(--space-2);
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 .embed-editor_ratio-pair {
   display: grid;
@@ -1624,7 +1642,7 @@
   width: 100%;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_ratio-caption {
   font-size: var(--font-size-xs);
@@ -1765,14 +1783,14 @@
   width: 100%;
   min-width: 0;
 }
-.embed-editor_grid-count .u-input {
-  padding-right: 18px;
+.embed-editor_grid-count:not(.is-expression) .u-input {
+  padding-inline-end: 18px;
 }
 /* ▲▼ steppers pinned inside the field. */
 .embed-editor_grid-count-steppers {
   position: absolute;
   top: 2px;
-  right: 2px;
+  inset-inline-end: 2px;
   bottom: 2px;
   display: flex;
   flex-direction: column;
@@ -1796,6 +1814,24 @@
 .embed-editor_grid-count-steppers button:disabled {
   cursor: not-allowed;
 }
+/* A track list that is not N equal tracks: the value as text in the stepper's own cell.
+   Nothing sits over the text (no steppers here, so no reserved padding either), and a
+   value too long for the cell ends in an ellipsis so its start stays readable. Refused
+   text turns the field danger-coloured by background, not border. */
+.embed-editor_grid-count.is-expression .u-input {
+  text-overflow: ellipsis;
+}
+/* The grid settings' axis: label, one mode control, then only that mode's control. */
+.embed-editor_grid-mode-body {
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-3);
+}
+.embed-editor_grid-count.is-invalid .u-input,
+.embed-editor_grid-count.is-invalid .embed-editor_varconnect-editor {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
 
 /* ── Grid settings modal (Configure grid popup) ── */
 /* ── Clip path: the Effects trigger button + its editor modal ── */
@@ -1816,7 +1852,7 @@
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -1895,6 +1931,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--space-4);
 }
 .embed-editor_clip-loading {
@@ -1912,6 +1949,7 @@
   max-width: none;
   max-height: 100vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--color-border-default);
@@ -1957,12 +1995,12 @@
    heading sat on the left. Push a trailing control out; never the only thing
    in the row. */
 .embed-editor_grid-section-head > :last-child:not(:first-child) {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 /* …unless the last thing IS a control in the group (the expression toggle,
    with the add hidden while it is open) — then nothing gets pushed out. */
 .embed-editor_grid-section-head > .embed-editor_icon-btn:last-child[aria-pressed] {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 /* GroupLabel (blue/orange/grey) + a greyed track count. */
 .embed-editor_grid-section-title {
@@ -2005,8 +2043,7 @@
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: 2px;
   background: var(--color-border-focus);
   z-index: 1;
@@ -2031,7 +2068,7 @@
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_grid-track-glyph {
   flex: none;
@@ -2148,22 +2185,22 @@
   width: 11px;
   height: 11px;
   background: var(--color-bg-surface-raised);
-  border-left: var(--border-width-thin) solid var(--color-border-default);
+  border-left: var(--border-width-thin) solid var(--color-border-default); /* physical: caret placed by measured left */
   border-top: var(--border-width-thin) solid var(--color-border-default);
   transform: translateX(-50%) rotate(45deg);
 }
 .embed-editor_grid-popover.is-above .embed-editor_grid-popover-caret {
   top: auto;
   bottom: -6px;
-  border-left: 0;
+  border-left: 0; /* physical: caret placed by measured left */
   border-top: 0;
-  border-right: var(--border-width-thin) solid var(--color-border-default);
+  border-right: var(--border-width-thin) solid var(--color-border-default); /* physical: caret placed by measured left */
   border-bottom: var(--border-width-thin) solid var(--color-border-default);
 }
-.embed-editor_grid-popover-note {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.45;
+.embed-editor_grid-popover-actions {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
 }
 .embed-editor_grid-popover-ok {
   align-self: flex-start;
@@ -2185,6 +2222,7 @@
    this textarea when there are variables to draw as chips, so the two have to
    agree on size, spacing and line height. */
 .embed-editor_grid-expression,
+.embed-editor_gradient-code-field,
 .embed-editor_varconnect.is-multiline.is-token > .embed-editor_varconnect-editor {
   width: 100%;
   min-height: 76px;
@@ -2198,7 +2236,8 @@
   line-height: 1.6;
   resize: vertical;
 }
-.embed-editor_grid-expression:focus-visible {
+.embed-editor_grid-expression:focus-visible,
+.embed-editor_gradient-code-field:focus-visible {
   outline: none;
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
 }
@@ -2255,23 +2294,6 @@
 .embed-editor_switch-label {
   letter-spacing: -0.01em;
 }
-.embed-editor_grid-warning {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-bg);
-  border: var(--border-width-thin) solid var(--color-warning-border);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-}
-.embed-editor_grid-warning-icon {
-  flex: none;
-  color: var(--color-warning);
-  margin-top: 1px;
-}
-
 /* Direction: the segmented control fills the row, the dense toggle sits beside it. */
 .embed-editor_grid-direction {
   display: flex;
@@ -2332,6 +2354,8 @@
    the real justify-items (X) / align-items (Y), so it slides to the cell corner and
    fills the axis on Stretch — mirroring Webflow's grid Align widget. */
 .embed-editor_grid-align-preview {
+  /* The preview draws justify-items over physical columns. */
+  direction: ltr;
   position: absolute;
   inset: 0;
   display: grid;
@@ -2371,6 +2395,8 @@
 /* Preview square: a 3×3 click grid beneath a real-flex bar preview. Stretches to
    the height of the two stacked axis dropdowns beside it. */
 .embed-editor_align-box {
+  /* The dots map to physical start/end of the site's flex box. */
+  direction: ltr;
   position: relative;
   flex: 0 0 auto;
   width: 68px;
@@ -2432,18 +2458,10 @@
   flex: none;
   border-radius: 1px;
   background: var(--color-text-primary);
-  /* Re-enable events (the preview is click-through) so the bars take the
-     double-click that toggles Space between / collapses to an alignment. */
-  pointer-events: auto;
-  cursor: pointer;
 }
-/* The bar is only ~2px thick — extend an invisible hit area around it so the
-   double-click is easy to land (bars only overlap when clustered, where any of them
-   maps to the same Space-between toggle). */
-.embed-editor_align-bar::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
+/* Focus is in the box once a dot is clicked; the arrow keys then move the alignment. */
+.embed-editor_align-box:focus-within {
+  background: var(--color-bg-active);
 }
 /* Baseline preview: the A and ↓ markers replace the bars, bright like them, and are
    spread by the preview's justify-content (so they track the X alignment). */
@@ -2476,7 +2494,7 @@
   min-width: 0;
 }
 .embed-editor_align-axis > .embed-editor_size-label {
-  margin-left: var(--space-2);
+  margin-inline-start: var(--space-2);
 }
 
 /* ── Borders section ── */
@@ -2504,10 +2522,12 @@
    The column gap is wider than the row gap so the left field doesn't run into the
    right pair's corner glyph. */
 .embed-editor_radius-grid {
+  /* Each corner edits a physical corner radius. */
+  direction: ltr;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-2) var(--space-5);
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 /* One corner: its glyph (a clearable label for that corner) + the length field. */
 .embed-editor_radius-corner {
@@ -2567,6 +2587,8 @@
 
 /* The box widget: top edge, [left | all | right], bottom edge. */
 .embed-editor_border-sides {
+  /* Each side edits a physical border side. */
+  direction: ltr;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2650,6 +2672,8 @@
    Its own selected state rather than the display bar's — that one is drawn by a
    sliding pill, and without the pill `is-selected` would only tint the glyph. */
 .embed-editor_inset-presets {
+  /* Each preset pins to physical top/left/right/bottom. */
+  direction: ltr;
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   gap: var(--space-1);
@@ -2657,7 +2681,7 @@
   /* Line up with the controls rather than the labels — the same offset the
      inset box below already uses, so the two read as one stack under the
      position dropdown instead of three things at three different left edges. */
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 .embed-editor_inset-preset {
   display: flex;
@@ -2729,7 +2753,7 @@
 
 /* The add-property row keeps its own cancel + prop + value + add layout. */
 .embed-editor_decl.is-add {
-  grid-template-columns: auto minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
 }
 
 /* Rows whose value is an inline control (e.g. the display segmented buttons) use
@@ -2776,7 +2800,7 @@
   /* Long property names wrap within the column instead of overrunning the value. */
   white-space: normal;
   overflow-wrap: anywhere;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_decl.is-dragging .embed-editor_prop-label .u-field-label {
   cursor: grabbing;
@@ -2791,29 +2815,6 @@
 
 .embed-editor_prop-input {
   color: var(--color-info);
-}
-
-/* Value field — a textarea that behaves as one scrollable line, then expands to
-   a full-width, auto-height field (set inline via JS) when its content wraps. */
-.embed-editor_value-input {
-  resize: none;
-}
-textarea.embed-editor_value-input.is-collapsed {
-  height: var(--size-input);
-  line-height: var(--size-input);
-  white-space: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-textarea.embed-editor_value-input.is-expanded {
-  grid-column: 1 / -1;
-  width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  overflow: hidden;
-  line-height: var(--line-height-normal);
-  padding-top: var(--space-2);
-  padding-bottom: var(--space-2);
 }
 
 /* Display control — a segmented picker (Block / Flex / Grid + a None/inline
@@ -2838,7 +2839,7 @@ textarea.embed-editor_value-input.is-expanded {
   z-index: 0;
   top: var(--space-1);
   bottom: var(--space-1);
-  left: 0;
+  left: 0; /* physical: indicator moved by measured translateX */
   width: 0;
   border-radius: var(--radius-sm);
   background: var(--surface-control);
@@ -2963,7 +2964,7 @@ textarea.embed-editor_value-input.is-expanded {
   position: absolute;
   z-index: calc(var(--z-modal) + 1);
   top: calc(100% + var(--space-2));
-  right: 0;
+  inset-inline-end: 0;
   min-width: 172px;
   max-width: calc(100vw - var(--space-4));
   display: flex;
@@ -2992,7 +2993,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -3013,7 +3014,7 @@ textarea.embed-editor_value-input.is-expanded {
   position: absolute;
   z-index: calc(var(--z-modal) + 1);
   top: calc(100% + var(--space-2));
-  right: 0;
+  inset-inline-end: 0;
   min-width: 232px;
   display: flex;
   flex-direction: column;
@@ -3053,7 +3054,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-secondary);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -3148,13 +3149,7 @@ textarea.embed-editor_value-input.is-expanded {
 /* Indent the inset box (and its popover) to the control column so it's only as wide
    as the Position dropdown above it — not the full panel like the Spacing box. */
 .embed-editor_position > .embed-editor_spacing {
-  margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
-}
-
-.embed-editor_decls-empty {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
+  margin-inline-start: calc(var(--embed-editor_size-label-w) + var(--space-3));
 }
 
 .embed-editor_decl.is-add .embed-editor_prop-input,
@@ -3180,6 +3175,7 @@ textarea.embed-editor_value-input.is-expanded {
   padding: var(--space-1);
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   border: var(--border-width-thin) solid var(--color-border-default);
   border-radius: var(--radius-md);
@@ -3198,7 +3194,7 @@ textarea.embed-editor_value-input.is-expanded {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3219,7 +3215,7 @@ textarea.embed-editor_value-input.is-expanded {
      below it, so the footer adds no border or top padding of its own. */
 }
 .embed-editor_rule-foot .embed-editor_source {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .embed-editor_rule-foot > .embed-editor_add-btn {
   margin-top: 0;
@@ -3332,12 +3328,12 @@ textarea.embed-editor_value-input.is-expanded {
   padding-top: var(--space-5);
 }
 .embed-editor_css-code-toggle {
-  padding-right: 0;
+  padding-inline-end: 0;
   padding-bottom: 0;
-  padding-left: 0;
+  padding-inline-start: 0;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_css-code-toggle:hover:not(:disabled),
@@ -3354,7 +3350,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-primary);
 }
 .embed-editor_css-code-source {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3381,13 +3377,26 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_css-code-editor .cm-scroller {
   max-height: min(36vh, 360px);
+  overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 .embed-editor_css-code-editor .cm-content {
   min-height: 100px;
+}
+/* The scroller holds the height, so the content must not. Two classes, because
+   CssCodeEditor.css loads after this sheet and caps it at 70vh: a taller rule
+   then ran out of its content box, past the bottom padding, and its last line
+   ended under the sideways bar. */
+.code-editor.embed-editor_css-code-editor .cm-content {
   max-height: none;
+}
+/* The sideways bar starts past the box's rounded corners: at the ends of its
+   travel they would otherwise shave the thumb. */
+.embed-editor_css-code-editor .cm-scroller::-webkit-scrollbar-track:horizontal,
+.embed-editor_css-code-preview::-webkit-scrollbar-track:horizontal {
+  margin-inline: var(--radius-xl);
 }
 .embed-editor_css-code-preview {
   width: 100%;
@@ -3402,8 +3411,9 @@ textarea.embed-editor_value-input.is-expanded {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* One declaration per line, as the editor beside it: a long one scrolls. */
+  white-space: pre;
+  overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -3415,6 +3425,11 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_css-code-line {
   display: block;
+  /* As wide as its text, so the box's right padding comes after a long line at
+     the end of the scroll. A line held to the box's width overflows past that
+     padding, and the text stops flush against the edge. */
+  width: max-content;
+  min-width: 100%;
   min-height: 1lh;
 }
 .embed-editor_css-code-selector,
@@ -3467,7 +3482,7 @@ textarea.embed-editor_value-input.is-expanded {
 
 .embed-editor_errors ul {
   margin: var(--space-3) 0 0;
-  padding-left: var(--space-6);
+  padding-inline-start: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -3507,7 +3522,7 @@ textarea.embed-editor_value-input.is-expanded {
 }
 /* Right-align the source dropdown within the row. */
 .embed-editor_source-link {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 0;
 }
 .embed-editor_source-prefix {
@@ -3576,10 +3591,49 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow-x: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
 .embed-editor_element-id.is-empty {
   color: var(--color-text-tertiary);
+}
+/* Resting on the element line shows its parts as chips (ElementTokenPicker),
+   wrapped to the panel's width, each in the colour the panel gives its kind:
+   the tag and id grey, classes the class blue, attributes the purple of a
+   connected value. The tip is a raised grey, well clear of the black field and
+   the panel it opens over, with room around the chips. */
+.embed-editor_element-tip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface-raised);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+.embed-editor_element-tip-chip {
+  max-width: 100%;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+.embed-editor_element-tip-chip:is(.is-tag, .is-id) {
+  background: var(--color-bg-surface-high);
+  color: var(--color-text-primary);
+}
+.embed-editor_element-tip-chip.is-class {
+  background: var(--color-class-tag-bg);
+  color: #fff;
+}
+.embed-editor_element-tip-chip.is-attribute {
+  background: var(--color-attribute-chip-bg);
+  color: var(--color-attribute-chip-text);
 }
 
 /* The source trigger reads as a little tag — green for a component embed, blue
@@ -3657,8 +3711,7 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_head::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   bottom: 100%;
   height: var(--space-5);
   background: var(--bg-panel, var(--color-bg-page));
@@ -3718,12 +3771,7 @@ textarea.embed-editor_value-input.is-expanded {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
-}
-.embed-editor_add-query-note {
-  margin: 0;
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-tertiary);
+  margin-inline-start: auto;
 }
 /* What a rename is about to touch — on the same line as the buttons it qualifies,
    at the panel's ordinary label size. It's the one thing on this form that says
@@ -3736,6 +3784,87 @@ textarea.embed-editor_value-input.is-expanded {
   white-space: nowrap;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+/* The suggestion-first add form: the project's breakpoints as flat 32px rows (no cards, no lines;
+   fills only for hover and the active row), then a Custom row and its live preview. Rows end in the
+   same 16px check slot, so insets are symmetric and nothing scrolls sideways. */
+.embed-editor_add-query.is-suggested {
+  gap: var(--space-2);
+  min-width: 0;
+}
+.embed-editor_aq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.embed-editor_aq-list:focus {
+  outline: none;
+}
+.embed-editor_aq-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: calc(var(--radius-xl) - var(--space-3));
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+.embed-editor_aq-row.is-active {
+  background: var(--color-bg-hover);
+}
+.embed-editor_aq-row.is-added {
+  color: var(--color-text-secondary);
+}
+.embed-editor_aq-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--color-text-tertiary);
+}
+.embed-editor_aq-name {
+  flex: 0 0 auto;
+}
+.embed-editor_aq-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-regular, 400);
+}
+.embed-editor_aq-check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.embed-editor_aq-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.embed-editor_aq-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-xs);
+}
+/* A custom query the field cannot take: the error tint behind the text, no border; the reason is a toast on commit. */
+.embed-editor_aq-input[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 /* The add form wraps (its wrap/nest switch needs the room); the rename form is a
    label and two buttons and stays on one line, the label giving way first. */
@@ -3757,7 +3886,7 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_selectors:has(.embed-editor_selector-add:focus) {
   border-color: var(--color-border-focus);
 }
-/* The well wraps the selector tags; the add input is revealed at its bottom.
+/* The well wraps the selector tags; the add input follows the last one inline.
    Clicking any empty space in it focuses the input. Keeps a min height so the black
    box (on .embed-editor_selectors) holds its shape before any tags load. */
 .embed-editor_selector-well {
@@ -3767,18 +3896,30 @@ textarea.embed-editor_value-input.is-expanded {
   /* One chip row, whatever is in it: the spinner shown while the scan runs stands
      exactly as tall as the chips it is standing in for, so the well doesn't change
      height — and everything under it doesn't jump — when they arrive. */
-  --embed-editor_chip-h: calc(
-    (var(--font-size-xs) * var(--line-height-tight)) + 4px + (2 * var(--border-width-thin))
-  );
+  --embed-editor_chip-h: calc((var(--font-size-xs) * var(--line-height-tight)) + 4px + (2 * var(--border-width-thin)));
   min-height: calc(var(--embed-editor_chip-h) + (2 * var(--space-3)));
   padding: var(--space-3);
   cursor: text;
 }
 .embed-editor_selector-chips {
+  /* The suggestion list hangs under the whole chip row. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+/* The add field follows the last chip inline and takes the rest of that row; it
+   wraps to a row of its own only when fewer than four characters are left. It is
+   drawn focused or not and stands exactly a chip high, so focusing or leaving it
+   never changes the well's height and nothing below moves under a press. It never
+   stands between two chips (SelectorPicker.tsx). The font is the input's, so `4ch`
+   is four of its characters. */
+.embed-editor_selector-caret-slot {
+  flex: 1 0 4ch;
+  min-width: 4ch;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
 }
 
 /* The well before its chips have been counted. An empty black box reads as "this
@@ -3797,11 +3938,6 @@ textarea.embed-editor_value-input.is-expanded {
   width: 12px;
   height: 12px;
   animation: embed-editor-spin 0.7s linear infinite;
-}
-/* Nothing to reveal (or not counted yet): the row holds its place, quietly. */
-.embed-editor_selector-filter.is-empty {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* Solid-blue, near-square tags with white text (Webflow class-tag styling). */
@@ -3828,10 +3964,38 @@ textarea.embed-editor_value-input.is-expanded {
 /* Non-active tags sit clearly darker so the selected one reads as the brightest;
    the selected tag gets no border/ring — only the fuller blue. Hover lifts partway
    toward the selected blue, but stays well short of it so the two never look alike. */
+/* A long selector is cut from its start: chips of one nested rule share their whole
+   beginning and differ only at the end. An RTL box puts the ellipsis on the left, and
+   the `<bdi dir="ltr">` inside keeps the selector's order. Without it the bidi algorithm
+   moves the punctuation at the ends of the text: `:open > a::after` drew as
+   `open > a::after:`. This box does the cutting, not the chip, because every button is
+   a centred flex container (styles.css), where a child overflows both ways with no
+   ellipsis. CSS rather than measuring, so the text stays whole in the DOM and refits
+   at any width. */
+.embed-editor_selector-chip-text {
+  /* A selector is code: it reads left to right in every interface language. */
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  text-align: left; /* physical: rtl ellipsis trick on path */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The chip's whole selector in its tooltip (SelectorPicker.tsx). A selector has few
+   places to break and its text may be one long word, so it breaks anywhere rather
+   than running past the tooltip's edge; the tooltip's height follows. */
+.embed-editor_selector-tip-code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .embed-editor_selector-chip:not(.is-active):not(.is-pending) {
   background: color-mix(in srgb, var(--color-class-tag-bg) 45%, #000);
 }
-.embed-editor_selector-chip:not(.is-active):hover:not(:disabled) {
+.embed-editor_selector-chip:not(.is-active):not(.is-pending):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-class-tag-bg) 65%, #000);
 }
 .embed-editor_selector-chip.is-active {
@@ -3843,39 +4007,129 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_selector-chip.is-active:hover:not(:disabled) {
   background: var(--color-class-tag-bg);
 }
-.embed-editor_selector-chip.is-component:not(.is-pending) {
-  background: var(--color-component-tag-bg);
-  color: var(--color-component-tag);
-}
-.embed-editor_selector-chip.is-component:not(.is-active):hover:not(:disabled) {
-  background: var(--color-component-tag-bg-hover);
-  color: var(--color-component-tag);
-}
-.embed-editor_selector-chip.is-component.is-active {
-  background: var(--color-component-tag-bg-active);
-  color: #fff;
-}
-.embed-editor_selector-chip.is-component.is-active:hover:not(:disabled) {
-  background: var(--color-component-tag-bg-active);
-}
-/* Global and ancestor-dependent selectors are supporting context, not styles
-   attached directly to the selected element. Neutral grey takes precedence over
-   source provenance (including component green), with distinct hover/active steps. */
-.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-pending) {
+/* A plain chip (selectorKind: only tags, `*` and pseudos, such as `img`, `:target`)
+   describes a project-wide group rather than this element, so it is grey, with
+   distinct hover and active steps. A class chip (a class, id or attribute anywhere,
+   nested ones included) keeps the blue above, whether or not it is global or
+   inherited: those filter the well, they do not colour it. Text colour is set in
+   every state, so hovering never changes the colour family. */
+.embed-editor_selector-chip.is-plain:not(.is-pending) {
   background: var(--color-selector-context-bg);
   color: var(--color-text-primary);
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-active):hover:not(:disabled) {
+.embed-editor_selector-chip.is-plain:not(.is-pending):not(.is-active):hover:not(:disabled) {
   background: var(--color-selector-context-bg-hover);
+  color: var(--color-text-primary);
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active {
+.embed-editor_selector-chip.is-plain.is-active:not(.is-pending) {
   background: var(--color-selector-context-bg-active);
   color: #fff;
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active:hover:not(:disabled) {
+.embed-editor_selector-chip.is-plain.is-active:not(.is-pending):hover:not(:disabled) {
   background: var(--color-selector-context-bg-active);
+  color: #fff;
 }
-.embed-editor_selector-chip.is-active.is-pending:hover:not(:disabled) {
+/* A chip whose classes and attributes are written in the open component's markup
+   (inComponentMarkup, model/componentMarkup.ts) has a green fill in every state, wherever
+   its CSS lives: at rest and on hover with the white text a blue class chip has,
+   and selected in the stronger green with white text. Each
+   state names its text colour, because a hover rule that set colour where the rest
+   rule did not painted a grey chip's text green on hover only. A pending chip has no
+   rule yet, so no provenance colour applies to it in any state. */
+.embed-editor_selector-chip.is-component:not(.is-pending) {
+  background: var(--color-component-tag-bg);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component:not(.is-pending):not(.is-active):hover:not(:disabled) {
+  background: var(--color-component-tag-bg-hover);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component.is-active:not(.is-pending) {
+  background: var(--color-component-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component.is-active:not(.is-pending):hover:not(:disabled) {
+  background: var(--color-component-tag-bg-active);
+  color: #fff;
+}
+/* The property controls' wrapper (StyleCard.tsx): no chrome of its own. Disabled for a
+   style attribute the panel can only show, so it reads as unavailable but stays in view. */
+.embed-editor_controls {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.embed-editor_controls:disabled {
+  opacity: 0.5;
+}
+/* The CSS code section for an inline style written as code (InlineBranchEditor.tsx):
+   the branch picker under the header, a muted line saying where edits go, and each
+   `${prop}` as a purple, atomic token. */
+.embed-editor_inline-branch {
+  margin: 0 var(--space-3) var(--space-2);
+}
+.embed-editor_inline-writes-to {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+.embed-editor_inline-token {
+  padding: 0 3px;
+  border-radius: var(--radius-xs);
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+}
+
+/* The "Inline styles" chip (InlineStyleChip.tsx) is amber in every state, with amber
+   text at rest and on hover and white text once picked. Each rule outranks the blue
+   rest, hover and active rules above (same specificity or more, later in the file),
+   and names its text colour, so hovering never changes the family. A chip for an
+   attribute written as code (`is-code`) keeps the family: only its icon differs. */
+.embed-editor_selector-chip.is-inline:not(.is-active) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-inline-tag-bg);
+  color: var(--color-inline-tag);
+}
+.embed-editor_selector-chip.is-inline:not(.is-active):hover:not(:disabled) {
+  background: var(--color-inline-tag-bg-hover);
+  color: var(--color-inline-tag);
+}
+.embed-editor_selector-chip.is-inline.is-active {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-inline-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-inline.is-active:hover:not(:disabled) {
+  background: var(--color-inline-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_inline-chip-icon {
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+/* The chip's `⋯`: a quiet fill of the same amber, so it reads as the chip's own. */
+.embed-editor_inline-chip-more {
+  min-height: var(--embed-editor_chip-h);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-inline-tag);
+}
+.embed-editor_inline-chip-more:hover:not(:disabled) {
+  background: var(--color-inline-tag-bg);
+  color: var(--color-inline-tag);
+}
+
+/* A pending chip holds its empty fill on hover too, against the app-wide button
+   hover (styles.css): a fill only on hover would claim a colour it does not have. */
+.embed-editor_selector-chip.is-pending:hover:not(:disabled) {
   background: transparent;
 }
 /* Picked but no rule for it yet (freshly added/typed) — dashed outline, no fill. */
@@ -3897,6 +4151,23 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_selector-chip.is-dimmed.is-active {
   opacity: 1;
 }
+/* The three selector-chip families (blue class, grey plain, green component) show "styled
+   only in another query" in the fill, never in the text: whole-chip opacity washed the text out
+   (white at 50% is #808080, about 4:1 on blue and 2:1 on grey), while the green chip beside them,
+   not dimmed, kept full-strength text. Text keeps each family's own colour from the rules above;
+   amber (inline) and dashed (pending) chips keep the opacity. */
+.embed-editor_selector-chip.is-dimmed:not(.is-inline):not(.is-pending) {
+  opacity: 1;
+}
+.embed-editor_selector-chip.is-dimmed:not(.is-inline):not(.is-pending):not(.is-active):not(.is-plain):not(.is-component):not(:hover) {
+  background: var(--color-class-tag-bg-dimmed);
+}
+.embed-editor_selector-chip.is-dimmed.is-plain:not(.is-inline):not(.is-pending):not(.is-active):not(:hover) {
+  background: var(--color-selector-context-bg-dimmed);
+}
+.embed-editor_selector-chip.is-dimmed.is-component:not(.is-inline):not(.is-pending):not(.is-active):not(:hover) {
+  background: var(--color-component-tag-bg-dimmed);
+}
 .embed-editor_selector-chip:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -3904,11 +4175,11 @@ textarea.embed-editor_value-input.is-expanded {
 /* The add input has no chrome of its own — just a text line at the bottom of the
    well. Scoped under the well so it wins over `.u-input`'s inset background. */
 .embed-editor_selector-field {
-  position: relative;
+  min-width: 0;
 }
 .embed-editor_selector-well .embed-editor_selector-add {
   width: 100%;
-  height: 22px;
+  height: var(--embed-editor_chip-h); /* a chip's height: the row never grows for it */
   padding: 0 var(--space-1);
   background: transparent;
   border-radius: 0;
@@ -3920,11 +4191,14 @@ textarea.embed-editor_value-input.is-expanded {
   background: transparent;
   box-shadow: none;
 }
+/* The placeholder shows only with the caret: at rest the well reads as its chips. */
+.embed-editor_selector-well .embed-editor_selector-add:not(:focus)::placeholder {
+  color: transparent;
+}
 .embed-editor_selector-suggest {
   position: absolute;
   top: calc(100% + var(--space-1));
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   /* Sit above the sibling Select controls (`.u-select` is always at --z-modal, +1
      when open) so the list clears the Base/source pickers and the sections below. */
   z-index: calc(var(--z-modal) + 2);
@@ -3932,6 +4206,7 @@ textarea.embed-editor_value-input.is-expanded {
   flex-direction: column;
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--space-1);
   border: var(--border-width-thin) solid var(--color-border-default);
   border-radius: var(--radius-md);
@@ -3949,12 +4224,24 @@ textarea.embed-editor_value-input.is-expanded {
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   color: var(--color-text-primary);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_suggest-item.is-active {
   background: var(--color-info-border);
   color: var(--color-text-primary);
+}
+/* A name that cannot be a class: the error tint behind the text, no border; the reason is a toast. */
+.embed-editor_selector-add[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+/* The letters a typed query matched (fuzzyRank.ts): a tint behind them, not a
+   border, so the name keeps its width and reads as one word. */
+.embed-editor_suggest-hit {
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--color-info) 28%, transparent);
+  color: inherit;
 }
 .embed-editor_suggest-sel {
   min-width: 0;
@@ -4035,13 +4322,6 @@ textarea.embed-editor_value-input.is-expanded {
   height: 11px;
   flex: none;
 }
-.embed-editor_provenance-embed-icon path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 .embed-editor_provenance-embed-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4049,7 +4329,7 @@ textarea.embed-editor_value-input.is-expanded {
   max-width: 96px;
   /* Clip the path from its start so the filename remains identifiable. */
   direction: rtl;
-  text-align: left;
+  text-align: left; /* physical: rtl ellipsis trick on path */
 }
 
 /* Orange property label — set through a selector other than the picked one.
@@ -4067,7 +4347,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-prop-orange);
   background: var(--color-prop-orange-bg);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   white-space: normal;
   overflow-wrap: anywhere;
   transition: background var(--transition-fast);
@@ -4172,7 +4452,7 @@ textarea.embed-editor_value-input.is-expanded {
   max-width: 100px;
   font-family: var(--font-family-mono);
   color: var(--color-text-secondary);
-  margin-left: auto;
+  margin-inline-start: auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4189,7 +4469,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: inherit;
   font-family: inherit;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   transition:
     background var(--transition-fast),
     opacity var(--transition-fast);
@@ -4391,8 +4671,7 @@ textarea.embed-editor_value-input.is-expanded {
    below the row; a solid overlay surface covers the section beneath it. */
 .embed-editor_more-popover {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   top: calc(100% + var(--space-2));
   z-index: var(--z-tooltip);
   display: flex;
@@ -4452,14 +4731,6 @@ textarea.embed-editor_value-input.is-expanded {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
 }
-/* Informational footnote (e.g. the skip-ink explainer). */
-.embed-editor_more-note {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-  color: var(--color-text-tertiary);
-}
-
 /* ── Breaking row (Word = word-break / Line = white-space) ──
    A static "Breaking" label in the shared label column, then two dropdown cells
    sharing the control area — each a Select stacked over its clickable label. */
@@ -4714,6 +4985,7 @@ textarea.embed-editor_value-input.is-expanded {
   gap: var(--space-2);
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_bg-picker-item {
   aspect-ratio: 1;
@@ -4760,7 +5032,8 @@ textarea.embed-editor_value-input.is-expanded {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3) var(--space-2);
 }
 .embed-editor_type-shadow-open {
   flex: 1 1 auto;
@@ -4773,7 +5046,7 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-primary);
   cursor: pointer;
   padding: 0;
-  text-align: left;
+  text-align: start;
 }
 .embed-editor_type-shadow-label {
   font-size: var(--font-size-xs);
@@ -4818,7 +5091,7 @@ textarea.embed-editor_value-input.is-expanded {
   flex: 0 0 4rem;
   /* The slider's thumb reaches the very end of its track, so the row's own gap left
      it all but touching the field. This is the space between the two controls. */
-  margin-left: var(--space-3);
+  margin-inline-start: var(--space-3);
 }
 
 /* Transform axis label: the Webflow glyph (per axis, per Move/Scale/Rotate/Skew) sits
@@ -4852,7 +5125,7 @@ textarea.embed-editor_value-input.is-expanded {
      which left the icon a few pixels wide beside 34px fields — the one control
      in the row you couldn't see. */
   width: 36px;
-  padding-left: 12px;
+  padding-inline-start: 12px;
 }
 .embed-editor_transform-lock {
   position: relative;
@@ -4869,13 +5142,15 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_transform-lock::before {
   content: '';
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 25%;
   bottom: 25%;
   width: 6px;
   border: 1px solid var(--color-border-default);
-  border-left: none;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-inline-start: none;
+  border-radius: 0;
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
 }
 /* Drawn at the size it was drawn for (the glyphs are 16px artboards). `flex:
    none` because the button is a flex row: without it the icon is a shrinkable
@@ -4957,7 +5232,7 @@ textarea.embed-editor_value-input.is-expanded {
    most carefully. */
 /* The value reads right-aligned against the slider beside it. */
 .embed-editor_trans-duration .u-input {
-  text-align: right;
+  text-align: end;
 }
 .embed-editor_trans-easing {
   flex: 1 1 auto;
@@ -5033,6 +5308,7 @@ textarea.embed-editor_value-input.is-expanded {
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_ease-main {
   padding: var(--space-4);
@@ -5079,6 +5355,8 @@ textarea.embed-editor_value-input.is-expanded {
   fill: #d4d4d4;
 }
 .embed-editor_ease-curve {
+  /* The curve plots time left to right, as CSS easing does. */
+  direction: ltr;
   width: 100%;
   max-width: 300px;
   height: auto;
@@ -5146,6 +5424,43 @@ textarea.embed-editor_value-input.is-expanded {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+/* The easing editor as a sheet, wherever it opens (the panel's transition row, a code chip, the
+   variables window): never taller than min(560px, the window less 24px), the curve at a fixed compact
+   size at the top, and only the preset list scrolling under it. A sheet sized by the panel's height
+   (PanelSheet.css) was the whole window tall, its presets running off the bottom. Three classes, to
+   outrank both the sheet's own sizing and `.is-framed`.
+
+   Layers, lowest first (the panel kit's scale, tokens.css):
+   | --z-modal       | a panel sheet (PanelSheet.css)                                |
+   | --z-modal + 2   | a layer popover (.embed-editor_layer-popover), the transition |
+   |                 | row's editor among them                                       |
+   | --z-modal + 3   | the easing editor, opened from that popover: above its opener |
+   | --z-tooltip     | the variable picker and tooltips, opened from anything above  |
+   test/renderer/style/codeChipsLayout.test.js holds this order. */
+.panel-sheet.panel-sheet.embed-editor_ease-modal {
+  z-index: calc(var(--z-modal) + 3);
+  max-height: min(560px, calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-main {
+  flex: none;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-curve {
+  max-width: 200px;
+}
+.panel-sheet.panel-sheet.embed-editor_ease-modal .embed-editor_ease-presets {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .embed-editor_ease-group-title {
   font-size: var(--font-size-sm);
@@ -5240,8 +5555,10 @@ textarea.embed-editor_value-input.is-expanded {
 .cx-num {
   color: #d6b6ff;
 }
+/* Lighter than the variable purple it echoes so it holds 4.5:1 up to the
+   overlay surface (#9d7fd8 was 3.5:1 there). */
 .cx-unit {
-  color: #9d7fd8;
+  color: #b29ae0;
 }
 .cx-fn {
   color: #7fd1e8;
@@ -5259,16 +5576,33 @@ textarea.embed-editor_value-input.is-expanded {
   color: #c4afff;
 }
 .cx-comment {
-  color: var(--color-text-tertiary, #666);
+  color: var(--color-text-tertiary, #a6a6a6);
   font-style: italic;
+}
+/* `!important` after a value: present in the text, so it can be read and
+   deleted, but quieter than the value it qualifies. */
+.cx-important {
+  color: var(--color-text-tertiary, #a6a6a6);
+}
+/* The whitespace in a coloured value (see plainHtml in model/cssCode.ts). The
+   single-line field is a flex row, which trims the edges of bare text and drops
+   whitespace-only text; as an element with `pre` the space keeps its width, so
+   `rgb(255 255 255 / 0.09)` never reads `rgb(255255255/0.09)`. */
+.cx-space {
+  white-space: pre;
+}
+/* The multi-line editor is a block that wraps, where bare spaces already keep
+   their width; `pre` there would stop a long value wrapping at its spaces. */
+.embed-editor_varconnect.is-multiline .cx-space {
+  white-space: inherit;
 }
 
 .embed-editor_varconnect-dot {
   --ee-connect: #7c5cff;
   position: absolute;
   top: -4px;
-  left: -1px;
-  z-index: 4;
+  inset-inline-start: -1px;
+  z-index: var(--z-style-connect);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5384,8 +5718,7 @@ textarea.embed-editor_value-input.is-expanded {
   pointer-events: auto;
 }
 /* A live draft hides inheritance even before its value reaches React state. */
-.embed-editor_varconnect-editor:not(:empty):not(:has(> br:only-child))
-  ~ .embed-editor_varconnect-hint {
+.embed-editor_varconnect-editor:not(:empty):not(:has(> br:only-child)) ~ .embed-editor_varconnect-hint {
   display: none;
 }
 /* The atomic chip (contenteditable=false): click to re-open the picker and switch. */
@@ -5393,8 +5726,14 @@ textarea.embed-editor_value-input.is-expanded {
   display: inline-flex;
   align-items: center;
   align-self: center;
+  /* In a multi-line field the chip sits in a line of monospace text, where it
+     would otherwise rest on the baseline and ride high: its sans label is
+     smaller and padded. Centred on the line, it sits level with the code. A
+     single-line field is a flex row, and align-self above does the same there. */
+  vertical-align: middle;
   gap: var(--space-2);
-  margin: 0 1px;
+  /* No margin: the caret behind a chip stands flush with its right edge. */
+  margin: 0;
   padding: 1px var(--space-2);
   border-radius: var(--radius-sm);
   background: rgba(124, 92, 255, 0.28);
@@ -5410,6 +5749,11 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_varconnect-editor:focus .embed-editor_varconnect-token,
 .embed-editor_varconnect-token:hover {
   background: rgba(124, 92, 255, 0.42);
+}
+
+/* Chips welded together keep a hairline between them now the chip has no margin of its own. */
+.embed-editor_varconnect-token + .embed-editor_varconnect-token {
+  margin-inline-start: 1px;
 }
 
 /* The gap between two chips (see spaceRun). `pre` so the space keeps its width —
@@ -5438,23 +5782,108 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_varpicker {
   z-index: var(--z-tooltip);
   box-sizing: border-box;
-  max-height: min(60vh, 420px);
+  /* The height cap is inline (VariablePicker.tsx, PICKER_HEIGHT_REM_MAX) with the room in the window. */
   display: flex;
   flex-direction: column;
   padding: var(--space-2);
-  border: var(--border-width-thin) solid var(--color-border-default);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  background: var(--color-bg-surface-overlay);
+  /* One step darker than the overlay the other menus use, so the list reads as its own
+     surface; all four corners share the menu radius and the content is clipped to it. */
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-surface);
   box-shadow: var(--shadow-lg);
 }
-.embed-editor_varpicker-search {
+/* The search: compact, a raised fill rather than the black inset well, the glass inside it. */
+/* The search row: the field and the view-options button, with spacing only (no fill, no hairline). */
+.embed-editor_varpicker-searchrow {
+  display: flex;
+  align-items: center;
   flex: none;
-  margin-bottom: var(--space-2);
+  gap: var(--space-2);
+  margin-bottom: 0.25rem;
+}
+.embed-editor_varpicker-searchbox {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.embed-editor_varpicker-search-icon {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.embed-editor_varpicker-searchbox:focus-within .embed-editor_varpicker-search-icon {
+  color: var(--color-text-primary);
+}
+.embed-editor_varpicker .embed-editor_varpicker-search {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  padding-block: 0;
+  padding-inline: 1.75rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  /* No fill of its own: it reads as part of the menu surface. */
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.embed-editor_varpicker .embed-editor_varpicker-search::placeholder {
+  color: var(--color-text-secondary);
+}
+.embed-editor_varpicker .embed-editor_varpicker-search:focus {
+  outline: none;
+}
+/* The ring is for the keyboard; a click leaves only the colour shift of the icon and text. */
+.embed-editor_varpicker .embed-editor_varpicker-search:focus-visible {
+  box-shadow: 0 0 0 0.0625rem var(--color-border-focus);
+}
+.embed-editor_varpicker-options {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.embed-editor_varpicker-options:hover,
+.embed-editor_varpicker-options[aria-expanded='true'] {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+/* Listed by "show all" but not valid for the property, or kept out of suggestions: still pickable. */
+.embed-editor_varpicker-item.is-invalid .embed-editor_varpicker-item-name,
+.embed-editor_varpicker-item.is-invalid .embed-editor_varpicker-item-value {
+  opacity: 0.6;
+}
+.embed-editor_varpicker-item.is-hidden {
+  opacity: 0.7;
+}
+.embed-editor_varpicker-item.is-overridden .embed-editor_varpicker-item-value::after {
+  content: ' ·';
+  color: var(--color-text-tertiary);
+}
+.embed-editor_varpicker-item-hidden {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-secondary);
 }
 .embed-editor_varpicker-list {
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
 }
@@ -5462,7 +5891,7 @@ textarea.embed-editor_value-input.is-expanded {
   margin: 0;
   padding: var(--space-3);
   font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 /* Collection heading — the top grouping level (bold, primary), a full-width toggle
    with a chevron; a hairline separates collections so each reads as its own block. */
@@ -5471,8 +5900,8 @@ textarea.embed-editor_value-input.is-expanded {
   flex-direction: column;
 }
 .embed-editor_varpicker-collection + .embed-editor_varpicker-collection {
-  margin-top: var(--space-2);
-  border-top: var(--border-width-thin) solid var(--color-border-default);
+  /* Space, not a hairline, sets one file apart from the next. */
+  margin-top: 0.5rem;
 }
 .embed-editor_varpicker-collection-head {
   display: flex;
@@ -5480,21 +5909,21 @@ textarea.embed-editor_value-input.is-expanded {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  padding: var(--space-3) var(--space-2) var(--space-1);
+  padding: 0.5rem 0.625rem 0.375rem;
   border: 0;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_varpicker-collection-name {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 .embed-editor_varpicker-collection-arrow {
   flex: none;
   display: inline-flex;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   transition: transform var(--transition-fast);
 }
 .embed-editor_varpicker-collection-arrow.is-open {
@@ -5503,28 +5932,76 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_varpicker-group {
   display: flex;
   flex-direction: column;
+  /* A little air between rows, so each is its own target. */
+  gap: 0.125rem;
 }
 .embed-editor_varpicker-group-name {
-  padding: var(--space-2) var(--space-2) var(--space-1);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  /* Room below the heading so the first row never touches it. */
+  padding: 0.25rem 0.625rem 0.5rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-family-sans);
+  font-weight: 500;
   color: var(--color-text-secondary);
+  /* One line: the whole selector list is in the tooltip. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A group of two or more rows: a quiet block on a faint fill, its heading small and secondary,
+   its rows indented a little. Three levels read apart by
+   size, weight and tone alone: the file (md, bold, primary), the group (0.75rem, medium, secondary)
+   and the row (sm, regular, primary). No borders. */
+.embed-editor_varpicker-family {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 0.5rem;
+  padding: 0 0.375rem 0.375rem;
+  gap: 0.125rem;
+  border-radius: 0.5rem;
+  background: var(--color-bg-hover);
+}
+.embed-editor_varpicker-family-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  /* Room below the heading so the first row never touches it. */
+  padding: 0.5rem 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-family-sans);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  /* One line, truncated with the whole name in the tooltip. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .embed-editor_varpicker-item {
-  display: flex;
+  /* Four columns: the icon, the name (sized to its text, at most 60% of the row, so a name is not cut
+     while the value column sits nearly empty), the value (the rest, truncating) and the end marks. */
+  display: grid;
+  grid-template-columns: 0.875rem fit-content(60%) minmax(0, 1fr) 1rem;
   align-items: center;
-  gap: var(--space-2);
+  column-gap: 0.5rem;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  min-height: 1.75rem;
+  box-sizing: border-box;
+  padding: 0.25rem 0.5rem;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 0.5rem;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  text-align: left;
+  font-size: 0.75rem;
+  text-align: start;
   cursor: pointer;
 }
 .embed-editor_varpicker-item:hover {
+  background: var(--color-bg-hover);
+}
+/* The row the arrow keys are on while a reference is typed in the field. */
+.embed-editor_varpicker-item.is-active {
   background: var(--color-bg-hover);
 }
 /* The currently-applied variable: a purple tint + a trailing check + purple glyph/name. */
@@ -5538,35 +6015,66 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_varpicker-item.is-selected .embed-editor_varpicker-item-name {
   color: #cbbcff;
 }
+.embed-editor_varpicker-item-marks {
+  grid-column: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-width: 0;
+}
 .embed-editor_varpicker-item-check {
   flex: none;
   display: inline-flex;
-  margin-left: var(--space-2);
-  color: #7c5cff;
+  /* The connect purple, lightened so the check clears 3:1 on the selected row's
+     purple fill over the overlay (#7c5cff was 2.0:1). */
+  color: #9980ff;
 }
 /* Leading connect glyph. */
 .embed-editor_varpicker-item-icon {
   flex: none;
   display: inline-flex;
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-tertiary);
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--color-text-secondary);
+}
+/* A colour variable's swatch, in the icon's place: its resolved fill over a
+   checkerboard, so a translucent value reads as one. */
+.embed-editor_varpicker-item-swatch {
+  flex: none;
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  overflow: hidden;
+  border-radius: 0.1875rem;
+  background: repeating-conic-gradient(#808080 0% 25%, #a0a0a0 0% 50%) 50% / 8px 8px;
+}
+.embed-editor_varpicker-item-swatch > span {
+  flex: 1;
 }
 .embed-editor_varpicker-item-name {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-/* Value flows in right after the name (left-aligned) and truncates at the edge. */
-.embed-editor_varpicker-item-value {
-  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
-  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+/* The value sits in its own column, left-aligned, truncating with an ellipsis (the whole text is in the tooltip). */
+.embed-editor_varpicker-item-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  /* Secondary, not tertiary: the value is what tells two variables apart, and the
+     tertiary grey on the overlay was 4.6:1, readable but dim. Pinned by
+     test/renderer/style/variablePickerContrast.test.js. */
+  color: var(--color-text-secondary);
   font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
+  font-size: 0.625rem;
+  font-weight: 400;
 }
 
 /* Reveals the selectors that match nearly every element (:target,
@@ -5665,8 +6173,71 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_field-suffix {
   flex: none;
-  padding-right: var(--space-3);
+  padding-inline-end: var(--space-3);
   font-size: var(--font-size-2xs);
   color: var(--color-text-tertiary);
   text-transform: uppercase; /* DEG / % — Webflow shows the unit uppercase */
+}
+
+/* A context row's source chip, toned like the "Add custom styles in" tag: green
+   for a component's own styles, blue for a page block or a stylesheet. */
+.embed-editor_context-select .u-select-tag[data-tone='component'] {
+  background: var(--color-component-tag-bg);
+  color: var(--color-component-tag);
+}
+.embed-editor_context-select .u-select-tag[data-tone='embed'] {
+  background: var(--color-info-border);
+  color: var(--color-info);
+}
+
+/* A control with no text to show `!important` in (a segmented bar, a select,
+   a spacing label) carries this mark instead. The wrapper takes the control's
+   grid cell and stretches it, so the mark costs no layout of its own. */
+.embed-editor_important-mark {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.embed-editor_important-badge {
+  position: absolute;
+  top: -4px;
+  inset-inline-end: -4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  background: var(--color-bg-inset);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+/* Inside a spacing label the mark sits after the number, in the flow. */
+.embed-editor_spacing-label .embed-editor_important-badge {
+  position: static;
+  margin-inline-start: 1px;
+  background: transparent;
+  min-width: 0;
+  padding: 0;
+}
+
+/* A section's body (StyleCard HeldBody): no box of its own, so the rows lay out as if it were not there.
+   While held it shows the element the person just left, which cannot be pressed. */
+.embed-editor_body {
+  display: contents;
+}
+.embed-editor_body.is-held {
+  pointer-events: none;
+}
+
+/* A wrapper that adds no box of its own: the control inside keeps left-to-right order because its
+   options are physical CSS values (text-align left, center, right). */
+.embed-editor_physical-order {
+  display: contents;
+  direction: ltr;
 }

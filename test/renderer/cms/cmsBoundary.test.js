@@ -1,27 +1,26 @@
 // Exercise CMS wire parsers and request wrappers with real shared parsers. Keep
 // transport failures distinct from malformed replies, preserve expression/asset
-// metadata, and reject oversized or unknown field declarations at the boundary.
+// metadata, reject unknown or structurally too deep or too wide field declarations
+// at the boundary, and accept data of any size.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
 const bridge = load('src/features/cms/cmsBridge.ts');
 const types = load('src/features/cms/cmsTypes.ts');
-const entries = [
-  { title: 'Entry', image: { __expr: 'hero', __asset: 'src/assets/hero.png' }, tags: ['one'] },
-];
+const entries = [{ title: 'Entry', image: { __expr: 'hero', __asset: 'src/assets/hero.png' }, tags: ['one'] }];
 
 test('CMS data and declared field types retain their wire meaning', () => {
   assert.deepEqual(bridge.parseCmsRead({ data: { rows: entries, version: 2 } }), {
     data: { rows: entries, version: 2 },
   });
-  assert.deepEqual(
-    bridge.parseCmsMeta({ meta: { 'data/site.json': { title: 'text', image: 'image' } } }),
-    { meta: { 'data/site.json': { title: 'text', image: 'image' } } },
-  );
+  assert.deepEqual(bridge.parseCmsMeta({ meta: { 'data/site.json': { title: 'text', image: 'image' } } }), {
+    meta: { 'data/site.json': { title: 'text', image: 'image' } },
+  });
   assert.deepEqual(bridge.parseCmsUsage({ files: ['pages/index.astro'] }), {
     files: ['pages/index.astro'],
   });
@@ -37,13 +36,7 @@ test('CMS parsers reject malformed shapes, field types, and boundary overflow', 
   for (const value of [jsonNull, {}, [], { data: NaN }, { data: () => {} }]) {
     assert.throws(() => bridge.parseCmsRead(value));
   }
-  for (const value of [
-    jsonNull,
-    {},
-    { meta: [] },
-    { meta: { file: { field: 'mystery' } } },
-    { meta: { file: { field: 12 } } },
-  ]) {
+  for (const value of [jsonNull, {}, { meta: [] }, { meta: { file: { field: 'mystery' } } }, { meta: { file: { field: 12 } } }]) {
     assert.throws(() => bridge.parseCmsMeta(value));
   }
   for (const value of [jsonNull, {}, { files: ['ok', 1] }, { files: ['x'.repeat(32769)] }]) {
@@ -55,12 +48,13 @@ test('CMS parsers reject malformed shapes, field types, and boundary overflow', 
   for (const value of [jsonNull, {}, { ok: 1 }, { ok: false }]) {
     assert.throws(() => bridge.parseCmsSuccess(value));
   }
-  const data = 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1);
-  assert.throws(() => bridge.parseCmsRead({ data }), /limit/);
-  assert.throws(() => bridge.parseCmsRead({ data: Array(100001).fill(0) }), /limit/);
+  // A longer string than the platform ceiling cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseCmsRead({ data: Array(100001).fill(0) }).data.length, 100001);
   assert.throws(() => types.parseDeclaredTypes({ ['x'.repeat(32769)]: 'text' }), /limit/);
   assert.throws(() => types.withDeclaredTypes([], {}, Array(129).fill('x')), /path limit/);
-  assert.throws(() => types.withDeclaredTypes(Array(100001).fill({}), {}, []), /count limit/);
+  assert.doesNotThrow(() => types.withDeclaredTypes(Array(100001).fill({}), {}, []));
 });
 
 test('CMS requests parse replies outside the operating failure catch', async () => {
@@ -71,12 +65,7 @@ test('CMS requests parse replies outside the operating failure catch', async () 
     ['writeCmsMeta', 'setCmsMeta', ['/project', 'data.json', { title: 'text' }], { ok: true }],
     ['readCmsUsage', 'cmsUsage', ['/project', 'data.json'], { files: [] }],
     ['deleteCms', 'deleteCms', ['/project', 'data.json'], { ok: true, rewritten: [] }],
-    [
-      'importCmsAsset',
-      'cmsAssetRef',
-      ['/project', 'data.js#items', 'src/hero.png'],
-      { name: 'hero', asset: 'src/hero.png' },
-    ],
+    ['importCmsAsset', 'cmsAssetRef', ['/project', 'data.js#items', 'src/hero.png'], { name: 'hero', asset: 'src/hero.png' }],
   ];
   for (const [method, channel, args, reply] of cases) {
     let calls = 0;
@@ -99,4 +88,14 @@ test('CMS requests parse replies outside the operating failure catch', async () 
     window.avb[channel] = async () => jsonNull;
     await assert.rejects(bridge[method](...args), /Expected object/);
   }
+});
+
+test('a declared repeater with no entries yet stays a repeater', () => {
+  const fields = [{ key: 'team', label: 'Team', type: 'list' }];
+  const declared = { team: 'objects', tags: 'objects' };
+  assert.equal(types.withDeclaredTypes(fields, declared, [])[0].type, 'objects');
+  assert.equal(types.withDeclaredTypes(fields, { team: 'text' }, [])[0].type, 'list');
+  assert.equal(types.bestType('objects', []), 'objects');
+  assert.equal(types.bestType('objects', ['a']), 'list');
+  assert.equal(types.bestType('list', []), 'list');
 });

@@ -3,19 +3,14 @@ import type { ViteDevServer, WebSocketClient } from 'vite';
 import type { IncomingMessage } from 'node:http';
 import { maintainConnection, reauthorizeConnection } from '../collaboration/connectionLease';
 import { RenderPush, type RenderTarget } from './renderPush';
+import { renderScope } from './renderRequest';
 
 export function renderPath(input: unknown): string | undefined {
   if (!input || typeof input !== 'object' || !('path' in input)) {
     return undefined;
   }
   const path = input.path;
-  if (
-    typeof path !== 'string' ||
-    path.length > 2000 ||
-    !path.startsWith('/') ||
-    path.startsWith('//') ||
-    /[\\#\r\n]/.test(path)
-  ) {
+  if (typeof path !== 'string' || path.length > 2000 || !path.startsWith('/') || path.startsWith('//') || /[\\#\r\n]/.test(path)) {
     return undefined;
   }
   const url = new URL(path, 'http://studio');
@@ -27,16 +22,17 @@ export function renderPath(input: unknown): string | undefined {
 }
 
 export function configureRenderPush(server: ViteDevServer, port: number, root: string) {
+  server.middlewares.use((request, _response, next) => {
+    if (request.headers['x-studio-render'] === 'patch') {
+      renderScope.run('patch', next);
+    } else {
+      next();
+    }
+  });
   const push = new RenderPush((path) => renderPage(port, path));
   const targets = new Map<WebSocketClient, RenderTarget>();
   const authorized = previewConnections(server);
-  const invalidateVariants = configureVariants(
-    server,
-    root,
-    authorized,
-    (path, headers) => renderPage(port, path, headers),
-    renderPath,
-  );
+  const invalidateVariants = configureVariants(server, root, authorized, (path, headers) => renderPage(port, path, headers), renderPath);
   server.ws.on('studio:render-subscribe', (input: unknown, client: WebSocketClient) => {
     const path = renderPath(input);
     if (!authorized.has(client.socket) || !path || (!targets.has(client) && targets.size >= 100)) {
@@ -45,8 +41,7 @@ export function configureRenderPush(server: ViteDevServer, port: number, root: s
     let target = targets.get(client);
     if (!target) {
       target = {
-        gzip:
-          !!input && typeof input === 'object' && 'encoding' in input && input.encoding === 'gzip',
+        gzip: !!input && typeof input === 'object' && 'encoding' in input && input.encoding === 'gzip',
         send: (event, data) => {
           if (client.socket.readyState === 1 && client.socket.bufferedAmount < 8_000_000) {
             client.send(event, data);
@@ -65,9 +60,12 @@ export function configureRenderPush(server: ViteDevServer, port: number, root: s
     push.subscribe(path, target);
   });
   server.httpServer?.once('close', () => push.close());
-  return () => {
-    invalidateVariants();
-    push.invalidate();
+  return {
+    sourceWritten: push.sourceWritten.bind(push),
+    invalidate: () => {
+      invalidateVariants();
+      push.invalidate();
+    },
   };
 }
 
@@ -90,22 +88,15 @@ function previewConnections(server: ViteDevServer) {
   return authorized;
 }
 
-async function renderPage(
-  port: number,
-  path: string,
-  headers?: Record<string, string>,
-): Promise<string> {
+async function renderPage(port: number, path: string, headers?: Record<string, string>): Promise<string> {
   // Keep Astro compilation inside the container; the browser receives the result
   // on its existing authenticated preview socket instead of another WAN request.
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-    headers: headers ?? {},
+    headers: { ...headers, 'x-studio-render': 'patch' },
     redirect: 'error',
     signal: AbortSignal.timeout(15_000),
   });
-  if (
-    (!response.ok && response.status !== 404) ||
-    !response.headers.get('content-type')?.includes('text/html')
-  ) {
+  if ((!response.ok && response.status !== 404) || !response.headers.get('content-type')?.includes('text/html')) {
     throw new Error('Preview render failed');
   }
   const reader = response.body?.getReader();
@@ -120,7 +111,7 @@ async function renderPage(
       break;
     }
     size += value.byteLength;
-    if (size > 16_000_000) {
+    if (size > 4_000_000) {
       await reader.cancel();
       throw new Error('Preview render limit exceeded');
     }

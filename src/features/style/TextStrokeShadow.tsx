@@ -1,27 +1,28 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { add as centralAdd } from '../../ui/central/centralGeometry';
 // Text stroke (-webkit-text-stroke) and layered text shadows, each with its
 // own editor (TypographySection.tsx).
 
 import { useState } from 'react';
 import ColorSwatch from './components/ColorSwatch';
 import { ShadowLength, ShadowColorRow } from './ShadowFields';
-import {
-  parseShadows,
-  serializeShadows,
-  blankShadow,
-  shadowLabel,
-  type Shadow,
-} from './model/textShadow';
+import { parseShadows, serializeShadows, blankShadow, shadowLabel, type Shadow } from './model/textShadow';
 import { parseHideable, serializeHideable, type Hideable } from './model/hideable';
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';
-import { displayOf, type Display } from './model/styleDisplay';
+import { displayOf, type Display, withImportant } from './model/styleDisplay';
 import { useComputedValue } from './model/computedStyle';
-import { type Props, joinImportant, PropLabel, LiveInput } from './TypographyKit';
+import { type Props, PropLabel, LiveInput } from './TypographyKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // ─────────────── Stroke (-webkit-text-stroke) ───────────────
 
+const BLACK_KEYWORD = 'black'; // i18n-ignore: the CSS color keyword shown as the empty value.
+
 export function StrokeRow(props: Props) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
+  const translate = useTranslate();
   const widthDisplay = displayOf(read('-webkit-text-stroke-width'));
   const colorDisplay = displayOf(read('-webkit-text-stroke-color'));
   const computedColor = useComputedValue(colorDisplay.present ? '' : '-webkit-text-stroke-color');
@@ -31,7 +32,7 @@ export function StrokeRow(props: Props) {
   return (
     <div className="embed-editor_break-row">
       <PropLabel
-        label="Stroke"
+        label={translate('style.textStrokeShadow.stroke')}
         prop="-webkit-text-stroke-width"
         display={combined}
         contributors={read('-webkit-text-stroke-width')?.contributors ?? []}
@@ -46,44 +47,35 @@ export function StrokeRow(props: Props) {
             prop="-webkit-text-stroke-width"
             display={widthDisplay}
             placeholder="0px"
-            ariaLabel="Stroke width"
+            ariaLabel={translate('style.textStrokeShadow.strokeWidth')}
             {...props}
           />
-          <StrokeCaption
-            label="Width"
-            prop="-webkit-text-stroke-width"
-            display={widthDisplay}
-            {...props}
-          />
+          <StrokeCaption label={translate('style.textStrokeShadow.width')} prop="-webkit-text-stroke-width" display={widthDisplay} {...props} />
         </div>
         <div className="embed-editor_type-cell">
           <div className="embed-editor_type-field">
             <ColorSwatch
               value={colorDisplay.present ? colorDisplay.value : computedColor}
               busy={busy}
-              ariaLabel="Stroke color"
+              ariaLabel={translate('style.textStrokeShadow.strokeColor')}
               onChange={(color, live) => {
+                // The swatch picks a colour, not the flag: a flagged colour stays so.
                 if (live) {
-                  props.liveSetProp('-webkit-text-stroke-color', color, false);
+                  props.liveSetProp('-webkit-text-stroke-color', color, colorDisplay.important);
                 } else {
-                  props.setProp('-webkit-text-stroke-color', color, false);
+                  props.setProp('-webkit-text-stroke-color', color, colorDisplay.important);
                 }
               }}
             />
             <StrokeInput
               prop="-webkit-text-stroke-color"
               display={colorDisplay}
-              placeholder="black"
-              ariaLabel="Stroke color"
+              placeholder={BLACK_KEYWORD}
+              ariaLabel={translate('style.textStrokeShadow.strokeColor')}
               {...props}
             />
           </div>
-          <StrokeCaption
-            label="Color"
-            prop="-webkit-text-stroke-color"
-            display={colorDisplay}
-            {...props}
-          />
+          <StrokeCaption label={translate('style.textStrokeShadow.color')} prop="-webkit-text-stroke-color" display={colorDisplay} {...props} />
         </div>
       </div>
     </div>
@@ -121,7 +113,7 @@ export function StrokeInput({
 } & Props) {
   return (
     <LiveInput
-      value={display.present ? joinImportant(display) : ''}
+      value={display.present ? withImportant(display) : ''}
       busy={busy}
       placeholder={placeholder}
       ariaLabel={ariaLabel}
@@ -162,23 +154,12 @@ export function StrokeCaption({
 
 // ─────────────── Text shadows (layered text-shadow) ───────────────
 
-export const ShadowPlusIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
+export const ShadowPlusIcon = centralIcon(centralAdd);
 
 export type ShadowPatch = { x?: string; y?: string; blur?: string; color?: string };
 
-export function ShadowEditor({
-  shadow,
-  busy,
-  onChange,
-}: {
-  shadow: Shadow;
-  busy: boolean;
-  onChange: (patch: ShadowPatch, live: boolean) => void;
-}) {
+export function ShadowEditor({ shadow, busy, onChange }: { shadow: Shadow; busy: boolean; onChange: (patch: ShadowPatch, live: boolean) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_type-shadow-editor">
       <ShadowLength
@@ -196,27 +177,23 @@ export function ShadowEditor({
         onLive={(value) => onChange({ y: value }, true)}
       />
       <ShadowLength
-        label="Blur"
+        label={translate('style.textStrokeShadow.blur')}
         value={shadow.blur}
         busy={busy}
         onCommit={(value) => onChange({ blur: value }, false)}
         onLive={(value) => onChange({ blur: value }, true)}
       />
-      <ShadowColorRow
-        color={shadow.color}
-        busy={busy}
-        onChange={(color, live) => onChange({ color: color }, live)}
-      />
+      <ShadowColorRow color={shadow.color} busy={busy} onChange={(color, live) => onChange({ color: color }, live)} />
     </div>
   );
 }
 
 // The transparency checkerboard drawn beneath each shadow's colour swatch.
-export const SHADOW_PREVIEW_CHECKERBOARD =
-  'conic-gradient(#8883 25%, transparent 0 50%, #8883 0 75%, transparent 0) 0 0 / 10px 10px';
+export const SHADOW_PREVIEW_CHECKERBOARD = 'conic-gradient(#8883 25%, transparent 0 50%, #8883 0 75%, transparent 0) 0 0 / 10px 10px';
 
 export function TextShadowsRow(props: Props) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
+  const translate = useTranslate();
   const display = displayOf(read('text-shadow'));
   const computed = useComputedValue(display.present ? '' : 'text-shadow');
   const rows = parseHideable(display.present ? display.value : computed, ',', parseShadows);
@@ -230,7 +207,7 @@ export function TextShadowsRow(props: Props) {
     <div className="embed-editor_type-shadows">
       <div className="embed-editor_bg-layers-head">
         <PropLabel
-          label="Text shadows"
+          label={translate('style.textStrokeShadow.textShadows')}
           prop="text-shadow"
           display={display}
           contributors={read('text-shadow')?.contributors ?? []}
@@ -244,8 +221,8 @@ export function TextShadowsRow(props: Props) {
           className="embed-editor_icon-btn"
           onClick={edit.add}
           disabled={busy}
-          title="Add a shadow"
-          aria-label="Add a text shadow"
+          title={translate('style.textStrokeShadow.addShadow')}
+          aria-label={translate('style.textStrokeShadow.addTextShadow')}
         >
           <ShadowPlusIcon />
         </button>
@@ -253,30 +230,23 @@ export function TextShadowsRow(props: Props) {
       <LayerList
         count={shadows.length}
         busy={busy}
-        ariaLabel="Text shadows"
+        ariaLabel={translate('style.textStrokeShadow.textShadows')}
         onOpen={(i, element) => {
-          setOpenIndex((current) => (current === i ? undefined : i));
+          // A click on the open row closes it; on a row marked open with no editor showing yet (one
+          // just added, whose row had not been drawn to anchor to), it opens, as useLayerRows does.
+          const showing = openIndex === i && anchorElement === element;
+          setOpenIndex(showing ? undefined : i);
           setAnchorElement(element);
         }}
         onReorder={edit.reorder}
         onRemove={edit.remove}
         isHidden={(i) => rows[i]?.hidden ?? false}
         onToggleHidden={edit.toggle}
-        renderRow={(i) => shadowLayerRow(shadows[i], i)}
+        renderRow={(i) => shadowLayerRow(shadows[i], i, translate)}
       />
       {openIndex !== undefined && anchorElement && openShadow ? (
-        <LayerPopover
-          anchorEl={anchorElement}
-          ariaLabel="Text shadow"
-          onClose={() => setOpenIndex(undefined)}
-        >
-          <ShadowEditor
-            shadow={openShadow}
-            busy={busy}
-            onChange={(shadowPatch, live) =>
-              edit.patch(openIndex, shadowPatch, live ? 'live' : 'commit')
-            }
-          />
+        <LayerPopover anchorEl={anchorElement} ariaLabel={translate('style.textStrokeShadow.textShadow')} onClose={() => setOpenIndex(undefined)}>
+          <ShadowEditor shadow={openShadow} busy={busy} onChange={(shadowPatch, live) => edit.patch(openIndex, shadowPatch, live ? 'live' : 'commit')} />
         </LayerPopover>
       ) : undefined}
     </div>
@@ -284,7 +254,7 @@ export function TextShadowsRow(props: Props) {
 }
 
 // A shadow's row in the layer list: its colour over a checkerboard, and its label.
-export function shadowLayerRow(shadow: Shadow | undefined, index: number) {
+export function shadowLayerRow(shadow: Shadow | undefined, index: number, translate: Translator) {
   if (shadow === undefined) {
     throw new Error(`Text shadow ${index} is missing`);
   }
@@ -299,7 +269,7 @@ export function shadowLayerRow(shadow: Shadow | undefined, index: number) {
         aria-hidden="true"
       />
     ),
-    label: shadowLabel(shadow),
+    label: shadowLabel(shadow, translate),
   };
 }
 
@@ -316,14 +286,17 @@ export function shadowRowEdits({
 }) {
   const write = (next: Array<Hideable<Shadow>>, mode: 'live' | 'commit') => {
     const value = serializeHideable(next, ',', serializeShadows);
+    // The list is edited row by row, with no text to delete `!important` from,
+    // so a write keeps the flag the property already has.
+    const { important } = displayOf(props.read('text-shadow'));
     if (mode === 'live') {
       if (value) {
-        props.liveSetProp('text-shadow', value, false);
+        props.liveSetProp('text-shadow', value, important);
       }
       return;
     }
     if (value) {
-      props.setProp('text-shadow', value, false);
+      props.setProp('text-shadow', value, important);
     } else {
       props.clearProp('text-shadow');
     }

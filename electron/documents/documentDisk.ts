@@ -28,15 +28,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { toFilePath, type FilePath } from '../../shared/core/brand';
-import type {
-  DiskError,
-  DiskLock,
-  DiskRead,
-  DocumentDisk,
-  LockError,
-  Projector,
-  ReplaceError,
-} from '../../shared/engine/documentActor';
+import type { DiskError, DiskLock, DiskRead, DocumentDisk, LockError, Projector, ReplaceError } from '../../shared/engine/documentActor';
 import { parsePageResult } from '../../shared/page/pageNode';
 import { parseMarkdownPage } from '../parse/markdownParser';
 import type { Plan } from '../../shared/engine/planner';
@@ -44,11 +36,7 @@ import { projectValueSplice } from '../../shared/engine/projectionPatch';
 import { toRecord } from '../../shared/core/record';
 import { err, ok, type Result } from '../../shared/core/result';
 import { createLazySnapshot, createSnapshot, type Snapshot } from '../../shared/page/snapshot';
-import {
-  projectOpaqueDocument,
-  projectPage,
-  type Projection,
-} from '../../shared/page/sourceProjection';
+import { projectOpaqueDocument, projectPage, type Projection } from '../../shared/page/sourceProjection';
 import { decodeUtf8, toByteString, type ByteString } from '../../shared/core/span';
 import { parsePage } from '../parse/astroParser';
 import {
@@ -65,6 +53,7 @@ import {
 import { readSourceBytes } from '../lib/mainLimits';
 import { isInstalledFile, packageOf } from '../lib/installedPackages';
 import { atomicDirectoryOf, prepareAtomicDirectory } from './atomicDirectory';
+import { translateMain } from '../lib/mainLocale';
 
 /** A lock older than this whose owner cannot be asked is abandoned: no save
  * holds its lock for more than one read, one write and one read-back. */
@@ -95,7 +84,7 @@ export class NodeDocumentDisk implements DocumentDisk {
       bytes = readSourceBytes(file);
     } catch (error: unknown) {
       const code = errorCode(error) === 'ENOENT' ? 'missing' : 'failed';
-      return err({ code, message: `Could not read ${file}: ${errorMessage(error)}` });
+      return err({ code, message: translateMain('error.documents.readFailed', { file, reason: errorMessage(error) }) });
     }
     this.#reads += 1;
     assert(Number.isSafeInteger(this.#reads), 'The read stamp stays a safe integer');
@@ -115,7 +104,11 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!directory.ok) {
       return err({ code: 'failed', message: directory.error.message });
     }
-    const lockFile = lockFileOf(target.value);
+    const location = lockFileOf(target.value);
+    if (!location.ok) {
+      return location;
+    }
+    const lockFile = location.value;
     const first = this.#tryLock(file, lockFile);
     if (first.ok || first.error.code === 'failed') {
       return first;
@@ -134,10 +127,14 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!target.ok) {
       return err({ code: 'failed', message: target.error.message });
     }
-    const lockFile = lockFileOf(target.value);
+    const location = lockFileOf(target.value);
+    if (!location.ok) {
+      return location;
+    }
+    const lockFile = location.value;
     const owner = readLockOwner(lockFile);
     if (owner?.token !== lock.token) {
-      return err({ code: 'failed', message: `The lock on ${lock.path} was taken over` });
+      return err({ code: 'failed', message: translateMain('error.documents.lockTakenOver', { file: lock.path }) });
     }
     try {
       fs.rmSync(lockFile);
@@ -178,6 +175,11 @@ export class NodeDocumentDisk implements DocumentDisk {
 
   /** The actor's path and identity key for `file` (see header). */
   canonical(file: string): Result<CanonicalDocument, string> {
+    // Check the authored path before canonicalization loses a workspace package link.
+    const installed = refuseInstalled(file);
+    if (!installed.ok) {
+      return err(installed.error.message);
+    }
     const target = writeTargetOf(file);
     if (!target.ok) {
       return err(target.error.message);
@@ -206,9 +208,9 @@ export class NodeDocumentDisk implements DocumentDisk {
       fs.writeFileSync(descriptor, owner);
     } catch (error: unknown) {
       if (errorCode(error) === 'EEXIST') {
-        return err({ code: 'held', message: `${file} is being saved by another program` });
+        return err({ code: 'held', message: translateMain('error.documents.lockHeld', { file }) });
       }
-      return err({ code: 'failed', message: `Could not lock ${file}: ${errorMessage(error)}` });
+      return err({ code: 'failed', message: translateMain('error.documents.lockFailed', { file, reason: errorMessage(error) }) });
     } finally {
       if (descriptor !== undefined) {
         fs.closeSync(descriptor);
@@ -226,10 +228,7 @@ export class NodeDocumentDisk implements DocumentDisk {
     if (!this.#stale(lockFile, owner)) {
       return false;
     }
-    const aside = path.join(
-      path.dirname(lockFile),
-      `${LOCK_PREFIX}broken-${randomUUID()}${LOCK_SUFFIX}`,
-    );
+    const aside = path.join(path.dirname(lockFile), `${LOCK_PREFIX}broken-${randomUUID()}${LOCK_SUFFIX}`);
     try {
       fs.renameSync(lockFile, aside);
     } catch (error: unknown) {
@@ -325,8 +324,7 @@ const hashBytes = (bytes: ByteString) => digestOf(bytes);
  * reparse on every candidate (plan §10). */
 export const NODE_PROJECTOR: Projector = {
   hash: hashBytes,
-  snapshot: (file, bytes) =>
-    createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes),
+  snapshot: (file, bytes) => createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes),
   candidate: (file: FilePath, base: Snapshot, plan: Plan, bytes: ByteString) => {
     const [splice, ...others] = plan.splices;
     if (splice !== undefined && others.length === 0) {
@@ -337,11 +335,7 @@ export const NODE_PROJECTOR: Projector = {
         }
       }
     }
-    return createLazySnapshot(
-      { path: file, bytes },
-      (own) => projectDocument(file, own),
-      hashBytes,
-    );
+    return createLazySnapshot({ path: file, bytes }, (own) => projectDocument(file, own), hashBytes);
   },
 };
 
@@ -353,13 +347,17 @@ export interface LockOwner {
   readonly token: string;
 }
 
-/** The lock file for a write target. The name hashes the case-folded file
- * name, so every spelling of one file meets at one lock; two names that differ
- * only in case on a case-sensitive disk share a lock too, which costs them a
- * `write-race` at worst, never a lost update. */
-function lockFileOf(target: string): string {
-  const name = digestOf(foldCase(path.basename(target))).slice(0, 16);
-  return path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`);
+/** Directory identity and a folded filename distinguish equal basenames while
+ * making aliases of the same target contend for one lock in shared staging. */
+function lockFileOf(target: string): Result<string, { readonly code: 'failed'; readonly message: string }> {
+  try {
+    const directory = fs.statSync(path.dirname(target));
+    const identity = `${directory.dev}:${directory.ino}/${foldCase(path.basename(target))}`;
+    const name = digestOf(identity);
+    return ok(path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`));
+  } catch (error: unknown) {
+    return err({ code: 'failed', message: translateMain('error.documents.lockLocate', { reason: errorMessage(error) }) });
+  }
 }
 
 // A lock file is written by another process: parse it, never trust it. Its
@@ -458,15 +456,12 @@ function swapCase(name: string): string {
 }
 
 /** Refuse a write that would land inside node_modules (see header). */
-function refuseInstalled(
-  file: string,
-): Result<void, { readonly code: 'failed'; readonly message: string }> {
+function refuseInstalled(file: string): Result<void, { readonly code: 'failed'; readonly message: string }> {
   const landing = landingOf(file);
   assert(path.isAbsolute(landing), 'A landing path is absolute');
-  if (isInstalledFile(landing)) {
+  if (isInstalledFile(file) || isInstalledFile(landing)) {
     const owner = packageOf(landing);
-    const what =
-      owner === undefined ? 'is inside node_modules' : `belongs to the installed package ${owner}`;
+    const what = owner === undefined ? 'is inside node_modules' : `belongs to the installed package ${owner}`;
     return err({
       code: 'failed',
       message:

@@ -3,9 +3,17 @@
 // stepping over whole chips (VariableConnect.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { RefObject } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { droplet as centralDroplet, font as centralFont, number as centralNumber, ruler as centralRuler } from '../../ui/central/centralGeometry';
+import type { MutableRefObject, RefObject } from 'react';
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './model/cssCode';
 import { isHTMLElementInDocument } from './model/dom';
+import { commitTokenFieldInPlace } from './model/commitStyleInPlace';
+import { assert } from '../../../shared/core/assert';
+import { caretPlacementAt, placeCaret } from './tokenFieldCaret';
+import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit, redoStep, undoStep } from './tokenFieldHistory';
+import { chipSource, type PastedLineBreaks, pastedSegments, pastedText, selectedSource, selectionRangeIn } from './tokenFieldClipboard';
 
 // ── Inline token editor ──────────────────────────────────────────────────────
 // The applied variable renders as a purple chip *inside* the field, with editable
@@ -18,58 +26,36 @@ import { isHTMLElementInDocument } from './model/dom';
 
 // Per-type glyphs as HTML strings (contentEditable can't take React children). Size
 // covers most length fields; Color covers colour props. Others fall back to Size.
-export const TOKEN_GLYPH: Record<string, string> = {
-  Color:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M8 12C6.61929 12 5.5 10.8807 5.5 9.50002C5.5 9.04673 5.62524 ' +
-    '8.59624 5.85694 8.21178L5.86179 8.20374L8.00001 4.50006L10.1434 8.21244C10.3748 ' +
-    '8.59673 10.5 9.04697 10.5 9.50002C10.5 10.8807 9.38071 12 8 12ZM4.5 9.50002' +
-    'C4.5 11.433 6.067 13 8 13C9.933 13 11.5 11.433 11.5 9.50002C11.5 8.86769 11.3267 ' +
-    '8.24048 11.0025 7.70059L8.86604 4.00006C8.48114 3.3334 7.51889 3.33339 7.13398 4.00006' +
-    'L4.99795 7.69979C4.67349 8.2399 4.5 8.86738 4.5 9.50002Z" fill="currentColor"/></svg>',
-  Size:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M12 4.70711L4.70711 12' +
-    'H7.5V13H3V8.5H4V11.2929L11.2929 4H8.5V3H13V7.5H12V4.70711Z" fill="currentColor"/></svg>',
-  Number:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M11.846 3.13226L11.0637 6.0007H13V7.0007H10.791L10.2455 9.0007' +
-    'H12V10.0007H9.9728L9.11873 13.1323L8.15397 12.8691L8.93627 10.0007H5.9728L5.11873 ' +
-    '13.1323L4.15397 12.8691L4.93627 10.0007H3V9.0007H5.209L5.75445 7.0007' +
-    'H4V6.0007H6.02718L6.88124 2.86914L7.84601 3.13226L7.0637 6.0007' +
-    'H10.0272L10.8812 2.86914L11.846 3.13226ZM6.24552 9.0007H9.209' +
-    'L9.75446 7.0007H6.79098L6.24552 9.0007Z" fill="currentColor"/></svg>',
-  FontFamily:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M8.49945 3.49902L8.50043 3.49805V2.99902L8.88422 3L8.98285 ' +
-    '3.37012L10.4116 8.7041C11.6626 9.16833 12.7329 9.8024 13.4955 10.5137L12.8139 11.2451' +
-    'C12.2954 10.7615 11.5854 10.3001 10.7368 9.91699L11.2954 12H10.2602L9.58344 9.47559' +
-    'C9.40836 9.41951 9.22889 9.3663 9.04633 9.31738C8.17518 9.084 7.32862 8.96439 ' +
-    '6.55707 8.94629L5.98481 11.085C5.81653 11.7126 5.4687 12.2493 5.01996 12.6016' +
-    'C4.57106 12.9537 3.99165 13.1394 3.4057 12.9824C2.81995 12.8253 2.41134 12.375 ' +
-    '2.19867 11.8457C1.98617 11.3163 1.95342 10.6775 2.12152 10.0498C2.31581 9.32507 ' +
-    '2.87878 8.80593 3.58344 8.47266C4.19709 8.18251 4.95456 8.01274 5.78656 7.96094' +
-    'L7.01703 3.36914L7.11664 2.99902H8.50043L8.49945 3.49902ZM5.51117 8.98828C4.91768 ' +
-    '9.0534 4.40905 9.1879 4.01117 9.37598C3.46964 9.63206 3.18054 9.96113 3.08734 10.3086' +
-    'C2.96987 10.7474 3.00204 11.1626 3.12641 11.4727C3.25078 11.7822 3.45071 11.9592 ' +
-    '3.66449 12.0166C3.87841 12.0739 4.14016 12.0205 4.40277 11.8145' +
-    'C4.66552 11.6081 4.90132 11.265 5.01898 10.8262L5.51117 8.98828' +
-    'ZM6.8227 7.95605C7.60256 7.99297 8.43418 8.12006 9.27973 8.34473' +
-    'L8.11664 3.99902H7.88324L6.8227 7.95605Z" fill="currentColor"/></svg>',
-};
+const TOKEN_GLYPH_ICONS = {
+  Color: centralIcon(centralDroplet),
+  FontFamily: centralIcon(centralFont),
+  Number: centralIcon(centralNumber),
+  Size: centralIcon(centralRuler),
+} as const;
+const tokenGlyphCache = new Map<string, string>();
+
 export function tokenGlyph(type: string): string {
-  return TOKEN_GLYPH[type] ?? TOKEN_GLYPH['Size'] ?? '';
+  const cached = tokenGlyphCache.get(type);
+  if (cached !== undefined) {
+    return cached;
+  }
+  // Unknown types fall back to the Size glyph, as the chips always did.
+  const Icon = type === 'Color' || type === 'FontFamily' || type === 'Number' ? TOKEN_GLYPH_ICONS[type] : TOKEN_GLYPH_ICONS.Size;
+  const markup = renderToStaticMarkup(<Icon size={12} />);
+  tokenGlyphCache.set(type, markup);
+  return markup;
 }
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// One variable in the field, as it is drawn and as it is written back.
-export type Chip = { text: string; name: string; type: string };
+// One variable in the field, as it is drawn and as it is written back. `value` is
+// what the variable is declared as, when the catalog knows it: the chip's tooltip.
+export type Chip = { text: string; name: string; type: string; value?: string };
 
 // What the chips amount to, for the effects that redraw when they change.
-export const chipKey = (chips: Chip[]): string =>
-  chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}`).join(',');
+export const chipKey = (chips: Chip[]): string => chips.map((chip) => `${chip.text}|${chip.name}|${chip.type}|${chip.value ?? ''}`).join(',');
 
 // The chip markup embedded in the contentEditable. `contenteditable="false"` makes it
 // atomic (a single backspace removes it); `data-chip` marks it for serialization, and
@@ -78,11 +64,20 @@ export const chipKey = (chips: Chip[]): string =>
 export function tokenChipHtml(chip: Chip): string {
   return (
     '<span class="embed-editor_varconnect-token" contenteditable="false" data-chip="1" ' +
-    `data-binding="${escapeHtml(chip.text)}">` +
+    `data-binding="${escapeHtml(chip.text)}"${chipTitle(chip)}>` +
     `<span class="embed-editor_varconnect-token-icon">${tokenGlyph(chip.type)}</span>` +
     `<span class="embed-editor_varconnect-token-name">${escapeHtml(chip.name)}</span>` +
     '</span>'
   );
+}
+
+// The chip's tooltip: the variable and what it resolves to, when that is known.
+function chipTitle(chip: Chip): string {
+  if (chip.value === undefined || chip.value === '') {
+    return '';
+  }
+  const quoted = (text: string): string => escapeHtml(text).replace(/"/g, '&quot;');
+  return ` data-value="${quoted(chip.value)}" title="${quoted(`${chip.name}: ${chip.value}`)}"`;
 }
 
 // Value → contentEditable HTML: literal text, the chip in place of the variable, more
@@ -102,18 +97,28 @@ export function buildTokenHtml(value: string, chips: Chip[], code = false): stri
     if (found < 0) {
       return;
     }
-    let before = spaceRun(write(value.slice(at, found)));
+    let before = runHtml(value.slice(at, found), write);
     if (before === '' && index === 0) {
       before = '\u200B';
     }
     out += before + tokenChipHtml(chip);
     at = found + chip.text.length;
   });
-  let after = spaceRun(write(value.slice(at)));
+  let after = runHtml(value.slice(at), write);
   if (after === '') {
     after = '\u200B';
   }
   return out + after;
+}
+
+// The text between two chips. A run that is only whitespace is a gap, drawn
+// plain whether or not the field colours code, so it is always the one
+// `spaceRun` element below; anything else is written as the field writes text.
+function runHtml(text: string, write: (text: string) => string): string {
+  if (text !== '' && text.trim() === '') {
+    return spaceRun(escapeHtml(text));
+  }
+  return spaceRun(write(text));
 }
 
 // The space in `var(--space-1) var(--space-2)`, wrapped so it survives.
@@ -143,7 +148,7 @@ export const CHIP_MARK = '\u0000';
 // How deep the field's markup is read. contentEditable nests typed text a level or
 // two inside the spans it inserts; pasted markup can nest further, and anything
 // nested past this bound is left unread rather than recursed into without end.
-export const TOKEN_FIELD_LIMITS = { nestingDepthMax: 64 } as const;
+export const TOKEN_FIELD_LIMITS = { nestingDepthMax: 64, chipsMax: 256 } as const;
 
 export function fieldText(root: HTMLElement): string {
   let out = '';
@@ -154,10 +159,7 @@ export function fieldText(root: HTMLElement): string {
     node.childNodes.forEach((child) => {
       if (child.nodeType === 3) {
         out += child.textContent ?? '';
-      } else if (
-        isHTMLElementInDocument(child, root.ownerDocument) &&
-        child.dataset['chip'] !== undefined
-      ) {
+      } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.dataset['chip'] !== undefined) {
         out += CHIP_MARK;
       } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.tagName === 'BR') {
         // A line break is browser filler, not text.
@@ -173,20 +175,19 @@ export function fieldText(root: HTMLElement): string {
 /** The chips the field is showing, in the order they appear — read back before a
  *  repaint so each mark in the text is redrawn as the chip it actually was. */
 export function chipsOf(root: HTMLElement): Chip[] {
-  return [...root.querySelectorAll<HTMLElement>('[data-chip]')].map((element) => ({
-    text: element.dataset['binding'] ?? '',
-    name: element.querySelector('.embed-editor_varconnect-token-name')?.textContent ?? '',
-    type: element.dataset['type'] ?? 'Size',
-  }));
+  return [...root.querySelectorAll<HTMLElement>('[data-chip]')].map((element) => {
+    const value = element.dataset['value'];
+    return {
+      text: element.dataset['binding'] ?? '',
+      name: element.querySelector('.embed-editor_varconnect-token-name')?.textContent ?? '',
+      type: element.dataset['type'] ?? 'Size', // i18n-ignore: a variable type id.
+      ...(value === undefined ? {} : { value }),
+    };
+  });
 }
 
 /** Re-draw the field from `text`, keeping its chips, and put the caret at `at`. */
-export function paint(
-  rootElement: HTMLElement,
-  text: string,
-  at: number | undefined,
-  chips: Chip[],
-): void {
+export function paint(rootElement: HTMLElement, text: string, at: number | undefined, chips: Chip[]): void {
   const parts = text.split(CHIP_MARK);
   let html = highlightCss(parts[0] ?? '');
   for (let i = 1; i < parts.length; i++) {
@@ -227,10 +228,7 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
         if (text.replace(/\u200B/g, '').trim() !== '') {
           hasText = true;
         }
-      } else if (
-        isHTMLElementInDocument(child, root.ownerDocument) &&
-        child.dataset['chip'] !== undefined
-      ) {
+      } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.dataset['chip'] !== undefined) {
         chips.push(child.dataset['binding'] ?? '');
         out += '\u0000'; // the variable — resolved below once we know if it stands alone
       } else if (isHTMLElementInDocument(child, root.ownerDocument) && child.tagName === 'BR') {
@@ -244,32 +242,43 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
   // The lone form is for a field holding one variable and nothing else — that is
   // what a native binding reads back as. Anything else writes var(…) per chip.
   let at = 0;
-  return out
+  // A space typed at the end of the text is inserted by Chromium as a non-breaking space
+  // (U+00A0), so it shows while typing, and the repaint keeps it in its own `.cx-space`
+  // element, where the browser never turns it back. CSS does not read U+00A0 as whitespace
+  // (`span<U+00A0>3` is a span to a line named "\u00A03"), so the value is saved with a space.
+  const value = out
     .replace(/\u0000/g, () => {
       const binding = chips[at++];
       if (chips.length === 1 && !hasText) {
-        return bare;
+        // A lone chip pasted in is its own reference; one read back by name is the field's.
+        return chipSource(binding ?? '', bare);
       }
       return binding || varForm;
     })
-    .replace(/\u200B/g, '');
+    .replace(/\u200B/g, '')
+    .replace(/\u00A0/g, ' ');
+  assert(!value.includes('\u00A0'), 'serializeTokens: a saved value holds no non-breaking space');
+  return value;
 }
 
 // Move a collapsed caret across the atomic chip when it sits right at the chip's edge —
 // browsers otherwise stall there, so you can't arrow behind a lone variable to type
-// `!important`. Returns true when it handled the key (so the caller preventDefaults).
+// `!important`. Returns true when it handled the key (so the caller preventDefault).
+//
+// "Right at the edge" ignores zero-width spaces: buildTokenHtml leaves one as the caret
+// slot beside a chip at either end of the value, and a caret in front of that slot (the
+// far left of a field that opens on a chip) is visually against the chip. Treating the
+// slot as a character made the first ArrowRight a silent step over it, and the person
+// could not tell why the caret would not move past the chip to delete it. Every chip is
+// considered, not only the first: a value of two variables has two edges to step over.
 export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'): boolean {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
     return false;
   }
-  const chip = root.querySelector<HTMLElement>('[data-chip]');
-  if (!chip) {
-    return false;
-  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'jumpCaretPastChip: the field holds a bounded number of chips');
   const { startContainer: node, startOffset: off } = selection.getRangeAt(0);
-  const before = chip.previousSibling;
-  const after = chip.nextSibling;
   const place = (target: Node, offset: number) => {
     const range = document.createRange();
     range.setStart(target, offset);
@@ -277,22 +286,133 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
     selection.removeAllRanges();
     selection.addRange(range);
   };
-  // Caret is immediately before the chip (end of the preceding text node, or the root
-  // slot just before it) → drop it just after the chip, and vice-versa.
-  const beforeLength = before?.textContent?.length ?? 0;
-  const rightAdjacent =
-    (node === before && off === beforeLength) || (node === root && root.childNodes[off] === chip);
-  const leftAdjacent =
-    (node === after && off === 0) || (node === root && root.childNodes[off - 1] === chip);
-  if (direction === 'right' && rightAdjacent && after) {
-    place(after, 0);
-    return true;
-  }
-  if (direction === 'left' && leftAdjacent && before) {
-    place(before, beforeLength);
-    return true;
+  for (const chip of chips) {
+    if (direction === 'right' && caretBesideChip(chip, node, off, 'before')) {
+      // Against the chip's far side, so Backspace there removes the chip.
+      place(slotBeside(chip, 'after'), 0);
+      return true;
+    }
+    if (direction === 'left' && caretBesideChip(chip, node, off, 'after')) {
+      const slot = slotBeside(chip, 'before');
+      place(slot, slot.length);
+      return true;
+    }
   }
   return false;
+}
+
+// Whether the field holds chips and nothing else: no text, only the zero-width caret slots.
+// Such a value has one place worth putting a caret, right behind the chip, where Backspace
+// takes the whole variable off in one press.
+export function fieldHoldsOnlyChips(root: HTMLElement): boolean {
+  const text = fieldText(root)
+    .replace(/\u200B/g, '')
+    .replace(/\s/g, '');
+  return text !== '' && text.replace(new RegExp(CHIP_MARK, 'g'), '') === '';
+}
+
+// Put the caret against the far side of the last chip of a chip-only field, replacing
+// whatever selection the browser or an opener gave it (the whole value selected on open
+// drew as a fat bar over the chip, with the caret nowhere). Returns whether it did.
+export function settleCaretAfterChips(root: HTMLElement): boolean {
+  if (!fieldHoldsOnlyChips(root)) {
+    return false;
+  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'settleCaretAfterChips: the field holds a bounded number of chips');
+  const last = chips[chips.length - 1];
+  assert(last !== undefined, 'settleCaretAfterChips: a chip-only field has a chip');
+  const slot = slotBeside(last, 'after');
+  placeCaret(root, { kind: 'text', node: slot, offset: 0 });
+  return true;
+}
+
+// The chip Backspace (caret against its far side) or Delete (against its near side) would take,
+// if the caret is collapsed and right against one. The browser removes a chip too, but not the
+// same way every time: a caret one zero-width slot away from the chip spent its first Backspace
+// on the slot, so the field answers these keys itself, in one press.
+export function chipBesideCaret(root: HTMLElement, key: 'Backspace' | 'Delete'): HTMLElement | undefined {
+  const selection = root.ownerDocument.getSelection();
+  if (selection === null || selection.rangeCount === 0 || !selection.isCollapsed) {
+    return undefined;
+  }
+  const { startContainer: node, startOffset: offset } = selection.getRangeAt(0);
+  if (!root.contains(node)) {
+    return undefined;
+  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'chipBesideCaret: the field holds a bounded number of chips');
+  const side = key === 'Backspace' ? 'after' : 'before';
+  return chips.find((chip) => caretBesideChip(chip, node, offset, side));
+}
+
+// Take one chip out whole; the caret stays where it was, in the text that ended before it.
+export function removeChip(root: HTMLElement, chip: HTMLElement): void {
+  assert(root.contains(chip), 'removeChip: the chip is in the field');
+  const before = root.querySelectorAll('[data-chip]').length;
+  const slot = slotBeside(chip, 'before');
+  chip.remove();
+  placeCaret(root, { kind: 'text', node: slot, offset: slot.length });
+  assert(root.querySelectorAll('[data-chip]').length === before - 1, 'removeChip: exactly one chip went');
+}
+
+// The text node a caret on `side` of `chip` sits in. A neighbour may be a coloured run, or
+// the `.cx-space` element a gap is drawn in, whose text node holds the caret: the element
+// itself never does. Where no text is there (a chip welded to another chip, or to the end
+// of the field) a zero-width slot is added, which the serializer strips; browsers will not
+// hold a typing caret beside a non-editable node without one.
+function slotBeside(chip: HTMLElement, side: 'before' | 'after'): Text {
+  const ownerDocument = chip.ownerDocument;
+  const sibling = (side === 'before' ? chip.previousSibling : chip.nextSibling) ?? undefined;
+  const weldedChip = sibling !== undefined && isHTMLElementInDocument(sibling, ownerDocument) && sibling.dataset['chip'] !== undefined;
+  const edge = sibling === undefined || weldedChip ? undefined : edgeTextNode(sibling, side === 'before' ? 'end' : 'start');
+  // Checked against the node's own window: nodes from another realm are not this realm's Text.
+  const TextConstructor = ownerDocument.defaultView?.Text;
+  assert(TextConstructor !== undefined, 'slotBeside: the field belongs to a window');
+  if (edge instanceof TextConstructor) {
+    return edge;
+  }
+  const parent = chip.parentNode;
+  assert(parent !== null, 'slotBeside: the chip is in the field');
+  const slot = ownerDocument.createTextNode('\u200B');
+  parent.insertBefore(slot, side === 'before' ? chip : chip.nextSibling);
+  return slot;
+}
+
+const isZeroWidth = (text: string): boolean => text.replace(/\u200B/g, '') === '';
+
+// Whether the caret at (`node`, `offset`) stands on `side` of `chip` with nothing visible
+// between. The caret is either in that
+// text with only zero-width spaces between it and the chip, or at the chip's parent with
+// only zero-width text nodes between its child slot and the chip.
+function caretBesideChip(chip: HTMLElement, node: Node, offset: number, side: 'before' | 'after'): boolean {
+  const own = side === 'before' ? edgeTextNode(chip.previousSibling ?? undefined, 'end') : edgeTextNode(chip.nextSibling ?? undefined, 'start');
+  if (own !== undefined && node === own) {
+    const text = own.textContent ?? '';
+    return isZeroWidth(side === 'before' ? text.slice(offset) : text.slice(0, offset));
+  }
+  if (node === chip.parentNode) {
+    const children = [...node.childNodes];
+    const chipIndex = children.indexOf(chip);
+    assert(chipIndex >= 0, 'caretBesideChip: the chip is among its parent’s children');
+    const between = side === 'before' ? children.slice(offset, chipIndex) : children.slice(chipIndex + 1, offset);
+    return offset <= children.length && between.every((child) => child.nodeType === 3 && isZeroWidth(child.textContent ?? ''));
+  }
+  return false;
+}
+
+// The innermost node at one end of `node`: itself when it holds nothing further in.
+// Bounded by the depth the field's markup is read to (TOKEN_FIELD_LIMITS).
+function edgeTextNode(node: ChildNode | undefined, end: 'start' | 'end'): ChildNode | undefined {
+  let current = node;
+  for (let depth = 0; current !== undefined && depth < TOKEN_FIELD_LIMITS.nestingDepthMax; depth += 1) {
+    const inner = end === 'start' ? current.firstChild : current.lastChild;
+    if (inner === null) {
+      return current;
+    }
+    current = inner;
+  }
+  return current;
 }
 
 // The keys bracket-matching cares about (see the handler below).
@@ -314,15 +434,43 @@ export function TokenField({
   onCommit,
   onDraft,
   onChipClick,
+  chipOf,
+  lineBreaks,
 }: TokenFieldProps) {
   // Every edit, to whoever is holding this field's value. Recorded as synced too: a
   // parent that stores it hands it straight back as `value`, and rebuilding the field
   // from a value it already shows would throw the caret to the end mid-word.
-  const synced = useTokenFieldSync({ value, chips, code, editorRef });
+  const historyRef = useRef<FieldHistory>(EMPTY_FIELD_HISTORY);
+  const synced = useTokenFieldSync({ value, chips, code, editorRef, historyRef });
   const report = (element: HTMLElement) => {
     const next = serializeTokens(element, chipBare, chipVar);
     synced.current = next;
     onDraft?.(next);
+  };
+  const record = (element: HTMLElement, kind: string) => {
+    historyRef.current = recordEdit(historyRef.current, captureField(element), { kind, atMs: Date.now(), grouped: GROUPED_EDITS.has(kind) });
+  };
+  const travel = (element: HTMLElement, direction: 'undo' | 'redo'): void => {
+    const step = (direction === 'undo' ? undoStep : redoStep)(historyRef.current, captureField(element));
+    if (step === undefined) {
+      return;
+    }
+    historyRef.current = step.history;
+    restoreField(element, step.show, { code: !!code });
+    report(element);
+  };
+  useFieldHistoryInput(editorRef, { record, travel });
+  // A paste, a cut or a drop is one undo step, answered here (tokenFieldClipboard.ts):
+  // the browser's own copies a chip as a line break and pastes a reference as plain text.
+  const clipboard = (element: HTMLElement, edit: ClipboardEdit): void => {
+    record(element, edit.kind);
+    if (edit.kind === 'cut') {
+      deleteSelection(element);
+    } else {
+      insertSource(element, edit.text, chipOf);
+    }
+    // The field's own input path re-colours and reports it, and the wrapper reads the caret.
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: CLIPBOARD_INPUT_TYPES[edit.kind] }));
   };
   return (
     <div
@@ -335,7 +483,11 @@ export function TokenField({
       aria-label={ariaLabel}
       data-placeholder={placeholder || undefined}
       spellCheck={false}
-      onFocus={onFocusField}
+      onFocus={(event) => {
+        // A chip-only value opens with the caret behind the chip, never in front of it or over it.
+        settleCaretAfterChips(event.currentTarget);
+        onFocusField();
+      }}
       onBlur={() => {
         const element = editorRef.current;
         onCommit(element ? serializeTokens(element, chipBare, chipVar) : '');
@@ -357,18 +509,239 @@ export function TokenField({
         }
         paint(element, fieldText(element), caretOffset(element), chipsOf(element));
       }}
-      onKeyDown={(event) => tokenFieldKeyDown(event, { code: !!code, stepMin, report })}
-      onMouseDown={(event) => {
-        if (
-          isHTMLElementInDocument(event.target, event.currentTarget.ownerDocument) &&
-          event.target.closest('[data-chip]')
-        ) {
-          event.preventDefault();
-          onChipClick();
+      onKeyDown={(event) => {
+        // A chip that is the target of Enter or Space (assistive technology, or a press-like
+        // activation) acts as a press on it; the field's own Enter would only commit.
+        if ((event.key === 'Enter' || event.key === ' ') && !disabled) {
+          const chip = pressedChip(event.currentTarget, event.target);
+          if (chip !== undefined) {
+            event.preventDefault();
+            onChipClick(chip);
+            return;
+          }
         }
+        const direction = historyKey(event);
+        if (direction !== undefined) {
+          // The field's own history, not the page's: the app's ⌘Z listener
+          // sees this was handled and leaves the page alone.
+          event.preventDefault();
+          historyKeyAtMs = Date.now();
+          travel(event.currentTarget, direction);
+          return;
+        }
+        if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !disabled) {
+          const element = event.currentTarget;
+          // Recorded first, so the removal is a step ⌘Z takes back.
+          const beside = chipBesideCaret(element, event.key);
+          if (beside !== undefined) {
+            event.preventDefault();
+            record(element, `key:${event.key}`);
+            removeChip(element, beside);
+            if (code) {
+              paint(element, fieldText(element), caretOffset(element), chipsOf(element));
+            }
+            report(element);
+            return;
+          }
+        }
+        tokenFieldKeyDown(event, { code: !!code, stepMin, report, record });
+      }}
+      onCopy={(event) => {
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', source);
+      }}
+      onCut={(event) => {
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.preventDefault();
+        event.clipboardData.setData('text/plain', source);
+        if (disabled) {
+          return;
+        }
+        clipboard(event.currentTarget, { kind: 'cut' });
+      }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const text = pastedText(event.clipboardData.getData('text/plain'), lineBreaks);
+        if (disabled || text === '') {
+          return;
+        }
+        clipboard(event.currentTarget, { kind: 'paste', text });
+      }}
+      onDragStart={(event) => {
+        // What is dragged out is the same CSS a copy writes, never the chips' labels.
+        const source = selectedSource(event.currentTarget, chipBare);
+        if (source === undefined) {
+          return;
+        }
+        event.dataTransfer.clearData();
+        event.dataTransfer.setData('text/plain', source);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const text = pastedText(event.dataTransfer.getData('text/plain'), lineBreaks);
+        if (disabled || text === '') {
+          return;
+        }
+        const element = event.currentTarget;
+        // The text goes where it was dropped; the dragged original stays where it was.
+        placeCaretAtPoint(element, { x: event.clientX, y: event.clientY });
+        element.focus();
+        clipboard(element, { kind: 'drop', text });
+      }}
+      onMouseDown={(event) => {
+        const chip = pressedChip(event.currentTarget, event.target);
+        if (chip !== undefined) {
+          event.preventDefault();
+          // The press opens the chooser; the caret still ends up behind a lone chip.
+          settleCaretAfterChips(event.currentTarget);
+          onChipClick(chip);
+          return;
+        }
+        if (disabled) {
+          return;
+        }
+        tokenFieldPress(event.currentTarget, event);
       }}
     />
   );
+}
+
+// What a clipboard event does to the field: take the selection out, or put text in over it.
+type ClipboardEdit = { readonly kind: 'cut' } | { readonly kind: 'paste' | 'drop'; readonly text: string };
+
+// The input each clipboard edit is reported as, the names the browser gives its own.
+const CLIPBOARD_INPUT_TYPES = { cut: 'deleteByCut', paste: 'insertFromPaste', drop: 'insertFromDrop' } as const satisfies Record<ClipboardEdit['kind'], string>;
+
+/**
+ * Put `text` in the field over its selection (or at the caret), each variable
+ * reference in it drawn as the chip `chipOf` makes for it, and leave the caret
+ * behind what went in. Text with no reference in it, or an unclosed `var(`, goes in as text.
+ */
+export function insertSource(root: HTMLElement, text: string, chipOf: (reference: string) => Chip): void {
+  const range = selectionRangeIn(root) ?? endRange(root);
+  const before = root.querySelectorAll('[data-chip]').length;
+  const segments = pastedSegments(text);
+  const references = segments.filter((segment) => segment.kind === 'reference').length;
+  range.deleteContents();
+  const left = root.querySelectorAll('[data-chip]').length;
+  const template = root.ownerDocument.createElement('template');
+  template.innerHTML = segments.map((segment) => (segment.kind === 'reference' ? tokenChipHtml(chipOf(segment.text)) : escapeHtml(segment.text))).join('');
+  const first = template.content.firstChild ?? undefined;
+  const last = template.content.lastChild ?? undefined;
+  range.insertNode(template.content);
+  if (first !== undefined && isHTMLElementInDocument(first, root.ownerDocument) && first.dataset['chip'] !== undefined) {
+    // A chip pasted at the very start keeps a caret slot in front, as buildTokenHtml draws one.
+    slotBeside(first, 'before');
+  }
+  assert(root.querySelectorAll('[data-chip]').length === left + references, 'insertSource: every reference went in as a chip');
+  assert(left <= before, 'insertSource: replacing the selection only took chips away');
+  if (last === undefined) {
+    return;
+  }
+  if (isHTMLElementInDocument(last, root.ownerDocument) && last.dataset['chip'] !== undefined) {
+    placeCaret(root, { kind: 'text', node: slotBeside(last, 'after'), offset: 0 });
+    return;
+  }
+  assert(last.nodeType === 3, 'insertSource: the last thing put in is a chip or text');
+  const TextConstructor = root.ownerDocument.defaultView?.Text;
+  assert(TextConstructor !== undefined, 'insertSource: the field belongs to a window');
+  if (last instanceof TextConstructor) {
+    placeCaret(root, { kind: 'text', node: last, offset: last.length });
+  }
+}
+
+/** Take the field's selection out, chips whole; the caret stays where it began. */
+export function deleteSelection(root: HTMLElement): void {
+  const range = selectionRangeIn(root);
+  if (range === undefined) {
+    return;
+  }
+  range.deleteContents();
+  const selection = root.ownerDocument.getSelection();
+  assert(selection !== null, 'deleteSelection: a field with a selection has one to collapse');
+  selection.removeAllRanges();
+  selection.addRange(range);
+  assert(range.collapsed, 'deleteSelection: nothing is left selected');
+}
+
+// A caret at the end of the field, for a paste with no selection in it.
+function endRange(root: HTMLElement): Range {
+  const range = root.ownerDocument.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  return range;
+}
+
+// The field's caret at a viewport point (a drop), when the point is in the field.
+function placeCaretAtPoint(root: HTMLElement, point: { readonly x: number; readonly y: number }): void {
+  const ownerDocument = root.ownerDocument;
+  const range = ownerDocument.caretRangeFromPoint(point.x, point.y);
+  if (range === null || !root.contains(range.startContainer)) {
+    return;
+  }
+  const selection = ownerDocument.getSelection();
+  if (selection === null) {
+    return;
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// A press on the field that is not on a chip. Only a plain single press is
+// placed here: a double press selects a word, and a modified one extends or
+// adds to a selection, and those stay the browser's (tokenFieldCaret.ts).
+export function tokenFieldPress(
+  field: HTMLElement,
+  press: Pick<MouseEvent, 'button' | 'detail' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'altKey' | 'clientX' | 'clientY' | 'preventDefault'>,
+): void {
+  if (press.button !== 0) {
+    return;
+  }
+  if (press.detail > 1) {
+    return;
+  }
+  if (press.shiftKey || press.metaKey || press.ctrlKey || press.altKey) {
+    return;
+  }
+  const placement = caretPlacementAt(field, { x: press.clientX, y: press.clientY });
+  if (placement.kind === 'browser') {
+    return;
+  }
+  // The press is answered here, so the browser's own placement must not run
+  // after it; focus is then given by hand, since preventing the press keeps it.
+  press.preventDefault();
+  if (field.ownerDocument.activeElement !== field) {
+    field.focus();
+  }
+  placeCaret(field, placement.target);
+  assert(field.ownerDocument.activeElement === field, 'tokenFieldPress: the pressed field holds focus');
+}
+
+// A chip the person pressed: its place among the field's chips, and its variable.
+export interface PressedChip {
+  readonly index: number;
+  readonly binding: string;
+}
+
+// The chip under a press in `field`, if the press landed on one.
+export function pressedChip(field: HTMLElement, target: EventTarget): PressedChip | undefined {
+  if (!isHTMLElementInDocument(target, field.ownerDocument)) {
+    return undefined;
+  }
+  const chip = target.closest<HTMLElement>('[data-chip]');
+  if (chip === null || !field.contains(chip)) {
+    return undefined;
+  }
+  const index = [...field.querySelectorAll('[data-chip]')].indexOf(chip);
+  assert(index >= 0, 'pressedChip: a chip inside the field is among its chips');
+  return { index, binding: chip.dataset['binding'] ?? '' };
 }
 
 export type TokenFieldProps = {
@@ -391,7 +764,12 @@ export type TokenFieldProps = {
   /** The value as it is being typed. Nothing is written — this is for whatever
    *  is watching the field rather than storing it. */
   onDraft?: (value: string) => void;
-  onChipClick: () => void;
+  /** A chip was pressed: which one, so a pick can swap that chip and no other. */
+  onChipClick: (chip: PressedChip) => void;
+  /** The chip a variable reference pasted or dropped into the field is drawn as. */
+  chipOf: (reference: string) => Chip;
+  /** What a paste or drop does with line breaks: kept in a multi-line editor, joined in a one-line field. */
+  lineBreaks: PastedLineBreaks;
   /** Treat the value as code: colour it as it is typed, and let the arrow keys
    *  step the number the caret is in. */
   code?: boolean;
@@ -407,7 +785,8 @@ export function useTokenFieldSync({
   chips,
   code,
   editorRef,
-}: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined }) {
+  historyRef,
+}: Pick<TokenFieldProps, 'value' | 'chips' | 'editorRef'> & { code: boolean | undefined; historyRef: MutableRefObject<FieldHistory> }) {
   const synced = useRef<string | undefined>(undefined);
   // The chips are compared by what they amount to, not by array identity (the
   // caller builds a fresh array every render); the effects read the latest ones.
@@ -428,6 +807,12 @@ export function useTokenFieldSync({
     // field you are typing in is torn out from under you. So carry the caret across.
     const focused = element.ownerDocument.activeElement === element;
     const at = focused ? caretOffset(element) : undefined;
+    // A value set while the field is in use (a variable picked into it) is a
+    // step ⌘Z can take back. One set from elsewhere starts the field afresh:
+    // its old steps describe a value that is no longer there.
+    historyRef.current = focused
+      ? recordEdit(historyRef.current, captureField(element), { kind: 'replace', atMs: Date.now(), grouped: false })
+      : EMPTY_FIELD_HISTORY;
     element.innerHTML = buildTokenHtml(value, latest.current.chips, code);
     if (!focused) {
       return;
@@ -436,7 +821,7 @@ export function useTokenFieldSync({
     if (at !== undefined) {
       setCaretOffset(element, Math.min(at, fieldText(element).length));
     }
-  }, [value, chipsKey, code, editorRef]);
+  }, [value, chipsKey, code, editorRef, historyRef]);
 
   // Refresh the chip label if it resolves later (async variable load) — but only while
   // unfocused, so an active caret is never disturbed. A change of value alone is the
@@ -460,11 +845,13 @@ export function tokenFieldKeyDown(
     code,
     stepMin,
     report,
-  }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void },
+    record,
+  }: { code: boolean; stepMin: number | undefined; report: (element: HTMLElement) => void; record: (element: HTMLElement, kind: string) => void },
 ): void {
   if (event.key === 'Enter') {
     event.preventDefault();
-    event.currentTarget.blur();
+    // Commits and stays: the field still has the focus for the arrow keys afterwards.
+    commitTokenFieldInPlace(event.currentTarget);
     return;
   }
   const element = event.currentTarget;
@@ -473,6 +860,7 @@ export function tokenFieldKeyDown(
     if (edit !== 'unhandled') {
       if (edit !== undefined) {
         event.preventDefault();
+        record(element, `key:${event.key}`);
         paint(element, edit.text, edit.caret, chipsOf(element));
         report(element);
       }
@@ -520,14 +908,106 @@ export function codeKeyEdit(
   return 'unhandled';
 }
 
+const NUMBER_WITH_UNIT = /^[-+]?(?:\d+\.?\d*|\.\d+)[a-zA-Z%]*/;
+const IDENTIFIER = /^-{0,2}[A-Za-z_][\w-]*/;
+
+// How far a scan for a matching bracket looks. A value longer than this is not one typed by hand.
+const BRACKET_SCAN_MAX = 4_096;
+
+// The token right after the caret that a typed `(` wraps: a chip (one mark), a function call
+// (`var(--a)`, `min(1px, 2px)`: through its matching bracket), a number with its unit, or a bare
+// identifier. Empty when what follows is a space, an operator, a comma, a `)` or the end.
+function wrappedToken(rest: string): string {
+  if (rest.startsWith(CHIP_MARK)) {
+    return CHIP_MARK;
+  }
+  const word = IDENTIFIER.exec(rest)?.[0];
+  if (word !== undefined) {
+    if (rest[word.length] !== '(') {
+      return word;
+    }
+    // A call wraps whole, or not at all when its own bracket is still open.
+    const end = matchingBracket(rest, word.length);
+    return end === undefined ? '' : rest.slice(0, end + 1);
+  }
+  return NUMBER_WITH_UNIT.exec(rest)?.[0] ?? '';
+}
+
+// The index of the `)` that closes the `(` at `open`, or undefined when it is never closed.
+function matchingBracket(text: string, open: number): number | undefined {
+  assert(text[open] === '(', 'matchingBracket: starts at an open bracket');
+  let depth = 0;
+  const limit = Math.min(text.length, open + BRACKET_SCAN_MAX);
+  for (let index = open; index < limit; index++) {
+    if (text[index] === '(') {
+      depth += 1;
+    } else if (text[index] === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
+// Is `at` inside a string or a `url(` (where a bracket is text, not structure)?
+function insideLiteral(text: string, at: number): boolean {
+  let quote: string | undefined;
+  let url = false;
+  for (let index = Math.max(0, at - BRACKET_SCAN_MAX); index < at; index++) {
+    const ch = text[index];
+    if (quote !== undefined) {
+      if (ch === '\\') {
+        index += 1;
+      } else if (ch === quote) {
+        quote = undefined;
+      }
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (url) {
+      if (ch === ')') {
+        url = false;
+      }
+    } else if (ch === '(' && /url$/i.test(text.slice(Math.max(0, index - 3), index))) {
+      url = true;
+    }
+  }
+  return quote !== undefined || url;
+}
+
+// More `)` than `(` in the text: a closer is already waiting, so a new `(` must not bring its own.
+function hasSurplusCloser(text: string): boolean {
+  let balance = 0;
+  const limit = Math.min(text.length, BRACKET_SCAN_MAX);
+  for (let index = 0; index < limit; index++) {
+    if (text[index] === '(') {
+      balance += 1;
+    } else if (text[index] === ')') {
+      balance -= 1;
+    }
+  }
+  return balance < 0;
+}
+
 // The bracket pairing for one key at caret `at`, or undefined when it doesn't apply.
-export function bracketEdit(
-  text: string,
-  at: number,
-  key: string,
-): { text: string; caret: number } | undefined {
+//
+// A `(` typed in front of a token wraps it (`calc|32px` → `calc(32px)`, `calc|[chip]` →
+// `calc([chip])`) with the caret after the token, before the new `)`; anywhere else it brings an empty pair, the caret between. The
+// field's text stands a chip in as one mark, so the same rule serves chips and literal tokens.
+export function bracketEdit(text: string, at: number, key: string): { text: string; caret: number } | undefined {
   if (key === '(') {
-    return { text: `${text.slice(0, at)}()${text.slice(at)}`, caret: at + 1 };
+    if (insideLiteral(text, at)) {
+      return undefined;
+    }
+    if (hasSurplusCloser(text)) {
+      return { text: `${text.slice(0, at)}(${text.slice(at)}`, caret: at + 1 };
+    }
+    const wrapped = wrappedToken(text.slice(at));
+    const closeAt = at + wrapped.length;
+    // Around a token the caret ends after it, so what is typed next goes inside the pair; with
+    // nothing to wrap it stays between the two brackets.
+    return { text: `${text.slice(0, at)}(${wrapped})${text.slice(closeAt)}`, caret: at + 1 + wrapped.length };
   }
   if (key === ')' && text[at] === ')') {
     return { text, caret: at + 1 };
@@ -535,5 +1015,94 @@ export function bracketEdit(
   if (key === 'Backspace' && text[at - 1] === '(' && text[at] === ')') {
     return { text: text.slice(0, at - 1) + text.slice(at + 1), caret: at - 1 };
   }
+  if (key === 'Backspace' && text[at - 1] === '(' && !insideLiteral(text, at - 1)) {
+    // The pair a `(` made around a token: taking the `(` takes its `)` too.
+    const wrapped = wrappedToken(text.slice(at));
+    if (wrapped !== '' && text[at + wrapped.length] === ')') {
+      return { text: text.slice(0, at - 1) + wrapped + text.slice(at + wrapped.length + 1), caret: at - 1 };
+    }
+  }
   return undefined;
+}
+
+// Edits that group into one undo step when they follow each other quickly.
+const GROUPED_EDITS: ReadonlySet<string> = new Set(['insertText', 'deleteContentBackward', 'deleteContentForward']);
+
+// When the field last answered ⌘Z itself. The menu's Undo may also reach the
+// field a moment later as a `historyUndo` input; that is the same press, and
+// taking it again would undo two steps.
+let historyKeyAtMs = 0;
+const HISTORY_ECHO_MS = 250;
+
+/** ⌘Z is undo; ⇧⌘Z and ⌘Y are redo; anything else is neither. */
+export function historyKey(event: {
+  readonly key: string;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}): 'undo' | 'redo' | undefined {
+  if (!event.metaKey && !event.ctrlKey) {
+    return undefined;
+  }
+  if (event.altKey) {
+    return undefined;
+  }
+  const key = event.key.toLowerCase();
+  if (key === 'z') {
+    return event.shiftKey ? 'redo' : 'undo';
+  }
+  return key === 'y' && !event.shiftKey ? 'redo' : undefined;
+}
+
+// Every change the browser is about to make to the field is recorded first, so
+// it can be undone; the menu's Undo and Redo arrive here as history inputs and
+// are answered from the field's own history.
+function useFieldHistoryInput(
+  editorRef: RefObject<HTMLDivElement>,
+  handlers: { readonly record: (element: HTMLElement, kind: string) => void; readonly travel: (element: HTMLElement, direction: 'undo' | 'redo') => void },
+): void {
+  const latest = useRef(handlers);
+  latest.current = handlers;
+  useEffect(() => {
+    const element = editorRef.current;
+    if (!element) {
+      return undefined;
+    }
+    const onBeforeInput = (event: InputEvent): void => {
+      if (event.inputType === 'historyUndo' || event.inputType === 'historyRedo') {
+        event.preventDefault();
+        if (Date.now() - historyKeyAtMs > HISTORY_ECHO_MS) {
+          latest.current.travel(element, event.inputType === 'historyUndo' ? 'undo' : 'redo');
+        }
+        return;
+      }
+      latest.current.record(element, event.inputType);
+    };
+    element.addEventListener('beforeinput', onBeforeInput);
+    return () => element.removeEventListener('beforeinput', onBeforeInput);
+  }, [editorRef]);
+}
+
+/** What the field shows now: its text with each chip as one mark, the chips, and the caret. */
+export function captureField(element: HTMLElement): FieldSnapshot {
+  const text = fieldText(element);
+  return { text, chips: chipsOf(element), caret: caretOffset(element) ?? text.length };
+}
+
+/** Show `snapshot` in the field, caret included. */
+export function restoreField(element: HTMLElement, snapshot: FieldSnapshot, options: { readonly code: boolean }): void {
+  const write = options.code ? highlightCss : escapeHtml;
+  const parts = snapshot.text.split(CHIP_MARK);
+  assert(parts.length - 1 <= snapshot.chips.length, 'restoreField: every mark in the text has its chip');
+  let html = write(parts[0] ?? '');
+  for (let index = 1; index < parts.length; index++) {
+    const chip = snapshot.chips[index - 1];
+    html += (chip === undefined ? '' : tokenChipHtml(chip)) + write(parts[index] ?? '');
+  }
+  element.innerHTML = html;
+  assert(fieldText(element).length === snapshot.text.length, 'restoreField: the field shows the snapshot text');
+  if (element.ownerDocument.activeElement === element) {
+    setCaretOffset(element, Math.min(snapshot.caret, snapshot.text.length));
+  }
 }

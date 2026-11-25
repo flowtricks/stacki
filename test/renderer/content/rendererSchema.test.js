@@ -4,12 +4,14 @@
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
 const schema = loadRenderer('src/features/content/contentSchema.ts');
+const { ENGLISH_TRANSLATE } = loadRenderer('shared/properties/i18n/englishTranslator.ts');
 const cms = loadRenderer('src/features/cms/cmsSchema.ts');
 const { parseContentSchema } = loadRenderer('src/features/content/contentSchemaBoundary.ts');
 const fixture = {
@@ -30,9 +32,9 @@ const fields = schema.collectionFields(fixture).fields;
 assert.equal(fields[0].required, true);
 assert.equal(fields[0].default, 'Untitled');
 assert.equal(fields[1].nullable, true);
-assert.equal(schema.fieldIssue(fields[0], ''), 'Required');
-assert.equal(schema.fieldIssue(fields[1], PLATFORM_NULL), undefined);
-assert.equal(schema.fieldIssue(fields[2], 0), 'At least 1');
+assert.equal(schema.fieldIssue(fields[0], '', ENGLISH_TRANSLATE), 'Required');
+assert.equal(schema.fieldIssue(fields[1], PLATFORM_NULL, ENGLISH_TRANSLATE), undefined);
+assert.equal(schema.fieldIssue(fields[2], 0, ENGLISH_TRANSLATE), 'At least 1');
 assert.equal('max' in fields[2].constraints, false);
 assert.equal(fields[3].control, 'image');
 assert.equal(fields[4].item.fields[0].key, 'name');
@@ -70,9 +72,10 @@ for (const value of [
 ]) {
   assert.throws(() => parseContentSchema(value));
 }
-const typeOverLimit = 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1);
-assert.throws(() => parseContentSchema({ type: typeOverLimit }), /limit/);
-assert.throws(() => parseContentSchema({ required: Array(100001).fill('a') }), /limit/);
+// A longer string or array than the platform holds cannot be built; Stacki has no product size limit.
+assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+assert.doesNotThrow(() => parseContentSchema({ required: Array(100001).fill('a') }));
 let deep = { type: 'string' };
 for (let index = 0; index < 130; index++) {
   deep = { items: deep };
@@ -87,14 +90,27 @@ const collection = cms.collectionOf({ rel: 'data.json', name: 'data.json', dir: 
 assert.equal(collection.raw, raw);
 assert.equal(collection.items, raw.rows);
 assert.equal(cms.inferType(raw.rows[0].image), 'image');
+// Colours are found written as hex or as CSS colour functions; a word that only
+// names a colour, or a broken function, stays text.
+for (const color of [
+  '#337ffe',
+  'hsla(0, 0.00%, 100.00%, 1.00)',
+  'hsl(210 50% 40%)',
+  'rgb(10, 20, 30)',
+  'rgba(0, 0, 0, 0.5)',
+  'oklch(70% 0.1 200)',
+  'color(display-p3 1 0 0)',
+]) {
+  assert.equal(cms.inferType(color), 'color', color);
+}
+for (const text of ['red', 'rgb(1, 2', 'hsl(1) and more', '#12345']) {
+  assert.notEqual(cms.inferType(text), 'color', text);
+}
 assert.deepEqual(cms.reassemble(collection, [{ title: 'Two' }]), {
   metadata: 'keep',
   rows: [{ title: 'Two' }],
 });
-assert.deepEqual(
-  cms.applyToItems([{ group: [{ name: 'One' }] }], ['group'], cms.renameKey('name', 'title')),
-  [{ group: [{ title: 'One' }] }],
-);
+assert.deepEqual(cms.applyToItems([{ group: [{ name: 'One' }] }], ['group'], cms.renameKey('name', 'title')), [{ group: [{ title: 'One' }] }]);
 assert.deepEqual(cms.duplicateItem({ id: 'one', name: 'One', image: raw.rows[0].image }), {
   id: 'one-copy',
   name: 'One copy',

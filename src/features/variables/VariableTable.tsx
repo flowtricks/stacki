@@ -1,40 +1,37 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { VariableBlock, VariableGroup } from './variablesBridge';
+import type { VariableBlock, VariableCell, VariableGroup } from '../../ipc/variablesBridge';
 import type { WireColumn } from '../../../shared/ipc/ipcResults';
 import type { VariableCellProps } from './VariableCell';
 import type { VariableSlot, VariableRename, SlotOffset } from './variableRows';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { buildSheetSlots, stemOf, sectionPrefix, rowRenames } from './variableRows';
-import { createScrollSync } from './variableScroll';
+import type { ScrollLanes } from './variableScroll';
+import { useVariableSheetScroll, VariableScrollBar } from './VariableSheetScroll';
 import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
 import VariableTypeIcon from './VariableTypeIcon';
+import VariableNameCell, { VariableVisibilityButton, type VariableVisibilityControl } from './VariableNameCell';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
+import { CodeInline } from '../../ui/CodeBlock';
+import { labelParts, labelPlainText } from '../../../shared/page/commentLabel';
 
 type EditName = (name: string) => boolean | void | Promise<boolean | void>;
-type AddVariable = (
-  block: VariableBlock,
-  columns: readonly WireColumn[],
-  word: string,
-) => void | Promise<void>;
+type AddVariable = (block: VariableBlock, columns: readonly WireColumn[], word: string) => void | Promise<void>;
 export interface SheetActions {
   readonly onSave: VariableCellProps['onSave'];
-  readonly onMove?: (
-    slots: readonly VariableSlot[],
-    from: number,
-    to: number,
-  ) => void | Promise<void>;
+  readonly onMove?: (slots: readonly VariableSlot[], from: number, to: number) => void | Promise<void>;
   readonly onAdd?: AddVariable | undefined;
-  readonly onRename?:
-    ((renames: readonly VariableRename[]) => boolean | void | Promise<boolean | void>) | undefined;
-  readonly onRetitle?:
-    ((block: VariableBlock, title: string) => boolean | Promise<boolean>) | undefined;
+  readonly onRename?: ((renames: readonly VariableRename[]) => boolean | void | Promise<boolean | void>) | undefined;
+  readonly onRetitle?: ((block: VariableBlock, title: string) => boolean | Promise<boolean>) | undefined;
   readonly onDuplicateSection?: ((block: VariableBlock) => void | Promise<void>) | undefined;
   readonly onDeleteSection?: ((block: VariableBlock) => void | Promise<void>) | undefined;
   readonly fluidOf?: VariableCellProps['fluidOf'];
   readonly onDraft?: VariableCellProps['onDraft'];
+  /** Which variables are hidden from suggestions, and the settings menu that changes it; absent, rows have no settings. */
+  readonly visibility?: VariableVisibilityControl | undefined;
 }
 export interface SheetProps extends SheetActions {
   readonly blocks: readonly VariableBlock[];
@@ -69,7 +66,7 @@ interface TableProps extends SheetActions {
     readonly props: React.HTMLAttributes<HTMLElement>;
     readonly className: string;
   };
-  readonly scrollSync: ReturnType<typeof createScrollSync>;
+  readonly scrollLanes: ScrollLanes;
   readonly rowsDrag: Reorder;
   readonly slotOffset?: number;
   readonly showHead?: boolean;
@@ -82,29 +79,27 @@ function reportEditFailure(error: unknown): void {
   console.error('[stacki] variable edit failed:', error);
 }
 const LABEL_TRACKS = 'calc(var(--vars-inset) + 18px) var(--vars-name-col)';
+// --vars-col-fit is the widest heading on the page, set by the sheet: every
+// value column grows to it together, so tables with the same count still line up.
 const valueTracks = (count: number) =>
-  `repeat(${count}, minmax(var(--vars-col-min), var(--vars-col)))`;
+  `repeat(${count}, minmax(max(var(--vars-col-min), var(--vars-col-fit, 0px)), max(var(--vars-col), var(--vars-col-fit, 0px))))`;
 function sheetOffset(offsets: readonly SlotOffset[], index: number): SlotOffset {
   const offset = offsets[index];
   assert(offset !== undefined, 'Variable table: missing block offset');
   assert(offset.rows >= offset.head, 'Variable table: rows precede their heading');
   return offset;
 }
-function useScrollSync() {
-  const sync = useMemo(createScrollSync, []);
-  useEffect(() => () => sync.dispose(), [sync]);
-  return sync;
-}
 
 function SectionMenu({ onRename, onDuplicate, onDelete }: SectionMenuProps) {
+  const translate = useTranslate();
   return (
     <MoreMenu
       className="vars-section-menu"
-      title="Group options"
+      title={translate('variables.group.options')}
       items={[
-        { label: 'Rename', icon: <PencilIcon size={13} />, onSelect: onRename },
-        { label: 'Duplicate', icon: <CopyIcon size={13} />, onSelect: onDuplicate },
-        { label: 'Delete', icon: <TrashIcon size={13} />, danger: true, onSelect: onDelete },
+        { label: translate('variables.menu.rename'), icon: <PencilIcon size={13} />, onSelect: onRename },
+        { label: translate('variables.menu.duplicate'), icon: <CopyIcon size={13} />, onSelect: onDuplicate },
+        { label: translate('variables.menu.delete'), icon: <TrashIcon size={13} />, danger: true, onSelect: onDelete },
       ]}
     />
   );
@@ -175,6 +170,7 @@ function EditableName(props: EditableNameProps) {
   return <EditableNameView state={state} />;
 }
 function EditableNameView({ state }: { readonly state: ReturnType<typeof useEditableName> }) {
+  const translate = useTranslate();
   const { value, className, title, children } = state;
   const { editing, setEditing, text, setText, inputRef, commit, cancel } = state;
   if (!editing) {
@@ -185,7 +181,7 @@ function EditableNameView({ state }: { readonly state: ReturnType<typeof useEdit
         // The name fills the row, so it is also where a drag starts. Press and
         // move to drag the row; press and release to rename it.
         data-drag-through=""
-        title={title ? `${title} — drag to move, click to rename` : 'Click to rename'}
+        title={title ? translate('variables.name.dragOrRename', { name: title }) : translate('variables.name.clickToRename')}
         onClick={() => {
           setText(value);
           setEditing(true);
@@ -241,7 +237,9 @@ function useSheet(props: SheetProps) {
   });
   // Owned here rather than by any one table, for the same reason the section
   // drag is: what it coordinates is the tables against each other.
-  const scrollSync = useScrollSync();
+  const scroll = useVariableSheetScroll(blocks, group.columns.length);
+  const scrollSync = scroll.sync;
+  const scrollLanes = scroll.lanes;
 
   // The column headings name the selector's modes, not any one group's rows, so
   // they are the sheet's rather than the first table's. Written here, they stay
@@ -249,10 +247,7 @@ function useSheet(props: SheetProps) {
   // happened to be carrying them.
   const headRef = useRef<HTMLDivElement>(null);
   const headStripRef = useRef<HTMLDivElement>(null);
-  useEffect(
-    () => scrollSync?.register(group.columns.length, headStripRef.current ?? undefined),
-    [scrollSync, group.columns.length],
-  );
+  useLayoutEffect(() => scrollSync.register(headStripRef.current ?? undefined), [scrollSync]);
   // The group titles come to rest under this, so its height has to be known
   // rather than guessed — a row's height is set in CSS and read here.
   useLayoutEffect(() => {
@@ -275,62 +270,61 @@ function useSheet(props: SheetProps) {
 
   const single = group.columns.length === 1;
 
-  return { ...props, slots, slotOffsets, rowsDrag, scrollSync, headRef, headStripRef, single };
+  return {
+    ...props,
+    slots,
+    slotOffsets,
+    rowsDrag,
+    scroll,
+    scrollSync,
+    scrollLanes,
+    headRef,
+    headStripRef,
+    single,
+  };
 }
 export default function Sheet(props: SheetProps) {
   const state = useSheet(props);
   return <SheetView state={state} />;
 }
 function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
-  const {
-    blocks,
-    group,
-    onSave,
-    onAdd,
-    onRename,
-    onRetitle,
-    onDuplicateSection,
-    onDeleteSection,
-    fluidOf,
-    onDraft,
-  } = state;
-  const { slotOffsets, rowsDrag, scrollSync } = state;
+  const translate = useTranslate();
+  const { blocks, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft, visibility } = state;
+  const { slotOffsets, rowsDrag, scrollLanes } = state;
   return (
-    <>
-      <SheetHeader state={state} />
-      {blocks.map((block, index) => (
-        <Table
-          key={index}
-          block={block}
-          group={group}
-          onSave={onSave}
-          sectionDrag={{
-            props:
-              block.title !== undefined
-                ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head)
-                : {},
-            className:
-              block.title !== undefined
-                ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head)
-                : '',
-          }}
-          onAdd={onAdd}
-          onRename={onRename}
-          onRetitle={onRetitle}
-          onDuplicateSection={onDuplicateSection}
-          onDeleteSection={onDeleteSection}
-          rowsDrag={rowsDrag}
-          slotOffset={sheetOffset(slotOffsets, index).rows}
-          fluidOf={fluidOf}
-          onDraft={onDraft}
-          scrollSync={scrollSync}
-          // The group's headings are the sheet's now; only a matrix, whose
-          // columns are its own, still writes its own.
-          showHead={block.kind === 'matrix'}
-        />
-      ))}
-      {!blocks.length && <div className="props-empty">Nothing matches the search.</div>}
-    </>
+    <div className="vars-sheet">
+      <div className="cms-detail-body vars-body" ref={state.scroll.bodyRef}>
+        <SheetHeader state={state} />
+        {blocks.map((block, index) => (
+          <Table
+            key={index}
+            block={block}
+            group={group}
+            onSave={onSave}
+            sectionDrag={{
+              props: block.title !== undefined ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head) : {},
+              className: block.title !== undefined ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head) : '',
+            }}
+            onAdd={onAdd}
+            onRename={onRename}
+            onRetitle={onRetitle}
+            onDuplicateSection={onDuplicateSection}
+            onDeleteSection={onDeleteSection}
+            rowsDrag={rowsDrag}
+            slotOffset={sheetOffset(slotOffsets, index).rows}
+            fluidOf={fluidOf}
+            onDraft={onDraft}
+            visibility={visibility}
+            scrollLanes={scrollLanes}
+            // The group's headings are the sheet's now; only a matrix, whose
+            // columns are its own, still writes its own.
+            showHead={block.kind === 'matrix'}
+          />
+        ))}
+        {!blocks.length && <div className="props-empty">{translate('variables.noMatches')}</div>}
+      </div>
+      <VariableScrollBar scroll={state.scroll} />
+    </div>
   );
 }
 
@@ -366,29 +360,22 @@ function NewVariable(props: NewVariableProps) {
   return <NewVariableView state={state} />;
 }
 function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVariable> }) {
+  const translate = useTranslate();
   const { block, template, slotProps, dropping } = state;
   const { typing, setTyping, word, setWord, inputRef, commit } = state;
   if (!typing) {
     return (
-      <div
-        className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`}
-        style={{ gridTemplateColumns: template }}
-        {...(slotProps || {})}
-      >
+      <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
         <span />
         <button className="vars-add-btn" onClick={() => setTyping(true)}>
-          <PlusIcon size={11} /> New variable
+          <PlusIcon size={11} /> {translate('variables.new')}
         </button>
       </div>
     );
   }
 
   return (
-    <div
-      className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`}
-      style={{ gridTemplateColumns: template }}
-      {...(slotProps || {})}
-    >
+    <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
       <span />
       <span className="vars-add-field">
         <span className="vars-add-stem">{block.kind === 'matrix' ? '…-' : stemOf(block)}</span>
@@ -418,7 +405,7 @@ function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVa
 }
 
 function useVariableTable(props: TableProps) {
-  const { block, group, scrollSync, rowsDrag, slotOffset = 0 } = props;
+  const { block, group, scrollLanes, rowsDrag, slotOffset = 0 } = props;
 
   // A matrix carries its own columns (the family's prefixes); everything else
   // uses the group's (one per rule).
@@ -426,6 +413,9 @@ function useVariableTable(props: TableProps) {
   assert(columns !== undefined, 'Variable table: matrix columns are required');
   assert(columns.length <= LIMITS.scanEntriesMax, 'Variable table: column limit exceeded');
   const single = columns.length === 1;
+  // Scrolls with the tables whose columns line up with its own — see
+  // createScrollLanes.
+  const scrollSync = scrollLanes.lane(columns.length);
   // Two stacks side by side: the labels, which never move, and a scroller
   // holding every value. One grid per row with the label cells stuck to the
   // left was the obvious shape and the wrong one — the values showed through
@@ -452,12 +442,14 @@ function useVariableTable(props: TableProps) {
   // are rendered for why they are two boxes rather than one.
   const headRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
-  // Keyed by how many columns this table has: only tables of the same width
-  // have a scroll position worth sharing.
-  useEffect(
-    () => scrollSync?.register(columns.length, rowsRef.current ?? undefined),
-    [scrollSync, columns.length],
-  );
+  useLayoutEffect(() => {
+    const removeRows = scrollSync.register(rowsRef.current ?? undefined);
+    const removeHead = scrollSync.register(headRef.current ?? undefined);
+    return () => {
+      removeRows?.();
+      removeHead?.();
+    };
+  }, [scrollSync, props.showHead]);
   // Whether this table's heading is a name its rows share (renameable) or a
   // comment above them (not — see sectionPrefix).
   const prefix = sectionPrefix(block);
@@ -482,6 +474,7 @@ function useVariableTable(props: TableProps) {
     setHovered,
     headRef,
     rowsRef,
+    scrollSync,
     prefix,
     renameSignal,
     setRenameSignal,
@@ -528,34 +521,29 @@ function TableView({ state }: { readonly state: ReturnType<typeof useVariableTab
             step and each line runs across both. */}
         <TableScrollHead state={state} />
         <TableScrollRows state={state} />
-        {/* No counterpart to the add row here: the scroller's own scrollbar
-            stands in for it. Given one, the bar was pushed a row below the
-            button and read as belonging to whatever came next; without one it
-            sits on the same line, which is also the line it scrolls. */}
+        {/* Adding a variable is a label-side action; values need no extra row. */}
       </div>
     </div>
   );
 }
 
 function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> }) {
+  const translate = useTranslate();
   const { group, headRef, headStripRef, single } = state;
   return (
     <div className="vars-table vars-sheet-head" ref={headRef}>
       <div className="vars-fixed">
         <div className="vars-row is-head" style={{ gridTemplateColumns: LABEL_TRACKS }}>
           <div />
-          <div className="vars-head">Name</div>
+          <div className="vars-head">{translate('variables.head.name')}</div>
         </div>
       </div>
       <div className="vars-scroll">
-        <div className="vars-scroll-head" ref={headStripRef}>
-          <div
-            className="vars-row is-head"
-            style={{ gridTemplateColumns: valueTracks(group.columns.length) }}
-          >
+        <div className="vars-scroll-head" ref={headStripRef} data-scroll-lane={group.columns.length}>
+          <div className="vars-row is-head" style={{ gridTemplateColumns: valueTracks(group.columns.length) }}>
             {group.columns.map((column) => (
               <div key={column.id} className="vars-head" title={column.selector || column.label}>
-                {single && group.kind === 'single' ? 'Value' : column.label}
+                {single && group.kind === 'single' ? translate('variables.head.value') : column.label}
               </div>
             ))}
           </div>
@@ -566,13 +554,7 @@ function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> })
 }
 
 // A comment heading's menu carries the two things that are not renaming.
-function CommentHeading({
-  state,
-  title,
-}: {
-  readonly state: ReturnType<typeof useVariableTable>;
-  readonly title: string;
-}) {
+function CommentHeading({ state, title }: { readonly state: ReturnType<typeof useVariableTable>; readonly title: string }) {
   const { block, onRetitle, onDuplicateSection, onDeleteSection } = state;
   const { renameSignal, setRenameSignal } = state;
   return (
@@ -580,10 +562,12 @@ function CommentHeading({
       <EditableName
         className="vars-section-text"
         value={title}
-        title={title}
+        title={block.description ?? labelPlainText(title)}
         openSignal={renameSignal}
         onRename={(next) => onRetitle?.(block, next)}
-      />
+      >
+        <CommentTitle title={title} />
+      </EditableName>
       <SectionMenu
         onRename={() => setRenameSignal((signal) => signal + 1)}
         onDuplicate={() => {
@@ -597,19 +581,29 @@ function CommentHeading({
   );
 }
 
+// A heading read from a comment: its words, with what the author put in
+// backticks drawn as code (AGENTS.md, "Code display"). The field that renames it
+// edits the title as written, backticks and all.
+function CommentTitle({ title }: { readonly title: string }) {
+  return (
+    <>
+      {labelParts(title).map((part, index) =>
+        part.kind === 'code' ? <CodeInline key={index} text={part.text} language="css" /> : <React.Fragment key={index}>{part.text}</React.Fragment>,
+      )}
+    </>
+  );
+}
+
 function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, onRename, sectionDrag, labelTemplate, prefix } = state;
   return (
     <>
       {block.title && (
         // The heading lines up with the names under it, and drags the same way
         // a row does — a group is a run of lines in the file like any other.
-        <h3
-          className={`vars-row vars-section ${sectionDrag?.className || ''}`}
-          style={{ gridTemplateColumns: labelTemplate }}
-          {...(sectionDrag?.props || {})}
-        >
-          <span className="vars-grip" title="Drag to reorder">
+        <h3 className={`vars-row vars-section ${sectionDrag?.className || ''}`} style={{ gridTemplateColumns: labelTemplate }} {...(sectionDrag?.props || {})}>
+          <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
           {prefix ? (
@@ -638,7 +632,9 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
             // the comment, and the names underneath are its own business.
             <CommentHeading state={state} title={block.title} />
           ) : (
-            <span className="vars-section-text">{block.title}</span>
+            <span className="vars-section-text" title={block.description ?? labelPlainText(block.title)}>
+              <CommentTitle title={block.title} />
+            </span>
           )}
         </h3>
       )}
@@ -647,6 +643,7 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
 }
 
 function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { showHead, labelTemplate } = state;
   return (
     <div className="vars-fixed-head">
@@ -654,7 +651,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
       {showHead && (
         <div className="vars-row is-head" style={{ gridTemplateColumns: labelTemplate }}>
           <div />
-          <div className="vars-head">Name</div>
+          <div className="vars-head">{translate('variables.head.name')}</div>
         </div>
       )}
     </div>
@@ -662,6 +659,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
 }
 
 function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, onRename, labelTemplate, reorder, rowProps } = state;
   return (
     <>
@@ -675,10 +673,10 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
           {...reorder.rowProps(index)}
           {...rowProps(index)}
         >
-          <span className="vars-grip" title="Drag to reorder">
+          <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
-          <div className="vars-name" title={row.name || row.label}>
+          <VariableNameCell title={row.name || row.label}>
             <VariableTypeIcon kind={row.cells.find((cell) => cell !== undefined)?.kind ?? ''} />
             <EditableName
               className="vars-name-text"
@@ -686,7 +684,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
               title={row.name || row.label}
               onRename={(next) => onRename?.(rowRenames(block, row, next))}
             />
-          </div>
+          </VariableNameCell>
         </div>
       ))}
     </>
@@ -694,25 +692,22 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
 }
 
 function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, group, showHead, columns, single, valueTemplate, headRef } = state;
   return (
-    <div className="vars-scroll-head" ref={headRef}>
+    <div className="vars-scroll-head" ref={headRef} data-scroll-lane={columns.length}>
       {block.title && (
         // The heading's counterpart carries the same tracks as the rows
         // below it, or it measures the width of the scroller instead of the
         // width of its contents — and its rule stops at the visible edge
         // while every other line runs the full scroll.
-        <div
-          className="vars-row vars-section"
-          style={{ gridTemplateColumns: valueTemplate }}
-          aria-hidden="true"
-        />
+        <div className="vars-row vars-section" style={{ gridTemplateColumns: valueTemplate }} aria-hidden="true" />
       )}
       {showHead && (
         <div className="vars-row is-head" style={{ gridTemplateColumns: valueTemplate }}>
           {columns.map((column) => (
             <div key={column.id} className="vars-head" title={column.selector || column.label}>
-              {single && group.kind === 'single' ? 'Value' : column.label}
+              {single && group.kind === 'single' ? translate('variables.head.value') : column.label}
             </div>
           ))}
         </div>
@@ -722,47 +717,51 @@ function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVaria
 }
 
 function TableScrollRows({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
-  const {
-    block,
-    onSave,
-    fluidOf,
-    onDraft,
-    scrollSync,
-    columns,
-    valueTemplate,
-    headRef,
-    rowsRef,
-    rowProps,
-  } = state;
+  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps, visibility } = state;
   return (
     <div
       className="vars-scroll-rows"
       ref={rowsRef}
+      data-scroll-lane={columns.length}
       onScroll={(event) => {
         const { scrollLeft } = event.currentTarget;
-        if (headRef.current) {
-          headRef.current.scrollLeft = scrollLeft;
-        }
-        scrollSync?.broadcast(columns.length, event.currentTarget, scrollLeft);
+        scrollSync.broadcast(event.currentTarget, scrollLeft);
       }}
     >
       {block.rows.map((row, index) => (
-        <div
-          key={row.name || row.label}
-          style={{ gridTemplateColumns: valueTemplate }}
-          {...rowProps(index)}
-        >
+        <div key={row.name || row.label} style={{ gridTemplateColumns: valueTemplate }} {...rowProps(index)}>
           {columns.map((column, at) => (
-            <Cell
-              key={column.id}
-              cell={row.cells[at]}
-              onSave={onSave}
-              fluidOf={fluidOf}
-              onDraft={onDraft}
-            />
+            <ValueCellHost key={column.id} cell={row.cells[at]} visibility={visibility}>
+              <Cell cell={row.cells[at]} onSave={onSave} fluidOf={fluidOf} onDraft={onDraft} />
+            </ValueCellHost>
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The one place a variable's value cell is drawn with its settings gear, for every layout: a plain list, a matrix, modes,
+ * nested groups, chips, swatches and curves all reach their cells through TableScrollRows, which wraps each in this.
+ * The gear sits at the cell's right edge, over it, so the value does not move or shrink; a cell with no variable
+ * behind it (an empty cell) has none, and nor does a sheet that cannot hide variables.
+ */
+function ValueCellHost(props: {
+  readonly cell: VariableCell | undefined;
+  readonly visibility: VariableVisibilityControl | undefined;
+  readonly children: React.ReactNode;
+}) {
+  const { cell, visibility, children } = props;
+  if (visibility === undefined || cell === undefined || cell.name.length === 0) {
+    return <>{children}</>;
+  }
+  return (
+    <div className="vars-cell-host">
+      {children}
+      <span className="vars-cell-tools">
+        <VariableVisibilityButton name={cell.name} visibility={visibility} />
+      </span>
     </div>
   );
 }

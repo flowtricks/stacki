@@ -97,9 +97,7 @@ export function describe(mod) {
     return { error: 'The content config has no `collections` export.', collections: [] };
   }
   return {
-    collections: Object.entries(collections).map(([name, collection]) =>
-      describeCollection(name, collection),
-    ),
+    collections: Object.entries(collections).map(([name, collection]) => describeCollection(name, collection)),
   };
 }
 

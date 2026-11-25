@@ -1,0 +1,10 @@
+---
+interface Props {
+  cta: {
+    label: string;
+    link: { href: string; external?: boolean };
+  };
+}
+const { cta } = Astro.props;
+---
+<a class="nested-object" href={cta.link.href} target={cta.link.external ? '_blank' : undefined}>{cta.label}</a>

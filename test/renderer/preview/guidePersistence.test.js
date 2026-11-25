@@ -22,8 +22,7 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   const writes = [];
   globalThis.CSS = { supports: () => true };
   globalThis.localStorage = {
-    getItem: () =>
-      JSON.stringify({ columns: 8, visible: true, color: '#abc', columnDefaultsVersion: 1 }),
+    getItem: () => JSON.stringify({ columns: 8, visible: true, color: '#abc', columnDefaultsVersion: 1 }),
   };
   globalThis.window = {
     avb: {
@@ -48,6 +47,12 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   first.change((settings) => ({ ...settings, opacity: 0.12 }));
   await until(() => writes.length === 2);
   assert.equal(JSON.parse(source).settings.opacity, 0.12);
+  // Loading and saving are progress, not problems: turning the guide on and off
+  // must raise no toast, so no state before a failure carries a problem.
+  assert.deepEqual(
+    states.map((state) => state.problem),
+    states.map(() => ''),
+  );
 
   const otherStates = [];
   const other = createGuideController('/project', (state) => otherStates.push(state));
@@ -58,7 +63,7 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   first.change((settings) => ({ ...settings, opacity: 0.2 }));
   await until(() => writes.length === 3);
   other.change((settings) => ({ ...settings, opacity: 0.3 }));
-  await until(() => otherStates.at(-1)?.message.includes('Changed in another editor.'));
+  await until(() => otherStates.at(-1)?.problem.includes('Changed in another editor.'));
   assert.equal(JSON.parse(source).settings.opacity, 0.2);
   other.reload();
   await until(() => otherStates.at(-1)?.settings.opacity === 0.2);
@@ -68,3 +73,38 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   delete globalThis.localStorage;
   delete globalThis.CSS;
 });
+
+for (const legacy of [JSON.parse('null'), undefined, '{broken', 'null', '[]', '42', 'x'.repeat(2049)]) {
+  test(`guide saves on change with legacy record ${String(legacy).slice(0, 20)}`, async () => {
+    let source;
+    const writes = [];
+    globalThis.CSS = { supports: () => true };
+    globalThis.localStorage = { getItem: () => legacy };
+    globalThis.window = {
+      avb: {
+        projectMetadata: async () => ({ ok: true, value: source === undefined ? {} : { source } }),
+        writeProjectMetadata: async ({ write: input }) => {
+          source = input.source;
+          writes.push(input);
+          return { ok: true, value: { source } };
+        },
+      },
+    };
+    const states = [];
+    const controller = createGuideController('/project', (state) => states.push(state));
+    controller.reload();
+    await until(() => states.at(-1)?.loading === false);
+    // Let a save that should not happen have its chance to run.
+    await delay(50);
+    assert.equal(writes.length, 0);
+    assert.equal(source, undefined);
+    controller.change((settings) => ({ ...settings, opacity: 0.15 }));
+    await until(() => writes.length === 1);
+    assert.equal(writes[0].base, undefined);
+    assert.equal(JSON.parse(source).settings.opacity, 0.15);
+    controller.close();
+    delete globalThis.window;
+    delete globalThis.localStorage;
+    delete globalThis.CSS;
+  });
+}

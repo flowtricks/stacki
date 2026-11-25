@@ -1,0 +1,12 @@
+---
+import type { CollectionEntry } from 'astro:content';
+interface Props {
+  post: CollectionEntry<'blog'>;
+  showDate?: boolean;
+}
+const { post, showDate = true } = Astro.props;
+---
+<article class="collection-entry-prop">
+  <h3>{post.data.title}</h3>
+  {showDate && <time datetime={post.data.published.toISOString()}>{post.data.published.toDateString()}</time>}
+</article>

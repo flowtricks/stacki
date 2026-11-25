@@ -106,9 +106,7 @@ const check = (what, condition, detail) => {
   };
 
   const press = (element) => {
-    element.dispatchEvent(
-      new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }),
-    );
+    element.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
   };
   const clickIt = (element) => {
     press(element);
@@ -145,8 +143,7 @@ const check = (what, condition, detail) => {
   };
 
   const bigOpen = (host) => !!document.querySelector('.var-custom');
-  const pickerOpen = (host) =>
-    !!host.querySelector('[role="dialog"], .embed-editor_varconnect-panel');
+  const pickerOpen = (host) => !!host.querySelector('[role="dialog"], .embed-editor_varconnect-panel');
 
   // Inherited chips open the same picker, but remain outside the draft until
   // the user explicitly chooses a binding. Overflow must not steal the press.
@@ -193,11 +190,7 @@ const check = (what, condition, detail) => {
     await act(async () => {
       clickIt(dot);
     });
-    check(
-      'pressing the dot does not open the value editor',
-      !bigOpen(host),
-      'the big editor swallowed the dot press',
-    );
+    check('pressing the dot does not open the value editor', !bigOpen(host), 'the big editor swallowed the dot press');
 
     // A real press lands on the glyph inside the button, not the button — so
     // the check that lets the dot through has to see past the <svg> to it.
@@ -206,11 +199,7 @@ const check = (what, condition, detail) => {
     await act(async () => {
       clickIt(glyph);
     });
-    check(
-      'pressing the glyph inside the dot does not open it either',
-      !bigOpen(host),
-      'a press on the icon inside the dot was taken as a press on the field',
-    );
+    check('pressing the glyph inside the dot does not open it either', !bigOpen(host), 'a press on the icon inside the dot was taken as a press on the field');
     await done();
   }
 
@@ -218,8 +207,7 @@ const check = (what, condition, detail) => {
   {
     const { host, done } = await mount('calc(2rem + 100px)');
     setOverflow(host, true);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
       press(field);
     });
@@ -231,8 +219,7 @@ const check = (what, condition, detail) => {
   {
     const { host, done } = await mount('2rem');
     setOverflow(host, false);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
       press(field);
     });
@@ -246,12 +233,9 @@ const check = (what, condition, detail) => {
   {
     const { host, done } = await mount('2rem');
     setOverflow(host, false);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
-      field.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: '=', bubbles: true, cancelable: true }),
-      );
+      field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: '=', bubbles: true, cancelable: true }));
     });
     check('= opens the value editor even when the value fits', bigOpen(host));
     await done();
@@ -268,8 +252,7 @@ const check = (what, condition, detail) => {
   {
     const { host, picked, done } = await mount('calc(2rem + )');
     setOverflow(host, true);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
       press(field);
     });
@@ -291,8 +274,7 @@ const check = (what, condition, detail) => {
   {
     const { host, done } = await mount('calc(2rem + )');
     setOverflow(host, true);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
       press(field);
     });
@@ -366,27 +348,15 @@ const check = (what, condition, detail) => {
     // Press a variable in it. The value that comes out is the whole point:
     // the variable has to land at the caret, with the calc intact around it.
     const option = picker && picker.querySelector('.embed-editor_varpicker-item');
-    check(
-      'the picker has a variable to press',
-      !!option,
-      picker ? picker.innerHTML.slice(0, 200) : 'no picker',
-    );
+    check('the picker has a variable to press', !!option, picker ? picker.innerHTML.slice(0, 200) : 'no picker');
     if (option) {
       await act(async () => {
         clickIt(option);
       });
       check('picking wrote a value', picked.length === 1, JSON.stringify(picked));
-      check(
-        'the variable landed where the caret was',
-        picked[0] === 'calc(2rem + var(--brand)10px)',
-        JSON.stringify(picked[0]),
-      );
+      check('the variable landed where the caret was', picked[0] === 'calc(2rem + var(--brand)10px)', JSON.stringify(picked[0]));
       // The failure the whole change is about: the calc thrown away.
-      check(
-        'and the expression survived',
-        String(picked[0]).startsWith('calc('),
-        JSON.stringify(picked[0]),
-      );
+      check('and the expression survived', String(picked[0]).startsWith('calc('), JSON.stringify(picked[0]));
     }
     await done();
   }
@@ -404,8 +374,7 @@ const check = (what, condition, detail) => {
   {
     const { host, picked, done } = await mount('calc(2rem + )');
     setOverflow(host, true);
-    const field =
-      host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
+    const field = host.querySelector('.embed-editor_varconnect-editor') || host.querySelector('input');
     await act(async () => {
       press(field);
     });
@@ -477,26 +446,14 @@ const check = (what, condition, detail) => {
       });
       check('a value was written', picked.length === 1, JSON.stringify(picked));
       // The expression on screen must survive, and the variable must land in it.
-      check(
-        'the typed expression is not wiped',
-        String(picked[0]).includes('calc('),
-        JSON.stringify(picked[0]),
-      );
-      check(
-        'and the variable is in the result',
-        String(picked[0]).includes('var(--brand)'),
-        JSON.stringify(picked[0]),
-      );
+      check('the typed expression is not wiped', String(picked[0]).includes('calc('), JSON.stringify(picked[0]));
+      check('and the variable is in the result', String(picked[0]).includes('var(--brand)'), JSON.stringify(picked[0]));
       // WHERE it lands depends on the recorded caret, and jsdom cannot put a
       // real selection in a contentEditable — so this half is pinned down by
       // test/renderer/style/insertBinding.test.js against the caret directly. What this test can
       // prove, and the thing that was broken, is that the expression survives:
       // the fallback for an unknown caret appends rather than replacing.
-      check(
-        'the fallback appends rather than wiping',
-        picked[0] === 'calc(2rem + )var(--brand)',
-        JSON.stringify(picked[0]),
-      );
+      check('the fallback appends rather than wiping', picked[0] === 'calc(2rem + )var(--brand)', JSON.stringify(picked[0]));
     }
     await done();
   }
@@ -514,20 +471,14 @@ const check = (what, condition, detail) => {
       clickIt(host.querySelector('.embed-editor_varconnect-dot'));
     });
     check('the picker opens from the dot', !!document.querySelector('.embed-editor_varpicker'));
-    const row = [...document.querySelectorAll('button')].find((button) =>
-      /brand/.test(button.textContent || ''),
-    );
+    const row = [...document.querySelectorAll('button')].find((button) => /brand/.test(button.textContent || ''));
     check('it lists a variable', !!row);
     if (row) {
       await act(async () => {
         clickIt(row);
       });
       check('choosing one applies it', picked.length === 1, JSON.stringify(picked));
-      check(
-        'and does not open the big editor instead',
-        !bigOpen(host),
-        'the value editor swallowed the pick',
-      );
+      check('and does not open the big editor instead', !bigOpen(host), 'the value editor swallowed the pick');
     }
     await done();
   }
@@ -580,27 +531,19 @@ const check = (what, condition, detail) => {
     await act(async () => {
       clickIt(host.querySelector('.embed-editor_varconnect-dot'));
     });
-    const row = [...document.querySelectorAll('button')].find((button) =>
-      /brand/.test(button.textContent || ''),
-    );
+    const row = [...document.querySelectorAll('button')].find((button) => /brand/.test(button.textContent || ''));
     check('the picker lists a variable to choose', !!row);
     if (row) {
       await act(async () => {
         clickIt(row);
       });
-      check(
-        'the variable goes in at the caret, not on the end',
-        picked[0] === 'calc(2rem + var(--brand))',
-        JSON.stringify(picked),
-      );
+      check('the variable goes in at the caret, not on the end', picked[0] === 'calc(2rem + var(--brand))', JSON.stringify(picked));
     }
     await done();
   }
 
   if (failures.length) {
-    console.error(
-      `varconnect-open: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`varconnect-open: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`varconnect-open: ${checked} passed`);

@@ -1,3 +1,4 @@
+import type { IpcPayloads } from '../../../shared/ipc/ipcPayloads';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, count, pathText, record, text } from '../../../shared/core/boundary';
@@ -20,8 +21,8 @@ export interface TerminalProcessEvent {
   readonly name: string;
 }
 
-export function startTerminal(id: string, cwd: string, autoLaunch: string) {
-  const payload = parseIpcPayload('terminal:start', { id, cwd, autoLaunch });
+export function startTerminal(options: IpcPayloads['terminal:start']) {
+  const payload = parseIpcPayload('terminal:start', options);
   return terminalRequest(parseStartResult, () => window.avb.startTerminal(payload));
 }
 
@@ -37,11 +38,12 @@ export function closeTerminal(id: string) {
 
 export function saveTerminalClipboardImage(bytes: Uint8Array, mime: string) {
   if (bytes.byteLength > TERMINAL_IMAGE_BYTES_MAX) {
-    return Promise.resolve({ ok: false, error: 'Clipboard image exceeds 20 MB.' } as const);
+    return Promise.resolve(
+      // i18n-ignore: the caller only branches on `ok`; the text is never shown.
+      { ok: false, error: 'Clipboard image exceeds 20 MB.' } as const,
+    );
   }
-  return terminalRequest(parseClipboardResult, () =>
-    window.avb.terminalClipboardImage(bytes, text(mime)),
-  );
+  return terminalRequest(parseClipboardResult, () => window.avb.terminalClipboardImage(bytes, text(mime)));
 }
 
 export function sendTerminalInput(id: string, data: string): void {
@@ -116,10 +118,7 @@ function parseSuccess(input: unknown): { readonly ok: true } {
   return { ok: true };
 }
 
-async function terminalRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function terminalRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

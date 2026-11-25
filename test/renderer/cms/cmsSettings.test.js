@@ -28,14 +28,7 @@ buildSync({
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 require('../../helpers/popupDom').installPopupDOM(dom.window);
 global.window = dom.window;
-for (const name of [
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLInputElement',
-  'Element',
-  'Node',
-]) {
+for (const name of ['document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node']) {
   global[name] = dom.window[name];
 }
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,14 +37,10 @@ const { act } = React;
 const { createRoot } = require('react-dom/client');
 const { Settings, ConfirmHost } = require(output);
 const click = (element) => act(async () => element.click());
-const button = (label) =>
-  [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
+const button = (label) => [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === label);
 const type = (input, text) =>
   act(async () => {
-    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(
-      input,
-      text,
-    );
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, text);
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
 const collection = { rel: 'data/site.json', label: 'Site', single: false };
@@ -80,17 +69,7 @@ function fixture(overrides = {}) {
     operations,
     errors,
     root,
-    mount: () =>
-      act(async () =>
-        root.render(
-          React.createElement(
-            React.Fragment,
-            {},
-            React.createElement(Settings, props),
-            React.createElement(ConfirmHost),
-          ),
-        ),
-      ),
+    mount: () => act(async () => root.render(React.createElement(React.Fragment, {}, React.createElement(Settings, props), React.createElement(ConfirmHost)))),
   };
 }
 
@@ -106,18 +85,10 @@ test('nested schema editing preserves paths and the new field name', async () =>
     assert.deepEqual(state.operations[0], ['rename', ['group'], 'inner', 'newInner']);
     assert.equal(name.value, 'Inner', 'rejected rename restores the original label');
     await click(document.querySelector('.cms-schema-nested .cms-add'));
-    await click(
-      [...document.querySelectorAll('.cms-type-tile')].find(
-        (entry) => entry.querySelector('.cms-type-name').textContent === 'Text',
-      ),
-    );
+    await click([...document.querySelectorAll('.cms-type-tile')].find((entry) => entry.querySelector('.cms-type-name').textContent === 'Text'));
     await type(document.querySelector('.cms-type-modal input'), 'Hero title');
     await click(document.querySelector('[title="Back to field types"]'));
-    await click(
-      [...document.querySelectorAll('.cms-type-tile')].find(
-        (entry) => entry.querySelector('.cms-type-name').textContent === 'Long text',
-      ),
-    );
+    await click([...document.querySelectorAll('.cms-type-tile')].find((entry) => entry.querySelector('.cms-type-name').textContent === 'Long text'));
     assert.equal(document.querySelector('.cms-type-modal input').value, 'Hero title');
     await click(document.querySelector('.cms-type-modal .primary'));
     assert.deepEqual(state.operations[1], ['add', ['group'], 'heroTitle', 'longtext']);
@@ -140,8 +111,7 @@ test('collection settings omit code helpers while retaining content fields', asy
   });
   try {
     await state.mount();
-    const labels = () =>
-      [...document.querySelectorAll('.cms-schema-name')].map((input) => input.value);
+    const labels = () => [...document.querySelectorAll('.cms-schema-name')].map((input) => input.value);
     assert.deepEqual(labels(), ['Title', 'Landing images']);
     await click(document.querySelector('[title="Show its fields"]'));
     assert.deepEqual(labels(), ['Title', 'Landing images', 'Cover']);

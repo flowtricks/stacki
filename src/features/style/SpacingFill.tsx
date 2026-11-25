@@ -6,14 +6,11 @@ import { useEffect, useId, useRef } from 'react';
 import { getHost } from './model/host';
 import { getModifiers, onModifiers, setModifiers } from '../../editor/heldModifiers';
 import { assert } from '../../../shared/core/assert';
-import {
-  type SetProp,
-  type LiveSetProp,
-  type Read,
-  type Side,
-  type Display,
-  displayOf,
-} from './spacingTypes';
+import { type SetProp, type LiveSetProp, type Read, type Side, type Display, displayOf } from './spacingTypes';
+import { withImportant } from './model/styleDisplay';
+import { projectLengthUnit } from './model/lengthUnit';
+import { formatPxLength, projectLength, type LengthUnit } from '../../../shared/properties/lengthUnit';
+import { startTouchClaim, useTouchClaimGuard, type TouchClaim } from '../../ui/touchClaim';
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -91,10 +88,13 @@ export function pxPerUnit(unit: string): number {
   }
 }
 
-/** Round to a sensible precision for the unit and re-attach it. */
-export function formatLength(amount: number, unit: string): string {
-  const rounded =
-    unit === 'px' || unit === '%' ? Math.round(amount) : Math.round(amount * 100) / 100;
+/** Round to a sensible precision for the unit and re-attach it. A rem project
+ *  rounds rem to whole pixels (0.0625rem at a 16px root), the step px gets. */
+export function formatLength(amount: number, unit: string, lengthUnit: LengthUnit = projectLengthUnit()): string {
+  if (lengthUnit.kind === 'rem' && unit === 'rem') {
+    return formatPxLength(Math.round(amount * lengthUnit.rootFontPx), lengthUnit);
+  }
+  const rounded = unit === 'px' || unit === '%' ? Math.round(amount) : Math.round(amount * 100) / 100;
   return `${rounded}${unit}`;
 }
 
@@ -259,20 +259,19 @@ function useDragReport(
   };
 }
 
-export function useSideDrag({
-  propFor,
-  inward,
-  kind,
-  read,
-  busy,
-  setProp,
-  liveSetProp,
-  onLive,
-  onLiveEnd,
-  threshold = 0,
-}: SideDragOptions) {
+export function useSideDrag({ propFor, inward, kind, read, busy, setProp, liveSetProp, onLive, onLiveEnd, threshold = 0 }: SideDragOptions) {
   const dragRef = useRef<SideDrag | undefined>(undefined);
   const dragged = useRef(false);
+  // On touch the box sits in a panel that scrolls, so a press is only a candidate until the
+  // gesture is clear (ui/touchClaim.ts): a horizontal drag claims a left or right side, a held
+  // press claims any side, and a vertical swipe goes to the panel's scroll.
+  const claimRef = useRef<TouchClaim | undefined>(undefined);
+  useTouchClaimGuard();
+  useEffect(() => () => claimRef.current?.end(), []);
+  const endClaim = () => {
+    claimRef.current?.end();
+    claimRef.current = undefined;
+  };
   const report = useDragReport(dragRef, { kind, propFor });
   const frame = useLiveFrame(dragRef, liveSetProp, (props, display, drag) => {
     onLive(props, display);
@@ -299,12 +298,43 @@ export function useSideDrag({
       event.preventDefault();
     }
     const shown = displayOf(read(propFor(side)));
-    dragRef.current = startSideDrag({ side, shown, inward, threshold, event });
+    const drag = startSideDrag({ side, shown, inward, threshold, event });
+    endClaim();
+    const claim = startTouchClaim(event, { axis: SIDE_AXIS[side].axis === 'x' ? 'x' : 'hold' }, () => {
+      // Held still: the band is the drag's now, before the finger moves.
+      if (threshold === 0 && dragRef.current === drag) {
+        drag.active = true;
+      }
+    });
+    if (claim.state() !== 'claimed') {
+      drag.active = false;
+    }
+    assert(claim.state() === 'claimed' || !drag.active, 'useSideDrag: an unclaimed touch is not a drag yet');
+    dragRef.current = drag;
+    claimRef.current = claim;
     dragged.current = false;
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const onPointerMove = (event: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) {
+      return;
+    }
+    const claim = claimRef.current?.move(event) ?? 'claimed';
+    if (claim === 'released') {
+      // A vertical swipe: the panel scrolls, and nothing was written.
+      assert(!dragged.current, 'useSideDrag: a released touch never dragged');
+      dragRef.current = undefined;
+      endClaim();
+      return;
+    }
+    if (claim === 'pending') {
+      return;
+    }
+    if (threshold === 0) {
+      drag.active = true;
+    }
     if (followPointer(dragRef, event, threshold)) {
       apply();
     }
@@ -312,6 +342,7 @@ export function useSideDrag({
 
   const onPointerUp = (event: React.PointerEvent) => {
     const drag = dragRef.current;
+    endClaim();
     if (!drag) {
       return;
     }
@@ -423,7 +454,9 @@ export function startSideDrag({
   threshold: number;
   event: React.PointerEvent;
 }): SideDrag {
-  const { amount, unit } = parseAmountUnit(shown.value);
+  // A px side drags in rem in a rem project: the project never writes px.
+  const authored = parseAmountUnit(shown.value);
+  const { amount, unit } = projectLength(authored.amount, authored.unit, projectLengthUnit());
   const sideAxis = SIDE_AXIS[side];
   // Outward grows away from centre; inward (padding) drags the opposite way
   // (Webflow flips the resize cursors to match).
@@ -477,9 +510,7 @@ export function followPointer(
   if (drag.active) {
     return true;
   }
-  const far =
-    Math.abs(event.clientX - drag.startX) >= threshold ||
-    Math.abs(event.clientY - drag.startY) >= threshold;
+  const far = Math.abs(event.clientX - drag.startX) >= threshold || Math.abs(event.clientY - drag.startY) >= threshold;
   if (far) {
     drag.active = true;
   }
@@ -508,7 +539,7 @@ export function useLiveFrame(
     const drag = dragRef.current;
     const value = pending.current;
     if (drag && value !== undefined) {
-      onLive(drag.props, drag.important ? `${value} !important` : value, drag);
+      onLive(drag.props, withImportant({ value, important: drag.important }), drag);
       // Linked sides are one visual edit. Sending them together lets the style
       // writer serialize the shared stylesheet once instead of once per side.
       liveSetProp(drag.props, value, drag.important);
@@ -526,10 +557,7 @@ export function useLiveFrame(
 // While a drag is live, Shift and Option are read as they are pressed rather
 // than as they were at the start: reach for one mid-drag and the other sides
 // join in from that moment.
-export function useDragModifiers(
-  dragRef: React.MutableRefObject<SideDrag | undefined>,
-  apply: () => void,
-): void {
+export function useDragModifiers(dragRef: React.MutableRefObject<SideDrag | undefined>, apply: () => void): void {
   // The listeners below are registered once; this keeps them calling the
   // current `apply`, with the props of the render that is on screen.
   const applyRef = useRef(apply);
@@ -549,8 +577,7 @@ export function useDragModifiers(
     };
     // Read off any key event, not just the modifiers themselves, and through
     // the shared store — see the hover hook below for both reasons.
-    const onKey = (event: KeyboardEvent) =>
-      setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
+    const onKey = (event: KeyboardEvent) => setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('keyup', onKey, true);
     const offModifiers = onModifiers(follow);
@@ -566,15 +593,7 @@ export function useDragModifiers(
 // pointer is over — the strip of the page that side is holding open — so the
 // panel has to say which sides those are, and keep saying it while Shift or
 // Option change the answer under a pointer that hasn't moved.
-export function useSideHover({
-  propFor,
-  kind,
-  read,
-}: {
-  propFor: (side: Side) => string;
-  kind: 'padding' | 'margin';
-  read: Read;
-}) {
+export function useSideHover({ propFor, kind, read }: { propFor: (side: Side) => string; kind: 'padding' | 'margin'; read: Read }) {
   const overRef = useRef<HoveredSide | undefined>(undefined);
 
   const report = () => {
@@ -640,10 +659,7 @@ export type HoveredSide = { side: Side; shiftKey: boolean; altKey: boolean };
 
 // Keeps the hovered sides following Shift and Option while the pointer stands
 // still, and clears the canvas when the panel goes away mid-hover.
-export function useHoverModifiers(
-  overRef: React.MutableRefObject<HoveredSide | undefined>,
-  report: () => void,
-): void {
+export function useHoverModifiers(overRef: React.MutableRefObject<HoveredSide | undefined>, report: () => void): void {
   // The listener below is registered once; this keeps it calling the current
   // report, which reads the values as they are now rather than as they were when
   // the panel first rendered.
@@ -673,8 +689,7 @@ export function useHoverModifiers(
     // from travelling must not stop the canvas from following the modifier. And
     // the answer goes through the shared store, because the other place these
     // are pressed is the canvas — see setModifiers.
-    const onKey = (event: KeyboardEvent) =>
-      setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
+    const onKey = (event: KeyboardEvent) => setModifiers({ shiftKey: event.shiftKey, altKey: event.altKey });
     const onBlur = () => setModifiers({ shiftKey: false, altKey: false });
     window.addEventListener('keydown', onKey, true);
     window.addEventListener('keyup', onKey, true);
@@ -709,31 +724,10 @@ export function SpacingFill({ frame, inward = false, ...dragOptions }: FillProps
   const hover = useSideHover({ propFor: dragOptions.propFor, kind, read: dragOptions.read });
 
   return (
-    <svg
-      className="embed-editor_spacing-fill"
-      viewBox={`0 0 ${geometry.w} ${geometry.h}`}
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
+    <svg className="embed-editor_spacing-fill" viewBox={`0 0 ${geometry.w} ${geometry.h}`} preserveAspectRatio="none" aria-hidden="true">
       <mask id={maskId} maskContentUnits="userSpaceOnUse">
-        <rect
-          x="0"
-          y="0"
-          width={geometry.w}
-          height={geometry.h}
-          rx={geometry.or}
-          ry={geometry.or}
-          fill="#fff"
-        />
-        <rect
-          x={geometry.mask.x}
-          y={geometry.mask.y}
-          width={geometry.mask.w}
-          height={geometry.mask.h}
-          rx={geometry.ir}
-          ry={geometry.ir}
-          fill="#000"
-        />
+        <rect x="0" y="0" width={geometry.w} height={geometry.h} rx={geometry.or} ry={geometry.or} fill="#fff" />
+        <rect x={geometry.mask.x} y={geometry.mask.y} width={geometry.mask.w} height={geometry.mask.h} rx={geometry.ir} ry={geometry.ir} fill="#000" />
       </mask>
       <g mask={`url(#${maskId})`}>
         {(['top', 'right', 'bottom', 'left'] satisfies Side[]).map((side) => (

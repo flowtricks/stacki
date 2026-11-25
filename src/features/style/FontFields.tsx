@@ -2,11 +2,16 @@
 // picked from, and the weights a font names (TypographySection.tsx).
 
 import { useEffect, useState } from 'react';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import { getProjectFontFamilies } from './model/webflow';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, displayText } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
-import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
+import { type Props, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -18,17 +23,7 @@ import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput } from './Typog
 
 // Webflow's built-in web fonts — real project fonts, so picking one applies natively
 // (an arbitrary web-safe name Webflow doesn't stock would be dropped on the native write).
-export const WEB_FONTS = [
-  'Arial',
-  'Georgia',
-  'Impact',
-  'Palatino Linotype',
-  'Tahoma',
-  'Times New Roman',
-  'Trebuchet MS',
-  'Verdana',
-  'system-ui',
-];
+export const WEB_FONTS = ['Arial', 'Georgia', 'Impact', 'Palatino Linotype', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'system-ui'];
 
 // Webflow's Google fonts.
 export const GOOGLE_FONTS = [
@@ -52,6 +47,9 @@ export const GOOGLE_FONTS = [
   'Vollkorn',
 ];
 
+const FONT_FAMILY_PLACEHOLDER = 'font-family'; // i18n-ignore: the CSS property name.
+const FONT_WEIGHT_PLACEHOLDER = 'font-weight'; // i18n-ignore: the CSS property name.
+
 // The primary family of a font-family value (first list entry, unquoted, lowered) —
 // used to match a CSS value like `"General Sans", sans-serif` back to a menu option.
 export function primaryFamily(value: string): string {
@@ -67,14 +65,19 @@ export function quoteFamily(name: string): string {
 }
 
 export function FontFamilyField(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('font-family'));
-  const [forceCustom, setForceCustom] = useState(false);
-  const { options, byPrimary } = fontOptions(useProjectFonts());
+  const translate = useTranslate();
+  const [forceCustom, setForceCustom] = useSelectorState(false);
+  const { options, byPrimary } = fontOptions(useProjectFonts(), translate);
   const computed = useStyleHint(display.present ? '' : 'font-family');
   const current = display.present ? display.value : computed;
   const matched = current ? byPrimary.get(primaryFamily(current)) : undefined;
-  const customMode = forceCustom || (current.length > 0 && !matched);
+  // A flagged value opens the custom field, whose text shows `!important` —
+  // the convention every preset control in the panel follows.
+  const customMode = forceCustom || (current.length > 0 && !matched) || display.important;
 
   const pick = (value: string) => {
     if (value === CUSTOM) {
@@ -96,7 +99,7 @@ export function FontFamilyField(props: Props) {
   return (
     <div className="embed-editor_size-row">
       <PropLabel
-        label="Font"
+        label={translate('style.fontFields.font')}
         prop="font-family"
         display={display}
         contributors={read('font-family')?.contributors ?? []}
@@ -105,29 +108,35 @@ export function FontFamilyField(props: Props) {
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
+      <VariableSelect
+        prop="font-family"
+        rawValue={display.present ? display.value : ''}
+        onVariable={(binding) => {
+          setForceCustom(false);
+          setProp('font-family', binding, display.important);
+        }}
         value={customMode ? CUSTOM : (matched ?? '')}
         options={options}
         onChange={pick}
         onPreview={(value) => {
           const previewed = value ?? undefined;
           const font = previewed && previewed !== CUSTOM ? quoteFamily(previewed) : undefined;
-          liveSetProp('font-family', font, false);
+          hoverPreview('font-family', font, false);
         }}
-        ariaLabel="Font family"
+        ariaLabel={translate('style.fontFields.fontFamily')}
         disabled={busy}
         searchable
-        searchPlaceholder="Search fonts…"
+        searchPlaceholder={translate('style.fontFields.searchFonts')}
         customInput={
           customMode ? (
             <LiveInput
               // Start empty when switching to Custom from a NAMED font (so typing doesn't
               // append onto e.g. "Montserrat" → "Montserratunset"); keep the current value
               // when it's already a custom one being edited.
-              value={forceCustom && matched ? '' : display.present ? joinImportant(display) : ''}
+              value={forceCustom && matched && !display.important ? '' : displayText(display)}
               busy={busy}
-              placeholder="font-family"
-              ariaLabel="Font family"
+              placeholder={FONT_FAMILY_PLACEHOLDER}
+              ariaLabel={translate('style.fontFields.fontFamily')}
               className="u-select-custom-input"
               prop="font-family"
               autoFocus={forceCustom}
@@ -163,46 +172,47 @@ export function useProjectFonts(): string[] {
 // The dropdown's options, grouped under headings, and every named font by its
 // primary family. The project's fonts minus the ones already listed under
 // Google/Web are what's left: the project's own custom fonts.
-export function fontOptions(fonts: string[]) {
+export function fontOptions(fonts: string[], translate: Translator) {
   const builtInLower = new Set([...GOOGLE_FONTS, ...WEB_FONTS].map((font) => font.toLowerCase()));
   const customFonts = fonts.filter((font) => !builtInLower.has(font.toLowerCase()));
   const named = [...customFonts, ...GOOGLE_FONTS, ...WEB_FONTS];
   const byPrimary = new Map(named.map((font) => [primaryFamily(font), font]));
-  const options: SelectOption<string>[] = [{ value: '', label: 'Default' }];
-  const group = (heading: string, list: string[]) => {
+  const options: SelectOption<string>[] = [{ value: '', label: translate('style.fontFields.default') }];
+  const group = (heading: string, headingLabel: string, list: string[]) => {
     if (!list.length) {
       return;
     }
-    options.push({ value: `__head_${heading}`, label: heading, heading: true });
+    options.push({ value: `__head_${heading}`, label: headingLabel, heading: true });
     for (const font of list) {
       options.push({ value: font, label: font, indent: true });
     }
   };
-  group('Custom fonts', customFonts);
-  group('Google fonts', GOOGLE_FONTS);
-  group('Web fonts', WEB_FONTS);
-  options.push({ value: CUSTOM, label: 'Custom…' });
+  group('Custom fonts', translate('style.fontFields.customFonts'), customFonts);
+  group('Google fonts', translate('style.fontFields.googleFonts'), GOOGLE_FONTS);
+  group('Web fonts', translate('style.fontFields.webFonts'), WEB_FONTS);
+  options.push({ value: CUSTOM, label: translate('style.fontFields.custom') });
   return { options, byPrimary };
 }
 
 // ─────────────────────────── Font weight ───────────────────────────
 
+// The weight names are the font-weight scale designers know by these English names.
 export const WEIGHTS: ReadonlyArray<[string, string]> = [
-  ['100', '100 - Thin'],
-  ['200', '200 - Extra Light'],
-  ['300', '300 - Light'],
-  ['400', '400 - Normal'],
-  ['500', '500 - Medium'],
-  ['600', '600 - Semi Bold'],
-  ['700', '700 - Bold'],
-  ['800', '800 - Extra Bold'],
-  ['900', '900 - Black'],
+  ['100', '100 - Thin'], // i18n-ignore: font weight name.
+  ['200', '200 - Extra Light'], // i18n-ignore: font weight name.
+  ['300', '300 - Light'], // i18n-ignore: font weight name.
+  ['400', '400 - Normal'], // i18n-ignore: font weight name.
+  ['500', '500 - Medium'], // i18n-ignore: font weight name.
+  ['600', '600 - Semi Bold'], // i18n-ignore: font weight name.
+  ['700', '700 - Bold'], // i18n-ignore: font weight name.
+  ['800', '800 - Extra Bold'], // i18n-ignore: font weight name.
+  ['900', '900 - Black'], // i18n-ignore: font weight name.
 ];
 export const WEIGHT_VALUES = new Set(WEIGHTS.map(([weight]) => weight));
-export const WEIGHT_OPTIONS: SelectOption<string>[] = [
-  { value: '', label: 'Default' },
+export const weightOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: '', label: translate('style.fontFields.weightDefault') },
   ...WEIGHTS.map(([value, label]) => ({ value, label })),
-  { value: CUSTOM, label: 'Custom…' },
+  { value: CUSTOM, label: translate('style.fontFields.custom') },
 ];
 // Map the CSS keywords onto the numeric scale so they select the right option.
 export function normalizeWeight(value: string): string {
@@ -217,13 +227,17 @@ export function normalizeWeight(value: string): string {
 }
 
 export function WeightField(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
+  const translate = useTranslate();
   const display = displayOf(read('font-weight'));
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const computed = useStyleHint(display.present ? '' : 'font-weight');
   const normalized = normalizeWeight(display.present ? display.value : computed);
   const matched = WEIGHT_VALUES.has(normalized) ? normalized : undefined;
-  const customMode = forceCustom || (normalized.length > 0 && !matched);
+  // A flagged weight opens the custom field, which shows its `!important`.
+  const customMode = forceCustom || (normalized.length > 0 && !matched) || display.important;
 
   const pick = (value: string) => {
     if (value === CUSTOM) {
@@ -241,7 +255,7 @@ export function WeightField(props: Props) {
   return (
     <div className="embed-editor_size-row">
       <PropLabel
-        label="Weight"
+        label={translate('style.fontFields.weight')}
         prop="font-weight"
         display={display}
         contributors={read('font-weight')?.contributors ?? []}
@@ -253,22 +267,26 @@ export function WeightField(props: Props) {
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
+      <VariableSelect
+        prop="font-weight"
+        rawValue={display.present ? display.value : ''}
+        onVariable={(binding) => {
+          setForceCustom(false);
+          setProp('font-weight', binding, display.important);
+        }}
         value={customMode ? CUSTOM : (matched ?? '')}
-        options={WEIGHT_OPTIONS}
+        options={weightOptions(translate)}
         onChange={pick}
-        onPreview={(value) =>
-          liveSetProp('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)
-        }
-        ariaLabel="Font weight"
+        onPreview={(value) => hoverPreview('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)}
+        ariaLabel={translate('style.fontFields.fontWeight')}
         disabled={busy}
         customInput={
           customMode ? (
             <LiveInput
-              value={display.present ? joinImportant(display) : ''}
+              value={displayText(display)}
               busy={busy}
-              placeholder="font-weight"
-              ariaLabel="Font weight"
+              placeholder={FONT_WEIGHT_PLACEHOLDER}
+              ariaLabel={translate('style.fontFields.fontWeight')}
               className="u-select-custom-input"
               prop="font-weight"
               autoFocus={forceCustom}

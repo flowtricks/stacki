@@ -24,17 +24,7 @@ test('variable cells keep hook order across sparse matrix updates', async () => 
   });
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   global.window = dom.window;
-  for (const name of [
-    'document',
-    'navigator',
-    'HTMLElement',
-    'HTMLInputElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-    'DOMRect',
-    'Window',
-  ]) {
+  for (const name of ['document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'MutationObserver', 'DOMRect', 'Window']) {
     global[name] = dom.window[name];
   }
   global.getComputedStyle = dom.window.getComputedStyle;
@@ -79,32 +69,21 @@ test('variable cells keep hook order across sparse matrix updates', async () => 
           React.createElement(
             'div',
             undefined,
-            values.map((value, index) =>
-              React.createElement(Cell, { key: index, cell: value, onSave() {}, onDraft }),
-            ),
+            values.map((value, index) => React.createElement(Cell, { key: index, cell: value, onSave() {}, onDraft })),
           ),
         ),
       );
-      assert.equal(
-        document.querySelectorAll('.var-cell.empty').length,
-        values.filter((value) => !value).length,
-      );
-      assert.equal(
-        document.querySelectorAll('.var-cell:not(.empty)').length,
-        values.filter(Boolean).length,
-      );
+      assert.equal(document.querySelectorAll('.var-cell.empty').length, values.filter((value) => !value).length);
+      assert.equal(document.querySelectorAll('.var-cell:not(.empty)').length, values.filter(Boolean).length);
     }
     await act(async () => root.unmount());
     assert.ok(notes.length > sequence.length, 'draft lifecycle ran for populated cells');
     assert.deepEqual(notes.at(-1), { name: '--gap', value: undefined }, 'unmount clears the draft');
     const { renderToStaticMarkup } = require('react-dom/server');
-    assert.throws(
-      () =>
-        renderToStaticMarkup(
-          React.createElement(Cell, { cell: { ...cell, value: 'x'.repeat(1048577) }, onSave() {} }),
-        ),
-      /value limit exceeded/,
-    );
+    // Stacki has no product size limit: a value is bounded only by the platform's string ceiling.
+    const { LIMITS, PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
+    assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+    assert.doesNotThrow(() => renderToStaticMarkup(React.createElement(Cell, { cell: { ...cell, value: 'x'.repeat(1048577) }, onSave() {} })));
   } finally {
     dom.window.close();
   }

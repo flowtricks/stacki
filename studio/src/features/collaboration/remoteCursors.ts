@@ -5,10 +5,7 @@ import { presenceColor } from './presenceColors';
 
 type CursorView = ReturnType<typeof createRemoteCursor>;
 export class RemoteCursors {
-  private readonly views = new Map<
-    string,
-    { readonly view: CursorView; packet: CursorPacket; seen: number }
-  >();
+  private readonly views = new Map<string, { readonly view: CursorView; packet: CursorPacket; seen: number }>();
   inverse = 1;
   constructor(private readonly root: ShadowRoot) {}
   update(packet: CursorPacket) {
@@ -56,7 +53,13 @@ export class RemoteCursors {
     view.element.hidden = x < 0 || y < 0 || x > innerWidth || y > innerHeight;
     view.element.style.transition = animate ? 'transform 70ms linear' : 'none';
     view.element.style.transform = `translate(${x}px, ${y}px)`;
-    view.label.style.left = x + 260 * this.inverse > innerWidth ? '-240px' : '18px';
-    view.label.style.top = y + 100 * this.inverse > innerHeight ? '-85px' : '22px';
+    // Place the actual label beside the pointer; reserving its maximum width
+    // leaves short names floating far away whenever the cursor nears an edge.
+    const width = view.label.offsetWidth * this.inverse;
+    const height = view.label.offsetHeight * this.inverse;
+    const left = Math.max(4, Math.min(x + 18 * this.inverse, innerWidth - width - 4));
+    const top = Math.max(4, Math.min(y + 22 * this.inverse, innerHeight - height - 4));
+    view.label.style.left = (left - x) / this.inverse + 'px';
+    view.label.style.top = (top - y) / this.inverse + 'px';
   }
 }

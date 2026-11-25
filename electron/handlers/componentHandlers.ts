@@ -5,6 +5,7 @@
 import {
   inverseBatch,
   loadComponentProperties,
+  previewComponentPropertyRemoval,
   PropertyUndoStore,
   revertComponentProperties,
   updateComponentProperties,
@@ -12,24 +13,33 @@ import {
 } from '../properties/componentProperties';
 import { createProjectText } from '../documents/documentWrites';
 import { definedFields } from '../../shared/core/boundary';
-import { isPathDescendant } from '../lib/platform';
+import { translateMain } from '../lib/mainLocale';
 import { assert } from '../../shared/core/assert';
-import { ok } from '../../shared/core/result';
+import { err, ok } from '../../shared/core/result';
 import * as path from 'path';
 import * as fs from 'fs';
-import { componentFile } from '../documents/componentFile';
+import { componentFile, discardComponentFile } from '../documents/componentFile';
 import { componentUsage } from '../properties/componentUsage';
+import { findClassMentions } from '../properties/classMentions';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
+import { applyComponentRename, ComponentRenameStore, revertComponentRename } from './componentRenameApply';
+import { planComponentRenameWork } from './componentRenamePlan';
+import { desktopRenameWriter } from '../project/pageRenameDesktop';
+import { runSliced } from '../lib/slicedWork';
+import { ComponentRemovalStore, duplicateComponentTarget, previewRemoveTarget, removeComponentTarget, restoreRemovedComponent } from './componentOps';
+import { projectFoldersFor } from '../lib/projectFolders';
+import { componentImportPaths } from '../properties/componentImports';
 
 // Step 6: every applied property batch leaves its inverse here, and the reply
 // carries the token Undo sends back (componentProperties.ts).
 const propertyUndo = new PropertyUndoStore();
+// What each deletion from the Components panel removed, so Undo can put it back (componentOps.ts).
+const removalUndo = new ComponentRemovalStore();
+const renameUndo = new ComponentRenameStore();
 
-export function registerComponentHandlers(
-  host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite'>,
-): void {
+export function registerComponentHandlers(host: Pick<MainHost, 'clipboard' | 'documents' | 'ipcMain' | 'noteAppWrite' | 'shell'>): void {
   registerComponentCreateHandlers(host);
   registerSelectionCopyHandler(host);
 }
@@ -38,14 +48,75 @@ function registerComponentCreateHandlers({
   ipcMain,
   documents,
   noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
+  shell,
+}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite' | 'shell'>): void {
   // Turn a piece of a page into a component of its own. The file is worked out
   // in componentFile.js; writing it belongs here, with every other write.
+  // The checksum is what Undo hands back to `component:discard`: the file goes
+  // only while it still holds these bytes.
   ipcMain.handle('component:create', async (_event, options) => {
-    const { path: target, rel, text } = componentFile(options);
+    const { path: target, rel, text, folders } = componentFile({ ...options, componentFolders: projectFoldersFor(options.projectPath, 'components') });
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    createProjectText(target, text);
-    return { path: target, rel, name: options.name };
+    const checksum = createProjectText(target, text);
+    assert(
+      folders.every((folder) => fs.existsSync(folder)),
+      'Every folder the component needed was made',
+    );
+    return { path: target, rel, name: options.name, checksum, folders };
+  });
+
+  // The Components panel's "…" menu. Expected refusals (used, outside the component folders, a name that cannot be found)
+  // come back as typed errors with nothing changed; see componentOps.ts for what each writes.
+  // Rename or move a component and everything that names it: a preview of the files that change, the rename itself (all
+  // files or none, one undo token), and its undo and redo. See componentRenamePlan.ts for what counts as a reference.
+  ipcMain.handle('component:planRename', async (_event, { projectPath, request }) => {
+    const plan = await runSliced(planComponentRenameWork(projectPath, request));
+    return plan.ok ? ok(plan.value.summary) : err(plan.error);
+  });
+  ipcMain.handle('component:rename', async (_event, { projectPath, request }) => {
+    noteAppWrite();
+    const plan = await runSliced(planComponentRenameWork(projectPath, request));
+    if (!plan.ok) {
+      return err(plan.error);
+    }
+    const applied = applyComponentRename(plan.value, desktopRenameWriter());
+    return applied.ok ? ok({ ...plan.value.summary, undo: renameUndo.record(plan.value) }) : err(applied.error);
+  });
+  ipcMain.handle('component:revertRename', async (_event, { token, direction }) => {
+    noteAppWrite();
+    const plan = renameUndo.get(token);
+    if (plan === undefined) {
+      return err({ code: 'unknown-undo', message: translateMain('error.component.unknownUndo') });
+    }
+    const done = direction === 'undo' ? revertComponentRename(plan, desktopRenameWriter()) : applyComponentRename(plan, desktopRenameWriter());
+    return done.ok ? ok({ files: plan.texts.length }) : err(done.error);
+  });
+  ipcMain.handle('component:duplicate', async (_event, { projectPath, target }) => duplicateComponentTarget(projectPath, target));
+  // Deleting a component: the plan the confirmation shows (no write), then the deletion with every instance and import
+  // (componentRemovalPlan.ts), pages first and the file last, undone in one step.
+  ipcMain.handle('component:planRemove', async (_event, { projectPath, target }) => previewRemoveTarget(projectPath, target));
+  ipcMain.handle('component:remove', async (_event, { projectPath, target, uses }) => {
+    noteAppWrite();
+    return removeComponentTarget(projectPath, target, removalUndo, { trash: (file) => shell.trashItem(file), writer: desktopRenameWriter() }, uses);
+  });
+  ipcMain.handle('component:restoreRemoved', async (_event, { token }) => {
+    noteAppWrite();
+    return restoreRemovedComponent(token, removalUndo, desktopRenameWriter());
+  });
+
+  // Undo of creating a component: one step with the page edit that placed it.
+  ipcMain.handle('component:discard', async (_event, { projectPath, path: target, checksum, force, folders }) => {
+    noteAppWrite();
+    return {
+      outcome: discardComponentFile({
+        projectPath,
+        path: target,
+        checksum,
+        force: force === true,
+        componentFolders: projectFoldersFor(projectPath, 'components'),
+        folders: folders ?? [],
+      }),
+    };
   });
 
   // Component property edits validate their revision before updating project sources.
@@ -66,27 +137,25 @@ function registerComponentCreateHandlers({
     assert(undo !== undefined, 'An applied batch recorded its inverse');
     return ok({ ...result.value, undo });
   });
-  ipcMain.handle('component:revertProperties', (_event, { token }) =>
-    revertComponentProperties(token, propertyUndo, { documents, noteWrite: noteAppWrite }),
-  );
+  ipcMain.handle('component:previewPropertyRemoval', (_event, { projectPath, file, name }) => previewComponentPropertyRemoval({ projectPath, file }, name));
+  ipcMain.handle('component:revertProperties', (_event, { token }) => revertComponentProperties(token, propertyUndo, { documents, noteWrite: noteAppWrite }));
 
   // Which files hold instances of a component — the palette’s instance count.
-  ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) =>
-    componentUsage(definedFields({ projectPath, name, exclude })),
-  );
+  ipcMain.handle('component:usage', async (_event, { projectPath, name, exclude }) => componentUsage(definedFields({ projectPath, name, exclude })));
 
-  ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) => {
-    const rel = toPosix(path.relative(path.dirname(pagePath), targetPath));
-    const relative = rel.startsWith('.') ? rel : './' + rel;
-    let sourceRelative: string | undefined = undefined;
-    if (projectPath) {
-      const sourceDirectory = path.join(projectPath, 'src');
-      if (isPathDescendant(sourceDirectory, targetPath)) {
-        sourceRelative = toPosix(path.relative(sourceDirectory, targetPath));
-      }
-    }
-    return { relative, srcRelative: sourceRelative };
+  // Which files other than the page mention each class: Create component offers to move only the CSS of the classes none does.
+  ipcMain.handle('component:classUsage', async (_event, { projectPath, pagePath, classes }) => {
+    const pageRel = toPosix(path.relative(projectPath, pagePath));
+    assert(pageRel !== '', 'component:classUsage: the page is a file, not the project folder');
+    assert(!pageRel.startsWith('..'), 'component:classUsage: the page is inside the project');
+    assert(!path.isAbsolute(pageRel), 'component:classUsage: the page is on the project drive');
+    const found = await findClassMentions(projectPath, classes, pageRel, projectFoldersFor(projectPath, 'styles'));
+    return { classes: classes.map((name) => ({ name, files: found.get(name) ?? [] })) };
   });
+
+  ipcMain.handle('page:importPathFor', async (_event, { pagePath, targetPath, projectPath }) =>
+    componentImportPaths({ pagePath, targetPath, projectPath: projectPath ?? undefined }),
+  );
 
   // The same import, written for another page.
   //
@@ -109,10 +178,7 @@ function registerComponentCreateHandlers({
   });
 }
 
-function registerSelectionCopyHandler({
-  ipcMain,
-  clipboard,
-}: Pick<MainHost, 'clipboard' | 'ipcMain'>): void {
+function registerSelectionCopyHandler({ ipcMain, clipboard }: Pick<MainHost, 'clipboard' | 'ipcMain'>): void {
   ipcMain.handle('selection:copy', async (_event, state) => {
     const trail = selectionTrail(state);
     if (!trail) {

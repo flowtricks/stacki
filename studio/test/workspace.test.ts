@@ -18,10 +18,7 @@ test('an embedded studio copies the site without copying itself or its draft', a
     await writeFile(path.join(studio, 'package.json'), '{"name":"cms"}');
     await copyProject(root, workspace, studio);
     assert.deepEqual((await readdir(workspace)).sort(), ['package.json', 'src']);
-    assert.equal(
-      await readFile(path.join(workspace, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Site</h1>',
-    );
+    assert.equal(await readFile(path.join(workspace, 'src/pages/index.astro'), 'utf8'), '<h1>Site</h1>');
     assert.equal(await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'), '<h1>Site</h1>');
     await assert.rejects(() => copyProject(root, root, studio), /must not contain/);
   } finally {
@@ -43,10 +40,7 @@ test('matching image dependencies are reused and changed lockfiles trigger an in
     assert.equal(await linkImageDependencies(site, cached), false);
     await writeFile(path.join(site, 'package-lock.json'), 'original');
     assert.equal(await linkImageDependencies(site, cached), true);
-    assert.equal(
-      await realpath(path.join(site, 'node_modules')),
-      await realpath(path.join(cached, 'node_modules')),
-    );
+    assert.equal(await realpath(path.join(site, 'node_modules')), await realpath(path.join(cached, 'node_modules')));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { parsePreviewMessage } from '../../../vendor/stacki/src/features/preview/previewMessages';
-import {
-  frameContextPoint,
-  type ContextPoint,
-} from '../../../vendor/stacki/src/features/preview/contextPosition';
+import { frameContextPoint, type ContextPoint } from '../../../vendor/stacki/src/features/preview/contextPosition';
 
 export interface PreviewContextMenu extends ContextPoint {
   readonly generation: number;
@@ -22,12 +19,7 @@ export function usePreviewContextMenu(
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>): void => {
       const current = frame.current;
-      if (
-        !current ||
-        !origin ||
-        event.source !== current.contentWindow ||
-        event.origin !== origin
-      ) {
+      if (!current || !origin || event.source !== current.contentWindow || event.origin !== origin) {
         return;
       }
       const message = parsePreviewMessage(event.data);

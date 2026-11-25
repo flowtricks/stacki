@@ -1,9 +1,6 @@
 // The handoff deliberately contains no account identifiers, credentials or
 // computer paths. The agent reads project-specific information in the project.
-export function studioSetupPrompt(
-  version: string,
-  options: { readonly installed: boolean },
-): string {
+export function studioSetupPrompt(version: string, options: { readonly installed: boolean }): string {
   const releaseBase = `https://github.com/flowtricks/stacki-releases/releases/download/v${version}`;
   const installation = options.installed
     ? 'Studio is already installed in ./studio. Preserve its current version and configuration.'
@@ -14,6 +11,7 @@ an npm package or copy a developer's working Studio folder. Never overwrite an e
 studio folder.
 Validate the release paths and version before extracting. Copy templates/cloudflare to cloudflare
 for a new installation. Use the package's lockfile and scripts.`;
+  // i18n-ignore: the prompt is read by the person's coding agent, not shown as interface text.
   return `Set up Stacki Studio for this Astro project, including local preview and hosted editing.
 
 ${installation}
@@ -34,6 +32,19 @@ Consult current official Cloudflare and GitHub docs before provisioning.
 Contents read/write and Metadata read. Set the OAuth callback to the Studio origin plus
 /studio/auth/callback. Configure app/client/installation IDs and repository access controls.
 Use public App registration if collaborators outside the owner account must authorize it.
+3b. Ask me how people sign in to Studio: github (default), access (Cloudflare Zero Trust Access in
+front of /studio*; needs ACCESS_TEAM_DOMAIN and the application's ACCESS_AUD tag, no secrets),
+google (GOOGLE_CLIENT_ID, secret GOOGLE_CLIENT_SECRET, redirect URI <origin>/studio/auth/google/callback),
+oidc (OIDC_ISSUER, OIDC_CLIENT_ID, optional OIDC_NAME, secret OIDC_CLIENT_SECRET unless a public PKCE
+client, redirect URI <origin>/studio/auth/oidc/callback) or passkey (AUTH_BOOTSTRAP_ADMIN=passkey:owner, secret AUTH_SETUP_CODE of 16 to 200 characters that I choose and
+set myself; after deploying I open <origin>/studio/auth/passkey/bootstrap once to create the first passkey, then invite
+others from the Roles view). Write only
+the non-secret vars (AUTH_PROVIDER, those above, optional AUTH_ALLOWED_DOMAINS / AUTH_ALLOWED_EMAILS and
+AUTH_BOOTSTRAP_ADMIN such as google:me@example.com) into studio/cloudflare/wrangler.jsonc, never replacing an
+AUTH_PROVIDER that is already there without asking. Tell me to run each secret command myself
+(npx wrangler secret put GOOGLE_CLIENT_SECRET --config cloudflare/wrangler.jsonc); never ask me to
+paste a client secret to you. For access, remind me people must be allowed in the Access policy and
+listed in .stacki/roles.json. The GitHub App credentials stay required in every mode for publishing.
 4. Configure studio/cloudflare from the included templates. Create distinct resource names,
 a private R2 bucket, the container/Worker bindings, Studio routing and the isolated authenticated
 preview origin. Integrate the public site gateway and deployment revision endpoint according to
@@ -41,7 +52,7 @@ the guide. Preserve existing routes and hosting; present the proposed routing ch
 5. Guide me through entering GITHUB_PRIVATE_KEY, GITHUB_CLIENT_SECRET, SESSION_SECRET and
 CONTAINER_TOKEN using Wrangler secret prompts. Generate independent random values of at least
 32 bytes for the last two. Never put secrets in source, prompts, logs or public environment vars.
-Ignore .studio/, .studio-state/, .wrangler/, .env*, .dev.vars* and node_modules/ in Git and Docker.
+Ignore .studio/, .stacki/studio/, .wrangler/, .env*, .dev.vars* and node_modules/ in Git and Docker.
 Do not reuse another project's credentials, account IDs, drafts or saved browser sessions.
 6. Validate the Worker bundle and real container image build. Ask before provisioning billable
 resources or deploying. Deploy only after configuration and access controls are reviewed.

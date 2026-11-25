@@ -3,21 +3,19 @@
 // refuse everything else, including values past the wire bounds.
 // Methodology: one known-good value per variant must round-trip unchanged; each
 // known-bad shape (wrong discriminant, missing or mistyped field, out-of-range
-// line, text or path past its limit) must throw.
+// line, path past its limit) must throw. Text is bounded only by the platform's
+// string length, so a large text is accepted and the bound is pinned instead.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  parseOkResult,
-  parseResolvePathResult,
-  parseSymbolReadResult,
-  parseTextResult,
-} from '#dist/shared/ipc/ipcContract.js';
+import { parseOkResult, parseResolvePathResult, parseSymbolReadResult, parseTextResult } from '#dist/shared/ipc/ipcContract.js';
 import { BOUNDARY_LIMITS } from '#dist/shared/core/boundary.js';
+import { PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
 
-const textOverLimit = 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1);
+// Text is bounded only by the string: a longer one cannot be built, and Stacki has no product size limit.
+const textLarge = 'x'.repeat(4 * 1024 * 1024);
 const pathOverLimit = 'p'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1);
 
 test('a symbol read keeps every variant main returns', () => {
@@ -34,7 +32,7 @@ test('a symbol read keeps every variant main returns', () => {
   });
 });
 
-test('a symbol read refuses malformed and oversized shapes', () => {
+test('a symbol read refuses malformed shapes and over-long paths', () => {
   const good = { ok: true, rel: 'src/data.ts', text: 'x', line: 3 };
   const bad: readonly unknown[] = [
     undefined,
@@ -47,7 +45,6 @@ test('a symbol read refuses malformed and oversized shapes', () => {
     { ...good, rel: 'a\0b' },
     { ...good, rel: pathOverLimit },
     { ...good, text: undefined },
-    { ...good, text: textOverLimit },
     { ...good, line: -1 },
     { ...good, line: 1.5 },
     { ...good, line: Number.NaN },
@@ -56,6 +53,8 @@ test('a symbol read refuses malformed and oversized shapes', () => {
   for (const input of bad) {
     assert.throws(() => parseSymbolReadResult(input), `refused: ${JSON.stringify(input)}`);
   }
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.deepEqual(parseSymbolReadResult({ ...good, text: textLarge }), { ...good, text: textLarge });
 });
 
 test('a resolved path is ok with a bounded path, or a bare refusal', () => {
@@ -72,9 +71,10 @@ test('a resolved path is ok with a bounded path, or a bare refusal', () => {
 test('a text reply carries bounded text and a bare ok carries nothing else', () => {
   assert.deepEqual(parseTextResult({ text: '' }), { text: '' });
   assert.deepEqual(parseTextResult({ text: 'body', extra: 1 }), { text: 'body' });
-  for (const input of [jsonNull, {}, { text: 3 }, { text: textOverLimit }]) {
+  for (const input of [jsonNull, {}, { text: 3 }]) {
     assert.throws(() => parseTextResult(input));
   }
+  assert.equal(parseTextResult({ text: textLarge }).text.length, textLarge.length);
   assert.deepEqual(parseOkResult({ ok: true, note: 'x' }), { ok: true });
   for (const input of [jsonNull, undefined, {}, { ok: false }, { ok: 'true' }]) {
     assert.throws(() => parseOkResult(input), /OkResult|Expected object/);

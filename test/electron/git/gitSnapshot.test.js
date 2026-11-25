@@ -87,16 +87,9 @@ const caught = async (callback) => {
     write(directory, 'a.txt', 'one\n');
     write(directory, 'b.txt', 'two\n');
     const result = await snap.commit(git, { projectPath: directory, message: 'everything' });
-    check(
-      'saving with no picks saves all of it',
-      result.files === undefined,
-      JSON.stringify(result),
-    );
+    check('saving with no picks saves all of it', result.files === undefined, JSON.stringify(result));
     check('and the tree is clean after', (await sh(directory, 'status', '--porcelain')) === '');
-    check(
-      'with the message given',
-      (await sh(directory, 'log', '-1', '--format=%s')) === 'everything',
-    );
+    check('with the message given', (await sh(directory, 'log', '-1', '--format=%s')) === 'everything');
   }
 
   // --- Saving only some ----------------------------------------------------
@@ -133,11 +126,7 @@ const caught = async (callback) => {
     // sitting there, changed, exactly as it was.
     const left = await sh(directory, 'status', '--porcelain');
     check('the unpicked edit is still uncommitted', /b\.txt/.test(left), left);
-    check(
-      'and still says what it said',
-      read(directory, 'b.txt') === 'v2\n',
-      read(directory, 'b.txt'),
-    );
+    check('and still says what it said', read(directory, 'b.txt') === 'v2\n', read(directory, 'b.txt'));
     check('the unpicked new file is still there', /new\.txt/.test(left), left);
   }
 
@@ -167,17 +156,12 @@ const caught = async (callback) => {
     write(directory, 'a.txt', 'x\n');
     await snap.commit(git, { projectPath: directory, message: 'base' });
     write(directory, 'a.txt', 'y\n');
-    const { error } = await caught(() =>
-      snap.commit(git, { projectPath: directory, message: 'nothing', paths: [] }),
-    );
+    const { error } = await caught(() => snap.commit(git, { projectPath: directory, message: 'nothing', paths: [] }));
     // An empty list is a mistake, not "commit everything" — the difference
     // between the two is the whole feature.
     check('picking nothing is refused', !!error, error);
     check('and says so plainly', /pick|choose/i.test(error || ''), error);
-    check(
-      'and nothing was committed',
-      (await sh(directory, 'log', '-1', '--format=%s')) === 'base',
-    );
+    check('and nothing was committed', (await sh(directory, 'log', '-1', '--format=%s')) === 'base');
   }
 
   // --- Putting one file back ------------------------------------------------
@@ -211,11 +195,7 @@ const caught = async (callback) => {
       ref: first,
       path: 'src/pages/later.astro',
     });
-    check(
-      'a file that did not exist yet is refused',
-      missing.ok === false,
-      JSON.stringify(missing),
-    );
+    check('a file that did not exist yet is refused', missing.ok === false, JSON.stringify(missing));
     check('and explained', /added later/i.test(missing.message || ''), missing.message);
     check('without creating it', !exists(directory, 'src/pages/later.astro'));
   }
@@ -233,11 +213,7 @@ const caught = async (callback) => {
 
     const result = await snap.restoreProject(git, { projectPath: directory, ref: first });
     check('the project goes back', result.ok === true, JSON.stringify(result));
-    check(
-      'files go back to what they said',
-      read(directory, 'keep.txt') === 'v1\n',
-      read(directory, 'keep.txt'),
-    );
+    check('files go back to what they said', read(directory, 'keep.txt') === 'v1\n', read(directory, 'keep.txt'));
     // THE case. A checkout by pathspec leaves this file behind, and `clean`
     // will not remove it because it is tracked — so "how it was" would be the
     // old project plus a file that did not exist then.
@@ -249,10 +225,7 @@ const caught = async (callback) => {
     // The branch does not move: going back is itself something to come back
     // from, and moving the branch would silently drop every commit since.
     check('history is not rewritten', (await sh(directory, 'log', '-1', '--format=%s')) === 'two');
-    check(
-      'and the difference is visible as changes',
-      (await sh(directory, 'status', '--porcelain')) !== '',
-    );
+    check('and the difference is visible as changes', (await sh(directory, 'status', '--porcelain')) !== '');
   }
 
   // --- Going back over unsaved work ----------------------------------------
@@ -268,9 +241,7 @@ const caught = async (callback) => {
 
     // With no way to park it, this must refuse rather than write over work
     // that exists nowhere else.
-    const { error } = await caught(() =>
-      snap.restoreProject(git, { projectPath: directory, ref: first }),
-    );
+    const { error } = await caught(() => snap.restoreProject(git, { projectPath: directory, ref: first }));
     check('unsaved work with nowhere to go stops it', !!error, error);
     check('and the work is untouched', read(directory, 'a.txt') === 'work in progress\n');
 

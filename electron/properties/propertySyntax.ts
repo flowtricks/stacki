@@ -2,7 +2,10 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
+import { isAstroProps, syntaxNodes } from '../parse/astroSyntax';
+import { frontmatterOf } from '../parse/astroFence';
 
 export interface SourceEdit {
   readonly start: number;
@@ -19,23 +22,16 @@ export interface PropertySyntax {
 
 export function readPropertySyntax(source: string): PropertySyntax {
   assert(source.length <= PROPERTY_LIMITS.sourceCharsMax, 'Component source is bounded');
-  const match = /^(?:\uFEFF)?---[^\S\r\n]*\r?\n([\s\S]*?)^---[^\S\r\n]*(?:\r?\n|$)/m.exec(source);
-  const found = match?.index === 0 ? match : undefined;
-  const frontmatter = found?.[1] ?? '';
-  const start = found ? found[0].indexOf('\n') + 1 : 0;
+  const found = frontmatterOf(source);
+  const frontmatter = found?.code ?? '';
+  const start = found?.codeStart ?? 0;
   assert(start >= 0, 'Frontmatter starts inside source');
   return {
     source,
     start,
     end: start + frontmatter.length,
     frontmatter,
-    syntax: ts.createSourceFile(
-      'component.ts',
-      frontmatter,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    ),
+    syntax: ts.createSourceFile('component.ts', frontmatter, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS),
   };
 }
 
@@ -45,9 +41,7 @@ export function replaceFrontmatter(document: PropertySyntax, frontmatter: string
   if (document.start === 0) {
     return `---\n${frontmatter}\n---\n${document.source}`;
   }
-  return (
-    document.source.slice(0, document.start) + frontmatter + document.source.slice(document.end)
-  );
+  return document.source.slice(0, document.start) + frontmatter + document.source.slice(document.end);
 }
 
 export function applySourceEdits(source: string, edits: readonly SourceEdit[]): string {
@@ -75,21 +69,19 @@ export function syntaxError(source: string): string | undefined {
       jsx: ts.JsxEmit.Preserve,
     },
   });
-  const diagnostic = result.diagnostics?.find(
-    (item) => item.category === ts.DiagnosticCategory.Error,
-  );
+  const diagnostic = result.diagnostics?.find((item) => item.category === ts.DiagnosticCategory.Error);
   return diagnostic ? ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n') : undefined;
 }
 
 export function validatePropertyCode(type: string, expression: string): Result<void> {
   if (!type.trim()) {
-    return err({ code: 'type', message: 'Enter a TypeScript type.' });
+    return err(refusal('type', 'props.syntax.typeEmpty'));
   }
   const typeSource = `type PropertyType = ${type};`;
   const typeFile = ts.createSourceFile('type.ts', typeSource, ts.ScriptTarget.Latest, true);
   const declaration = typeFile.statements[0];
   if (typeFile.statements.length !== 1 || !declaration || !ts.isTypeAliasDeclaration(declaration)) {
-    return err({ code: 'type', message: 'Enter one TypeScript type, without declarations.' });
+    return err(refusal('type', 'props.syntax.typeSingle'));
   }
   const typeError = syntaxError(typeSource);
   if (typeError) {
@@ -97,18 +89,9 @@ export function validatePropertyCode(type: string, expression: string): Result<v
   }
   if (expression.trim()) {
     const expressionSource = `const value = (${expression});`;
-    const expressionFile = ts.createSourceFile(
-      'default.ts',
-      expressionSource,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const expressionFile = ts.createSourceFile('default.ts', expressionSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     if (expressionFile.statements.length !== 1) {
-      return err({
-        code: 'default',
-        message: 'Enter one default expression, without declarations.',
-      });
+      return err(refusal('default', 'props.syntax.defaultSingle'));
     }
     const expressionError = syntaxError(expressionSource);
     if (expressionError) {
@@ -118,52 +101,9 @@ export function validatePropertyCode(type: string, expression: string): Result<v
   return ok(undefined);
 }
 
-export function syntaxNodes(root: ts.Node): readonly ts.Node[] {
-  const pending = [root];
-  const output: ts.Node[] = [];
-  // Every node is visited once and the node budget caps both work and memory.
-  for (let index = 0; index < pending.length; index += 1) {
-    assert(pending.length <= PROPERTY_LIMITS.nodesMax, 'TypeScript node budget');
-    const node = pending[index];
-    assert(node !== undefined, 'Queued syntax node exists');
-    output.push(node);
-    node.forEachChild((child) => {
-      pending.push(child);
-    });
-  }
-  return output;
-}
-
-export function isAstroProps(node: ts.Node | undefined): boolean {
-  if (!node) {
-    return false;
-  }
-  if (ts.isAsExpression(node) || ts.isParenthesizedExpression(node)) {
-    return isAstroPropsUnwrap(node);
-  }
-  return (
-    ts.isPropertyAccessExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Astro' &&
-    node.name.text === 'props'
-  );
-}
-// `(Astro.props as Props)` nests a wrapper or two; a hundred is a generated file.
-const PROPS_WRAPPER_DEPTH_MAX = 128;
-function isAstroPropsUnwrap(node: ts.Node): boolean {
-  let current = node;
-  for (let depth = 0; depth < PROPS_WRAPPER_DEPTH_MAX; depth += 1) {
-    if (ts.isAsExpression(current) || ts.isParenthesizedExpression(current)) {
-      current = current.expression;
-    } else {
-      return isAstroProps(current);
-    }
-  }
-  assert(false, 'Astro.props wrapper depth is bounded');
-}
-export function propertyKey(
-  node: ts.PropertyName | ts.BindingName | undefined,
-): string | undefined {
+// The syntax walk and the `Astro.props` test live with the parsers, which read props too.
+export { isAstroProps, syntaxNodes };
+export function propertyKey(node: ts.PropertyName | ts.BindingName | undefined): string | undefined {
   if (!node) {
     return undefined;
   }
@@ -173,16 +113,13 @@ export function propertyKey(
   return undefined;
 }
 
+/** A prop name as a member or key is written: bare when it is an identifier, quoted when not (`"aria-label"`). */
+export function propertyNameText(name: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name);
+}
+
 export function defaultExpression(source: string): string {
-  const syntax = ts.createSourceFile(
-    'default.ts',
-    `const value = (${source});`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const comma = syntaxNodes(syntax).some(
-    (node) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken,
-  );
+  const syntax = ts.createSourceFile('default.ts', `const value = (${source});`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const comma = syntaxNodes(syntax).some((node) => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.CommaToken);
   return comma ? `(${source})` : source;
 }

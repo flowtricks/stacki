@@ -1,0 +1,226 @@
+{
+ "docs": [
+  {
+   "id": 653,
+   "parent": 7,
+   "version": {
+    "title": "Post 007 zebra",
+    "slug": "post-7",
+    "tagline": "Tagline 7",
+    "body": {
+     "root": {
+      "type": "root",
+      "format": "",
+      "indent": 0,
+      "version": 1,
+      "direction": "ltr",
+      "children": [
+       {
+        "type": "paragraph",
+        "format": "",
+        "indent": 0,
+        "version": 1,
+        "direction": "ltr",
+        "textFormat": 0,
+        "children": [
+         {
+          "mode": "normal",
+          "text": "Body of post 7",
+          "type": "text",
+          "style": "",
+          "detail": 0,
+          "format": 0,
+          "version": 1
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "views": 7,
+    "featured": false,
+    "kind": "news",
+    "publishedAt": "2024-01-08T06:00:00.000Z",
+    "author": 1,
+    "categories": [
+     2
+    ],
+    "cover": null,
+    "meta": {
+     "description": null
+    },
+    "contact": null,
+    "mode": null,
+    "snippet": null,
+    "extra": null,
+    "tags": [],
+    "links": [
+     {
+      "id": "6af6fc1673ae4c05fd86cf10",
+      "label": "L7",
+      "url": "https://example.test/7"
+     }
+    ],
+    "updatedAt": "2026-11-13T12:33:27.600Z",
+    "createdAt": "2026-11-13T12:01:26.268Z",
+    "_status": "draft"
+   },
+   "createdAt": "2026-11-13T12:01:26.268Z",
+   "updatedAt": "2026-11-13T12:33:27.600Z",
+   "snapshot": null,
+   "publishedLocale": null,
+   "latest": true
+  },
+  {
+   "id": 652,
+   "parent": 7,
+   "version": {
+    "title": "Post 007 zebra",
+    "slug": "post-7",
+    "tagline": "Tagline 7",
+    "body": {
+     "root": {
+      "type": "root",
+      "format": "",
+      "indent": 0,
+      "version": 1,
+      "direction": "ltr",
+      "children": [
+       {
+        "type": "paragraph",
+        "format": "",
+        "indent": 0,
+        "version": 1,
+        "direction": "ltr",
+        "textFormat": 0,
+        "children": [
+         {
+          "mode": "normal",
+          "text": "Body of post 7",
+          "type": "text",
+          "style": "",
+          "detail": 0,
+          "format": 0,
+          "version": 1
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "views": 7,
+    "featured": false,
+    "kind": "news",
+    "publishedAt": "2024-01-08T06:00:00.000Z",
+    "author": 1,
+    "categories": [
+     2
+    ],
+    "cover": null,
+    "meta": {
+     "description": null
+    },
+    "contact": null,
+    "mode": null,
+    "snippet": null,
+    "extra": null,
+    "tags": [],
+    "links": [
+     {
+      "id": "6af6fc1673ae4c05fd86cf10",
+      "label": "L7",
+      "url": "https://example.test/7"
+     }
+    ],
+    "updatedAt": "2026-11-13T12:33:27.465Z",
+    "createdAt": "2026-11-13T12:01:26.268Z",
+    "_status": "published"
+   },
+   "createdAt": "2026-11-13T12:01:26.268Z",
+   "updatedAt": "2026-11-13T12:33:27.474Z",
+   "snapshot": null,
+   "publishedLocale": null,
+   "latest": false
+  },
+  {
+   "id": 651,
+   "parent": 7,
+   "version": {
+    "title": "Post 007 zebra",
+    "slug": "post-7",
+    "tagline": "Tagline 7",
+    "body": {
+     "root": {
+      "type": "root",
+      "format": "",
+      "indent": 0,
+      "version": 1,
+      "direction": "ltr",
+      "children": [
+       {
+        "type": "paragraph",
+        "format": "",
+        "indent": 0,
+        "version": 1,
+        "direction": "ltr",
+        "textFormat": 0,
+        "children": [
+         {
+          "mode": "normal",
+          "text": "Body of post 7",
+          "type": "text",
+          "style": "",
+          "detail": 0,
+          "format": 0,
+          "version": 1
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "views": 12345,
+    "featured": false,
+    "kind": "news",
+    "publishedAt": "2024-01-08T06:00:00.000Z",
+    "author": 1,
+    "categories": [
+     2
+    ],
+    "cover": null,
+    "meta": {
+     "description": null
+    },
+    "contact": null,
+    "mode": null,
+    "snippet": null,
+    "extra": null,
+    "tags": [],
+    "links": [
+     {
+      "id": "6af6fc1673ae4c05fd86cf10",
+      "label": "L7",
+      "url": "https://example.test/7"
+     }
+    ],
+    "updatedAt": "2026-11-13T12:33:27.420Z",
+    "createdAt": "2026-11-13T12:01:26.268Z",
+    "_status": "draft"
+   },
+   "createdAt": "2026-11-13T12:33:27.420Z",
+   "updatedAt": "2026-11-13T12:33:27.420Z",
+   "snapshot": null,
+   "publishedLocale": null,
+   "latest": false
+  }
+ ],
+ "hasNextPage": true,
+ "hasPrevPage": false,
+ "limit": 3,
+ "nextPage": 2,
+ "page": 1,
+ "pagingCounter": 1,
+ "prevPage": null,
+ "totalDocs": 20,
+ "totalPages": 7
+}

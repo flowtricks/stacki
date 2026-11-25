@@ -1,0 +1,585 @@
+/* The composer (ChatComposer.tsx, ComposerInput.tsx, ComposerStatusLine.tsx). Surfaces are separated by background fills, never borders. */
+.ai-compose {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-commands {
+  position: absolute;
+  bottom: 100%;
+  inset-inline: 0;
+  margin-block-end: 4px;
+  background: var(--bg-panel);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  z-index: 5;
+}
+/* The `/` menu's rows (SlashMenu.tsx): icon, name over a one-line description, and a skill's source at the end. */
+.ai-commands .ai-command {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  text-align: start;
+}
+.ai-commands .ai-command.on {
+  background: var(--bg-active);
+}
+.ai-command-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim);
+}
+.ai-command-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.ai-command-name {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11.5px;
+}
+.ai-command-description {
+  font-size: 11px;
+  color: var(--text-faint);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-command-source {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.ai-command-skeleton {
+  min-height: 34px;
+}
+/* Nothing matches: the shared empty-state card fills the menu. */
+.ai-commands.ai-commands-empty {
+  padding: 0;
+  overflow: hidden;
+}
+/* The box: one slim row. The "+" and the right-hand buttons sit on the bottom edge so they stay put as the text grows. */
+.ai-composer {
+  /* Roomier and brighter than the panel, like Claude's own bar: a taller single line (about 50px), rounder corners and a fill a step lighter than the input fill. */
+  background: color-mix(in srgb, var(--bg-input), var(--text) 5%);
+  border-radius: 16px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-composer.is-blocked .ai-editor .cm-placeholder {
+  color: var(--text-dim);
+}
+.ai-composer.is-blocked .ai-send {
+  background: transparent;
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.ai-composer.is-dragging {
+  background: var(--accent-soft);
+}
+/* The input (ComposerInput.tsx, a CodeMirror editor): one line when empty, growing with the text up to a cap. */
+.ai-composer .ai-editor {
+  flex: 1;
+  min-width: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.ai-composer .ai-editor .cm-editor {
+  background: transparent;
+  color: var(--text);
+  font-size: 14.5px;
+}
+.ai-composer .ai-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.ai-composer .ai-editor .cm-content {
+  min-height: 32px;
+  padding: 5px 4px;
+  font-family: inherit;
+  line-height: 22px;
+  caret-color: var(--text);
+}
+.ai-composer .ai-editor .cm-line {
+  padding: 0;
+}
+.ai-composer .ai-editor .cm-placeholder {
+  /* One line: a placeholder that wraps would double the slim box in the docked panel's width. */
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  vertical-align: top;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+.ai-plus {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+.ai-plus.is-open {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-composer-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: 32px;
+}
+.ai-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ai-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-active);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  max-width: 180px;
+}
+.ai-attachment img {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+.ai-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-tool-button.is-listening {
+  color: var(--red);
+}
+/* Send and Stop as Claude's composer draws them: plain white icon buttons the size of the microphone, a subtle
+   hover fill, no coloured background; Send is not drawn at all while there is nothing to send. */
+.ai-send {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text);
+}
+.ai-send:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.ai-send:active:not(:disabled) {
+  background: var(--bg-pressed);
+}
+/* It appears with a short fade and slide when the box gets something to send; instant with reduced motion. */
+.ai-send:not(.ai-stop) {
+  animation: ai-send-in 140ms ease-out;
+}
+@keyframes ai-send-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-send:not(.ai-stop) {
+    animation: none;
+  }
+}
+.ai-stop-square {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #fff;
+}
+.ai-compose-problem {
+  font-size: 11px;
+  color: var(--red);
+}
+.ai-compose-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* OpenAI's mark is monochrome: drawn in the full text colour, as OpenAI shows its white mark on dark. */
+.ai-logo-codex {
+  color: var(--text);
+}
+
+/* Queued messages, above the box (QueuedPrompts.tsx). */
+.ai-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ai-queued {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding-block: 3px;
+  padding-inline: 10px 4px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  font-size: 11.5px;
+}
+.ai-queued-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.ai-queued-send {
+  flex: none;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-queued-remove {
+  flex: none;
+  padding: 4px;
+  color: var(--text-faint);
+}
+.ai-queue-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-block: 0;
+  padding-inline: 10px 4px;
+  font-size: 11px;
+  color: var(--amber);
+}
+
+/* The status line under the box (ComposerStatusLine.tsx): quiet text chips and the context ring. */
+.ai-status-line {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 2px;
+}
+.ai-status-spacer {
+  flex: 1;
+}
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.ai-chip:hover:not(:disabled),
+.ai-chip.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-chip:disabled {
+  opacity: 0.55;
+}
+/* A mode that asks for nothing reads as quietly as any other; the warning colour shows only under the pointer, and the tooltip says why. */
+.ai-chip.is-danger:hover:not(:disabled),
+.ai-chip.is-danger.is-open {
+  color: color-mix(in srgb, var(--red), #fff 30%);
+}
+.ai-chip-logo {
+  display: inline-flex;
+  flex: none;
+}
+.ai-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chip-quiet {
+  flex: none;
+  color: var(--text-faint);
+}
+.ai-ring {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+/* The context panel the ring opens (ContextRing.tsx): one compact card a clear step lighter than the composer, no borders. */
+.ai-ring-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: min(260px, calc(100vw - 16px));
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-input), var(--text) 14%);
+  color: var(--text);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.ai-ring-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+.ai-ring-percent {
+  font-variant-numeric: tabular-nums;
+}
+.ai-ring-percent[data-tone='amber'] {
+  color: #ffb340;
+}
+.ai-ring-percent[data-tone='red'] {
+  color: var(--red);
+}
+.ai-ring-tokens {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* The bar: a dark track, a bright fill (blue, amber from 70%, red from 90%), and a tick where auto-compaction starts. */
+.ai-ring-bar {
+  position: relative;
+  block-size: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+}
+.ai-ring-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.ai-ring-bar[data-tone='amber'] .ai-ring-fill {
+  background: #ffb340;
+}
+.ai-ring-bar[data-tone='red'] .ai-ring-fill {
+  background: var(--red);
+}
+.ai-ring-tick {
+  position: absolute;
+  inset-block: -3px;
+  inline-size: 2px;
+  border-radius: 1px;
+  background: var(--text);
+}
+/* One row: Compact and the auto-compact picker side by side, each on one line. */
+.ai-ring-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-ring-compact {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  white-space: nowrap;
+}
+.ai-ring-compact:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+.ai-ring-compact:disabled {
+  opacity: 0.4;
+}
+.ai-ring-auto {
+  display: inline-flex;
+  flex: 1;
+  min-inline-size: 0;
+}
+.ai-ring-auto > * {
+  inline-size: 100%;
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+
+/* Voice input: the waveform and the phrase being spoken sit in one quiet line under the box. */
+.ai-voice-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 20px;
+  padding-inline: 2px;
+}
+.ai-wave {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  block-size: 18px;
+  color: var(--red);
+}
+.ai-wave-bar {
+  inline-size: 2px;
+  block-size: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: center;
+  will-change: transform;
+}
+/* Before the microphone is open the bars are a skeleton: a soft pulse, no words. */
+.ai-wave.is-starting .ai-wave-bar {
+  opacity: 0.35;
+  animation: ai-wave-pulse 1s ease-in-out infinite;
+}
+@keyframes ai-wave-pulse {
+  50% {
+    opacity: 0.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-wave.is-starting .ai-wave-bar {
+    animation: none;
+  }
+}
+.ai-voice-text {
+  min-inline-size: 0;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-voice-text.is-hint {
+  color: var(--text-faint);
+}
+/* What a built-in command did ("Copied the chat as Markdown"): quiet, beside where a problem would show. */
+.ai-compose-note {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* The words being dictated, after the text and not part of it (dictationDraft.ts): dimmer and italic,
+   pulsing while Whisper decodes, always inline in the line that is there, so the box never grows for it.
+   Reduced motion keeps the dim style without the pulse. */
+.ai-dictation-draft {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.ai-dictation-draft.is-decoding {
+  animation: ai-dictation-draft-pulse 1.2s ease-in-out infinite;
+}
+/* The draft takes no room of its own: while it shows, the placeholder steps aside instead of sharing the line. */
+.cm-content:has(.ai-dictation-draft) .cm-placeholder {
+  display: none;
+}
+@keyframes ai-dictation-draft-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-dictation-draft.is-decoding {
+    animation: none;
+  }
+}
+
+/* A decode with no words to show yet pulses the microphone itself: no new element, no new line. */
+.ai-tool-button.is-decoding {
+  animation: ai-dictation-draft-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-tool-button.is-decoding {
+    animation: none;
+  }
+}
+
+/* The footer row and the voice line share one grid cell (ChatComposer.tsx): the footer sets the height and
+   stays in the layout while hidden, the voice line fades in over it, so nothing moves. */
+.ai-compose-footer {
+  display: grid;
+}
+.ai-compose-footer > * {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+.ai-compose-footer-status {
+  transition: opacity 120ms ease;
+}
+.ai-compose-footer.is-dictating .ai-compose-footer-status {
+  visibility: hidden;
+  opacity: 0;
+}
+.ai-compose-footer-voice {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  animation: ai-compose-footer-in 120ms ease;
+}
+.ai-compose-footer-voice .ai-voice-line {
+  min-block-size: 0;
+  block-size: 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+@keyframes ai-compose-footer-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-compose-footer-status {
+    transition: none;
+  }
+  .ai-compose-footer-voice {
+    animation: none;
+  }
+}

@@ -29,11 +29,7 @@ export interface RenamedAttributes<T> {
   readonly attrOrder?: string[];
 }
 
-export function renamedAttr<T>(
-  node: AttributeOwner<T>,
-  oldName: string,
-  newName: string,
-): RenamedAttributes<T> | undefined {
+export function renamedAttr<T>(node: AttributeOwner<T>, oldName: string, newName: string): RenamedAttributes<T> | undefined {
   const props = node.props;
   if (props === undefined || !Object.hasOwn(props, oldName)) {
     return undefined;
@@ -55,8 +51,6 @@ export function renamedAttr<T>(
   if (order === undefined) {
     return { props: next };
   }
-  const attrOrder = order
-    .filter((name) => name !== newName)
-    .map((name) => (name === oldName ? newName : name));
+  const attrOrder = order.filter((name) => name !== newName).map((name) => (name === oldName ? newName : name));
   return { props: next, attrOrder };
 }

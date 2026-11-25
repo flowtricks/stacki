@@ -5,34 +5,71 @@ import { definedFields } from '../../shared/core/boundary';
 import { readPublishConfig } from '../project/publishConfig';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import type { GitInfo } from '../lib/mainTypes';
-import { mergeBranch, deleteBranch, switchBranch, resolveMerge } from '../git/gitBranches';
+import { mergeBranch, deleteBranch, switchBranch, resolveMerge, readDefaultBranch } from '../git/gitBranches';
+import { pullBranch, readIncomingCommits } from '../git/gitPull';
 import * as gitHistory from '../git/gitHistory';
 import { readCommitDiff } from '../git/gitCommitDiff';
 import * as gitSnapshot from '../git/gitSnapshot';
 import { capture } from '../lib/mainHelpers';
 import { run, git } from '../lib/nodeTools';
-import {
-  parkBranch,
-  unparkBranch,
-  currentBranch,
-  readGitLog,
-  readGitIdentity,
-  readGitParked,
-} from '../git/gitParking';
+import { parkBranch, unparkBranch, currentBranch, readGitLog, readGitIdentity, readGitParked } from '../git/gitParking';
 import type { MainHost } from './mainHost';
+import { registerGitAvatarHandler } from './gitAvatarHandlers';
+import { registerGitHubUserSearchHandler } from './githubUserSearchHandlers';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
+import { referencingIpc } from '../lib/referencingIpc';
+import type { createIpcRegistrar } from '../lib/ipcRegistrar';
+import { explainGitFailure, explainingGitFailures } from '../git/gitFailure';
+import { projectPrefix, readHead, requireValidBranchName } from '../git/gitState';
+import { parseStatusRecords } from '../git/gitHistory';
+import { MAIN_LIMITS } from '../lib/mainLimits';
+import { toRecord } from '../../shared/core/record';
+
+type Registrar = ReturnType<typeof createIpcRegistrar>;
+
+// Every failure leaving a git channel goes through `explainGitFailure`: a locked index, a refused sign-in or a missing identity reach the
+// person as the sentence that says what to do, never as git's raw output with a command line in front of it.
+function explainingIpc(ipcMain: { readonly handle: Registrar }): { readonly handle: Registrar } {
+  const handle: Registrar = (channel, listener) => {
+    ipcMain.handle(channel, (event, payload) => explainingGitFailures(async () => listener(event, payload)));
+  };
+  return { handle };
+}
 
 export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
-  registerGitInfoHandler(host);
-  registerGitGhStatusHandlers(host);
-  registerGitUnparkHandlers(host);
-  registerGitPublishHandler(host);
+  // Our own refusals (a branch changed, a merge went stale) carry a reference to their translation; this keeps it across IPC.
+  const referencing = { ipcMain: explainingIpc(referencingIpc(host.ipcMain)) };
+  registerGitInfoHandler(referencing);
+  registerGitGhStatusHandlers(referencing);
+  registerGitUnparkHandlers(referencing);
+  registerGitPublishHandler(referencing);
+  registerGitPullHandler(referencing);
+  registerGitAvatarHandler(host);
+  registerGitHubUserSearchHandler(host);
+}
+
+/**
+ * Whether the folder is inside a repository's working tree. "Not a repository" is an answer; git missing, or refusing the folder because
+ * another user owns it, is a failure the person must be told about, because answering "not a repository" there would offer to initialise
+ * a new repository on top of an existing one (or one that cannot be created at all).
+ */
+async function isWorkTree(projectPath: string): Promise<boolean> {
+  try {
+    // A bare repository, or a folder inside `.git`, answers "false" with success: there are no files to work on there.
+    return (await git(projectPath, ['rev-parse', '--is-inside-work-tree'])).stdout.trim() === 'true';
+  } catch (error: unknown) {
+    const code = toRecord(error)?.['code'];
+    const explained = explainGitFailure(error);
+    if (code === 'ENOENT' || (explained instanceof ReferencedError && explained.messageRef.key === 'git.error.unsafeDirectory')) {
+      throw explained;
+    }
+    return false;
+  }
 }
 
 function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
   ipcMain.handle('git:info', async (_event, projectPath) => {
-    try {
-      await git(projectPath, ['rev-parse', '--is-inside-work-tree']);
-    } catch {
+    if (!(await isWorkTree(projectPath))) {
       return { isRepo: false as const };
     }
     const info: GitInfo = {
@@ -68,27 +105,19 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     } catch {
       /* empty repo */
     }
+    info.defaultBranch = await readDefaultBranch(git, projectPath, info.trunk);
     try {
-      info.remote =
-        (await git(projectPath, ['remote', 'get-url', 'origin'])).stdout.trim() || undefined;
+      info.remote = (await git(projectPath, ['remote', 'get-url', 'origin'])).stdout.trim() || undefined;
     } catch {
       info.remote = undefined;
     }
-    try {
-      const out = (await git(projectPath, ['status', '--porcelain'])).stdout;
-      // Porcelain v1 is "XY path" — two status columns, a space, then the path
-      // (renames as "old -> new"). Don't trim the line before slicing: the
-      // first column is a space for worktree-only changes.
-      const lines = out.split('\n').filter((line) => line.trim());
-      info.dirty = lines.length > 0;
-      info.dirtyFiles = lines.slice(0, 50).map((line) => {
-        const filePath = line.slice(3);
-        const arrow = filePath.lastIndexOf(' -> ');
-        return (arrow === -1 ? filePath : filePath.slice(arrow + 4)).replace(/^"|"$/g, '');
-      });
-    } catch {
-      /* ignore */
-    }
+    // A failed status is not "clean": reporting `dirty: false` there would let a switch or a publish go ahead as if nothing were
+    // unsaved, so the failure is thrown and the panel says so. `-z` and the prefix give project-relative, unquoted paths.
+    const prefix = await projectPrefix(git, projectPath);
+    const out = (await git(projectPath, ['status', '--porcelain=v1', '-z', '--', '.'])).stdout;
+    const changed = parseStatusRecords(out, prefix, MAIN_LIMITS.statusFilesMax);
+    info.dirty = changed.length > 0;
+    info.dirtyFiles = changed.slice(0, 50).map((file) => file.path);
     // Without an upstream there's no count to give — and "0 ahead" would read
     // as "nothing to push" when in fact the branch has never been pushed at
     // all, so the two cases have to stay distinguishable.
@@ -100,9 +129,7 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     }
     if (info.hasUpstream) {
       try {
-        const counts = (
-          await git(projectPath, ['rev-list', '--count', '--left-only', 'HEAD...@{upstream}'])
-        ).stdout.trim();
+        const counts = (await git(projectPath, ['rev-list', '--count', '--left-only', 'HEAD...@{upstream}'])).stdout.trim();
         info.ahead = parseInt(counts, 10) || 0;
       } catch {
         info.ahead = 0;
@@ -140,25 +167,32 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
   });
 
   ipcMain.handle('git:init', async (_event, projectPath) => {
-    await git(projectPath, ['init', '-b', 'main']);
+    try {
+      await git(projectPath, ['init', '-b', 'main']);
+    } catch {
+      // Git older than 2.28 has no `-b`. Initialise, then point HEAD at main, which is what `-b` does.
+      await git(projectPath, ['init']);
+      await git(projectPath, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    }
     return { ok: true as const };
   });
 
-  // Switching branches. The behaviour, and why it tries before it asks, is in
-  // gitBranches.js; park/unpark are handed in because they live here.
-  ipcMain.handle('git:checkout', async (_event, { projectPath, branch, create, parkFirst }) => {
+  // Keep drafts on their original branches, including edits Git could carry across.
+  ipcMain.handle('git:checkout', async (_event, { projectPath, branch, create }) => {
     const result = await switchBranch(git, {
       projectPath,
       branch,
-      ...definedFields({ create, parkFirst }),
-      park: async () => parkBranch(projectPath, await currentBranch(projectPath)),
+      ...definedFields({ create }),
+      park: (from) => parkBranch(projectPath, from),
       unpark: (from) => unparkBranch(projectPath, from),
     });
     if (!result.ok) {
       return result;
     }
-    // Whatever was last left on this branch comes back out, however the switch
-    // was made — that half is always wanted.
+    if (create || result.from === branch) {
+      return { ...result, parkedFrom: undefined, restored: false };
+    }
+    // Only this destination's drafts come back; the source branch stays parked.
     const back = await unparkBranch(projectPath, branch);
     return { ...result, parkedFrom: result.parked ? result.from : undefined, ...back };
   });
@@ -166,27 +200,13 @@ function registerGitGhStatusHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): vo
   ipcMain.handle('git:log', async (_event, payload) => readGitLog(payload));
   ipcMain.handle('git:commitDiff', async (_event, payload) => readCommitDiff(git, payload));
 
-  ipcMain.handle('git:commitFiles', async (_event, { projectPath, ref }) =>
-    gitHistory.describeFiles(await gitHistory.commitFiles(git, { projectPath, ref })),
-  );
-
   // Every file in the project, with what has happened to each — the file
   // browser's list, and the same status the commit picker reads.
-  ipcMain.handle('git:allFiles', async (_event, { projectPath }) =>
-    gitHistory.describeFiles(await gitHistory.allFiles(git, { projectPath })),
-  );
+  ipcMain.handle('git:allFiles', async (_event, { projectPath }) => gitHistory.describeFiles(await gitHistory.allFiles(git, { projectPath })));
 
-  ipcMain.handle('git:status', async (_event, { projectPath }) =>
-    gitHistory.describeFiles(await gitHistory.status(git, { projectPath })),
-  );
+  ipcMain.handle('git:status', async (_event, { projectPath }) => gitHistory.describeFiles(await gitHistory.status(git, { projectPath })));
 
-  ipcMain.handle('git:fileAt', async (_event, { projectPath, ref, path: filePath }) =>
-    gitHistory.fileAt(git, { projectPath, ref, path: filePath }),
-  );
-
-  ipcMain.handle('git:worktrees', async (_event, { projectPath }) =>
-    gitHistory.worktrees(git, { projectPath }),
-  );
+  ipcMain.handle('git:worktrees', async (_event, { projectPath }) => gitHistory.worktrees(git, { projectPath }));
 
   // Setting work aside and picking it back up, on their own. The switch has done
   // this internally for a while; a merge that finds unsaved work in its way needs
@@ -204,27 +224,17 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
     return unparkBranch(projectPath, branch);
   });
 
-  ipcMain.handle('git:merge', async (_event, { projectPath, branch }) =>
-    mergeBranch(git, { projectPath, branch }),
-  );
+  ipcMain.handle('git:merge', async (_event, { projectPath, branch }) => mergeBranch(git, { projectPath, branch }));
 
   // Finishing a merge the user has chosen their way through. The conflicting
   // files come back from git:merge with both versions; this applies the answers.
-  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) =>
-    resolveMerge(git, definedFields({ projectPath, branch, choices })),
-  );
+  ipcMain.handle('git:resolveMerge', async (_event, { projectPath, branch, choices }) => resolveMerge(git, definedFields({ projectPath, branch, choices })));
 
-  ipcMain.handle('git:deleteBranch', async (_event, { projectPath, branch, force }) =>
-    deleteBranch(git, definedFields({ projectPath, branch, force })),
-  );
+  ipcMain.handle('git:deleteBranch', async (_event, { projectPath, branch, force }) => deleteBranch(git, definedFields({ projectPath, branch, force })));
 
-  ipcMain.handle('git:commit', async (_event, { projectPath, message, paths }) =>
-    gitSnapshot.commit(git, definedFields({ projectPath, message, paths })),
-  );
+  ipcMain.handle('git:commit', async (_event, { projectPath, message, paths }) => gitSnapshot.commit(git, definedFields({ projectPath, message, paths })));
 
-  ipcMain.handle('git:restoreFile', async (_event, { projectPath, ref, path: filePath }) =>
-    gitSnapshot.restoreFile(git, { projectPath, ref, path: filePath }),
-  );
+  ipcMain.handle('git:restoreFile', async (_event, { projectPath, ref, path: filePath }) => gitSnapshot.restoreFile(git, { projectPath, ref, path: filePath }));
 
   // `park` is handed in rather than imported: it lives here, over the stash, and
   // is the reason going back to an old version cannot lose what is on disk now.
@@ -238,12 +248,30 @@ function registerGitUnparkHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
   });
 
   ipcMain.handle('git:push', async (_event, { projectPath, branch }) => {
+    // Push the named local branch to the same name, and nothing else: never a force, never "all", never whatever HEAD happens to be.
+    // A detached HEAD has no branch to send, and a name git would not accept is never handed to it.
+    const head = await readHead(git, projectPath);
+    if (head.branch === undefined) {
+      throw new ReferencedError('git.error.detachedHead');
+    }
+    await requireValidBranchName(git, projectPath, branch);
     const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
-    await git(projectPath, ['push', '-u', 'origin', branch], {
+    await git(projectPath, ['push', '-u', 'origin', `refs/heads/${branch}:refs/heads/${branch}`], {
       timeout: 120000,
       env: environment,
     });
     return { ok: true as const };
+  });
+}
+
+function registerGitPullHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
+  ipcMain.handle('git:incoming', async (_event, payload) => {
+    const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
+    return readIncomingCommits((projectPath, args) => git(projectPath, args, { timeout: 30000, env: environment }), payload);
+  });
+  ipcMain.handle('git:pull', async (_event, payload) => {
+    const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
+    return pullBranch((projectPath, args) => git(projectPath, args, { timeout: 120000, env: environment }), payload);
   });
 }
 
@@ -252,22 +280,9 @@ function registerGitPublishHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
     try {
       await run('gh', ['--version'], projectPath);
     } catch {
-      throw new Error(
-        'GitHub CLI (gh) is not installed. Install it from https://cli.github.com ' +
-          'and run `gh auth login`.',
-      );
+      throw new ReferencedError('git.publish.cliMissing');
     }
-    const args = [
-      'repo',
-      'create',
-      repoName,
-      isPrivate ? '--private' : '--public',
-      '--source',
-      '.',
-      '--remote',
-      'origin',
-      '--push',
-    ];
+    const args = ['repo', 'create', repoName, isPrivate ? '--private' : '--public', '--source', '.', '--remote', 'origin', '--push'];
     const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));
     const result = await run('gh', args, projectPath, { timeout: 180000, env: environment });
     const output = result.stdout + result.stderr;

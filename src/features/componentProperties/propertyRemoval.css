@@ -1,0 +1,28 @@
+/* The prop deletion's confirmation (propertyRemovalDialog.tsx): one short line per fact, file lists on a quiet fill. */
+.property-removal {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: 16px 0;
+  white-space: normal;
+}
+.property-removal-detail {
+  list-style: none;
+  color: var(--text);
+}
+.property-removal-rows {
+  display: grid;
+  gap: 2px;
+  margin-block: 6px 0;
+  margin-inline: -16px 0;
+  padding: 6px 10px;
+  list-style: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.property-removal-more {
+  color: var(--text-dim);
+}

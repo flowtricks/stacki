@@ -6,9 +6,7 @@ export { TOAST_LIMIT, type ToastNotice, type ToastKind } from '../../ui/toastNot
 export function useToastStack<Notice extends ToastNotice>() {
   const [notices, setNotices] = useState<readonly Notice[]>([]);
   const push = useCallback((notice: Notice) => {
-    setNotices((current) =>
-      [notice, ...current.filter((item) => item.message !== notice.message)].slice(0, TOAST_LIMIT),
-    );
+    setNotices((current) => [notice, ...current.filter((item) => item.message !== notice.message)].slice(0, TOAST_LIMIT));
   }, []);
   const dismiss = useCallback((id: string) => {
     setNotices((current) => current.filter((notice) => notice.id !== id));

@@ -1,3 +1,4 @@
+// i18n-ignore-file: section names are English next to their `labelKey`, which the panel translates; the rest of the file holds no interface text.
 // Canonical property ordering + section grouping for the style panel.
 //
 // The panel shows declarations in a fixed Webflow-like order grouped into
@@ -5,23 +6,16 @@
 // pure, render-only transform: it never mutates the AST, so an author's embed
 // is only ever touched by an explicit edit (see the css.ts "no reflow" promise).
 
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import type { ParsedDeclaration } from './styleTypes';
 
-export type SectionId =
-  | 'flex-child'
-  | 'layout'
-  | 'size'
-  | 'spacing'
-  | 'position'
-  | 'typography'
-  | 'backgrounds'
-  | 'borders'
-  | 'effects'
-  | 'other';
+export type SectionId = 'flex-child' | 'layout' | 'size' | 'spacing' | 'position' | 'typography' | 'backgrounds' | 'borders' | 'effects' | 'other';
 
 export type SectionDefinition = {
   id: SectionId;
+  /** English text, for search and logs; the panel shows `labelKey` translated. */
   label: string;
+  labelKey: MessageKey;
   /** Canonical property order within the section (lowercased, matches decl.prop). */
   order: readonly string[];
 };
@@ -34,13 +28,14 @@ export const SECTIONS: readonly SectionDefinition[] = [
     // Sits above Layout so a selected flex item's sizing/alignment reads top-down.
     id: 'flex-child',
     label: 'Flex/Grid Child',
+    labelKey: 'styleModel.sections.flexChild',
     order: [
       'flex',
       'flex-grow',
       'flex-shrink',
       'flex-basis',
       // The Position control reads column/row shorthands and line longhands.
-      // grid-area has no dedicated field; NO_CONTROL sends it to Custom properties.
+      // grid-area has no dedicated field; NO_CONTROL sends it to Other properties.
       'grid-area',
       'grid-column',
       'grid-column-start',
@@ -56,6 +51,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'layout',
     label: 'Layout',
+    labelKey: 'styleModel.sections.layout',
     order: [
       'display',
       'vertical-align',
@@ -67,7 +63,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'align-content',
       'place-content',
       // Gap + its legacy `grid-*-gap` aliases — all owned by the Gap control, so they
-      // stay out of Custom properties.
+      // stay out of Other properties.
       'gap',
       'row-gap',
       'column-gap',
@@ -87,26 +83,19 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'spacing',
     label: 'Spacing',
+    labelKey: 'styleModel.sections.spacing',
     // The sides only: the box has a field for each longhand. The resolved model
     // projects `margin` and the padding shorthands onto these sides
     // (spacingShorthand.ts), so the box shows them. The shorthand itself is left
     // out, as a property listed in a section is routed to that section's control
     // and the box has none for it: it falls through to the catch-all at the
     // bottom, where it can still be edited and cleared whole, as written.
-    order: [
-      'margin-top',
-      'margin-right',
-      'margin-bottom',
-      'margin-left',
-      'padding-top',
-      'padding-right',
-      'padding-bottom',
-      'padding-left',
-    ],
+    order: ['margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
   },
   {
     id: 'size',
     label: 'Size',
+    labelKey: 'styleModel.sections.size',
     order: [
       'width',
       'height',
@@ -120,7 +109,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'aspect-ratio',
       'box-sizing',
       // Handled by the Size section's Image fit control (SizeSection reads them
-      // directly) — listed here so they don't fall through to Custom properties.
+      // directly) — listed here so they don't fall through to Other properties.
       'object-fit',
       'object-position',
     ],
@@ -128,11 +117,13 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'position',
     label: 'Position',
+    labelKey: 'styleModel.sections.position',
     order: ['position', 'inset', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'clear'],
   },
   {
     id: 'typography',
     label: 'Typography',
+    labelKey: 'styleModel.sections.typography',
     order: [
       'color',
       'font-family',
@@ -173,6 +164,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'backgrounds',
     label: 'Backgrounds',
+    labelKey: 'styleModel.sections.backgrounds',
     order: [
       'background',
       'background-color',
@@ -188,6 +180,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'borders',
     label: 'Borders',
+    labelKey: 'styleModel.sections.borders',
     order: [
       'border-radius',
       'border-top-left-radius',
@@ -219,6 +212,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'effects',
     label: 'Effects',
+    labelKey: 'styleModel.sections.effects',
     order: [
       'mix-blend-mode',
       'opacity',
@@ -247,7 +241,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'pointer-events',
     ],
   },
-  { id: 'other', label: 'Custom properties', order: [] },
+  { id: 'other', label: 'Other properties', labelKey: 'styleModel.sections.other', order: [] },
 ];
 
 // Property → section, and property → its canonical index within that section. Built once
@@ -274,8 +268,8 @@ export const PROPERTY_ORDER: ReadonlyMap<string, number> = (() => {
 // order is where a property sorts when it's rendered; it is not a claim that it
 // is. `inset: 0` sorted next to top/right/bottom/left and was then rendered by
 // nothing — the inset box asks for each side separately — so it was in the file
-// and nowhere in the panel: not in Position, not in Custom properties, not
-// anywhere. A property with no control belongs in Custom properties, where it
+// and nowhere in the panel: not in Position, not in Other properties, not
+// anywhere. A property with no control belongs in Other properties, where it
 // can at least be read and edited as text.
 //
 // Every one of these is a shorthand whose longhands DO have controls. Adding a
@@ -317,10 +311,7 @@ const UNRANKED = Number.MAX_SAFE_INTEGER;
  * are emitted in SECTIONS order, with `other` last. Empty sections are omitted
  * unless listed in `alwaysShow` (e.g. Size, whose controls always render).
  */
-export function groupDeclarations(
-  decls: ParsedDeclaration[],
-  alwaysShow: readonly SectionId[] = [],
-): SectionGroup[] {
+export function groupDeclarations(decls: ParsedDeclaration[], alwaysShow: readonly SectionId[] = []): SectionGroup[] {
   const buckets = new Map<SectionId, ParsedDeclaration[]>();
   decls.forEach((decl) => {
     const id = sectionOf(decl.prop);
@@ -356,10 +347,7 @@ export function groupDeclarations(
 export type SectionPropGroup = { def: SectionDefinition; props: string[] };
 
 /** Like groupDeclarations but over bare property names (for the resolved model). */
-export function groupProps(
-  propNames: string[],
-  alwaysShow: readonly SectionId[] = [],
-): SectionPropGroup[] {
+export function groupProps(propNames: string[], alwaysShow: readonly SectionId[] = []): SectionPropGroup[] {
   const buckets = new Map<SectionId, string[]>();
   propNames.forEach((prop) => {
     const id = sectionOf(prop);

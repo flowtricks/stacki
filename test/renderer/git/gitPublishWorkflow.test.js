@@ -3,11 +3,10 @@
 // preload bridge, verify ordering and payloads, then corrupt each wire reply.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseGitCommit, parseGitInfo, parseGitPublish, parseGitSuccess } =
-  require('../../helpers/rendererModule')('src/features/git/gitChipBridge.ts');
-const { publishGitProject } = require('../../helpers/rendererModule')(
-  'src/features/git/gitPublishWorkflow.ts',
-);
+const { parseGitCommit, parseGitInfo, parseGitPublish, parseGitSuccess } = require('../../helpers/rendererModule')('src/features/git/gitChipBridge.ts');
+const { publishGitProject } = require('../../helpers/rendererModule')('src/features/git/gitPublishWorkflow.ts');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -23,7 +22,7 @@ const cleanInfo = {
 };
 const published = { ok: true, url: 'https://github.com/person/project', output: 'created' };
 
-test('Git publish response parsers reject malformed and oversized data', () => {
+test('Git publish response parsers reject malformed data and accept any branch count', () => {
   assert.deepEqual(parseGitInfo(cleanInfo), cleanInfo);
   assert.deepEqual(parseGitInfo({ isRepo: false }), { isRepo: false });
   assert.deepEqual(parseGitCommit({ ok: true, files: 2 }), { ok: true, files: 2 });
@@ -36,10 +35,12 @@ test('Git publish response parsers reject malformed and oversized data', () => {
     { ...cleanInfo, branch: 1 },
     // Absence is `undefined` (AGENTS.md §6): main never sends a null remote.
     { ...cleanInfo, remote: jsonNull },
-    { ...cleanInfo, branches: Array(100001).fill('main') },
   ]) {
     assert.throws(() => parseGitInfo(value));
   }
+  // Stacki has no product size limit: a branch list is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(parseGitInfo({ ...cleanInfo, branches: Array(100001).fill('main') }).branches.length, 100001);
   assert.throws(() => parseGitCommit({ ok: true, files: -1 }));
   assert.throws(() => parseGitPublish({ ok: true, url: jsonNull }));
   assert.throws(() => parseGitSuccess({ ok: false }));

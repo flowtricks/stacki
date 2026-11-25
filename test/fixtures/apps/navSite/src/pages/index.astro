@@ -1,0 +1,41 @@
+---
+import Layout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/wrapper/Section.astro";
+import Heading from "@/components/typography/Heading.astro";
+import Eyebrow from "@/components/typography/Eyebrow.astro";
+import Img from "@/components/media/Img.astro";
+import lumos_background from "@/assets/graphics/lumos-background.svg";
+import Icon from "@/components/media/Icon.astro";
+import logo_icon from "@/assets/logo/logo-icon.svg";
+import ContentWrapper from "@/components/wrapper/ContentWrapper.astro";
+---
+
+<Layout theme="dark">
+  <Section
+    paddingBottom="even"
+    containerClass="flex-grow"
+    paddingTop="even"
+    class="flex-grow"
+    style="min-height: calc(100svh - var(--nav-height));"
+  >
+    <ContentWrapper
+      class="flex-grow theme-brand"
+      variant="card"
+      mediaOpacity={100}
+    >
+      <Icon src={logo_icon} variant="large" />
+      <Heading variant="display" tag="h1" class="margin-block-8" data-stacki-key="k8x0hlc0ttzv0">
+        Style Guide
+      </Heading>
+      <Eyebrow variant="tag">v1.0.3</Eyebrow>
+      <Img
+        slot="column2"
+        src={lumos_background}
+        width={1920}
+        height={1080}
+        loading="eager"
+        fetchPriority="high"
+      />
+    </ContentWrapper>
+  </Section>
+</Layout>

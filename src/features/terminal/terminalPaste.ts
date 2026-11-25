@@ -5,9 +5,7 @@ import { LIMITS } from '../../../shared/core/limits';
 export type PathStyle = 'posix' | 'windows';
 
 export type PasteAction =
-  | { readonly kind: 'text' }
-  | { readonly kind: 'paths'; readonly text: string }
-  | { readonly kind: 'image'; readonly file: File | undefined };
+  { readonly kind: 'text' } | { readonly kind: 'paths'; readonly text: string } | { readonly kind: 'image'; readonly file: File | undefined };
 
 // Decides what a paste (or drop) into the embedded terminal should do.
 //

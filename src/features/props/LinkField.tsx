@@ -1,3 +1,5 @@
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import { assert } from '../../../shared/core/assert';
@@ -5,59 +7,25 @@ import { LIMITS } from '../../../shared/core/limits';
 import Dropdown from '../../ui/Dropdown';
 import AssetField from '../../ui/AssetField';
 import { ElementLinkIcon, FileIcon, PhoneIcon, ElementImageIcon } from '../../ui/Icons';
+import LinkPageChooser from './LinkPageChooser';
+import type { LinkEntryLoader } from './linkEntries';
+import { anchorTargetExists, detectLinkType, type LinkPage, type LinkType, type LinkTypeContext } from './linkType';
 
 // Webflow-style link settings for href props: a Type segmented control
 // (URL / Page / Section / Email / Phone / Asset) whose fields all compile
 // down to one href string. Plain URL mode stays available for anything
-// custom; the value's shape picks the initial type.
+// custom; the value's shape picks the initial type (see linkType.ts).
 //
-// context: { pages: [{name, route}], sectionIds: [string], projectPath }
+// context: { pages: [{name, route, title}], sectionIds: [string], projectPath }
 
-const TYPES = [
-  { id: 'url', title: 'URL', icon: <ElementLinkIcon size={13} /> },
-  { id: 'page', title: 'Page', icon: <FileIcon size={13} /> },
-  { id: 'section', title: 'Page section', icon: <b style={{ fontSize: 12 }}>#</b> },
-  { id: 'email', title: 'Email', icon: <b style={{ fontSize: 12 }}>@</b> },
-  { id: 'phone', title: 'Phone', icon: <PhoneIcon size={13} /> },
-  { id: 'asset', title: 'File / asset', icon: <ElementImageIcon size={13} /> },
-] as const;
-type LinkType = (typeof TYPES)[number]['id'];
-interface LinkPage {
-  readonly name: string;
-  readonly route: string;
-}
-
-function linkPageLabel(page: LinkPage): string {
-  const name = page.name.replace(/\.(astro|md)$/i, '');
-  const namePath = name.replace(/^\/+|\/+$/g, '');
-  const routePath = page.route.replace(/^\/+|\/+$/g, '');
-  if (namePath === routePath) {
-    return name;
-  }
-  return `${name}  ·  ${page.route}`;
-}
-
-function detectType(text: string, pages: readonly LinkPage[] | undefined): LinkType {
-  if (!text) {
-    return 'url';
-  }
-  if (text.startsWith('#')) {
-    return 'section';
-  }
-  if (text.startsWith('mailto:')) {
-    return 'email';
-  }
-  if (text.startsWith('tel:')) {
-    return 'phone';
-  }
-  if ((pages || []).some((page) => page.route === text)) {
-    return 'page';
-  }
-  if (text.startsWith('/') && /\.[a-z0-9]+$/i.test(text)) {
-    return 'asset';
-  }
-  return 'url';
-}
+const TYPES: ReadonlyArray<{ readonly id: LinkType; readonly title: MessageKey; readonly icon: React.ReactNode }> = [
+  { id: 'url', title: 'props.link.type.url', icon: <ElementLinkIcon size={13} /> },
+  { id: 'page', title: 'props.link.type.page', icon: <FileIcon size={13} /> },
+  { id: 'section', title: 'props.link.type.section', icon: <b style={{ fontSize: 12 }}>#</b> },
+  { id: 'email', title: 'props.link.type.email', icon: <b style={{ fontSize: 12 }}>@</b> },
+  { id: 'phone', title: 'props.link.type.phone', icon: <PhoneIcon size={13} /> },
+  { id: 'asset', title: 'props.link.type.asset', icon: <ElementImageIcon size={13} /> },
+];
 
 function parseMailto(text: string) {
   const match = String(text).match(/^mailto:([^?]*)(?:\?(.*))?$/);
@@ -76,29 +44,40 @@ function parseMailto(text: string) {
 interface LinkContext {
   readonly pages?: readonly LinkPage[];
   readonly sectionIds?: readonly string[];
+  /** Resolves a template page's entries (its CMS entries as concrete routes); absent where the host cannot. */
+  readonly loadEntries?: LinkEntryLoader | undefined;
   readonly projectPath: string;
 }
 interface LinkFieldProps {
   readonly value?: Attr | undefined;
   readonly context: LinkContext;
+  /** What an unset link falls back to, shown muted in the URL box; "#" when the component says nothing. */
+  readonly placeholder?: string | undefined;
   readonly onChange: (value: Attr, immediate?: boolean) => void;
 }
+function linkTypeContext(context: LinkContext): LinkTypeContext {
+  return { routes: (context.pages ?? []).map((page) => page.route), sectionIds: context.sectionIds ?? [] };
+}
+
+// One array for "no pages", so the page chooser's effects see the same value on every render.
+const NO_PAGES: readonly LinkPage[] = [];
+
 type Commit = (value: string, options?: { readonly immediate: boolean }) => void;
-export default function LinkField({ value, context, onChange }: LinkFieldProps) {
+export default function LinkField({ value, context, placeholder, onChange }: LinkFieldProps) {
   const text = value?.type === 'string' ? value.value : '';
-  const [type, setType] = useState(() => detectType(text, context.pages));
-  const lastRef = useRef(text);
   assert((context.pages?.length ?? 0) <= LIMITS.scanEntriesMax, 'LinkField: page limit exceeded');
-  assert(
-    (context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax,
-    'LinkField: section limit exceeded',
-  );
+  assert((context.sectionIds?.length ?? 0) <= LIMITS.treeNodesMax, 'LinkField: section limit exceeded');
+  const [type, setType] = useState(() => detectLinkType(text, linkTypeContext(context)));
+  // The last value this field wrote or saw. Only a value that differs from it
+  // came from outside (undo, another element, the canvas), so only then is the
+  // tab re-detected; the user's own typing never moves the tab they picked.
+  const lastRef = useRef(text);
   useEffect(() => {
     if (text !== lastRef.current) {
-      setType(detectType(text, context.pages));
+      setType(detectLinkType(text, linkTypeContext(context)));
       lastRef.current = text;
     }
-  }, [text, context.pages]);
+  }, [text, context]);
   const commit: Commit = (next, options) => {
     lastRef.current = next;
     onChange({ type: 'string', value: next }, options?.immediate ?? false);
@@ -106,7 +85,13 @@ export default function LinkField({ value, context, onChange }: LinkFieldProps) 
   return (
     <>
       <LinkTypes type={type} setType={setType} />
-      <LinkControl type={type} text={text} context={context} commit={commit} />
+      <LinkControl
+        type={type}
+        text={text}
+        context={context}
+        placeholder={placeholder === undefined || placeholder === '' ? '#' : placeholder}
+        commit={commit}
+      />
     </>
   );
 }
@@ -115,33 +100,26 @@ function LinkControl({
   type,
   text,
   context,
+  placeholder,
   commit,
 }: {
   readonly type: LinkType;
   readonly text: string;
   readonly context: LinkContext;
+  readonly placeholder: string;
   readonly commit: Commit;
 }) {
+  const translate = useTranslate();
   switch (type) {
     case 'url':
-      return (
-        <input
-          value={text}
-          placeholder="#"
-          spellCheck={false}
-          onChange={(event) => commit(event.target.value)}
-        />
-      );
+      return <input value={text} placeholder={placeholder} spellCheck={false} onChange={(event) => commit(event.target.value)} />;
     case 'page':
       return (
-        <Dropdown
-          value={(context.pages || []).some((page) => page.route === text) ? text : ''}
-          placeholder="Choose a page…"
-          options={(context.pages || []).map((page) => ({
-            value: page.route,
-            label: linkPageLabel(page),
-          }))}
-          onChange={(value) => commit(value, { immediate: true })}
+        <LinkPageChooser
+          text={text}
+          pages={context.pages ?? NO_PAGES}
+          loadEntries={context.loadEntries}
+          onPick={(route) => commit(route, { immediate: true })}
         />
       );
     case 'section':
@@ -152,7 +130,7 @@ function LinkControl({
       return (
         <input
           value={text.startsWith('tel:') ? text.slice(4) : ''}
-          placeholder="e.g. +14155551212"
+          placeholder={translate('props.link.examplePhone')}
           spellCheck={false}
           onChange={(event) => commit(`tel:${event.target.value.replace(/\s+/g, '')}`)}
         />
@@ -160,7 +138,7 @@ function LinkControl({
     case 'asset':
       return (
         <AssetField
-          value={detectType(text, context.pages) === 'asset' ? text : ''}
+          value={detectLinkType(text, linkTypeContext(context)) === 'asset' ? text : ''}
           mediaKind="asset"
           projectPath={context.projectPath}
           showModeToggle={false}
@@ -174,71 +152,44 @@ function LinkControl({
   }
 }
 
-function LinkSection({
-  text,
-  sections,
-  commit,
-}: {
-  readonly text: string;
-  readonly sections: readonly string[];
-  readonly commit: Commit;
-}) {
+function LinkSection({ text, sections, commit }: { readonly text: string; readonly sections: readonly string[]; readonly commit: Commit }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   if (sections.length > 0) {
     return (
       <Dropdown
-        value={text.startsWith('#') && sections.includes(text.slice(1)) ? text : ''}
-        placeholder="Choose a section…"
+        value={anchorTargetExists(text, sections) ? text : ''}
+        placeholder={translate('props.link.chooseSection')}
         options={sections.map((id) => ({ value: `#${id}`, label: `#${id}` }))}
         onChange={(value) => commit(value, { immediate: true })}
       />
     );
   }
-  return (
-    <div className="link-note">
-      No elements on this page have an <code>id</code> yet — set one in an element's attributes to
-      anchor-link to it.
-    </div>
-  );
+  return <div className="link-note">{translateRich('props.link.noSections', { code: (text) => <code>{text}</code> })}</div>;
 }
 
 function LinkEmail({ text, commit }: { readonly text: string; readonly commit: Commit }) {
+  const translate = useTranslate();
   const { email, subject } = parseMailto(text);
   return (
     <>
       <input
         value={email}
-        placeholder="e.g. bob@gmail.com"
+        placeholder={translate('props.link.exampleEmail')}
         spellCheck={false}
-        onChange={(event) =>
-          commit(
-            `mailto:${event.target.value.trim()}${
-              subject ? `?subject=${encodeURIComponent(subject)}` : ''
-            }`,
-          )
-        }
+        onChange={(event) => commit(`mailto:${event.target.value.trim()}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`)}
       />
       <input
         value={subject}
-        placeholder="Subject (optional)"
-        onChange={(event) =>
-          commit(
-            `mailto:${email}${
-              event.target.value ? `?subject=${encodeURIComponent(event.target.value)}` : ''
-            }`,
-          )
-        }
+        placeholder={translate('props.link.subject')}
+        onChange={(event) => commit(`mailto:${email}${event.target.value ? `?subject=${encodeURIComponent(event.target.value)}` : ''}`)}
       />
     </>
   );
 }
 
-function LinkTypes({
-  type,
-  setType,
-}: {
-  readonly type: LinkType;
-  readonly setType: (type: LinkType) => void;
-}) {
+function LinkTypes({ type, setType }: { readonly type: LinkType; readonly setType: (type: LinkType) => void }) {
+  const translate = useTranslate();
   const { rowRef, btnRefs: buttonRefs, indicator } = useLinkIndicator(type);
   return (
     <div className="link-types" ref={rowRef}>
@@ -251,7 +202,7 @@ function LinkTypes({
           }}
           type="button"
           className={type === option.id ? 'on' : ''}
-          title={option.title}
+          title={translate(option.title)}
           onClick={() => setType(option.id)}
         >
           {option.icon}
@@ -281,17 +232,10 @@ function useLinkIndicator(type: LinkType) {
   >(undefined);
   const measure = () => {
     const element = buttonRefs.current[typeRef.current];
-    const next =
-      element && element.offsetWidth
-        ? { left: element.offsetLeft, width: element.offsetWidth }
-        : undefined;
+    const next = element && element.offsetWidth ? { left: element.offsetLeft, width: element.offsetWidth } : undefined;
     // Same numbers must yield the same object, or measuring on every render
     // would re-render forever.
-    setIndicator((previous) =>
-      previous && next && previous.left === next.left && previous.width === next.width
-        ? previous
-        : next,
-    );
+    setIndicator((previous) => (previous && next && previous.left === next.left && previous.width === next.width ? previous : next));
   };
   useLayoutEffect(measure);
   useLayoutEffect(() => {

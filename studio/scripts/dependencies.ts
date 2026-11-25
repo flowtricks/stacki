@@ -4,10 +4,7 @@ import path from 'node:path';
 
 export async function linkImageDependencies(root: string, cached = '/opt/site') {
   try {
-    const [site, image] = await Promise.all([
-      readFile(path.join(root, 'package-lock.json')),
-      readFile(path.join(cached, 'package-lock.json')),
-    ]);
+    const [site, image] = await Promise.all([readFile(path.join(root, 'package-lock.json')), readFile(path.join(cached, 'package-lock.json'))]);
     const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
     if (digest(site) !== digest(image)) {
       return false;

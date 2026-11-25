@@ -31,12 +31,20 @@ test('preview URLs respect the project slash policy and preserve encoded file id
   }
 });
 
+test('the page layout is an explicit option; without it the URL has no layout, as the popup always had', () => {
+  const component = { name: 'Hero', folder: 'Section', path: '/project/src/components/Section/Hero.astro' };
+  const plain = new URL(model.componentPreviewURL('http://localhost:4321', component, 'never'));
+  assert.equal(plain.searchParams.has('layout'), false);
+  assert.equal(plain.search, new URL(model.componentPreviewURL('http://localhost:4321', component, 'never', { layout: 'popup' })).search);
+  const page = new URL(model.componentPreviewURL('http://localhost:4321', component, 'never', { layout: 'page' }));
+  assert.equal(page.searchParams.get('layout'), 'page');
+  assert.equal(page.searchParams.get('c'), 'Hero');
+  assert.equal(page.searchParams.get('p'), 'src/components/Section/Hero.astro');
+});
+
 test('component preview messages accept only known status updates', () => {
   for (const status of ['empty', 'ready']) {
-    assert.deepEqual(
-      model.parseComponentPreviewMessage({ type: 'avb:component-preview', status }),
-      { status },
-    );
+    assert.deepEqual(model.parseComponentPreviewMessage({ type: 'avb:component-preview', status }), { status });
   }
   for (const value of [
     PLATFORM_NULL,
@@ -80,12 +88,7 @@ test('component groups keep the root first and folders in name order', () => {
   const component = (name, folder) => ({ path: `/p/${name}.astro`, name, folder });
   assert.deepEqual(
     model
-      .groupPaletteComponents([
-        component('Zed', 'Z'),
-        component('Root', ''),
-        component('Alpha', 'A'),
-        component('Again', 'A'),
-      ])
+      .groupPaletteComponents([component('Zed', 'Z'), component('Root', ''), component('Alpha', 'A'), component('Again', 'A')])
       .map(([folder, items]) => [folder, items.map((item) => item.name)]),
     [
       ['', ['Root']],

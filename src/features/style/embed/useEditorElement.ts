@@ -4,42 +4,31 @@
 // and suggested (EmbedEditor.tsx).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  defaultSelectorTokens,
-  selectorToClassTokens,
-  tokensToSelector,
-} from '../model/elementTokens';
+import { defaultSelectorTokens, selectorToClassTokens, tokensToSelector } from '../model/elementTokens';
 import { stateForSelector, STATES, type ContextKey } from '../model/resolved';
-import {
-  listAtRuleBlocks,
-  parseNestedInput,
-  type NestStep,
-  renameAtRuleQuery,
-  atRuleQueryText,
-  queryKey,
-  splitQuery,
-} from '../model/css';
+import { listAtRuleBlocks, parseNestedInput, renameAtRuleQuery, atRuleQueryText, queryKey, splitQuery } from '../model/css';
 import { canonicalCompound } from '../model/selectors';
-import { getHost } from '../model/host';
-import {
-  readNativeStyleByName,
-  readNativeStyles,
-  resolveIdentityElement,
-  writeEmbedDocument,
-  type EmbedDocument,
-} from '../model/webflow';
+import { placedContextKey, placementOfPath, renameQueryInContextKey, sourcedContextKey, splitSourcedKey } from '../model/queryWrapper';
+import { findNode, getHost, onHostChange } from '../model/host';
+import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import type { NativeModel } from '../model/styleTypes';
 import { standaloneNativeClass } from './EditorBasics';
-import { loneTypedClass, type NestedInput, nativeModelCache } from './editorModel';
-import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
+import { PLACEMENT_END, type ClassPlacement } from '../../../editor/classAttr';
 import {
-  useEditorRefs,
-  useBusyState,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+  loneTypedClass,
+  type NestedInput,
+  nativeModelCache,
+  pseudoPickFor,
+  readPseudoTarget,
+  rememberTypedPath,
+  withTypedLabel,
+  type TypedLabels,
+  type TypedPaths,
+  usePseudoTarget,
+} from './editorModel';
+import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
+import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
+import { assert } from '../../../../shared/core/assert';
 import { useRefreshDerived } from './useEditorScanning';
 import { useApplyEdit, useElementTokens } from './useEditorRuleEdits';
 
@@ -50,15 +39,7 @@ export function useTokenDefault(
   elementTokens: ReturnType<typeof useElementTokens>,
 ) {
   const { setNativeFallback } = scanState;
-  const {
-    defaultTokensRef,
-    pendingDefaultRef,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    tokenIdentityRef,
-    typedClassRef,
-  } = selectionState;
+  const { defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef, typedClassRef } = selectionState;
   const { tokens } = elementTokens;
 
   // Re-default the picked selector when the element changes: the element's FIRST
@@ -73,11 +54,18 @@ export function useTokenDefault(
   //
   // The primary class is what a class system is authored against; a combo is a
   // deliberate act, so it takes picking that chip.
-  useEffect(() => {
-    const identity = tokens.map((token) => token.name).join('|');
-    if (identity === tokenIdentityRef.current) {
-      return;
-    }
+  //
+  // Adjusted during render, not in an effect: an effect runs after the commit, so the
+  // render that first drew the new element's chips and fields drew them with no pick,
+  // and every label went from "nobody picked" to "picked" one frame later (the chips
+  // lost their highlight and the fields their colour for a frame on every switch).
+  // Setting state while rendering the same component makes React render again before
+  // anything is painted. The identity check makes it run once per element.
+  const identity = tokens.map((token) => token.name).join('|');
+  if (identity !== tokenIdentityRef.current) {
+    applyTokenDefault();
+  }
+  function applyTokenDefault(): void {
     tokenIdentityRef.current = identity;
     const typedClass = typedClassRef.current;
     if (typedClass !== undefined) {
@@ -101,17 +89,7 @@ export function useTokenDefault(
     // the user chose to add new styles. (It falls back to the first embed only if
     // that source isn't available for the new element — see effectiveSourceSel.)
     setNativeFallback(undefined);
-  }, [
-    tokens,
-    defaultTokensRef,
-    pendingDefaultRef,
-    setNativeFallback,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    tokenIdentityRef,
-    typedClassRef,
-  ]);
+  }
 
   // The element's identity (tag + classes + attrs) as a stable key — drives the
   // native-style read so it re-runs on selection or class changes, not on every
@@ -210,14 +188,7 @@ export function useNativeRead(
     return () => {
       cancelled = true;
     };
-  }, [
-    elementIdentity,
-    serveCachedNative,
-    nativeIdentityRef,
-    nativeModelRef,
-    selectedRef,
-    setNativeModel,
-  ]);
+  }, [elementIdentity, serveCachedNative, nativeIdentityRef, nativeModelRef, selectedRef, setNativeModel]);
 }
 
 // The selector being edited, and a typed standalone class's native styles.
@@ -232,10 +203,7 @@ export function useActiveSelector(
   const { activeSelectorRef, nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
   const { tokens } = elementTokens;
 
-  const selectedSelector = useMemo(
-    () => tokensToSelector(selectedTokens, tokens),
-    [selectedTokens, tokens],
-  );
+  const selectedSelector = useMemo(() => tokensToSelector(selectedTokens, tokens), [selectedTokens, tokens]);
   // The full selector currently being edited: an explicit chip/typed pick when set,
   // else the one composed from the token chips.
   const activeSelector = selectedSelectorText ?? selectedSelector;
@@ -246,8 +214,7 @@ export function useActiveSelector(
   // With no canvas selection, a typed standalone class is still a complete native
   // target: look it up directly in the project's Style API so its values and state
   // styles can be shown and edited just like an applied class.
-  const standaloneClass =
-    phase === 'no-selection' ? standaloneNativeClass(activeSelector) : undefined;
+  const standaloneClass = phase === 'no-selection' ? standaloneNativeClass(activeSelector) : undefined;
   useEffect(() => {
     if (phase !== 'no-selection') {
       return;
@@ -281,8 +248,7 @@ export function useSelectorPick(
   elementTokens: ReturnType<typeof useElementTokens>,
 ) {
   const { selectedRef } = editorRefs;
-  const { pendingDefaultRef, setContext, setSelectedSelectorText, setSelectedTokens, setStateKey } =
-    selectionState;
+  const { pendingDefaultRef, setContext, setSelectedSelectorText, setSelectedTokens, setStateKey } = selectionState;
   const { tokens } = elementTokens;
 
   // Pick any matched selector (a chip, an override-note jump, or a typed one) as the
@@ -292,11 +258,10 @@ export function useSelectorPick(
   // Queries typed into the add-selector field that may not exist in an embed yet —
   // kept so they're selectable in the dropdown until the rule is created.
   const [typedContexts, setTypedContexts] = useState<string[]>([]);
-  // The nesting path from a typed selector (`.hero { @container { .title } }`), so the
-  // first edit writes NESTED source into the embed rather than a flat selector.
-  const typedPathRef = useRef<{ selector: string; ctx: string; path: NestStep[] } | undefined>(
-    undefined,
-  );
+  // The nesting paths of typed selectors (`.hero { @container { .title } }`), so each
+  // one's first edit writes NESTED source into the embed rather than a flat selector.
+  const typedPathsRef = useRef<TypedPaths>(new Map());
+  const [typedLabels, setTypedLabels] = useState<TypedLabels>(new Map());
   const selectActiveSelector = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -304,7 +269,6 @@ export function useSelectorPick(
         return;
       }
       pendingDefaultRef.current = false;
-      typedPathRef.current = undefined; // a manual pick cancels a typed nesting path
       setSelectedSelectorText(trimmed);
       const simple = canonicalCompound(trimmed).simple;
       const matchedTokens = simple ? selectorToClassTokens(trimmed, tokens) : undefined;
@@ -312,14 +276,7 @@ export function useSelectorPick(
       setSelectedTokens(matchedTokens ?? (standalone ? [`class:${standalone}`] : []));
       setStateKey(stateForSelector(trimmed));
     },
-    [
-      tokens,
-      pendingDefaultRef,
-      selectedRef,
-      setSelectedSelectorText,
-      setSelectedTokens,
-      setStateKey,
-    ],
+    [tokens, pendingDefaultRef, selectedRef, setSelectedSelectorText, setSelectedTokens, setStateKey],
   );
   // Add a selector typed in the field — supports CSS nesting / a query, e.g.
   // `.hero { .title }`, `.hero { @container (width < 50em) { .title } }`, or
@@ -329,28 +286,27 @@ export function useSelectorPick(
   // context, and remember the path so the first edit writes NESTED source, not a flat
   // rule.
   const selectNested = useCallback(
-    (parsed: NestedInput) => {
-      const contextKey = parsed.atContext.join(' › ');
+    (parsed: NestedInput, typed: string) => {
+      // The typed path is remembered under the query chain (what the first write
+      // looks it up by), while the panel selects the PLACE it writes into: a query
+      // typed inside `.hero { }` is the nested `.hero` row, not the top-level one.
+      const atContextKey = parsed.atContext.join(' › ');
+      const contextKey = atContextKey ? placedContextKey(atContextKey, placementOfPath(parsed.path)) : '';
       if (contextKey) {
-        setTypedContexts((previous) =>
-          previous.includes(contextKey) ? previous : [...previous, contextKey],
-        );
+        setTypedContexts((previous) => (previous.includes(contextKey) ? previous : [...previous, contextKey]));
         setContext(contextKey);
       } else {
         setContext('');
       }
       selectActiveSelector(parsed.selector);
       if (parsed.path.length >= 2) {
-        typedPathRef.current = {
-          selector: parsed.selector,
-          ctx: contextKey,
-          path: parsed.path,
-        };
+        rememberTypedPath(typedPathsRef.current, parsed.selector, atContextKey, parsed.path);
+        setTypedLabels((previous) => withTypedLabel(previous, parsed.selector, typed));
       }
     },
     [selectActiveSelector, setContext],
   );
-  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedPathRef };
+  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedLabels, typedPathsRef };
 }
 
 // Add a typed selector, or deselect.
@@ -361,18 +317,12 @@ export function useTypedSelector(
   selectorPick: ReturnType<typeof useSelectorPick>,
 ) {
   const { primedRef } = editorRefs;
-  const {
-    pendingDefaultRef,
-    setSelectedSelectorText,
-    setSelectedTokens,
-    setStateKey,
-    typedClassRef,
-  } = selectionState;
+  const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, typedClassRef } = selectionState;
   const { classGatesRef } = applyEditHook;
   const { selectActiveSelector, selectNested } = selectorPick;
 
   const addTypedSelector = useCallback(
-    (input: string) => {
+    (input: string, placement: ClassPlacement) => {
       const trimmed = input.trim();
       if (!trimmed) {
         return;
@@ -380,14 +330,14 @@ export function useTypedSelector(
       if (trimmed.includes('{')) {
         const parsed = parseNestedInput(trimmed);
         if (parsed) {
-          selectNested(parsed);
+          selectNested(parsed, trimmed);
           return;
         }
       }
       const loneClass = loneTypedClass(trimmed);
       if (loneClass !== undefined) {
         typedClassRef.current = loneClass;
-        const gate = getHost().addClass?.(loneClass);
+        const gate = getHost().addClass?.(loneClass, placement);
         // The rule this selector will get depends on the page edit: its first
         // write waits for that edit's outcome (step 6, plan §3.3).
         if (gate) {
@@ -403,8 +353,12 @@ export function useTypedSelector(
   );
   // Deselect (click the active chip again): no selector is picked, so the panel
   // shows every property's cascade winner read-only. The first edit re-picks a
-  // default target (see autoSelectForEdit).
+  // default target (see autoSelectForEdit). A ::before or ::after row keeps its pick:
+  // that default is the element's, so the next edit would land on the element.
   const deselect = useCallback(() => {
+    if (readPseudoTarget() !== undefined) {
+      return;
+    }
     pendingDefaultRef.current = false;
     setSelectedTokens([]);
     setSelectedSelectorText(undefined);
@@ -414,10 +368,7 @@ export function useTypedSelector(
 }
 
 // Jump to a selector and focus one of its property fields.
-export function useFocusProp(
-  editorRefs: ReturnType<typeof useEditorRefs>,
-  selectorPick: ReturnType<typeof useSelectorPick>,
-) {
+export function useFocusProp(editorRefs: ReturnType<typeof useEditorRefs>, selectorPick: ReturnType<typeof useSelectorPick>) {
   const { rootRef } = editorRefs;
   const { selectActiveSelector } = selectorPick;
 
@@ -443,9 +394,17 @@ export function useFocusProp(
     // Wait a frame so the re-picked selector's fields have rendered, then focus.
     const raf = requestAnimationFrame(() => {
       const field = rootRef.current?.querySelector<HTMLElement>(`[data-prop="${focusProp}"]`);
-      field?.focus();
-      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-        field.select();
+      // A code field's input sits invisibly behind its rich editor: focus there
+      // would send typing somewhere nobody can see.
+      const editor = field?.parentElement?.querySelector<HTMLElement>(':scope > .embed-editor_varconnect-editor');
+      if (editor) {
+        editor.focus();
+        editor.ownerDocument.getSelection()?.selectAllChildren(editor);
+      } else {
+        field?.focus();
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          field.select();
+        }
       }
       setFocusProp(undefined);
     });
@@ -455,10 +414,7 @@ export function useFocusProp(
 }
 
 // The stylesheet new rules land in, and its queries' uses.
-export function useSourceDocument(
-  nativeState: ReturnType<typeof useNativeState>,
-  pendingWrites: ReturnType<typeof usePendingWrites>,
-) {
+export function useSourceDocument(nativeState: ReturnType<typeof useNativeState>, pendingWrites: ReturnType<typeof usePendingWrites>) {
   const { sourceSelection } = nativeState;
   const { documentByKey } = pendingWrites;
 
@@ -469,9 +425,7 @@ export function useSourceDocument(
     if (sourceSelection && documentByKey.has(sourceSelection)) {
       return documentByKey.get(sourceSelection);
     }
-    return [...documentByKey.values()].sort(
-      (left, right) => left.source.order - right.source.order,
-    )[0];
+    return [...documentByKey.values()].sort((left, right) => left.source.order - right.source.order)[0];
   }, [sourceSelection, documentByKey]);
   // How many blocks in that stylesheet each query is written in. Drives the edit
   // pencil in the query dropdown (a query this file doesn't hold can't be renamed
@@ -527,7 +481,7 @@ export function useRenameQuery(
     }
     const next = asQuery(to);
     if (!splitQuery(next)) {
-      setStatus('A query starts with @ — @media, @container or @supports.');
+      setStatus('A query starts with @ — @media, @container or @supports.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     if (next === from) {
@@ -535,7 +489,7 @@ export function useRenameQuery(
     }
     void (async () => {
       setBusyBoth(true);
-      setStatus('Renaming query…');
+      setStatus('Renaming query…'); // i18n-ignore: write-only status, never rendered.
       // try/finally so a throw mid-rename can't leave every button disabled.
       try {
         let count = 0;
@@ -543,7 +497,7 @@ export function useRenameQuery(
           count += renameAtRuleQuery(region, from, next);
         }
         if (!count) {
-          setStatus('That query isn’t in this file any more.');
+          setStatus('That query isn’t in this file any more.'); // i18n-ignore: write-only status, never rendered.
           return;
         }
         await refreshDerived();
@@ -553,14 +507,10 @@ export function useRenameQuery(
         }
         // The context key is the at-rule chain; only the renamed link changes, so
         // a nested context stays selected too.
-        const swap = (key: ContextKey) =>
-          key
-            .split(' › ')
-            .map((part) => (part === from ? next : part))
-            .join(' › ');
+        const swap = (key: ContextKey) => renameQueryInContextKey(key, from, next);
         setTypedContexts((previous) => previous.map(swap));
         setContext((previous) => swap(previous));
-        setStatus(count === 1 ? `Renamed to ${next}.` : `Renamed ${count} blocks to ${next}.`);
+        setStatus(count === 1 ? `Renamed to ${next}.` : `Renamed ${count} blocks to ${next}.`); // i18n-ignore: write-only status, never rendered.
       } finally {
         setBusyBoth(false);
       }
@@ -589,7 +539,9 @@ export function useContextKeys(
     const take = (embedDocument: EmbedDocument) => {
       for (const region of embedDocument.regions) {
         for (const block of listAtRuleBlocks(region)) {
-          const contextLabel = block.atContext.join(' › ');
+          // One key per PLACE the query is written (model/queryWrapper.ts): the
+          // same query at the top level and nested inside a rule are two rows.
+          const contextLabel = sourcedContextKey(placedContextKey(block.atContext.join(' › '), block.placement), embedDocument.source.key);
           if (!seen.has(contextLabel)) {
             seen.add(contextLabel);
             keys.push(contextLabel);
@@ -598,9 +550,7 @@ export function useContextKeys(
       }
     };
     if (model) {
-      const matchedDocumentKeys = new Set(
-        [...model.base, ...model.conditional].map((matched) => matched.rule.embedKey),
-      );
+      const matchedDocumentKeys = new Set([...model.base, ...model.conditional].map((matched) => matched.rule.embedKey));
       for (const [key, embedDocument] of documentByKey) {
         if (!matchedDocumentKeys.has(key)) {
           continue;
@@ -617,8 +567,11 @@ export function useContextKeys(
       take(sourceDocument);
     }
     // Queries typed into the add-selector field (may not exist in any embed yet).
+    // Once one is written it is listed with its stylesheet above, and the typed
+    // row would only repeat it.
+    const placedListed = new Set(keys.map((key) => splitSourcedKey(key).placed));
     for (const typedContext of typedContexts) {
-      if (!seen.has(typedContext)) {
+      if (!seen.has(typedContext) && !placedListed.has(typedContext)) {
         seen.add(typedContext);
         keys.push(typedContext);
       }
@@ -667,9 +620,66 @@ export function useQuerySuggestions(pendingWrites: ReturnType<typeof usePendingW
     // and the prefers-* queries are set once and left. Sorting is stable, so
     // within each group the file's own queries still come before the suggested
     // ones, in the order the file has them.
-    const bySize = (query: string) =>
-      /@container\b/.test(query) || /\b(width|height)\b/.test(query) ? 0 : 1;
+    const bySize = (query: string) => (/@container\b/.test(query) || /\b(width|height)\b/.test(query) ? 0 : 1);
     return out.sort((left, right) => bySize(left.query) - bySize(right.query));
   }, [documentByKey]);
   return { querySuggestions };
+}
+
+// A ::before or ::after picked in the navigator: once its element is the
+// selection, pick its pseudo-element's selector the way typing it would.
+// Each request is handled once (by its serial), and waits while the element
+// is not yet the selection.
+export function usePseudoRequest(
+  typedSelector: ReturnType<typeof useTypedSelector>,
+  selectorPick: ReturnType<typeof useSelectorPick>,
+  elementTokens: ReturnType<typeof useElementTokens>,
+  selectionState: ReturnType<typeof useSelectionState>,
+) {
+  const { addTypedSelector } = typedSelector;
+  const { selectActiveSelector } = selectorPick;
+  const { model, snapshot } = elementTokens;
+  const { defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens } = selectionState;
+  const [request, setRequest] = useState(() => getHost().pseudoRequest);
+  useEffect(() => onHostChange(() => setRequest(getHost().pseudoRequest)), []);
+  const handledRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (request === undefined || handledRef.current === request.serial) {
+      return;
+    }
+    const host = getHost();
+    if (host.selectedId !== request.nodeId) {
+      return;
+    }
+    const pick = pseudoPickFor(findNode(host.nodes, request.nodeId), request.pseudo, { snapshot, model });
+    if (pick?.kind === 'wait') {
+      return; // The panel's rules are still another element's.
+    }
+    handledRef.current = request.serial;
+    if (pick?.kind === 'existing') {
+      selectActiveSelector(pick.selector);
+    } else if (pick?.kind === 'typed') {
+      addTypedSelector(pick.input, PLACEMENT_END);
+    }
+  }, [request, snapshot, model, addTypedSelector, selectActiveSelector]);
+
+  // Leaving the layer for its own element (the element's row, same selection):
+  // the pseudo-element's selector is no longer the target, so the panel goes
+  // back to the element's default pick, as selecting the element does.
+  const target = usePseudoTarget();
+  const heldTargetRef = useRef(target);
+  useEffect(() => {
+    const held = heldTargetRef.current;
+    heldTargetRef.current = target;
+    if (held === undefined) {
+      return;
+    }
+    if (target !== undefined) {
+      return;
+    }
+    assert(held !== target, 'usePseudoRequest: the layer changed');
+    setSelectedTokens(defaultTokensRef.current);
+    setSelectedSelectorText(undefined);
+    pendingDefaultRef.current = true;
+  }, [target, defaultTokensRef, pendingDefaultRef, setSelectedSelectorText, setSelectedTokens]);
 }

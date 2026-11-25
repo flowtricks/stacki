@@ -5,91 +5,10 @@
 import { assert } from '../../shared/core/assert';
 import { RAW_ELEMENTS, required } from './astroAttrs';
 
-// ---------------------------------------------------------------------------
-// Template parsing
-// ---------------------------------------------------------------------------
+import { findMatchingBrace, skipStringOrComment, findMatchingParen } from './astroLexical';
+import { scanTag } from './astroTag';
 
-export const TAG_RE =
-  /<([A-Za-z][\w.-]*)((?:[^>"'{]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]*\})*\})*?)(\/?)>/y;
-
-// Index just past the string/comment starting at `i`, or `i` itself when
-// nothing starts there. Comments matter as much as strings: `{/* the button's
-// background */}` is an ordinary JSX comment, and without this the apostrophe
-// opens a "string" that never closes, so the scan runs off the end of the file
-// and the whole page is declared unrepresentable.
-export function skipStringOrComment(code: string, start: number): number {
-  const ch = code.charAt(start);
-  // A template literal is the one quote that spans lines, so it is followed
-  // wherever it goes.
-  if (ch === '`') {
-    let position = start + 1;
-    while (position < code.length && code.charAt(position) !== ch) {
-      if (code.charAt(position) === '\\') {
-        position++;
-      }
-      position++;
-    }
-    return position + 1;
-  }
-  if (ch === '"' || ch === "'") {
-    // A quote that does not close on its own line is not a string. What it
-    // usually is, is an apostrophe: `<Heading>We're here for you</Heading>`.
-    // Read as a string opener, it swallowed everything up to the next
-    // apostrophe — three hundred lines later, in a CSS comment — and with it
-    // the braces that closed the expression it sat inside. The page fell back
-    // to code view saying "an unclosed { … } expression", which is exactly what
-    // it looked like from in here.
-    //
-    // Nothing is lost by the rule: a JavaScript string cannot contain a raw
-    // line break, and neither can an HTML attribute value in any markup this
-    // has to read.
-    let j = start + 1;
-    while (j < code.length && code.charAt(j) !== ch && code.charAt(j) !== '\n') {
-      j += code.charAt(j) === '\\' ? 2 : 1;
-    }
-    return code.charAt(j) === ch ? j + 1 : start;
-  }
-  if (ch === '/' && code.charAt(start + 1) === '/') {
-    // `https://…` is not a comment, wherever it is written.
-    if (code.charAt(start - 1) === ':') {
-      return start;
-    }
-    const nl = code.indexOf('\n', start + 2);
-    return nl === -1 ? code.length : nl; // leave the newline itself unconsumed
-  }
-  if (ch === '/' && code.charAt(start + 1) === '*') {
-    const end = code.indexOf('*/', start + 2);
-    return end === -1 ? code.length : end + 2;
-  }
-  return start;
-}
-
-// Match either kind of delimiter using the same string/comment rules.
-function findMatchingDelimiter(code: string, start: number, open: string, close: string): number {
-  let depth = 0;
-  for (let i = start; i < code.length; i++) {
-    const skipped = skipStringOrComment(code, i);
-    if (skipped !== i) {
-      i = skipped - 1;
-      continue;
-    }
-    const ch = code.charAt(i);
-    if (ch === open) {
-      depth++;
-    } else if (ch === close) {
-      depth--;
-      if (depth === 0) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-export const findMatchingBrace = (code: string, start: number) =>
-  findMatchingDelimiter(code, start, '{', '}');
-export const findMatchingParen = (code: string, start: number) =>
-  findMatchingDelimiter(code, start, '(', ')');
+export { findMatchingBrace, findMatchingParen, skipStringOrComment };
 
 // Recognizes {items.map((item) => ( <JSX/> ))} and turns it into a 'map'
 // node whose JSX body is a parsed child tree (editable in the navigator).
@@ -108,9 +27,7 @@ export function dedentHead(text: string): string {
   if (lines.length < 2) {
     return normalizeHead(text);
   }
-  const indents = lines
-    .filter((line) => line.trim())
-    .map((line) => (line.match(/^[ \t]*/)?.[0] ?? '').length);
+  const indents = lines.filter((line) => line.trim()).map((line) => (line.match(/^[ \t]*/)?.[0] ?? '').length);
   const common = Math.min(...indents);
   return lines
     .map((line) => (line.trim() ? line.slice(common) : ''))
@@ -197,7 +114,8 @@ function endsInComment(text: string): boolean {
     if (skipped !== i) {
       // A string ends a statement as well as any other word does; only a
       // comment swallows what is written after it.
-      inside = text.charAt(i) === '/' && !text.slice(skipped).trim();
+      const comment = text.startsWith('//', i) || text.startsWith('/*', i);
+      inside = comment && !text.slice(skipped).trim();
       i = skipped - 1;
     } else if (text.charAt(i).trim()) {
       inside = false;
@@ -218,9 +136,7 @@ function endsInComment(text: string): boolean {
 // Returns { body: string[], markup: string, at: number } or undefined, where `at`
 // is where the markup starts in `block` — the returned tree is a tree of the
 // file, and every node in it has to be able to say which lines are its own.
-export function splitBlockLoopBody(
-  block: string,
-): { body: string[]; markup: string; at: number } | undefined {
+export function splitBlockLoopBody(block: string): { body: string[]; markup: string; at: number } | undefined {
   const statements = topLevelStatements(block);
   if (!statements.length) {
     return undefined;
@@ -251,6 +167,9 @@ export function splitBlockLoopBody(
         return undefined;
       }
       let markup = text.slice('return'.length);
+      if (/^[ \t]*(?:\r|\n)/.test(markup)) {
+        return undefined; // Automatic semicolon insertion makes this an empty return.
+      }
       let markupAt = rawAt + at + (after.length - after.trimStart().length) + 'return'.length;
       const trimLeft = () => {
         const space = markup.length - markup.trimStart().length;
@@ -309,22 +228,14 @@ export function topLevelOps(source: string): { op: '?' | ':' | '&&'; at: number 
       depth--;
       continue;
     }
-    // A JSX tag's own attributes are not part of the expression around it.
-    if (ch === '<' && /[A-Za-z/]/.test(source.charAt(i + 1) || '')) {
-      let j = i + 1;
-      while (j < source.length) {
-        const afterSkip = skipStringOrComment(source, j);
-        if (afterSkip !== j) {
-          j = afterSkip;
-          continue;
-        }
-        if (source.charAt(j) === '>') {
-          break;
-        }
-        j++;
+    // Scan the complete opening tag; an arrow or comparison in a prop is
+    // not the closing angle bracket and cannot change the surrounding depth.
+    if (ch === '<') {
+      const tag = scanTag(source, i);
+      if (tag) {
+        i = tag.end - 1;
+        continue;
       }
-      i = j;
-      continue;
     }
     if (depth !== 0) {
       continue;
@@ -386,79 +297,58 @@ function nextIndexOf(template: string, needle: string, from: number, previous: n
   return template.indexOf(needle, from);
 }
 
-// Index of the close tag matching an already-consumed open tag, handling
-// nested same-name tags.
-//
-// Text inside a <script>, a <style> or a comment is not markup, and counting
-// it as markup loses the whole page. A Webflow export had a script with
-// `/* Find the closest parent <section> for hover events */` in it: seven
-// `<section`s to this scan and six closes, so the section that really did
-// close never balanced, and a page with nothing wrong with it opened as code
-// with "an unclosed <section> tag" over it. The same words in an HTML comment
-// did the same thing.
-//
-// So those three are stepped over rather than read. A run that never ends is
-// not treated as fatal here — it is only text this scan can't use — so the
-// scan carries on past the opener and whatever is really wrong with the page
-// is reported by the parse itself.
+// Matching paired tags skips complete attributes and expression bodies. A
+// string such as "</div>" in a prop is data, never the parent's closing tag.
 export function findMatchingClose(template: string, from: number, name: string): number {
-  const re = closeTagPattern(name);
-  re.lastIndex = from;
   let depth = 1;
-  let match;
-  while ((match = re.exec(template)) !== null) {
-    const [full, raw, selfClose] = match;
-    if (full === '<!--') {
-      const end = template.indexOf('-->', match.index + 4);
-      re.lastIndex = end === -1 ? match.index + 4 : end + 3;
-      continue;
+  let found = NOT_YET_FOUND;
+  for (let position = from; position < template.length;) {
+    found = nextDelimiters(template, position, found);
+    const next = found.next;
+    if (next === -1) {
+      return -1;
     }
-    if (raw) {
-      const end = template.indexOf(`</${raw}`, match.index + full.length);
-      const after = end === -1 ? -1 : template.indexOf('>', end);
-      re.lastIndex = after === -1 ? match.index + full.length : after + 1;
-      continue;
-    }
-    if (full.startsWith('</')) {
-      depth--;
-      if (depth === 0) {
-        return match.index;
+    if (next === found.br) {
+      const end = findMatchingBrace(template, next);
+      if (end === -1) {
+        return -1;
       }
-    } else if (selfClose !== '/') {
-      depth++;
+      position = end + 1;
+    } else if (template.startsWith('<!--', next)) {
+      const end = template.indexOf('-->', next + 4);
+      position = end === -1 ? template.length : end + 3;
+    } else if (template.startsWith(`</${name}`, next)) {
+      const suffix = next + name.length + 2;
+      const close = /^\s*>/.exec(template.slice(suffix));
+      if (close) {
+        depth--;
+        if (depth === 0) {
+          return next;
+        }
+        position = suffix + close[0].length;
+      } else {
+        position = suffix;
+      }
+    } else {
+      const tag = scanTag(template, next);
+      if (!tag) {
+        position = next + 1;
+        continue;
+      }
+      position = tag.end;
+      if (tag.selfClose === '/') {
+        continue;
+      }
+      if (tag.name === name) {
+        depth++;
+      } else if (RAW_ELEMENTS.has(tag.name)) {
+        const close = template.indexOf(`</${tag.name}`, position);
+        const end = close === -1 ? -1 : template.indexOf('>', close);
+        position = end === -1 ? template.length : end + 1;
+      }
     }
   }
   return -1;
-}
-
-// A page names few distinct tags, so their close-tag patterns are compiled once
-// per parse process instead of once per element (with escapeRe run each time).
-// The cache is bounded: past the cap a pattern is compiled and not kept. A
-// cached pattern is shared, which is safe because findMatchingClose runs each
-// scan to completion — it never recurses — and resets lastIndex first.
-const CLOSE_TAG_PATTERNS_MAX = 512;
-const closeTagPatterns = new Map<string, RegExp>();
-
-function closeTagPattern(name: string): RegExp {
-  const cached = closeTagPatterns.get(name);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const tag = escapeRe(name);
-  const re = new RegExp(
-    `<!--|<(script|style)(?=[\\s/>])|<${tag}(?=[\\s/>])` +
-      `(?:[^>"']|"[^"]*"|'[^']*')*?(/?)>|</${tag}\\s*>`,
-    'g',
-  );
-  if (closeTagPatterns.size < CLOSE_TAG_PATTERNS_MAX) {
-    closeTagPatterns.set(name, re);
-  } else {
-    assert(
-      closeTagPatterns.size === CLOSE_TAG_PATTERNS_MAX,
-      'The pattern cache never exceeds its cap',
-    );
-  }
-  return re;
 }
 
 // Fragment delimiters can also occur in quoted attributes, expressions and
@@ -487,15 +377,14 @@ export function findMatchingFragmentClose(template: string, from: number): numbe
       depth++;
       position += 2;
     } else if (template.charAt(position) === '<') {
-      TAG_RE.lastIndex = position;
-      const tag = TAG_RE.exec(template);
+      const tag = scanTag(template, position);
       if (!tag) {
         position++;
         continue;
       }
-      position += tag[0].length;
-      if (RAW_ELEMENTS.has(required(tag[1], 'Raw tag name capture')) && tag[3] !== '/') {
-        const close = template.indexOf(`</${tag[1]}`, position);
+      position = tag.end;
+      if (RAW_ELEMENTS.has(tag.name) && tag.selfClose !== '/') {
+        const close = template.indexOf(`</${tag.name}`, position);
         const end = close === -1 ? -1 : template.indexOf('>', close);
         if (end === -1) {
           return -1;
@@ -507,8 +396,4 @@ export function findMatchingFragmentClose(template: string, from: number): numbe
     }
   }
   return -1;
-}
-
-function escapeRe(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

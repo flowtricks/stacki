@@ -1,0 +1,24 @@
+/* The side panel's search box (PanelSearch.tsx). Only the clear button needs rules: the box itself is the app's
+   plain input. The button sits inside the box at its end edge, in logical properties so it follows the reading
+   direction, and the text stops short of it so a long query never runs under the cross. */
+.panel-search {
+  position: relative;
+}
+.panel-search.clearable input {
+  padding-inline-end: 28px;
+}
+.panel-search .panel-search-clear {
+  position: absolute;
+  inset-block-start: 4px;
+  /* The panel's 12px inset, then 4px inside the box. */
+  inset-inline-end: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-faint);
+}
+/* Hover is the ghost button's own fill (controls.css), as on every other small icon button. */

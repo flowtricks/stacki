@@ -1,0 +1,988 @@
+/* The transcript (TranscriptView.tsx and the cards it draws). Surfaces are separated by background fills, never borders. */
+/* Transcript */
+.ai-transcript {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* The transcript never scrolls sideways: a wide table or block scrolls inside its own box. */
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 1rem;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* One spacing scale for the transcript. Between turns is the largest gap; between a tool row and the prose after it,
+   and between prose paragraphs, list items, headings and tables, the markdown rules below use the same tokens. */
+.ai-transcript {
+  --ai-gap-turn: 1.25rem;
+  --ai-gap-prose: 0.75rem;
+  --ai-gap-tool: 0.5rem;
+  --ai-gap-item: 0.25rem;
+  --ai-gap-heading-above: 1rem;
+  --ai-gap-heading-below: 0.375rem;
+  --ai-gap-table: 0.75rem;
+}
+.ai-transcript-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-earlier,
+.ai-group-earlier {
+  align-self: center;
+  background: var(--bg-input);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-message-user {
+  align-self: flex-end;
+  max-width: 88%;
+}
+.ai-message-user:not(.ai-msg),
+.ai-msg-bubble {
+  background: var(--bg-active);
+  border-radius: 10px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-message-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-message-attachment-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The tiny preview: a fixed box, so the line never shifts when the picture decodes. A fill, no border. */
+.ai-message-thumb {
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.75rem;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: var(--bg-hover);
+}
+.ai-message-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ai-message-thumb[data-decode='pending'] img {
+  opacity: 0;
+}
+/* The larger preview in the app's tooltip: the picture at its stored width, never wider than the window. */
+.rail-tooltip.ai-message-thumb-preview {
+  padding: 4px;
+  z-index: 10001;
+}
+.ai-message-thumb-preview img {
+  display: block;
+  width: 20rem;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+}
+.ai-message-agent {
+  overflow-wrap: anywhere;
+}
+.ai-message {
+  position: relative;
+}
+.ai-worked {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-thought {
+  color: var(--text-dim);
+}
+.ai-thought-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-align: start;
+}
+.ai-thought-head:hover {
+  background: var(--bg-input);
+}
+.ai-thought-body {
+  margin-block: 2px 0;
+  /* Under the thought's label: the head's padding, the chevron and its gap. */
+  margin-inline: 24px 0;
+  padding: 6px 8px;
+  max-height: 260px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+
+/* The line under a running turn */
+.ai-turn-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.ai-turn-time {
+  min-width: 4.2em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ai-latest {
+  position: sticky;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  justify-content: center;
+  margin: 0 auto;
+  z-index: 2;
+  /* A solid surface, the one menus and popovers use, so nothing scrolling underneath shows through. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+}
+.ai-retry {
+  align-self: flex-start;
+}
+
+/* An activity group: the agent's work between two messages, folded to a line */
+.ai-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+/* One compact row: its text starts where the prose starts and its duration ends where the prose ends; the hover fill
+   reaches 6px past both, inside the panel's inset. */
+.ai-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline: -6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: start;
+}
+.ai-group-head:hover {
+  background: var(--bg-hover);
+}
+.ai-group-head > svg {
+  flex: none;
+  color: var(--text-faint);
+}
+.ai-group-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--red);
+}
+.ai-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.ai-group-failed {
+  font-size: 10.5px;
+  color: var(--red);
+}
+.ai-group-time,
+.ai-tool-time,
+.ai-task-time {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Flush left: the rows reach 6px past the prose on both sides exactly as the head does, so a row's chevron sits
+     under the head's chevron and its duration ends where the head's does. No indent under the label. */
+  margin-inline: -6px;
+  min-width: 0;
+}
+
+/* Tool calls */
+.ai-tool {
+  background: transparent;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.ai-tool:hover,
+.ai-tool:has(> .ai-tool-body) {
+  background: var(--bg-hover);
+}
+.ai-tool-nested {
+  margin-inline-start: 12px;
+}
+.ai-tool-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: start;
+}
+.ai-tool-head > svg {
+  flex: none;
+  color: var(--text-faint);
+}
+.ai-tool-head:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.ai-tool-spacer {
+  width: 12px;
+}
+.ai-tool-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.ai-tool-title .code-inline {
+  font-size: 12px;
+}
+.ai-tool-title .code-inline span {
+  opacity: 0.7;
+}
+.ai-tool-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 14px;
+  justify-content: flex-end;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-status-completed {
+  opacity: 0.6;
+}
+.ai-tool-count {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-status-in_progress {
+  color: var(--accent);
+}
+.ai-status-failed {
+  color: var(--red);
+}
+.ai-tool-command {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+.ai-tool-more {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-tool-showall {
+  align-self: flex-start;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-tool-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-subagent-body > .ai-tool-details {
+  margin: 4px 6px 0;
+}
+.ai-tool-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+.ai-tool-paths {
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+/* Each path reads in its own direction; the bullet and indent follow the panel. */
+.ai-tool-paths li {
+  unicode-bidi: plaintext;
+}
+.ai-tool-output {
+  max-height: 220px;
+  max-width: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* Permission, plan and notices */
+.ai-permission {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-permission-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.ai-permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-allow {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-reject {
+  background: var(--bg-active);
+}
+.ai-permission-answered {
+  flex-direction: row;
+  justify-content: space-between;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.ai-permission-outcome {
+  color: var(--text-faint);
+}
+.ai-notice {
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.ai-notice-error,
+.ai-notice-sign-in {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--text);
+}
+.ai-notice-warning {
+  background: rgba(255, 179, 64, 0.12);
+}
+.ai-plan {
+  background: var(--bg-input);
+  border-radius: 6px;
+}
+.ai-plan-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  text-align: start;
+}
+.ai-plan-count {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-plan-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-plan-entries {
+  margin: 0;
+  list-style: none;
+  padding-block: 0 8px;
+  padding-inline: 12px 8px;
+  font-size: 12px;
+}
+.ai-plan-entries li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 1px 0;
+}
+.ai-plan-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  flex: none;
+}
+.ai-plan-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ai-plan-in_progress .ai-plan-text {
+  color: var(--text);
+}
+.ai-plan-completed {
+  color: var(--text-faint);
+}
+.ai-plan-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  opacity: 0.5;
+}
+
+/* A reply that failed for any reason but signing in: one quiet row, no alarm colours. */
+.ai-error-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text-dim);
+}
+.ai-error-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.ai-error-title {
+  flex: 1;
+  min-width: 0;
+}
+.ai-error-body .ai-details {
+  flex-basis: 100%;
+}
+
+/* Compaction */
+.ai-compaction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.ai-compaction-mark {
+  display: inline-flex;
+  align-items: center;
+}
+.ai-compaction-detail {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.ai-compaction-failed {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--text);
+}
+.ai-compaction-failed .ai-compaction-mark {
+  color: var(--red);
+}
+
+/* Background tasks */
+.ai-tasks {
+  background: var(--bg-input);
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-tasks-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline-end: 4px;
+}
+.ai-tasks-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: start;
+}
+.ai-tasks-stop {
+  flex: none;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.ai-tasks-list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 8px;
+  align-items: center;
+}
+.ai-task-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-task-finished {
+  color: var(--text-faint);
+}
+.ai-task-failed .ai-task-time {
+  color: var(--red);
+}
+.ai-task-peek {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline-start: 19px;
+  /* Command output reads in its own direction while the indent follows the panel. */
+  unicode-bidi: plaintext;
+  font: 10.5px / 1.4 var(--mono, ui-monospace, monospace);
+  color: var(--text-faint);
+}
+.ai-untracked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-untracked-turn-on {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ai-untracked-failed {
+  color: var(--text-faint);
+}
+
+/* Rows of one turn sit a tool-gap apart; a new turn starts a turn-gap lower. */
+.ai-transcript-flow > * + * {
+  margin-top: var(--ai-gap-tool);
+}
+.ai-transcript-flow > .ai-msg-user:not(:first-child) {
+  margin-top: var(--ai-gap-turn);
+}
+/* A finished call shows no mark: success is the default. */
+.ai-tool-status.ai-status-completed {
+  display: none;
+}
+
+/* Subagents: the strip above the transcript and the header of one subagent's transcript (SubagentStrip.tsx, SubagentPane.tsx). */
+.ai-agents {
+  flex: none;
+  background: var(--bg-input);
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-agents-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: start;
+}
+button.ai-agents-head:hover {
+  background: var(--bg-hover);
+  border-radius: 6px;
+}
+.ai-agents-failed {
+  color: var(--red);
+  font-size: 11px;
+}
+.ai-agents-list {
+  margin: 0;
+  padding: 0 4px 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* About five rows; a run with more scrolls inside the strip, never pushing the transcript away. */
+  max-height: 10rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.ai-agents-more {
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+/* Every row has the same columns, so the dots, models and times line up down the list whatever their text: the dot,
+   the task (the rest of the width, cut with an ellipsis), the model (one fixed width), and the time (one fixed width,
+   right-aligned tabular figures, so "11s" and "5.9s" end on one line). */
+.ai-transcript,
+.ai-agents,
+.ai-agent-pane-head {
+  --ai-agent-model-width: 6.5rem;
+  --ai-agent-time-width: 3.25rem;
+}
+.ai-agent {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) var(--ai-agent-model-width) var(--ai-agent-time-width);
+  align-items: center;
+  gap: 1px 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+}
+.ai-agent:hover {
+  background: var(--bg-hover);
+}
+.ai-agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.ai-agent-dot-running {
+  background: var(--accent);
+}
+.ai-agent-dot-waiting {
+  background: var(--amber);
+}
+.ai-agent-dot-done {
+  background: var(--green);
+}
+.ai-agent-dot-failed {
+  background: var(--red);
+}
+.ai-agent-dot-stopped {
+  background: var(--text-dim);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ai-agent-dot-running {
+    animation: ai-agent-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes ai-agent-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+.ai-agent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-agent-role,
+.ai-agent-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.ai-agent-model-inherited {
+  font-style: italic;
+}
+.ai-agent-time-cell {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.ai-agent-time {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-agent-doing {
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-agent-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 8px 3px 3px;
+  background: var(--bg-input);
+  border-radius: 6px;
+}
+.ai-agent-pane-head .ai-agent-name {
+  flex: 1;
+}
+/* A subagent in the transcript (SubagentCard.tsx): one unit with its calls inside. Its head is a two-line grid in the
+   strip's columns (chevron and dot, task, model, time; then the progress line and the result under the task); its
+   chevron sits where the prose starts, as a group's does, and its calls sit flush under it. */
+.ai-subagent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-inline: -6px;
+  border-radius: 6px;
+  background: transparent;
+}
+.ai-subagent:has(> .ai-subagent-body) {
+  background: var(--bg-hover);
+}
+.ai-subagent-head {
+  display: grid;
+  grid-template-columns: 12px 7px minmax(0, 1fr) var(--ai-agent-model-width) var(--ai-agent-time-width);
+  align-items: center;
+  gap: 1px 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: start;
+}
+.ai-subagent-head:hover {
+  background: var(--bg-hover);
+}
+.ai-subagent-chevron {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+.ai-subagent-title {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-subagent-progress,
+.ai-subagent-summary {
+  grid-column: 3 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-subagent-summary {
+  color: var(--text-dim);
+}
+.ai-subagent-failed .ai-subagent-progress {
+  color: var(--red);
+}
+.ai-subagent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding-block-end: 4px;
+}
+.ai-subagent-body > .ui-skeleton-rows {
+  padding: 4px 6px;
+}
+.ai-subagent-result {
+  margin: 4px 6px 0;
+  padding: 6px 8px;
+  max-height: 260px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.ai-subagent-open {
+  align-self: flex-start;
+  margin: 4px 6px 0;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-subagent-open:hover {
+  background: var(--bg-pressed);
+  color: var(--text);
+}
+.ai-agent-back {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.ai-agent-back:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Find in the chat (ChatFindBar.tsx): a floating pill held at the top of the scrolling transcript. Filled a clear step
+   above the panel and the composer, lifted by a soft shadow, never outlined; focus brightens the fill. */
+.ai-find {
+  position: sticky;
+  inset-block-start: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  block-size: 44px;
+  margin-block-end: 8px;
+  padding-inline: 14px 6px;
+  border-radius: 22px;
+  /* A solid surface, so the messages scrolling underneath do not show through. */
+  background: color-mix(in srgb, var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b)), #fff 8%);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  transition: background-color 0.12s;
+}
+.ai-find:focus-within {
+  background: color-mix(in srgb, var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b)), #fff 14%);
+}
+.ai-find-icon {
+  flex: none;
+  color: var(--text);
+}
+.ai-find-field {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14.5px;
+}
+/* A mid-contrast grey that still reads against the pill's fill. */
+.ai-find-field::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.ai-find-count {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-find-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  padding: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+}
+.ai-find-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.ai-find-button:active:not(:disabled) {
+  background: var(--bg-pressed);
+}
+.ai-find-button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+/* Painted with the Custom Highlight API: every match in a strong amber, the current one stronger still, both legible on the dark transcript. */
+::highlight(ai-find) {
+  background-color: color-mix(in srgb, #f5c542 42%, transparent);
+  color: var(--text);
+}
+::highlight(ai-find-current) {
+  background-color: #ffb020;
+  color: #111;
+}

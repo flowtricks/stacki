@@ -1,0 +1,327 @@
+/* The diff view (DiffView.tsx) and the changes card (ChangesCard.tsx). Surfaces are separated by background fills, never borders.
+   The rows' colours come from the history diff's classes (`history-diff-*`); the rules here only fit them to the narrow panel. */
+
+.ai-diffview {
+  background: var(--bg);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 0;
+}
+.ai-diffview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+/* A path is code: it reads left to right in every language. */
+.ai-diffview .ai-diff-path {
+  direction: ltr;
+  unicode-bidi: isolate;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.ai-diffview-kind {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-diffview-counts {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+/* The lines are code, so the diff never mirrors; its gutters below stay physical for that reason. */
+.ai-diffview-scroll {
+  direction: ltr;
+  max-height: 360px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+.ai-diffview-compact .ai-diffview-scroll {
+  max-height: 170px;
+}
+.ai-diffview-lines {
+  width: max-content;
+  min-width: 100%;
+  font: 11.5px / 18px var(--mono, ui-monospace, monospace);
+  tab-size: 2;
+}
+.ai-diffview .history-diff-line {
+  grid-template-columns: 34px 14px 1fr;
+  min-height: 18px;
+}
+.ai-diffview .history-diff-number {
+  padding-right: 6px; /* physical: diff gutter inside LTR region */
+}
+.ai-diffview .history-diff-code {
+  padding-right: 12px; /* physical: diff gutter inside LTR region */
+}
+/* The words that changed inside an edited line: a stronger fill of the line's own colour. */
+.ai-diffview .history-diff-line.added .ai-diff-word {
+  background: rgba(48, 193, 88, 0.3);
+  border-radius: 2px;
+}
+.ai-diffview .history-diff-line.deleted .ai-diff-word {
+  background: rgba(255, 69, 58, 0.3);
+  border-radius: 2px;
+}
+.ai-diffview-gap {
+  position: sticky;
+  left: 0; /* physical: sticky inside LTR diff scroller */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 22px;
+  padding: 0 8px 0 10px; /* physical: gap row inside LTR diff */
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font: 11px / 22px var(--font, system-ui, sans-serif);
+  text-align: left; /* physical: gap row inside LTR diff */
+  border-radius: 0;
+}
+.ai-diffview-gap:hover {
+  color: var(--text);
+}
+.ai-diffview-note {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* The changes card */
+.ai-changes-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  /* Its rows pad themselves 6px for their hover fill, so the text lines up with the prose's edge. */
+  margin-inline: -6px;
+}
+.ai-changes-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.ai-changes-card-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 400;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ai-changes-total {
+  font-weight: 400;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ai-changes-bulk {
+  display: flex;
+  gap: 2px;
+}
+.ai-changes-bulk button,
+.ai-file-actions button {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-changes-bulk button:disabled,
+.ai-file-actions button:disabled {
+  opacity: 0.5;
+}
+.ai-changes-bulk .ai-changes-keep {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-changes-bulk .ai-changes-keep:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-changes-bulk .ai-changes-keep:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+.ai-file {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-file-open {
+  background: var(--bg);
+}
+.ai-file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-file-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.ai-file-toggle:hover {
+  background: var(--bg-hover, var(--bg-active));
+}
+.ai-file-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ai-file-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+/* File names and folders are paths: isolated left to right inside a mirrored row. */
+.ai-file-name {
+  direction: ltr;
+  unicode-bidi: isolate;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The folder is a second, quieter line so two files of one name stay apart without squeezing the name. */
+.ai-file-folder {
+  direction: ltr;
+  unicode-bidi: isolate;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+  /* The folder gives way first, so the name stays readable in a narrow panel. */
+  flex: 0 99 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-file-counts {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ai-file-added {
+  color: var(--green);
+}
+.ai-file-removed {
+  color: var(--red);
+}
+.ai-file-kind {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-file-kind-created {
+  color: var(--green);
+}
+.ai-file-kind-deleted {
+  color: var(--red);
+}
+.ai-file .ai-file-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-inline-end: 4px;
+}
+.ai-file .ai-file-done {
+  flex: none;
+  padding-inline-end: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-file-open-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 5px;
+}
+.ai-file-open-button:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+.ai-file-body {
+  padding: 0 4px 4px;
+}
+.ai-file-body .ai-diffview {
+  background: transparent;
+}
+.ai-file-gone {
+  margin: 0;
+  padding-block: 4px 8px;
+  padding-inline: 24px 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* With nothing to decide ("Applied"), the card is flat text: the buttons wait for the pointer or the keyboard. */
+.ai-changes-card-auto .ai-file-actions button,
+.ai-changes-card-auto .ai-changes-bulk button,
+.ai-changes-card-auto .ai-file-open-button {
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ai-changes-card-auto:hover .ai-file-actions button,
+.ai-changes-card-auto:hover .ai-changes-bulk button,
+.ai-changes-card-auto:hover .ai-file-open-button,
+.ai-changes-card-auto:focus-within .ai-file-actions button,
+.ai-changes-card-auto:focus-within .ai-changes-bulk button,
+.ai-changes-card-auto:focus-within .ai-file-open-button {
+  opacity: 1;
+}
+.ai-changes-card-auto .ai-file-actions button:hover,
+.ai-changes-card-auto .ai-changes-bulk button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+@media (hover: none) {
+  .ai-changes-card-auto .ai-file-actions button,
+  .ai-changes-card-auto .ai-changes-bulk button,
+  .ai-changes-card-auto .ai-file-open-button {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-changes-card-auto .ai-file-actions button,
+  .ai-changes-card-auto .ai-changes-bulk button,
+  .ai-changes-card-auto .ai-file-open-button {
+    transition: none;
+  }
+}

@@ -1,0 +1,8 @@
+---
+interface Props {
+  variant?: 'primary' | 'secondary' | 'ghost';
+  label: string;
+}
+const { variant = 'primary', label } = Astro.props;
+---
+<button class={`string-union btn-${variant}`}>{label}</button>

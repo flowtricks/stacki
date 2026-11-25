@@ -1,9 +1,11 @@
-// Goal: ContentView consumes only bounded, parsed entry and rename data.
+// Goal: ContentView consumes only parsed entry and rename data, of any size.
 // Methodology: exercise each parser with a complete wire reply, corrupt nested
-// fields and bounds, then script preload calls to separate I/O from contract bugs.
+// fields, then script preload calls to separate I/O from contract bugs.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const bridge = require('../../helpers/rendererModule')('src/features/content/contentViewBridge.ts');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -59,7 +61,7 @@ test('content entry, validation, and rename parsers preserve valid replies', () 
   assert.deepEqual(bridge.parseContentRenamePlan(plan), plan);
 });
 
-test('content parsers reject malformed nested data and collection bounds', () => {
+test('content parsers reject malformed nested data and accept any collection size', () => {
   for (const value of [
     jsonNull,
     { ...entries, entries: jsonNull },
@@ -68,10 +70,12 @@ test('content parsers reject malformed nested data and collection bounds', () =>
     { ...entries, entries: [{ ...entry, locator: [-1] }] },
     { ...entries, entries: [{ ...entry, data: Number.NaN }] },
     { ...entries, collection: { ...collection, name: 1 } },
-    { ...entries, entries: Array(100_001).fill(entry) },
   ]) {
     assert.throws(() => bridge.parseContentEntries(value));
   }
+  // Stacki has no product size limit: a collection is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseContentEntries({ ...entries, entries: Array(100_001).fill(entry) }).entries.length, 100_001);
   for (const value of [
     { ...plan, move: { kind: 'mystery' } },
     { ...plan, pointers: [{ ...plan.pointers[0], path: [-1] }] },
@@ -114,17 +118,7 @@ test('content operations validate payloads and keep transport failures as values
   assert.equal((await bridge.readContentEntries('/project', 'posts')).ok, true);
   assert.equal((await bridge.readContentTargets('/project', 'posts')).ok, true);
   assert.equal((await bridge.validateContentEntry('/project', 'posts', entry.data)).ok, true);
-  assert.equal(
-    (
-      await bridge.writeContentEntry(
-        '/project',
-        { file: entry.file, locator: [] },
-        [{ path: ['title'], value: 'Welcome' }],
-        undefined,
-      )
-    ).ok,
-    true,
-  );
+  assert.equal((await bridge.writeContentEntry('/project', { file: entry.file, locator: [] }, [{ path: ['title'], value: 'Welcome' }], undefined)).ok, true);
   assert.equal((await bridge.planContentRename('/project', 'posts', 'hello', 'welcome')).ok, true);
   assert.equal((await bridge.renameContentEntry('/project', 'posts', 'hello', 'welcome')).ok, true);
   assert.equal(calls.length, 6);

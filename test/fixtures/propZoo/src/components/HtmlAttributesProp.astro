@@ -1,0 +1,9 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+interface Props {
+  label: string;
+  linkAttrs?: HTMLAttributes<'a'>;
+}
+const { label, linkAttrs = {} } = Astro.props;
+---
+<a class="html-attributes-prop" {...linkAttrs}>{label}</a>

@@ -1,0 +1,390 @@
+/* The sessions list and the panel header's list controls (SessionsView.tsx, ChatRow.tsx, SectionHeader.tsx,
+   ChatHeader.tsx). Surfaces are separated by background fills, never borders. */
+.ai-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.ai-sessions-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.ai-sessions-search {
+  flex: 1;
+  min-width: 0;
+}
+.ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: 6px;
+}
+/* A drag in progress: nothing under the pointer selects, and the cursor says something is held. */
+.ai-list:has([data-dragging]) {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* A section: its header, then its rows. */
+.ai-section {
+  display: flex;
+  flex-direction: column;
+}
+.ai-section-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding-block: 0;
+  padding-inline: 8px 4px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.ai-section-head.is-static {
+  cursor: default;
+}
+.ai-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-inline-start: -6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.ai-section-toggle:hover,
+.ai-section-toggle:focus-visible,
+.ai-section-head.has-menu .ai-section-toggle {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-section-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-section-count {
+  flex: none;
+  color: var(--text-faint);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.ai-section-head.is-static {
+  gap: 5px;
+}
+.ai-section-head .ai-row-more {
+  margin-inline-start: auto;
+}
+.ai-section-head:hover .ai-row-more,
+.ai-section-head:focus-within .ai-row-more,
+.ai-section-head.has-menu .ai-row-more {
+  opacity: 1;
+}
+.ai-section-head.is-renaming {
+  height: 30px;
+}
+.ai-section-rename {
+  margin-block: 0;
+  margin-inline: -6px 4px;
+}
+.ai-section-empty {
+  list-style: none;
+  padding-block: 4px;
+  padding-inline: 26px 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* A chat row: two lines in a fixed 16px icon column, 44px tall, so every row has the same height whatever it holds.
+   The open button always stops short of the "⋯" (padding at its end), so a long title is cut in the same place
+   whether or not the button shows, and hovering moves nothing. */
+.ai-list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ai-list-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+.ai-list-row:hover,
+.ai-list-row:focus-within,
+.ai-list-row.has-menu {
+  background: var(--bg-hover);
+}
+/* The open chat (split layout): the app's selected fill, as the Navigator's selected row. */
+.ai-list-row.is-selected,
+.ai-list-row.is-selected:hover,
+.ai-list-row.is-selected:focus-within {
+  background: var(--accent-soft);
+}
+.ai-list-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding-block: 0;
+  padding-inline: 8px 32px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+}
+.ai-list-open:focus-visible {
+  background: var(--bg-active);
+  outline: none;
+}
+.ai-list-open[data-dragging] {
+  opacity: 0.5;
+}
+.ai-list-open.is-static {
+  cursor: default;
+  padding-inline-end: 8px;
+}
+.ai-row-lead {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-block-start: 7px;
+  color: var(--text-dim);
+}
+/* Unread: a dot on the mark's corner, cut out of the row's fill by a ring of the panel colour (a fill, not a border). */
+.ai-unread-dot {
+  position: absolute;
+  inset-block-start: -2px;
+  inset-inline-end: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-panel);
+}
+.ai-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ai-row-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.ai-list-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.ai-list-row.is-unread .ai-list-title {
+  font-weight: 600;
+}
+.ai-list-row.is-archived .ai-list-title {
+  color: var(--text-faint);
+}
+.ai-row-pin {
+  flex: none;
+  color: var(--text-faint);
+}
+.ai-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The separator is drawn, not typed, so the two parts stay one translation-free pair in either reading direction. */
+.ai-list-time::before {
+  content: '·';
+  margin-inline-end: 5px;
+}
+.ai-row-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.ai-list-row .ai-row-more {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.ai-list-row:hover .ai-row-more,
+.ai-list-row:focus-within .ai-row-more,
+.ai-list-row.has-menu .ai-row-more,
+.ai-row-more:focus-visible {
+  opacity: 1;
+}
+.ai-row-more:hover,
+.ai-row-more[aria-expanded='true'] {
+  background: var(--bg-input);
+  color: var(--text);
+}
+.ai-row-restore {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11px;
+}
+.ai-list-row.is-archived .ai-row-more {
+  position: static;
+  transform: none;
+  margin-inline-end: 4px;
+}
+.ai-list-row.is-renaming {
+  height: 44px;
+  gap: 8px;
+  padding-inline-start: 8px;
+}
+.ai-list-row.is-renaming .ai-row-lead {
+  align-self: center;
+  margin-block-start: 0;
+}
+/* A field is exactly as tall as the line it replaces, so renaming moves nothing below it. */
+.ai-rename {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 26px;
+  margin-block: 0;
+  margin-inline: 0 4px;
+}
+
+/* Where a dragged row would land: zero height, so showing it moves nothing. */
+.ai-drop-slot {
+  position: relative;
+  height: 0;
+  list-style: none;
+}
+
+/* The list's empty and filtered-out states (a quiet mark, one line and the way on), and the foot's "New section",
+   a quiet text button at the end of the list in the rows' own inset. */
+.ai-sessions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-block: 32px 16px;
+  padding-inline: 16px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+.ai-sessions-empty p {
+  margin: 0;
+  max-width: 240px;
+}
+.ai-sessions-empty-icon {
+  color: var(--text-faint);
+  opacity: 0.8;
+}
+.ai-sessions-start,
+.ai-new-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.ai-sessions-start {
+  padding: 5px 10px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+/* The empty list's New chat is the panel's one primary action: blue, and blue it stays (aiShell.css .ai-primary). */
+.ai-sessions-start.ai-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-sessions-start.ai-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-sessions-start.ai-primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+.ai-new-section {
+  align-self: flex-start;
+  margin-block-start: 2px;
+  padding-block: 5px;
+  padding-inline: 8px 10px;
+}
+.ai-new-section:hover:not(:disabled),
+.ai-new-section:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-new-section:disabled {
+  opacity: 0.5;
+}
+
+/* The header. */
+/* A filter is on: the funnel turns blue and carries a dot, so a short list says why it is short. */
+.ai-filter-button {
+  position: relative;
+}
+.ai-filter-button.on {
+  color: var(--accent);
+}
+.ai-filter-badge {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-end: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-panel);
+}
+.ai-header h2 {
+  cursor: default;
+}
+.ai-header-rename {
+  flex: 1;
+  min-width: 0;
+}

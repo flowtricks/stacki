@@ -19,39 +19,24 @@
 import { assert } from '../../shared/core/assert';
 import type { Edit, NodeRef } from '../../shared/engine/editRequest';
 import type { BuiltEdit, EditBase, IntentDraft } from './documentActors';
-import { TAG_NAME_RE } from '../../shared/engine/intent';
-import type { Operation, Placement, RejectionReason, SourceEdit } from '../../shared/engine/intent';
+import { isAttributeHost, TAG_NAME_RE } from '../../shared/engine/intent';
+import type { Operation, RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { renameSites } from '../../shared/engine/loopScope';
-import {
-  closeTagStart,
-  lineIndent,
-  nodeAtPath,
-  openTagEnd,
-  tagNameEnd,
-  textOf,
-} from '../../shared/engine/planSupport';
+import { closeTagStart, indentedFragment, lineIndent, nodeAtPath, openTagEnd, tagNameEnd, textOf } from '../../shared/engine/planSupport';
+import { insertedIndent, labelledSpan, wrapperTakesLines } from '../../shared/engine/planTree';
+import { wrappedTextHunk } from '../../shared/engine/planText';
+import { diffCodePatch } from '../../shared/engine/codePatch';
+import { encodeText } from '../../shared/page/htmlText';
 import { parsePageResult, type PageNode } from '../../shared/page/pageNode';
 import { toAnchorRef, type AnchorRef } from '../../shared/page/ref';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  encodeUtf8,
-  spansAscending,
-  toByteSpan,
-  toByteString,
-} from '../../shared/core/span';
+import { byteStringsEqual, decodeUtf8, encodeUtf8, spansAscending, toByteSpan, toByteString } from '../../shared/core/span';
 import { parsePage, serializeNodes, serializePage } from '../parse/astroParser';
-import {
-  frontmatterSlot,
-  pageFormat,
-  placedHunks,
-  resolveRef,
-  shiftedHunks,
-  type Authored,
-} from './editAnchors';
+import { indentUnitBelow, indentUnitOf } from '../../shared/core/indent';
+import { frontmatterSlot, pageFormat, placedHunks, resolveRef, shiftedHunks, type Authored } from './editAnchors';
 import { markdownEditDraft, markdownPageNodes } from './markdownEdits';
+import { entityTextHunks } from './textEntities';
 
 /** The intent an edit is. Every edit is built against the snapshot it names,
  * except a frontmatter request after the app's own commits: it states the
@@ -70,10 +55,7 @@ export function buildEdit(edit: Edit, base: EditBase): Result<BuiltEdit, Rejecti
 }
 
 /** The intent an edit is, against the snapshot it names. */
-export function buildEditIntent(
-  edit: Edit,
-  snapshot: Snapshot,
-): Result<IntentDraft, RejectionReason> {
+export function buildEditIntent(edit: Edit, snapshot: Snapshot): Result<IntentDraft, RejectionReason> {
   const decoded = decodeUtf8(snapshot.bytes);
   assert(decoded.ok, 'A page the renderer read decodes');
   if (edit.tag === 'revert') {
@@ -89,9 +71,7 @@ export function buildEditIntent(
   const format = pageFormat(snapshot.path);
   const authored: Authored = { snapshot, text: decoded.value, projection, format };
   if (edit.tag === 'replace-page') {
-    return format === 'astro'
-      ? replacePageDraft(authored, edit.model)
-      : err('unsupported-operation');
+    return format === 'astro' ? replacePageDraft(authored, edit.model) : err('unsupported-operation');
   }
   if (format !== 'astro') {
     // Markdown's own drafts first (markdownEdits.ts); what it leaves — markup
@@ -106,14 +86,18 @@ export function buildEditIntent(
 }
 
 // A gesture's edit of the page's nodes, stated against their parse.
-function nodeEditDraft(
-  edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patch' }>,
-  authored: Authored,
-): Result<IntentDraft, RejectionReason> {
+function nodeEditDraft(edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patch' }>, authored: Authored): Result<IntentDraft, RejectionReason> {
   switch (edit.tag) {
     case 'set-attribute':
     case 'remove-attribute':
-    case 'set-inline-style':
+    case 'set-inline-style': {
+      // A node with no tag has nowhere to write this: a refusal, not a thrown
+      // intent. A throw reads as a failed transport, so the saver would keep
+      // the gesture at the head of the queue and every later edit of the page
+      // would fail behind it.
+      const { target, ...rest } = edit;
+      return withAnchor(authored, target, (anchor) => (isAttributeHost(anchor.expectedKind) ? ok({ anchor, operation: rest }) : err('unsupported-operation')));
+    }
     case 'remove-node': {
       const { target, ...rest } = edit;
       return withAnchor(authored, target, (anchor) => ok({ anchor, operation: rest }));
@@ -122,30 +106,24 @@ function nodeEditDraft(
       return withAnchor(authored, edit.target, (anchor) => insertDraft(authored, anchor, edit));
     case 'move-node':
       return withAnchor(authored, edit.target, (anchor) =>
-        withAnchor(authored, edit.destination, (destination) =>
-          ok({ anchor, operation: { tag: 'move-node', destination, placement: edit.placement } }),
-        ),
+        withAnchor(authored, edit.destination, (destination) => ok({ anchor, operation: { tag: 'move-node', destination, placement: edit.placement } })),
       );
     case 'rename-binding':
       return withAnchor(authored, edit.target, (anchor) => renameDraft(authored, anchor, edit));
     case 'rename-tag':
-      return withAnchor(authored, edit.target, (anchor) =>
-        tagRenameDraft(authored, anchor, edit.to),
-      );
+      return withAnchor(authored, edit.target, (anchor) => tagRenameDraft(authored, anchor, edit.to));
     case 'rename-attribute':
       return withAnchor(authored, edit.target, (anchor) =>
-        tagAnchor(anchor)
+        isAttributeHost(anchor.expectedKind)
           ? ok({ anchor, operation: { tag: 'rename-attribute', from: edit.from, to: edit.to } })
           : err('unsupported-operation'),
       );
     case 'replace-node':
-      return withAnchor(authored, edit.target, (anchor) =>
-        replaceDraft(authored, anchor, edit.node),
-      );
+      return withAnchor(authored, edit.target, (anchor) => replaceDraft(authored, anchor, edit.node));
     case 'wrap-nodes':
-      return withAnchor(authored, edit.target, (anchor) =>
-        withAnchor(authored, edit.last, (last) => wrapDraft(authored, anchor, last, edit.name)),
-      );
+      return withAnchor(authored, edit.target, (anchor) => withAnchor(authored, edit.last, (last) => wrapDraft(authored, anchor, last, edit.name)));
+    case 'wrap-text':
+      return withAnchor(authored, edit.target, (anchor) => textWrapDraft(authored, anchor, edit.name));
     case 'unwrap-node':
       return withAnchor(authored, edit.target, (anchor) => unwrapDraft(authored, anchor));
     case 'append-body':
@@ -164,10 +142,7 @@ function nodeEditDraft(
 // The last-resort visual edit is still a bounded hunk edit, not a regenerated
 // file. The old printed model identifies semantic changes; placedHunks maps
 // only those ranges onto the authored formatting and refuses ambiguous ones.
-function replacePageDraft(
-  authored: Authored,
-  next: Extract<Edit, { tag: 'replace-page' }>['model'],
-): Result<IntentDraft, RejectionReason> {
+function replacePageDraft(authored: Authored, next: Extract<Edit, { tag: 'replace-page' }>['model']): Result<IntentDraft, RejectionReason> {
   const parsed = parsePageResult(parsePage(authored.text, { locs: true }));
   if (!parsed.editable) {
     return err('source-invalid');
@@ -189,7 +164,7 @@ function replacePageDraft(
 // The body's first nodes, printed as a new node is; the planner refuses them
 // once the body has any node (they must stand beside it then).
 function appendDraft(authored: Authored, nodes: readonly PageNode[]): IntentDraft {
-  const source = serializeNodes(nodes).replace(/\r?\n$/, '');
+  const source = serializeNodes(nodes, indentUnitOf(authored.text)).replace(/\r?\n$/, '');
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const anchor = toAnchorRef({
     span: toByteSpan(0, authored.snapshot.bytes.length),
@@ -203,29 +178,24 @@ function appendDraft(authored: Authored, nodes: readonly PageNode[]): IntentDraf
 // The renderer's node reference, checked against the projection of the same
 // bytes (editAnchors.ts): a mismatch means the renderer's parse is not of
 // these bytes.
-function withAnchor(
-  authored: Authored,
-  ref: NodeRef,
-  next: (anchor: AnchorRef) => Result<IntentDraft, RejectionReason>,
-): Result<IntentDraft, RejectionReason> {
+function withAnchor(authored: Authored, ref: NodeRef, next: (anchor: AnchorRef) => Result<IntentDraft, RejectionReason>): Result<IntentDraft, RejectionReason> {
   const resolved = resolveRef(authored, ref);
   return resolved.ok ? next(resolved.value.anchor) : resolved;
 }
 
 // New nodes print with the legacy printer, their continuation lines indented
-// to where they land; a copy is the source node's own bytes.
-function insertDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  edit: Extract<Edit, { tag: 'insert-node' }>,
-): Result<IntentDraft, RejectionReason> {
+// to where the planner lands them; a copy is the source node's own bytes.
+function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'insert-node' }>): Result<IntentDraft, RejectionReason> {
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
-  const indent =
-    lineIndent(authored.snapshot.bytes, anchor.span.start) + (inside(edit.placement) ? '  ' : '');
   const content = edit.content;
   if (content.tag === 'copy') {
     return withAnchor(authored, content.source, (source) => {
-      const bytes = authored.snapshot.bytes.subarray(source.span.start, source.span.end);
+      // A copy takes the node's label with it (planTree.ts, labelledSpan), so the
+      // duplicate reads in the Navigator as its original does.
+      const copied = nodeAtPath(authored.projection, source.path);
+      assert(copied !== undefined, 'A checked copy source names a projected node');
+      const span = labelledSpan(authored.snapshot.bytes, authored.projection, copied);
+      const bytes = authored.snapshot.bytes.subarray(span.start, span.end);
       const text = Buffer.from(bytes).toString('utf8');
       return ok({
         anchor,
@@ -233,17 +203,18 @@ function insertDraft(
       });
     });
   }
-  const printed = serializeNodes(content.nodes).replace(/\r?\n$/, '');
-  const text = printed.split(/\r?\n/).join(`${eol}${indent}`);
+  const landing = nodeAtPath(authored.projection, anchor.path);
+  assert(landing !== undefined, 'A checked anchor names a projected node');
+  const indent = insertedIndent(authored.snapshot.bytes, authored.projection, landing, edit.placement);
+  // Nested lines step in as the landing line does: a file that mixes tabs and
+  // spaces gets each new line in the style of the lines around it.
+  const printed = serializeNodes(content.nodes, indentUnitBelow(authored.text, indent)).replace(/\r?\n$/, '');
+  const text = indentedFragment(printed, indent, eol);
   const operation: Operation = { tag: 'insert-node', placement: edit.placement, source: text };
   return ok({ anchor, operation });
 }
 
-function renameDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  edit: Extract<Edit, { tag: 'rename-binding' }>,
-): Result<IntentDraft, RejectionReason> {
+function renameDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'rename-binding' }>): Result<IntentDraft, RejectionReason> {
   const loop = nodeAtPath(authored.projection, anchor.path);
   assert(loop !== undefined, 'A checked anchor names a projected node');
   if (loop.kind !== 'map') {
@@ -259,11 +230,7 @@ function renameDraft(
 // A tag's new name: the old one is read off the authored bytes, where the
 // planner will find it again (its witness). A `<style>` or `<script>` is raw
 // text by its name, and `<>` has none: neither is renamed visually.
-function tagRenameDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  to: string,
-): Result<IntentDraft, RejectionReason> {
+function tagRenameDraft(authored: Authored, anchor: AnchorRef, to: string): Result<IntentDraft, RejectionReason> {
   const node = nodeAtPath(authored.projection, anchor.path);
   assert(node !== undefined, 'A checked anchor names a projected node');
   if (node.kind !== 'element' && node.kind !== 'component') {
@@ -287,16 +254,24 @@ function tagRenameDraft(
 // on the bytes through a diff between the two (the span mapper, which refuses
 // rather than guesses). A range the formatting itself changed has no place:
 // the edit is refused, and the node is never reprinted.
-function replaceDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  next: PageNode,
-): Result<IntentDraft, RejectionReason> {
+function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Result<IntentDraft, RejectionReason> {
   const projected = nodeAtPath(authored.projection, anchor.path);
   assert(projected !== undefined, 'A checked anchor names a projected node');
   const previous = pageNodeAt(authored, anchor.path);
   if (previous === undefined) {
     return err('anchor-moved');
+  }
+  if (previous.kind === 'raw' && next.kind === 'raw') {
+    const contents = rawContentsDraft(authored, anchor, { previous, next });
+    if (contents !== undefined) {
+      return contents;
+    }
+  }
+  if (previous.kind === 'text' && next.kind === 'text') {
+    const words = textDraft(authored, anchor, { previous, next });
+    if (words !== undefined) {
+      return words;
+    }
   }
   const bytes = authored.snapshot.bytes;
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
@@ -315,30 +290,141 @@ function replaceDraft(
   return ok({ anchor, operation: { tag: 'rewrite-node', hunks: moved } });
 }
 
-// Attributes live on tags: elements, component invocations, `<style>`/`<script>`.
-function tagAnchor(anchor: AnchorRef): boolean {
-  const kind = anchor.expectedKind;
-  return kind === 'element' || kind === 'component' || kind === 'raw';
+/**
+ * A `<style>` or `<script>` whose contents alone changed: the contents are
+ * kept byte for byte, so the change is the diff of the old contents and the
+ * new, written where the contents sit between the tags. Printing the element
+ * instead re-indents its contents by the element's own indentation, and a
+ * change the diff could not place on the file through that re-indented text
+ * was refused as an editor error (typing a comment into a page's `<style>`,
+ * a style panel edit): or, placed, wrote new lines at the doubled indent.
+ * Undefined when the tag itself changed or the contents on disk are not the
+ * ones the node holds; the printed path decides those.
+ */
+function rawContentsDraft(
+  authored: Authored,
+  anchor: AnchorRef,
+  nodes: { readonly previous: RawPageNode; readonly next: RawPageNode },
+): Result<IntentDraft, RejectionReason> | undefined {
+  const { previous, next } = nodes;
+  if (previous.name !== next.name || JSON.stringify([previous.props, previous.attrOrder]) !== JSON.stringify([next.props, next.attrOrder])) {
+    return undefined;
+  }
+  const projected = nodeAtPath(authored.projection, anchor.path);
+  assert(projected?.kind === 'raw', 'A raw page node is a projected raw node');
+  const bytes = authored.snapshot.bytes;
+  const open = openTagEnd(bytes, projected);
+  const close = open.selfClosing ? undefined : closeTagStart(bytes, projected, open.end);
+  if (close === undefined || textOf(bytes, toByteSpan(open.end, close)) !== previous.inner) {
+    return undefined;
+  }
+  const change = diffCodePatch(previous.inner, next.inner);
+  if (!change.ok) {
+    return change;
+  }
+  if (change.value.length === 0) {
+    return err('unsupported-operation'); // Nothing to write; the gesture had no change.
+  }
+  const hunks = shiftedHunks(
+    change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })),
+    open.end,
+  );
+  assert(
+    hunks.every((hunk) => hunk.span.start >= open.end && hunk.span.end <= close),
+    'A contents edit stays between the tags',
+  );
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks } });
+}
+
+type RawPageNode = Extract<PageNode, { readonly kind: 'raw' }>;
+// A text run's node: the value kinds share one shape, `text` among them.
+type TextPageNode = Extract<PageNode, { readonly kind: 'text' | 'expr' | 'raw-line' }>;
+
+/**
+ * A run of text whose words changed: written as the diff of its old text and
+ * its new, where the run sits. The printer writes a run without the space at
+ * either end (on a line of its own that space is the layout's), so a change to
+ * that space alone printed the same before and after and was refused as an
+ * editor error: deleting the space in `Send your first pigeon <span>`.
+ * Undefined unless the file holds the run exactly as its text spells it; the
+ * printed path decides the rest (text wrapped across lines, say).
+ */
+function textDraft(
+  authored: Authored,
+  anchor: AnchorRef,
+  nodes: { readonly previous: TextPageNode; readonly next: TextPageNode },
+): Result<IntentDraft, RejectionReason> | undefined {
+  const { previous, next } = nodes;
+  const projected = nodeAtPath(authored.projection, anchor.path);
+  assert(projected?.kind === 'text', 'A text page node is a projected text node');
+  const own = textOf(authored.snapshot.bytes, projected.span);
+  const before = encodeText(previous.value);
+  if (own !== before) {
+    // A run that spells characters as entities (`&copy;`) is not the encoding of its own value.
+    // It is edited on its characters, each end of the change moved to a boundary the bytes have.
+    const spelled = entityTextHunks(own, previous.value, next.value);
+    if (spelled === undefined) {
+      return undefined;
+    }
+    if (!spelled.ok) {
+      return spelled;
+    }
+    return ok({ anchor, operation: { tag: 'rewrite-node', hunks: shiftedHunks(spelled.value, projected.span.start) } });
+  }
+  if (own.includes('\n')) {
+    return undefined;
+  }
+  const after = encodeText(next.value);
+  const change = diffCodePatch(before, after);
+  if (!change.ok) {
+    return change;
+  }
+  if (change.value.length === 0) {
+    return err('unsupported-operation'); // Nothing to write; the gesture had no change.
+  }
+  const hunks = shiftedHunks(
+    change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })),
+    projected.span.start,
+  );
+  assert(
+    hunks.every((hunk) => hunk.span.start >= projected.span.start && hunk.span.end <= projected.span.end),
+    'A text edit stays inside its run',
+  );
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks } });
 }
 
 // A run of siblings inside a new tag: the opening tag on its own line before
 // the first, the closing tag on its own line after the last, at the first
-// one's indentation. The run's own bytes are not re-indented.
-function wrapDraft(
-  authored: Authored,
-  anchor: AnchorRef,
-  last: AnchorRef,
-  name: string,
-): Result<IntentDraft, RejectionReason> {
+// one's indentation, or tight around it where a line break would show (the layout
+// rule, planTree.ts). The run's own bytes are not re-indented.
+function wrapDraft(authored: Authored, anchor: AnchorRef, last: AnchorRef, name: string): Result<IntentDraft, RejectionReason> {
+  const first = nodeAtPath(authored.projection, anchor.path);
+  assert(first !== undefined, 'A checked anchor names a projected node');
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const indent = lineIndent(authored.snapshot.bytes, anchor.span.start);
+  const lines = wrapperTakesLines(authored.snapshot.bytes, authored.projection, first, name);
   const operation: Operation = {
     tag: 'wrap-nodes',
     last,
-    open: `<${name}>${eol}${indent}`,
-    close: `${eol}${indent}</${name}>`,
+    open: lines ? `<${name}>${eol}${indent}` : `<${name}>`,
+    close: lines ? `${eol}${indent}</${name}>` : `</${name}>`,
   };
   return ok({ anchor, operation });
+}
+
+// A text run inside a new tag, written as a rewrite of the run: `wrap-nodes`
+// puts its tags on lines of their own, which here would add spaces to the words.
+function textWrapDraft(authored: Authored, anchor: AnchorRef, name: string): Result<IntentDraft, RejectionReason> {
+  const node = nodeAtPath(authored.projection, anchor.path);
+  assert(node !== undefined, 'A checked anchor names a projected node');
+  if (node.kind !== 'text') {
+    return err('unsupported-operation');
+  }
+  const hunk = wrappedTextHunk(textOf(authored.snapshot.bytes, node.span), node.span, name);
+  if (hunk === undefined) {
+    return err('unsupported-operation'); // A blank run has no words to wrap.
+  }
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks: [hunk] } });
 }
 
 // A paired tag taken away, its children kept as they are written: the opening
@@ -399,8 +485,7 @@ function lineStartBefore(bytes: Uint8Array, to: number, floor: number): number |
 // The parsed node at a projection path: projections index the same tree. A
 // Markdown page's markup is found in the Markdown parse, which holds it.
 function pageNodeAt(authored: Authored, path: readonly number[]): PageNode | undefined {
-  const roots =
-    authored.format === 'astro' ? astroPageNodes(authored.text) : markdownPageNodes(authored);
+  const roots = authored.format === 'astro' ? astroPageNodes(authored.text) : markdownPageNodes(authored);
   if (roots === undefined) {
     return undefined;
   }
@@ -424,10 +509,7 @@ function astroPageNodes(text: string): readonly PageNode[] | undefined {
   return parsed.editable ? parsed.model.nodes : undefined;
 }
 
-function frontmatterDraft(
-  authored: Authored,
-  model: Extract<Edit, { tag: 'set-frontmatter' }>['model'],
-): Result<IntentDraft, RejectionReason> {
+function frontmatterDraft(authored: Authored, model: Extract<Edit, { tag: 'set-frontmatter' }>['model']): Result<IntentDraft, RejectionReason> {
   const block = authored.projection.frontmatter;
   const page = serializePage({ ...model, nodes: [] });
   if (block === undefined) {
@@ -443,9 +525,7 @@ function frontmatterDraft(
     });
     return ok({ anchor, operation: { tag: 'insert-frontmatter', source: printed } });
   }
-  const before = Buffer.from(authored.snapshot.bytes.subarray(block.start, block.end)).toString(
-    'utf8',
-  );
+  const before = Buffer.from(authored.snapshot.bytes.subarray(block.start, block.end)).toString('utf8');
   const printed = printedBlock(page, before);
   if (printed === undefined) {
     return err('unsupported-operation');
@@ -468,10 +548,7 @@ function printedBlock(page: string, before: string): string | undefined {
   return before.endsWith('\n') ? `${block}${eol}` : block;
 }
 
-function revertDraft(
-  snapshot: Snapshot,
-  hunks: Extract<Edit, { tag: 'revert' }>['hunks'],
-): Result<IntentDraft, RejectionReason> {
+function revertDraft(snapshot: Snapshot, hunks: Extract<Edit, { tag: 'revert' }>['hunks']): Result<IntentDraft, RejectionReason> {
   const inside = hunks.every((hunk) => hunk.span.end <= snapshot.bytes.length);
   if (!inside || !spansAscending(hunks.map((hunk) => hunk.span)) || hunks.length === 0) {
     return err('anchor-moved'); // Not hunks of these bytes.
@@ -488,10 +565,7 @@ function revertDraft(
 // hunk inside them, on code-point boundaries, holding the text it says it
 // replaces. A hunk that does not is not a diff of these bytes — the editor's
 // text descends from some other version — and it cannot be merged.
-function codePatchDraft(
-  snapshot: Snapshot,
-  hunks: Extract<Edit, { tag: 'code-patch' }>['hunks'],
-): Result<IntentDraft, RejectionReason> {
+function codePatchDraft(snapshot: Snapshot, hunks: Extract<Edit, { tag: 'code-patch' }>['hunks']): Result<IntentDraft, RejectionReason> {
   assert(hunks.length > 0, 'The wire parser requires a hunk');
   assert(spansAscending(hunks.map((hunk) => hunk.span)), 'The wire parser orders the hunks');
   const bytes = snapshot.bytes;
@@ -523,8 +597,4 @@ function continuesCodePoint(bytes: Uint8Array, offset: number): boolean {
     return false; // The end of the file is a boundary.
   }
   return byte >= 0x80 && byte < 0xc0;
-}
-
-function inside(placement: Placement): boolean {
-  return placement === 'first-child' || placement === 'last-child';
 }

@@ -21,6 +21,8 @@ export type TelemetryEvent =
 
 export interface TelemetryCounts {
   readonly applied: number;
+  /** Applied without a write: the plan left the bytes as they were. */
+  readonly unchanged: number;
   readonly uncertain: number;
   readonly backpressured: number;
   readonly lockLeaked: number;
@@ -41,7 +43,7 @@ export const TELEMETRY_EVENT = 'stacki.document';
 export function createDocumentTelemetry(log: (line: string) => void): DocumentTelemetry {
   // The one mutable state of this module: counts owned by this closure.
   const rejected = Object.fromEntries(REJECTION_REASONS.map((reason) => [reason, 0]));
-  const totals: Totals = { applied: 0, uncertain: 0, backpressured: 0, lockLeaked: 0 };
+  const totals: Totals = { applied: 0, unchanged: 0, uncertain: 0, backpressured: 0, lockLeaked: 0 };
   return {
     record(file, event) {
       // Push the ifs up: every counter moves here, and the line reports its total.
@@ -73,6 +75,7 @@ export function hashPath(file: string): string {
 /** The counters other than rejections, owned by one telemetry closure. */
 interface Totals {
   applied: number;
+  unchanged: number;
   uncertain: number;
   backpressured: number;
   lockLeaked: number;
@@ -112,6 +115,11 @@ function outcomeTally(outcome: Outcome): Tally {
   const intent = outcome.intentId;
   switch (outcome.tag) {
     case 'applied':
+      // An applied intent that changed no range wrote nothing (documentActor.ts
+      // `unchanged`); the log says so, so a write made by looking is visible.
+      if (outcome.changedRanges.length === 0) {
+        return { counter: 'unchanged', intent, outcome: 'unchanged' };
+      }
       return { counter: 'applied', intent, outcome: 'applied' };
     case 'uncertain':
       return { counter: 'uncertain', intent, outcome: 'uncertain' };
@@ -142,5 +150,7 @@ function rejectionCounts(input: Record<string, number>): Record<RejectionReason,
     'write-failed': count('write-failed'),
     'write-race': count('write-race'),
     'merge-conflict': count('merge-conflict'),
+    'invalid-placement': count('invalid-placement'),
+    'would-break-page': count('would-break-page'),
   };
 }

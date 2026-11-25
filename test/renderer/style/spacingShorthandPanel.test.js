@@ -89,6 +89,7 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
 
   let disk = '.card { color: red; padding: 2rem; }';
   window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [SHEET] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),
@@ -149,13 +150,13 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
       await until('the panel to settle', () => SIDES.every((each) => !label(each)?.disabled));
     };
 
-    const chip = await until('the class chip', () =>
-      panel.querySelector('.embed-editor_selector-chip'),
-    );
-    chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-    await until('the shorthand on the four sides', () =>
-      shown().every((text) => text === '2rem') ? shown() : undefined,
-    );
+    // The element's first class is the default pick, highlighted from the first paint;
+    // a click on it would deselect it, so it is clicked only when another is picked.
+    const chip = await until('the class chip', () => panel.querySelector('.embed-editor_selector-chip'));
+    if (!chip.classList.contains('is-active')) {
+      chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    }
+    await until('the shorthand on the four sides', () => (shown().every((text) => text === '2rem') ? shown() : undefined));
     assert.equal(disk, '.card { color: red; padding: 2rem; }', 'showing it writes nothing');
 
     // Shift: four sides move together, and the rule still holds one declaration.
@@ -165,30 +166,30 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
     assert.notEqual(all, '2rem', 'the drag changed the value');
     await until('the four labels to follow', () => shown().every((text) => text === all));
 
-    // Alt: the opposite pair moves, so each axis groups on its own.
+    // Alt: the opposite pair moves; every side is still set, so the rule holds
+    // one `padding` with a value per axis (`padding: 2rem 3rem`).
     await drag('left', [-16, 0], { altKey: true });
     assert.deepEqual(
       padding().map(([prop]) => prop),
-      ['padding-block', 'padding-inline'],
+      ['padding'],
       disk,
     );
-    const [[, block], [, inline]] = padding();
+    const [block, inline] = padding()[0][1].split(' ');
     assert.equal(block, all, 'the block axis kept its value');
     assert.notEqual(inline, all);
-    await until(
-      'the labels to follow each axis',
-      () => JSON.stringify(shown()) === JSON.stringify([block, inline, block, inline]),
-    );
+    await until('the labels to follow each axis', () => JSON.stringify(shown()) === JSON.stringify([block, inline, block, inline]));
 
-    // No key: one side leaves its axis, the other axis stays grouped.
+    // No key: one side changes; still one `padding`, now naming all three values it needs.
     await drag('top', [0, -16]);
     assert.deepEqual(
       padding().map(([prop]) => prop),
-      ['padding-top', 'padding-bottom', 'padding-inline'],
+      ['padding'],
       disk,
     );
-    assert.notEqual(padding()[0][1], block);
-    assert.equal(padding()[1][1], block, 'the bottom kept the axis value');
+    const [top, right, bottom] = padding()[0][1].split(' ');
+    assert.notEqual(top, block);
+    assert.equal(bottom, block, 'the bottom kept the axis value');
+    assert.equal(right, inline);
 
     // Alt-click resets a side that has no declaration of its own any more.
     const before = JSON.stringify(padding());

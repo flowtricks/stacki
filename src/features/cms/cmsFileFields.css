@@ -1,0 +1,56 @@
+/* A data file's settings (CmsFileFields.tsx) are drawn with a content
+   collection's settings classes (remoteCms.css); these are only what a
+   variable adds to them: its value, its delete on hover, and the preview. */
+
+/* A variable's row opens nothing, so it does not point like a clickable one. */
+.remote-cms-settings-field.cms-file-field {
+  cursor: default;
+}
+.cms-file-field-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  /* Code reads left to right in every language; it sits at the row's end as a field's meta does. */
+  direction: ltr;
+  text-align: end;
+}
+.cms-file-field-delete {
+  opacity: 0;
+}
+.cms-file-field:hover .cms-file-field-delete,
+.cms-file-field-delete:focus-visible {
+  opacity: 1;
+}
+.cms-file-fields-preview {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  font-weight: 400;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cms-file-fields-code {
+  min-height: 56px;
+  font-weight: 400;
+}
+/* The settings column keeps Team settings' width (remote-cms-settings-body), and
+   its grid tracks may shrink below their content, so a long value is cut short
+   inside its row instead of pushing the column past the view's edge. */
+.cms-file-fields-body,
+.cms-file-fields-body .remote-cms-settings-section,
+.cms-file-fields-body .remote-cms-settings-fields,
+.cms-file-fields-body .remote-cms-settings-editor {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.cms-file-field {
+  min-width: 0;
+}
+.cms-file-field .remote-cms-settings-name,
+.cms-file-field .remote-cms-settings-kind {
+  flex-shrink: 0;
+}

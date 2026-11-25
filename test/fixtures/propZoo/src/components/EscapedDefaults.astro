@@ -1,0 +1,10 @@
+---
+interface Props {
+  quote?: string;
+  emoji?: string;
+  multiline?: string;
+  path?: string;
+}
+const { quote = "He said \"hi\"", emoji = '🦒 zoo', multiline = 'line one\nline two', path = 'C:\\zoo' } = Astro.props;
+---
+<blockquote class="escaped-defaults" data-path={path}>{quote} {emoji} <pre>{multiline}</pre></blockquote>

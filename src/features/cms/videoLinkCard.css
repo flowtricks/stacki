@@ -1,0 +1,101 @@
+/* A video link's card under its field (VideoLinkCard.tsx). The thumbnail and
+   the words sit side by side where the panel is wide, as in the CMS panel, and
+   stack where it is narrow, as in the props panel. */
+.video-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-input, rgba(255, 255, 255, 0.06));
+}
+.video-card-thumb {
+  flex: 1 1 180px;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+.video-card.is-loading .video-card-thumb {
+  cursor: default;
+}
+.video-card-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video-card-body {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.video-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.video-card-open {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.video-card-open:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+.video-card-description {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.video-card-meta,
+.video-card-wait {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.video-card-wait {
+  color: var(--text-faint);
+}
+.video-card-remove {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 5px;
+  margin-top: auto;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.video-card-remove:hover {
+  background: rgba(255, 69, 58, 0.85);
+  color: #fff;
+}

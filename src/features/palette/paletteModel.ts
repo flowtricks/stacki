@@ -1,6 +1,7 @@
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
 import { count, list, optional, pathText, record, text } from '../../../shared/core/boundary';
+import { assert } from '../../../shared/core/assert';
 
 export interface ComponentUsageFile {
   readonly rel: string;
@@ -10,12 +11,16 @@ export interface ComponentUsageFile {
 }
 
 export type ComponentUsageResult =
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly files: readonly ComponentUsageFile[] };
+  { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly files: readonly ComponentUsageFile[] };
 
 export interface ComponentPreviewMessage {
   readonly status: 'empty' | 'ready';
+  /** Why an empty preview is empty, in the route's words (missing data, nothing rendered). */
+  readonly reason?: string;
 }
+
+/** The longest reason a preview page may give; a longer one is cut, never trusted to fit. */
+export const previewReasonCharsMax = 500;
 
 export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMessage | undefined {
   if (typeof input !== 'object' || input === null) {
@@ -27,8 +32,34 @@ export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMe
   if (!('status' in input)) {
     return undefined;
   }
-  if (input.status === 'empty' || input.status === 'ready') {
+  if (input.status === 'ready') {
     return { status: input.status };
+  }
+  if (input.status === 'empty') {
+    const reason = 'reason' in input && typeof input.reason === 'string' ? input.reason.trim().slice(0, previewReasonCharsMax) : '';
+    return reason === '' ? { status: 'empty' } : { status: 'empty', reason };
+  }
+  return undefined;
+}
+
+/**
+ * What the pointer did inside a card's live preview (the route's page posts it, componentPreview.ts):
+ * it came in, or it clicked. The page itself never acts on either, so the card does.
+ */
+export type ComponentPreviewGesture = 'pointer' | 'click';
+
+export function parseComponentPreviewGesture(input: unknown): ComponentPreviewGesture | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  if (!('type' in input) || input.type !== 'avb:component-preview-gesture') {
+    return undefined;
+  }
+  if (!('gesture' in input)) {
+    return undefined;
+  }
+  if (input.gesture === 'pointer' || input.gesture === 'click') {
+    return input.gesture;
   }
   return undefined;
 }
@@ -62,9 +93,7 @@ export function parseComponentUsage(input: unknown): ComponentUsageResult {
   return { kind: 'ready', files };
 }
 
-export function groupPaletteComponents(
-  components: readonly ScanComponent[],
-): readonly (readonly [string, readonly ScanComponent[]])[] {
+export function groupPaletteComponents(components: readonly ScanComponent[]): readonly (readonly [string, readonly ScanComponent[]])[] {
   const groups = new Map<string, ScanComponent[]>();
   for (const component of components) {
     const folder = component.folder;
@@ -90,19 +119,40 @@ export function prettyComponentName(name: string): string {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
+/** How the preview route lays a component out; see ComponentPreviewLayout in the route. `popup` is what it always did. */
+export type PreviewLayout = 'popup' | 'page' | 'snapshot';
+
 export function componentPreviewURL(
   devURL: string,
   component: ScanComponent,
   trailingSlash: TrailingSlash,
+  options: { readonly layout: PreviewLayout } = { layout: 'popup' },
 ): string {
   // A basename cannot distinguish components in different folders or a layout
   // from a component. Match the scan's folder convention without exposing an absolute path.
+  // The scan names the file itself when the host knows it (configured component folders,
+  // .stacki/folders.json); an older host leaves it out and the folder convention rebuilds it.
   const base = component.isLayout ? 'src' : 'src/components';
-  const file = [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
+  const file =
+    component.origin?.kind === 'package'
+      ? packagePreviewPath(component)
+      : (component.file ?? [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/'));
   const query = new URLSearchParams({ c: component.name, p: file });
+  // The popup layout is the route's default, so its URL stays exactly as it was.
+  if (options.layout === 'page' || options.layout === 'snapshot') {
+    query.set('layout', options.layout);
+  }
   // Astro 5 returns a 404 when an injected page violates the project's slash policy.
   const route = trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
   return `${devURL.replace(/\/+$/, '')}${route}?${query}`;
+}
+
+function packagePreviewPath(component: ScanComponent): string {
+  assert(component.origin?.kind === 'package', 'Package previews require package origin');
+  const file = component.path.replaceAll('\\', '/');
+  const index = file.lastIndexOf(`node_modules/${component.origin.package}/`);
+  assert(index >= 0, 'Package preview identity retains its installed path');
+  return file.slice(index);
 }
 
 export function usageFileLabel(file: ComponentUsageFile): string {

@@ -1,0 +1,2396 @@
+{
+  "entries": [
+    {
+      "file": "studio/test/ai.browser.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/assetLoading.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/canvasDemoLinks.browser.ts",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/canvasInteract.browser.ts",
+      "rule": "fixed-pause",
+      "count": 11,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/canvasText.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/canvasTextBreak.browser.ts",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/canvasTextFormat.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/cmsQueue.test.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/componentExit.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/componentProperties.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/connection-lease.test.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/contentInputs.browser.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/delayedPreview.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/demo.browser.ts",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/demo.browser.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/demoFixture.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/demoProjectFiles.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/demoVariants.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/idleSession.browser.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/linkedHosting.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/loopGapHit.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/navigation.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/notifications.browser.ts",
+      "rule": "fixed-pause",
+      "count": 12,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/numericStyles.browser.ts",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/numericStyles.browser.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/panelRefresh.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/publish-http.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/reorderPush.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/sharedPublishing.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/structuralEdits.bench.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "A manual benchmark, not a gate suite: the fixed delay is the slow server it simulates (a 700 ms component render), and no time is asserted.",
+      "added": "2026-11-21",
+      "expires": "2027-05-20"
+    },
+    {
+      "file": "studio/test/structuralLatency.browser.ts",
+      "rule": "absolute-ms",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/styleEditingStability.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/styleSelectors.browser.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/styleStability.browser.ts",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/textConvert.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/touchReorder.browser.ts",
+      "rule": "fixed-pause",
+      "count": 9,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/touchScroll.browser.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/variantHtml.browser.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/variantHtml.browser.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "studio/test/vendorSync.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Injected latency in a fake copy, so a concurrent assemble overlaps it; the test awaits it, never races it.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/app/backendLifecycle.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/app/closeProject.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/content/astroContent.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/content/cmsConnections.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/content/emdashInstall.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/content/payloadConnection.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/documents/pageEdit.test.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "One bounded quiet-wait (40 polls of 50 ms until the watcher goes quiet) and one negative-space window (no read between two edits) that cannot be awaited.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/agentHost.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/agentHostPrewarm.test.ts",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/agentHostProtocol.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/agentSetup.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/branchNotice.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/branchNotice.test.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/ai/changeTracking.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/appFrameFetch.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/appFrameTransparency.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/handlers/appUiKitServe.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/boundTextCanvas.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/canvasClickHeal.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/canvasDragChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/canvasInteract.test.js",
+      "rule": "fixed-pause",
+      "count": 13,
+      "reason": "Waits out the product hold timer under test (LINK_HOLD_MS in electron/preload/frameInteraction.ts plus room); fake timers would not reach the preload. Since v1.4.7.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/canvasInteractModal.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Negative-space windows (the modal stays open; no second load arrives) after the awaited state: absence cannot be awaited. Since v1.4.7.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/collapsedSelection.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/deepOutlineSafety.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/fragmentOutline.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Poll intervals of bounded condition waits, and a pause before the optional screenshot (STACKI_SHOTS only). Since v1.4.7.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/framePendingEdit.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/framePendingInsert.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/hoverCost.test.js",
+      "rule": "fixed-pause",
+      "count": 12,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/instanceRoot.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/instantEditsChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/loopGapHit.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/loopGapStripped.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/openedClass.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/pressDoesNotScroll.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/previewMode.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/previewTokenFrame.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/previewTokenScale.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/revealGlide.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/revealScrollsDown.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/revealSmoothScroll.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/preload/textEditLayout.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewClient/canvasMove.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewClient/commentRegion.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewClient/outsideEdit.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewServer/componentHoverPreview.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewServer/slotMarkers.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/previewServer/styleRecompile.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "The fake transform settles after an injected 5 ms; every test awaits it, none races it.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/appStorage.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/astroFileMonitor.test.ts",
+      "rule": "fixed-pause",
+      "count": 11,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/astroVariableWatch.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/cli/cliAppModule.test.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/instructionFiles.test.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/publishAccountVercel.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/publishAvailability.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/publishGitOnly.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/publisher.test.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/studioProgress.test.ts",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/thumbs.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/electron/project/thumbs.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/appGestures.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/electronEntry.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/soakDriver.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/soakLaunch.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/soakProcesses.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/soakScenarios.js",
+      "rule": "fixed-pause",
+      "count": 17,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/e2e/startupEntry.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/scaleFixtures.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Lets the event-loop delay histogram take its last samples: a measurement period, not synchronisation.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/helpers/waitFor.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "The bounded poll interval of waitFor itself: the one place a pause is the mechanism.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/canvasCost.bench.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/canvasRecovery.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/devLifecycle.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/homeSwap.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/insertLatency.bench.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/renderCost.bench.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/styleDelete.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/styleFieldLatency.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/integration/styleLatency.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "A manual integration or benchmark script, not a gate suite (testDiscovery.ts NOT_SUITES).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ai/aiStore.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ai/composerInput.test.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ai/sessions.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ai/sessions.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ai/transcript.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/breakpointSync.test.js",
+      "rule": "fixed-pause",
+      "count": 11,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/componentScanRefresh.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/lazyPanels.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/memberPicker.test.js",
+      "rule": "fixed-pause",
+      "count": 20,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/pageNavigation.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/panelFirstOpen.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/panelSwitch.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/railOverflow.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/railSettings.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/roleComponents.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/rolesSettings.test.js",
+      "rule": "fixed-pause",
+      "count": 11,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/app/settingsTabs.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appFolderSettle.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appRolePermissions.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appShortcutsOverrides.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appTheme.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appUiKitConfirm.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appUiKitDropdownHighlight.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appUiKitDropdownIcons.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appUiKitElements.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Poll intervals of bounded condition waits in the page, and the 5 s bound of the motion wait. Since v1.4.7.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 13,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appsRowLayout.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/appsViewTabs.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/overlayPointer.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/apps/shareAppLayout.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/assets/assetDelete.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/assets/hostedMediaPicker.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/audits/audits.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/cms/cmsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/cms/payloadPanelFlow.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/cms/slugSync.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/componentProperties/componentPropertiesPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/componentProperties/propertyPanelGrowth.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/content/contentView.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/content/contentViewRender.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/editor/openedClick.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/editor/saveRecovery.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/git/commitType.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/history/popup.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/instructions/instructionsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/lib/domIdentity.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Pins the memory-safety bound of a failure message build (docs/memory-safety.md); review on expiry.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/lib/waitFor.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Pins the default bound of waitFor (polls times interval), a configuration value, not a measured duration.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/emdashTemplateDialog.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageOrder.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageOrderPersistence.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageRenameDialog.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageSwitcher.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageTemplateForm.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/pages/pageTree.test.js",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/palette/componentCreate.test.js",
+      "rule": "fixed-pause",
+      "count": 30,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/palette/componentRoleMenu.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/palette/insertTabMotion.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/canvasClickLadder.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/canvasEditingTagChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/canvasOffSite.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/canvasOutlineInstant.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/componentPreview.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/desktopDeviceChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Since v1.4.7: settle pauses after a reached condition (400 ms, 60 ms); in progress, replace with waits on the drawn frame.",
+      "added": "2026-11-19",
+      "expires": "2026-12-19"
+    },
+    {
+      "file": "test/renderer/preview/guidePersistence.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/hoverWithin.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/movingPage.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/outlines.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/previewDeviceKeysChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Since v1.4.7: settle pauses after keys and loads; in progress, replace with waits on the stage state.",
+      "added": "2026-11-19",
+      "expires": "2026-12-19"
+    },
+    {
+      "file": "test/renderer/preview/previewLifecycle.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "A 20 ms settle helper used without a duration by older tests; the v1.4.7 tooltip pause is now a wait on the tooltip.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/previewRecovery.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/projectBreakpoints.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "The settle helper used by older tests; the v1.4.7 dialog pauses are now waits on the dialog and the save.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/resizeHandlesChromium.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Since v1.4.7: pauses between real input events and before reads of the drag; in progress, replace with waits on the readout and frame width.",
+      "added": "2026-11-19",
+      "expires": "2026-12-19"
+    },
+    {
+      "file": "test/renderer/preview/resizeHandlesModes.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "A 20 ms settle helper; review on expiry.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/preview/toolbarOverflow.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/projectSettings/secretsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/props/conditionPanels.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/props/pickerPropSettings.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/props/propertyFormLayout.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/publishing/publishAvailability.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/publishing/publishSettings.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/selectors/selectorsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 9,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/selectors/selectorsPanelMotion.test.js",
+      "rule": "fixed-pause",
+      "count": 20,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/expressionBinding.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/fragmentIdentity.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/navigator.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/navigatorOpenCode.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/navigatorPlacementDrag.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/navigatorWrapSave.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/structure/nodeStates.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/canvasReloadPress.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/classListRemovalApp.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/clipPathOpen.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/clipPathPaste.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/clippedChipPicker.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/codeVariables.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/computedHold.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/computedHooks.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/contextMenu.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/contextReach.test.js",
+      "rule": "fixed-pause",
+      "count": 13,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/cssCodeScroll.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/customValue.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/firstStylesApp.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/gridTracks.test.js",
+      "rule": "fixed-pause",
+      "count": 14,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/hoverNeverWrites.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/inheritedStyles.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/nestedQueryWrite.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/panelField.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/popoverChipPress.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/popoverDismiss.test.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/popupLayers.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/queryCache.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/queryList.test.js",
+      "rule": "fixed-pause",
+      "count": 6,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/querySelectorLine.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/resetUndo.test.js",
+      "rule": "fixed-pause",
+      "count": 19,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/sectionDot.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectPreview.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectTriggerToggle.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectionFirstPaint.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectionPureRead.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorCaret.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorChipEnd.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorChipTip.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorHomePanel.test.js",
+      "rule": "fixed-pause",
+      "count": 9,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorWell.test.js",
+      "rule": "fixed-pause",
+      "count": 24,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/selectorsLive.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/sourceChipPath.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/sourceMenu.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/spacing.test.js",
+      "rule": "fixed-pause",
+      "count": 23,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/spacingDragReport.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/spacingPick.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/spacingShorthandPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 3,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/spacingToggle.test.js",
+      "rule": "fixed-pause",
+      "count": 10,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/styleBlockUndo.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/stylePanelSoakProcesses.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/stylePanelSwitchFrames.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/styleWrites.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/typedSuggestion.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/varconnectChooser.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variableHoverPreview.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerDismissFocus.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerFontWeight.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerGroups.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerHeight.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerHidden.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerOptions.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerPolish.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerSlot.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerToggle.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/variablePickerWritten.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/style/varpickerOpensOnCurrent.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/astroEditorScale.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/chipEditor.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/codeBlock.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/codeEditorLifecycle.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/codeFirstPaint.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/dropdown.test.js",
+      "rule": "fixed-pause",
+      "count": 30,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/fontPreview.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/menu.test.js",
+      "rule": "fixed-pause",
+      "count": 8,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/menuInfoTip.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/panelSound.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/remoteAssetCard.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/sectionedDrag.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/segmentedTabs.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/sound.test.js",
+      "rule": "fixed-pause",
+      "count": 14,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/ui/toastDrag.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/liveVariableEdits.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/styleBlockVariables.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/variableCellArrows.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/variablePlace.test.js",
+      "rule": "fixed-pause",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/variableVisibility.test.js",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/varsPanel.test.js",
+      "rule": "fixed-pause",
+      "count": 5,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/variables/varsView.test.js",
+      "rule": "fixed-pause",
+      "count": 60,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/welcome/recentRail.test.js",
+      "rule": "fixed-pause",
+      "count": 7,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/renderer/welcome/welcome.test.js",
+      "rule": "fixed-pause",
+      "count": 13,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/scripts/gate/testPool.test.js",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/scripts/gate/testTimingScan.test.ts",
+      "rule": "fixed-pause",
+      "count": 11,
+      "reason": "The scan's own fixtures: strings that must count, never run.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/scripts/gate/testTimingScan.test.ts",
+      "rule": "absolute-ms",
+      "count": 5,
+      "reason": "The scan's own fixtures: strings that must count, never run.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/scripts/release/linuxPreflightChecks.test.ts",
+      "rule": "fixed-pause",
+      "count": 4,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/scripts/release/releaseShip.test.ts",
+      "rule": "absolute-ms",
+      "count": 1,
+      "reason": "Reads an injected fake clock, not the wall clock: deterministic.",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/shared/properties/appSecrets.test.ts",
+      "rule": "absolute-ms",
+      "count": 2,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/simulator/patch.bench.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    },
+    {
+      "file": "test/simulator/spike.bench.ts",
+      "rule": "fixed-pause",
+      "count": 1,
+      "reason": "Predates the test-timing scan (2026-11-19); replace each fixed pause with a wait on the state it reads, or a timing the test drives (docs/test-timing-audit.md).",
+      "added": "2026-11-19",
+      "expires": "2027-05-18"
+    }
+  ]
+}

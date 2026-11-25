@@ -1,19 +1,35 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import {
+  chevronDown as centralChevronDown,
+  help as centralHelp,
+  arrowRotateCounterClockwise as centralArrowRotateCounterClockwise,
+} from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // The clip-path editor's view: its class tags, presets and source menu, fit
 // mode and scale variables, shortcut help, and the canvas (ClipPath.tsx).
 
+const HelpGlyph = centralIcon(centralHelp, 12);
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
+
+const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
+
 import { createPortal } from 'react-dom';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeEditor } from '../components/CssCodeEditor';
-import SegmentedControl from '../components/SegmentedControl';
+import SegmentedControl from '../../../ui/SegmentedControl';
 import ClassPicker from '../components/ClassPicker';
 import { type ShapeFitMode, type ShapeScaleOptionOverrides } from './clipPathTypes';
 import {
-  BREAKPOINT_LABELS,
+  BREAKPOINT_LABEL_KEYS,
+  CLIP_PATH_CODE_ID,
+  presetLabel,
   SHAPE_SCALE_VARIABLE_PLACEHOLDER,
   SHAPE_OFFSET_LEFT_VARIABLE_PLACEHOLDER,
   SHAPE_OFFSET_TOP_VARIABLE_PLACEHOLDER,
 } from './clipPathConstants';
-import { formatShapeVariableName } from './clipPathMeasure';
+import { formatShapeVariableField } from './clipPathMeasure';
+import VariableConnect from '../VariableConnect';
 import { PRESETS, PRESET_NAMES } from './clipPathFormat';
 import { presetOptionId } from './clipPathShortcuts';
 import { BreakpointIcon, PresetIcon } from './ClipPathIcons';
@@ -22,13 +38,12 @@ import { ShortcutHelpGroups, ClipPathCanvas } from './ClipPathCanvas';
 
 // The editor: the class tags, the preset menu, the canvas, and the code.
 export function ClipPathView({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shortcutHelpPortalTarget, hideClassPicker, codeValue } = editor;
   const { selectedCodeTokenHighlights, onCodeChange, onCodeSelectionChange } = editor;
   return (
     <div className="clip-path_component">
-      {shortcutHelpPortalTarget
-        ? createPortal(<ShortcutHelpControl editor={editor} />, shortcutHelpPortalTarget)
-        : undefined}
+      {shortcutHelpPortalTarget ? createPortal(<ShortcutHelpControl editor={editor} />, shortcutHelpPortalTarget) : undefined}
       {hideClassPicker ? undefined : <ClassTagsControl editor={editor} />}
       <PresetControl editor={editor} />
       <ClipPathCanvas editor={editor} />
@@ -36,11 +51,13 @@ export function ClipPathView({ editor }: EditorProps) {
       <ShapeScaleVariableControl editor={editor} />
 
       <CodeEditor
-        id="clip-path_css-output"
+        id={CLIP_PATH_CODE_ID}
         className="clip-path_code"
         value={codeValue}
         language="css"
-        ariaLabel="Editable clip-path CSS"
+        ariaLabel={translate('styleModel.clipPath.codeLabel')}
+        // The code is the whole clip-path value: binding it makes that value `var(--x)`.
+        variables={{ kind: 'value', prop: 'clip-path' }}
         tokenHighlights={selectedCodeTokenHighlights}
         onChange={onCodeChange}
         onSelectionChange={onCodeSelectionChange}
@@ -51,6 +68,7 @@ export function ClipPathView({ editor }: EditorProps) {
 
 // The element's classes as tags; picking some targets their style.
 export function ClassTagsControl({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { elementClassNames, selectedClassNames, handleClassSelectionChange } = editor;
   const { selectedSelector } = editor;
   if (!elementClassNames.length) {
@@ -64,8 +82,8 @@ export function ClassTagsControl({ editor }: EditorProps) {
       onChange={handleClassSelectionChange}
       tagTitle={(token, isActive) =>
         selectedSelector && isActive
-          ? `Editing clip path on ${selectedSelector}`
-          : `Edit clip path on .${token.name} — Shift/Option-click to combine`
+          ? translate('styleModel.clipPath.tagEditing', { selector: selectedSelector })
+          : translate('styleModel.clipPath.tagEdit', { name: token.name })
       }
     />
   );
@@ -98,6 +116,7 @@ export function PresetControl({ editor }: EditorProps) {
 // The label: blue when this breakpoint sets the clip-path (a menu to reset it),
 // orange when it is inherited (a popover naming where it comes from).
 export function ClipPathLabel({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { clipPathLabelRef, clipPathStyleOrigin, clipPathLabelClassName } = editor;
   const { isClipPathLabelMenuOpen, onClipPathLabelClick, resetCurrentBreakpointClipPath } = editor;
   return (
@@ -111,45 +130,30 @@ export function ClipPathLabel({ editor }: EditorProps) {
           aria-expanded={isClipPathLabelMenuOpen}
           onClick={onClipPathLabelClick}
         >
-          Clip Path
+          {translate('styleModel.clipPath.label')}
         </button>
       ) : (
         <span className={clipPathLabelClassName} id="clip-path_preset-label">
-          Clip Path
+          {translate('styleModel.clipPath.label')}
         </span>
       )}
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'current' ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={() => editor.setIsClipPathLabelMenuOpen(false)}
-          className="clip-path_label-menu"
-          role="menu"
-        >
-          <button
-            type="button"
-            className="clip-path_label-menu-item"
-            role="menuitem"
-            onClick={() => void resetCurrentBreakpointClipPath()}
-          >
-            <svg className="clip-path_label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M5.2 5.2H2.2V2.2" />
-              <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-            </svg>
-            <span>Reset</span>
-            <span className="clip-path_label-menu-shortcut">Option + click</span>
+        <Popup mode="popover" portal={false} onClose={() => editor.setIsClipPathLabelMenuOpen(false)} className="clip-path_label-menu" role="menu">
+          <button type="button" className="clip-path_label-menu-item" role="menuitem" onClick={() => void resetCurrentBreakpointClipPath()}>
+            <ResetGlyph className="clip-path_label-menu-icon" />
+            <span>{translate('ui.reset')}</span>
+            <span className="clip-path_label-menu-shortcut">{translate('styleModel.shared.optionClick')}</span>
           </button>
         </Popup>
       ) : undefined}
-      {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'inherited' ? (
-        <ClipPathSourceMenu editor={editor} />
-      ) : undefined}
+      {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'inherited' ? <ClipPathSourceMenu editor={editor} /> : undefined}
     </div>
   );
 }
 
 // Where an inherited clip-path comes from: its breakpoint and its selector.
 export function ClipPathSourceMenu({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { clipPathSourceBreakpoint, clipPathSourceSelector, appliedClassName } = editor;
   return (
     <Popup
@@ -158,25 +162,17 @@ export function ClipPathSourceMenu({ editor }: EditorProps) {
       onClose={() => editor.setIsClipPathLabelMenuOpen(false)}
       className="clip-path_label-menu clip-path_source-menu"
       role="dialog"
-      label="Clip path value source"
+      label={translate('styleModel.clipPath.sourceLabel')}
     >
-      <span className="clip-path_source-title">Value comes from:</span>
+      <span className="clip-path_source-title">{translate('styleModel.shared.valueComesFrom')}</span>
       <div className="clip-path_source-row">
         {clipPathSourceBreakpoint ? (
-          <span
-            className="clip-path_source-breakpoint"
-            title={BREAKPOINT_LABELS[clipPathSourceBreakpoint]}
-          >
+          <span className="clip-path_source-breakpoint" title={translate(BREAKPOINT_LABEL_KEYS[clipPathSourceBreakpoint])}>
             <BreakpointIcon breakpoint={clipPathSourceBreakpoint} />
-            {BREAKPOINT_LABELS[clipPathSourceBreakpoint]}
+            {translate(BREAKPOINT_LABEL_KEYS[clipPathSourceBreakpoint])}
           </span>
         ) : undefined}
-        {(clipPathSourceSelector.length
-          ? clipPathSourceSelector
-          : appliedClassName
-            ? [appliedClassName]
-            : []
-        ).map((name) => (
+        {(clipPathSourceSelector.length ? clipPathSourceSelector : appliedClassName ? [appliedClassName] : []).map((name) => (
           <span className="clip-path_source-class" key={name}>
             {name}
           </span>
@@ -188,6 +184,7 @@ export function ClipPathSourceMenu({ editor }: EditorProps) {
 
 // The preset button and, while open, its listbox.
 export function PresetDropdown({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { presetDropdownRef, presetButtonRef, isPresetOpen, closePresetDropdown } = editor;
   const { setIsShortcutHelpOpen, openPresetDropdown, onPresetButtonKeyDown } = editor;
   const { selectedPresetShape, activePreset } = editor;
@@ -214,11 +211,9 @@ export function PresetDropdown({ editor }: EditorProps) {
       >
         <span className="clip-path_preset-value">
           <PresetIcon shape={selectedPresetShape} />
-          <span className="clip-path_preset-name">{activePreset}</span>
+          <span className="clip-path_preset-name">{presetLabel(activePreset, translate)}</span>
         </span>
-        <svg className="clip-path_preset-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M4.2 6.2 8 10l3.8-3.8" />
-        </svg>
+        <ChevronDownGlyph className="clip-path_preset-chevron" />
       </button>
 
       {isPresetOpen ? <PresetList editor={editor} /> : undefined}
@@ -228,6 +223,7 @@ export function PresetDropdown({ editor }: EditorProps) {
 
 // The presets, each with its icon; hovering one makes it the active option.
 export function PresetList({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { presetListRef, activePresetOptionId, onPresetListKeyDown, activePreset } = editor;
   const { activePresetIndex, setActivePresetIndex, choosePreset } = editor;
   return (
@@ -256,20 +252,14 @@ export function PresetList({ editor }: EditorProps) {
           <div
             key={name}
             id={presetOptionId(name)}
-            className={[
-              'clip-path_preset-option',
-              index === activePresetIndex ? 'is-active' : '',
-              isSelected ? 'is-selected' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={['clip-path_preset-option', index === activePresetIndex ? 'is-active' : '', isSelected ? 'is-selected' : ''].filter(Boolean).join(' ')}
             role="option"
             aria-selected={isSelected}
             onMouseEnter={() => setActivePresetIndex(index)}
             onClick={() => choosePreset(name)}
           >
             <PresetIcon shape={optionShape} />
-            <span className="clip-path_preset-name">{name}</span>
+            <span className="clip-path_preset-name">{presetLabel(name, translate)}</span>
           </div>
         );
       })}
@@ -279,6 +269,7 @@ export function PresetList({ editor }: EditorProps) {
 
 // How a pasted shape fits the element: scaled to the container, or stretched.
 export function ShapeFitControl({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { activePreset, shapeFitMode, setShapeFitModeFromControl } = editor;
   if (activePreset !== 'Shape') {
     return undefined;
@@ -286,27 +277,23 @@ export function ShapeFitControl({ editor }: EditorProps) {
   return (
     <div className="clip-path_control-row clip-path_control-row--with-help">
       <label className="clip-path_control-label" id="clip-path_shape-fit-label">
-        Fit
+        {translate('styleModel.clipPath.fit')}
       </label>
       <div className="clip-path_control-field">
         <SegmentedControl<ShapeFitMode>
-          ariaLabel="Fit"
+          ariaLabel={translate('styleModel.clipPath.fit')}
           value={shapeFitMode}
           onChange={setShapeFitModeFromControl}
           options={[
-            { value: 'contain', label: 'Scale' },
-            { value: 'stretch', label: 'Stretch' },
+            { value: 'contain', label: translate('styleModel.clipPath.fit.scale') },
+            { value: 'stretch', label: translate('styleModel.clipPath.fit.stretch') },
           ]}
         />
       </div>
       {shapeFitMode === 'contain' ? (
         <p className="clip-path_control-help">
-          <svg className="clip-path_control-help-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" />
-            <path d="M6.5 6.2a2 2 0 0 1 3.8.9c0 1.8-2.2 1.6-2.2 3" />
-            <path d="M8 12.2h.01" />
-          </svg>
-          <span>Apply container-type: size; to the parent</span>
+          <HelpGlyph className="clip-path_control-help-icon" />
+          <span>{translate('styleModel.clipPath.fit.containerHint', { code: 'container-type: size;' })}</span>
         </p>
       ) : undefined}
     </div>
@@ -322,11 +309,7 @@ export function ShapeVariableLabel({ id, text, tip }: { id: string; text: string
       </label>
       <span className="clip-path_label-help">
         <button type="button" className="clip-path_label-help-button" aria-label={tip}>
-          <svg className="clip-path_label-help-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" />
-            <path d="M6.5 6.2a2 2 0 0 1 3.8.9c0 1.8-2.2 1.6-2.2 3" />
-            <path d="M8 12.2h.01" />
-          </svg>
+          <HelpGlyph className="clip-path_label-help-icon" />
         </button>
         <span className="clip-path_label-help-tip" aria-hidden="true">
           {tip}
@@ -336,68 +319,83 @@ export function ShapeVariableLabel({ id, text, tip }: { id: string; text: string
   );
 }
 
-// A shape-variable name field; the name is tidied into a custom property on blur.
+// A shape-variable field: a custom property the shape() reads, bound the way any
+// other Style panel value is, from the purple dot, by typing `--`, or by typing its
+// name. A bound field holds `var(--name)` and shows it as a chip; a typed name is
+// tidied into that reference on blur. `prop` filters the chooser to the variables
+// that fit: a length for the size (as `width` takes), and a plain number for an
+// offset (as `opacity`, the panel's other 0 to 1 number, takes).
 export function ShapeVariableInput({
   id,
   labelId,
+  label,
+  prop,
   value,
   placeholder,
   apply,
 }: {
   id: string;
   labelId: string;
+  label: string;
+  prop: string;
   value: string;
   placeholder: string;
-  apply: (name: string) => void;
+  apply: (fieldText: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="clip-path_control-field clip-path_variable-field">
-      <input
-        id={id}
-        className="u-input clip-path_variable-input"
-        value={value}
-        onChange={(event) => apply(event.target.value)}
-        onBlur={(event) => {
-          const formatted = formatShapeVariableName(event.target.value);
-          if (event.target.value !== formatted) {
-            apply(formatted);
-          }
-        }}
-        placeholder={placeholder}
-        spellCheck={false}
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        aria-labelledby={labelId}
-      />
+      <VariableConnect
+        ariaLabel={translate('styleModel.shared.connectVariable', { label })}
+        prop={prop}
+        onPick={(binding) => apply(formatShapeVariableField(binding))}
+      >
+        <input
+          id={id}
+          className="u-input clip-path_variable-input"
+          value={value}
+          onChange={(event) => apply(event.target.value)}
+          onBlur={(event) => {
+            const formatted = formatShapeVariableField(event.target.value);
+            if (event.target.value !== formatted) {
+              apply(formatted);
+            }
+          }}
+          placeholder={placeholder}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          aria-labelledby={labelId}
+        />
+      </VariableConnect>
     </div>
   );
 }
 
 // The variables a scaled shape reads: its size and its X / Y offsets.
 export function ShapeScaleVariableControl({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { activePreset, shapeFitMode, shapeScaleVariableName } = editor;
   const { setShapeScaleOptionsFromControl, currentShapeScaleOptions } = editor;
   const { shapeOffsetLeftVariableName, shapeOffsetTopVariableName } = editor;
   if (activePreset !== 'Shape' || shapeFitMode !== 'contain') {
     return undefined;
   }
-  const apply = (overrides: ShapeScaleOptionOverrides) =>
-    setShapeScaleOptionsFromControl(currentShapeScaleOptions(overrides));
+  const apply = (overrides: ShapeScaleOptionOverrides) => setShapeScaleOptionsFromControl(currentShapeScaleOptions(overrides));
   return (
     <>
       <div className="clip-path_control-row">
         <ShapeVariableLabel
           id="clip-path_shape-variable-label"
-          text="Size"
-          tip={
-            'This optional variable allows us to animate shape size or change size based on ' +
-            'screen size'
-          }
+          text={translate('styleModel.clipPath.variable.size')}
+          tip={translate('styleModel.clipPath.variable.sizeTip')}
         />
         <ShapeVariableInput
           id="clip-path_shape-variable-input"
           labelId="clip-path_shape-variable-label"
+          label={translate('styleModel.clipPath.variable.size')}
+          prop="width"
           value={shapeScaleVariableName}
           placeholder={SHAPE_SCALE_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ variableName: name })}
@@ -406,12 +404,14 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
       <div className="clip-path_control-row">
         <ShapeVariableLabel
           id="clip-path_shape-offset-left-label"
-          text="Offset X"
-          tip="Optional variable to animate or shift the shape horizontally (0 = left, 1 = right)."
+          text={translate('styleModel.clipPath.variable.offsetX')}
+          tip={translate('styleModel.clipPath.variable.offsetXTip')}
         />
         <ShapeVariableInput
           id="clip-path_shape-offset-left-input"
           labelId="clip-path_shape-offset-left-label"
+          label={translate('styleModel.clipPath.variable.offsetX')}
+          prop="opacity"
           value={shapeOffsetLeftVariableName}
           placeholder={SHAPE_OFFSET_LEFT_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ offsetLeftVariableName: name })}
@@ -420,12 +420,14 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
       <div className="clip-path_control-row">
         <ShapeVariableLabel
           id="clip-path_shape-offset-top-label"
-          text="Offset Y"
-          tip="Optional variable to animate or shift the shape vertically (0 = top, 1 = bottom)."
+          text={translate('styleModel.clipPath.variable.offsetY')}
+          tip={translate('styleModel.clipPath.variable.offsetYTip')}
         />
         <ShapeVariableInput
           id="clip-path_shape-offset-top-input"
           labelId="clip-path_shape-offset-top-label"
+          label={translate('styleModel.clipPath.variable.offsetY')}
+          prop="opacity"
           value={shapeOffsetTopVariableName}
           placeholder={SHAPE_OFFSET_TOP_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ offsetTopVariableName: name })}
@@ -437,6 +439,7 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
 
 // The "?" button in the header and its keyboard-shortcut popover.
 export function ShortcutHelpControl({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shortcutHelpRef, isShortcutHelpOpen, closePresetDropdown } = editor;
   const { setIsShortcutHelpOpen, selectedPresetShape, activePreset } = editor;
   return (
@@ -444,7 +447,7 @@ export function ShortcutHelpControl({ editor }: EditorProps) {
       <button
         type="button"
         className="clip-path_shortcuts-button"
-        aria-label="Show Clip Path shortcuts"
+        aria-label={translate('styleModel.clipPath.shortcuts.show')}
         aria-haspopup="dialog"
         aria-expanded={isShortcutHelpOpen}
         aria-controls="clip-path_shortcuts-popover"
@@ -466,13 +469,13 @@ export function ShortcutHelpControl({ editor }: EditorProps) {
           id="clip-path_shortcuts-popover"
           className="clip-path_shortcuts-popover"
           role="dialog"
-          label="Clip Path shortcuts"
+          label={translate('styleModel.clipPath.shortcuts.title')}
         >
           <div className="clip-path_shortcuts-header">
-            <span className="clip-path_shortcuts-title">Shortcuts</span>
+            <span className="clip-path_shortcuts-title">{translate('styleModel.clipPath.shortcuts.heading')}</span>
             <span className="clip-path_shortcuts-preset">
               <PresetIcon shape={selectedPresetShape} />
-              <span className="clip-path_shortcuts-preset-name">{activePreset}</span>
+              <span className="clip-path_shortcuts-preset-name">{presetLabel(activePreset, translate)}</span>
             </span>
           </div>
           <ShortcutHelpGroups editor={editor} />

@@ -4,11 +4,16 @@
 // var() and calc() verbatim instead of evaluating them. Cleanup is synchronous.
 import { assert } from '../../shared/core/assert';
 import { PRELOAD_LIMITS } from './frameBasics';
+import { ownClasses } from './frameMeasure';
 import { inheritedProperty } from './styleInheritance';
+import { CASCADE_CANDIDATES_MAX, type CascadeOrigin, type CascadeProperty } from '../../shared/properties/cascadeOrigin';
 
 const STYLE_LIMITS = { rulesMax: 20_000, propertiesMax: 512, workMax: 200_000 } as const;
 type Probe = { readonly inherited: string; readonly local: string };
 const registrations = new Map<string, Probe>();
+// Every probe name takes the next numbers from this counter, so the custom-property probes and the
+// property probes never share one and `authoredStyleMutation` recognizes both by their digits.
+let probeCounter = 0;
 const prefix = `--stacki-inspect-${Math.random().toString(36).slice(2)}-`;
 type InlineStyle = { readonly element: HTMLElement | SVGElement; readonly text: string };
 type CollectedStyles = {
@@ -20,17 +25,16 @@ type Declaration = { readonly value: string; readonly priority: string };
 export type AuthoredInspection = {
   readonly values: Readonly<Record<string, string | undefined>>;
   readonly sources: Readonly<Record<string, Element | undefined>>;
+  /** The browser's own winner and the declarations that reach the element, per property it sets itself. */
+  readonly origins: Readonly<Record<string, CascadeProperty | undefined>>;
 };
 
 export function authoredProperties(element: Element, properties: readonly string[]) {
   return inspectAuthoredProperties(element, properties).values;
 }
 
-export function inspectAuthoredProperties(
-  element: Element,
-  properties: readonly string[],
-): AuthoredInspection {
-  const empty: AuthoredInspection = { values: {}, sources: {} };
+export function inspectAuthoredProperties(element: Element, properties: readonly string[]): AuthoredInspection {
+  const empty: AuthoredInspection = { values: {}, sources: {}, origins: {} };
   if (typeof window.CSS?.registerProperty !== 'function') {
     return empty;
   }
@@ -45,7 +49,8 @@ export function inspectAuthoredProperties(
     return empty;
   }
   const values: string[] = [];
-  const patches = new Map<CSSStyleDeclaration, string>();
+  const records: DeclaredRecord[] = [];
+  const patches = new Map<CSSStyleDeclaration, AuthoredPatch>();
   const names = properties.map((property) => ({ property, probe: registeredProbe(property) }));
   try {
     for (const { property, probe } of names) {
@@ -55,12 +60,13 @@ export function inspectAuthoredProperties(
           if (declaration.value) {
             const token = probeToken(declaration.value, values.length);
             values.push(declaration.value);
-            if (!patches.has(style)) {
-              patches.set(style, style.cssText);
-            }
+            records.push({ property, style, value: declaration.value, important: declaration.priority === 'important' });
+            const patch = patches.get(style) ?? authoredPatch(style);
+            patches.set(style, patch);
             for (const name of [probe.inherited, probe.local]) {
               const value = name === probe.local ? localToken(token, property) : token;
               style.setProperty(name, value, declaration.priority);
+              patch.probes.add(name);
             }
           }
         }
@@ -68,7 +74,7 @@ export function inspectAuthoredProperties(
     }
     assert(patches.size <= styles.declarations.length, 'Each declaration has one saved original');
     assert(values.length * 2 <= STYLE_LIMITS.workMax, 'Authored probe writes are bounded');
-    return inspectProbeResults(element, names, values);
+    return inspectProbeResults(element, names, values, records);
   } finally {
     restoreAuthoredStyles(patches, styles.inline);
   }
@@ -91,10 +97,13 @@ function inspectProbeResults(
   element: Element,
   names: readonly { readonly property: string; readonly probe: Probe | undefined }[],
   declarations: readonly string[],
+  records: readonly DeclaredRecord[],
 ): AuthoredInspection {
   const computed = getComputedStyle(element);
   const values: Record<string, string | undefined> = {};
   const sources: Record<string, Element | undefined> = {};
+  const origins: Record<string, CascadeProperty | undefined> = {};
+  const ranks = records.length > 0 ? documentRanks() : new Map<CSSStyleDeclaration, number>();
   for (const { property, probe } of names) {
     if (probe === undefined) {
       continue;
@@ -104,9 +113,117 @@ function inspectProbeResults(
     if (Number.isSafeInteger(index) && declarations[index] !== undefined) {
       values[property] = declarations[index];
       sources[property] = probeSource(element, probe.local, token);
+      const winner = records[index];
+      if (winner !== undefined && sources[property] === element) {
+        origins[property] = cascadeProperty({ element, property, winner, records, ranks, used: computed.getPropertyValue(property).trim() });
+      }
     }
   }
-  return { values, sources };
+  return { values, sources, origins };
+}
+
+// One declaration block that sets a property, as mirrored into a probe.
+type DeclaredRecord = {
+  readonly property: string;
+  readonly style: CSSStyleDeclaration;
+  readonly value: string;
+  readonly important: boolean;
+};
+
+function cascadeProperty(input: {
+  readonly element: Element;
+  readonly property: string;
+  readonly winner: DeclaredRecord;
+  readonly records: readonly DeclaredRecord[];
+  readonly ranks: ReadonlyMap<CSSStyleDeclaration, number>;
+  readonly used: string;
+}): CascadeProperty {
+  const { element, property, winner, records, ranks, used } = input;
+  const candidates = records
+    .filter((record) => record.property === property && (record === winner || reaches(record.style, element)))
+    .map((record) => originOf(record, ranks))
+    .sort((left, right) => left.order - right.order)
+    .slice(-CASCADE_CANDIDATES_MAX);
+  assert(candidates.length <= CASCADE_CANDIDATES_MAX, 'The reported candidates are bounded');
+  return { used, winner: originOf(winner, ranks), candidates };
+}
+
+// Whether a block's rule can apply to the element: false only when its selector provably does not match.
+// A nested or unparsable selector is kept, because the browser (not this list) decides the winner.
+function reaches(style: CSSStyleDeclaration, element: Element): boolean {
+  const rule = style.parentRule;
+  if (rule === null) {
+    return element instanceof HTMLElement && element.style === style;
+  }
+  if (!(rule instanceof CSSStyleRule) || rule.parentRule instanceof CSSStyleRule) {
+    return true;
+  }
+  try {
+    return element.matches(rule.selectorText);
+  } catch {
+    return true;
+  }
+}
+
+function originOf(record: DeclaredRecord, ranks: ReadonlyMap<CSSStyleDeclaration, number>): CascadeOrigin {
+  const where = describeDeclaration(record.style);
+  const context = ruleContext(record.style);
+  return {
+    selector: where.selector,
+    ...(where.file === undefined ? {} : { file: where.file }),
+    value: record.value.replace(/\s+/g, ' ').trim(),
+    important: record.important,
+    ...(context.layer === undefined ? {} : { layer: context.layer }),
+    conditions: context.conditions,
+    order: ranks.get(record.style) ?? Number.MAX_SAFE_INTEGER,
+  };
+}
+
+// The cascade layer and the conditions around a block's rule, outermost first.
+function ruleContext(style: CSSStyleDeclaration): { readonly layer: string | undefined; readonly conditions: string[] } {
+  const layers: string[] = [];
+  const conditions: string[] = [];
+  let rule: CSSRule | undefined = style.parentRule ?? undefined;
+  for (let depth = 0; rule !== undefined && depth < PRELOAD_LIMITS.cssRuleDepthMax; depth += 1) {
+    if (typeof CSSLayerBlockRule !== 'undefined' && rule instanceof CSSLayerBlockRule) {
+      layers.unshift(rule.name);
+    } else if (rule instanceof CSSMediaRule) {
+      conditions.unshift(`@media ${rule.conditionText}`.trim());
+    } else if (rule instanceof CSSSupportsRule) {
+      conditions.unshift(`@supports ${rule.conditionText}`.trim());
+    } else if (typeof CSSContainerRule !== 'undefined' && rule instanceof CSSContainerRule) {
+      conditions.unshift(`@container ${rule.conditionText}`.trim());
+    }
+    rule = rule.parentRule ?? undefined;
+  }
+  return { layer: layers.length === 0 ? undefined : layers.join('.'), conditions };
+}
+
+// The position of every declaration block in document order: sheets in order, rules depth-first,
+// an `@import` expanding in place. The probe list is breadth-first and cannot say this.
+function documentRanks(): Map<CSSStyleDeclaration, number> {
+  const ranks = new Map<CSSStyleDeclaration, number>();
+  const stack: CSSRule[] = [];
+  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets];
+  for (const sheet of sheets.reverse()) {
+    const rules = sheetRules(sheet);
+    if (rules !== undefined) {
+      stack.push(...Array.from(rules).reverse());
+    }
+  }
+  // Sheets are pushed last-first, so the first sheet's first rule is popped first.
+  for (let step = 0; step < STYLE_LIMITS.rulesMax * 4 && stack.length > 0; step += 1) {
+    const rule = stack.pop();
+    assert(rule !== undefined, 'The rank stack is non-empty inside the loop');
+    if (rule instanceof CSSStyleRule || (typeof CSSNestedDeclarations !== 'undefined' && rule instanceof CSSNestedDeclarations)) {
+      ranks.set(rule.style, ranks.size);
+    }
+    const children = authoredChildRules(rule);
+    if (children !== undefined) {
+      stack.push(...Array.from(children).reverse());
+    }
+  }
+  return ranks;
 }
 
 function probeSource(element: Element, name: string, token: string): Element | undefined {
@@ -123,16 +240,36 @@ function probeSource(element: Element, name: string, token: string): Element | u
   return undefined;
 }
 
-function restoreAuthoredStyles(
-  patches: ReadonlyMap<CSSStyleDeclaration, string>,
-  inline: readonly InlineStyle[],
-): void {
+// What one declaration block held before probing: the names written into it,
+// and its text for the one case removing them cannot restore.
+interface AuthoredPatch {
+  readonly text: string;
+  readonly all: boolean;
+  readonly probes: Set<string>;
+}
+
+function authoredPatch(style: CSSStyleDeclaration): AuthoredPatch {
+  return { text: style.cssText, all: style.getPropertyValue('all') !== '', probes: new Set() };
+}
+
+function restoreAuthoredStyles(patches: ReadonlyMap<CSSStyleDeclaration, AuthoredPatch>, inline: readonly InlineStyle[]): void {
   assert(patches.size <= STYLE_LIMITS.workMax, 'Authored probe cleanup is bounded');
-  // Chromium can expand `all` while editing registered custom properties. Restore
-  // each complete declaration so inspection preserves shorthand order and resets.
-  for (const [style, text] of patches) {
-    if (style.cssText !== text) {
-      style.cssText = text;
+  // Remove only the probes. Reassigning cssText loses a shorthand that holds a
+  // var() followed by one of its longhands (`font: 800 2rem var(--f);
+  // font-variant-numeric: …`): Chromium serializes the shorthand's longhands as
+  // empty while substitution is pending, and writing that text back drops them
+  // (issue #71).
+  for (const [style, patch] of patches) {
+    assert(patch.probes.size > 0, 'A saved declaration was probed');
+    for (const name of patch.probes) {
+      style.removeProperty(name);
+    }
+    // Chromium can expand `all` while editing registered custom properties; only
+    // then is the complete text restored, to keep its shorthand order and resets.
+    if (patch.all) {
+      if (style.cssText !== patch.text) {
+        style.cssText = patch.text;
+      }
     }
   }
   for (const { element, text } of inline) {
@@ -176,16 +313,7 @@ function registeredProbe(property: string): Probe | undefined {
   if (typeof window.CSS?.registerProperty !== 'function') {
     return undefined;
   }
-  const probe = {
-    inherited: `${prefix}${registrations.size * 2}`,
-    local: `${prefix}${registrations.size * 2 + 1}`,
-  };
-  window.CSS.registerProperty({
-    name: probe.inherited,
-    syntax: '*',
-    inherits: inheritedProperty(property),
-  });
-  window.CSS.registerProperty({ name: probe.local, syntax: '*', inherits: false });
+  const probe = newProbe({ inherits: inheritedProperty(property) });
   registrations.set(property, probe);
   return probe;
 }
@@ -238,12 +366,10 @@ function sheetRules(sheet: CSSStyleSheet): CSSRuleList | undefined {
 
 function authoredStyles(element: Element): CollectedStyles | undefined {
   const styles: CSSStyleDeclaration[] = [];
-  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets].filter(
-    (sheet) => {
-      const owner = sheet.ownerNode;
-      return !(owner instanceof Element && /^avb-(design-style|vh-override)$/.test(owner.id));
-    },
-  );
+  const sheets = [...Array.from(document.styleSheets), ...document.adoptedStyleSheets].filter((sheet) => {
+    const owner = sheet.ownerNode;
+    return !(owner instanceof Element && /^avb-(design-style|vh-override)$/.test(owner.id));
+  });
   if (sheets.length > STYLE_LIMITS.rulesMax) {
     return undefined;
   }
@@ -307,4 +433,266 @@ function authoredChildRules(rule: CSSRule): CSSRuleList | readonly CSSRule[] | u
     return rule.cssRules;
   }
   return [];
+}
+
+// Registered carriers for one probe: a property registered once stays registered, so the probes
+// are numbered and reused rather than made per question.
+function newProbe({ inherits }: { readonly inherits: boolean }): Probe {
+  const probe = { inherited: `${prefix}${probeCounter}`, local: `${prefix}${probeCounter + 1}` };
+  probeCounter += 2;
+  window.CSS.registerProperty({ name: probe.inherited, syntax: '*', inherits });
+  window.CSS.registerProperty({ name: probe.local, syntax: '*', inherits: false });
+  return probe;
+}
+
+// ---- The winning declaration of a custom property, traced up from an element ----
+
+/** The most custom properties one question may ask about, and the most probe writes it may make. */
+export const WINNING_LIMITS = { namesMax: 512, writesMax: 200_000 } as const;
+
+/** A custom property's winning declaration for one element, as written. */
+export interface WinningDeclaration {
+  /** The declaration's value text, trimmed and whitespace-normalized, never resolved. */
+  readonly expression: string;
+  /** The rule's selector list, or `style` for an inline declaration. */
+  readonly selector: string;
+  /** The stylesheet's file (a link's address or a development style tag's id), when it has one. */
+  readonly file?: string;
+  /** How many parents up the declaring element is: 0 is the element itself. */
+  readonly depth: number;
+  /** The declaring element's own label (`.theme-dark`, `#hero`, a tag). */
+  readonly ancestor: string;
+}
+
+// Custom property probes: pairs of registered carriers, reused from the front of this pool by index.
+const customProbes: Probe[] = [];
+
+function customProbe(index: number): Probe | undefined {
+  if (typeof window.CSS?.registerProperty !== 'function') {
+    return undefined;
+  }
+  while (customProbes.length <= index) {
+    if (customProbes.length >= WINNING_LIMITS.namesMax) {
+      return undefined;
+    }
+    // A custom property inherits unless registered otherwise, so its carrier does too.
+    customProbes.push(newProbe({ inherits: true }));
+  }
+  return customProbes[index];
+}
+
+type DeclaredSource = { readonly style: CSSStyleDeclaration; readonly expression: string };
+
+/**
+ * For each custom property, the declaration that wins for `element`, found the way the browser finds
+ * it: every declaration of the property in an accessible stylesheet or inline style is mirrored into
+ * a registered carrier custom property (same rule, same priority), so the cascade (importance,
+ * specificity, order, layers, media and other conditions) is Chromium's own, and the carrier's
+ * value at the element names the winning declaration. The nearest element up the parent chain that
+ * holds it locally is the declaring one: a custom property inherits, so the nearest declaring
+ * ancestor-or-self wins. Reads nothing from the computed value of the property itself. An
+ * inaccessible stylesheet or an exhausted bound answers nothing rather than a false winner.
+ */
+export function inspectWinningDeclarations(element: Element, names: readonly string[]): Readonly<Record<string, WinningDeclaration>> {
+  const wanted = [...new Set(names.filter((name) => name.startsWith('--')))];
+  if (wanted.length === 0 || wanted.length > WINNING_LIMITS.namesMax) {
+    return {};
+  }
+  const styles = authoredStyles(element);
+  if (styles === undefined) {
+    return {};
+  }
+  const probes = wanted.map((_, index) => customProbe(index));
+  if (probes.some((probe) => probe === undefined)) {
+    return {};
+  }
+  const indexOf = new Map(wanted.map((name, index) => [name, index]));
+  const declared: DeclaredSource[] = [];
+  const patches = new Map<CSSStyleDeclaration, AuthoredPatch>();
+  try {
+    for (const style of styles.declarations) {
+      for (const name of Array.from(style).filter((candidate) => indexOf.has(candidate))) {
+        const probe = probes[indexOf.get(name) ?? -1];
+        if (probe === undefined || declared.length * 2 >= WINNING_LIMITS.writesMax) {
+          return {};
+        }
+        const value = style.getPropertyValue(name);
+        const token = probeToken(value, declared.length);
+        const patch = patches.get(style) ?? authoredPatch(style);
+        patches.set(style, patch);
+        style.setProperty(probe.inherited, token, style.getPropertyPriority(name));
+        style.setProperty(probe.local, localToken(token, name), style.getPropertyPriority(name));
+        patch.probes.add(probe.inherited);
+        patch.probes.add(probe.local);
+        declared.push({ style, expression: value });
+      }
+    }
+    return readWinners(element, wanted, probes, declared);
+  } finally {
+    restoreAuthoredStyles(patches, styles.inline);
+  }
+}
+
+function readWinners(
+  element: Element,
+  names: readonly string[],
+  probes: ReadonlyArray<Probe | undefined>,
+  declared: readonly DeclaredSource[],
+): Record<string, WinningDeclaration> {
+  // The element and its parents, each read once; the ancestors' own labels come from them.
+  const chain: Element[] = [];
+  for (let node: Element | undefined = element; node !== undefined && chain.length < PRELOAD_LIMITS.domDepthMax; node = node.parentElement ?? undefined) {
+    chain.push(node);
+  }
+  const computed = chain.map((node) => getComputedStyle(node));
+  const winners: Record<string, WinningDeclaration> = {};
+  names.forEach((name, position) => {
+    const probe = probes[position];
+    const atElement = probe === undefined ? '' : (computed[0]?.getPropertyValue(probe.inherited).trim() ?? '');
+    const index = /^\d+$/.test(atElement) ? Number(atElement) : -1;
+    const source = declared[index];
+    if (probe === undefined || source === undefined) {
+      return;
+    }
+    const depth = computed.findIndex((style) => style.getPropertyValue(probe.local).trim() === atElement);
+    const owner = chain[depth];
+    if (depth < 0 || owner === undefined) {
+      return;
+    }
+    const where = describeDeclaration(source.style);
+    winners[name] = {
+      expression: source.expression.replace(/\s+/g, ' ').trim(),
+      selector: where.selector,
+      ...(where.file === undefined ? {} : { file: where.file }),
+      depth,
+      ancestor: elementLabel(owner),
+    };
+  });
+  return winners;
+}
+
+function elementLabel(element: Element): string {
+  if (element.id) {
+    return `#${element.id}`;
+  }
+  // The canvas's own classes (`stacki-opened`, `stacki-designer`) are not the project's: a label
+  // that named them would show them in the picker as something the project wrote.
+  const classes = ownClasses(element).map((name) => `.${name}`);
+  return classes.length > 0 ? classes.join('') : element.tagName.toLowerCase();
+}
+
+// The rule a declaration block belongs to: its selector list and the file of its stylesheet.
+function describeDeclaration(style: CSSStyleDeclaration): { readonly selector: string; readonly file: string | undefined } {
+  let rule: CSSRule | undefined = style.parentRule ?? undefined;
+  if (rule === undefined) {
+    return { selector: 'style', file: undefined };
+  }
+  let selector = '';
+  for (let depth = 0; rule !== undefined && depth < PRELOAD_LIMITS.cssRuleDepthMax; depth += 1) {
+    if (rule instanceof CSSStyleRule) {
+      selector = selector === '' ? rule.selectorText : `${rule.selectorText} ${selector}`;
+    }
+    if (rule.parentRule === null) {
+      return { selector, file: sheetFile(rule.parentStyleSheet ?? undefined) };
+    }
+    rule = rule.parentRule;
+  }
+  return { selector, file: undefined };
+}
+
+function sheetFile(sheet: CSSStyleSheet | undefined): string | undefined {
+  if (sheet === undefined) {
+    return undefined;
+  }
+  const owner = sheet.ownerNode;
+  const id = owner instanceof HTMLElement ? owner.dataset['viteDevId'] : undefined;
+  const file = id ?? sheet.href ?? undefined;
+  if (file === undefined) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(file, document.baseURI);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.pathname.slice(0, 1024) : file.slice(0, 1024);
+  } catch {
+    return file.slice(0, 1024);
+  }
+}
+
+// ---- The custom properties declared in scope of an element ----
+
+/** The most scoped names one question reports. */
+export const SCOPED_NAMES_MAX = 512;
+
+/**
+ * Every custom property declared by a rule that reaches `element` or one of its parents (or by an inline
+ * style on them), with the NEAREST such declaration of each (the later of two at one distance; the traced winner, not this, is what a row shows): the variables a component keeps for itself
+ * (`--_mw` on its own class) as well as the project's. A rule reaches an element when its selector matches
+ * it, so a sibling's own variables are not reported. Conditions on the rule (media, supports) are not judged
+ * here; the caller keeps only names the element actually computes. A nested rule's relative selector is not
+ * matched. Read-only: nothing is written to any stylesheet.
+ */
+export function inspectScopedProperties(element: Element): Readonly<Record<string, WinningDeclaration>> {
+  const styles = authoredStyles(element);
+  if (styles === undefined) {
+    return {};
+  }
+  const chain: Element[] = [];
+  for (let node: Element | undefined = element; node !== undefined && chain.length < PRELOAD_LIMITS.domDepthMax; node = node.parentElement ?? undefined) {
+    chain.push(node);
+  }
+  const found: Record<string, WinningDeclaration> = {};
+  let count = 0;
+  for (const style of styles.declarations) {
+    const names = Array.from(style).filter((name) => name.startsWith('--'));
+    if (names.length === 0) {
+      continue;
+    }
+    const depth = reachDepth(style, chain);
+    if (depth < 0) {
+      continue;
+    }
+    const owner = chain[depth];
+    if (owner === undefined) {
+      continue;
+    }
+    const where = describeDeclaration(style);
+    for (const name of names) {
+      const known = found[name];
+      if (known === undefined) {
+        if (count >= SCOPED_NAMES_MAX) {
+          continue;
+        }
+        count += 1;
+      } else if (known.depth < depth) {
+        continue;
+      }
+      found[name] = {
+        expression: style.getPropertyValue(name).replace(/\s+/g, ' ').trim(),
+        selector: where.selector,
+        ...(where.file === undefined ? {} : { file: where.file }),
+        depth,
+        ancestor: elementLabel(owner),
+      };
+    }
+  }
+  return found;
+}
+
+// How many parents up the first element is that this declaration block reaches; -1 when none.
+function reachDepth(style: CSSStyleDeclaration, chain: readonly Element[]): number {
+  const rule = style.parentRule;
+  if (rule === null) {
+    return chain.findIndex((node) => node instanceof HTMLElement && node.style === style);
+  }
+  const owner = rule instanceof CSSStyleRule ? rule : rule.parentRule instanceof CSSStyleRule ? rule.parentRule : undefined;
+  if (owner === undefined) {
+    return -1;
+  }
+  return chain.findIndex((node) => {
+    try {
+      return node.matches(owner.selectorText);
+    } catch {
+      return false;
+    }
+  });
 }

@@ -1,4 +1,5 @@
 import esbuild = require('esbuild');
+import childProcess = require('node:child_process');
 import fs = require('node:fs');
 import path = require('node:path');
 import { repositoryRoot } from '../lib/repoRoot';
@@ -13,6 +14,27 @@ function versionOf(file: string): string {
     throw new Error('Expected a stable package version');
   }
   return version;
+}
+
+// The Studio demo's browser files go into the package under dist/demo/, because stacki.build
+// bakes its /demo from the newest create-stacki on npm (stacki-marketing-site/scripts/npm-demo.ts)
+// and refuses a package without them. They are the same files the release uploads, named
+// stacki-demo-<file> with stacki-demo-manifest.json listing each one's checksum.
+function packDemo(root: string, directory: string): void {
+  const studio = path.join(root, 'studio');
+  childProcess.execFileSync('npm', ['run', 'release:demo'], { cwd: studio, stdio: 'inherit' });
+  const source = path.join(studio, '.studio/demo-release/upload');
+  const target = path.join(directory, 'dist/demo');
+  fs.rmSync(target, { recursive: true, force: true });
+  fs.mkdirSync(target, { recursive: true });
+  const names = fs.readdirSync(source);
+  if (!names.includes('stacki-demo-manifest.json')) {
+    throw new Error('The Studio demo build wrote no manifest');
+  }
+  for (const name of names) {
+    fs.copyFileSync(path.join(source, name), path.join(target, name));
+  }
+  console.log(`Packed ${names.length} Studio demo files into create-stacki.`);
 }
 
 function build(): void {
@@ -41,6 +63,7 @@ function build(): void {
   });
   fs.chmodSync(path.join(output, 'cli.mjs'), 0o755);
   fs.copyFileSync(release, path.join(output, 'stacki-studio.json'));
+  packDemo(root, directory);
   fs.copyFileSync(path.join(root, 'LICENSE'), path.join(directory, 'LICENSE'));
   console.log(`Prepared create-stacki ${version} with its bundled Studio release.`);
 }

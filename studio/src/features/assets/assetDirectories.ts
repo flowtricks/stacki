@@ -1,3 +1,4 @@
+import { ReferencedError } from '../../shared/referencedError';
 import { readdir } from 'node:fs/promises';
 import { safePath } from '../project/projectServer';
 import { managedAsset } from './assetStateTypes';
@@ -10,11 +11,11 @@ export async function assetDirectoryContents(root: string, directory: string) {
   for (let index = 0; index < directories.length; index++) {
     const current = directories[index];
     if (!current || directories.length > 200 || files.length > 200) {
-      throw new Error('Move at most 200 files and folders at once');
+      throw new ReferencedError('assets.error.moveMaxEntries', { count: 200 });
     }
     for (const entry of await readdir(await safePath(root, current), { withFileTypes: true })) {
       if (entry.name.startsWith('.') || entry.isSymbolicLink()) {
-        throw new Error('Folders containing hidden files or symbolic links cannot be moved');
+        throw new ReferencedError('assets.error.folderHidden');
       }
       const file = current + '/' + entry.name;
       if (entry.isDirectory()) {
@@ -22,7 +23,7 @@ export async function assetDirectoryContents(root: string, directory: string) {
       } else if (entry.isFile()) {
         files.push(managedAsset(file));
       } else {
-        throw new Error('Folder contains an unsupported entry');
+        throw new ReferencedError('assets.error.folderUnsupportedEntry');
       }
     }
   }

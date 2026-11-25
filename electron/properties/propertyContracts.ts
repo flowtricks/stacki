@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import type { PropertyEditing } from '../../shared/properties/propertyEditing';
 import { isAstroProps, propertyKey, syntaxNodes } from './propertySyntax';
@@ -16,33 +17,38 @@ interface Work {
   readonly path: readonly string[];
 }
 interface Branch {
-  readonly condition: string;
+  /** Which branch of the union: the discriminating field and its value (code), or its position when no field tells them apart. */
+  readonly condition: { readonly kind: 'named'; readonly label: string } | { readonly kind: 'numbered'; readonly number: number };
   readonly fields: ReadonlyMap<string, ts.PropertySignature>;
 }
 interface Contract {
   readonly members: ReadonlyMap<string, readonly Usage[]>;
   readonly names: ReadonlySet<string>;
   readonly branches: readonly (readonly Branch[])[];
-  readonly complete: boolean;
   readonly inheritedAttributes: boolean;
 }
 export interface PropertyContracts {
   readonly names: ReadonlySet<string>;
-  readonly editable: ReadonlyMap<string, ts.PropertySignature>;
+  /** The declaration that states a prop's tooltip and required mark: the public one outside any variant, else the first variant's that is not `never`. */
+  readonly primary: ReadonlyMap<string, ts.PropertySignature>;
+  /** Every declaration of a prop (public variants, separate intersected types, runtime assertions), the primary first: a save writes all of them. */
+  readonly declared: ReadonlyMap<string, readonly ts.PropertySignature[]>;
   readonly editing: (name: string) => PropertyEditing;
-  readonly conditions: (name: string) => readonly string[];
+  readonly conditions: (name: string) => readonly Described[];
 }
 
-// A common member must be the same declaration in both the public contract and
-// the runtime assertion. Editing it then preserves every variant and runtime type.
+// A common member is one declaration in the public contract. When the runtime
+// assertion (`Astro.props as AllProps`) declares it again as its own member,
+// that declaration is a mirror: an edit writes both, so the two types cannot
+// drift apart. Editing it preserves every variant and runtime type.
 export function readPropertyContracts(document: PropertySyntax): PropertyContracts {
   const declarations = new Map<string, Declaration>();
   for (const statement of document.syntax.statements) {
     if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
-      if (declarations.has(statement.name.text)) {
-        return unavailableContracts('Duplicate type declarations require editing in source.');
+      // A repeated name is a source error the compiler reports; the first declaration speaks for it.
+      if (!declarations.has(statement.name.text)) {
+        declarations.set(statement.name.text, statement);
       }
-      declarations.set(statement.name.text, statement);
     }
   }
   const assertions = syntaxNodes(document.syntax)
@@ -51,51 +57,55 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   const attributes = htmlAttributeImports(document.syntax);
   const imports = importedTypeNames(document.syntax);
   const publicContract = readContract(declarations.get('Props'), declarations, attributes, imports);
-  const runtimeContracts = assertions.map((node) =>
-    readContract(node.type, declarations, attributes, imports),
+  // Other types the props are checked against: a cast (`Astro.props as All`), an annotation
+  // (`const { a }: Shape = Astro.props`), and a second declaration of `Props` that merges with the first.
+  const annotations = syntaxNodes(document.syntax)
+    .filter(ts.isVariableDeclaration)
+    .filter((node) => isAstroProps(node.initializer) && node.type !== undefined)
+    .flatMap((node) => (node.type === undefined ? [] : [node.type]));
+  const merged = document.syntax.statements.filter(
+    (statement): statement is Declaration =>
+      (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) &&
+      statement.name.text === 'Props' &&
+      statement !== declarations.get('Props'),
+  );
+  const runtimeContracts = [...assertions.map((node) => node.type), ...annotations, ...merged].map((root) =>
+    readContract(root, declarations, attributes, imports),
   );
   const contracts = [publicContract, ...runtimeContracts];
-  const editable = new Map<string, ts.PropertySignature>();
-  const reasons = new Map<string, string>();
-  for (const [name, usages] of publicContract.members) {
-    const member = usages[0]?.member;
-    assert(member !== undefined, 'Contract field has a declaration');
-    const reason = commonMemberRestriction(name, publicContract, runtimeContracts);
-    if (reason) {
-      reasons.set(name, reason);
-    } else {
-      editable.set(name, member);
-    }
+  const primary = new Map<string, ts.PropertySignature>();
+  const declared = new Map<string, readonly ts.PropertySignature[]>();
+  for (const name of new Set([...publicContract.members.keys(), ...runtimeContracts.flatMap((contract) => [...contract.members.keys()])])) {
+    const members = [...new Set(contracts.flatMap((contract) => (contract.members.get(name) ?? []).map((usage) => usage.member)))];
+    const first = bestPrimary(publicContract.members.get(name) ?? []) ?? members[0];
+    assert(first !== undefined, 'A declared prop has a declaration');
+    primary.set(name, first);
+    declared.set(name, [first, ...members.filter((member) => member !== first)]);
   }
-  assert(editable.size <= PROPERTY_LIMITS.fieldsMax, 'Editable contract fields are bounded');
+  assert(primary.size <= PROPERTY_LIMITS.fieldsMax, 'Contract fields are bounded');
   return {
     names: new Set(contracts.flatMap((contract) => [...contract.names])),
-    editable,
+    primary,
+    declared,
+    // Every prop is editable; one the file only inherits is declared locally on its first save.
     editing: (name) =>
-      editable.has(name)
-        ? { kind: 'editable' }
-        : inheritedAttributeCanOverride(name, contracts)
-          ? {
-              kind: 'override',
-              reason: 'This HTML attribute will be declared locally when you save it.',
-            }
-          : {
-              kind: 'restricted',
-              reason:
-                reasons.get(name) ??
-                'This prop is inherited or imported. Edit its declaration in source.',
-            },
+      !declared.has(name) && inheritedAttributeCanOverride(name, contracts)
+        ? withReason('override', described('props.contract.override'))
+        : { kind: 'editable' },
     conditions: (name) => contractConditions(publicContract, name),
   };
 }
 
-function unavailableContracts(reason: string): PropertyContracts {
-  return {
-    names: new Set(),
-    editable: new Map(),
-    editing: () => ({ kind: 'restricted', reason }),
-    conditions: () => [],
-  };
+// The declaration that speaks for a prop: outside any variant when there is one, else the first that is not `never`.
+function bestPrimary(usages: readonly Usage[]): ts.PropertySignature | undefined {
+  const common = usages.find((usage) => !usage.conditional && usage.member.type?.kind !== ts.SyntaxKind.NeverKeyword);
+  const allowed = usages.find((usage) => usage.member.type?.kind !== ts.SyntaxKind.NeverKeyword);
+  return (common ?? allowed ?? usages[0])?.member;
+}
+
+/** An override permission, its reason in English and as a reference the window translates. */
+export function withReason(kind: 'override', reason: Described): PropertyEditing {
+  return { kind, reason: reason.message, reasonRef: reason.messageRef };
 }
 
 function inheritedAttributeCanOverride(name: string, contracts: readonly Contract[]): boolean {
@@ -104,35 +114,6 @@ function inheritedAttributeCanOverride(name: string, contracts: readonly Contrac
     return false;
   }
   return contracts.every((contract) => contract.inheritedAttributes && !contract.members.has(name));
-}
-
-function commonMemberRestriction(
-  name: string,
-  contract: Contract,
-  runtimeContracts: readonly Contract[],
-): string | undefined {
-  const usages = contract.members.get(name) ?? [];
-  if (usages.some((usage) => usage.conditional)) {
-    return 'This prop has variant rules. Edit its declaration in source to preserve those rules.';
-  }
-  if (new Set(usages.map((usage) => usage.member)).size !== 1) {
-    return 'This prop combines multiple declarations. Edit those declarations in source.';
-  }
-  if (!contract.complete) {
-    return 'This prop depends on a shared or computed type that must be edited in source.';
-  }
-  const member = usages[0]?.member;
-  for (const runtime of runtimeContracts) {
-    const matches = runtime.members.get(name) ?? [];
-    if (
-      !runtime.complete ||
-      matches.length === 0 ||
-      matches.some((match) => match.member !== member || match.conditional)
-    ) {
-      return 'This prop has a separate runtime type. Edit both declarations together in source.';
-    }
-  }
-  return undefined;
 }
 
 function readContract(
@@ -145,7 +126,6 @@ function readContract(
   const members = new Map<string, readonly Usage[]>();
   const names = new Set<string>();
   const branches: (readonly Branch[])[] = [];
-  let complete = root !== undefined;
   let inheritedAttributes = false;
   for (let count = 0; count < PROPERTY_LIMITS.nodesMax && work.length > 0; count++) {
     const item = work.pop();
@@ -166,9 +146,8 @@ function readContract(
         branches.push(unionBranches(item.node));
       }
       const children = contractChildren(item, declarations, attributes, imports);
-      if (children === undefined) {
-        complete = false;
-      } else {
+      // A computed or cyclic part adds no members this scan can see; the rest still counts.
+      if (children !== undefined && children !== 'opaque') {
         work.push(...children);
       }
     }
@@ -176,14 +155,10 @@ function readContract(
   }
   assert(work.length === 0, 'Contract traversal completes within its budget');
   assert(members.size <= PROPERTY_LIMITS.fieldsMax, 'Contract field count is bounded');
-  return { members, names, branches, complete, inheritedAttributes };
+  return { members, names, branches, inheritedAttributes };
 }
 
-function isInheritedAstroAttributes(
-  node: ts.Node,
-  declarations: ReadonlyMap<string, Declaration>,
-  attributes: ReadonlySet<string>,
-): boolean {
+function isInheritedAstroAttributes(node: ts.Node, declarations: ReadonlyMap<string, Declaration>, attributes: ReadonlySet<string>): boolean {
   if (!ts.isTypeReferenceNode(node) && !ts.isExpressionWithTypeArguments(node)) {
     return false;
   }
@@ -191,19 +166,30 @@ function isInheritedAstroAttributes(
   return attributes.has(name) && !declarations.has(name);
 }
 
+// What a contract node contributes: the nodes beneath it; 'opaque', a named
+// type declared elsewhere (imported, global, generic, exported) whose fields
+// this file cannot see; or undefined, a computed or cyclic type that makes the
+// contract incomplete. An opaque part sits beside the local members in an
+// intersection: it can add fields but never remove a sibling's, so the local
+// members stay editable (`type Props = SeoProps & { theme?: … }`). A computed
+// part (a mapped, conditional or indexed type) can produce any key, so it
+// still makes every member read-only.
+type ContractChildren = readonly Work[] | 'opaque' | undefined;
+
 function contractChildren(
   item: Work,
   declarations: ReadonlyMap<string, Declaration>,
   attributes: ReadonlySet<string>,
   imports: ReadonlySet<string>,
-): readonly Work[] | undefined {
+): ContractChildren {
   const { node } = item;
   if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) {
-    if (node.typeParameters || item.path.includes(node.name.text) || item.path.length >= 64) {
+    if (item.path.includes(node.name.text) || item.path.length >= 64) {
       return undefined;
     }
+    // Other files may import an exported declaration, so its members are not this file's to edit.
     if (node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
-      return undefined;
+      return 'opaque';
     }
     const next = { ...item, path: [...item.path, node.name.text] };
     if (ts.isTypeAliasDeclaration(node)) {
@@ -211,9 +197,7 @@ function contractChildren(
     }
     return [
       ...node.members.map((member) => ({ ...next, node: member })),
-      ...(node.heritageClauses ?? [])
-        .flatMap((clause) => clause.types)
-        .map((type) => ({ ...next, node: type })),
+      ...(node.heritageClauses ?? []).flatMap((clause) => clause.types).map((type) => ({ ...next, node: type })),
     ];
   }
   if (ts.isTypeLiteralNode(node)) {
@@ -236,14 +220,19 @@ function contractChildren(
       return [];
     }
     // Omit only narrows known Astro attributes, so it cannot hide another local declaration.
-    if (
-      ts.isTypeReferenceNode(node) &&
-      isOmittedAstroAttributes(node, declarations, attributes, imports)
-    ) {
+    if (ts.isTypeReferenceNode(node) && isOmittedAstroAttributes(node, declarations, attributes, imports)) {
       return [];
     }
     const declaration = declarations.get(name);
-    return declaration && !node.typeArguments ? [{ ...item, node: declaration }] : undefined;
+    if (declaration === undefined) {
+      // Imported or global: its fields live in another file.
+      return 'opaque';
+    }
+    if (node.typeArguments !== undefined) {
+      // A local generic instantiated here: its fields depend on the arguments, and stay in source.
+      return 'opaque';
+    }
+    return [{ ...item, node: declaration }];
   }
   return undefined;
 }
@@ -283,11 +272,7 @@ function htmlAttributeImports(syntax: ts.SourceFile): ReadonlySet<string> {
   for (const statement of syntax.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const bindings = statement.importClause?.namedBindings;
-      if (
-        statement.moduleSpecifier.text === 'astro/types' &&
-        bindings &&
-        ts.isNamedImports(bindings)
-      ) {
+      if (statement.moduleSpecifier.text === 'astro/types' && bindings && ts.isNamedImports(bindings)) {
         for (const specifier of bindings.elements) {
           if ((specifier.propertyName ?? specifier.name).text === 'HTMLAttributes') {
             names.add(specifier.name.text);
@@ -322,14 +307,12 @@ function importedTypeNames(syntax: ts.SourceFile): ReadonlySet<string> {
 
 function unionBranches(node: ts.UnionTypeNode): readonly Branch[] {
   const fields = node.types.map(branchFields);
-  const discriminator = [...(fields[0]?.keys() ?? [])].find((name) =>
-    fields.every((branch) => literalBranchValue(branch.get(name)?.type) !== undefined),
-  );
+  const discriminator = [...(fields[0]?.keys() ?? [])].find((name) => fields.every((branch) => literalBranchValue(branch.get(name)?.type) !== undefined));
   return fields.map((branch, index) => ({
     fields: branch,
     condition: discriminator
-      ? `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}`
-      : `Variant branch ${index + 1}`,
+      ? { kind: 'named', label: `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}` }
+      : { kind: 'numbered', number: index + 1 },
   }));
 }
 
@@ -366,21 +349,17 @@ function literalBranchValue(type: ts.TypeNode | undefined): string | undefined {
   return types.every((value) => ts.isLiteralTypeNode(value)) ? type.getText() : undefined;
 }
 
-function contractConditions(contract: Contract, name: string): readonly string[] {
+function contractConditions(contract: Contract, name: string): readonly Described[] {
   const common = contract.members.get(name)?.find((usage) => !usage.conditional)?.member;
   const conditions = contract.branches
     .filter((branches) => branches.some((branch) => branch.fields.has(name)))
     .flatMap((branches) =>
       branches.map((branch) => {
         const member = branch.fields.get(name) ?? common;
-        const state = member
-          ? member.type?.kind === ts.SyntaxKind.NeverKeyword
-            ? 'not allowed'
-            : member.questionToken
-              ? 'optional'
-              : 'required'
-          : 'not declared';
-        return `${branch.condition}: ${state}`;
+        const state = member ? (member.type?.kind === ts.SyntaxKind.NeverKeyword ? 'Never' : member.questionToken ? 'Optional' : 'Required') : 'Undeclared';
+        return branch.condition.kind === 'named'
+          ? described(`props.contract.condition.named${state}`, { branch: branch.condition.label })
+          : described(`props.contract.condition.numbered${state}`, { number: branch.condition.number });
       }),
     );
   assert(conditions.length <= PROPERTY_LIMITS.fieldsMax, 'Property variant conditions are bounded');

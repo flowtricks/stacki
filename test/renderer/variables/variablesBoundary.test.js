@@ -5,21 +5,20 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { readVariables } = require('#dist/electron/project/cssVars.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // A boundary can receive null — JSON, structured clone and postMessage all carry it —
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const { parseCSSVariables, readCSSVariables, VARIABLES_LIMITS } =
-  require('../../helpers/rendererModule')('src/features/variables/variablesBridge.ts');
+const { parseCSSVariables, readCSSVariables, VARIABLES_LIMITS } = require('../../helpers/rendererModule')('src/ipc/variablesBridge.ts');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-variable-boundary-'));
 let wire;
 try {
   fs.mkdirSync(path.join(directory, 'src/styles'), { recursive: true });
   fs.writeFileSync(
     path.join(directory, 'src/styles/tokens.css'),
-    ':root { /* Palette */ --brand: #0af; --accent: var(--brand); --gap: 1rem; }\n' +
-      '.dark { --brand: #111; --accent: var(--brand); --gap: 2rem; }\n',
+    ':root { /* Palette */ --brand: #0af; --accent: var(--brand); --gap: 1rem; }\n' + '.dark { --brand: #111; --accent: var(--brand); --gap: 2rem; }\n',
   );
   fs.writeFileSync(path.join(directory, 'src/styles/broken.css'), ':root { --broken:');
   wire = readVariables(directory);
@@ -113,20 +112,14 @@ for (const mutate of [
   (snapshot) => {
     cell(snapshot).unknownColor = 'true';
   },
-  (snapshot) => {
-    cell(snapshot).value = 'x'.repeat(VARIABLES_LIMITS.fileCharsMax + 1);
-  },
-  (snapshot) => {
-    group(snapshot).columns = Array(VARIABLES_LIMITS.entriesMax + 1).fill(PLATFORM_NULL);
-  },
-  (snapshot) => {
-    snapshot.files = Array(VARIABLES_LIMITS.entriesMax + 1).fill(PLATFORM_NULL);
-  },
 ]) {
   const invalid = good();
   mutate(invalid);
   assert.throws(() => parseCSSVariables(invalid));
 }
+// A longer value or list than the platform holds cannot be built; Stacki has no product size limit.
+assert.equal(VARIABLES_LIMITS.fileCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+assert.equal(VARIABLES_LIMITS.entriesMax, PLATFORM_LIMITS.arrayLengthMax);
 const matrix = good();
 block(matrix).kind = 'matrix';
 assert.throws(() => parseCSSVariables(matrix), /matrix columns are required/);
@@ -157,9 +150,7 @@ for (const invalid of [PLATFORM_NULL, [], {}, { files: [] }, { files: [], error:
   assert.deepEqual(await readCSSVariables('/project'), { ok: false, error: 'disk unavailable' });
   window.avb.cssVariables = async () => PLATFORM_NULL;
   await assert.rejects(() => readCSSVariables('/project'));
-  console.log(
-    'variables-boundary: real parser round trip, nested bounds and failure channels passed',
-  );
+  console.log('variables-boundary: real parser round trip, nested bounds and failure channels passed');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -39,6 +39,8 @@
 .studio-brand {
   width: 26px;
   height: 26px;
+  padding: 0;
+  border: 0;
   display: grid;
   place-items: center;
   color: #f5f5f5;
@@ -47,13 +49,7 @@
 .project-name {
   font-weight: 550;
 }
-.draft-chip {
-  font-size: 10px;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 6px;
-}
+
 .studio-titlebar .page-switch-btn {
   width: auto;
   min-width: 100px;
@@ -61,14 +57,14 @@
 }
 .collaborators {
   display: flex;
-  padding-left: 6px;
+  padding-inline-start: 6px;
 }
 .collaborators > button {
   border: 2px solid var(--bg-panel);
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  margin-left: -6px;
+  margin-inline-start: -6px;
   display: grid;
   place-items: center;
   font-size: 9px;
@@ -78,6 +74,38 @@
   font-size: 10px;
   color: var(--text-dim);
   white-space: nowrap;
+}
+.save-state-button {
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+}
+.save-state-button:hover,
+.save-state-button[aria-expanded='true'] {
+  background: var(--bg-hover);
+}
+.save-state-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* A phone's title bar has no room to spare, and "Saved" is the quiet,
+   expected state, so it is hidden from sight there. It stays readable to
+   screen readers, and every other state (connecting, saving, offline)
+   still shows, because those need the user's attention. */
+@media (max-width: 700px) {
+  .save-state[data-saved] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 .studio-workspace {
   position: relative;
@@ -102,10 +130,8 @@
   color: var(--text-dim);
 }
 @media (max-width: 700px) {
-  .studio-left[data-variable-selected='true'] {
-    display: none;
-  }
-  .studio-editor-content .vars-body {
+  /* The body and its sibling scrollbar must inherit the same column sizes. */
+  .studio-editor-content .vars-sheet {
     --vars-name-col: 140px;
     --vars-inset: 12px;
     --vars-col: 220px;
@@ -127,21 +153,31 @@
 .ai-icon {
   font-size: 24px;
 }
+/* Like Desktop's .panel, the side panels do not clip: each panel body scrolls itself,
+   and the shared resize handle reaches 4px past the panel edge. */
 .studio-left {
   width: 260px;
   min-width: 210px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
   background: var(--bg-panel);
-  overflow: auto;
+  overflow: visible;
   position: relative;
 }
 .studio-right {
   width: 322px;
   flex-shrink: 0;
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   background: var(--bg-panel);
-  overflow: auto;
+  overflow: visible;
+  position: relative;
+}
+/* Desktop's shared resize handle straddles the panel edge, as on .panel.left and .panel.right. */
+.studio-left > .panel-resize {
+  inset-inline-end: -4px;
+}
+.studio-right > .panel-resize {
+  inset-inline-start: -4px;
 }
 
 .muted {
@@ -176,135 +212,6 @@
   flex-direction: column;
   background: #202020;
 }
-.canvas-toolbar {
-  height: 42px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-.viewport-tools {
-  display: flex;
-  gap: 2px;
-}
-.viewport-tools button {
-  padding: 5px 7px;
-  background: transparent;
-  color: var(--text-dim);
-}
-.viewport-tools button.active {
-  background: var(--bg-active);
-  color: white;
-}
-.preview-url {
-  color: var(--text-faint);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.canvas-stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  justify-content: center;
-  overflow: hidden;
-  padding: 20px;
-}
-.canvas-stage iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: white;
-  box-shadow: 0 8px 30px #0003;
-}
-.canvas-stage.phone iframe {
-  max-width: 390px;
-}
-.canvas-stage.tablet iframe {
-  max-width: 768px;
-}
-.canvas-footer {
-  height: 28px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-faint);
-  font-size: 10px;
-  border-top: 1px solid var(--border);
-}
-.canvas-footer span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.drop-mode {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  color: var(--text-faint);
-  font-size: 10px;
-}
-.drop-mode select {
-  font-size: 10px;
-  padding: 3px 6px;
-  width: auto;
-  background: transparent;
-}
-.studio-tree {
-  padding: 4px 0;
-}
-.studio-tree-row {
-  min-height: 31px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-right: 8px;
-  cursor: pointer;
-}
-.studio-tree-row:hover {
-  background: var(--bg-hover);
-}
-.studio-tree-row.selected {
-  background: var(--accent-soft);
-  color: #8ecbff;
-}
-.studio-tree-row.component {
-  color: var(--component-green);
-}
-.studio-tree-row.component.selected {
-  background: var(--component-green-soft);
-}
-.tree-toggle {
-  padding: 0;
-  width: 12px;
-  height: 22px;
-  background: transparent;
-}
-.tree-label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-}
-.drag-grip {
-  padding: 0 3px;
-  height: 25px;
-  background: transparent;
-  color: var(--text-faint);
-  touch-action: none;
-  cursor: grab;
-}
-.studio-fields {
-  padding: 8px 14px;
-}
 .studio-field {
   position: relative;
   display: flex;
@@ -334,7 +241,7 @@
   color: var(--accent);
 }
 .studio-field input,
-.studio-field select {
+.studio-field .dd-trigger {
   min-height: 29px;
 }
 .inapplicable {
@@ -359,28 +266,32 @@
 .class-suggestions {
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   z-index: 30;
   background: #252525;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
   box-shadow: 0 8px 20px #0008;
 }
 .class-suggestions button {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   border-radius: 0;
   background: transparent;
   padding: 7px 10px;
   font-family: var(--mono);
   font-size: 10px;
+  /* A class name is code, which reads left to right in every language. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 .collection-editor {
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 36px;
   flex: 1;
   user-select: text;
@@ -405,10 +316,8 @@
   max-width: 680px;
 }
 .source-editor {
-  min-height: 60vh;
+  height: 60vh;
   margin-top: 16px;
-  font-family: var(--mono);
-  line-height: 1.7;
 }
 .boot {
   height: 100dvh;
@@ -420,138 +329,197 @@
   padding: 24px;
   text-align: center;
 }
-.boot-detail {
-  max-width: 420px;
-  font-size: 13px;
-  color: var(--text-muted, #999);
+.boot-title {
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--text);
+}
+/* One column as wide as the bar: the bar, then one row with the stage left and the step counter right. */
+.boot-status {
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .boot-progress {
-  width: min(280px, 75vw);
   height: 4px;
   border-radius: 4px;
   overflow: hidden;
-  background: #2b2b2b;
+  background: var(--bg-active);
 }
 .boot-progress > span {
   display: block;
-  width: 40%;
+  position: relative;
   height: 100%;
   border-radius: inherit;
-  background: #f5f5f5;
-  animation: boot-progress 1.4s ease-in-out infinite;
+  background: var(--text);
+  overflow: hidden;
+  transition: width 0.6s ease;
 }
-@keyframes boot-progress {
+/* A soft sheen moves along the filled part while a long stage runs; the fill itself only ever grows. */
+.boot-progress > span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.28), transparent);
+  animation: boot-sheen 1.8s ease-in-out infinite;
+}
+@keyframes boot-sheen {
   from {
     transform: translateX(-100%);
   }
   to {
-    transform: translateX(350%);
+    transform: translateX(100%);
   }
+}
+.boot-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: start;
+  font-size: 12px;
+}
+.boot-stage {
+  min-width: 0;
+  color: var(--text-dim);
+}
+.boot-counter {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.boot-note {
+  min-height: 1.4em;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  text-align: start;
 }
 @media (prefers-reduced-motion: reduce) {
   .boot-progress > span {
+    transition: none;
+  }
+  .boot-progress > span::after {
     animation: none;
-    width: 100%;
-    opacity: 0.6;
+    display: none;
   }
 }
-.mobile-close,
-.mobile-settings-button {
+.panel-close {
   display: none;
 }
+/* The inspector's tab row: the tabs, then (collapsed) the close button on the same line. */
+.studio-inspector-head {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.studio-inspector-head > .right-tabs {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+/* The collapsed layout (mobileEditor.ts, after Desktop's editorLayout.ts): when docked panels
+   would leave the canvas too narrow, they float over a full-width canvas instead. Each keeps
+   the width the user set, up to the room there is, and docks at that width again later. */
+.studio-app[data-editor-layout='collapsed'] .studio-left {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 44px;
+  max-width: calc(100% - 44px);
+  z-index: 40;
+  border-inline-end: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 40px #0005;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-left[data-variable-selected='true'] {
+  display: none;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-right {
+  display: none;
+}
+/* Below the canvas toolbar, so its panel button stays in reach to close the panel again. */
+.studio-app[data-editor-layout='collapsed'] .studio-right.mobile-open {
+  display: flex;
+  position: absolute;
+  top: 44px;
+  inset-inline-end: 0;
+  bottom: 0;
+  max-width: 100%;
+  z-index: 45;
+  border-inline-start: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 40px #0005;
+}
+/* A quiet icon button the size of the panel headers' own (22px), filled on hover. */
+.studio-app[data-editor-layout='collapsed'] .panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+}
+/* In the panel header's row, inside its 12px padding, beside the header's own actions. */
+.studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  z-index: 2;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-left .panel-header {
+  padding-inline-end: 38px;
+}
+/* In the tab row: the tabs' height and top and bottom insets, and the 12px right inset of the
+   panel's content below (and of the Navigator header's close button). */
+.studio-app[data-editor-layout='collapsed'] .studio-inspector-head > .panel-close {
+  width: 26px;
+  height: auto;
+  margin-block: 8px 4px;
+  margin-inline: 0 12px;
+}
 @media (max-width: 1000px) {
-  .studio-left {
-    width: 220px;
-  }
-  .studio-right {
-    width: 250px;
-  }
-  .canvas-stage {
-    padding: 10px;
-  }
   .project-name {
     display: none;
   }
 }
 @media (max-width: 700px) {
   .studio-titlebar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
     height: 50px;
     padding: 0 8px;
     gap: 6px;
   }
-  .draft-chip,
-  .save-state,
   .collaborators {
     display: none;
   }
   .studio-titlebar .page-switch-btn {
-    max-width: 150px;
+    min-width: 0;
+    max-width: 100%;
   }
   .studio-titlebar.component-open .collaborators {
     display: none;
   }
-  .studio-rail {
-    width: 44px;
+  /* A phone has no room beside a panel: the collapsed overlays take the full width and height. */
+  .studio-app[data-editor-layout='collapsed'] .studio-left {
+    min-width: calc(100% - 44px);
   }
-  .studio-left {
-    position: fixed;
-    top: 50px;
-    bottom: 0;
-    left: 44px;
-    width: calc(100% - 44px);
-    z-index: 40;
-    border-right: 0;
-  }
-  .studio-right {
-    display: none;
-  }
-  .studio-right.mobile-open {
-    display: block;
-    position: fixed;
-    top: 50px;
-    bottom: 0;
-    left: 44px;
-    width: calc(100% - 44px);
-    z-index: 45;
-  }
-  .mobile-close {
-    display: flex;
-    position: absolute;
-    right: 12px;
-    top: 10px;
-    z-index: 2;
-    font-size: 22px;
+  .studio-app[data-editor-layout='collapsed'] .studio-right.mobile-open {
+    top: 0;
+    min-width: 100%;
   }
   .panel-header {
-    padding-right: 48px;
     min-height: 48px;
   }
-  .studio-tree-row {
-    min-height: 44px;
-  }
-  .drag-grip {
-    min-width: 36px;
-    min-height: 40px;
-    font-size: 20px;
-  }
-  .canvas-stage {
-    padding: 0;
-  }
-  .canvas-toolbar {
-    padding: 0 8px;
-  }
-  .preview-url {
-    max-width: 80px;
-  }
-  .mobile-settings-button {
-    display: inline-flex;
-    padding: 4px 8px;
-  }
-  .canvas-footer {
-    min-height: 38px;
+  /* A 48px header centres its row 3px lower than the 12px top padding does. */
+  .studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
+    top: 15px;
   }
   .studio-field input,
-  .studio-field select,
+  .studio-field .dd-trigger,
   .studio-field textarea {
     font-size: 16px;
     min-height: 40px;
@@ -588,6 +556,7 @@
   font-size: 12px;
   max-height: 200px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 .sync-notice p {
   margin: 0 0 4px;
@@ -601,6 +570,7 @@
   font-size: 11px;
   max-height: 220px;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 8px;
 }
 .diff-before {
@@ -659,7 +629,7 @@
   display: grid;
   gap: 0.5rem;
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 36px;
   z-index: 100;
   min-width: 150px;
@@ -668,11 +638,6 @@
   border-radius: 8px;
   background: var(--bg-panel);
   box-shadow: 0 8px 24px #0008;
-}
-.account-popover:has(.storage-total) {
-  width: min(340px, calc(100vw - 24px));
-  max-height: calc(100dvh - 64px);
-  overflow-y: auto;
 }
 .account-popover button {
   width: 100%;
@@ -684,16 +649,6 @@
   font-size: 10px;
   line-height: 1.5;
   color: var(--text-dim);
-}
-.account-popover > .storage-panel {
-  margin: 0;
-  padding: 0.75rem 0 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 0;
-}
-.account-popover .storage-toggle {
-  min-height: 2.75rem;
 }
 @media (max-width: 700px) {
   /* Give page names the flexible space so the avatar group keeps its full width. */
@@ -734,7 +689,6 @@
 .studio-left:has(.studio-code-panel) {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-navigator > .panel-section {
   width: 100%;
@@ -748,7 +702,6 @@
 .studio-right {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-code-panel {
   height: 100%;
@@ -757,14 +710,6 @@
 .studio-code-panel > .code-editor-host {
   flex: 1;
   min-height: 0;
-}
-@media (max-width: 700px) {
-  .studio-right {
-    display: none;
-  }
-  .studio-right.mobile-open {
-    display: flex;
-  }
 }
 
 .collaborators > button {
@@ -781,19 +726,19 @@
   outline: 2px solid #009dff;
   outline-offset: -2px;
   pointer-events: none;
-  z-index: 6;
+  z-index: var(--canvas-layer-collaborator);
 }
 .collaborator-outline-tag {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  left: 0; /* physical: canvas overlay, page coordinates */
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 6px 3px 3px;
+  padding: 3px 6px 3px 3px; /* physical: canvas overlay, page coordinates */
   background: #009dff;
   color: white;
-  border-radius: 4px 4px 4px 0;
+  border-radius: 4px 4px 4px 0; /* physical: canvas overlay, page coordinates */
   white-space: nowrap;
   font-size: 10.5px;
   font-weight: 600;
@@ -832,8 +777,8 @@
   white-space: nowrap;
 }
 .page-presence {
-  margin-left: auto;
-  padding-left: 5px;
+  margin-inline-start: auto;
+  padding-inline-start: 5px;
   display: inline-flex;
   flex-shrink: 0;
 }
@@ -842,7 +787,7 @@
   place-items: center;
   width: 23px;
   height: 23px;
-  margin-left: -5px;
+  margin-inline-start: -5px;
   border: 2px solid var(--bg-panel);
   border-radius: 50%;
   overflow: hidden;
@@ -861,77 +806,11 @@
   color: var(--text-dim);
 }
 
-.storage-panel {
-  margin: 0 12px 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.storage-toggle {
-  width: 100%;
-}
-.storage-total {
-  font-size: 14px;
-  margin: 12px 0 8px;
-}
-.storage-total span,
-.storage-note,
-.storage-message,
-.cleanup-confirm p {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-dim);
-}
-.storage-total span {
-  display: block;
-}
-.storage-usage {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 8px;
-  font-size: 11px;
-}
-.storage-usage dd {
-  margin: 0;
-}
-.cleanup-list {
-  max-height: 230px;
-  overflow-y: auto;
-  margin: 10px 0;
-}
-.cleanup-list label {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 6px 0;
-  cursor: pointer;
-}
-.cleanup-list input {
-  width: auto;
-  flex-shrink: 0;
-  margin: 3px 0 0;
-}
-.cleanup-list strong {
-  font-size: 11px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.cleanup-list small {
-  display: block;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-.cleanup-confirm > button {
-  margin: 0 4px 4px 0;
-}
-
 .studio-left {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-left.code-panel-shell {
-  width: clamp(360px, 34vw, 620px);
   background: #111;
 }
 .studio-panel-actions {
@@ -946,7 +825,7 @@
 }
 .studio-page-list .list-item {
   width: 100%;
-  text-align: left;
+  text-align: start;
   font-weight: 400;
 }
 .studio-file-dialog {
@@ -959,9 +838,6 @@
   background: rgba(0, 0, 0, 0.5);
 }
 @media (max-width: 700px) {
-  .studio-left.code-panel-shell {
-    width: calc(100% - 44px);
-  }
   .studio-titlebar .page-switch-btn {
     min-width: 0;
   }
@@ -971,9 +847,18 @@
   justify-content: flex-start;
   background: transparent;
 }
-.studio-page-list .list-item:hover:not(:disabled) {
+.studio-page-list .list-item:hover:not(:disabled):not(.active) {
   background: var(--bg-hover);
 }
 .studio-page-list .list-item.active {
   background: var(--accent-soft);
+}
+/* A press that may become a touch drag (useTouchTree.ts): no long-press callout, no text
+   selection and no system drag lift on the rows, which would take the touch away. */
+.studio-navigator.touch-pressing .structure-node,
+.studio-navigator.touch-dragging .structure-node {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }

@@ -22,11 +22,7 @@ export function cssUnitPx(unit: string, axis: 'x' | 'y', canvas: HTMLElement) {
   return previewUnitPx(unit, axis, { width: rect.width, height: rect.height });
 }
 
-export function cssUnitValueToCanvasPercent(
-  value: CssUnitValue,
-  axis: 'x' | 'y',
-  canvas: HTMLElement,
-) {
+export function cssUnitValueToCanvasPercent(value: CssUnitValue, axis: 'x' | 'y', canvas: HTMLElement) {
   const rect = canvas.getBoundingClientRect();
   const axisSize = axis === 'x' ? rect.width : rect.height;
   if (axisSize <= 0) {
@@ -35,12 +31,7 @@ export function cssUnitValueToCanvasPercent(
   return ((value.value * cssUnitPx(value.unit, axis, canvas)) / axisSize) * 100;
 }
 
-export function canvasPercentToCssUnitValue(
-  percent: number,
-  axis: 'x' | 'y',
-  unit: string,
-  canvas: HTMLElement,
-): CssUnitValue {
+export function canvasPercentToCssUnitValue(percent: number, axis: 'x' | 'y', unit: string, canvas: HTMLElement): CssUnitValue {
   const rect = canvas.getBoundingClientRect();
   const axisSize = axis === 'x' ? rect.width : rect.height;
   const unitPx = cssUnitPx(unit, axis, canvas);
@@ -52,11 +43,7 @@ export function cssUnitValueToken(value: CssUnitValue) {
   return formatCssUnitValue(value);
 }
 
-export function cssUnitCalculationToken(
-  left: CssUnitValue,
-  operator: '+' | '-',
-  right: CssUnitValue,
-) {
+export function cssUnitCalculationToken(left: CssUnitValue, operator: '+' | '-', right: CssUnitValue) {
   return `calc(${cssUnitValueToken(left)} ${operator} ${cssUnitValueToken(right)})`;
 }
 
@@ -68,11 +55,7 @@ export function insetRadiusToCanvas(shape: InsetShape, radius: CornerRadius): Co
   };
 }
 
-export function cssCoordinateExpressionToCanvasPercent(
-  expression: string,
-  axis: 'x' | 'y',
-  canvas: HTMLElement,
-) {
+export function cssCoordinateExpressionToCanvasPercent(expression: string, axis: 'x' | 'y', canvas: HTMLElement) {
   const rect = canvas.getBoundingClientRect();
   const axisSize = axis === 'x' ? rect.width : rect.height;
   if (axisSize <= 0 || typeof document === 'undefined') {
@@ -110,20 +93,11 @@ export function cssCoordinateExpressionToCanvasPercent(
   return (offset / axisSize) * 100;
 }
 
-export function cssCoordinateValueToCanvasPercent(
-  value: CssCoordinateValue,
-  axis: 'x' | 'y',
-  canvas: HTMLElement,
-) {
-  return isCssUnitValue(value)
-    ? cssUnitValueToCanvasPercent(value, axis, canvas)
-    : cssCoordinateExpressionToCanvasPercent(value.expression, axis, canvas);
+export function cssCoordinateValueToCanvasPercent(value: CssCoordinateValue, axis: 'x' | 'y', canvas: HTMLElement) {
+  return isCssUnitValue(value) ? cssUnitValueToCanvasPercent(value, axis, canvas) : cssCoordinateExpressionToCanvasPercent(value.expression, axis, canvas);
 }
 
-export function partialCssCoordinatePointToCanvasPoint(
-  point: CssCoordinatePoint,
-  canvas: HTMLElement,
-): Point | undefined {
+export function partialCssCoordinatePointToCanvasPoint(point: CssCoordinatePoint, canvas: HTMLElement): Point | undefined {
   const x = cssCoordinateValueToCanvasPercent(point.x, 'x', canvas);
   const y = cssCoordinateValueToCanvasPercent(point.y, 'y', canvas);
   if (x === undefined && y === undefined) {
@@ -135,10 +109,7 @@ export function partialCssCoordinatePointToCanvasPoint(
   };
 }
 
-export function rawInsetBox(
-  shape: Extract<RawEditableClipPath, { kind: 'inset' }>,
-  canvas: HTMLElement,
-) {
+export function rawInsetBox(shape: Extract<RawEditableClipPath, { kind: 'inset' }>, canvas: HTMLElement) {
   const left = cssUnitValueToCanvasPercent(shape.left, 'x', canvas);
   const top = cssUnitValueToCanvasPercent(shape.top, 'y', canvas);
   const right = 100 - cssUnitValueToCanvasPercent(shape.right, 'x', canvas);
@@ -153,11 +124,7 @@ export function rawInsetBox(
   };
 }
 
-export function rawEditableHandlePoint(
-  editable: RawEditableClipPath,
-  handle: HandleTarget,
-  canvas: HTMLElement,
-): Point | undefined {
+export function rawEditableHandlePoint(editable: RawEditableClipPath, handle: HandleTarget, canvas: HTMLElement): Point | undefined {
   if (handle.kind === 'polygon-point' && editable.kind === 'polygon') {
     const point = editable.points[handle.index];
     return point ? partialCssCoordinatePointToCanvasPoint(point, canvas) : undefined;
@@ -172,9 +139,7 @@ export function rawEditableHandlePoint(
     }
     if (handle.kind === 'circle-radius') {
       return {
-        x:
-          cssUnitValueToCanvasPercent(editable.cx, 'x', canvas) +
-          cssUnitValueToCanvasPercent(editable.radius, 'x', canvas),
+        x: cssUnitValueToCanvasPercent(editable.cx, 'x', canvas) + cssUnitValueToCanvasPercent(editable.radius, 'x', canvas),
         y: cssUnitValueToCanvasPercent(editable.cy, 'y', canvas),
       };
     }
@@ -189,18 +154,14 @@ export function rawEditableHandlePoint(
     }
     if (handle.kind === 'ellipse-rx') {
       return {
-        x:
-          cssUnitValueToCanvasPercent(editable.cx, 'x', canvas) +
-          cssUnitValueToCanvasPercent(editable.rx, 'x', canvas),
+        x: cssUnitValueToCanvasPercent(editable.cx, 'x', canvas) + cssUnitValueToCanvasPercent(editable.rx, 'x', canvas),
         y: cssUnitValueToCanvasPercent(editable.cy, 'y', canvas),
       };
     }
     if (handle.kind === 'ellipse-ry') {
       return {
         x: cssUnitValueToCanvasPercent(editable.cx, 'x', canvas),
-        y:
-          cssUnitValueToCanvasPercent(editable.cy, 'y', canvas) +
-          cssUnitValueToCanvasPercent(editable.ry, 'y', canvas),
+        y: cssUnitValueToCanvasPercent(editable.cy, 'y', canvas) + cssUnitValueToCanvasPercent(editable.ry, 'y', canvas),
       };
     }
   }
@@ -212,11 +173,7 @@ export function rawEditableHandlePoint(
 }
 
 // Where a raw inset's edge or corner-radius handle sits on the canvas.
-export function rawInsetHandlePoint(
-  editable: Extract<RawEditableClipPath, { kind: 'inset' }>,
-  handle: HandleTarget,
-  canvas: HTMLElement,
-): Point | undefined {
+export function rawInsetHandlePoint(editable: Extract<RawEditableClipPath, { kind: 'inset' }>, handle: HandleTarget, canvas: HTMLElement): Point | undefined {
   const box = rawInsetBox(editable, canvas);
   if (handle.kind === 'inset-top') {
     return { x: box.x0 + box.width / 2, y: box.y0 };
@@ -257,10 +214,7 @@ export function rawInsetHandlePoint(
   return undefined;
 }
 
-export function rawEditableHandleCssPoint(
-  editable: RawEditableClipPath,
-  handle: HandleTarget,
-): { x: string; y: string } | undefined {
+export function rawEditableHandleCssPoint(editable: RawEditableClipPath, handle: HandleTarget): { x: string; y: string } | undefined {
   if (handle.kind === 'polygon-point' && editable.kind === 'polygon') {
     const point = editable.points[handle.index];
     return point
@@ -308,10 +262,7 @@ export function rawEditableHandleCssPoint(
 }
 
 // Where a raw inset's edge or corner-radius handle sits, as CSS the preview resolves.
-export function rawInsetHandleCssPoint(
-  editable: Extract<RawEditableClipPath, { kind: 'inset' }>,
-  handle: HandleTarget,
-): { x: string; y: string } | undefined {
+export function rawInsetHandleCssPoint(editable: Extract<RawEditableClipPath, { kind: 'inset' }>, handle: HandleTarget): { x: string; y: string } | undefined {
   const left = cssUnitValueToken(editable.left);
   const top = cssUnitValueToken(editable.top);
   const right = `calc(100% - ${cssUnitValueToken(editable.right)})`;

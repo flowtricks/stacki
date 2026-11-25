@@ -111,10 +111,7 @@ type Shape = Readonly<Record<string, Parser<unknown>>>;
 type ShapeValue<S extends Shape> = {
   readonly [K in keyof S as undefined extends Parsed<S[K]> ? never : K]: Parsed<S[K]>;
 } & {
-  readonly [K in keyof S as undefined extends Parsed<S[K]> ? K : never]?: Exclude<
-    Parsed<S[K]>,
-    undefined
-  >;
+  readonly [K in keyof S as undefined extends Parsed<S[K]> ? K : never]?: Exclude<Parsed<S[K]>, undefined>;
 };
 
 export function object<S extends Shape>(shape: S): Parser<ShapeValue<S>> {
@@ -133,10 +130,7 @@ export function object<S extends Shape>(shape: S): Parser<ShapeValue<S>> {
 }
 
 export function dictionary<T>(parse: Parser<T>): Parser<Record<string, T>> {
-  return (input) =>
-    Object.fromEntries(
-      Object.entries(record(input)).map(([key, value]) => [pathText(key), parse(value)]),
-    );
+  return (input) => Object.fromEntries(Object.entries(record(input)).map(([key, value]) => [pathText(key), parse(value)]));
 }
 
 export function data(input: unknown): Data {
@@ -180,11 +174,7 @@ type DefinedFields<T> = {
   readonly [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & { readonly [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined> };
 
-export function definedFields<T extends Readonly<Record<string, unknown>>>(
-  source: T,
-): DefinedFields<T> {
+export function definedFields<T extends Readonly<Record<string, unknown>>>(source: T): DefinedFields<T> {
   // Dropping undefined keys makes explicit options safe for exact optional types.
-  return Object.fromEntries(
-    Object.entries(source).filter(([, value]) => value !== undefined),
-  ) as DefinedFields<T>;
+  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as DefinedFields<T>;
 }

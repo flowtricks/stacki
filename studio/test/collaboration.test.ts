@@ -38,18 +38,11 @@ test('a room persists source plus CRDT history and incorporates external disk ch
     const fresh = new Room(root, 'src/pages/index.astro');
     await fresh.initialize();
     Y.applyUpdate(fresh.document, Y.encodeStateAsUpdate(room.document));
-    assert.equal(
-      fresh.text.toString(),
-      '<h1>Hello</h1>',
-      'Restart before the first edit retains CRDT identity',
-    );
+    assert.equal(fresh.text.toString(), '<h1>Hello</h1>', 'Restart before the first edit retains CRDT identity');
     fresh.document.destroy();
     room.text.insert(4, 'Shared ');
     await room.persist();
-    assert.equal(
-      await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'),
-      '<h1>Shared Hello</h1>',
-    );
+    assert.equal(await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'), '<h1>Shared Hello</h1>');
     const restored = new Room(root, 'src/pages/index.astro');
     await restored.initialize();
     assert.equal(restored.text.toString(), room.text.toString());

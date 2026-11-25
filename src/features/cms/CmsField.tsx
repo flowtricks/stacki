@@ -7,11 +7,20 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { toArray, toRecord } from '../../../shared/core/record';
 import { blankItem, contentFieldsOf, isExpr, titleOf, EXPR_KEY } from './cmsSchema';
-import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import AssetField from '../../ui/AssetField';
 import AutoTextarea from '../../ui/AutoTextarea';
+import CalendarField from '../../ui/DateField';
+import HtmlField from '../../ui/HtmlField';
+import { containsHTML } from '../../ui/htmlFieldModel';
+import { calendarValue } from '../../ui/dateFieldModel';
 import ExprInput from '../../ui/ExprInput';
 import useListReorder from '../../ui/useListReorder';
+import { CmsListField } from './CmsListField';
+import { CmsFieldFrame, CmsPropField, type CmsScalar, type CmsScalarKind } from './CmsPropField';
+import { FIELD_TYPES } from './cmsFieldTypes';
+import { CmsColorInput } from './CmsColorInput';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export interface CmsFieldContext {
   readonly projectPath: string;
@@ -25,6 +34,7 @@ interface ValueProps extends CmsFieldContext {
 }
 interface ControlProps extends ValueProps {
   readonly type: FieldType;
+  readonly label: string;
 }
 export interface CmsFieldProps extends CmsFieldContext {
   readonly label: string;
@@ -66,21 +76,74 @@ export default function CmsField({ label, type, depth = 0, ...props }: CmsFieldP
     shown.current = type;
   }
   return (
-    <div
-      className={`cms-field ${shown.current}`}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    >
-      <div className="cms-field-head">
-        <label>{label}</label>
-      </div>
-      <FieldControl {...props} type={shown.current} depth={depth} />
+    <div className={`cms-field ${shown.current}`} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+      <LocalField {...props} label={label} type={shown.current} depth={depth} />
     </div>
   );
 }
 
+// A project field drawn as a component prop field, like a connected CMS's
+// (CmsPropField.tsx): text, numbers and switches are prop fields outright;
+// any other kind keeps its control under the same label row.
+function LocalField(props: ControlProps) {
+  const { type, value, label, onChange } = props;
+  const scalar = localScalar(type, value);
+  if (scalar !== undefined) {
+    return (
+      <CmsPropField
+        name={label}
+        help=""
+        kind={scalar}
+        options={[]}
+        value={scalarValue(value)}
+        onChange={(next) => onChange(next ?? (scalar === 'boolean' ? false : ''))}
+      />
+    );
+  }
+  const Icon = FIELD_TYPES.find((entry) => entry.value === type)?.Icon ?? VariableTextSizeIcon;
+  return (
+    <CmsFieldFrame name={label} help="" icon={<Icon size={12} />} set={hasValue(value)}>
+      <FieldControl {...props} />
+    </CmsFieldFrame>
+  );
+}
+
+// Plain text, long text, numbers and switches; text holding HTML keeps its editor.
+function localScalar(type: FieldType, value: unknown): CmsScalarKind | undefined {
+  if (type === 'number' || type === 'boolean') {
+    return type;
+  }
+  if (type === 'text' || type === 'empty' || type === 'longtext') {
+    if (containsHTML(fieldText(value))) {
+      return undefined;
+    }
+    return type === 'longtext' ? 'text' : 'string';
+  }
+  return undefined;
+}
+
+function scalarValue(value: unknown): CmsScalar | undefined {
+  if (typeof value === 'string') {
+    return value === '' ? undefined : value;
+  }
+  return typeof value === 'number' || typeof value === 'boolean' ? value : undefined;
+}
+
+function hasValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return value !== undefined && value !== '';
+}
+
 function FieldControl(props: ControlProps) {
   const { type, value, onChange, depth, ...context } = props;
+  if (['text', 'longtext', 'empty'].includes(type)) {
+    const text = fieldText(value);
+    if (containsHTML(text)) {
+      return <HtmlField value={text} label={props.label} onChange={onChange} />;
+    }
+  }
   switch (type) {
     case 'code':
       return <CodeField value={value} onChange={onChange} />;
@@ -91,50 +154,24 @@ function FieldControl(props: ControlProps) {
     case 'image':
       return <ImageField {...props} />;
     case 'date':
-      return <DateField value={value} onChange={onChange} />;
+      return <CalendarField value={fieldText(value)} label={props.label} onChange={onChange} />;
     case 'color':
       return <ColorField value={value} onChange={onChange} />;
     case 'longtext':
-      return (
-        <AutoTextarea
-          value={fieldText(value)}
-          minRows={3}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
+      return <AutoTextarea value={fieldText(value)} minRows={3} onChange={(event) => onChange(event.target.value)} />;
     case 'list':
-      return <ListEditor value={toArray(value) ?? []} onChange={onChange} />;
+      return <ListField value={toArray(value) ?? []} onChange={onChange} />;
     case 'object':
-      return (
-        <GroupEditor
-          {...context}
-          value={toRecord(value) ?? {}}
-          onChange={onChange}
-          depth={depth + 1}
-        />
-      );
+      return <GroupEditor {...context} value={toRecord(value) ?? {}} onChange={onChange} depth={depth + 1} />;
     case 'objects':
-      return (
-        <RepeaterEditor
-          {...context}
-          value={toArray(value) ?? []}
-          onChange={onChange}
-          depth={depth + 1}
-        />
-      );
+      return <RepeaterEditor {...context} value={toArray(value) ?? []} onChange={onChange} depth={depth + 1} />;
     case 'link':
     case 'email':
     case 'phone':
       return <AddressField {...props} type={type} />;
     case 'empty':
     case 'text':
-      return (
-        <input
-          value={fieldText(value)}
-          maxLength={BOUNDARY_LIMITS.textLengthMax}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
+      return <input value={fieldText(value)} maxLength={BOUNDARY_LIMITS.textLengthMax} onChange={(event) => onChange(event.target.value)} />;
     default: {
       const exhaustive: never = type;
       return exhaustive;
@@ -148,12 +185,13 @@ function fieldText(value: unknown): string {
 }
 type ScalarProps = Pick<ValueProps, 'value' | 'onChange'>;
 function CodeField({ value, onChange }: ScalarProps) {
+  const translate = useTranslate();
   const text = isExpr(value) ? value[EXPR_KEY] : fieldText(value);
   return (
     <ExprInput
       value={text}
       syncValue={text}
-      placeholder="expression"
+      placeholder={translate('cms.field.expression')}
       onCommit={(next) => {
         if (next.trim() !== text.trim()) {
           onChange({ [EXPR_KEY]: next.trim() });
@@ -163,14 +201,11 @@ function CodeField({ value, onChange }: ScalarProps) {
   );
 }
 function ToggleField({ value, onChange }: ScalarProps) {
+  const translate = useTranslate();
   return (
-    <button
-      type="button"
-      className={`cms-toggle ${value ? 'on' : ''}`}
-      onClick={() => onChange(!value)}
-    >
+    <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}>
       <span className="cms-toggle-knob" />
-      <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
+      <span className="cms-toggle-label">{value ? translate('cms.toggle.on') : translate('cms.toggle.off')}</span>
     </button>
   );
 }
@@ -192,13 +227,7 @@ function NumberField({ value, onChange }: ScalarProps) {
     />
   );
 }
-function ImageField({
-  value,
-  onChange,
-  pickAsset,
-  projectPath,
-  baseDir: baseDirectory,
-}: ValueProps) {
+function ImageField({ value, onChange, pickAsset, projectPath, baseDir: baseDirectory }: ValueProps) {
   const asset = isExpr(value) ? value['__asset'] : undefined;
   const reference = typeof asset === 'string' ? asset : undefined;
   return (
@@ -222,15 +251,7 @@ function ImageField({
     />
   );
 }
-function DateField({ value, onChange }: ScalarProps) {
-  const text = fieldText(value);
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text);
-  return dateOnly || !value ? (
-    <input type="date" value={text} onChange={(event) => onChange(event.target.value)} />
-  ) : (
-    <input value={text} onChange={(event) => onChange(event.target.value)} />
-  );
-}
+
 function AddressField({
   type,
   value,
@@ -243,41 +264,35 @@ function AddressField({
       type={type === 'link' ? 'url' : type === 'email' ? 'email' : 'tel'}
       value={fieldText(value)}
       maxLength={BOUNDARY_LIMITS.textLengthMax}
+      // i18n-ignore: example addresses are literal URL and email syntax, not words.
       placeholder={type === 'link' ? 'https://' : type === 'email' ? 'name@site.com' : ''}
       onChange={(event) => onChange(event.target.value)}
     />
   );
 }
 function ColorField({ value, onChange }: ScalarProps) {
-  const text = fieldText(value);
-  return (
-    <div className="cms-color">
-      <input
-        type="color"
-        value={/^#[0-9a-f]{6}$/i.test(text) ? text : '#000000'}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <input
-        value={text}
-        placeholder="#000000"
-        spellCheck={false}
-        maxLength={BOUNDARY_LIMITS.textLengthMax}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
+  const translate = useTranslate();
+  return <CmsColorInput value={fieldText(value)} label={translate('cms.color.name')} onChange={onChange} />;
+}
+// Plain text and numbers are options to drag, rename and delete; a list holding
+// rich text or dates keeps the editors those values need.
+function ListField(props: ListProps) {
+  const rich = props.value.some((entry) => {
+    const text = fieldText(entry);
+    return containsHTML(text) || calendarValue(text) !== undefined;
+  });
+  return rich ? <ListEditor {...props} /> : <CmsListField {...props} />;
 }
 function ListEditor({ value, onChange }: ListProps) {
+  const translate = useTranslate();
   assert(value.length <= BOUNDARY_LIMITS.itemsMax, 'CMS list: item limit exceeded');
   return (
     <div className="cms-list">
       {value.map((entry, index) => (
         <div key={index} className="cms-list-row">
-          <input
+          <ListValue
             value={fieldText(entry)}
-            maxLength={BOUNDARY_LIMITS.textLengthMax}
-            onChange={(event) => {
-              const text = event.target.value;
+            onChange={(text) => {
               const next = typeof entry === 'number' ? Number(text) : text;
               if (typeof next === 'number') {
                 if (!Number.isFinite(next)) {
@@ -287,11 +302,7 @@ function ListEditor({ value, onChange }: ListProps) {
               onChange(value.map((item, position) => (position === index ? next : item)));
             }}
           />
-          <button
-            className="ghost"
-            title="Remove"
-            onClick={() => onChange(value.filter((_, position) => position !== index))}
-          >
+          <button className="ghost" title={translate('ui.remove')} onClick={() => onChange(value.filter((_, position) => position !== index))}>
             <CloseIcon size={10} />
           </button>
         </div>
@@ -303,12 +314,22 @@ function ListEditor({ value, onChange }: ListProps) {
           onChange([...value, '']);
         }}
       >
-        <PlusIcon size={11} /> Add
+        <PlusIcon size={11} /> {translate('cms.add')}
       </button>
     </div>
   );
 }
+function ListValue({ value, onChange }: { readonly value: string; readonly onChange: (value: string) => void }) {
+  if (containsHTML(value)) {
+    return <HtmlField value={value} onChange={onChange} />;
+  }
+  if (calendarValue(value)) {
+    return <CalendarField value={value} onChange={onChange} />;
+  }
+  return <input value={value} maxLength={BOUNDARY_LIMITS.textLengthMax} onChange={(event) => onChange(event.target.value)} />;
+}
 function GroupEditor({ value, onChange, ...context }: GroupProps) {
+  const translate = useTranslate();
   const fields = contentFieldsOf([value]);
   return (
     <div className="cms-group-box">
@@ -322,7 +343,7 @@ function GroupEditor({ value, onChange, ...context }: GroupProps) {
           onChange={(next) => onChange({ ...value, [field.key]: next })}
         />
       ))}
-      {fields.length === 0 && <div className="cms-empty-inline">Empty group.</div>}
+      {fields.length === 0 && <div className="cms-empty-inline">{translate('cms.field.emptyGroup')}</div>}
     </div>
   );
 }
@@ -374,24 +395,20 @@ function useRepeater({ value, onChange }: RepeaterProps) {
   return { openIndex, setOpenIndex, removeAt, add, reorder };
 }
 function RepeaterEditor(props: RepeaterProps) {
+  const translate = useTranslate();
   const { value, onChange, ...context } = props;
   const { openIndex, setOpenIndex, removeAt, add, reorder } = useRepeater(props);
   return (
     <div className="cms-repeater">
       {value.map((entry, index) => (
-        <div
-          key={index}
-          className={`cms-repeat-row ${reorder.rowClass(index)}`}
-          {...reorder.rowProps(index)}
-          onClick={() => setOpenIndex(index)}
-        >
+        <div key={index} className={`cms-repeat-row ${reorder.rowClass(index)}`} {...reorder.rowProps(index)} onClick={() => setOpenIndex(index)}>
           <span className="cms-repeat-grip">
             <DragIcon size={11} />
           </span>
-          <span className="cms-repeat-title">{titleOf(entry, index)}</span>
+          <span className="cms-repeat-title">{titleOf(entry, index, translate)}</span>
           <button
             className="ghost"
-            title="Remove"
+            title={translate('ui.remove')}
             onClick={(event) => {
               event.stopPropagation();
               removeAt(index);
@@ -403,16 +420,14 @@ function RepeaterEditor(props: RepeaterProps) {
         </div>
       ))}
       <button className="cms-add" onClick={add}>
-        <PlusIcon size={11} /> Add item
+        <PlusIcon size={11} /> {translate('cms.addItem')}
       </button>
       {openIndex !== undefined && value[openIndex] !== undefined && (
         <NestedItemDialog
           {...context}
           entry={value[openIndex]}
-          title={titleOf(value[openIndex], openIndex)}
-          onChange={(next) =>
-            onChange(value.map((entry, index) => (index === openIndex ? next : entry)))
-          }
+          title={titleOf(value[openIndex], openIndex, translate)}
+          onChange={(next) => onChange(value.map((entry, index) => (index === openIndex ? next : entry)))}
           onDelete={() => removeAt(openIndex)}
           onClose={() => setOpenIndex(undefined)}
         />
@@ -421,6 +436,7 @@ function RepeaterEditor(props: RepeaterProps) {
   );
 }
 function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...context }: DialogProps) {
+  const translate = useTranslate();
   const value = toRecord(entry) ?? {};
   const fields = contentFieldsOf([entry]);
   return (
@@ -429,7 +445,7 @@ function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...contex
         <>
           <div className="modal-header cms-modal-header">
             <span>{title}</span>
-            <button className="ghost" title="Close" onClick={close}>
+            <button className="ghost" title={translate('ui.close')} onClick={close}>
               <CloseIcon size={12} />
             </button>
           </div>
@@ -444,18 +460,14 @@ function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...contex
                 onChange={(next) => onChange({ ...value, [field.key]: next })}
               />
             ))}
-            {fields.length === 0 && (
-              <div className="cms-empty-inline">
-                These items have no fields yet — add them in the collection's settings.
-              </div>
-            )}
+            {fields.length === 0 && <div className="cms-empty-inline">{translate('cms.field.noFields')}</div>}
           </div>
           <div className="modal-footer cms-modal-footer">
             <button className="ghost danger cms-delete-action" onClick={onDelete}>
-              <TrashIcon size={12} /> Delete
+              <TrashIcon size={12} /> {translate('cms.delete')}
             </button>
             <button className="primary" onClick={close}>
-              Done
+              {translate('cms.settings.done')}
             </button>
           </div>
         </>

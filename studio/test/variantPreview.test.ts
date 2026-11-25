@@ -1,11 +1,7 @@
 import { record } from '../src/shared/validation';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  applyVariant,
-  instrumentVariant,
-  variantScope,
-} from '../src/features/preview/variantRuntime';
+import { applyVariant, instrumentVariant, variantScope } from '../src/features/preview/variantRuntime';
 import { parseVariantRequest } from '../src/features/preview/variantProtocol';
 
 test('variant renders isolate async request props and never change another instance', async () => {
@@ -28,19 +24,14 @@ test('variant renders isolate async request props and never change another insta
         return selected.variant;
       },
     );
-  assert.deepEqual(await Promise.all([render('cards'), render('table'), render(null)]), [
-    'cards',
-    'table',
-    undefined,
-  ]);
+  assert.deepEqual(await Promise.all([render('cards'), render('table'), render(null)]), ['cards', 'table', undefined]);
   const normal = { 'data-avb-p': '0.1', variant: 'original' };
   applyVariant(normal, 'Heading.astro');
   assert.equal(normal.variant, 'original');
 });
 
 test('variant instrumentation precedes props destructuring without touching authored bytes', () => {
-  const source =
-    '---\nconst {variant} = Astro.props;\n---\n{variant === "a" ? <section/> : <article/>}\n';
+  const source = '---\nconst {variant} = Astro.props;\n---\n{variant === "a" ? <section/> : <article/>}\n';
   const marked = instrumentVariant(source, 'Card.astro', '/studio/variantRuntime.mjs');
   assert.ok(marked.indexOf('__studioApplyVariant(Astro.props') < marked.indexOf('const {variant}'));
   assert.ok(marked.endsWith(source.slice(4)));
@@ -96,9 +87,7 @@ test('cached render replies obey latest hover, cancel, commit and source invalid
       },
     });
     preview.receive({ action: 'prepare', prop: 'variant' });
-    const request = record(sent.find((item) => item.event === 'studio:variants-prepare')?.data)[
-      'request'
-    ];
+    const request = record(sent.find((item) => item.event === 'studio:variants-prepare')?.data)['request'];
     const render = async (value: string, html: string) => {
       handlers.get('studio:variant-render')?.({ request, value, html });
       await Promise.resolve();
@@ -116,11 +105,7 @@ test('cached render replies obey latest hover, cancel, commit and source invalid
     assert.equal(painted.at(-1), 'list markup');
     preview.receive({ action: 'commit' });
     preview.receive({ action: 'reset' });
-    assert.equal(
-      painted.at(-1),
-      'list markup',
-      'Keep committed preview until authoritative HTML arrives',
-    );
+    assert.equal(painted.at(-1), 'list markup', 'Keep committed preview until authoritative HTML arrives');
     preview.authoritative('new draft');
     await render('table', 'stale markup');
     assert.equal(painted.at(-1), 'new draft');

@@ -5,10 +5,80 @@ import test from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  readProjectMetadata,
-  writeProjectMetadata,
-} from '#dist/electron/project/projectMetadata.js';
+import { readProjectMetadata, writeProjectMetadata } from '#dist/electron/project/projectMetadata.js';
+import { METADATA_FILES, metadataKind, type MetadataKind } from '#dist/shared/properties/projectMetadata.js';
+import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js';
+import { readPublishConfig } from '#dist/electron/project/publishConfig.js';
+
+const firstSettings = {
+  components: {
+    version: 1,
+    components: {
+      'src/components/Wrapper.astro': {
+        children: [{ component: 'src/components/Heading.astro', props: { slot: 'aside' } }],
+      },
+    },
+  },
+  guide: {
+    version: 1,
+    settings: {
+      visible: true,
+      numbers: false,
+      color: '#888',
+      opacity: 0.1,
+      columns: { kind: 'count', count: 8 },
+    },
+  },
+  pages: { version: 1, entries: ['about/', 'index.astro'] },
+  componentSources: { version: 1, sources: [] },
+  styles: { version: 1, keep: ['is-*'] },
+  breakpointSync: { version: 1, laptop: { excluded: [{ file: 'src/pages/index.astro', locator: '2d535645:0' }] } },
+  breakpoints: { version: 2, laptop: { value: 1100, unit: 'px' }, tablet: { value: 48, unit: 'rem' }, phone: { value: 30, unit: 'rem' } },
+  variables: { version: 1, hiddenFromSuggestions: ['--light-100', '--tint-100'] },
+  folders: { version: 1, folders: { components: ['src/ui'], assets: ['public', 'src/assets'] } },
+  instructions: { version: 1, hidden: ['docs/archive', '**/CHANGELOG.md'] },
+  audits: { version: 1, ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|src="/a.png"', reason: 'Decorative hero' }] },
+  roles: { version: 1, defaultRole: 'admin', roles: [{ id: 'admin', name: 'Admin', members: ['owner'] }] },
+  publish: {
+    ...DEFAULT_PUBLISH_CONFIG,
+    defaultTarget: 'hosting',
+    githubAccount: 'owner',
+    githubWorkflow: { kind: 'pull-request' },
+    hosting: { provider: 'cloudflare-workers', accountId: 'account', project: 'website' },
+    buildScript: 'build-site',
+    beforePublish: ['prepare-site'],
+    afterPublish: ['verify-site'],
+    publishedSite: {
+      hosting: { provider: 'cloudflare-workers', accountId: 'account', project: 'website' },
+      source: 'manual',
+      url: 'https://example.com',
+    },
+  },
+} satisfies Readonly<Record<MetadataKind, unknown>>;
+
+for (const [key, value] of Object.entries(firstSettings)) {
+  const kind = metadataKind(key);
+  test(`${kind} creates its own file on first Desktop save without guide settings`, (context) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-first-settings-'));
+    context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const directory = path.join(root, '.stacki');
+    assert.deepEqual(readProjectMetadata(root, kind), { ok: true, value: {} });
+    assert.equal(writeProjectMetadata(root, { kind, source: '{broken' }).ok, false);
+    assert.equal(fs.existsSync(directory), false);
+    const source = JSON.stringify(value);
+    const changed = JSON.stringify(value, undefined, 2) + '\n';
+    assert.equal(writeProjectMetadata(root, { kind, source }).ok, true);
+    assert.deepEqual(fs.readdirSync(directory), [path.basename(METADATA_FILES[kind])]);
+    assert.deepEqual(readProjectMetadata(root, kind), { ok: true, value: { source } });
+    assert.equal(writeProjectMetadata(root, { kind, source: changed, base: source }).ok, true);
+    assert.equal(writeProjectMetadata(root, { kind, source, base: source }).ok, false);
+    assert.deepEqual(readProjectMetadata(root, kind), { ok: true, value: { source: changed } });
+    assert.equal(fs.readFileSync(path.join(root, METADATA_FILES[kind]), 'utf8'), changed);
+    if (kind === 'publish') {
+      assert.deepEqual(readPublishConfig(root), firstSettings.publish);
+    }
+  });
+}
 
 test('metadata creates once, saves against its base and reports external edits', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-metadata-'));
@@ -26,16 +96,10 @@ test('metadata creates once, saves against its base and reports external edits',
     },
   });
   assert.equal(writeProjectMetadata(root, { kind: 'components', source: next }).ok, false);
-  assert.equal(
-    writeProjectMetadata(root, { kind: 'components', source: next, base: source }).ok,
-    true,
-  );
+  assert.equal(writeProjectMetadata(root, { kind: 'components', source: next, base: source }).ok, true);
   assert.equal(writeProjectMetadata(root, { kind: 'components', source, base: source }).ok, false);
   assert.equal(fs.readFileSync(path.join(root, '.stacki/components.json'), 'utf8'), next);
-  assert.equal(
-    writeProjectMetadata(root, { kind: 'components', source: '{broken', base: next }).ok,
-    false,
-  );
+  assert.equal(writeProjectMetadata(root, { kind: 'components', source: '{broken', base: next }).ok, false);
 });
 
 test('metadata refuses symlink directories and leaves the destination untouched', (context) => {

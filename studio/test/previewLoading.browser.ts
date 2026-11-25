@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -29,14 +28,8 @@ try {
   const loading = page.getByRole('status').filter({ hasText: 'Loading your preview' });
   await loading.waitFor();
   await page.locator('iframe[title="Site preview"]').waitFor({ state: 'attached' });
-  assert.equal(
-    await page.locator('.frame-sized').evaluate((node) => getComputedStyle(node).visibility),
-    'hidden',
-  );
-  assert.notEqual(
-    await loading.evaluate((node) => getComputedStyle(node).backgroundColor),
-    'rgb(255, 255, 255)',
-  );
+  assert.equal(await page.locator('.frame-sized').evaluate((node) => getComputedStyle(node).visibility), 'hidden');
+  assert.notEqual(await loading.evaluate((node) => getComputedStyle(node).backgroundColor), 'rgb(255, 255, 255)');
   await page.clock.fastForward(16000);
   const retry = page.getByRole('button', { name: 'Retry preview' });
   await retry.waitFor();
@@ -50,13 +43,8 @@ try {
   await page.frameLocator('iframe[title="Site preview"]').locator('h1').waitFor();
   await page.locator('.studio-preview-loading').waitFor({ state: 'detached' });
   assert.ok(requests > first, 'Retry starts a fresh preview request');
-  assert.equal(
-    await page.locator('.frame-sized').evaluate((node) => getComputedStyle(node).visibility),
-    'visible',
-  );
-  console.log(
-    'Delayed real preview shows a dark loading state, exposes retry, and becomes visible when ready.',
-  );
+  assert.equal(await page.locator('.frame-sized').evaluate((node) => getComputedStyle(node).visibility), 'visible');
+  console.log('Delayed real preview shows a dark loading state, exposes retry, and becomes visible when ready.');
 } finally {
   release();
   await browser.close();

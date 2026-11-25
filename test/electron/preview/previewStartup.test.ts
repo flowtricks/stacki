@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
-import { portAnswers, serverResponds } from '#dist/electron/preview/devServerChecks.js';
+import { portAnswers, previewPort, serverResponds } from '#dist/electron/preview/devServerChecks.js';
 import { listenForPreviewFailures } from '#dist/electron/preview/previewFailure.js';
 
 class Contents extends EventEmitter {
@@ -16,7 +16,9 @@ class Contents extends EventEmitter {
 
 test('a listening port is not ready until HTTP responds', async () => {
   let respond = false;
-  const server = createServer((_request, response) => {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    requests.push(request.url ?? '');
     if (respond) {
       response.writeHead(500);
       response.end('An Astro compile error is visible, not a blank connection failure.');
@@ -35,13 +37,21 @@ test('a listening port is not ready until HTTP responds', async () => {
     assert.equal(await serverResponds(url), false);
     respond = true;
     assert.equal(await serverResponds(url), true);
+    assert.deepEqual(requests, ['/@vite/client', '/@vite/client']);
   } finally {
     server.closeAllConnections();
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
   assert.equal(await serverResponds(url), false);
+});
+
+test('preview ports are stable per project and leave room for bounded conflict retries', () => {
+  const project = '/projects/documentation';
+  assert.equal(previewPort(project), previewPort(project));
+  assert.notEqual(previewPort(project), previewPort('/projects/storefront'));
+  assert.ok(previewPort(project) >= 45000);
+  assert.ok(previewPort(project) < 55000);
+  assert.throws(() => previewPort(''), /Preview port requires a project path/);
 });
 
 test('only a failed active preview is reported; deliberate navigation is ignored', () => {
@@ -61,4 +71,21 @@ test('only a failed active preview is reported; deliberate navigation is ignored
   current = undefined;
   fail(-102, 'http://127.0.0.1:4321/', 'frame');
   assert.equal(contents.messages.length, 1);
+});
+
+test('a page the server answers with an error status is reported, one it answers well is not', () => {
+  const contents = new Contents();
+  const current = 'http://127.0.0.1:4321';
+  listenForPreviewFailures(contents, () => current);
+  const navigated = (url: string, status: number, scope: 'main' | 'frame'): void => {
+    contents.emit('did-frame-navigate', {}, url, status, '', scope === 'main');
+  };
+  navigated(current + '/', 200, 'frame');
+  navigated(current + '/', 404, 'frame');
+  navigated(current + '/', 500, 'main');
+  navigated('http://127.0.0.1:4322/', 500, 'frame');
+  assert.deepEqual(contents.messages, []);
+  // An SSR TypeError (a wrongly imported default) answers 500: the canvas is told, and offers Undo last change.
+  navigated(current + '/#avb-design', 500, 'frame');
+  assert.deepEqual(contents.messages, [{ channel: 'dev:preview-failed', payload: current + '/' }]);
 });

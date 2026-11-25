@@ -27,11 +27,7 @@ test('both image formats update references before trashing the original', async 
       const original = path.join(projectPath, 'public/img/photo.png');
       fs.writeFileSync(original, await picture());
       const page = path.join(projectPath, 'src/pages/index.astro');
-      fs.writeFileSync(
-        page,
-        '<img src="/img/photo.png?width=80" />\n' +
-          '<style>img{background:url(/img/photo.png)}</style>\n',
-      );
+      fs.writeFileSync(page, '<img src="/img/photo.png?width=80" />\n' + '<style>img{background:url(/img/photo.png)}</style>\n');
       const trashed = [];
       const result = await convertImage({
         projectPath,
@@ -93,31 +89,16 @@ test('relative collection paths, aliases, encoded URLs and suffixes rewrite prec
   const to = path.join(root, 'src/assets/my photo.avif');
   const file = path.join(root, 'src/content/post.md');
   const before = '---\nimage: ../assets/my%20photo.png\n---\n![Photo](../assets/my%20photo.png)\n';
+  assert.equal(rewriteImageReferences(before, file, root, from, to), before.replaceAll('.png', '.avif'));
   assert.equal(
-    rewriteImageReferences(before, file, root, from, to),
-    before.replaceAll('.png', '.avif'),
-  );
-  assert.equal(
-    rewriteImageReferences("import image from '@/assets/my photo.png';", file, root, from, to, [
-      ['@/', ['src/']],
-    ]),
+    rewriteImageReferences("import image from '@/assets/my photo.png';", file, root, from, to, [['@/', ['src/']]]),
     "import image from '@/assets/my photo.avif';",
   );
   const publicFrom = path.join(root, 'public/photo.png');
   const publicTo = path.join(root, 'public/photo.webp');
-  const source =
-    '<img src=/photo.png><img src="https://remote.test/photo.png"><img src="/photo.png.backup">';
-  assert.equal(
-    rewriteImageReferences(source, file, root, publicFrom, publicTo),
-    source.replace('src=/photo.png>', 'src=/photo.webp>'),
-  );
-  for (const value of [
-    '../photo.png',
-    'src/../photo.png',
-    'public/a.svg',
-    'public/a.gif',
-    'public/./a.png',
-  ]) {
+  const source = '<img src=/photo.png><img src="https://remote.test/photo.png"><img src="/photo.png.backup">';
+  assert.equal(rewriteImageReferences(source, file, root, publicFrom, publicTo), source.replace('src=/photo.png>', 'src=/photo.webp>'));
+  for (const value of ['../photo.png', 'src/../photo.png', 'public/a.svg', 'public/a.gif', 'public/./a.png']) {
     assert.throws(() => parseImagePath(value));
   }
   assert.throws(() => parseImageFormat('png'));
@@ -178,10 +159,7 @@ test('linked files outside the project never reach encoding or deletion', async 
 });
 
 test('a concurrent document edit rolls back earlier references and keeps both images', async () => {
-  const {
-    DocumentActors,
-    createNodeDocumentActors,
-  } = require('#dist/electron/documents/documentActors.js');
+  const { DocumentActors, createNodeDocumentActors } = require('#dist/electron/documents/documentActors.js');
   const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
   const { createDocumentTelemetry } = require('#dist/electron/documents/documentTelemetry.js');
   const { installDocumentHost } = require('#dist/electron/documents/documentWrites.js');

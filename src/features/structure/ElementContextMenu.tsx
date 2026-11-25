@@ -1,6 +1,6 @@
 import { ContextMenu, type ContextAction, type ContextPosition } from './StructureContextMenu';
 import { findNavigatorNode, type NavigatorNode } from './structureModel';
-import { canWrapNode, type WrapperTag } from '../../editor/wrapRules';
+import { canConvertText, canWrapNode, type TextTag, type WrapperTag } from '../../editor/wrapRules';
 import { isFragmentNode } from '../../editor/liveClasses';
 
 /** Shared by navigator and canvas so action availability cannot drift between them. */
@@ -11,6 +11,10 @@ export interface ElementActionProps {
   readonly onSetDefaults?: (name: string, id: string) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
+  /** Gives bare text a tag. Left out where a page cannot write one, and the menu then offers none. */
+  readonly onConvertText?: (id: string, tag: TextTag) => void;
+  /** Whether Delete, Cut, Copy, Duplicate and Wrap may act on this node. Left out, the protected nodes alone are refused. */
+  readonly canChangeStructure?: (id: string) => boolean;
   readonly onRemoveNode: (id: string) => void;
   readonly onCopyNode: (id: string) => void;
   readonly onCutNode?: (id: string) => void;
@@ -44,18 +48,9 @@ export function ElementContextMenu(
   );
 }
 
-function runContextAction(
-  action: ContextAction,
-  props: ElementActionProps,
-  menu: ContextPosition,
-): void {
+function runContextAction(action: ContextAction, props: ElementActionProps, menu: ContextPosition): void {
   const capabilities = contextCapabilities(props, menu);
-  if (
-    capabilities.protectedNode &&
-    action !== 'paste' &&
-    action !== 'open' &&
-    action !== 'defaults'
-  ) {
+  if (capabilities.protectedNode && action !== 'paste' && action !== 'open' && action !== 'defaults') {
     return;
   }
   switch (action) {
@@ -74,23 +69,47 @@ function runContextAction(
       return;
     }
     case 'cut':
-      props.onCutNode?.(menu.nodeId);
+      if (capabilities.canCut) {
+        props.onCutNode?.(menu.nodeId);
+      }
       return;
     case 'copy':
-      props.onCopyNode(menu.nodeId);
+      if (capabilities.canChange) {
+        props.onCopyNode(menu.nodeId);
+      }
       return;
     case 'duplicate':
-      props.onDuplicateNode(menu.nodeId);
+      if (capabilities.canChange) {
+        props.onDuplicateNode(menu.nodeId);
+      }
       return;
     case 'paste':
       props.onPasteNode();
       return;
     case 'delete':
-      props.onRemoveNode(menu.nodeId);
+      if (capabilities.canChange) {
+        props.onRemoveNode(menu.nodeId);
+      }
       return;
     case 'div':
+      if (capabilities.canWrapBox) {
+        props.onWrapNode?.(menu.nodeId, action);
+      }
+      return;
     case 'a':
-      props.onWrapNode?.(menu.nodeId, action);
+      if (capabilities.canWrapLink) {
+        props.onWrapNode?.(menu.nodeId, action);
+      }
+      return;
+    case 'convert-div':
+      if (capabilities.canConvertDiv) {
+        props.onConvertText?.(menu.nodeId, 'div');
+      }
+      return;
+    case 'convert-span':
+      if (capabilities.canConvertSpan) {
+        props.onConvertText?.(menu.nodeId, 'span');
+      }
       return;
     default: {
       const exhaustive: never = action;
@@ -109,14 +128,20 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
     node.kind === 'chunk-group' ||
     node.kind === 'branch' ||
     (props.clientMode === true && node.id === 'layout');
-  const wrap = props.onWrapNode !== undefined && !protectedNode;
+  const canChange = !protectedNode && props.canChangeStructure?.(position.nodeId) !== false;
+  const wrap = props.onWrapNode !== undefined && canChange;
+  const convert = props.onConvertText !== undefined && canChange;
   return {
     component,
+    plainText: node?.kind === 'text' && props.onConvertText !== undefined,
     protectedNode,
+    canChange,
     canSetDefaults: component && !props.clientMode && props.onSetDefaults !== undefined,
-    canCut: props.onCutNode !== undefined && !protectedNode,
+    canCut: props.onCutNode !== undefined && canChange,
     canOpen: component && !node.astroAsset && props.onOpenComponent !== undefined,
     canWrapBox: wrap && canWrapNode(nodes, position.nodeId, 'div'),
     canWrapLink: wrap && canWrapNode(nodes, position.nodeId, 'a'),
+    canConvertDiv: convert && canConvertText(nodes, position.nodeId, 'div'),
+    canConvertSpan: convert && canConvertText(nodes, position.nodeId, 'span'),
   };
 }

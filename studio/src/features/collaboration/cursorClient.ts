@@ -1,10 +1,5 @@
 import { record, string } from '../../shared/validation';
-import {
-  CURSOR_INTERVAL,
-  CURSOR_MESSAGE_LIMIT,
-  parseCursorPacket,
-  type CursorPosition,
-} from './cursorPresence';
+import { CURSOR_INTERVAL, CURSOR_MESSAGE_LIMIT, parseCursorPacket, type CursorPosition } from './cursorPresence';
 import { cursorAt } from './cursorCoordinates';
 import { createCursorEditor, createCursorLayer, createRemoteCursor } from './cursorElements';
 import { RemoteCursors } from './remoteCursors';
@@ -143,21 +138,10 @@ class CursorClient {
     this.publish();
   }
   private shortcut(event: KeyboardEvent) {
-    if (
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.ctrlKey ||
-      event.metaKey ||
-      event.altKey ||
-      !this.enabled ||
-      this.interactive
-    ) {
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || !this.enabled || this.interactive) {
       return;
     }
-    if (
-      event.target instanceof Element &&
-      event.target.closest('input, textarea, select, [contenteditable=true], #studio-live-cursors')
-    ) {
+    if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], #studio-live-cursors')) {
       return;
     }
     if (event.key === 'Backspace' && (this.text || this.deleting)) {
@@ -186,11 +170,7 @@ class CursorClient {
       if (!this.hasPoint) {
         this.lastPoint = { x: innerWidth / 2, y: innerHeight / 2 };
       }
-      this.cursor = cursorAt(
-        this.lastPoint.x,
-        this.lastPoint.y,
-        document.elementFromPoint(this.lastPoint.x, this.lastPoint.y),
-      );
+      this.cursor = cursorAt(this.lastPoint.x, this.lastPoint.y, document.elementFromPoint(this.lastPoint.x, this.lastPoint.y));
     }
     this.typing = true;
     this.editor.input.value = this.text;
@@ -202,12 +182,7 @@ class CursorClient {
   }
   private inputChanged(event: Event) {
     this.text = this.editor.input.value;
-    if (
-      !this.text &&
-      event instanceof InputEvent &&
-      event.inputType.startsWith('delete') &&
-      !event.isComposing
-    ) {
+    if (!this.text && event instanceof InputEvent && event.inputType.startsWith('delete') && !event.isComposing) {
       this.finish();
     } else {
       this.draw();
@@ -219,11 +194,7 @@ class CursorClient {
     if (event.key === 'Backspace' && !event.isComposing) {
       this.deleting = true;
     }
-    if (
-      event.isComposing ||
-      (event.key === 'Enter' && event.shiftKey) ||
-      !['Escape', 'Enter'].includes(event.key)
-    ) {
+    if (event.isComposing || (event.key === 'Enter' && event.shiftKey) || !['Escape', 'Enter'].includes(event.key)) {
       return;
     }
     event.preventDefault();
@@ -254,11 +225,7 @@ class CursorClient {
   }
   private scrolled() {
     if (this.cursor) {
-      this.cursor = cursorAt(
-        this.lastPoint.x,
-        this.lastPoint.y,
-        document.elementFromPoint(this.lastPoint.x, this.lastPoint.y),
-      );
+      this.cursor = cursorAt(this.lastPoint.x, this.lastPoint.y, document.elementFromPoint(this.lastPoint.x, this.lastPoint.y));
       this.publish();
     }
     this.draw();
@@ -290,20 +257,10 @@ class CursorClient {
     this.local.text.textContent = this.text;
     this.positionBubble(this.typing ? this.editor : this.local, x, y);
   }
-  private positionBubble(
-    bubble: { element: HTMLElement; label: HTMLElement },
-    x: number,
-    y: number,
-  ) {
+  private positionBubble(bubble: { element: HTMLElement; label: HTMLElement }, x: number, y: number) {
     const inverse = this.remote.inverse;
-    const left = Math.max(
-      4,
-      Math.min(x + 18 * inverse, innerWidth - bubble.label.offsetWidth * inverse - 4),
-    );
-    const top = Math.max(
-      4,
-      Math.min(y + 22 * inverse, innerHeight - bubble.label.offsetHeight * inverse - 4),
-    );
+    const left = Math.max(4, Math.min(x + 18 * inverse, innerWidth - bubble.label.offsetWidth * inverse - 4));
+    const top = Math.max(4, Math.min(y + 22 * inverse, innerHeight - bubble.label.offsetHeight * inverse - 4));
     bubble.element.style.transform = `translate(${x}px, ${y}px)`;
     bubble.label.style.left = (left - x) / inverse + 'px';
     bubble.label.style.top = (top - y) / inverse + 'px';

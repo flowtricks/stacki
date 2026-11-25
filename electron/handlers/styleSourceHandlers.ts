@@ -1,38 +1,33 @@
 // The style and source IPC: the stylesheets the style panel can author, and
 // the source files behind a symbol, read and written inside the open project.
 
-import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { readSource } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
 import * as path from 'path';
-import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
 import { resolveImportPath, declarationLine } from '../properties/importPaths';
-import { listCssFiles, listAstroStyleFiles } from '../project/styleFiles';
+import { listCssFilesSliced, listAstroStyleFilesSliced } from '../project/styleFiles';
+import { announceVariableWrite } from './cssVariableHandlers';
 import type { MainHost } from './mainHost';
 
-export function registerStyleSourceHandlers(
-  host: Pick<MainHost, 'assertInProject' | 'ipcMain'>,
-): void {
+export function registerStyleSourceHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'send'>): void {
   registerStyleListFilesHandlers(host);
   registerSourceWriteTextHandler(host);
 }
 
-function registerStyleListFilesHandlers({
-  ipcMain,
-  assertInProject,
-}: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
+function registerStyleListFilesHandlers({ ipcMain, assertInProject, send }: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'send'>): void {
   ipcMain.handle('style:listFiles', async (_event, projectPath) => {
     if (!projectPath) {
       return { files: [] };
     }
-    return { files: listCssFiles(projectPath) };
+    return { files: await listCssFilesSliced(projectPath) };
   });
 
   ipcMain.handle('style:listAstroStyles', async (_event, projectPath) => {
     if (!projectPath) {
       return { files: [] };
     }
-    return { files: listAstroStyleFiles(projectPath) };
+    return { files: await listAstroStyleFilesSliced(projectPath) };
   });
 
   ipcMain.handle('style:readFile', async (_event, filePath) => {
@@ -40,9 +35,14 @@ function registerStyleListFilesHandlers({
     return { css: readSource(abs) };
   });
 
-  ipcMain.handle('style:writeFile', async (_event, { filePath, css }) => {
+  ipcMain.handle('style:writeFile', async (_event, { filePath, css, announce, expected }) => {
     const abs = assertInProject(filePath);
-    writeProjectText(abs, css); // notes the write, so the watcher does not see it as external
+    // Notes the write, so the watcher does not see it as external. With `expected`, the file's actor writes only while
+    // the file holds those bytes, in the same step as the write, and refuses otherwise: no read-then-write gap.
+    writeProjectText(abs, css, expected ?? undefined);
+    if (announce === true) {
+      announceVariableWrite(send, [abs]);
+    }
     return { ok: true as const };
   });
 
@@ -57,10 +57,6 @@ function registerStyleListFilesHandlers({
       return { ok: false as const, reason: 'not-found' };
     }
     assertInProject(abs);
-    const stat = fs.statSync(abs);
-    if (stat.size > MAIN_LIMITS.editableFileBytesMax) {
-      return { ok: false as const, reason: 'too-large' };
-    }
     const text = readSource(abs);
     return {
       ok: true as const,
@@ -91,10 +87,7 @@ function registerStyleListFilesHandlers({
   });
 }
 
-function registerSourceWriteTextHandler({
-  ipcMain,
-  assertInProject,
-}: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
+function registerSourceWriteTextHandler({ ipcMain, assertInProject }: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   ipcMain.handle('src:writeText', async (_event, { projectPath, rel, text }) => {
     const abs = assertInProject(path.resolve(projectPath, rel));
     writeProjectText(abs, text);

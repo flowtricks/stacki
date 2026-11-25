@@ -24,41 +24,25 @@ async function orchestrate() {
       dependencies: { astro: ASTRO_VERSION },
     }),
   );
-  fs.writeFileSync(
-    path.join(project, 'astro.config.mjs'),
-    'export default { trailingSlash: "always" };\n',
-  );
-  fs.writeFileSync(
-    path.join(project, 'src', 'pages', 'index.astro'),
-    '<html><body><h1>Lifecycle fixture</h1></body></html>\n',
-  );
+  fs.writeFileSync(path.join(project, 'astro.config.mjs'), 'export default { trailingSlash: "always" };\n');
+  fs.writeFileSync(path.join(project, 'src', 'pages', 'index.astro'), '<html><body><h1>Lifecycle fixture</h1></body></html>\n');
   writeHoverComponents(project);
   fs.mkdirSync(path.join(project, 'src', 'data'));
-  fs.writeFileSync(
-    path.join(project, 'src', 'data', 'posts.json'),
-    JSON.stringify([{ id: 'hello', title: 'Hello', rank: 1 }]),
-  );
+  fs.writeFileSync(path.join(project, 'src', 'data', 'posts.json'), JSON.stringify([{ id: 'hello', title: 'Hello', rank: 1 }]));
   fs.writeFileSync(
     path.join(project, 'src', 'content.config.ts'),
     [
       "import { defineCollection, reference, z } from 'astro:content';",
       "import { file } from 'astro/loaders';",
       "export const collections = { posts: defineCollection({ loader: file('src/data/posts.json'),",
-      'schema: ({ image }) => z.object({ title: z.string().min(3), rank: ' +
-        'z.number().int().min(0), live: z.boolean().default(false),',
-      "hero: image().optional(), author: reference('authors').optional(), published: " +
-        'z.coerce.date().optional(),',
+      'schema: ({ image }) => z.object({ title: z.string().min(3), rank: ' + 'z.number().int().min(0), live: z.boolean().default(false),',
+      "hero: image().optional(), author: reference('authors').optional(), published: " + 'z.coerce.date().optional(),',
       "flag: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),",
-      "}).refine((data) => data.title !== 'reserved', { message: 'This title is reserved', " +
-        "path: ['title'] }) }),",
-      "authors: defineCollection({ loader: file('src/data/authors.json'), schema: z.object({ " +
-        'name: z.string() }) }) };',
+      "}).refine((data) => data.title !== 'reserved', { message: 'This title is reserved', " + "path: ['title'] }) }),",
+      "authors: defineCollection({ loader: file('src/data/authors.json'), schema: z.object({ " + 'name: z.string() }) }) };',
     ].join('\n'),
   );
-  fs.writeFileSync(
-    path.join(project, 'src', 'data', 'authors.json'),
-    JSON.stringify([{ id: 'author', name: 'Author' }]),
-  );
+  fs.writeFileSync(path.join(project, 'src', 'data', 'authors.json'), JSON.stringify([{ id: 'author', name: 'Author' }]));
   const linkedProject = path.join(directory, 'project-link');
   fs.symlinkSync(project, linkedProject, process.platform === 'win32' ? 'junction' : 'dir');
   const env = {
@@ -104,10 +88,7 @@ async function inElectron() {
   const electron = require('electron');
   const { app, ipcMain, BrowserWindow } = electron;
   const directory = process.env.STACKI_INTEGRATION_DIR;
-  assert.ok(
-    directory && path.basename(directory).startsWith('stacki-dev-integration-'),
-    'use the isolated fixture only',
-  );
+  assert.ok(directory && path.basename(directory).startsWith('stacki-dev-integration-'), 'use the isolated fixture only');
   const project = process.env.STACKI_INTEGRATION_PROJECT;
   assert.equal(fs.realpathSync(project), fs.realpathSync(path.join(directory, 'project')));
   const userData = path.join(directory, 'user-data');
@@ -185,11 +166,7 @@ async function inElectron() {
     while (children.some((child) => groupAlive(child, group)) && Date.now() < deadline) {
       await sleep(50);
     }
-    assert.equal(
-      children.filter((child) => groupAlive(child, group)).length,
-      0,
-      'all owned server processes and descendants exit',
-    );
+    assert.equal(children.filter((child) => groupAlive(child, group)).length, 0, 'all owned server processes and descendants exit');
   };
   const fetchPreview = async (url) => {
     const response = await fetch(url + '/', { signal: AbortSignal.timeout(20000) });
@@ -208,10 +185,7 @@ async function inElectron() {
   const say = (message) => fs.writeSync(1, message + '\n');
   const content = require(repoPath('dist/electron/content/contentConfig.js'));
   try {
-    const configs = await Promise.all([
-      content.readContentConfig(project),
-      content.readContentConfig(project),
-    ]);
+    const configs = await Promise.all([content.readContentConfig(project), content.readContentConfig(project)]);
     for (const config of configs) {
       assert.equal(config.error, undefined, config.error);
       const posts = config.collections.find((collection) => collection.name === 'posts');
@@ -256,9 +230,7 @@ async function inElectron() {
       stdin: {
         contents: [
           "import { z } from 'astro/zod';",
-          `import { withMetadata, toJsonSchema } from ${JSON.stringify(
-            repoPath('dist/electron/content/workers/schemaTools.mjs'),
-          )};`,
+          `import { withMetadata, toJsonSchema } from ${JSON.stringify(repoPath('dist/electron/content/workers/schemaTools.mjs'))};`,
           'export const result = toJsonSchema(z.object({ title: z.string().min(3), hero: ' +
             'withMetadata(z.string(), { astroImage: true }), date: z.coerce.date(), flag: ' +
             'z.string().transform(Boolean) }));',
@@ -330,16 +302,12 @@ async function inElectron() {
         },
       });
       const preloadErrors = [];
-      renderer.webContents.on('preload-error', (_event, _file, error) =>
-        preloadErrors.push(error.message),
-      );
+      renderer.webContents.on('preload-error', (_event, _file, error) => preloadErrors.push(error.message));
       await renderer.loadFile(dist);
       const bootDeadline = Date.now() + 10000;
       let welcome = false;
       while (!welcome && Date.now() < bootDeadline) {
-        welcome = await renderer.webContents.executeJavaScript(
-          "!!window.avb && !!document.querySelector('.welcome')",
-        );
+        welcome = await renderer.webContents.executeJavaScript("!!window.avb && !!document.querySelector('.welcome')");
         if (!welcome) {
           await sleep(50);
         }
@@ -349,10 +317,7 @@ async function inElectron() {
       renderer.destroy();
       say('PASS production dist/preload boots the welcome screen in a hidden window');
     }
-    say(
-      `dev-lifecycle integration: passed ` +
-        `(Electron ${process.versions.electron}, Astro ${ASTRO_VERSION})`,
-    );
+    say(`dev-lifecycle integration: passed ` + `(Electron ${process.versions.electron}, Astro ${ASTRO_VERSION})`);
   } finally {
     content.stopAllServices();
     await invoke('project:close').catch(() => {});
@@ -393,10 +358,7 @@ function writeHoverComponents(project) {
       ')}',
     ].join('\n'),
   );
-  fs.writeFileSync(
-    path.join(project, 'src/components/Other/AccordionItem.astro'),
-    '<p>Distinct other component</p>\n',
-  );
+  fs.writeFileSync(path.join(project, 'src/components/Other/AccordionItem.astro'), '<p>Distinct other component</p>\n');
 }
 
 async function verifyHoverPreview(base) {

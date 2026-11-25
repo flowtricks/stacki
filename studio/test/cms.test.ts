@@ -10,8 +10,7 @@ import { parseCmsFiles } from '../vendor/stacki/src/features/cms/cmsPanelBridge'
 import { parseContentEntries } from '../vendor/stacki/src/features/content/contentViewBridge';
 
 const page = 'src/pages/index.astro';
-const original =
-  '---\r\n// Keep this comment.\r\nconst title = "Welcome";\r\nconst items = [{ name: "First", count: 2 }];\r\n---\r\n<h1>{title}</h1>\r\n';
+const original = '---\r\n// Keep this comment.\r\nconst title = "Welcome";\r\nconst items = [{ name: "First", count: 2 }];\r\n---\r\n<h1>{title}</h1>\r\n';
 const payload = { projectPath: 'studio', rel: 'pages/index.astro#items' };
 test('CMS discovers page data and patches only its declaration; stale saves and undo are rejected', async () => {
   const fixture = await cmsFixture({ [page]: original });
@@ -20,21 +19,14 @@ test('CMS discovers page data and patches only its declaration; stale saves and 
     assert.ok(listing.some((item) => item.rel === payload.rel));
     const before = await fixture.post('cms:read', payload);
     const data = [{ name: 'Updated', count: 3 }];
-    assert.equal(
-      record((await fixture.post('cms:write', { ...payload, data }, before['versions']))['value'])[
-        'ok'
-      ],
-      true,
-    );
+    assert.equal(record((await fixture.post('cms:write', { ...payload, data }, before['versions']))['value'])['ok'], true);
     const saved = await readFile(path.join(fixture.root, page), 'utf8');
     assert.ok(saved.startsWith(original.slice(0, original.indexOf('[{'))));
     assert.ok(saved.endsWith(original.slice(original.indexOf('];') + 1)));
     const stale = await fixture.post('cms:write', { ...payload, data: [] }, before['versions']);
     assert.match(String(stale['error']), /changed/);
     const current = await fixture.post('cms:read', payload);
-    const undo = await fixture.post('cms:write', { ...payload, data: [] }, current['versions'], [
-      { name: 'Another editor' },
-    ]);
+    const undo = await fixture.post('cms:write', { ...payload, data: [] }, current['versions'], [{ name: 'Another editor' }]);
     assert.match(String(undo['error']), /newer content/);
     assert.equal(await readFile(path.join(fixture.root, page), 'utf8'), saved);
     for (const rel of ['../package.json', '/tmp/outside.json', 'data/../../package.json']) {
@@ -58,31 +50,14 @@ test('CMS creates collections, persists field types, deletes collections and rep
     assert.equal(await fixture.rooms.read('src/data/testimonials.json'), '[]\n');
     const meta = await fixture.post('cms:meta', 'studio');
     const declared = { title: 'longtext' };
-    assert.ok(
-      (
-        await fixture.post(
-          'cms:setMeta',
-          { projectPath: 'studio', rel: 'data/items.json', fields: declared },
-          meta['versions'],
-        )
-      )['value'],
-    );
-    assert.deepEqual(
-      record(record((await fixture.post('cms:meta', 'studio'))['value'])['meta'])[
-        'data/items.json'
-      ],
-      declared,
-    );
+    assert.ok((await fixture.post('cms:setMeta', { projectPath: 'studio', rel: 'data/items.json', fields: declared }, meta['versions']))['value']);
+    assert.deepEqual(record(record((await fixture.post('cms:meta', 'studio'))['value'])['meta'])['data/items.json'], declared);
     const target = { projectPath: 'studio', rel: 'data/items.json' };
     const usage = await fixture.post('cms:usage', target);
     assert.deepEqual(record(usage['value'])['files'], ['pages/index.astro']);
     assert.ok((await fixture.post('cms:delete', target, usage['versions']))['value']);
     assert.match(await fixture.rooms.read(page), /const items = \[\]/);
-    assert.ok(
-      !parseCmsFiles((await fixture.post('cms:list', 'studio'))['value']).some((file) =>
-        file.rel.includes('studio-cms-schema'),
-      ),
-    );
+    assert.ok(!parseCmsFiles((await fixture.post('cms:list', 'studio'))['value']).some((file) => file.rel.includes('studio-cms-schema')));
   } finally {
     await fixture.close();
   }
@@ -143,27 +118,19 @@ test('content edits reject stale entry data even after a background refresh, and
     };
     assert.ok((await fixture.post('content:writeEntry', write, before['versions']))['value']);
     const fresh = await fixture.post('content:entries', target);
-    const rejected = await fixture.post(
-      'content:writeEntry',
-      { ...write, edits: [{ path: ['title'], value: 'Stale' }] },
-      fresh['versions'],
-      { data: { title: 'Hello' }, body: 'Body\n' },
-    );
+    const rejected = await fixture.post('content:writeEntry', { ...write, edits: [{ path: ['title'], value: 'Stale' }] }, fresh['versions'], {
+      data: { title: 'Hello' },
+      body: 'Body\n',
+    });
     assert.match(String(rejected['error']), /collaborator changed/);
     const plan = await fixture.post('content:renamePlan', {
       ...target,
       from: 'hello',
       to: 'greeting',
     });
-    const renamed = await fixture.post(
-      'content:rename',
-      { ...target, from: 'hello', to: 'greeting' },
-      plan['versions'],
-    );
+    const renamed = await fixture.post('content:rename', { ...target, from: 'hello', to: 'greeting' }, plan['versions']);
     assert.ok(renamed['value'], JSON.stringify(renamed));
-    const inventory = JSON.parse(
-      await fixture.rooms.read('src/data/studio-cms-deleted.json'),
-    ) as unknown;
+    const inventory = JSON.parse(await fixture.rooms.read('src/data/studio-cms-deleted.json')) as unknown;
     assert.deepEqual(inventory, [file]);
     assert.match(await fixture.rooms.read('src/content/posts/greeting.md'), /Collaborator/);
     const { writeFile } = await import('node:fs/promises');

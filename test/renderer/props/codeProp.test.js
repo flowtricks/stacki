@@ -30,10 +30,7 @@ const check = (what, condition, detail) => {
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });
   const entry = path.join(buildDirectory, 'code-prop.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { BindField } from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};\n`,
-  );
+  fs.writeFileSync(entry, `export { BindField } from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};\n`);
   const bundle = path.join(buildDirectory, 'code-prop.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -140,21 +137,13 @@ const check = (what, condition, detail) => {
   // --- the report ---------------------------------------------------------------
   {
     const mounted = await mount({ name: 'options', type: 'code' }, { type: 'expr', value: 'jobs' });
-    check(
-      'a prop bound to a name shows a field to type in',
-      !!mounted.box(),
-      mounted.host.innerHTML.slice(0, 160),
-    );
+    check('a prop bound to a name shows a field to type in', !!mounted.box(), mounted.host.innerHTML.slice(0, 160));
     const typed = await mounted.type(ARRAY);
     check('the array can be typed', typed);
     const last = mounted.wrote[mounted.wrote.length - 1];
     check('and is written as an expression', last?.type === 'expr', JSON.stringify(last));
     check('with the array itself as the value', last?.value === ARRAY, JSON.stringify(last));
-    check(
-      'not as a quoted string',
-      !(last?.type === 'string'),
-      'options="[…]" is a string the component calls .map on',
-    );
+    check('not as a quoted string', !(last?.type === 'string'), 'options="[…]" is a string the component calls .map on');
     await mounted.done();
   }
 
@@ -165,16 +154,8 @@ const check = (what, condition, detail) => {
   // are.
   {
     const mounted = await mount({ name: 'options', type: 'code' }, { type: 'expr', value: ARRAY });
-    check(
-      'an array value gets the code editor',
-      !!mounted.code(),
-      mounted.host.innerHTML.slice(0, 200),
-    );
-    check(
-      'rather than a field of chips and text',
-      !mounted.box(),
-      mounted.host.innerHTML.slice(0, 200),
-    );
+    check('an array value gets the code editor', !!mounted.code(), mounted.host.innerHTML.slice(0, 200));
+    check('rather than a field of chips and text', !mounted.box(), mounted.host.innerHTML.slice(0, 200));
     await mounted.done();
   }
 
@@ -183,10 +164,7 @@ const check = (what, condition, detail) => {
   // A text prop is still text. The same characters typed into a heading are the
   // heading, brackets and all.
   {
-    const mounted = await mount(
-      { name: 'heading', type: 'string' },
-      { type: 'string', value: 'Hi' },
-    );
+    const mounted = await mount({ name: 'heading', type: 'string' }, { type: 'string', value: 'Hi' });
     await mounted.type(ARRAY);
     const last = mounted.wrote[mounted.wrote.length - 1];
     check('a text prop still writes text', last?.type === 'string', JSON.stringify(last));
@@ -218,8 +196,7 @@ const check = (what, condition, detail) => {
   {
     const { parsePropSchema } = require(repoPath('dist/electron/parse/astroParser.js'));
     const withType = (decl) => {
-      const source =
-        `---\ninterface Props {\n  ${decl}\n}\n` + `const { items } = Astro.props;\n---\n<div/>\n`;
+      const source = `---\ninterface Props {\n  ${decl}\n}\n` + `const { items } = Astro.props;\n---\n<div/>\n`;
       return (parsePropSchema(source).find((prop) => prop.name === 'items') || {}).type;
     };
     check(
@@ -232,16 +209,8 @@ const check = (what, condition, detail) => {
       withType('items?: { title: string, text: string }[];') === 'code',
       withType('items?: { title: string, text: string }[];'),
     );
-    check(
-      'a named array is still code',
-      withType('items?: Item[];') === 'code',
-      withType('items?: Item[];'),
-    );
-    check(
-      'and so is a plain one',
-      withType('items?: string[];') === 'code',
-      withType('items?: string[];'),
-    );
+    check('a named array is still code', withType('items?: Item[];') === 'code', withType('items?: Item[];'));
+    check('and so is a plain one', withType('items?: string[];') === 'code', withType('items?: string[];'));
     // The semicolons inside a Record are the same case, and it is still a bag
     // of attributes rather than a list.
     check(
@@ -277,25 +246,13 @@ const check = (what, condition, detail) => {
     const schema = parsePropSchema(source);
     const union = (schema.find((prop) => prop.unions) || {}).unions || [];
     const names = union[0] ? union[0].names : [];
-    check(
-      'a branch knows the array member it declares',
-      names.includes('items'),
-      JSON.stringify(names),
-    );
-    check(
-      'beside the ones it always knew',
-      names.includes('variant') && names.includes('text'),
-      JSON.stringify(names),
-    );
+    check('a branch knows the array member it declares', names.includes('items'), JSON.stringify(names));
+    check('beside the ones it always knew', names.includes('variant') && names.includes('text'), JSON.stringify(names));
   }
 
   // --- the rule, where it lives ---------------------------------------------------
   const panel = fs.readFileSync(repoPath('src/features/props/propBindings.tsx'), 'utf8');
-  check(
-    'a code prop is written as an expression',
-    /field\?\.type === 'code' \|\|/.test(panel),
-    'nothing marks an array prop as written-as-code',
-  );
+  check('a code prop is written as an expression', /field\?\.type === 'code' \|\|/.test(panel), 'nothing marks an array prop as written-as-code');
   check(
     'and its parts join as code rather than into a template',
     /mode: field\?\.type === 'code' \? 'code' : mode/.test(panel),

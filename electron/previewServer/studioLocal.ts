@@ -1,14 +1,9 @@
 // Studio gets its own module graph so its preview hooks cannot interfere with
 // Electron's canvas. Both servers read and write the same website source folder.
 import { spawn, type ChildProcess } from 'node:child_process';
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
+import { prepareStudioLocal } from './studioLocalMove';
+import { STUDIO_STATE_DIRECTORY } from '../../shared/properties/studioLocal';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,6 +11,7 @@ import { assert } from '../../shared/core/assert';
 import { record } from '../../shared/core/boundary';
 import { err, ok, type Result } from '../../shared/core/result';
 import { releaseVersion } from '../../shared/ipc/studioRelease';
+import { withStudioTelemetryDisabled } from '../../shared/properties/studioTelemetry';
 
 export function hasLocalStudio(project: string): boolean {
   try {
@@ -72,15 +68,10 @@ interface LaunchHost {
   readonly log: (text: string) => void;
 }
 
-async function launchLocalStudio(
-  project: string,
-  host: LaunchHost,
-): Promise<Result<string, string>> {
+async function launchLocalStudio(project: string, host: LaunchHost): Promise<Result<string, string>> {
   const assets = path.join(project, 'studio/dist');
   if (!existsSync(path.join(assets, 'integration.mjs'))) {
-    return err(
-      'Studio needs a build. Run npm --prefix studio run build, then restart the preview.',
-    );
+    return err('Studio needs a build. Run npm --prefix studio run build, then restart the preview.');
   }
   const port = await availablePort();
   if (!host.active()) {
@@ -100,7 +91,13 @@ async function launchLocalStudio(
       '127.0.0.1',
       '--ignore-lock',
     ],
-    { cwd: project, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      cwd: project,
+      detached: process.platform !== 'win32',
+      // This child alone: the canvas server that starts it keeps its own environment.
+      env: withStudioTelemetryDisabled(process.env),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   host.track(child);
   let failure: string | undefined;
@@ -135,20 +132,16 @@ export function writeLocalStudioConfig(project: string, assets: string, port: nu
   assert(port <= 65535, 'Studio port must be a nonprivileged TCP port');
   const names = ['astro.config.mjs', 'astro.config.js', 'astro.config.ts', 'astro.config.mts'];
   const userConfig = names.find((name) => existsSync(path.join(project, name)));
-  const source = userConfig
-    ? `import config from ${JSON.stringify(pathToFileURL(path.join(project, userConfig)).href)};`
-    : 'const config = {};';
+  const source = userConfig ? `import config from ${JSON.stringify(pathToFileURL(path.join(project, userConfig)).href)};` : 'const config = {};';
   const integration = pathToFileURL(path.join(assets, 'integration.mjs')).href;
   const directory = path.join(project, 'node_modules/.avb');
-  const state = path.join(project, '.studio-state');
+  const state = path.join(project, STUDIO_STATE_DIRECTORY);
   mkdirSync(directory, { recursive: true });
+  // `.stacki/studio/` ignores its own contents; an older `.studio-state` moves in.
+  prepareStudioLocal(project);
   mkdirSync(state, { recursive: true });
   if (lstatSync(state).isSymbolicLink()) {
     throw new Error('Studio session storage must be a real directory');
-  }
-  const ignore = path.join(state, '.gitignore');
-  if (!existsSync(ignore)) {
-    writeFileSync(ignore, '*\n', { flag: 'wx' });
   }
   const file = path.join(directory, 'astro.studio.config.mjs');
   writeFileSync(
@@ -173,9 +166,7 @@ async function availablePort(): Promise<number> {
   const address = server.address();
   assert(address !== null, 'Listening Studio probe must have an address');
   assert(typeof address !== 'string', 'Studio probe must use TCP');
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   return address.port;
 }
 
@@ -224,10 +215,7 @@ function stopLocalStudio(child: ChildProcess): void {
   }
   try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }).once(
-        'error',
-        () => child.kill(),
-      );
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }).once('error', () => child.kill());
     } else {
       process.kill(-child.pid, 'SIGTERM');
     }

@@ -1,0 +1,246 @@
+// The "Add custom styles in:" source menu: a link-variant Select.
+//
+//   node test/renderer/style/sourceMenu.test.js
+//
+// Goal: the menu opens in place with the standard popup motion, sits whole
+// inside the panel with equal insets, and ends each row with its check.
+// Two faults came together here. The horizontal clamp was written to the
+// list's `transform`, which the popup's open motion transitions, so the menu
+// opened at its natural spot and slid sideways to the clamped one. And the
+// menu (20rem) was wider than the panel, so the clamp pushed its left edge
+// past the panel, whose overflow clip cut the left padding away.
+//
+// Method: first the pure placement over each case (fits, runs off the right,
+// starts left of the panel, and the assertions). Then the real Select, built
+// and laid out in Electron (jsdom has no layout): open it, sample its left edge
+// through the open motion, and measure the list against the panel and the
+// search field and rows against the list. Without Electron the layout half is
+// skipped, as popoverDropdown.test.js does.
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const load = require('../../helpers/rendererModule');
+const { ROOT, repoPath } = require('../../helpers/sources.js');
+
+const { menuPlacement, menuWidthMaxPx, MENU_EDGE_MARGIN_PX } = load('src/features/style/model/panelBox.ts');
+
+// ── Pure placement ──────────────────────────────────────────────────────────
+const panel = { boundsLeftPx: 100, boundsRightPx: 400 };
+assert.equal(menuWidthMaxPx({ left: 100, right: 400 }), 300 - 2 * MENU_EDGE_MARGIN_PX, 'the cap keeps a margin on each side');
+assert.equal(menuWidthMaxPx({ left: 100, right: 110 }), 0, 'a panel narrower than its margins caps at zero');
+assert.equal(menuPlacement({ ...panel, anchorLeftPx: 120, menuWidthPx: 200 }).shiftPx, 0, 'fits: stays under the trigger');
+assert.equal(menuPlacement({ ...panel, anchorLeftPx: 300, menuWidthPx: 200 }).shiftPx, -108, 'runs off the right: pulled in to the margin');
+assert.equal(menuPlacement({ ...panel, anchorLeftPx: 90, menuWidthPx: 100 }).shiftPx, 18, 'starts left of the panel: pushed in to the margin');
+// A menu at the cap, anchored at the far right, lands exactly between the margins.
+const capped = menuWidthMaxPx({ left: 100, right: 400 });
+const shifted = menuPlacement({ ...panel, anchorLeftPx: 390, menuWidthPx: capped }).shiftPx;
+assert.equal(390 + shifted, 100 + MENU_EDGE_MARGIN_PX, 'a capped menu keeps the left margin');
+assert.throws(() => menuPlacement({ ...panel, anchorLeftPx: 0, menuWidthPx: -1 }), /a menu width is not negative/);
+assert.throws(() => menuPlacement({ boundsLeftPx: 10, boundsRightPx: 0, anchorLeftPx: 0, menuWidthPx: 1 }), /the panel has a width/);
+
+// ── Real layout ─────────────────────────────────────────────────────────────
+const failures = [];
+const check = (what, condition, detail) => {
+  if (!condition) {
+    failures.push(`  ${what}${detail === undefined ? '' : `\n    ${detail}`}`);
+  }
+};
+
+(async () => {
+  const esbuild = require('esbuild');
+  const buildDirectory = repoPath('node_modules/.stacki-test/source-menu');
+  fs.mkdirSync(buildDirectory, { recursive: true });
+
+  // A 280px panel at the window's right edge, like the style panel, with the
+  // source picker's own markup and classes: the trigger is pushed right, so
+  // the menu anchored to its left runs past the panel unless clamped.
+  const entry = `
+    import React, { useState } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import Select from './src/features/style/components/Select'
+    import './src/features/style/tokens.css'
+    import './src/features/style/utilities.css'
+    import './src/features/style/embedEditor.css'
+
+    const Icon = () => <svg width="12" height="12" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="currentColor" /></svg>
+    const OPTIONS = [
+      { value: 'file', label: 'src/styles/webflow.css', marked: true, icon: <Icon /> },
+      { value: 'group', label: 'ButtonMain', heading: true, icon: <Icon /> },
+      { value: 'global', label: '<style is:global>', indent: true, icon: <Icon /> },
+      { value: 'defaults', label: 'Style tag defaults…', icon: <Icon />, footer: true },
+    ]
+    function Harness() {
+      const [value, setValue] = useState('global')
+      return (
+        <div className="embed-editor_root" style={{ position: 'fixed', right: 0, top: 0, width: 280, height: 600, overflowX: 'clip', padding: 12, boxSizing: 'border-box' }}>
+          <div className="embed-editor_head"><div className="embed-editor_selector-head"><div className="embed-editor_source-picker">
+            <span className="embed-editor_source-prefix">Add custom styles in:</span>
+            <Select variant="link" searchable searchPlaceholder="Search embeds…" className="embed-editor_source-link"
+              value={value} options={OPTIONS} onChange={setValue} ariaLabel="Style source" />
+          </div></div></div>
+        </div>
+      )
+    }
+    createRoot(document.getElementById('root')).render(<Harness />)
+  `;
+  await esbuild.build({
+    stdin: { contents: entry, resolveDir: ROOT, loader: 'jsx' },
+    outfile: path.join(buildDirectory, 'bundle.js'),
+    bundle: true,
+    format: 'iife',
+    jsx: 'automatic',
+    logLevel: 'silent',
+  });
+  fs.writeFileSync(
+    path.join(buildDirectory, 'index.html'),
+    '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="bundle.css">' +
+      '<style>body{margin:0;background:#111}</style><div id="root"></div>' +
+      '<script src="bundle.js"></script>',
+  );
+
+  const electronPath = (() => {
+    try {
+      return require('electron');
+    } catch {
+      return undefined;
+    }
+  })();
+  if (typeof electronPath !== 'string') {
+    console.log('source menu: placement ok; layout skipped — no Electron to lay it out in');
+    return;
+  }
+
+  // The trigger is opened with a DOM click, not window input, so the probe
+  // needs no focus and cannot lose it to another window.
+  const scriptPath = path.join(buildDirectory, 'probe.js');
+  fs.writeFileSync(
+    scriptPath,
+    `const { app, BrowserWindow } = require('electron');
+     app.on('window-all-closed', () => app.quit());
+     // A probe error ends the run with its message, not a silent spawn timeout.
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     app.whenReady().then(async () => {
+       const win = new BrowserWindow({ show: false, width: 700, height: 500 });
+       await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
+       const js = (code) => win.webContents.executeJavaScript(code);
+       await pollUntil({ what: 'the source menu trigger drawn', read: () => js("document.querySelector('.u-select-link') !== null"), until: (drawn) => drawn });
+       await js("document.querySelector('.u-select-link').click(); true");
+       const lefts = [];
+       // Deliberate sampling through the open motion, at a fixed pace: not a wait.
+       for (let i = 0; i < 8; i += 1) {
+         await new Promise((r) => setTimeout(r, 30));
+         lefts.push(await js("(() => { const l = document.querySelector('.u-select-list'); return l ? l.getBoundingClientRect().left : null })()"));
+       }
+       // The insets are measured at rest. A hidden window on a slow runner can
+       // still be in the open motion (scale 0.985) after the samples above,
+       // which read 8px margins as 9.98px on Linux CI; wait for the popup to
+       // leave its opening phase and for its transitions to finish, bounded.
+       const settled = await js(\`(async () => {
+         // An animation that never finishes (a throttled window) must not hang the probe:
+         // each wait on one is capped, and the inset checks then report what they measure.
+         const finishedWithin = (animations) => Promise.race([Promise.all(animations.map((a) => a.finished)), new Promise((r) => setTimeout(r, 5000))]);
+         for (let i = 0; i < 100; i += 1) {
+           const list = document.querySelector('.u-select-list');
+           const phased = list ? list.closest('[data-popup-phase]') : null;
+           const opening = phased !== null && phased.getAttribute('data-popup-phase') === 'opening';
+           if (list && !opening) {
+             await finishedWithin(list.getAnimations({ subtree: true }));
+             if (phased) { await finishedWithin(phased.getAnimations()); }
+             return true;
+           }
+           await new Promise((r) => setTimeout(r, 30));
+         }
+         return false;
+       })()\`);
+       if (!settled) { throw new Error('the menu never finished opening'); }
+       const out = await js(\`(() => {
+         const list = document.querySelector('.u-select-list');
+         const l = list.getBoundingClientRect();
+         const p = document.querySelector('.embed-editor_root').getBoundingClientRect();
+         const search = document.querySelector('.u-select-search-input');
+         const s = search.getBoundingClientRect();
+         // The room reserved for vertical scrollbars between an element and a box that holds it: each
+         // scrolling ancestor's stable gutter (docs/scroll-gutter.md). Its width is the platform's bar
+         // (0 for overlay bars on macOS, 15px classic on Linux, 8px in the app), so insets are compared
+         // net of it. A gutter on a box that does not scroll is not counted: it is waste.
+         const gutter = (el, stop) => {
+           let total = 0;
+           for (let node = el.parentElement, depth = 0; node && depth < 64; node = node.parentElement, depth += 1) {
+             const c = getComputedStyle(node);
+             if (c.overflowY === 'auto' || c.overflowY === 'scroll') total += node.offsetWidth - node.clientWidth - parseFloat(c.borderLeftWidth) - parseFloat(c.borderRightWidth);
+             if (node === stop) break;
+           }
+           return total;
+         };
+         const rows = [...list.querySelectorAll('.u-select-option')].map((o) => {
+           const r = o.getBoundingClientRect();
+           return { left: r.left - l.left, right: l.right - r.right, gutter: gutter(o, list), checkLast: o.lastElementChild.classList.contains('u-select-check') };
+         });
+         const selected = list.querySelector('.u-select-option.is-selected');
+         return {
+           inlineTransform: list.style.transform, inlineTranslate: list.style.translate,
+           panel: { left: l.left - p.left, right: p.right - l.right },
+           search: { left: s.left - l.left, right: l.right - s.right, top: s.top - l.top, gutter: gutter(search, list) },
+           footer: list.classList.contains('has-footer'),
+           rows, checked: selected ? !!selected.lastElementChild.querySelector('svg') : false,
+         };
+       })()\`);
+       console.log(JSON.stringify({ lefts, ...out }));
+       app.quit();
+     });`,
+  );
+
+  const { spawnSync } = require('node:child_process');
+  // Electron run as plain Node has no BrowserWindow; the gate's shell may set it.
+  const environment = { ...process.env };
+  delete environment.ELECTRON_RUN_AS_NODE;
+  const run = spawnSync(electronPath, [scriptPath], { encoding: 'utf8', timeout: 90000, env: environment });
+  const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
+  if (line === undefined) {
+    check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 400));
+  } else {
+    const out = JSON.parse(line);
+    const lefts = out.lefts.filter((left) => left !== null);
+    check('the menu opens', lefts.length > 0, JSON.stringify(out.lefts));
+    // The open motion scales from 0.985, which moves the left edge by a few
+    // pixels at most; the old sideways slide moved it by over a hundred.
+    const travel = Math.max(...lefts) - Math.min(...lefts);
+    check('no sideways slide while it opens', travel < 4, `left edge moved ${travel}px: ${JSON.stringify(lefts)}`);
+    check('the clamp is not written to transform', out.inlineTransform === '', out.inlineTransform);
+    check('it is written to translate', out.inlineTranslate !== '', 'no translate: the menu was not clamped');
+    const near = (first, second) => Math.abs(first - second) < 0.5;
+    check('the menu keeps the panel margin on the left', near(out.panel.left, 8), JSON.stringify(out.panel));
+    check('and the same margin on the right', near(out.panel.right, 8), JSON.stringify(out.panel));
+    // The list keeps a stable scrollbar gutter (docs/scroll-gutter.md), so a right inset also holds the
+    // bar's room; net of that room, measured on this platform, the insets are equal.
+    const netEqual = (inset) => near(inset.left, inset.right - inset.gutter);
+    check('the search field has equal insets, net of the scrollbar gutter', netEqual(out.search), JSON.stringify(out.search));
+    // The real menu ends with "Style tag defaults…" pinned below the rows, and a list with a footer drops its own padding:
+    // the search field must get it back, or it runs into the frame's edges and rounded corners.
+    check('the menu has its pinned footer, as in the app', out.footer === true);
+    check(
+      'the search field starts where the rows start',
+      near(out.search.left, out.rows[0]?.left ?? -1),
+      JSON.stringify({ search: out.search, row: out.rows[0] }),
+    );
+    check('and sits inside the frame, below its top edge', out.search.top > 0.5, JSON.stringify(out.search));
+    for (const row of out.rows) {
+      check('each row has equal insets, net of the scrollbar gutter', netEqual(row), JSON.stringify(row));
+      check('each row ends with its check column', row.checkLast === true);
+    }
+    check('the selected row shows its check at the end', out.checked === true);
+  }
+  if (failures.length > 0) {
+    console.error(`source menu: ${failures.length} failure(s)\n${failures.join('\n')}`);
+    process.exit(1);
+  }
+  console.log('source menu: ok');
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

@@ -8,12 +8,10 @@
 // winner (by !important, then specificity, then document order); losing
 // declarations are flagged `overriddenBy` so you still see what actually applies.
 
-import {
-  canonicalCompound,
-  compareSpecificity,
-  matchSelectorList,
-  type MatchTarget,
-} from './selectors';
+import type { LayerPosition } from './cascadeLayers';
+import { compareCandidates, type CascadeCandidate } from './cascadeResolve';
+import { canonicalCompound, compareSpecificity, matchSelectorList, type MatchTarget } from './selectors';
+import { spacingSides } from './spacingShorthand';
 import type { ParsedRule, SelectorInfo, Specificity } from './styleTypes';
 import { assert } from '../../../../shared/core/assert';
 
@@ -63,29 +61,15 @@ type Hit = {
 };
 
 /**
- * Cascade tie-break for one property, winner-first: `!important`, then
- * specificity, then document order (later wins). Shared by computeRuleModel and
- * the resolved-style model (lib/resolved.ts) so both agree on who wins.
+ * Cascade tie-break for one property, winner-first: importance, the style attribute, layers,
+ * specificity, then document order (later wins), as cascadeResolve.ts ranks them. Shared by
+ * computeRuleModel and the resolved-style model (resolved.ts) so both agree on who wins.
  */
-export function compareCascade(
-  left: { important: boolean; specificity: Specificity },
-  right: { important: boolean; specificity: Specificity },
-  leftOrder: number,
-  rightOrder: number,
-): number {
-  if (left.important !== right.important) {
-    return left.important ? -1 : 1;
-  }
-  const spec = compareSpecificity(right.specificity, left.specificity);
-  if (spec !== 0) {
-    return spec;
-  }
-  return rightOrder - leftOrder; // later wins on a tie
+export function compareCascade(left: Omit<CascadeCandidate, 'order'>, right: Omit<CascadeCandidate, 'order'>, leftOrder: number, rightOrder: number): number {
+  return compareCandidates({ ...left, order: leftOrder }, { ...right, order: rightOrder });
 }
 
-function strongestOf(
-  selectors: SelectorInfo[],
-): { selector: SelectorInfo; specificity: Specificity } | undefined {
+function strongestOf(selectors: SelectorInfo[]): { selector: SelectorInfo; specificity: Specificity } | undefined {
   let best: { selector: SelectorInfo; specificity: Specificity } | undefined;
   for (const selector of selectors) {
     if (!best || compareSpecificity(selector.specificity, best.specificity) > 0) {
@@ -95,10 +79,7 @@ function strongestOf(
   return best;
 }
 
-export async function computeRuleModel(
-  rules: ParsedRule[],
-  target: MatchTarget,
-): Promise<RuleModel> {
+export async function computeRuleModel(rules: ParsedRule[], target: MatchTarget): Promise<RuleModel> {
   const hits: Hit[] = [];
   for (const rule of rules) {
     const results = await matchSelectorList(rule.selectorText, target);
@@ -140,16 +121,12 @@ function classifyHit(rule: ParsedRule, matchedSelectors: SelectorInfo[]): Hit {
     const label = `${rule.atContext.join(' › ')} ${selectorText}`;
     return { ...hit, conditional: true, kind: 'at-rule', label };
   }
-  const baseSelectors = matchedSelectors.filter(
-    (selector) => !subjectHasState(selector.text) && selector.pseudoElement === undefined,
-  );
+  const baseSelectors = matchedSelectors.filter((selector) => !subjectHasState(selector.text) && selector.pseudoElement === undefined);
   if (baseSelectors.length) {
     const strongestBase = strongestOf(baseSelectors);
     return { ...hit, strongestBase, conditional: false, kind: 'base', label: selectorText };
   }
-  const kind = matchedSelectors.some((selector) => selector.pseudoElement !== undefined)
-    ? 'pseudo-element'
-    : 'pseudo-class';
+  const kind = matchedSelectors.some((selector) => selector.pseudoElement !== undefined) ? 'pseudo-element' : 'pseudo-class';
   return { ...hit, conditional: true, kind, label: selectorText };
 }
 
@@ -157,6 +134,7 @@ type Contribution = {
   declId: string;
   prop: string;
   important: boolean;
+  layer: LayerPosition | undefined;
   specificity: Specificity;
   seq: number;
   selectorText: string;
@@ -172,14 +150,21 @@ function cascadeWinners(hits: readonly Hit[]): Map<string, Winner> {
       continue;
     }
     for (const decl of hit.rule.declarations) {
-      contributions.push({
-        declId: decl.declId,
-        prop: decl.prop,
-        important: decl.important,
-        specificity: hit.strongestBase.specificity,
-        seq: seq++,
-        selectorText: hit.strongestBase.selector.text,
-      });
+      // A box shorthand also ranks for each side it sets (`margin-block` for the top and the
+      // bottom), so a `margin-top` it beats is flagged as overridden, as the panel's value is.
+      const props = [decl.prop, ...spacingSides(decl.prop, decl.value).keys()];
+      const order = seq++;
+      for (const prop of props) {
+        contributions.push({
+          declId: decl.declId,
+          prop,
+          important: decl.important,
+          layer: hit.rule.layer,
+          specificity: hit.strongestBase.specificity,
+          seq: order,
+          selectorText: hit.strongestBase.selector.text,
+        });
+      }
     }
   }
 
@@ -191,9 +176,7 @@ function cascadeWinners(hits: readonly Hit[]): Map<string, Winner> {
     byProp.set(contribution.prop, list);
   });
   byProp.forEach((list, prop) => {
-    const winner = [...list].sort((left, right) =>
-      compareCascade(left, right, left.seq, right.seq),
-    )[0];
+    const winner = [...list].sort((left, right) => compareCascade(left, right, left.seq, right.seq))[0];
     if (winner === undefined) {
       throw new Error(`Cascade invariant failed: ${prop} has no contributions`);
     }

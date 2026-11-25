@@ -20,7 +20,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { repoPath } = require('../../helpers/sources.js');
+const { repoPath, stubSources } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -43,12 +44,7 @@ const SEG = (TRACK - PAD * 2) / 4;
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });
   const entry = path.join(buildDirectory, 'segmented.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { default as DisplayControl } from ${JSON.stringify(
-      repoPath('src/features/style/DisplayControl.tsx'),
-    )};\n`,
-  );
+  fs.writeFileSync(entry, `export { default as DisplayControl } from ${JSON.stringify(repoPath('src/features/style/DisplayControl.tsx'))};\n`);
   const out = path.join(buildDirectory, 'segmented.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -60,6 +56,16 @@ const SEG = (TRACK - PAD * 2) / 4;
     external: ['react', 'react-dom', 'react/jsx-runtime'],
     loader: { '.tsx': 'tsx', '.ts': 'ts', '.jsx': 'jsx', '.css': 'empty' },
     logLevel: 'silent',
+    // A custom value is a variable-aware field (VariableConnect), which asks the project for
+    // its variables once it holds a var(). There is no project here: the list is empty.
+    plugins: [
+      stubSources('stub-variables', {
+        'src/features/style/model/webflow.ts': () => ({
+          contents: 'export async function streamProjectVariables() { return []; }\nexport const __stub = true;\n',
+          loader: 'js',
+        }),
+      }),
+    ],
   });
 
   const { JSDOM } = require('jsdom');
@@ -72,10 +78,7 @@ const SEG = (TRACK - PAD * 2) / 4;
   // The pill measures with offsetLeft/offsetWidth — zoom-independent, and the
   // reason it can't be a percentage of the track. jsdom reports 0 for both, so
   // they are defined here from the layout above.
-  const index = (element) =>
-    [...(element.parentElement?.children ?? [])]
-      .filter((sibling) => sibling.tagName === 'BUTTON')
-      .indexOf(element);
+  const index = (element) => [...(element.parentElement?.children ?? [])].filter((sibling) => sibling.tagName === 'BUTTON').indexOf(element);
   Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetLeft', {
     get() {
       if (!this.className?.includes?.('display-seg')) {
@@ -125,52 +128,30 @@ const SEG = (TRACK - PAD * 2) / 4;
 
   // --- the pill lands on the selection ----------------------------------------
   await show('block');
-  check(
-    'there is one pill, not four backgrounds',
-    host.querySelectorAll('.embed-editor_display-indicator').length === 1,
-  );
+  check('there is one pill, not four backgrounds', host.querySelectorAll('.embed-editor_display-indicator').length === 1);
   check('and it starts on the selected segment', at()?.x === PAD, JSON.stringify(at()));
   check('as wide as that segment', at()?.width === SEG, JSON.stringify(at()));
 
   await show('flex');
-  check(
-    'choosing the second moves it one segment along',
-    at()?.x === PAD + SEG,
-    JSON.stringify(at()),
-  );
+  check('choosing the second moves it one segment along', at()?.x === PAD + SEG, JSON.stringify(at()));
   await show('grid');
   check('and the third, two', at()?.x === PAD + SEG * 2, JSON.stringify(at()));
 
   // The fourth slot is whichever non-primary value is set, and its label
   // changes with it — so the pill is measured, never assumed.
   await show('none');
-  check(
-    'an inline/none value puts it on the fourth',
-    at()?.x === PAD + SEG * 3,
-    JSON.stringify(at()),
-  );
-  check(
-    'and the fourth reads as the value it holds',
-    segments()[3]?.textContent === 'None',
-    segments()[3]?.textContent,
-  );
+  check('an inline/none value puts it on the fourth', at()?.x === PAD + SEG * 3, JSON.stringify(at()));
+  check('and the fourth reads as the value it holds', segments()[3]?.textContent === 'None', segments()[3]?.textContent);
   await show('inline-block');
   check('whatever that value is', at()?.x === PAD + SEG * 3, JSON.stringify(at()));
-  check(
-    'with the label to match',
-    segments()[3]?.textContent === 'In-block',
-    segments()[3]?.textContent,
-  );
+  check('with the label to match', segments()[3]?.textContent === 'In-block', segments()[3]?.textContent);
 
   // --- and nothing else claims to be selected ---------------------------------
   await show('grid');
   const selected = segments().filter((element) => element.className.includes('is-selected'));
   check('exactly one segment is marked selected', selected.length === 1, String(selected.length));
   check('the one the pill is under', selected[0]?.textContent === 'Grid', selected[0]?.textContent);
-  check(
-    'and it is announced as checked',
-    segments().filter((element) => element.getAttribute('aria-checked') === 'true').length === 1,
-  );
+  check('and it is announced as checked', segments().filter((element) => element.getAttribute('aria-checked') === 'true').length === 1);
 
   // --- what the fourth slot can hold --------------------------------------------
   //
@@ -180,17 +161,9 @@ const SEG = (TRACK - PAD * 2) / 4;
   // fell through to the custom text field, which is where a value goes when the
   // panel doesn't understand it.
   await show('contents');
-  check(
-    'contents is a segment, not a custom value',
-    segments().length === 4,
-    String(segments().length),
-  );
+  check('contents is a segment, not a custom value', segments().length === 4, String(segments().length));
   check('sitting in the fourth slot', at()?.x === PAD + SEG * 3, JSON.stringify(at()));
-  check(
-    'labelled as itself',
-    segments()[3]?.textContent === 'Contents',
-    segments()[3]?.textContent,
-  );
+  check('labelled as itself', segments()[3]?.textContent === 'Contents', segments()[3]?.textContent);
   check('and marked as the one that is on', segments()[3]?.getAttribute('aria-checked') === 'true');
 
   // --- a value with no segment at all ------------------------------------------
@@ -203,14 +176,15 @@ const SEG = (TRACK - PAD * 2) / 4;
   // --- the transition ----------------------------------------------------------
   // The class arrives a frame after the first placement, so that the pill
   // doesn't fly in from the left on mount; jsdom runs those frames on a timer.
+  // Waited for, bounded, rather than paused for: a loaded runner runs those frames later.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await waitFor({
+      what: 'the pill animated once placed',
+      read: () => pill()?.className ?? '',
+      until: (className) => className.includes('is-animated'),
+    }).catch(() => undefined);
   });
-  check(
-    'the pill can be animated once placed',
-    pill()?.className.includes('is-animated'),
-    pill()?.className,
-  );
+  check('the pill can be animated once placed', pill()?.className.includes('is-animated'), pill()?.className);
 
   await act(async () => {
     root.unmount();
@@ -224,11 +198,10 @@ const SEG = (TRACK - PAD * 2) / 4;
     (display.match(/\{BOXLESS\.map\(/g) || []).length === 2,
     'the two menus render the boxless group',
   );
-  check('with a tooltip saying what it does', /contents: (?:\(\s*)?<>/.test(display));
+  check('with a tooltip saying what it does', /contents: 'style\.displayControl\.tooltipContents'/.test(display));
   check(
     'and it is a supported value, so the bar keeps it',
-    /const BOXLESS = \['none', 'contents'\]/.test(display) &&
-      /\.\.\.INLINE, \.\.\.BOXLESS/.test(display),
+    /const BOXLESS = \['none', 'contents'\]/.test(display) && /\.\.\.INLINE, \.\.\.BOXLESS/.test(display),
   );
 
   // --- every bar that shares the classes ----------------------------------------
@@ -256,20 +229,14 @@ const SEG = (TRACK - PAD * 2) / 4;
     const source = fs.readFileSync(path.join(panel, file), 'utf8');
     const tracks = (source.match(/className=\{`embed-editor_display /g) || []).length;
     const pills = (source.match(/<SegmentPill \/>/g) || []).length;
-    check(
-      `${file.replace('.tsx', '')} draws a pill in each of its tracks`,
-      tracks > 0 && pills === tracks,
-      `${pills} pills for ${tracks} tracks`,
-    );
+    check(`${file.replace('.tsx', '')} draws a pill in each of its tracks`, tracks > 0 && pills === tracks, `${pills} pills for ${tracks} tracks`);
   }
   // …and every file that renders a segment is on that list, so a new bar can't
   // quietly appear without one.
   const users = fs
     .readdirSync(panel)
     .filter((file) => file.endsWith('.tsx'))
-    .filter((file) =>
-      fs.readFileSync(path.join(panel, file), 'utf8').includes('embed-editor_display-seg'),
-    );
+    .filter((file) => fs.readFileSync(path.join(panel, file), 'utf8').includes('embed-editor_display-seg'));
   check(
     'and no other file renders segments without one',
     users.every((file) => bars.includes(file)),
@@ -300,26 +267,17 @@ const SEG = (TRACK - PAD * 2) / 4;
     }
     return out.length ? out.join('\n') : undefined;
   };
-  check(
-    'the pill is the thing that carries the background',
-    /background:\s*var\(--surface-control\)/.test(rule('.embed-editor_display-indicator') || ''),
-  );
-  check(
-    'and the thing that moves',
-    /transition:\s*transform/.test(rule('.embed-editor_display-indicator.is-animated') || ''),
-  );
+  check('the pill is the thing that carries the background', /background:\s*var\(--surface-control\)/.test(rule('.embed-editor_display-indicator') || ''));
+  check('and the thing that moves', /transition:\s*transform/.test(rule('.embed-editor_display-indicator.is-animated') || ''));
   check(
     'a selected segment has no background of its own',
-    !/background/.test(rule('.embed-editor_display-seg.is-selected') || '') &&
-      !css.includes('.embed-editor_display-seg.is-selected:hover'),
+    !/background/.test(rule('.embed-editor_display-seg.is-selected') || '') && !css.includes('.embed-editor_display-seg.is-selected:hover'),
     rule('.embed-editor_display-seg.is-selected') || 'no rule',
   );
   check(
     'hover moves the label, not a background',
     /background:\s*none/.test(rule('.embed-editor_display-seg:hover:not(:disabled)') || '') &&
-      /color:\s*var\(--color-text-primary\)/.test(
-        rule('.embed-editor_display-seg:hover:not(:disabled)') || '',
-      ),
+      /color:\s*var\(--color-text-primary\)/.test(rule('.embed-editor_display-seg:hover:not(:disabled)') || ''),
     rule('.embed-editor_display-seg:hover:not(:disabled)') || 'no rule',
   );
   check(
@@ -327,10 +285,7 @@ const SEG = (TRACK - PAD * 2) / 4;
     /background:\s*none/.test(rule('.embed-editor_display-arrow:hover:not(:disabled)') || ''),
     rule('.embed-editor_display-arrow:hover:not(:disabled)') || 'no rule',
   );
-  check(
-    'and the segments sit above the pill rather than under it',
-    /z-index:\s*1/.test(rule('.embed-editor_display-seg') || ''),
-  );
+  check('and the segments sit above the pill rather than under it', /z-index:\s*1/.test(rule('.embed-editor_display-seg') || ''));
 
   if (failures.length) {
     console.error(`\nsegmented: ${failures.length} failed, ${checked - failures.length} passed\n`);

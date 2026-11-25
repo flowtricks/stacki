@@ -1,20 +1,16 @@
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  EditorView,
-  keymap,
-  highlightSpecialChars,
-  drawSelection,
-  placeholder as cmPlaceholder,
-} from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, placeholder as cmPlaceholder } from '@codemirror/view';
+import { Annotation, EditorState, Transaction } from '@codemirror/state';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { StreamLanguage } from '@codemirror/language';
-import type { StringStream } from '@codemirror/language';
+import { StreamLanguage, StringStream } from '@codemirror/language';
+import type { Tag } from '@lezer/highlight';
+import { CODE_TOKEN_RULES, type CodeLine, type CodeToken } from '../../ui/codeHighlight';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { appTheme, appHighlight } from '../../ui/CodeEditor';
+import { codeIndentExtensions } from '../../ui/codeEditorIndent';
 
 // A `style` attribute holds a declaration list, not a stylesheet — no
 // selector, no braces. @codemirror/lang-css can't read that: it parses
@@ -31,6 +27,18 @@ interface StyleStep extends StyleState {
   readonly style: string | undefined;
 }
 
+// What each token of the mode is, in the tags the app's highlight style colours.
+const DECLARATION_TAGS: Readonly<Record<string, Tag>> = {
+  prop: t.propertyName,
+  val: t.variableName,
+  num: t.number,
+  str: t.string,
+  fn: t.function(t.variableName),
+  punct: t.punctuation,
+  important: t.modifier,
+  comment: t.comment,
+};
+
 const styleMode = StreamLanguage.define<{ inValue: boolean; depth: number }>({
   name: 'css-declarations',
   startState: () => ({ inValue: false, depth: 0 }),
@@ -45,17 +53,41 @@ const styleMode = StreamLanguage.define<{ inValue: boolean; depth: number }>({
     // eslint-disable-next-line stacki/no-null -- StreamParser spells "no style" as null.
     return step.style ?? null;
   },
-  tokenTable: {
-    prop: t.propertyName,
-    val: t.variableName,
-    num: t.number,
-    str: t.string,
-    fn: t.function(t.variableName),
-    punct: t.punctuation,
-    important: t.modifier,
-    comment: t.comment,
-  },
+  tokenTable: DECLARATION_TAGS,
 });
+
+/** The style attribute's declaration language, for another field that edits declarations (a conditional's branch value). */
+export const styleDeclarations = styleMode;
+
+/**
+ * A line of declarations as highlighted tokens, coloured exactly as this
+ * editor colours them, for text shown rather than edited (a summary line).
+ */
+export function declarationTokens(text: string): CodeLine {
+  assert(text.length <= LIMITS.attrCharsMax, 'declarationTokens: style value limit exceeded');
+  const tokens: CodeToken[] = [];
+  const stream = new StringStream(text, 2, 2);
+  let state: StyleState = { inValue: false, depth: 0 };
+  for (let round = 0; round <= text.length && stream.pos < text.length; round += 1) {
+    stream.start = stream.pos;
+    const step = styleStep(stream, state);
+    assert(stream.pos > stream.start, 'declarationTokens: every token moves forward');
+    state = step;
+    const tag = step.style === undefined ? undefined : DECLARATION_TAGS[step.style];
+    const style = tag === undefined ? undefined : CODE_TOKEN_RULES.find((rule) => tagsOf(rule.tag).includes(tag))?.style;
+    tokens.push(style === undefined ? { text: stream.current() } : { text: stream.current(), style });
+  }
+  assert(tokens.map((token) => token.text).join('') === text, 'declarationTokens: the tokens are the text');
+  return tokens;
+}
+
+function tagsOf(tag: Tag | readonly Tag[]): readonly Tag[] {
+  return isTagList(tag) ? tag : [tag];
+}
+
+function isTagList(tag: Tag | readonly Tag[]): tag is readonly Tag[] {
+  return Array.isArray(tag);
+}
 
 // One token of a declaration list, and the state after it.
 function styleStep(stream: StringStream, state: StyleState): StyleStep {
@@ -97,9 +129,7 @@ function styleStep(stream: StringStream, state: StyleState): StyleStep {
     return { style: 'num', inValue, depth }; // hex color
   }
   // Number with an optional unit (12px, 1.5rem, 50%, -.3em)
-  if (
-    stream.match(/^[-+]?(\d*\.\d+|\d+)(px|r?em|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt|cm|mm|in)?/)
-  ) {
+  if (stream.match(/^[-+]?(\d*\.\d+|\d+)(px|r?em|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch|ex|pt|cm|mm|in)?/)) {
     return { style: 'num', inValue, depth };
   }
   // Bare word: a property before the colon, a function if a ( follows,
@@ -172,6 +202,12 @@ interface StyleEditorProps {
   readonly placeholder?: string;
 }
 
+// A document replaced by the `value` effect below is the element's value
+// arriving from outside (Reset, undo, another element selected), not an edit
+// made here, so it never reaches `onChange`: hearing it as typing wrote the
+// value straight back to the file, a write made by merely looking.
+const outsideValue = Annotation.define<true>();
+
 // Compact declaration editor: no gutters, no line numbers, no folding — it
 // sits inside a popover a couple of hundred pixels wide.
 export default function StyleEditor(props: StyleEditorProps) {
@@ -196,6 +232,7 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
         doc: initial.text,
         extensions: [
           history(),
+          codeIndentExtensions(),
           highlightSpecialChars(),
           drawSelection(),
           keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -206,6 +243,9 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
+              if (!update.transactions.some((transaction) => transaction.docChanged && transaction.annotation(outsideValue) !== true)) {
+                return; // Only the outside value changed the document.
+              }
               onChangeRef.current?.(update.state.doc.toString());
             }
           }),
@@ -236,8 +276,11 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
     if (collapseDeclarations(view.state.doc.toString()) === next) {
       return;
     }
+    // A value arriving from outside is not an edit made here: kept off the
+    // editor's undo stack, so ⌘Z never undoes it back to a stale value.
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: expandDeclarations(next) },
+      annotations: [outsideValue.of(true), Transaction.addToHistory.of(false)],
     });
   }, [value]);
 

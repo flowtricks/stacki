@@ -1,6 +1,8 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { lock as centralLock, unlock as centralUnlock } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import { GroupLabel, PropLabel } from './TypographySection';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, parseImportant, withImportant } from './model/styleDisplay';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import { isNonNegative } from './model/cssProperties';
@@ -8,6 +10,8 @@ import VariableConnect from './VariableConnect';
 import type { ResolvedProp } from './model/resolved';
 import { splitTopLevelSpaces } from './model/background';
 import { useGapHover, type GapAxis } from './model/gapHover';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // The Gap control for the Layout section: a lock toggle plus one field (linked →
 // both gaps equal) or two fields (unlinked → separate row/column).
@@ -43,9 +47,12 @@ function shorthandPart(value: string, axis: 'row' | 'col'): string {
 }
 
 type Axis = {
-  /** The value to show in the field. */
+  /** The value, without its flag. */
   value: string;
   important: boolean;
+  /** What the field shows: the value with its `!important`, the way every field
+   *  in the panel spells it (model/styleDisplay.ts). */
+  text: string;
   /** Declarations a write should update — empty means nothing is set yet. */
   targets: string[];
   /** The declaration the shown value came from (for the label + provenance). */
@@ -53,12 +60,7 @@ type Axis = {
 };
 
 // One axis's state: where its value comes from, and what a write should touch.
-function axisState(
-  modern: string,
-  legacy: string,
-  axis: 'row' | 'col',
-  read: (prop: string) => ResolvedProp | undefined,
-): Axis {
+function axisState(modern: string, legacy: string, axis: 'row' | 'col', read: (prop: string) => ResolvedProp | undefined): Axis {
   const modernResolved = read(modern);
   const legacyResolved = read(legacy);
   const modernSet = modernResolved?.source === 'selected';
@@ -80,19 +82,21 @@ function axisState(
   const effective = own ?? legacyResolved ?? modernResolved;
   if (effective) {
     const raw = rawEffective(effective);
-    return { value: raw.value, important: raw.important, targets, resolved: effective };
+    return { value: raw.value, important: raw.important, text: withImportant(raw), targets, resolved: effective };
   }
   const short = read(SHORTHAND);
   if (short) {
     const raw = rawEffective(short);
+    const part = shorthandPart(raw.value, axis);
     return {
-      value: shorthandPart(raw.value, axis),
+      value: part,
       important: raw.important,
+      text: withImportant({ value: part, important: raw.important }),
       targets,
       resolved: short,
     };
   }
-  return { value: '', important: false, targets, resolved: undefined };
+  return { value: '', important: false, text: '', targets, resolved: undefined };
 }
 
 // The effective raw value + !important (not lowercased) — mirrors EmbedEditor's helper.
@@ -100,41 +104,12 @@ function rawEffective(resolved: ResolvedProp | undefined): { value: string; impo
   if (!resolved) {
     return { value: '', important: false };
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return { value: effective.value, important: effective.important };
 }
 
-function LockedIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path
-        d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-function UnlockedIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path
-        d="M5.5 7V5.2a2.5 2.5 0 0 1 4.9-.6"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+const LockedIcon = centralIcon(centralLock);
+const UnlockedIcon = centralIcon(centralUnlock);
 
 // A length field: live-as-you-type updates, commit on blur, ↑/↓ number stepping.
 // Which axes a field is responsible for: the linked field is both, the split
@@ -162,24 +137,21 @@ function GapInput({
 }: GapFieldOptions & {
   ariaLabel: string;
 }) {
+  const translate = useTranslate();
   const inputProps = useGapField(field);
   return (
     <VariableConnect
       code
+      // A gap has no negative side to step onto.
+      {...(isNonNegative(field.prop) ? { stepMin: 0 } : {})}
       className="is-fill"
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.gapControl.connect', { name: ariaLabel })}
       disabled={field.busy}
       prop={field.prop}
+      canvasProperty={field.prop}
       onPick={(binding) => field.onCommit(binding)}
     >
-      <input
-        {...inputProps}
-        className="u-input embed-editor_size-input"
-        disabled={field.busy}
-        spellCheck={false}
-        placeholder="0"
-        aria-label={ariaLabel}
-      />
+      <input {...inputProps} className="u-input embed-editor_size-input" disabled={field.busy} spellCheck={false} placeholder="0" aria-label={ariaLabel} />
     </VariableConnect>
   );
 }
@@ -243,11 +215,11 @@ function useExternalDraft(value: string) {
   return { draft, setDraft, focused };
 }
 
-// Enter blurs (which commits); ↑/↓ step the number in place. Returns the stepped text,
+// Enter commits and keeps the focus; ↑/↓ step the number in place. Returns the stepped text,
 // or undefined when the key did not step.
 function stepOnKey(event: React.KeyboardEvent<HTMLInputElement>, prop: string) {
   if (event.key === 'Enter') {
-    event.currentTarget.blur();
+    commitInPlace(event.currentTarget);
     return undefined;
   }
   // A gap has no negative side to step onto.
@@ -304,10 +276,11 @@ interface WriteOptions {
 
 export default function GapControl(props: GapControlProps) {
   const { show, read, busy, setProp, clearProp, liveSetProp } = props;
+  const translate = useTranslate();
   const rowAxis = axisState(ROW, ROW_LEGACY, 'row', read);
   const columnAxis = axisState(COL, COL_LEGACY, 'col', read);
-  const row = rowAxis.value;
-  const column = columnAxis.value;
+  const row = rowAxis.text;
+  const column = columnAxis.text;
   const [linkOverride, setLinkOverride] = useState<boolean | undefined>(undefined);
   const linked = linkOverride ?? row === column;
 
@@ -341,7 +314,7 @@ export default function GapControl(props: GapControlProps) {
   return (
     <div className="embed-editor_size-row">
       <GroupLabel
-        label="Gap"
+        label={translate('style.gapControl.gap')}
         props={GAP_PROPS}
         read={read}
         {...labelProps}
@@ -356,19 +329,13 @@ export default function GapControl(props: GapControlProps) {
             prop={ROW}
             value={row}
             busy={busy}
-            ariaLabel="Gap"
+            ariaLabel={translate('style.gapControl.gap')}
             axes={axesFor(ROW, 'linked')}
             onLive={(next) => writeBoth(next, { live: true })}
             onCommit={(next) => writeBoth(next, { live: false })}
           />
         ) : (
-          <SplitGapFields
-            rowAxis={rowAxis}
-            columnAxis={columnAxis}
-            {...labelProps}
-            clearProp={clearProp}
-            writeAxis={writeAxis}
-          />
+          <SplitGapFields rowAxis={rowAxis} columnAxis={columnAxis} {...labelProps} clearProp={clearProp} writeAxis={writeAxis} />
         )}
         <GapLinkButton linked={linked} busy={busy} onToggle={toggleLink} />
       </div>
@@ -377,11 +344,7 @@ export default function GapControl(props: GapControlProps) {
 }
 
 // Write an axis: update whatever form(s) it already uses, or add the modern longhand.
-function axisWriter({
-  setProp,
-  liveSetProp,
-  clearProp,
-}: Pick<GapControlProps, 'setProp' | 'liveSetProp' | 'clearProp'>) {
+function axisWriter({ setProp, liveSetProp, clearProp }: Pick<GapControlProps, 'setProp' | 'liveSetProp' | 'clearProp'>) {
   return (axis: Axis, fallback: string, next: string, options: WriteOptions) => {
     const trimmed = next.trim();
     const targets = axis.targets.length ? axis.targets : [fallback];
@@ -391,8 +354,12 @@ function axisWriter({
       }
       return;
     }
+    // The flag is what the text says: a field that shows `!important` keeps it
+    // through an edit, and deleting it from the text removes it. Before, the
+    // field hid the flag and every write re-applied it, so it could not go.
+    const parsed = parseImportant(trimmed);
     const put = options.live ? liveSetProp : setProp;
-    targets.forEach((prop) => put(prop, trimmed, axis.important));
+    targets.forEach((prop) => put(prop, parsed.value, parsed.important));
   };
 }
 
@@ -407,14 +374,15 @@ function SplitGapFields({
   columnAxis: Axis;
   writeAxis: ReturnType<typeof axisWriter>;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <GapCell
         axis={columnAxis}
         prop={COL}
         legacy={COL_LEGACY}
-        label="Columns"
-        ariaLabel="Column gap"
+        label={translate('style.gapControl.columns')}
+        ariaLabel={translate('style.gapControl.columnGap')}
         {...shared}
         write={(next, options) => writeAxis(columnAxis, COL, next, options)}
       />
@@ -422,8 +390,8 @@ function SplitGapFields({
         axis={rowAxis}
         prop={ROW}
         legacy={ROW_LEGACY}
-        label="Rows"
-        ariaLabel="Row gap"
+        label={translate('style.gapControl.rows')}
+        ariaLabel={translate('style.gapControl.rowGap')}
         {...shared}
         write={(next, options) => writeAxis(rowAxis, ROW, next, options)}
       />
@@ -456,7 +424,7 @@ function GapCell({
     <div className="embed-editor_gap-cell">
       <GapInput
         prop={prop}
-        value={axis.value}
+        value={axis.text}
         busy={busy}
         ariaLabel={ariaLabel}
         axes={axesFor(prop, 'split')}
@@ -477,24 +445,15 @@ function GapCell({
   );
 }
 
-function GapLinkButton({
-  linked,
-  busy,
-  onToggle,
-}: {
-  linked: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+function GapLinkButton({ linked, busy, onToggle }: { linked: boolean; busy: boolean; onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className={`embed-editor_icon-btn embed-editor_gap-link ${linked ? 'is-active' : ''}`}
       disabled={busy}
       aria-pressed={linked}
-      title={
-        linked ? 'Linked — one gap for rows and columns' : 'Unlinked — separate row and column gaps'
-      }
+      title={linked ? translate('style.gapControl.linked') : translate('style.gapControl.unlinked')}
       onClick={onToggle}
     >
       {linked ? <LockedIcon /> : <UnlockedIcon />}

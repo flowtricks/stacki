@@ -26,7 +26,21 @@ export async function readMetadataSource(root: string, kind: MetadataKind) {
 
 /** Enumerate only shared files; a preview checkout is never part of a metadata scan. */
 export async function metadataFiles(root: string): Promise<readonly string[]> {
-  const kinds: readonly MetadataKind[] = ['components', 'guide', 'publish', 'pages'];
+  const kinds: readonly MetadataKind[] = [
+    'components',
+    'guide',
+    'publish',
+    'pages',
+    'componentSources',
+    'styles',
+    'folders',
+    'roles',
+    'instructions',
+    'audits',
+    'breakpoints',
+    'breakpointSync',
+    'variables',
+  ];
   const files = await Promise.all(
     kinds.map(async (kind) => {
       const stored = await readMetadataSource(root, kind);
@@ -52,10 +66,7 @@ export async function metadataRoute(
   }
   const result =
     request.method === 'GET'
-      ? await readMetadataSource(
-          root,
-          metadataKind(new URL(request.url ?? '/', 'http://studio').searchParams.get('kind')),
-        )
+      ? await readMetadataSource(root, metadataKind(new URL(request.url ?? '/', 'http://studio').searchParams.get('kind')))
       : await saveMetadata(root, rooms, JSON.parse(await readBody()));
   response.setHeader('Content-Type', 'application/json');
   response.end(JSON.stringify(result));

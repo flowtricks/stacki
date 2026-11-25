@@ -1,13 +1,10 @@
 import { assert } from '../../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { DragIcon } from '../../ui/Icons';
 
 // Drop targets are gaps before removal, matching the shared list gesture hook.
-export function movePropertyItem<Value>(
-  items: readonly Value[],
-  source: number,
-  gap: number,
-): readonly Value[] {
+export function movePropertyItem<Value>(items: readonly Value[], source: number, gap: number): readonly Value[] {
   assert(items.length <= PROPERTY_LIMITS.fieldsMax, 'Property list exceeds bounds');
   assert(Number.isSafeInteger(source), 'Property source index must be an integer');
   assert(Number.isSafeInteger(gap), 'Property drop gap must be an integer');
@@ -39,13 +36,14 @@ export function PropertyGrip({
   readonly disabled: boolean;
   readonly onMove: (source: number, gap: number) => void;
 }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="list-field-grip"
       data-drag-through
-      aria-label={`Reorder ${label}`}
-      title="Drag to reorder (or use arrow keys)"
+      aria-label={translate('componentProps.reorder.label', { name: label })}
+      title={translate('componentProps.reorder.hint')}
       disabled={disabled || count < 2}
       onKeyDown={(event) => {
         if (event.key === 'ArrowUp' && index > 0) {

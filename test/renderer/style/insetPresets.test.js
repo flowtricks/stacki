@@ -124,11 +124,7 @@ const check = (what, condition, detail) => {
   // disappearing row of buttons above a permanent box would be the odd one out.
   {
     const stat = await mount({ position: 'static' });
-    check(
-      'a static element still gets them',
-      stat.presets().length === 9,
-      String(stat.presets().length),
-    );
+    check('a static element still gets them', stat.presets().length === 9, String(stat.presets().length));
     await stat.done();
 
     const rel = await mount({ position: 'relative' });
@@ -136,19 +132,11 @@ const check = (what, condition, detail) => {
     await rel.done();
 
     const bare = await mount({});
-    check(
-      'and one with no position declared at all',
-      bare.presets().length === 9,
-      String(bare.presets().length),
-    );
+    check('and one with no position declared at all', bare.presets().length === 9, String(bare.presets().length));
     await bare.done();
 
     const abs = await mount({ position: 'absolute' });
-    check(
-      'an absolute one gets all nine',
-      abs.presets().length === 9,
-      String(abs.presets().length),
-    );
+    check('an absolute one gets all nine', abs.presets().length === 9, String(abs.presets().length));
     await abs.done();
 
     const fixed = await mount({ position: 'fixed' });
@@ -168,11 +156,7 @@ const check = (what, condition, detail) => {
     for (const position of ['static', 'relative', 'absolute', undefined]) {
       const mounted = await mount(position ? { position: position } : {});
       const z = mounted.host.querySelector('[aria-label="z-index"]');
-      check(
-        `z-index is present for position: ${position ?? '(unset)'}`,
-        !!z,
-        mounted.host.innerHTML.slice(0, 120),
-      );
+      check(`z-index is present for position: ${position ?? '(unset)'}`, !!z, mounted.host.innerHTML.slice(0, 120));
       await mounted.done();
     }
   }
@@ -197,11 +181,7 @@ const check = (what, condition, detail) => {
     );
     // The half that is easy to miss: left and top must GO, or the element
     // stretches across the parent instead of sitting in the corner.
-    check(
-      'and the opposite sides are cleared',
-      mounted.cleared.sort().join(',') === 'left,top',
-      JSON.stringify(mounted.cleared),
-    );
+    check('and the opposite sides are cleared', mounted.cleared.sort().join(',') === 'left,top', JSON.stringify(mounted.cleared));
     await mounted.done();
   }
 
@@ -217,11 +197,7 @@ const check = (what, condition, detail) => {
         .join(',') === 'bottom,left,top',
       JSON.stringify(mounted.set),
     );
-    check(
-      'and clears the fourth',
-      mounted.cleared.join(',') === 'right',
-      JSON.stringify(mounted.cleared),
-    );
+    check('and clears the fourth', mounted.cleared.join(',') === 'right', JSON.stringify(mounted.cleared));
     await mounted.done();
   }
 
@@ -237,11 +213,7 @@ const check = (what, condition, detail) => {
         .join(',') === 'bottom,left,right,top',
       JSON.stringify(mounted.set),
     );
-    check(
-      'with nothing left to clear',
-      mounted.cleared.length === 0,
-      JSON.stringify(mounted.cleared),
-    );
+    check('with nothing left to clear', mounted.cleared.length === 0, JSON.stringify(mounted.cleared));
     await mounted.done();
   }
 
@@ -254,55 +226,31 @@ const check = (what, condition, detail) => {
         .map((button) => button.getAttribute('aria-label'));
 
     const corner = await mount({ position: 'absolute', top: '0', left: '0' });
-    check(
-      'the matching corner is shown as chosen',
-      selected(corner).join(',') === 'Top left',
-      JSON.stringify(selected(corner)),
-    );
+    check('the matching corner is shown as chosen', selected(corner).join(',') === 'Top left', JSON.stringify(selected(corner)));
     check('and only that one', selected(corner).length === 1, JSON.stringify(selected(corner)));
     await corner.done();
 
     // Read from WHICH sides are set, not from whether they are still zero: a
     // nudged corner is still pinned to that corner.
     const nudged = await mount({ position: 'absolute', top: '12px', left: '2rem' });
-    check(
-      'a nudged corner still reads as that corner',
-      selected(nudged).join(',') === 'Top left',
-      JSON.stringify(selected(nudged)),
-    );
+    check('a nudged corner still reads as that corner', selected(nudged).join(',') === 'Top left', JSON.stringify(selected(nudged)));
     await nudged.done();
 
     const edge = await mount({ position: 'absolute', top: '0', bottom: '0', left: '0' });
-    check(
-      'three sides read as an edge',
-      selected(edge).join(',') === 'Left edge',
-      JSON.stringify(selected(edge)),
-    );
+    check('three sides read as an edge', selected(edge).join(',') === 'Left edge', JSON.stringify(selected(edge)));
     await edge.done();
 
     const all = await mount({ position: 'absolute', top: '0', right: '0', bottom: '0', left: '0' });
-    check(
-      'four sides read as fill',
-      selected(all).join(',') === 'Fill',
-      JSON.stringify(selected(all)),
-    );
+    check('four sides read as fill', selected(all).join(',') === 'Fill', JSON.stringify(selected(all)));
     await all.done();
 
     // `auto` is what an unset side reads as, and it is not a pin.
     const autos = await mount({ position: 'absolute', top: '0', left: 'auto' });
-    check(
-      'an auto side does not count as pinned',
-      selected(autos).length === 0,
-      JSON.stringify(selected(autos)),
-    );
+    check('an auto side does not count as pinned', selected(autos).length === 0, JSON.stringify(selected(autos)));
     await autos.done();
 
     const none = await mount({ position: 'absolute' });
-    check(
-      'nothing set means nothing chosen',
-      selected(none).length === 0,
-      JSON.stringify(selected(none)),
-    );
+    check('nothing set means nothing chosen', selected(none).length === 0, JSON.stringify(selected(none)));
     await none.done();
   }
 

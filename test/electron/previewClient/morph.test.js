@@ -44,20 +44,13 @@ global.document = dom.window.document;
 // The client's modules, bundled for jsdom (test/helpers/morphModules.js); its
 // whole source, for the checks below that read it as text.
 const source = readFolderSource('electron/previewClient');
-// Main prepends the patcher's bounds from shared/core/limits.ts (step 7); the
-// bundle takes them as a parameter, so the cap tests below can shrink them.
-const { LIMITS } = require('#dist/shared/core/limits.js');
 const assert = require('node:assert/strict');
-const lift = (limits) => loadMorphModules(limits);
-const morph = lift({
-  previewMarkersMax: LIMITS.previewMarkersMax,
-  previewMorphWorkMax: LIMITS.previewMorphWorkMax,
-});
+const { LIMITS } = require('#dist/shared/core/limits.js');
+const morph = loadMorphModules();
 const { patchChildren, findLive, syncAnchors, syncStamps } = morph;
 
 // The other half of the same decision: whether to patch at all.
-const { scriptSignature, isStyleModule, loadStyles, refreshDevStyles, addedScripts, runScripts } =
-  morph;
+const { scriptSignature, isStyleModule, loadStyles, refreshDevStyles, addedScripts, runScripts } = morph;
 
 // Every patch here goes through this: a throw is the failure mode under test
 // (the client turns it into location.reload()), so it is reported as one rather
@@ -79,20 +72,13 @@ const tree = (html) => {
 };
 
 // A tablist as the server renders it: three buttons, one class each.
-const TABS = (labels) =>
-  `\n  ${labels
-    .map((label) => `<button class="tabs_link" type="button">${label}</button>`)
-    .join('\n  ')}\n`;
+const TABS = (labels) => `\n  ${labels.map((label) => `<button class="tabs_link" type="button">${label}</button>`).join('\n  ')}\n`;
 
 // The same tablist after the page's own script has run: ids, roles, and
 // `is-active` on whichever tab is open.
 const LIVE_TABS = (labels, active) =>
   `\n  ${labels
-    .map(
-      (label, i) =>
-        `<button class="tabs_link${i === active ? ' is-active' : ''}" type="button" ` +
-        `id="tab-${i}" role="tab">${label}</button>`,
-    )
+    .map((label, i) => `<button class="tabs_link${i === active ? ' is-active' : ''}" type="button" ` + `id="tab-${i}" role="tab">${label}</button>`)
     .join('\n  ')}\n`;
 
 // --- the report ---------------------------------------------------------------
@@ -108,20 +94,13 @@ const LIVE_TABS = (labels, active) =>
   const threw = patch(live, previous, next);
   check('a tablist the page has marked up does not defeat the patch', threw === undefined, threw);
   const now = [...live.querySelectorAll('button')];
-  check(
-    'the same three buttons are still there',
-    now.length === 3 && now.every((button, i) => button === was[i]),
-  );
+  check('the same three buttons are still there', now.length === 3 && now.every((button, i) => button === was[i]));
   check(
     'the open tab is still open',
     live.querySelectorAll('.is-active').length === 1 && now[0].classList.contains('is-active'),
     [...now].map((button) => button.className).join(' / '),
   );
-  check(
-    'and each one kept its id',
-    now.map((button) => button.id).join() === 'tab-0,tab-1,tab-2',
-    now.map((button) => button.id).join(),
-  );
+  check('and each one kept its id', now.map((button) => button.id).join() === 'tab-0,tab-1,tab-2', now.map((button) => button.id).join());
 }
 
 // The same tablist, with the server changing one tab's text — the node it lands
@@ -134,11 +113,7 @@ const LIVE_TABS = (labels, active) =>
   const threw = patch(live, previous, next);
   check('the edit can be applied at all', threw === undefined, threw);
   const text = [...live.querySelectorAll('button')].map((button) => button.textContent);
-  check(
-    'an edit lands on the tab it was made to',
-    text.join() === 'One,Renamed,Three',
-    text.join(),
-  );
+  check('an edit lands on the tab it was made to', text.join() === 'One,Renamed,Three', text.join());
 }
 
 // Every tab marked, not just one — an accordion with several panels open, a
@@ -146,19 +121,12 @@ const LIVE_TABS = (labels, active) =>
 {
   const previous = tree(TABS(['One', 'Two', 'Three']));
   const next = tree(TABS(['One', 'Two', 'Changed']));
-  const live = tree(
-    '\n  ' +
-      ['One', 'Two', 'Three']
-        .map((label) => `<button class="tabs_link is-seen" type="button">${label}</button>`)
-        .join('\n  ') +
-      '\n',
-  );
+  const live = tree('\n  ' + ['One', 'Two', 'Three'].map((label) => `<button class="tabs_link is-seen" type="button">${label}</button>`).join('\n  ') + '\n');
   const threw = patch(live, previous, next);
   check('a class on every sibling is fine too', threw === undefined, threw);
   check(
     'and the edit still lands last',
-    [...live.querySelectorAll('button')].map((button) => button.textContent).join() ===
-      'One,Two,Changed',
+    [...live.querySelectorAll('button')].map((button) => button.textContent).join() === 'One,Two,Changed',
     [...live.querySelectorAll('button')].map((button) => button.textContent).join(),
   );
 }
@@ -174,16 +142,8 @@ const LIVE_TABS = (labels, active) =>
   const live = tree('<div class="injected">ad</div><div class="real">a</div>');
   check('an inserted sibling does not stop the patch', patch(live, previous, next) === undefined);
   const divs = [...live.querySelectorAll('div')];
-  check(
-    'an inserted element is stepped over, not patched',
-    divs[0].textContent === 'ad',
-    divs[0].outerHTML,
-  );
-  check(
-    'and the server’s own element is the one that changes',
-    divs[1].textContent === 'b',
-    divs[1].outerHTML,
-  );
+  check('an inserted element is stepped over, not patched', divs[0].textContent === 'ad', divs[0].outerHTML);
+  check('and the server’s own element is the one that changes', divs[1].textContent === 'b', divs[1].outerHTML);
 }
 
 // A server node with no class at all: anything would satisfy "carries all of
@@ -195,11 +155,7 @@ const LIVE_TABS = (labels, active) =>
   const live = tree('<span class="tooltip">tip</span><span>a</span>');
   check('an inserted span does not stop it either', patch(live, previous, next) === undefined);
   const spans = [...live.querySelectorAll('span')];
-  check(
-    'a classless server node does not match a classed live one',
-    spans[0].textContent === 'tip',
-    spans[0].outerHTML,
-  );
+  check('a classless server node does not match a classed live one', spans[0].textContent === 'tip', spans[0].outerHTML);
   check('it matches the classless one', spans[1].textContent === 'b', spans[1].outerHTML);
 }
 
@@ -219,26 +175,14 @@ const LIVE_TABS = (labels, active) =>
 // no edit to apply inside it and therefore no reason to line up its live
 // descendants. Only the changed sibling should be visited.
 {
-  const server = (text) =>
-    '<div class="runtime"><div class="item">One</div><div class="item">Two</div></div>' +
-    `<h1>${text}</h1>`;
+  const server = (text) => '<div class="runtime"><div class="item">One</div><div class="item">Two</div></div>' + `<h1>${text}</h1>`;
   const previous = tree(server('Before'));
   const next = tree(server('After'));
-  const live = tree(
-    '<div class="runtime"><div class="client-clone">Client state</div></div>' + '<h1>Before</h1>',
-  );
+  const live = tree('<div class="runtime"><div class="client-clone">Client state</div></div>' + '<h1>Before</h1>');
   const threw = patch(live, previous, next);
   check('an unchanged runtime-owned subtree does not force a reload', threw === undefined, threw);
-  check(
-    'the text beside that subtree is still patched inline',
-    live.querySelector('h1').textContent === 'After',
-    live.innerHTML,
-  );
-  check(
-    'the runtime-owned subtree remains untouched',
-    live.querySelector('.client-clone').textContent === 'Client state',
-    live.innerHTML,
-  );
+  check('the text beside that subtree is still patched inline', live.querySelector('h1').textContent === 'After', live.innerHTML);
+  check('the runtime-owned subtree remains untouched', live.querySelector('.client-clone').textContent === 'Client state', live.innerHTML);
 }
 
 // An id is still taken at its word, ahead of any class.
@@ -247,16 +191,8 @@ const LIVE_TABS = (labels, active) =>
   const next = tree('<div id="keep" class="a">y</div>');
   const live = tree('<div class="a">decoy</div><div id="keep" class="a b">x</div>');
   check('a decoy does not stop the patch', patch(live, previous, next) === undefined);
-  check(
-    'an id wins over a same-class sibling',
-    live.querySelector('#keep').textContent === 'y',
-    live.innerHTML,
-  );
-  check(
-    'and the decoy is untouched',
-    live.firstElementChild.textContent === 'decoy',
-    live.innerHTML,
-  );
+  check('an id wins over a same-class sibling', live.querySelector('#keep').textContent === 'y', live.innerHTML);
+  check('and the decoy is untouched', live.firstElementChild.textContent === 'decoy', live.innerHTML);
 }
 
 // --- the locator, directly ------------------------------------------------------
@@ -266,11 +202,7 @@ const LIVE_TABS = (labels, active) =>
   check('a live node that kept the server’s class matches', findLive(live, server) === live);
 
   const other = tree('<button class="something-else">x</button>').firstElementChild;
-  check(
-    'one that never had it is only a last resort',
-    findLive(other, server) === other,
-    'nothing else to match, so the same-tag fallback stands',
-  );
+  check('one that never had it is only a last resort', findLive(other, server) === other, 'nothing else to match, so the same-tag fallback stands');
 }
 
 // --- switching a variant is a different set of stylesheets -------------------
@@ -284,24 +216,13 @@ const LIVE_TABS = (labels, active) =>
 // different handful of components, so the list differs, so the page reloaded —
 // for a stylesheet, which is the one thing a patch handles well.
 {
-  const head = (scripts) =>
-    new JSDOM(`<!doctype html><html><head>${scripts}</head><body></body></html>`).window.document;
-  const style = (name) =>
-    `<script type="module" ` +
-    `src="/src/components/${name}.astro?astro&type=style&index=0&lang.css"></script>`;
-  const script = (name) =>
-    `<script type="module" ` +
-    `src="/src/components/${name}.astro?astro&type=script&index=0&lang.ts"></script>`;
+  const head = (scripts) => new JSDOM(`<!doctype html><html><head>${scripts}</head><body></body></html>`).window.document;
+  const style = (name) => `<script type="module" ` + `src="/src/components/${name}.astro?astro&type=style&index=0&lang.css"></script>`;
+  const script = (name) => `<script type="module" ` + `src="/src/components/${name}.astro?astro&type=script&index=0&lang.ts"></script>`;
 
-  check(
-    'an Astro style module is recognised',
-    isStyleModule('/src/components/Card.astro?astro&type=style&index=0&lang.css'),
-  );
+  check('an Astro style module is recognised', isStyleModule('/src/components/Card.astro?astro&type=style&index=0&lang.css'));
   check('and so is a plain stylesheet import', isStyleModule('/src/styles/global.css'));
-  check(
-    'a component script is not one',
-    !isStyleModule('/src/components/Nav.astro?astro&type=script&index=0&lang.ts'),
-  );
+  check('a component script is not one', !isStyleModule('/src/components/Nav.astro?astro&type=script&index=0&lang.ts'));
   check('and neither is the module runtime', !isStyleModule('/@vite/client'));
 
   const before = head(style('Card') + script('Nav'));
@@ -321,21 +242,9 @@ const LIVE_TABS = (labels, active) =>
   // variant switches, one per option while hovering down the list.
   const withFooter = head(style('Card') + script('Nav') + script('Footer'));
   const added = addedScripts(before, withFooter);
-  check(
-    'a script appearing is something to run, not to reload for',
-    Array.isArray(added),
-    JSON.stringify(added),
-  );
-  check(
-    'and it is the one that appeared',
-    added?.length === 1 && /Footer/.test(added[0].src),
-    JSON.stringify(added),
-  );
-  check(
-    'a rendering asking for nothing new adds nothing',
-    addedScripts(before, withIcon)?.length === 0,
-    JSON.stringify(addedScripts(before, withIcon)),
-  );
+  check('a script appearing is something to run, not to reload for', Array.isArray(added), JSON.stringify(added));
+  check('and it is the one that appeared', added?.length === 1 && /Footer/.test(added[0].src), JSON.stringify(added));
+  check('a rendering asking for nothing new adds nothing', addedScripts(before, withIcon)?.length === 0, JSON.stringify(addedScripts(before, withIcon)));
 
   // What the rule is actually for: a script that changed cannot be rewritten
   // into a page, and one that is gone cannot be un-run.
@@ -347,27 +256,49 @@ const LIVE_TABS = (labels, active) =>
   const withInline = head(style('Card') + script('Nav') + '<script>console.log(2)</script>');
   check('an inline arrival reloads too', addedScripts(before, withInline) === undefined);
 
+  // A prop edit on a Section reloaded the canvas and replayed the page's intro animation: Astro emits a
+  // component's module where it renders, and slot content rendered to a string finishes in a different
+  // order from one edit to the next. A module runs once per URL, so its order and its tag count say
+  // nothing about what the live page runs. Negative space: a changed, a gone or an inline script still
+  // reloads, and so does a reordered classic script (it would run again).
+  {
+    const pair = (names) => names.map(script).join('');
+    const rendered = head(pair(['Button', 'Nav', 'Card', 'Card', 'Marquee']));
+    const reordered = head(pair(['Button', 'Nav', 'Marquee', 'Card', 'Card']));
+    const deduplicated = head(pair(['Button', 'Nav', 'Marquee', 'Card']));
+    check('a reordered set of modules patches', addedScripts(rendered, reordered)?.length === 0, JSON.stringify(addedScripts(rendered, reordered)));
+    check('a duplicate tag appearing or going patches', addedScripts(rendered, deduplicated)?.length === 0);
+    check('the other way round too', addedScripts(deduplicated, rendered)?.length === 0);
+    const withNew = head(pair(['Marquee', 'Footer', 'Card', 'Footer', 'Nav', 'Button']));
+    const addedOnce = addedScripts(rendered, withNew);
+    check('a new module in a reordered list is added once', addedOnce?.length === 1 && /Footer/.test(addedOnce[0].src), JSON.stringify(addedOnce));
+    check('a module that went away in a reordered list still reloads', addedScripts(rendered, head(pair(['Marquee', 'Card', 'Button']))) === undefined);
+    const classic = (name) => `<script src="/vendor/${name}.js"></script>`;
+    check('a reordered classic script reloads', addedScripts(head(classic('a') + classic('b')), head(classic('b') + classic('a'))) === undefined);
+    check('a duplicated classic script reloads', addedScripts(head(classic('a')), head(classic('a') + classic('a'))) === undefined);
+    const inline = (text) => `<script>${text}</script>`;
+    check(
+      'an unchanged inline script alongside reordered modules patches',
+      addedScripts(head(inline('x') + pair(['Nav', 'Card'])), head(pair(['Card', 'Nav']) + inline('x')))?.length === 0,
+    );
+    check(
+      'a changed inline script among reordered modules reloads',
+      addedScripts(head(inline('x') + pair(['Nav', 'Card'])), head(pair(['Card', 'Nav']) + inline('y'))) === undefined,
+    );
+  }
+
   // Not reloading is only half of it: the new component's CSS has to arrive.
   // The patch cannot bring it — a <script> cloned from a fetched document is
   // inert, so it is loaded by hand, with an element that runs.
   const live = dom.window.document;
   const wanted = '/src/components/Icon.astro?astro&type=style&index=0&lang.css';
   loadStyles(withIcon);
-  const loaded = () =>
-    [...live.querySelectorAll('script[src]')].map((node) => node.getAttribute('src'));
-  check(
-    'a stylesheet the page has just started using is loaded',
-    loaded().includes(wanted),
-    loaded().join('|'),
-  );
+  const loaded = () => [...live.querySelectorAll('script[src]')].map((node) => node.getAttribute('src'));
+  check('a stylesheet the page has just started using is loaded', loaded().includes(wanted), loaded().join('|'));
   const count = loaded().length;
   loadStyles(withIcon);
   check('and not loaded twice', loaded().length === count, `${loaded().length} vs ${count}`);
-  check(
-    'a real script is never loaded this way',
-    !loaded().some((source) => /type=script/.test(source)),
-    loaded().join('|'),
-  );
+  check('a real script is never loaded this way', !loaded().some((source) => /type=script/.test(source)), loaded().join('|'));
 
   // Running one means an element made here, not the inert copy a patch inserts.
   {
@@ -375,11 +306,7 @@ const LIVE_TABS = (labels, active) =>
     // A reload verdict has nothing to run, and saying so is the failure — not
     // a stack trace from handing null to a loop.
     runScripts(Array.isArray(added) ? added : []);
-    check(
-      'the module the variant needs is put in the page',
-      ran().length === 1,
-      `${ran().length} tags`,
-    );
+    check('the module the variant needs is put in the page', ran().length === 1, `${ran().length} tags`);
     runScripts(Array.isArray(added) ? added : []);
     check('and not put there twice', ran().length === 1, `${ran().length} tags`);
   }
@@ -429,33 +356,14 @@ const LIVE_TABS = (labels, active) =>
   }
   const threw = patch(live.body, previous.body, next.body);
   check('a stamp in the live body does not stop the patch', threw === undefined, threw);
-  check(
-    'and the text is patched past it',
-    live.body.textContent.includes('Two'),
-    live.body.innerHTML,
-  );
+  check('and the text is patched past it', live.body.textContent.includes('Two'), live.body.innerHTML);
   const withAnchors = new Dom(html(NEW).replace('One', 'Two')).window.document;
   syncAnchors(live.body, withAnchors.body);
   syncStamps(live, withAnchors);
-  check(
-    'the live page holds the new rendering’s stamps, and only them',
-    JSON.stringify(stampsOf(live)) === JSON.stringify(wanted),
-    stampsOf(live).join('\n'),
-  );
-  check(
-    'none of the old ones survived, in <head> or before <html>',
-    !stampsOf(live).some((stamp) => stamp.includes(OLD)),
-  );
-  check(
-    'the node markers are back where they were',
-    /<!--avb-s:0--><p>Two<\/p><!--avb-e:0-->/.test(live.body.innerHTML),
-    live.body.innerHTML,
-  );
-  check(
-    'and no stamp is put back beside them',
-    !/avb-d:/.test(live.body.innerHTML),
-    live.body.innerHTML,
-  );
+  check('the live page holds the new rendering’s stamps, and only them', JSON.stringify(stampsOf(live)) === JSON.stringify(wanted), stampsOf(live).join('\n'));
+  check('none of the old ones survived, in <head> or before <html>', !stampsOf(live).some((stamp) => stamp.includes(OLD)));
+  check('the node markers are back where they were', /<!--avb-s:0--><p>Two<\/p><!--avb-e:0-->/.test(live.body.innerHTML), live.body.innerHTML);
+  check('and no stamp is put back beside them', !/avb-d:/.test(live.body.innerHTML), live.body.innerHTML);
 }
 
 // A moved node (step 6 ships moves as relocated bytes; the open question was
@@ -469,84 +377,119 @@ const LIVE_TABS = (labels, active) =>
   const [first, second, third] = [...live.children];
   const threw = patch(live, tree(html(['a', 'b', 'c'])), tree(html(['b', 'c', 'a'])));
   check('a moved node patches without a reload', threw === undefined, threw);
-  check(
-    'and the page is the new rendering',
-    live.innerHTML === tree(html(['b', 'c', 'a'])).innerHTML,
-    live.innerHTML,
-  );
+  check('and the page is the new rendering', live.innerHTML === tree(html(['b', 'c', 'a'])).innerHTML, live.innerHTML);
   check('the first sibling that stayed is the same element', live.children[0] === second);
   check('and so is the second', live.children[1] === third);
   check('the moved one is rebuilt, not carried', live.children[2] !== first && !first.isConnected);
 }
 
-// The caps (step 7). Past the marker cap or the diff-work cap the patch throws
-// the cap's own reason, and update() turns that into an announced reload; under
-// them it patches as before. A shrunken copy of the patcher shows both edges.
+// No size at which the patch reloads (owner requirement: no size limit). A list of
+// any length is lined up by an algorithm chosen for its size, and the page ends up
+// exactly as the new rendering says; only the choice of which equal-keyed nodes
+// persist may differ between algorithms. Both ends of the choice are exercised: the
+// exact matrix (small remainders), Myers (large remainders with few edits) and the
+// greedy pass (large remainders with many edits).
 {
-  const tiny = lift({ previewMarkersMax: 3, previewMorphWorkMax: 40 });
-  const reasonOf = (run) => {
-    try {
-      run();
-      return undefined;
-    } catch (error) {
-      return error instanceof tiny.OverCap ? error.reason : `not a cap: ${error.message}`;
-    }
-  };
-  const marked = (i) => `<!--avb-s:${i}--><p>${i}</p><!--avb-e:${i}-->`;
-  const markers = (count) => tree(Array.from({ length: count }, (_, i) => marked(i)).join(''));
-  check(
-    'a rendering at the marker cap patches',
-    reasonOf(() => tiny.checkMarkerCap(markers(3))) === undefined,
-  );
-  check(
-    'one marker past it reloads, and says why',
-    reasonOf(() => tiny.checkMarkerCap(markers(4))) === 'markers-over-cap',
-  );
-  // A middle edit in a list of n children builds an (n+1)² matrix after the
-  // shared prefix: five children changed at the head cost 36 cells, under 40.
   const list = (items) => items.map((item) => `<i id="${item}">${item}</i>`).join('');
-  const five = ['a', 'b', 'c', 'd', 'e'];
-  const small = [tree(list(five)), tree(list(five)), tree(list(['z', ...five.slice(1)]))];
-  tiny.refillMorphWork();
+  const names = (count) => Array.from({ length: count }, (_, index) => `n${index}`);
+  const patched = (from, to) => {
+    const live = tree(list(from));
+    const threw = patch(live, tree(list(from)), tree(list(to)));
+    return { live, threw };
+  };
+  // A script of ops is correct when replaying it turns the old keys into the new ones, keeping only equal keys.
+  const replay = (from, to) => {
+    const ops = morph.diffChildren(from, to);
+    const out = [];
+    let nextBefore = 0;
+    let nextAfter = 0;
+    for (const [kind, i, j] of ops) {
+      if (kind === 0) {
+        if (from[i] !== to[j] || i !== nextBefore || j !== nextAfter) {
+          return `bad keep ${i},${j}`;
+        }
+        out.push(to[j]);
+        nextBefore++;
+        nextAfter++;
+      } else if (kind === -1) {
+        if (i !== nextBefore) {
+          return `bad removal ${i}`;
+        }
+        nextBefore++;
+      } else {
+        if (j !== nextAfter) {
+          return `bad insertion ${j}`;
+        }
+        out.push(to[j]);
+        nextAfter++;
+      }
+    }
+    if (nextBefore !== from.length || nextAfter !== to.length) {
+      return 'script ends early';
+    }
+    return out.join() === to.join() ? undefined : 'replay differs';
+  };
+
+  const small = patched(names(5), ['z', ...names(5).slice(1)]);
+  check('a small edit patches', small.threw === undefined && small.live.firstElementChild.id === 'z', small.live.innerHTML);
+
+  // Past the exact matrix's size: 3 000 children with the middle one replaced is 9·10⁶ cells.
+  const big = names(3000);
+  const middle = big.map((name, index) => (index === 1500 ? 'edited' : name));
+  const edited = patched(big, middle);
+  check('a long list with a middle edit patches without a reload', edited.threw === undefined, edited.threw);
+  check('and the live list is the new rendering', edited.live.innerHTML === tree(list(middle)).innerHTML);
+  check('the siblings that stayed are the same live elements', edited.live.children[0].id === 'n0' && edited.live.children[2999].id === 'n2999');
+
+  const scattered = big.filter((_, index) => index % 7 !== 0);
+  const dropped = patched(big, scattered);
   check(
-    'a diff inside the work cap patches',
-    reasonOf(() => tiny.patchChildren(...small)) === undefined,
+    'a long list losing every seventh child patches',
+    dropped.threw === undefined && dropped.live.innerHTML === tree(list(scattered)).innerHTML,
+    dropped.threw,
   );
-  check(
-    'and the live list shows the edit',
-    small[0].firstElementChild.id === 'z',
-    small[0].innerHTML,
-  );
-  const names = Array.from({ length: 8 }, (_, i) => `n${i}`);
-  const large = [tree(list(names)), tree(list(names)), tree(list(['x', ...names.slice(1)]))];
-  tiny.refillMorphWork();
-  check(
-    'a diff past the work cap reloads, and says why',
-    reasonOf(() => tiny.patchChildren(...large)) === 'diff-over-cap',
-  );
-  // The budget is per patch: refilled, the small edit fits again.
-  tiny.refillMorphWork();
-  const again = [tree(list(['a', 'b'])), tree(list(['a', 'b'])), tree(list(['q', 'b']))];
-  check(
-    'the next patch starts with the whole budget',
-    reasonOf(() => tiny.patchChildren(...again)) === undefined,
-  );
-  // The shipped bounds are the ones in shared/core/limits.ts, prepended by main.
-  const main = readSource('electron/handlers/devServers.ts');
-  check(
-    'main prepends the patcher its bounds from LIMITS',
-    /const AVB_PREVIEW_LIMITS = Object\.freeze\(\$\{JSON\.stringify\(bounds\)\}\)/.test(main) &&
-      /previewMarkersMax: (\w+_1\.)?LIMITS\.previewMarkersMax/.test(main) &&
-      /previewMorphWorkMax: (\w+_1\.)?LIMITS\.previewMorphWorkMax/.test(main),
-  );
-  check(
-    'the patcher declares the bounds, never defines its own',
-    !/AVB_PREVIEW_LIMITS\s*=/.test(source),
-  );
-  check(
-    'and announces a reload before it happens',
-    /postMessage\(\{ type: 'avb:preview-reload', reason \}/.test(source),
-  );
+
+  // Nothing in common at all: the cheapest correct script, and still a patch, not a reload.
+  const unrelated = names(3000).map((name) => `other-${name}`);
+  const replaced = patched(big, unrelated);
+  check('a long list replaced wholesale patches', replaced.threw === undefined && replaced.live.innerHTML === tree(list(unrelated)).innerHTML, replaced.threw);
+
+  // Many edits in a long list: past what Myers keeps a trace for, so the greedy pass takes over.
+  const shuffled = names(6000)
+    .map((name, index) => (index % 3 === 0 ? `new-${name}` : name))
+    .reverse();
+  const heavy = patched(names(6000), shuffled);
+  check('a long list with thousands of edits patches', heavy.threw === undefined && heavy.live.innerHTML === tree(list(shuffled)).innerHTML, heavy.threw);
+
+  // The edit script itself, over seeded random lists of repeated keys (as whitespace text nodes make them).
+  let seed = 12345;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const alphabet = ['t', 'c', 'e:DIV#', 'e:P#', 'e:LI#'];
+  const keys = (count) => Array.from({ length: count }, () => alphabet[Math.floor(random() * alphabet.length)]);
+  const failures = [];
+  for (const [beforeCount, afterCount] of [
+    [0, 0],
+    [0, 40],
+    [40, 0],
+    [1, 1],
+    [30, 25],
+    [200, 210],
+    [1200, 1100],
+    [2500, 2600],
+  ]) {
+    for (let round = 0; round < 3; round++) {
+      const problem = replay(keys(beforeCount), keys(afterCount));
+      if (problem !== undefined) {
+        failures.push(`${beforeCount}x${afterCount}: ${problem}`);
+      }
+    }
+  }
+  check('edit scripts replay to the new list for random repeated keys, small and large', failures.length === 0, failures.join('; '));
+  check('the page announces a reload before it happens', /postMessage\(\{ type: 'avb:preview-reload', reason \}/.test(source));
+  check('and no size cap is left in the patcher', !/AVB_PREVIEW_LIMITS|OverCap|over-cap/.test(source));
 }
 
 // --- a page's own stylesheet follows the edit ----------------------------------
@@ -600,48 +543,27 @@ const LIVE_TABS = (labels, active) =>
   refreshDevStyles(before, served);
   writes.push(...observer.takeRecords());
   observer.disconnect();
-  check(
-    'the page stylesheet takes the CSS the server rendered',
-    page.textContent === '.box { color: blue; }',
-  );
+  check('the page stylesheet takes the CSS the server rendered', page.textContent === '.box { color: blue; }');
   check('and stays the same element', head.contains(page));
   check(
     'an unchanged stylesheet is not written',
     writes.every((record) => record.target !== card && record.target.parentNode !== card),
     String(writes.length),
   );
-  check(
-    'a stylesheet the rendering does not carry is left to Vite',
-    own.textContent === '.vite { margin: 0; }',
-  );
-  check(
-    'a stylesheet the server renders stale keeps the text Vite gave it',
-    sheet.textContent === '.pad { padding: 3rem; }',
-    sheet.textContent,
-  );
+  check('a stylesheet the rendering does not carry is left to Vite', own.textContent === '.vite { margin: 0; }');
+  check('a stylesheet the server renders stale keeps the text Vite gave it', sheet.textContent === '.pad { padding: 3rem; }', sheet.textContent);
   // A stylesheet new to the server's rendering has no earlier text to agree with.
   const arrived = devStyle(CARD, '.card { gap: 0; }');
   head.append(arrived);
-  const without = new dom.window.DOMParser().parseFromString(
-    '<!doctype html><html><head></head><body></body></html>',
-    'text/html',
-  );
+  const without = new dom.window.DOMParser().parseFromString('<!doctype html><html><head></head><body></body></html>', 'text/html');
   card.remove();
   refreshDevStyles(without, served);
-  check(
-    'a stylesheet the previous rendering lacked takes the server text',
-    arrived.textContent === '.card { gap: 1rem; }',
-    arrived.textContent,
-  );
+  check('a stylesheet the previous rendering lacked takes the server text', arrived.textContent === '.card { gap: 1rem; }', arrived.textContent);
   arrived.remove();
   head.append(card);
   check(
     'exactly one stylesheet was written',
-    new Set(
-      writes.map((record) =>
-        record.target.nodeType === 3 ? record.target.parentNode : record.target,
-      ),
-    ).size === 1,
+    new Set(writes.map((record) => (record.target.nodeType === 3 ? record.target.parentNode : record.target))).size === 1,
     String(writes.length),
   );
   page.remove();
@@ -655,7 +577,4 @@ if (failures.length) {
   console.error(failures.join('\n') + '\n');
   process.exit(1);
 }
-console.log(
-  `morph: ${checked} passed  [patching a page whose own JS marks things; stylesheets are not ` +
-    `scripts]`,
-);
+console.log(`morph: ${checked} passed  [patching a page whose own JS marks things; stylesheets are not ` + `scripts]`);

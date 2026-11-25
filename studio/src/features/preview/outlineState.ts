@@ -1,8 +1,5 @@
 import { parsePreviewMessage } from '../../../vendor/stacki/src/features/preview/previewMessages';
-import type {
-  RectMap,
-  SpacingMap,
-} from '../../../vendor/stacki/src/features/preview/PreviewOverlays';
+import type { RectMap, SpacingMap } from '../../../vendor/stacki/src/features/preview/PreviewOverlays';
 import { record, string } from '../../shared/validation';
 interface Target {
   readonly id: string;
@@ -29,10 +26,8 @@ export function parseOutlines(input: unknown): OutlineState | undefined {
       return undefined;
     }
     const rects = record(data['rects']);
-    if (
-      Object.keys(rects).length > 34 ||
-      Object.values(rects).some((value) => !Array.isArray(value) || value.length > 500)
-    ) {
+    // The selection's and hover's paths and box paths (4), an app highlight's (1), the focus (1) and 30 collaborators.
+    if (Object.keys(rects).length > 36 || Object.values(rects).some((value) => !Array.isArray(value) || value.length > 500)) {
       return undefined;
     }
     const parsed = parsePreviewMessage({ ...data, type: 'avb:rects' });
@@ -56,13 +51,7 @@ function target(input: unknown): Target | undefined {
   }
   const data = record(input);
   const occurrence = data['occurrence'];
-  if (
-    occurrence !== undefined &&
-    (typeof occurrence !== 'number' ||
-      !Number.isSafeInteger(occurrence) ||
-      occurrence < 0 ||
-      occurrence > 10000)
-  ) {
+  if (occurrence !== undefined && (typeof occurrence !== 'number' || !Number.isSafeInteger(occurrence) || occurrence < 0 || occurrence > 10000)) {
     throw new Error('Invalid occurrence');
   }
   return { id: string(data['id'], 500), occurrence };

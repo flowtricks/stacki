@@ -2,12 +2,7 @@
 // Method: parse valid events and malformed inputs, then compare inventories and burst summaries.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  ASTRO_FILES_MAX,
-  astroChangeMessages,
-  diffAstroFiles,
-  parseAstroFileChanges,
-} from '#dist/shared/properties/astroFileChanges.js';
+import { ASTRO_FILES_MAX, astroChangeMessages, diffAstroFiles, parseAstroFileChanges } from '#dist/shared/properties/astroFileChanges.js';
 
 const added = { kind: 'added', file: 'src/components/Hero.astro' } as const;
 
@@ -38,11 +33,7 @@ test('Inventories ignore edits and report both sides of a rename', () => {
     { kind: 'added', file: 'src/components/Header.astro' },
   ]);
   assert.throws(
-    () =>
-      diffAstroFiles(
-        new Set(Array.from({ length: ASTRO_FILES_MAX + 1 }, (_, index) => String(index))),
-        after,
-      ),
+    () => diffAstroFiles(new Set(Array.from({ length: ASTRO_FILES_MAX + 1 }, (_, index) => String(index))), after),
     /Previous Astro inventory exceeds limit/,
   );
 });

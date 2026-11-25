@@ -1,0 +1,180 @@
+// Brazilian Portuguese `componentProps` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/componentProps';
+
+export const messages = {
+  'componentProps.attributes.addDefault': 'Adicionar atributo padrão',
+  'componentProps.attributes.connections': 'Conexões',
+  'componentProps.attributes.connectionsCount': { one: 'Conexões: {count} elemento', other: 'Conexões: {count} elementos' },
+  'componentProps.attributes.defaultName': 'Nome do atributo padrão {number}',
+  'componentProps.attributes.defaultValue': 'Valor do atributo padrão {number}',
+  'componentProps.attributes.defaults': 'Atributos padrão',
+  'componentProps.attributes.defaultsDiffer': 'Os elementos conectados têm padrões diferentes; ao editar um, todos recebem estes.',
+  'componentProps.attributes.name': 'Nome',
+  'componentProps.attributes.namePlaceholder': 'nome',
+  'componentProps.attributes.noSpread': 'Nenhum elemento espalha {spread} ainda. Conecte um pelo ponto de vínculo dos atributos dele.', // review
+  'componentProps.attributes.passThrough': 'Repassa os demais atributos por {spread}.',
+  'componentProps.attributes.removeDefault': 'Remover atributo padrão {name}',
+  'componentProps.attributes.rowKind': { one: 'Atributos · {count} elemento', other: 'Atributos · {count} elementos' },
+  'componentProps.attributes.select': 'Selecionar {name}',
+  'componentProps.attributes.title': 'Propriedade de atributos',
+  'componentProps.attributes.tooltipDefault': 'Atributos que uma instância adiciona aos elementos conectados',
+  'componentProps.attributes.valuePlaceholder': 'valor',
+  'componentProps.autosave.conflict': 'Este arquivo mudou no disco, então o formulário foi recarregado. Sua edição foi mantida.',
+  'componentProps.declaration.default': 'Padrão (linha {line}): {expression}',
+  'componentProps.declaration.details': 'Detalhes da declaração',
+  'componentProps.declaration.source': '{label} (linha {line}): {expression}',
+  'componentProps.declaration.variantRules': 'Regras de variantes',
+  'componentProps.default.none': 'Sem padrão',
+  'componentProps.default.number': 'Número padrão',
+  'componentProps.default.search': 'Buscar padrões…',
+  'componentProps.default.text': 'Texto padrão',
+  'componentProps.default.useControl': 'Usar o controle de valor padrão',
+  'componentProps.default.value': 'Valor padrão',
+  'componentProps.default.writeExpression': 'Escrever uma expressão padrão',
+  'componentProps.defaults.badCode': 'O padrão de {value} não é um código válido.', // review
+  'componentProps.defaults.computed': 'Calculado', // review
+  'componentProps.defaults.conditional': 'Definir por condições', // review
+  'componentProps.defaults.discard': 'Descartar alterações',
+  'componentProps.defaults.entryRead': 'O código lê {value} de {name} diretamente. Altere no código-fonte.', // review
+  'componentProps.defaults.missingTable': '{name} não tem padrões por opção para editar.', // review
+  'componentProps.defaults.perOption': 'Comece cada grupo com {controller} e uma opção.', // review
+  'componentProps.defaults.return': 'Voltar aos padrões',
+  'componentProps.defaults.saveFailed': 'Não foi possível salvar os padrões do componente.',
+  'componentProps.defaults.saved': 'Padrões salvos neste projeto.',
+  'componentProps.defaults.tableReset':
+    'O componente calcula este padrão com a própria tabela: altere o padrão de cada opção nas condições, ou a tabela no código.', // review
+  'componentProps.dialog.close': 'Fechar configurações da propriedade',
+  'componentProps.dialog.loading': 'Carregando propriedade…',
+  'componentProps.dialog.title': 'Configurações da propriedade',
+  'componentProps.editor.delete': 'Excluir propriedade',
+  'componentProps.editor.deleteNamed': 'Excluir {name}',
+  'componentProps.editor.name': 'Nome',
+  'componentProps.editor.newProperty': 'Nova propriedade',
+  'componentProps.editor.renameHelp': 'Renomear atualiza a propriedade deste componente, a variável que a lê e as instâncias dela em todo o site.',
+  'componentProps.editor.renameShared': 'Renomear reescreve {typeName} e cada leitura dela, nestes arquivos:', // review
+  'componentProps.kind.attributes': 'Atributos',
+  'componentProps.kind.choice': 'Escolha',
+  'componentProps.kind.code': 'Tipo de código…',
+  'componentProps.kind.color': 'Cor',
+  'componentProps.kind.curated': 'Itens escolhidos',
+  'componentProps.kind.date': 'Data',
+  'componentProps.kind.filter': 'Filtro',
+  'componentProps.kind.group': 'Grupo',
+  'componentProps.kind.image': 'Imagem',
+  'componentProps.kind.link': 'Link', // same
+  'componentProps.kind.list': 'Lista',
+  'componentProps.kind.number': 'Número',
+  'componentProps.kind.record': 'Lista chave–valor',
+  'componentProps.kind.sort': 'Ordem',
+  'componentProps.kind.switch': 'Interruptor',
+  'componentProps.kind.text': 'Texto',
+  'componentProps.kindHint.attributes': 'Dos atributos de um elemento',
+  'componentProps.kindHint.choice': 'Um de uma lista',
+  'componentProps.kindHint.code': 'Escrever um tipo TypeScript',
+  'componentProps.kindHint.curated': 'Escolhas da lista de coleção',
+  'componentProps.kindHint.filter': 'Filtros da lista de coleção',
+  'componentProps.kindHint.group': 'Campos em um objeto',
+  'componentProps.kindHint.list': 'Itens com campos',
+  'componentProps.kindHint.sort': 'Ordem da lista de coleção',
+  'componentProps.kindSection.advanced': 'Avançado',
+  'componentProps.kindSection.basic': 'Básico',
+  'componentProps.kindSection.collection': 'Lista de coleção',
+  'componentProps.kindSection.element': 'Elemento',
+  'componentProps.kindSection.media': 'Mídia e links',
+  'componentProps.kindSection.structure': 'Estrutura',
+  'componentProps.options.title': 'Opções',
+  'componentProps.panel.add': 'Adicionar propriedade',
+  'componentProps.panel.deletedIn': '{name} é excluída em {path}',
+  'componentProps.panel.empty': 'Nenhuma propriedade ainda. Adicione uma para definir o que cada instância pode personalizar.',
+  'componentProps.panel.from': 'De {typeName}',
+  'componentProps.panel.label': 'Propriedades do componente',
+  'componentProps.panel.loading': 'Carregando propriedades…',
+  'componentProps.panel.openFile': 'Abrir {path}',
+  'componentProps.panel.propertyGone': 'Este componente não tem mais uma propriedade {name}.',
+  'componentProps.panel.required': 'Obrigatória',
+  'componentProps.panel.saveBusy': 'Outro salvamento ainda está em andamento. Tente novamente.',
+  'componentProps.panel.title': 'Propriedades',
+  'componentProps.panel.unused': 'Não usada neste componente',
+  'componentProps.problem.decimalsRange': 'As casas decimais vão de 0 a {max}.',
+  'componentProps.problem.decimalsWhole': 'As casas decimais são um número inteiro.',
+  'componentProps.problem.minAboveMax': 'O mínimo é maior que o máximo.',
+  'componentProps.problem.nameShape': 'Use um nome como title, imageUrl ou isVisible.',
+  'componentProps.problem.typeMissing': 'Dê um tipo à propriedade.',
+  'componentProps.reorder.hint': 'Arraste para reordenar (ou use as setas)',
+  'componentProps.reorder.label': 'Reordenar {name}',
+  'componentProps.settings.auto': 'Auto', // same
+  'componentProps.settings.decimals': 'Casas decimais',
+  'componentProps.settings.decimalsHint': 'Quantas casas decimais o número mantém: 0 é um inteiro, no máximo {max}.',
+  'componentProps.settings.defaultNote': 'O padrão: {note}',
+  'componentProps.settings.legacyRemove': { one: 'Remover', other: 'Remover' },
+  'componentProps.settings.legacyTags': {
+    one: 'Esta documentação tem uma tag de rótulo de interruptor sem uso que nada lê.',
+    other: 'Esta documentação tem tags de rótulo de interruptor sem uso que nada lê.',
+  }, // review
+  'componentProps.settings.max': 'Máx.',
+  'componentProps.settings.min': 'Mín.',
+  'componentProps.settings.none': 'Nenhum',
+  'componentProps.settings.numberGroup': 'Configurações do número',
+  'componentProps.settings.numberMalformed': 'Digite um número ou deixe vazio para nenhum.',
+  'componentProps.settings.tooltip': 'Dica',
+  'componentProps.settings.tooltipPlaceholder': 'Descreva como usar esta propriedade…',
+  'componentProps.settings.useControls': 'Usar os controles', // review
+  'componentProps.settings.viewCode': 'Ver o TypeScript', // review
+  'componentProps.share.components': 'Componentes',
+  'componentProps.share.declaredIn': 'Declarada em',
+  'componentProps.share.defaults': 'Padrões',
+  'componentProps.share.instancesIn': 'Instâncias em',
+  'componentProps.share.summary': {
+    one: 'Compartilhada: edita {typeName} em {path}, usada por {count} componente ({names}) e suas instâncias.',
+    other: 'Compartilhada: edita {typeName} em {path}, usada por {count} componentes ({names}) e suas instâncias.',
+  }, // review
+  'componentProps.tooltips.perOption': 'Uma dica só pode depender de {controller}.', // review
+  'componentProps.type.attributesNote': 'Uma propriedade de atributos nasce de um elemento: abra o ponto de vínculo dos atributos dele.',
+  'componentProps.type.codeType': 'Tipo de código',
+  'componentProps.type.controllerKind': 'Suas opções definem o tipo', // review
+  'componentProps.type.defaultCleared': 'O padrão foi limpo: ele não se encaixa em “{kind}”.',
+  'componentProps.type.kind': 'Tipo', // review
+  'componentProps.type.noType': 'Sem tipo',
+  'componentProps.type.search': 'Buscar tipos…', // review
+  'componentProps.type.typescript': 'TypeScript', // same
+  'componentProps.variants.badIndex': 'Essa posição está fora das opções.', // review
+  'componentProps.variants.badValue': 'Use um nome curto sem aspas nem barras invertidas.', // review
+  'componentProps.variants.booleanOptions': '{name} é true ou false: suas duas opções não podem ser adicionadas, renomeadas nem removidas.', // review
+  'componentProps.variants.cannotAttach':
+    '{name} não está declarada nas propriedades que todas as opções compartilham, então não pode receber regras de variante aqui.', // review
+  'componentProps.variants.cannotGroup': 'Props não está escrito como um tipo ao qual o Stacki possa adicionar regras de variante.', // review
+  'componentProps.variants.condition': '{controller}: {options}', // same
+  'componentProps.variants.conditional': 'Condicional', // review
+  'componentProps.variants.duplicateOption': 'Já existe uma opção {value}.', // review
+  'componentProps.variants.forbiddenPassed': '{file} passa {name} com {controller} {value}. Altere essa instância primeiro.', // review
+  'componentProps.variants.lastOptions': 'Mantenha pelo menos duas opções.', // review
+  'componentProps.variants.missingGroup': 'Nenhuma regra de variante é controlada por {name}.', // review
+  'componentProps.variants.missingOption': 'Não existe a opção {value}.', // review
+  'componentProps.variants.missingProp': '{name} não faz parte destas regras de variante.', // review
+  'componentProps.variants.noDestructure':
+    'O componente não lê suas propriedades com uma única desestruturação, então a propriedade não pode ser adicionada aqui.', // review
+  'componentProps.variants.noRuntimeType': 'O tipo de execução do componente não aceita uma nova propriedade aqui.', // review
+  'componentProps.variants.noType': '{name} não tem um tipo para permitir. Dê um tipo a ela primeiro.', // review
+  'componentProps.variants.notAllowedThere': '{name} não é permitido para {value}.', // review
+  'componentProps.variants.optionInCode': 'O código do componente usa {value} de um jeito que o Stacki não consegue atualizar. Altere no código-fonte.', // review
+  'componentProps.variants.optionPassed': '{file} passa {value} como {name}. Altere essa instância primeiro.', // review
+  'componentProps.variants.optionsLimit': 'Uma propriedade pode ter no máximo {max} opções.', // review
+  'componentProps.variants.readOnly': 'As regras de variante controladas por {name} só podem ser alteradas no código-fonte.', // review
+  'componentProps.variants.reason.nested': 'Aninhado', // review
+  'componentProps.variants.reason.runtime': 'Execução', // review
+  'componentProps.variants.reason.shape': 'Complexo', // review
+  'componentProps.variants.reason.shared': 'Compartilhado', // review
+  'componentProps.variants.removeFallback': '{value} é o padrão. Torne outra opção o padrão primeiro.', // review
+  'componentProps.variants.state.forbidden': 'Ocultar', // review
+  'componentProps.variants.state.optional': 'Mostrar', // review
+  'componentProps.variants.state.required': 'Obrigatório', // review
+  'componentProps.variants.switchForbidsAll': 'Nenhuma opção de {name} permitiria esta propriedade.', // review
+  'componentProps.visibility.combination': 'O TypeScript não consegue expressar essa combinação. Dê a cada escolha seus próprios grupos.', // review
+  'componentProps.visibility.hideNeedsCondition': 'Ocultar precisa de uma condição: adicione uma propriedade de opções ou um interruptor pelo qual ocultar.', // review
+  'componentProps.visibility.otherwise': '{state} caso contrário', // review
+  'componentProps.visibility.shape': 'Cada grupo precisa de uma condição sobre uma escolha ou um interruptor.', // review
+  'componentProps.visibility.subject': '{name} não é uma escolha nem um interruptor.', // review
+  'componentProps.visibility.title': 'Visibilidade', // review
+  'componentProps.visibility.when': '{state} quando {conditions}', // review
+} as const satisfies CatalogOf<MessageKey>;

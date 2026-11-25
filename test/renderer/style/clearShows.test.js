@@ -103,15 +103,10 @@ const check = (what, condition, detail) => {
   await render();
 
   const field = () => document.querySelector('input[data-prop="width"]');
-  const label = () =>
-    [...document.querySelectorAll('.u-field-label, .u-field-label-wrap button')].find(
-      (element) => element.textContent.trim() === 'Width',
-    );
+  const label = () => [...document.querySelectorAll('.u-field-label, .u-field-label-wrap button')].find((element) => element.textContent.trim() === 'Width');
   const click = async (element) => {
     await act(async () => {
-      element.dispatchEvent(
-        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
-      );
+      element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     });
   };
 
@@ -119,9 +114,7 @@ const check = (what, condition, detail) => {
 
   // Option-click is the shortcut for the same Clear the menu offers.
   await act(async () => {
-    label().dispatchEvent(
-      new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
-    );
+    label().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }));
   });
   check('clearing asks for the property to go', cleared.join() === 'width', cleared.join());
   check('and the field stops showing it at once', field()?.value === '', field()?.value);
@@ -142,9 +135,7 @@ const check = (what, condition, detail) => {
   // idle. What follows the press is the question.
   const clear = async () => {
     await act(async () => {
-      label().dispatchEvent(
-        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }),
-      );
+      label().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true }));
     });
   };
 
@@ -168,45 +159,28 @@ const check = (what, condition, detail) => {
   // change for the field to notice, and it would sit empty saying the property
   // is gone when it is not.
   await clear();
-  check(
-    'a clear that changed nothing empties the field first',
-    field()?.value === '',
-    field()?.value,
-  );
+  check('a clear that changed nothing empties the field first', field()?.value === '', field()?.value);
   busy = true;
   await render();
   busy = false;
   await render();
-  check(
-    'and the unchanged value comes back when the save ends',
-    field()?.value === '50rem',
-    field()?.value,
-  );
+  check('and the unchanged value comes back when the save ends', field()?.value === '50rem', field()?.value);
 
   // Typing is still nobody else's business.
   await act(async () => {
     field().focus();
   });
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(field(), '12px');
     field().dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
   width = declared('80rem');
   await render();
-  check(
-    'a model that changes under a field being typed in does not take it over',
-    field()?.value === '12px',
-    field()?.value,
-  );
+  check('a model that changes under a field being typed in does not take it over', field()?.value === '12px', field()?.value);
 
   if (failures.length) {
-    console.error(
-      `\nclear-shows: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nclear-shows: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

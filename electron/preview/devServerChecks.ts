@@ -5,6 +5,8 @@
 import { object, text } from '../../shared/core/boundary';
 import * as path from 'path';
 import * as net from 'net';
+import { createHash } from 'node:crypto';
+import { assert } from '../../shared/core/assert';
 import { spawnSync, execFileSync } from 'child_process';
 import { capture, readJson } from '../lib/mainHelpers';
 import { resolveNodeBin } from '../lib/nodeTools';
@@ -17,13 +19,7 @@ export const parseAstroLock = object({ url: text });
 // want to go to /de/hotel/ instead?"; under 'never' the slash is the 404. The
 // canvas points at real URLs, so it has to know which spelling it serves.
 export const TRAILING_SLASH_MODES = ['always', 'never', 'ignore'];
-export const ASTRO_CONFIG_FILES = [
-  'astro.config.mjs',
-  'astro.config.js',
-  'astro.config.mts',
-  'astro.config.ts',
-  'astro.config.cjs',
-];
+export const ASTRO_CONFIG_FILES = ['astro.config.mjs', 'astro.config.js', 'astro.config.mts', 'astro.config.ts', 'astro.config.cjs'];
 
 // Read from the config's text, not by importing it: the file is ESM, is often
 // TypeScript, and is written to be loaded by Astro rather than by this
@@ -52,11 +48,23 @@ export function portAnswers(port: number, host = '127.0.0.1') {
   });
 }
 
-// A listening TCP port can precede Astro's HTTP middleware. Wait for a real
-// response before navigating the canvas; error pages still count as responses.
+// Astro hashes its server port into the content-cache key. Give each project a
+// stable starting port so unrelated servers do not force a rebuild on every open.
+export function previewPort(projectPath: string): number {
+  assert(projectPath.length > 0, 'Preview port requires a project path');
+  const digest = createHash('sha256').update(projectPath).digest();
+  const port = 45000 + (digest.readUInt32BE(0) % 10000);
+  assert(port >= 45000, 'Preview port must not fall below its search range');
+  assert(port < 55000, 'Preview port must leave room for conflict retries');
+  return port;
+}
+
+// Probe Vite's lightweight client, not the homepage: rendering a cold homepage
+// can exceed the probe timeout and start repeated, abandoned renders before the
+// canvas even navigates. Error responses still prove HTTP middleware is ready.
 export async function serverResponds(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url, {
+    const response = await fetch(new URL('/@vite/client', url), {
       signal: AbortSignal.timeout(1500),
       redirect: 'manual',
     });

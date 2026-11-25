@@ -13,17 +13,7 @@ type SentenceMessageIds = 'space' | 'capital' | 'terminal';
 // Tool directives are not prose.
 const DIRECTIVE = new RegExp(
   '^\\s*(?:' +
-    [
-      'eslint-(?:disable|enable)',
-      'eslint\\s+[\\w/-]+:',
-      '@ts-',
-      'prettier-ignore',
-      '#(?:end)?region',
-      '/',
-      'global\\s',
-      'c8\\s',
-      'istanbul\\s',
-    ].join('|') +
+    ['eslint-(?:disable|enable)', 'eslint\\s+[\\w/-]+:', '@ts-', 'prettier-ignore', '#(?:end)?region', '/', 'global\\s', 'c8\\s', 'istanbul\\s'].join('|') +
     ')',
 );
 // A first character that opens code or a list rather than a word.
@@ -43,9 +33,7 @@ export const commentSentence: RuleModule<SentenceMessageIds> = {
     docs: { description: 'Own-line comments are sentences (AGENTS.md §13).' },
     messages: {
       space: 'Put a space after `//` (AGENTS.md §13).',
-      capital:
-        'Start the comment with a capital letter, or quote the identifier it opens with in ' +
-        'backticks (AGENTS.md §13).',
+      capital: 'Start the comment with a capital letter, or quote the identifier it opens with in ' + 'backticks (AGENTS.md §13).',
       terminal: 'End the comment with a full stop, or a colon before what follows (AGENTS.md §13).',
     },
     schema: [],
@@ -82,10 +70,7 @@ export const commentSentence: RuleModule<SentenceMessageIds> = {
 };
 
 // Groups own-line `//` comments into blocks of consecutive lines.
-function ownLineBlocks(
-  comments: readonly TSESTree.Comment[],
-  lines: readonly string[],
-): readonly (readonly TSESTree.Comment[])[] {
+function ownLineBlocks(comments: readonly TSESTree.Comment[], lines: readonly string[]): readonly (readonly TSESTree.Comment[])[] {
   const blocks: TSESTree.Comment[][] = [];
   let previousLine = -1;
   for (const comment of comments) {
@@ -143,9 +128,7 @@ export const requireDisableReason: RuleModule<'missingReason'> = {
     type: 'suggestion',
     docs: { description: 'Every lint suppression states its reason.' },
     messages: {
-      missingReason:
-        'State why the rule does not apply: `eslint-disable… <rule> -- <reason>` ' +
-        '(AGENTS.md: always say why).',
+      missingReason: 'State why the rule does not apply: `eslint-disable… <rule> -- <reason>` ' + '(AGENTS.md: always say why).',
     },
     schema: [],
   },

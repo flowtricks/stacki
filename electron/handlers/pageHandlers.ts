@@ -1,11 +1,15 @@
+import { projectAliases } from '../properties/importPaths';
+import { desktopRenameWriter } from '../project/pageRenameDesktop';
+import { parsePageRename } from '../../shared/properties/pageRename';
+import { planPageRenameSliced } from '../project/pageRenamePlan';
+import { applyPageRenameSliced } from '../project/pageRenameWrite';
 // The page IPC: reading, parsing and editing a page through its document
 // actor, and creating, moving and deleting pages, folders and dynamic routes.
 
-import { readSource } from '../lib/mainLimits';
 import { buildEdit } from '../documents/editRequests';
-import { previewEdit } from '../documents/editPreview';
+import { previewEdit, previewEdits } from '../documents/editPreview';
 import { createProjectText } from '../documents/documentWrites';
-import { isPathDescendant, sameFilesystemPath } from '../lib/platform';
+import { sameFilesystemPath } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
 import { describeRejection, type RejectionReason } from '../../shared/engine/intent';
 import { decodeUtf8, encodeUtf8 } from '../../shared/core/span';
@@ -18,26 +22,30 @@ import { newPageText } from '../documents/componentFile';
 import { toPosix, errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
-import {
-  parsePageSource,
-  pageEditError,
-  resolvePagesDirectory,
-  fillRoute,
-} from '../documents/pageRequests';
+import { pagesDirectoryOf, readAstroPages } from '../lib/astroConfig';
+import { emDashPageEntries } from '../content/emdashPaths';
+import { detectEmDash } from '../content/emdashProject';
+import { registerEmDashInstallHandlers } from './emdashInstall';
+import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
+import { translateMain, translateMainDescribed } from '../lib/mainLocale';
+import { DescribedError } from '../../shared/properties/describedError';
+import { registerPageSettingsHandlers } from './pageSettingsHandlers';
 
-export function registerPageHandlers(
-  host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite'>,
-): void {
+/** The project's running preview, which adding EmDash restarts and whose address the EmDash admin button opens. */
+export interface PagePreviews {
+  readonly current: () => { readonly url: string; readonly projectPath: string } | undefined;
+  readonly restart: (projectPath: string) => Promise<string | undefined>;
+}
+
+export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite' | 'send'>, previews: PagePreviews): void {
   registerPageReadHandlers(host);
+  registerEmDashInstallHandlers(host, previews);
   registerPageMoveHandlers(host);
+  registerPageSettingsHandlers(host);
   registerProjectInjectedRoutesHandlers(host);
 }
 
-function registerPageReadHandlers({
-  ipcMain,
-  documents,
-  noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
+function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'documents' | 'noteAppWrite'>): void {
   // Read through the page's actor (step 6): the bytes the renderer is shown are
   // the bytes its edits will name, so the host must hold them — as its current
   // snapshot, and retained once an outside write replaces them — or an edit
@@ -66,6 +74,28 @@ function registerPageReadHandlers({
     const code = edit.tag === 'code-patch';
     const gone = code ? ('merge-conflict' as const) : ('anchor-moved' as const);
     const stated = { authoredChecksum, gone };
+    if (edit.tag === 'revert' && edit.hunks.length === 0) {
+      // Undo of an edit that wrote nothing (a move onto the place the node already had answers an
+      // empty inverse): there is nothing to restore, so the page is answered as it is, written
+      // not at all. An intent needs a hunk to name, so this never reaches the actor's planner.
+      const disk = documents.current(pagePath);
+      if (!disk.ok) {
+        return {
+          ok: false as const,
+          error: pageEditError(pagePath, { tag: 'rejected', reason: 'write-failed', message: disk.error.message, diskChecksum: undefined }),
+        };
+      }
+      if (disk.value.checksum !== authoredChecksum) {
+        const reason = 'region-externally-modified' as const;
+        return {
+          ok: false as const,
+          error: pageEditError(pagePath, { tag: 'rejected', reason, message: describeRejection(reason), diskChecksum: disk.value.checksum }),
+        };
+      }
+      const unchanged = decodeUtf8(disk.value.bytes);
+      assert(unchanged.ok, 'The actor holds UTF-8 page bytes');
+      return { ok: true as const, ...parsePageSource(pagePath, unchanged.value), checksum: disk.value.checksum, inverse: [] };
+    }
     const report = documents.submitEdit(pagePath, stated, (base) => buildEdit(edit, base));
     if (report.tag !== 'applied') {
       return { ok: false as const, error: pageEditError(pagePath, report) };
@@ -76,7 +106,43 @@ function registerPageReadHandlers({
     // A <style> edit reaches the canvas fresh on this one write: the preview
     // config compiles the file before Vite announces the new stylesheet
     // (avbRecompile in the generated avb-morph plugin).
-    noteAppWrite();
+    noteAppWrite(pagePath);
+    const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
+    return { ok: true as const, ...reply, inverse: report.inverse };
+  });
+
+  // Several edits of one gesture, written once: a loop and the query it reads,
+  // sent apart, gave the dev server a page between them whose loop read a
+  // query not yet declared. They are planned in memory against the bytes the
+  // renderer read (editPreview.ts), each held to what its own write would be
+  // held to, and the result is written as one rewrite of those bytes. A page
+  // that changed since is refused untouched: the renderer then sends the edits
+  // one at a time, which rebase through outside writes.
+  ipcMain.handle('page:editBatch', async (_event, { pagePath, authoredChecksum, edits }) => {
+    const refused = (reason: RejectionReason, diskChecksum: Digest | undefined) => ({
+      ok: false as const,
+      error: pageEditError(pagePath, { tag: 'rejected', reason, message: describeRejection(reason), diskChecksum }),
+    });
+    const disk = documents.current(pagePath);
+    if (!disk.ok) {
+      return refused('write-failed', undefined);
+    }
+    if (disk.value.checksum !== authoredChecksum) {
+      return refused('anchor-moved', disk.value.checksum);
+    }
+    const planned = previewEdits(pagePath, disk.value.bytes, authoredChecksum, edits);
+    if (!planned.ok) {
+      return refused(planned.error, authoredChecksum);
+    }
+    const decoded = decodeUtf8(planned.value.bytes);
+    assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
+    const text = decoded.value;
+    const report = documents.writeText(pagePath, text, authoredChecksum);
+    if (report.tag !== 'applied') {
+      return { ok: false as const, error: pageEditError(pagePath, report) };
+    }
+    assert(report.checksum === planned.value.checksum, 'The batch wrote the bytes it planned');
+    noteAppWrite(pagePath);
     const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
     return { ok: true as const, ...reply, inverse: report.inverse };
   });
@@ -86,29 +152,26 @@ function registerPageReadHandlers({
   // shows its unsaved gestures as the splices they are. The reply has page:edit's
   // shape, so the renderer states the next request against it as it would
   // against a write.
-  ipcMain.handle(
-    'page:previewEdit',
-    async (_event, { pagePath, authoredChecksum, edit, source }) => {
-      const refused = (reason: RejectionReason) => {
-        const error = { code: 'rejected' as const, reason, message: describeRejection(reason) };
-        return { ok: false as const, error: { ...error, diskChecksum: undefined } };
-      };
-      const planned = previewEdit(pagePath, encodeUtf8(source), authoredChecksum, edit);
-      if (!planned.ok) {
-        return refused(planned.error);
-      }
-      const decoded = decodeUtf8(planned.value.bytes);
-      assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
-      const reply = {
-        ...parsePageSource(pagePath, decoded.value),
-        checksum: planned.value.checksum,
-      };
-      return { ok: true as const, ...reply, inverse: planned.value.inverse };
-    },
-  );
+  ipcMain.handle('page:previewEdit', async (_event, { pagePath, authoredChecksum, edit, source }) => {
+    const refused = (reason: RejectionReason) => {
+      const error = { code: 'rejected' as const, reason, message: describeRejection(reason) };
+      return { ok: false as const, error: { ...error, diskChecksum: undefined } };
+    };
+    const planned = previewEdit(pagePath, encodeUtf8(source), authoredChecksum, edit);
+    if (!planned.ok) {
+      return refused(planned.error);
+    }
+    const decoded = decodeUtf8(planned.value.bytes);
+    assert(decoded.ok, 'A plan of UTF-8 text is UTF-8');
+    const reply = {
+      ...parsePageSource(pagePath, decoded.value),
+      checksum: planned.value.checksum,
+    };
+    return { ok: true as const, ...reply, inverse: planned.value.inverse };
+  });
 
   ipcMain.handle('page:create', async (_event, { projectPath, name, layout }) => {
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
+    const pagesDirectory = pagesDirectoryOf(projectPath);
     let fileName = name.trim().replace(/\.astro$/i, '');
     fileName = fileName.replace(/[^a-zA-Z0-9/_-]+/g, '-');
     if (!fileName) {
@@ -133,47 +196,21 @@ function registerPageReadHandlers({
   });
 }
 
-function registerPageMoveHandlers({
-  ipcMain,
-  noteAppWrite,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite'>): void {
+function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipcMain' | 'noteAppWrite'>): void {
   // Moves/renames a page within src/pages. `to` is the new path relative to
   // the pages dir (with extension). When the folder changes, relative imports
   // in the file's frontmatter are rewritten so they keep resolving.
   ipcMain.handle('page:move', async (_event, { projectPath, from, to }) => {
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
-    const target = path.resolve(pagesDirectory, to);
-    if (!isPathDescendant(pagesDirectory, target)) {
-      throw new Error('Invalid destination.');
-    }
-    if (sameFilesystemPath(from, target)) {
-      return { newPath: target };
-    }
-    if (fs.existsSync(target)) {
-      throw new Error('A page with that name already exists there.');
-    }
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-
-    let source = readSource(from);
-    const fromDirectory = path.dirname(from);
-    const toDirectory = path.dirname(target);
-    if (!sameFilesystemPath(fromDirectory, toDirectory)) {
-      source = source.replace(
-        /(import\s[^'"]*?from\s*['"])(\.\.?\/[^'"]+)(['"])/g,
-        (_match: string, pre: string, spec: string, post: string) => {
-          const abs = path.resolve(fromDirectory, spec);
-          let rel = toPosix(path.relative(toDirectory, abs));
-          if (!rel.startsWith('.')) {
-            rel = './' + rel;
-          }
-          return pre + rel + post;
-        },
-      );
-    }
+    requireDefaultPagesFolder(projectPath);
+    const pagesDirectory = pagesDirectoryOf(projectPath);
+    const change = parseRenameRequest({
+      kind: 'page',
+      from: toPosix(path.relative(pagesDirectory, from)),
+      to,
+    });
+    await renameProjectPages(projectPath, change);
     noteAppWrite();
-    createProjectText(target, source);
-    fs.rmSync(from);
-    return { newPath: target };
+    return { newPath: path.join(pagesDirectory, change.to) };
   });
 
   ipcMain.handle('pagefolder:create', async (_event, { projectPath, dir: directory }) => {
@@ -182,18 +219,15 @@ function registerPageMoveHandlers({
   });
 
   ipcMain.handle('pagefolder:rename', async (_event, { projectPath, from, to }) => {
-    const fromPath = resolvePagesDirectory(projectPath, from);
-    const toPath = resolvePagesDirectory(projectPath, to);
-    if (fs.existsSync(toPath)) {
-      throw new Error('A folder with that name already exists.');
-    }
-    fs.renameSync(fromPath, toPath);
+    requireDefaultPagesFolder(projectPath);
+    await renameProjectPages(projectPath, parseRenameRequest({ kind: 'folder', from, to }));
+    noteAppWrite();
     return { ok: true as const };
   });
 
   ipcMain.handle('pagefolder:delete', async (_event, { projectPath, dir: directory }) => {
     const full = resolvePagesDirectory(projectPath, directory);
-    const pagesDirectory = path.join(projectPath, 'src', 'pages');
+    const pagesDirectory = pagesDirectoryOf(projectPath);
     if (sameFilesystemPath(full, pagesDirectory)) {
       throw new Error('Invalid folder.');
     }
@@ -215,8 +249,11 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
   // The concrete URLs a dynamic page stands for, by asking the dev server to run
   // its getStaticPaths. Returns [] for a static page, and for any failure — a
   // page that can't answer is previewed at its own pattern, exactly as before.
+  // What an EmDash project holds, read from its files and its local database, read only.
+  ipcMain.handle('emdash:project', (_event, { projectPath }) => detectEmDash(path.resolve(projectPath)));
+
   ipcMain.handle('page:dynamicPaths', async (_event, { projectPath, pagePath, devUrl }) => {
-    const pattern = routeForPage(projectPath, pagePath);
+    const pattern = routeForPage(pagesDirectoryOf(projectPath), pagePath);
     if (!pattern.includes('[') || !devUrl) {
       return { entries: [] };
     }
@@ -224,7 +261,7 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
     try {
       const response = await fetch(`${devUrl}/__avb/paths?p=${encodeURIComponent(rel)}`);
       if (!response.ok) {
-        return { entries: [], error: `Dev server returned ${response.status}` };
+        return { entries: [], error: translateMain('error.pages.devServerStatus', { status: response.status }) };
       }
       const input: unknown = await response.json();
       const data = parseDynamicPaths(input);
@@ -240,6 +277,14 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
           label: Object.values(params).map(String).join(' / ') || pattern,
         };
       });
+      if (entries.length === 0 && !data.error) {
+        // An EmDash page reads its entry at request time, so it declares no getStaticPaths: its pages are the entries in EmDash.
+        const emdash = await emDashPageEntries(projectPath, pagePath, pattern);
+        return {
+          entries: emdash.map((entry) => ({ params: entry.params, props: undefined, route: fillRoute(pattern, entry.params), label: entry.label })),
+          error: undefined,
+        };
+      }
       return { entries, error: data.error || undefined };
     } catch (error: unknown) {
       return { entries: [], error: errorMessage(error) };
@@ -247,10 +292,7 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
   });
 }
 
-function readThroughActor(
-  { documents }: Pick<MainHost, 'documents'>,
-  pagePath: string,
-): { readonly text: string; readonly checksum: Digest } {
+function readThroughActor({ documents }: Pick<MainHost, 'documents'>, pagePath: string): { readonly text: string; readonly checksum: Digest } {
   const current = documents.current(pagePath);
   if (!current.ok) {
     throw new Error(current.error.message);
@@ -260,4 +302,39 @@ function readThroughActor(
     throw new Error(`${path.basename(pagePath)} is not valid UTF-8`);
   }
   return { text: decoded.value, checksum: current.value.checksum };
+}
+
+/** `parsePageRename`, with its refusal worded in the language main speaks: the renderer shows a rejected invoke's message as received. */
+// Renames rewrite links and imports by their `src/pages/` paths (electron/project/pageRename*.ts),
+// so a project whose astro.config moves the pages folder is refused with the reason, not half-renamed.
+function requireDefaultPagesFolder(projectPath: string): void {
+  const { pagesFolder, configFile } = readAstroPages(projectPath);
+  if (pagesFolder !== 'src/pages') {
+    throw new Error(
+      `Renaming pages is not supported when ${configFile ?? 'astro.config'} moves the pages folder to ${pagesFolder}. Rename the file in your editor.`,
+    );
+  }
+}
+
+function parseRenameRequest(input: unknown): ReturnType<typeof parsePageRename> {
+  try {
+    return parsePageRename(input);
+  } catch (failure: unknown) {
+    if (failure instanceof DescribedError) {
+      throw new Error(translateMainDescribed(failure.problem));
+    }
+    throw failure;
+  }
+}
+
+// Planning reads and rewrites every text file of the project, so it runs in slices that hand the main thread back: a project of any size renames without freezing the window.
+async function renameProjectPages(projectPath: string, change: ReturnType<typeof parsePageRename>): Promise<void> {
+  const planned = await planPageRenameSliced(projectPath, change, projectAliases(projectPath));
+  if (!planned.ok) {
+    throw new Error(translateMainDescribed(planned.error));
+  }
+  const saved = await applyPageRenameSliced(planned.value, desktopRenameWriter());
+  if (!saved.ok) {
+    throw new Error(translateMainDescribed(saved.error));
+  }
 }

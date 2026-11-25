@@ -1,23 +1,34 @@
 import Popup from './Popup';
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
 import { endDragNotes, hoverNote } from './sound';
 import { useSoundHere } from './soundScope';
 import { ChevronDownIcon, CheckIcon } from './Icons';
+import { SkeletonRows } from './Skeleton';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { useTranslate } from '../lib/i18n/useTranslate';
+
+/** Text as a search compares it: lower case with accents removed, so "cafe" finds "Café". */
+export function foldForSearch(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
 
 export const POPUP_GAP = 4;
 const POPUP_EDGE = 8;
 const POPUP_MIN = 120;
 const POPUP_PADDING_HEIGHT = 8;
 const OPTION_HEIGHT = 26;
+// A row with its description beneath the label (styles.css `.dd-stacked`).
+const STACKED_OPTION_HEIGHT = 40;
 const SEARCH_HEIGHT = 36;
-export function popupBox(
-  rectangle: Pick<DOMRect, 'top' | 'bottom'>,
-  wanted: number,
-  windowHeight: number,
-) {
+// A searchable menu is never narrower than this (styles.css `.dd-searchable`),
+// so its position is worked out at this width, inside the window.
+const SEARCHABLE_WIDTH_MIN = 300;
+// The tallest a list grows before it scrolls: about a dozen options, so a long
+// list (time zones, locales) is a list to scroll, not a wall down the window.
+const MENU_HEIGHT_MAX = 320;
+export function popupBox(rectangle: Pick<DOMRect, 'top' | 'bottom'>, wanted: number, windowHeight: number) {
   const below = windowHeight - rectangle.bottom - POPUP_GAP - POPUP_EDGE;
   const above = rectangle.top - POPUP_GAP - POPUP_EDGE;
   const up = wanted > below && above > below;
@@ -28,14 +39,31 @@ export function popupBox(
     maxHeight: wanted > room ? room : undefined,
   };
 }
+/** A row's colour family; absent is the default text colour. */
+export type DropdownOptionTone = 'collection';
 export interface DropdownOption<T = string> {
   readonly value: T;
   readonly label: string;
   readonly hint?: string;
   readonly group?: string;
+  /** A mark beside the group's heading (a CMS's logo); taken from the group's first option. */
+  readonly groupIcon?: ReactNode;
   readonly description?: string;
+  /** The row's tooltip: more than its label says (what a computed value is computed from). */
+  readonly title?: string;
   readonly icon?: ReactNode;
+  /**
+   * `collection`: a page a CMS collection generates, purple as it is in the Pages panel (label, icon,
+   * and the group heading over it). The highlighted row keeps the highlight's white for contrast.
+   */
+  readonly tone?: DropdownOptionTone;
   readonly dim?: boolean;
+  /** Listed but not choosable; its `description` says why. */
+  readonly disabled?: boolean;
+  /** Extra words a search matches (the description, synonyms) without showing them twice. */
+  readonly keywords?: string;
+  /** Listed whatever the search says, so a way out (a "None" row) is never filtered away. */
+  readonly pinned?: boolean;
 }
 export interface DropdownProps<T = string> {
   readonly disabled?: boolean;
@@ -44,21 +72,71 @@ export interface DropdownProps<T = string> {
   readonly options: readonly DropdownOption<T>[];
   readonly onChange: (value: T) => void;
   readonly className?: string;
+  /** The field is refused and empty: the trigger takes the error fill and `aria-invalid` (why is told by a toast, not here). */
+  readonly invalid?: boolean;
   readonly menuClassName?: string;
+  /** The menu's least width; it is never narrower than its trigger either way. */
+  readonly menuWidthMin?: number;
+  /** `stacked` draws each option's description beneath its label; the trigger still shows the label alone. */
+  readonly optionLayout?: 'line' | 'stacked';
   readonly placeholder?: string;
+  /**
+   * Whether hovering or arrowing to an option previews it before it is picked.
+   * Preview is opt-in and reserved for live canvas previews of a component prop:
+   * everywhere else (dialogs, settings forms) a hover only highlights the row, and
+   * the field keeps showing the committed value until a click or Enter.
+   * It defaults to on exactly when `onPreview` is passed. Set it without `onPreview`
+   * to preview by writing through `onChange`, reverted on close.
+   */
   readonly livePreview?: boolean;
   readonly onPrepare?: () => void;
   readonly onPreview?: (value: T) => void;
   readonly onCancelPreview?: () => void;
   readonly onCommitPreview?: () => void;
+  /**
+   * The row the person is on while the menu is open, by pointer or arrow keys, for a
+   * preview outside the field (an app's canvas highlight). It is heard once per change:
+   * `undefined` when the pointer leaves the rows, the row is disabled, or the menu
+   * closes. It never changes the value, and opening the menu announces nothing.
+   */
+  readonly onHighlight?: (value: T | undefined) => void;
   readonly searchable?: boolean;
   readonly searchPlaceholder?: string;
+  /**
+   * The most rows the list draws. Past it the list ends with "N more, keep typing", so a search over
+   * thousands of options stays fast; typing narrows the matches before they are counted.
+   */
+  readonly rowsMax?: number;
+  /** More options are still arriving: the list ends with skeleton rows, and an empty list is not yet "nothing matches". */
+  readonly loading?: boolean;
+  /** A last row that makes a new option from a typed name, in place inside the menu (a new folder). */
+  readonly createRow?: DropdownCreateRow<T>;
 }
+
+/**
+ * The menu's "New …" row. Choosing it turns the row into a text field in place; Enter makes the option when
+ * `validate` has no objection and selects the value `onCreate` answers, Escape (or a press elsewhere) puts the row
+ * back, and a second Escape closes the menu. Shown whatever a search says, after every option.
+ */
+export interface DropdownCreateRow<T> {
+  readonly label: string;
+  readonly icon?: ReactNode;
+  readonly placeholder: string;
+  /** Why the typed text cannot be made, in the language on screen; undefined when it can. */
+  readonly validate: (text: string) => string | undefined;
+  /** Makes the option from text `validate` accepted and answers the value to select. */
+  readonly onCreate: (text: string) => T;
+}
+
+/** The longest name the create row takes: a field, not a document. */
+export const DROPDOWN_CREATE_CHARS_MAX = 200;
 interface Selection<T> {
   readonly open: boolean;
   readonly highlight: number;
   readonly query: string;
   readonly visible: readonly DropdownOption<T>[];
+  /** Matches left undrawn by `rowsMax`. */
+  readonly hiddenCount: number;
   readonly selected: DropdownOption<T> | undefined;
   readonly setOpen: (open: boolean) => void;
   readonly setHighlight: (highlight: number) => void;
@@ -76,6 +154,8 @@ interface Actions<T> {
   readonly close: () => void;
   readonly preview: (index: number) => void;
   readonly hover: (index: number) => void;
+  /** The pointer left the options: a preview that can be dropped without a write is dropped. */
+  readonly leave: () => void;
   readonly pick: (option: DropdownOption<T>) => void;
 }
 type Controller<T> = Selection<T> & Actions<T>;
@@ -84,13 +164,18 @@ type PopupPosition = ReturnType<typeof popupBox> & {
   readonly width: number;
 };
 
-// Hover previews remain distinct from committed choices: closing reverts, while
-// selecting an already-previewed row avoids writing the same value twice.
+// Hover previews are opt-in (see `livePreview`) and remain distinct from committed
+// choices: closing reverts, while selecting an already-previewed row avoids writing
+// the same value twice. Without a preview, hovering and arrowing move the highlight only.
 export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
-  const position = useDropdownPosition(state, { searchable: props.searchable ?? false });
+  const position = useDropdownPosition(state, {
+    optionHeightPx: props.optionLayout === 'stacked' ? STACKED_OPTION_HEIGHT : OPTION_HEIGHT,
+    searchable: props.searchable ?? false,
+    widthPxMin: props.menuWidthMin ?? 0,
+  });
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -106,8 +191,11 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
         disabled={props.disabled}
         aria-label={props.ariaLabel}
         aria-expanded={state.open}
+        aria-invalid={props.invalid === true ? true : undefined}
         ref={state.triggerRef}
         className={`dd-trigger ${props.className || ''}`}
+        // The chosen row's tooltip is the trigger's too: what it names is the same.
+        title={state.selected?.title}
         onMouseEnter={props.onPrepare}
         onFocus={props.onPrepare}
         onClick={() => (state.open ? actions.close() : actions.openPopup())}
@@ -121,9 +209,7 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
           <ChevronDownIcon size={11} />
         </span>
       </button>
-      {position && (
-        <DropdownPopup control={control} props={props} position={position} onKey={onKey} />
-      )}
+      {position && <DropdownPopup control={control} props={props} position={position} onKey={onKey} />}
     </>
   );
 }
@@ -139,17 +225,24 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const searchRef = useRef<HTMLInputElement>(null);
   const committed = useRef(props.value);
   const previewed = useRef<{ readonly value: T } | undefined>(undefined);
-  const queryText = query.trim().toLowerCase();
-  const visible =
+  const queryText = foldForSearch(query.trim());
+  const matches =
     props.searchable && queryText
-      ? props.options.filter((option) =>
-          `${option.label} ${option.hint || ''} ${option.group || ''}`
-            .toLowerCase()
-            .includes(queryText),
+      ? props.options.filter(
+          (option) =>
+            option.pinned === true || foldForSearch(`${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`).includes(queryText),
         )
       : props.options;
+  // A caller's cap draws at least one row; without one every match is drawn, and a list with no
+  // options (or a search that matches none) draws none rather than failing.
+  if (props.rowsMax !== undefined) {
+    assert(props.rowsMax >= 1, 'Dropdown rowsMax draws at least one row');
+  }
+  const rowsMax = props.rowsMax ?? matches.length;
+  const visible = matches.length > rowsMax ? matches.slice(0, rowsMax) : matches;
   return {
     open,
+    hiddenCount: matches.length - visible.length,
     setOpen,
     highlight,
     setHighlight,
@@ -170,15 +263,10 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
 // Waiting longer makes the canvas feel stale as the pointer crosses options.
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
   const { setOpen, setHighlight, committed, previewed, visible } = state;
-  const {
-    value,
-    options,
-    onChange,
-    onPreview,
-    onPrepare,
-    onCancelPreview,
-    livePreview = true,
-  } = props;
+  const { value, options, onChange, onPreview, onPrepare, onCancelPreview } = props;
+  const announceHighlight = useHighlightAnnouncer(props.onHighlight, { open: state.open });
+  // No handler, no preview: a stray hover must never change a form's value.
+  const livePreview = props.livePreview ?? onPreview !== undefined;
   const hoverFrame = useRef<number | undefined>(undefined);
   const cancelHover = useCallback((): void => {
     if (hoverFrame.current !== undefined) {
@@ -187,7 +275,23 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
     }
   }, []);
   useEffect(() => () => cancelHover(), [cancelHover]);
+  // A panel can go while its list is open (a new selection, a remount). No close runs
+  // then, so a preview on the canvas would outlive the control that could end it.
+  const cancelPreview = useRef(onCancelPreview);
+  cancelPreview.current = onCancelPreview;
+  useEffect(
+    () => () => {
+      if (previewed.current !== undefined) {
+        previewed.current = undefined;
+        cancelPreview.current?.();
+      }
+    },
+    [previewed],
+  );
   const previewOption = (option: DropdownOption<T>): void => {
+    if (option.disabled === true) {
+      return;
+    }
     if (!livePreview) {
       return;
     }
@@ -213,13 +317,14 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       cancelHover();
       onPrepare?.();
       initializeDropdown(state, value);
-      setHighlight(options.findIndex((option) => option.value === value));
+      setHighlight(options.slice(0, props.rowsMax ?? options.length).findIndex((option) => option.value === value));
       setOpen(true);
     },
     preview: (index) => {
       cancelHover();
       setHighlight(index);
       const option = visible[index];
+      announceHighlight(option);
       if (option) {
         previewOption(option);
       }
@@ -228,15 +333,61 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       cancelHover();
       setHighlight(index);
       const option = visible[index];
+      announceHighlight(option);
       if (option && livePreview) {
         hoverFrame.current = window.requestAnimationFrame(() => previewOption(option));
       }
     },
+    leave: () => {
+      announceHighlight(undefined);
+      // Only a canvas preview (onCancelPreview) is dropped on the way out. A dropdown
+      // that previews by writing keeps its row until it closes, as it always has.
+      if (onCancelPreview === undefined) {
+        return;
+      }
+      cancelHover();
+      if (previewed.current !== undefined) {
+        previewed.current = undefined;
+        onCancelPreview();
+      }
+    },
     pick: (option) => {
+      if (option.disabled === true) {
+        return;
+      }
       cancelHover();
       commitDropdownOption(props, state, option);
     },
   };
+}
+
+/**
+ * Tells `onHighlight` about the row the person moved to, only when it changed, and
+ * `undefined` when the menu closes or the dropdown goes while open. Nothing told yet
+ * reads as `undefined`, so a close before any highlight tells nothing.
+ */
+function useHighlightAnnouncer<T>(
+  onHighlight: ((value: T | undefined) => void) | undefined,
+  { open }: { readonly open: boolean },
+): (option: DropdownOption<T> | undefined) => void {
+  const told = useRef<T | undefined>(undefined);
+  const listener = useRef(onHighlight);
+  listener.current = onHighlight;
+  const announce = useCallback((option: DropdownOption<T> | undefined): void => {
+    const value = option === undefined || option.disabled === true ? undefined : option.value;
+    if (Object.is(told.current, value)) {
+      return; // Once per change: the pointer moving within one row tells nothing new.
+    }
+    told.current = value;
+    listener.current?.(value);
+  }, []);
+  useEffect(() => {
+    if (!open) {
+      announce(undefined);
+    }
+  }, [open, announce]);
+  useEffect(() => () => announce(undefined), [announce]);
+  return announce;
 }
 
 function initializeDropdown<T>(state: Selection<T>, value: T): void {
@@ -246,11 +397,7 @@ function initializeDropdown<T>(state: Selection<T>, value: T): void {
   setQuery('');
 }
 
-function commitDropdownOption<T>(
-  props: DropdownProps<T>,
-  state: Selection<T>,
-  option: DropdownOption<T>,
-): void {
+function commitDropdownOption<T>(props: DropdownProps<T>, state: Selection<T>, option: DropdownOption<T>): void {
   const { onPreview, onCancelPreview, onCommitPreview, onChange } = props;
   const { committed, previewed, setOpen, triggerRef } = state;
   const applied = onPreview ? committed.current : (previewed.current?.value ?? committed.current);
@@ -271,10 +418,10 @@ function commitDropdownOption<T>(
   triggerRef.current?.focus();
 }
 
-function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean }) {
+function useDropdownPosition<T>(state: Selection<T>, options: { readonly optionHeightPx: number; readonly searchable: boolean; readonly widthPxMin: number }) {
   const [position, setPosition] = useState<PopupPosition | undefined>(undefined);
   const { open, triggerRef, visible } = state;
-  const { searchable } = options;
+  const { optionHeightPx, searchable, widthPxMin } = options;
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) {
       return;
@@ -284,14 +431,20 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
     // makes a long list alternate between capped and uncapped heights until
     // React aborts the render loop, so derive its intrinsic height from the
     // dimensions this component owns instead.
-    const wanted =
-      (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT +
-      POPUP_PADDING_HEIGHT +
-      (searchable ? SEARCH_HEIGHT : 0);
+    const wanted = visible.length * optionHeightPx + dropdownGroupCount(visible) * OPTION_HEIGHT + POPUP_PADDING_HEIGHT + (searchable ? SEARCH_HEIGHT : 0);
+    const shown = Math.min(wanted, MENU_HEIGHT_MAX);
+    const box = popupBox(rectangle, shown, window.innerHeight);
+    // A menu wider than its trigger (a compact "Match all") grows to its
+    // minimum and slides as far as it must to stay inside the window.
+    const least = searchable ? Math.max(widthPxMin, SEARCHABLE_WIDTH_MIN) : widthPxMin;
+    const width = Math.min(Math.max(rectangle.width, least), window.innerWidth - POPUP_EDGE * 2);
+    // The menu hangs from the edge where the trigger's text starts: its right edge in a right-to-left interface.
+    const startLeft = document.documentElement.dir === 'rtl' ? rectangle.right - width : rectangle.left;
     const next = {
-      left: rectangle.left,
-      width: rectangle.width,
-      ...popupBox(rectangle, wanted, window.innerHeight),
+      left: Math.max(POPUP_EDGE, Math.min(startLeft, window.innerWidth - POPUP_EDGE - width)),
+      width,
+      ...box,
+      maxHeight: wanted > shown ? Math.min(box.maxHeight ?? shown, shown) : box.maxHeight,
     };
     setPosition((previous) =>
       previous &&
@@ -303,7 +456,7 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
         ? previous
         : next,
     );
-  }, [open, triggerRef, visible, searchable]);
+  }, [open, triggerRef, visible, optionHeightPx, searchable, widthPxMin]);
   return position;
 }
 
@@ -339,11 +492,9 @@ function useDropdownFocus<T>(state: Selection<T>, options: { readonly searchable
       return;
     }
     const timer = window.setTimeout(() => {
-      (listRef.current || popupRef.current)
-        ?.querySelectorAll('.dd-option')
-        [highlight]?.scrollIntoView({
-          block: 'nearest',
-        });
+      (listRef.current || popupRef.current)?.querySelectorAll('.dd-option')[highlight]?.scrollIntoView({
+        block: 'nearest',
+      });
     }, 0);
     return () => window.clearTimeout(timer);
   }, [open, highlight, listRef, popupRef]);
@@ -356,11 +507,7 @@ function useDropdownFocus<T>(state: Selection<T>, options: { readonly searchable
   }, [open, searchable, searchRef]);
 }
 
-function dropdownKey<T>(
-  event: KeyboardEvent<HTMLElement>,
-  control: Controller<T>,
-  props: DropdownProps<T>,
-): void {
+function dropdownKey<T>(event: KeyboardEvent<HTMLElement>, control: Controller<T>, props: DropdownProps<T>): void {
   if (!control.open) {
     if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
@@ -412,7 +559,16 @@ interface PopupProps<T> {
   readonly position: PopupPosition;
   readonly onKey: (event: KeyboardEvent<HTMLElement>) => void;
 }
+// The menu is never narrower than its trigger (or its stated least width), and
+// grows to its longest option so none is clipped, up to the window's edge.
+function menuStyle(position: PopupPosition): CSSProperties {
+  const room = Math.max(position.width, window.innerWidth - position.left - POPUP_EDGE);
+  assert(room >= position.width, 'menuStyle: the menu has at least its least width');
+  return { ...position, width: 'max-content', minWidth: position.width, maxWidth: room };
+}
+
 function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
+  const translate = useTranslate();
   return (
     <Popup
       mode="popover"
@@ -420,15 +576,15 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
       anchor={control.triggerRef.current ?? undefined}
       onClose={control.close}
       ref={control.popupRef}
-      className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.menuClassName || ''}`}
-      style={position}
+      className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.optionLayout === 'stacked' ? 'dd-stacked' : ''} ${props.menuClassName || ''}`}
+      style={menuStyle(position)}
     >
       {props.searchable && (
         <input
           ref={control.searchRef}
           className="dd-search"
           value={control.query}
-          placeholder={props.searchPlaceholder ?? 'Search…'}
+          placeholder={props.searchPlaceholder ?? translate('ui.search')}
           spellCheck={false}
           onChange={(event) => {
             control.setQuery(event.target.value);
@@ -437,34 +593,119 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
           onKeyDown={onKey}
         />
       )}
-      <div className="dd-list" ref={control.listRef}>
+      <div className="dd-list" ref={control.listRef} onMouseLeave={control.leave}>
         {control.visible.map((option, index) => (
           <Fragment key={`${String(option.value)}-${index}`}>
             {option.group && option.group !== control.visible[index - 1]?.group && (
-              <div className="dd-group-label">{option.group}</div>
+              <div className={`dd-group-label ${option.tone === 'collection' ? 'collection' : ''}`}>
+                {option.groupIcon && <span className="dd-group-icon">{option.groupIcon}</span>}
+                {option.group}
+              </div>
             )}
             <DropdownRow option={option} index={index} control={control} />
           </Fragment>
         ))}
-        {!control.visible.length && <div className="dd-empty">Nothing matches</div>}
+        {control.hiddenCount > 0 && <div className="dd-more">{translate('ui.dropdown.more', { count: control.hiddenCount })}</div>}
+        {props.loading === true && (
+          <div className="dd-loading">
+            <SkeletonRows count={2} />
+          </div>
+        )}
+        {/* A pinned row is not a match, so the list still says nothing matched beside it. */}
+        {props.loading !== true && !control.visible.some((option) => option.pinned !== true) && (
+          <div className="dd-empty">{translate('ui.dropdown.noMatch')}</div>
+        )}
+        {props.createRow !== undefined && <DropdownCreate row={props.createRow} control={control} onChange={props.onChange} />}
       </div>
     </Popup>
   );
 }
-function DropdownRow<T>({
-  option,
-  index,
+type CreateMode = { readonly kind: 'row' } | { readonly kind: 'editing'; readonly text: string; readonly tried: boolean };
+
+// The create row and its field. The field holds its own keys: arrows, Space and typeahead stay in it, Enter and
+// Escape are answered here and go no further, so neither the search field nor the menu acts on them.
+function DropdownCreate<T>({
+  row,
   control,
+  onChange,
 }: {
-  readonly option: DropdownOption<T>;
-  readonly index: number;
+  readonly row: DropdownCreateRow<T>;
   readonly control: Controller<T>;
+  readonly onChange: (value: T) => void;
 }) {
+  const [mode, setMode] = useState<CreateMode>({ kind: 'row' });
+  const errorId = useId();
+  if (mode.kind === 'row') {
+    return (
+      <div
+        className="dd-option dd-create"
+        role="option"
+        aria-selected={false}
+        onMouseEnter={() => control.setHighlight(-1)}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setMode({ kind: 'editing', text: '', tried: false })}
+      >
+        {row.icon && <span className="dd-icon">{row.icon}</span>}
+        <span className="dd-option-label">{row.label}</span>
+      </div>
+    );
+  }
+  const problem = row.validate(mode.text);
+  // Nothing typed yet is not a mistake to point out; a refused Enter is.
+  const shown = mode.text.length > 0 || mode.tried ? problem : undefined;
+  return (
+    <div className="dd-create-edit" role="group">
+      <div className="dd-create-field">
+        {row.icon && <span className="dd-icon">{row.icon}</span>}
+        <input
+          autoFocus
+          value={mode.text}
+          maxLength={DROPDOWN_CREATE_CHARS_MAX}
+          placeholder={row.placeholder}
+          aria-label={row.placeholder}
+          aria-invalid={shown !== undefined}
+          aria-describedby={shown === undefined ? undefined : errorId}
+          spellCheck={false}
+          onChange={(event) => setMode({ kind: 'editing', text: event.currentTarget.value, tried: mode.tried })}
+          onBlur={() => setMode({ kind: 'row' })}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setMode({ kind: 'row' });
+              return;
+            }
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (problem !== undefined) {
+                setMode({ kind: 'editing', text: mode.text, tried: true });
+                return;
+              }
+              const value = row.onCreate(mode.text);
+              setMode({ kind: 'row' });
+              control.close();
+              onChange(value);
+            }
+          }}
+        />
+      </div>
+      {shown !== undefined && (
+        <div className="dd-create-error" id={errorId} role="alert">
+          {shown}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DropdownRow<T>({ option, index, control }: { readonly option: DropdownOption<T>; readonly index: number; readonly control: Controller<T> }) {
   const highlight = index === control.highlight ? 'highlight' : '';
   const selected = option.value === control.committed.current && control.open ? 'selected' : '';
   return (
     <div
-      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''}`}
+      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''} ${option.disabled === true ? 'disabled' : ''} ${option.tone === 'collection' ? 'collection' : ''}`}
+      aria-disabled={option.disabled === true ? true : undefined}
+      title={option.title}
       onMouseEnter={() => control.hover(index)}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button === 0) {
@@ -475,18 +716,16 @@ function DropdownRow<T>({
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => control.pick(option)}
     >
-      <span className="dd-check">
-        {option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}
-      </span>
+      {/* The check sits at the end, so icons and images line up down the left edge. */}
       {option.icon && <span className="dd-icon">{option.icon}</span>}
       <span className="dd-option-label">{option.label}</span>
       {option.description && <span className="dd-description">{option.description}</span>}
+      {option.hint && <span className="dd-hint">{option.hint}</span>}
+      <span className="dd-check">{option.value === control.committed.current ? <CheckIcon size={11} /> : undefined}</span>
     </div>
   );
 }
 
 function dropdownGroupCount<T>(options: readonly DropdownOption<T>[]): number {
-  return options.filter(
-    (option, index) => option.group && option.group !== options[index - 1]?.group,
-  ).length;
+  return options.filter((option, index) => option.group && option.group !== options[index - 1]?.group).length;
 }

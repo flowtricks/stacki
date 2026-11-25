@@ -5,8 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
-const { blankItem, collectionHasContent, collectionOf, contentFieldsOf, fieldsOf, reassemble } =
-  load('src/features/cms/cmsSchema.ts');
+const { blankItem, collectionHasContent, collectionOf, contentFieldsOf, fieldsOf, reassemble } = load('src/features/cms/cmsSchema.ts');
 
 const helper = { __expr: '(entry) => entry.summary || entry.subtitle' };
 const image = { __expr: 'hero', __asset: 'src/assets/hero.avif' };

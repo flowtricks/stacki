@@ -11,6 +11,7 @@ export interface TreeView {
   readonly head?: string;
   readonly test?: string;
   readonly body?: readonly string[];
+  readonly bodyParts?: readonly string[];
   readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string }>>;
   readonly children?: readonly TreeView[] | undefined;
 }

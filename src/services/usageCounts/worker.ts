@@ -15,9 +15,7 @@ interface Environment {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RETENTION_DAYS = 366;
-const INSERT_DAY =
-  'INSERT INTO activity_days (day, count) VALUES (?1, 1) ' +
-  'ON CONFLICT(day) DO UPDATE SET count = count + 1';
+const INSERT_DAY = 'INSERT INTO activity_days (day, count) VALUES (?1, 1) ' + 'ON CONFLICT(day) DO UPDATE SET count = count + 1';
 
 export default {
   async fetch(request: Request, env: Environment): Promise<Response> {

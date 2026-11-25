@@ -1,0 +1,10 @@
+{
+ "status": 401,
+ "body": {
+  "errors": [
+   {
+    "message": "This user is locked due to having too many failed login attempts."
+   }
+  ]
+ }
+}

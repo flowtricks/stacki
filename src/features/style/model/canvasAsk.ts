@@ -1,10 +1,12 @@
 // Asking the rendered page which selectors match an element: the forms a
 // selector can be asked in, and the answers turned into matches (webflow.ts).
 
+import { assert } from '../../../../shared/core/assert';
 import type { CanvasAnswer } from '../../../editor/canvasReply';
 import { getHost } from './host';
 import type { ParsedRule } from './styleTypes';
 import type { MatchTarget } from './selectors';
+import { nestedWrappersOf, wrapperProbes } from './queryReach';
 import { hasCanvas, queryCanvas } from '../../../editor/canvasQuery';
 
 // ───────────────────────── Asking the rendered page ─────────────────────────
@@ -51,19 +53,35 @@ export const PSEUDO_ELEMENT_NAMES = [
   'backdrop',
   'file-selector-button',
 ] as const;
-export const PSEUDO_ELEMENT_RE = new RegExp(
-  `::?(?:${PSEUDO_ELEMENT_NAMES.join('|')})(?![\\w-])|::(?:part|slotted)\\([^)]*\\)`,
-  'g',
-);
+export const PSEUDO_ELEMENT_RE = new RegExp(`::?(?:${PSEUDO_ELEMENT_NAMES.join('|')})(?![\\w-])|::(?:part|slotted)\\([^)]*\\)`, 'g');
 
 export function askableForm(text: string): string | undefined {
-  const bare = text.replace(PSEUDO_ELEMENT_RE, '').replace(STATE_PSEUDO_RE, '').trim();
+  const bare = text.replace(PSEUDO_ELEMENT_RE, standIn).replace(STATE_PSEUDO_RE, standIn).trim();
   // What's left has to still be a selector: `:hover {}` on its own strips to
   // nothing, and `.a > :hover` to a dangling combinator.
   if (!bare || /[>+~]\s*$/.test(bare) || bare.startsWith('>')) {
     return undefined;
   }
+  // Only stand-ins left (`:hover {}`, `::before {}` on their own): that asks
+  // about every element, not this one.
+  if (bare.replace(/[\s*>+~]/g, '') === '') {
+    return undefined;
+  }
   return bare;
+}
+
+// What a stripped pseudo leaves in its place: nothing inside a compound
+// (`details:open` → `details`), and `*` where it was the whole compound, so
+// `:open > .faq_summary` (from `:open > &` nested in `.faq_summary`) asks
+// `* > .faq_summary` rather than the dangling `> .faq_summary`, which is no
+// selector, and the rule was never shown for the element it styles.
+function standIn(match: string, offset: number, whole: string): string {
+  assert(whole.slice(offset, offset + match.length) === match, 'A stand-in replaces what it matched');
+  const before = offset === 0 ? '' : (whole[offset - 1] ?? '');
+  const after = whole[offset + match.length] ?? '';
+  const startsCompound = before === '' || /[\s>+~(,]/.test(before);
+  const endsCompound = after === '' || /[\s>+~),:]/.test(after);
+  return startsCompound && endsCompound ? '*' : '';
 }
 
 /** The selectors worth asking the DOM about, mapped back to the rule texts
@@ -78,15 +96,30 @@ export function askableSelectors(rules: ParsedRule[]): Map<string, string[]> {
       if (!ask) {
         continue;
       }
-      const list = askedFor.get(ask);
-      if (list) {
-        list.push(selector.text);
-      } else {
-        askedFor.set(ask, [selector.text]);
+      addAsked(askedFor, ask, selector.text);
+    }
+  }
+  // Whether the element is, or sits inside, each nested query's wrapper: the
+  // context dropdown lists a nested query only where it can reach (queryReach.ts),
+  // and asking here costs no second round trip.
+  for (const wrapper of nestedWrappersOf(rules)) {
+    for (const probe of wrapperProbes(wrapper)) {
+      const ask = askableForm(probe);
+      if (ask !== undefined) {
+        addAsked(askedFor, ask, probe);
       }
     }
   }
   return askedFor;
+}
+
+function addAsked(askedFor: Map<string, string[]>, ask: string, text: string): void {
+  const list = askedFor.get(ask);
+  if (list) {
+    list.push(text);
+  } else {
+    askedFor.set(ask, [text]);
+  }
 }
 
 /** What the page said about one element: what it renders as, and which of the
@@ -200,9 +233,7 @@ export async function primeDomMatches(
   target.domMatched = matched;
 }
 
-export function* matchedTexts(
-  ask: Extract<CanvasAsk, { kind: 'asked' }>,
-): Generator<[string, boolean]> {
+export function* matchedTexts(ask: Extract<CanvasAsk, { kind: 'asked' }>): Generator<[string, boolean]> {
   for (const [selector, texts] of ask.askedFor) {
     const hit = ask.answer?.matched[selector];
     if (typeof hit !== 'boolean') {

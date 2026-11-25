@@ -5,11 +5,7 @@ import assert from 'node:assert/strict';
 import { mergeSource } from '../src/features/github/merge';
 test('external commit merges with disjoint draft edits', async () => {
   const base = 'one\ntwo\nthree\nfour\nfive\n';
-  const result = await mergeSource(
-    base,
-    base.replace('one', 'local'),
-    base.replace('five', 'remote'),
-  );
+  const result = await mergeSource(base, base.replace('one', 'local'), base.replace('five', 'remote'));
   assert.deepEqual(result, { kind: 'merged', source: 'local\ntwo\nthree\nfour\nremote\n' });
 });
 test('overlapping edits surface a conflict', async () => {

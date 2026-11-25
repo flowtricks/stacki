@@ -14,23 +14,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  applyCodePatch,
-  codePatchBytes,
-  diffCodePatch,
-  mergeTyping,
-  type CodeHunk,
-} from '#dist/shared/engine/codePatch.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { applyCodePatch, codePatchBytes, diffCodePatch, mergeTyping, type CodeHunk } from '#dist/shared/engine/codePatch.js';
 import { shiftUntouched } from '#dist/shared/engine/rebase.js';
 import { encodeUtf8, toByteSpan } from '#dist/shared/core/span.js';
 
 // Repository paths: the runner starts every suite at the repository root.
-const FIXTURE_DIRECTORIES = [
-  'test/corpus',
-  'test/fixtures/editor-core',
-  'test/fixtures/round-trip',
-];
+const FIXTURE_DIRECTORIES = ['test/corpus', 'test/fixtures/editor-core', 'test/fixtures/round-trip'];
 
 function fixtures(): readonly {
   readonly name: string;
@@ -89,22 +78,16 @@ function mutate(text: string, next: (below: number) => number): string {
 
 test('equal texts need no patch; one edit is one hunk with its witness', () => {
   assert.deepEqual(patch('<p>a</p>', '<p>a</p>'), []);
-  assert.deepEqual(patch('<p title="Old">', '<p title="New">'), [
-    { span: { start: 10, end: 13 }, expected: 'Old', text: 'New' },
-  ]);
+  assert.deepEqual(patch('<p title="Old">', '<p title="New">'), [{ span: { start: 10, end: 13 }, expected: 'Old', text: 'New' }]);
   assert.deepEqual(patch('ab', 'axb'), [{ span: { start: 1, end: 1 }, expected: '', text: 'x' }]);
   assert.deepEqual(patch('abc', ''), [{ span: { start: 0, end: 3 }, expected: 'abc', text: '' }]);
 });
 
 test('hunks sit on whole code points, in bytes of the baseline', () => {
   // é and è share their lead byte: a byte diff alone would replace half a character.
-  assert.deepEqual(patch('café!', 'cafè!'), [
-    { span: { start: 3, end: 5 }, expected: 'é', text: 'è' },
-  ]);
+  assert.deepEqual(patch('café!', 'cafè!'), [{ span: { start: 3, end: 5 }, expected: 'é', text: 'è' }]);
   // Offsets count bytes: the emoji before the edit is four of them.
-  assert.deepEqual(patch('🎉 a', '🎉 b'), [
-    { span: { start: 5, end: 6 }, expected: 'a', text: 'b' },
-  ]);
+  assert.deepEqual(patch('🎉 a', '🎉 b'), [{ span: { start: 5, end: 6 }, expected: 'a', text: 'b' }]);
   const bom = '﻿---\r\ntitle: x\r\n---\r\n<p>x</p>\r\n';
   const [hunk] = patch(bom, bom.replace('<p>x', '<p>y'));
   assert.deepEqual(hunk, { span: { start: 26, end: 27 }, expected: 'x', text: 'y' }, 'BOM counted');
@@ -157,19 +140,25 @@ test('a change past the diff budget is one region, still exact', () => {
   assert.equal(applyCodePatch(baseline, hunks), next);
 });
 
-test('a text past the file bound fails with resource-limit, never a truncated patch', () => {
-  const huge = 'x'.repeat(LIMITS.sourceBytesMax + 1);
-  assert.deepEqual(diffCodePatch('<p/>', huge), {
-    ok: false,
-    error: 'resource-limit',
-  });
+// Stacki has no size limit: only a text longer than the platform's string could
+// be refused, and no such text can be built to ask. So the bound is pinned from
+// the other side: texts of many megabytes, one-byte and multi-byte, patch whole.
+test('a text of many megabytes patches whole, never refused and never truncated', () => {
+  const huge = 'x'.repeat(24 * 1024 * 1024);
+  const small = diffCodePatch('<p/>', huge);
+  assert.ok(small.ok);
+  if (small.ok) {
+    assert.equal(applyCodePatch('<p/>', small.value), huge);
+  }
   // Multi-byte text is measured in bytes, not characters.
-  const wide = 'é'.repeat(Math.floor(LIMITS.sourceBytesMax / 2) + 1);
-  assert.ok(wide.length < LIMITS.sourceBytesMax, 'the character count alone fits');
-  assert.deepEqual(diffCodePatch('', wide), {
-    ok: false,
-    error: 'resource-limit',
-  });
+  const wide = 'é'.repeat(6 * 1024 * 1024);
+  const whole = diffCodePatch('', wide);
+  assert.ok(whole.ok);
+  if (whole.ok) {
+    assert.equal(whole.value.length, 1);
+    assert.equal(codePatchBytes(whole.value), 12 * 1024 * 1024, 'twice the characters');
+    assert.equal(applyCodePatch('', whole.value), wide);
+  }
 });
 
 test('applying a patch checks every witness', () => {
@@ -177,10 +166,7 @@ test('applying a patch checks every witness', () => {
     () => applyCodePatch('<p>a</p>', [{ span: toByteSpan(3, 4), expected: 'b', text: 'c' }]),
     /Assertion failed: A hunk replaces the text it names/,
   );
-  assert.throws(
-    () => applyCodePatch('é', [{ span: toByteSpan(1, 2), expected: '', text: '' }]),
-    /Assertion failed: A hunk starts and ends on code points/,
-  );
+  assert.throws(() => applyCodePatch('é', [{ span: toByteSpan(1, 2), expected: '', text: '' }]), /Assertion failed: A hunk starts and ends on code points/);
 });
 
 test('mergeTyping merges disjoint changes and refuses touching ones', () => {
@@ -229,12 +215,7 @@ test('a code hunk rebases through commits that do not touch it, and only those',
   assert.deepEqual(shiftUntouched(hunk, [splice(20, 22, '')]), hunk);
   // Inside, overlapping, or at either edge: the bytes it names changed, or the
   // order is a guess — `rebaseSpan` would let the span hold the change.
-  for (const touching of [
-    splice(11, 12, 'y'),
-    splice(8, 11, ''),
-    splice(14, 14, 'z'),
-    splice(9, 10, ''),
-  ]) {
+  for (const touching of [splice(11, 12, 'y'), splice(8, 11, ''), splice(14, 14, 'z'), splice(9, 10, '')]) {
     assert.equal(shiftUntouched(hunk, [touching]), undefined, JSON.stringify(touching.range));
   }
 });

@@ -40,10 +40,7 @@ export function sharedAssertionDensity(root: string, files: readonly string[]): 
   return { functions, assertions, perFunction };
 }
 
-export function countFile(
-  file: string,
-  text: string,
-): { readonly functions: number; readonly assertions: number } {
+export function countFile(file: string, text: string): { readonly functions: number; readonly assertions: number } {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
   let functions = 0;
   let assertions = 0;

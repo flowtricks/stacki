@@ -45,11 +45,7 @@ test('CMS discovers general-only modules throughout src and preserves unrelated 
     const data = record(record(before['value'])['data']);
     assert.equal(data['SITE_NAME'], 'Original');
     assert.equal(data['privateSetting'], undefined);
-    const saved = await fixture.post(
-      'cms:write',
-      { ...payload, data: { ...data, SITE_NAME: 'Updated' } },
-      before['versions'],
-    );
+    const saved = await fixture.post('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }, before['versions']);
     assert.equal(saved['error'], undefined);
     assert.equal(record(saved['value'])['ok'], true);
     assert.equal(await fixture.rooms.read('src/consts.ts'), source.replace('Original', 'Updated'));

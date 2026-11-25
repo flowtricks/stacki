@@ -5,7 +5,7 @@
 //
 // Why atomic: a plain writeFileSync truncates the target first, so a crash, a
 // full disk or a concurrent reader can observe a half-written page. Here the
-// bytes go to a temporary file in a stable hidden child directory (same filesystem,
+// bytes go to a temporary file in a project’s .stacki/io directory (same filesystem,
 // so the rename is atomic), are flushed, and replace the target in one rename.
 // The target holds the old bytes or the new ones, never a mixture.
 //
@@ -44,7 +44,8 @@ import { assert } from '../../shared/core/assert';
 import { toDigest, type Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
-import { ATOMIC_DIRECTORY, prepareAtomicDirectory } from './atomicDirectory';
+import { prepareAtomicDirectory } from './atomicDirectory';
+import { translateMain } from '../lib/mainLocale';
 
 /** Why a write did not happen, or did without a durability promise. */
 export type AtomicWriteError =
@@ -71,7 +72,11 @@ export function digestOf(bytes: Uint8Array | string): Digest {
 /** True for the temporary and lock files the write protocol creates, so the
  * project watcher can ignore them instead of reporting an outside edit. */
 export function isAtomicTemporary(name: string): boolean {
-  if (name.split(/[\\/]/).includes(ATOMIC_DIRECTORY)) {
+  if (/(?:^|[\\/])\.stacki[\\/]io(?:[\\/]|$)/.test(name)) {
+    return true;
+  }
+  // Recognize older staging folders until projects have removed them.
+  if (name.split(/[\\/]/).includes('.stacki-io')) {
     return true;
   }
   const base = path.basename(name);
@@ -101,7 +106,7 @@ export function writeTargetOf(file: string): Result<string, AtomicWriteError> {
     return ok(fs.realpathSync(absolute));
   } catch (error: unknown) {
     if (isMissing(error)) {
-      return err({ code: 'filesystem', message: `${file} is a symlink to a missing file` });
+      return err({ code: 'filesystem', message: translateMain('error.documents.symlinkMissing', { file }) });
     }
     return filesystemError(file, error);
   }
@@ -111,7 +116,7 @@ export function writeTargetOf(file: string): Result<string, AtomicWriteError> {
  * what the file holds afterwards; this reports only what it did. */
 export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void, AtomicWriteError> {
   if (bytes.length > LIMITS.sourceBytesMax) {
-    return err({ code: 'filesystem', message: `${file} would exceed the 10 MB source limit` });
+    return err({ code: 'filesystem', message: translateMain('error.documents.sourceLimit', { file }) });
   }
   const target = writeTargetOf(file);
   if (!target.ok) {
@@ -127,18 +132,23 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
     return err({
       code: 'filesystem',
       message:
-        `${path.basename(target.value)} is hard-linked to another file, so Stacki will not ` +
-        `save it: saving would leave the other copy with the old text.`,
+        `${path.basename(target.value)} is hard-linked to another file, so Stacki will not ` + `save it: saving would leave the other copy with the old text.`,
+    });
+  }
+  // Replacing by rename would succeed even though the file itself forbids writing (the rename
+  // needs the folder's permission, not the file's), silently overriding a protection its owner
+  // set on purpose. Without any write bit the file is read-only, and the save says so.
+  if ((stats.mode & 0o222) === 0) {
+    return err({
+      code: 'filesystem',
+      message: `${path.basename(target.value)} is read-only, so Stacki will not save it. Make it writable to edit it here.`,
     });
   }
   const directory = prepareAtomicDirectory(target.value);
   if (!directory.ok) {
     return directory;
   }
-  const temporary = path.join(
-    directory.value,
-    `${TEMPORARY_PREFIX}${randomUUID()}${TEMPORARY_SUFFIX}`,
-  );
+  const temporary = path.join(directory.value, `${TEMPORARY_PREFIX}${randomUUID()}${TEMPORARY_SUFFIX}`);
   const staged = stageTemporary(temporary, bytes, stats);
   if (!staged.ok) {
     return discardTemporary(temporary, file, staged.error.message);
@@ -159,12 +169,9 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
 /** Create `file` with `bytes`, failing with `exists` if anything is there: a
  * creation can never overwrite. A crash mid-creation can leave a partial new
  * file; no existing bytes are ever at risk. */
-export function createFileExclusive(
-  file: string,
-  bytes: Uint8Array,
-): Result<void, AtomicWriteError> {
+export function createFileExclusive(file: string, bytes: Uint8Array): Result<void, AtomicWriteError> {
   if (bytes.length > LIMITS.sourceBytesMax) {
-    return err({ code: 'filesystem', message: `${file} would exceed the 10 MB source limit` });
+    return err({ code: 'filesystem', message: translateMain('error.documents.sourceLimit', { file }) });
   }
   const target = path.resolve(file);
   let descriptor: number | undefined;
@@ -174,7 +181,7 @@ export function createFileExclusive(
     fs.fsyncSync(descriptor);
   } catch (error: unknown) {
     if (errorCode(error) === 'EEXIST') {
-      return err({ code: 'exists', message: `${file} already exists` });
+      return err({ code: 'exists', message: translateMain('error.documents.exists', { file }) });
     }
     return filesystemError(file, error);
   } finally {
@@ -185,11 +192,7 @@ export function createFileExclusive(
   return flushDirectory(path.dirname(target), file);
 }
 
-function stageTemporary(
-  temporary: string,
-  bytes: Uint8Array,
-  target: fs.Stats,
-): Result<void, AtomicWriteError> {
+function stageTemporary(temporary: string, bytes: Uint8Array, target: fs.Stats): Result<void, AtomicWriteError> {
   const mode = target.mode & MODE_BITS;
   let descriptor: number | undefined;
   try {
@@ -224,10 +227,7 @@ function keepOwner(descriptor: number, target: fs.Stats): void {
   try {
     fs.fchownSync(descriptor, target.uid, target.gid);
   } catch (error: unknown) {
-    throw new Error(
-      `Saving would change the file's owner (${target.uid}:${target.gid}), ` +
-        `and it cannot be kept: ${errorMessage(error)}`,
-    );
+    throw new Error(`Saving would change the file's owner (${target.uid}:${target.gid}), ` + `and it cannot be kept: ${errorMessage(error)}`);
   }
 }
 
@@ -248,7 +248,7 @@ function flushDirectory(directory: string, file: string): Result<void, AtomicWri
     }
     return err({
       code: 'not-durable',
-      message: `${file} was saved, but its folder could not be flushed: ${errorMessage(error)}`,
+      message: translateMain('error.documents.flushFailed', { file, reason: errorMessage(error) }),
     });
   } finally {
     if (descriptor !== undefined) {
@@ -258,26 +258,20 @@ function flushDirectory(directory: string, file: string): Result<void, AtomicWri
   return ok(undefined);
 }
 
-function discardTemporary(
-  temporary: string,
-  file: string,
-  reason: string,
-): Result<never, AtomicWriteError> {
+function discardTemporary(temporary: string, file: string, reason: string): Result<never, AtomicWriteError> {
   try {
     fs.rmSync(temporary, { force: true });
   } catch (error: unknown) {
     return err({
       code: 'filesystem',
-      message:
-        `Could not save ${file} or remove temporary file ${temporary}: ` +
-        `${reason}; ${errorMessage(error)}`,
+      message: translateMain('error.documents.saveFailedTemporary', { file, temporary, reason, detail: errorMessage(error) }),
     });
   }
-  return err({ code: 'filesystem', message: `Could not save ${file}: ${reason}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.saveFailed', { file, reason }) });
 }
 
 function filesystemError(file: string, error: unknown): Result<never, AtomicWriteError> {
-  return err({ code: 'filesystem', message: `Could not save ${file}: ${errorMessage(error)}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.saveFailed', { file, reason: errorMessage(error) }) });
 }
 
 export function isMissing(error: unknown): boolean {

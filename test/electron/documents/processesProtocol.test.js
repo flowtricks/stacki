@@ -24,13 +24,7 @@ const { NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js')
 const { toFilePath } = require('#dist/shared/core/brand.js');
 const { isAtomicTemporary } = require('#dist/electron/documents/atomicWrite.js');
 const { atomicDirectoryOf } = require('#dist/electron/documents/atomicDirectory.js');
-const {
-  protocolLeftovers,
-  realHost,
-  runChild,
-  scratch,
-  sha256,
-} = require('../../helpers/platformSupport.js');
+const { protocolLeftovers, realHost, runChild, scratch, sha256 } = require('../../helpers/platformSupport.js');
 
 const WRITERS = 4;
 const ROUNDS = 40;
@@ -39,11 +33,7 @@ test('cooperating writers in separate processes never lose an update', async (co
   await scratch(os.tmpdir(), async (root) => {
     const file = path.join(root, 'page.astro');
     fs.writeFileSync(file, '');
-    const runs = await Promise.all(
-      Array.from({ length: WRITERS }, (_, id) =>
-        runChild({ mode: 'cooperate', file, id: `w${id}`, rounds: ROUNDS }),
-      ),
-    );
+    const runs = await Promise.all(Array.from({ length: WRITERS }, (_, id) => runChild({ mode: 'cooperate', file, id: `w${id}`, rounds: ROUNDS })));
     const events = runs.flatMap((run) => {
       assert.equal(run.code, 0, 'each writer exits cleanly');
       return run.lines.map((line) => JSON.parse(line));
@@ -55,10 +45,7 @@ test('cooperating writers in separate processes never lose an update', async (co
     assert.equal(lines.length, applied, 'every applied write is in the file: no lost update');
     assert.equal(new Set(lines).size, lines.length, 'and none was written twice');
     for (const event of refused) {
-      assert.ok(
-        ['region-externally-modified', 'write-race', 'write-failed'].includes(event.reason),
-        `a refusal names the race: ${event.reason}`,
-      );
+      assert.ok(['region-externally-modified', 'write-race', 'write-failed'].includes(event.reason), `a refusal names the race: ${event.reason}`);
       if (process.platform !== 'win32') {
         assert.notEqual(event.reason, 'write-failed', 'no writer failed outright');
       }
@@ -122,11 +109,7 @@ for (const at of ['after-rename', 'before-rename']) {
       assertKilled(run);
       const [staged, ...rest] = run.lines.map((line) => JSON.parse(line));
       assert.deepEqual(rest, [], 'it reported nothing after staging: no outcome was delivered');
-      assert.equal(
-        staged.candidate,
-        sha256('candidate\n'),
-        'the candidate checksum is deterministic',
-      );
+      assert.equal(staged.candidate, sha256('candidate\n'), 'the candidate checksum is deterministic');
       const verdict = reconcileUncertain({
         baseChecksum: staged.base,
         candidateChecksum: staged.candidate,
@@ -172,11 +155,7 @@ test('a crash, then another writer: reconciliation says the file changed again',
 
 function assertKilled(run) {
   if (process.platform === 'win32') {
-    assert.equal(
-      run.signal ?? undefined,
-      undefined,
-      'Windows reports forced termination as an exit code',
-    );
+    assert.equal(run.signal ?? undefined, undefined, 'Windows reports forced termination as an exit code');
     assert.notEqual(run.code, 0, 'the writer died inside the write');
   } else {
     assert.equal(run.signal, 'SIGKILL', 'the writer died inside the write');

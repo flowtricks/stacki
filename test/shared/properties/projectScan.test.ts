@@ -3,12 +3,13 @@
 // entry poisons selection, routing, and the palette.
 //
 // Methodology: a full scan passes; each known-bad entry shape fails with a
-// pinned message; array bounds from LIMITS are exercised.
+// pinned message. Entry counts and title lengths are bounded only by the
+// platform, so those bounds are pinned and large scans are accepted.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanResult } from '#dist/shared/properties/projectScan.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -51,23 +52,38 @@ test('a component without an extended or root tag carries undefined, never null'
   const parsed = parseScanResult({ ...goodScan, components: [bare] });
   assert.equal(parsed.components[0]?.extendsTag, undefined);
   assert.equal(parsed.components[0]?.renderTag, undefined);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...bare, extendsTag: jsonNull }] }), /extendsTag: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...bare, renderTag: jsonNull }] }), /renderTag: expected object/);
+});
+
+// The component a template opens with: the palette follows these names to find sections.
+test('a root component passes, and every wrong shape of it fails', () => {
+  const base = { path: '/x', name: 'Hero', folder: '' };
+  const parsed = parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'Section' }, { ...base, rootComponent: undefined }, base] });
+  assert.equal(parsed.components[0]?.rootComponent, 'Section');
+  assert.equal(parsed.components[1]?.rootComponent, undefined);
+  assert.equal(parsed.components[2]?.rootComponent, undefined);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: jsonNull }] }), /rootComponent: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 7 }] }), /rootComponent: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: '' }] }), /rootComponent: expected non-empty string/);
   assert.throws(
-    () => parseScanResult({ ...goodScan, components: [{ ...bare, extendsTag: jsonNull }] }),
-    /extendsTag: expected string/,
+    () => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'S'.repeat(LIMITS.tagNameCharsMax + 1) }] }),
+    /rootComponent: exceeds 128 chars/,
+  );
+  assert.equal(
+    parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'S'.repeat(LIMITS.tagNameCharsMax) }] }).components[0]?.rootComponent?.length,
+    LIMITS.tagNameCharsMax,
   );
   assert.throws(
-    () => parseScanResult({ ...goodScan, components: [{ ...bare, renderTag: jsonNull }] }),
-    /renderTag: expected object/,
+    () => parseScanResult({ ...goodScan, layouts: [{ ...goodScan.layouts[0], rootComponent: [] }] }),
+    /layouts\[0\]\.rootComponent: expected string/,
   );
 });
 
 test('negative space: wrong entry shapes fail with pinned messages', () => {
   assert.throws(() => parseScanResult(jsonNull), /expected object/);
   assert.throws(() => parseScanResult({ ...goodScan, pages: {} }), /pages: expected array/);
-  assert.throws(
-    () => parseScanResult({ ...goodScan, pages: [{ path: '/x', name: 'x.astro' }] }),
-    /route: expected string/,
-  );
+  assert.throws(() => parseScanResult({ ...goodScan, pages: [{ path: '/x', name: 'x.astro' }] }), /route: expected string/);
   assert.throws(
     () =>
       parseScanResult({
@@ -126,27 +142,18 @@ test('negative space: wrong entry shapes fail with pinned messages', () => {
   );
 });
 
-test('bounds: entry counts fail at LIMITS', () => {
+test('bounds: entry counts are the platform ceiling, so a large scan is accepted', () => {
+  // An array longer than these bounds cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.scanEntriesMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(LIMITS.scanFoldersMax, PLATFORM_LIMITS.arrayLengthMax);
   const page = goodScan.pages[0];
-  assert.throws(
-    () =>
-      parseScanResult({
-        ...goodScan,
-        pages: Array.from({ length: LIMITS.scanEntriesMax + 1 }, () => page),
-      }),
-    /exceeds \d+ entries/,
-  );
-  assert.throws(
-    () =>
-      parseScanResult({
-        ...goodScan,
-        pageFolders: Array.from({ length: LIMITS.scanFoldersMax + 1 }, () => 'f'),
-      }),
-    /exceeds \d+ entries/,
-  );
+  const pages = Array.from({ length: 10_000 }, () => page);
+  assert.equal(parseScanResult({ ...goodScan, pages }).pages.length, pages.length);
+  const pageFolders = Array.from({ length: 10_000 }, () => 'f');
+  assert.equal(parseScanResult({ ...goodScan, pageFolders }).pageFolders.length, pageFolders.length);
 });
 
-test('page titles are optional bounded strings, never unchecked display data', () => {
+test('page titles are optional strings, never unchecked display data', () => {
   const page = { path: '/site/src/pages/about.astro', name: 'about.astro', route: '/about' };
   const scan = (title: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, title }] });
   assert.equal(scan('About us').pages[0]?.title, 'About us');
@@ -154,5 +161,82 @@ test('page titles are optional bounded strings, never unchecked display data', (
   for (const value of [jsonNull, 42, {}, []]) {
     assert.throws(() => scan(value), /title: expected string/);
   }
-  assert.throws(() => scan('x'.repeat(LIMITS.ipcFieldCharsMax + 1)), /title: exceeds/);
+  // A title is bounded only by the string: a longer one cannot be built, so a long title is accepted.
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const long = 'x'.repeat(1024 * 1024);
+  assert.equal(scan(long).pages[0]?.title, long);
+});
+
+test('inherited page titles use the same boundary validation as direct titles', () => {
+  const page = {
+    path: '/site/src/pages/resources.astro',
+    name: 'resources.astro',
+    route: '/resources',
+  };
+  const scan = (inheritedTitle: unknown) => parseScanResult({ ...goodScan, pages: [{ ...page, inheritedTitle }] });
+  assert.equal(scan('Resources').pages[0]?.inheritedTitle, 'Resources');
+  assert.equal(scan(undefined).pages[0]?.inheritedTitle, undefined);
+  for (const value of [jsonNull, 42, {}, []]) {
+    assert.throws(() => scan(value), /inheritedTitle:/);
+  }
+  const long = 'x'.repeat(1024 * 1024);
+  assert.equal(scan(long).pages[0]?.inheritedTitle, long);
+});
+
+// The project's length unit rides on the scan (lengthUnit.ts): parsed when present,
+// absent from an older host, refused when malformed.
+test('the scan carries the project length unit', () => {
+  const rem = parseScanResult({ ...structuredClone(goodScan), lengthUnit: { kind: 'rem', rootFontPx: 16 } });
+  assert.deepEqual(rem.lengthUnit, { kind: 'rem', rootFontPx: 16 });
+  assert.equal(parseScanResult(structuredClone(goodScan)).lengthUnit, undefined);
+  assert.throws(() => parseScanResult({ ...structuredClone(goodScan), lengthUnit: { kind: 'vw' } }), {
+    message: 'LengthUnit.kind: expected "px" or "rem"',
+  });
+});
+
+// Each component's per-file shares (`uses`) are what the Components panel swaps the open file's live
+// count into (src/app/model/liveInstanceCounts.ts): they must name project files the same way on
+// every platform, list each file once, and add up to the total they explain.
+test('a component carries its per-file instance shares, which sum to its count', () => {
+  const component = (uses: unknown, instances: unknown = 3) => ({ path: '/p/src/components/Div.astro', name: 'Div', folder: '', instances, uses });
+  const scan = (uses: unknown, instances?: unknown) => parseScanResult({ ...structuredClone(goodScan), components: [component(uses, instances)] });
+  const good = [
+    { file: 'src/pages/index.astro', count: 1 },
+    { file: 'src/pages/about.astro', count: 2 },
+  ];
+  assert.deepEqual(scan(good).components[0]?.uses, good);
+  assert.deepEqual(scan([], 0).components[0]?.uses, [], 'an unused component lists no file');
+  assert.equal(parseScanResult(structuredClone(goodScan)).components[0]?.uses, undefined, 'absent from an older host');
+});
+
+test('malformed instance shares are refused with a pinned reason', () => {
+  const scan = (uses: unknown, instances: unknown = 1) =>
+    parseScanResult({ ...structuredClone(goodScan), components: [{ path: '/p/src/components/Div.astro', name: 'Div', folder: '', instances, uses }] });
+  const rows: ReadonlyArray<readonly [unknown, RegExp, unknown?]> = [
+    [{}, /uses: expected array/],
+    [[jsonNull], /expected object/],
+    [[{ file: 'src/pages/index.astro', count: 2 }], /uses: counts do not sum to instances/],
+    [[{ file: 'src/pages/index.astro', count: 0 }], /count: a file that uses the component none is left out/, 0],
+    [[{ file: 'src/pages/index.astro', count: 1.5 }], /count: expected an integer/],
+    [[{ file: 'src/pages/index.astro', count: '1' }], /count: expected an integer/],
+    [[{ file: '/p/src/pages/index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: 'src\\pages\\index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: '../index.astro', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [[{ file: '', count: 1 }], /file: expected a project-relative, \/-separated path/],
+    [
+      [
+        { file: 'src/pages/index.astro', count: 1 },
+        { file: 'src/pages/index.astro', count: 1 },
+      ],
+      /file: listed twice/,
+      2,
+    ],
+  ];
+  for (const [uses, reason, instances] of rows) {
+    assert.throws(() => scan(uses, instances ?? 1), reason);
+  }
+  assert.throws(
+    () => parseScanResult({ ...structuredClone(goodScan), components: [{ path: '/p/x.astro', name: 'X', folder: '', uses: [] }] }),
+    /uses: written only beside instances/,
+  );
 });

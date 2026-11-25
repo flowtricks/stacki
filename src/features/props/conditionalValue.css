@@ -1,0 +1,605 @@
+/* A conditional value (ConditionalValue.tsx): the purple chip a bound value
+   wears, the read-only summary under it, and the Value conditions editor.
+   Fills, never borders: groups sit on a lighter fill than the pop-up. */
+
+.conditional-badge,
+.conditional-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* The chip takes the place of the field it stands for, in the field's own box
+   (controls.css `input`): full width, the same type size, padding, edge and
+   radius, so the row does not move when a value becomes conditional. */
+.conditional-chip {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: normal;
+  cursor: pointer;
+}
+/* Its own hover, a brighter purple of the same family: written through
+   :not(:disabled) so it outweighs the base `button:hover` grey (controls.css). */
+.conditional-chip:hover:not(:disabled),
+.conditional-chip[aria-expanded='true'] {
+  background: rgba(146, 116, 255, 0.38);
+  color: #d7ccff;
+}
+
+.conditional-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-summary {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: start;
+  cursor: pointer;
+}
+.conditional-summary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.conditional-lines,
+.conditional-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.conditional-lines {
+  gap: 6px;
+}
+.conditional-heading {
+  color: var(--text);
+}
+.conditional-bullet::before {
+  content: '• ';
+}
+.conditional-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conditional-empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* The editor. */
+.conditional-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 300px;
+  /* In its pop-up's column: as tall as the window allows, the head fixed and the body scrolling. */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* The groups, New group and the Else: the one region that scrolls, by wheel,
+   keys and drag, with a stable gutter so the rows do not shift as it appears. */
+.conditional-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.conditional-editor:has(.conditional-editor-body) {
+  overflow: hidden;
+}
+.conditional-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  /* A group is a darker well in the popover, and the fields inside it are lighter than the well, so the
+     three surfaces (popover, group, field) read apart. 5% white on the popover left them within a shade. */
+  background: rgba(0, 0, 0, 0.3);
+  --bg-input: rgba(255, 255, 255, 0.11);
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --text-dim: rgba(255, 255, 255, 0.78);
+}
+.conditional-group:focus-visible {
+  outline: 1px solid var(--accent);
+}
+.conditional-group.is-dragging {
+  opacity: 0.4;
+}
+/* Where a dragged group would land: the shared drop line, in the gap above or below. */
+.conditional-gap {
+  position: absolute;
+  inset-inline: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.conditional-gap.is-before {
+  top: -10px;
+}
+.conditional-gap.is-after {
+  bottom: -10px;
+}
+/* The grip shows on hover, at the group's top-left, and is what a drag starts from. */
+.conditional-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 18px;
+  margin-inline-start: -4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: grab;
+  opacity: 0;
+}
+.conditional-group:hover .conditional-grip,
+.conditional-group:focus-within .conditional-grip {
+  opacity: 1;
+}
+.conditional-grip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* Between the conditions and the value they give. */
+.conditional-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.conditional-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-group-head > .loop-settings-remove {
+  margin-inline-start: auto;
+}
+/* As wide as its word, not the row: the trigger is full width by default (dropdown.css). */
+.dd-trigger.conditional-match {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  gap: 4px;
+}
+.conditional-or {
+  align-self: center;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-condition {
+  /* Prop and operator as wide as their words, the values the rest of the
+     line; in a narrow panel the values wrap under them, and the row's one
+     remove stays at the end. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+}
+.conditional-condition > .dd-trigger.conditional-subject,
+.conditional-condition > .dd-trigger.conditional-operator {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+}
+.conditional-condition > .multi-select,
+.conditional-condition > .conditional-values-none {
+  flex: 1 1 160px;
+}
+.conditional-condition > .loop-settings-remove {
+  margin-inline-start: auto;
+}
+.conditional-add,
+.conditional-add-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+/* A ghost text button, left under the conditions it adds to. */
+.conditional-add {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+/* "+ New group" sits on a full-width line, the line running out on both sides. */
+.conditional-add-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conditional-add-group-row::before,
+.conditional-add-group-row::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.conditional-add-group {
+  flex: 0 0 auto;
+}
+.conditional-add:hover:not(:disabled),
+.conditional-add-group:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.conditional-add:disabled,
+.conditional-add-group:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.conditional-value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-value-row > .attr-value-field > input {
+  width: 100%;
+}
+.conditional-value-label {
+  flex: 0 0 auto;
+}
+
+/* A spread attribute (propAttributes.tsx SpreadRow): its code, and nothing to edit. */
+.attr-row.spread {
+  cursor: default;
+}
+.attr-row.spread .attr-name {
+  font-family: var(--mono);
+}
+
+/* Where a prop field's Value conditions editor opens from (PropFieldLabel.tsx):
+   out of the flow, so the field's gaps between its label and control stay as they were. */
+.conditional-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* "If [all] conditions in this group are true" stays one line beside its picker. */
+.conditional-group-head {
+  white-space: nowrap;
+}
+.conditional-phrase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A style attribute's branch value: the CSS editor's highlighting in an input's box. */
+.conditional-css-input {
+  width: 100%;
+}
+.conditional-css {
+  white-space: normal;
+}
+
+/* The class-list editor: a row per class, its grip, field and remove on one line. */
+.conditional-bullet-when {
+  color: var(--text-faint);
+}
+.class-list-line {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* In the attribute editor, the Value label sits on the chip's line, not
+   centred against the chip and the summary under it: the chip is an input's
+   height, so the label takes an input's top padding. */
+.attr-editor-row:has(> .conditional-field) {
+  align-items: flex-start;
+}
+.attr-editor-row:has(> .conditional-field) > span {
+  padding-top: 7px;
+}
+
+/* In a class row the grip always shows, muted, so every row lines up the same. */
+.class-list-entry .conditional-grip {
+  opacity: 0.5;
+}
+.class-list-entry:hover .conditional-grip,
+.class-list-entry:focus-within .conditional-grip {
+  opacity: 1;
+}
+.conditional-group-head > .loop-settings-remove {
+  margin-inline-start: auto;
+}
+
+/* The template condition editor (ConditionExpressionEditor.tsx): its value is a field of its own beside the operator. */
+.conditional-condition > .conditional-value-input,
+.conditional-condition > .dd-trigger.conditional-value-pick {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.conditional-condition > .dd-trigger.conditional-subject .code-inline {
+  background: transparent;
+  padding: 0;
+}
+.condition-expression {
+  min-width: 0;
+}
+/* In the narrow Settings column a row stays on one line, its remove at the right end: the name and the operator
+   give way (their labels clip) before the row wraps. */
+.condition-expression .conditional-condition {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.condition-expression .conditional-condition > .dd-trigger.conditional-subject,
+.condition-expression .conditional-condition > .dd-trigger.conditional-operator {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.condition-expression .conditional-condition > .conditional-values-none {
+  flex: 0 0 0;
+}
+.condition-expression .conditional-condition > .conditional-value-input,
+.condition-expression .conditional-condition > .dd-trigger.conditional-value-pick {
+  flex: 1 1 60px;
+}
+.condition-expression .conditional-condition > .loop-settings-remove {
+  flex: 0 0 auto;
+}
+/* The if's name menu sits in a box the data picker opens from: the box takes the name's place in the row. */
+.condition-expression .conditional-condition > .conditional-subject-anchor {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.conditional-subject-anchor > .dd-trigger.conditional-subject {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.condition-expression .conditional-condition > .multi-select {
+  flex: 1 1 60px;
+  min-width: 0;
+}
+/* Otherwise: its label, then the Nothing / Else branch switch, on one line. */
+.condition-otherwise {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+/* Two equal segments of a fixed width: hovering or pressing one never moves the other (SegmentedControl). */
+.condition-otherwise > .u-segmented.condition-otherwise-switch {
+  flex: 0 0 auto;
+  width: 184px;
+}
+.condition-otherwise-switch > .u-segmented-button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A default computed by code the conditions cannot show (ConditionalDefaultField.tsx ComputedDefault):
+   its one word, then the code on the field's own fill, wrapping rather than clipping at the panel's widths. */
+.conditional-computed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-computed-code {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A prop's Default value set by conditions (ConditionalDefaultField.tsx): the
+   field's own full-width Conditional chip, its values after it on the same
+   line, cut to the room there is; each option's own default is on its row. */
+.conditional-default {
+  display: flex;
+  min-width: 0;
+}
+.conditional-default-chip {
+  min-width: 0;
+  overflow: hidden;
+}
+.conditional-default-chip > svg {
+  flex: none;
+}
+.conditional-default-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(215, 204, 255, 0.72);
+  font-weight: 400;
+}
+.conditional-value-row > .conditional-value-choice {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The head: the title with its `{}` beside it, as Kind {} and Default value {} sit in a prop's settings; the remove at the far end. */
+.conditional-editor > .loop-property-head {
+  justify-content: flex-start;
+  gap: 6px;
+}
+.conditional-editor > .loop-property-head > .loop-settings-remove {
+  margin-inline-start: auto;
+}
+
+/* Code the conditions cannot read (ComputedField): the same pill as
+   Conditional, greyed and not pressable, its code under it and the {} at the
+   pill's end, which opens the code editor. */
+.conditional-computed-field {
+  position: relative;
+}
+.conditional-badge-computed,
+.conditional-chip-computed {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: default;
+}
+.conditional-computed-toggle {
+  position: absolute;
+  top: 3px;
+  inset-inline-end: 3px;
+}
+
+/* A fallback (`label ?? named[variant]`): its values in a row, the operator muted between them. */
+.conditional-fallback,
+.conditional-fallback-operand {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-fallback-operator {
+  color: var(--text-faint);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+.conditional-result .conditional-computed-code,
+.conditional-fallback .conditional-computed-code {
+  display: inline;
+  width: auto;
+  padding: 1px 4px;
+}
+
+/* A test the rows cannot show: the Computed chip, then its code on one line,
+   locked, as wide as the row allows; the code clips with an ellipsis and the
+   whole of it is the tooltip. */
+.conditional-condition > .conditional-code-condition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 160px;
+  min-width: 0;
+  padding-block: 3px;
+  padding-inline: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.conditional-code-condition > .conditional-chip-computed {
+  flex: none;
+  width: auto;
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+  background: var(--bg-hover);
+}
+.conditional-code-condition-code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conditional-condition > .conditional-code-condition + .conditional-values-none {
+  display: none;
+}
+
+/* Under a computed value's row, the prop condition it is the same as: a quiet
+   row on the secondary fill, its words muted, a compact Switch at its end. */
+.conditional-plainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-block: 2px;
+  padding-inline: 8px 4px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-plainer-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conditional-plainer-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.conditional-plainer-switch:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* A Computed part being edited: the code editor takes the rest of the row. */
+.conditional-code-condition.is-editing > .expr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.conditional-code-condition.is-editable {
+  cursor: text;
+}
+.conditional-code-condition.is-editable:hover {
+  background: var(--bg-hover);
+}
+.conditional-code-condition > .conditional-code-condition-edit {
+  flex: none;
+  margin-inline-start: auto;
+}
+/* In the narrow Settings column the name and the operator keep their words; the value gives way first. */
+.condition-expression .conditional-condition > .dd-trigger.conditional-value-pick,
+.condition-expression .conditional-condition > .conditional-value-input {
+  flex: 1 1 0;
+  min-width: 48px;
+}

@@ -102,11 +102,56 @@ test('a fresh rewrite-text applies through idle → planned → written → idle
   );
   const checksum = sha256(encodeUtf8(next));
   const range = toByteSpan(13, 16); // `Old` → `New`: only the bytes that differ.
-  assert.deepEqual(outcomes, [
-    { tag: 'applied', intentId: intent.id, changedRanges: [range], checksum },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'applied', intentId: intent.id, changedRanges: [range], checksum }]);
   assert.equal(state.snapshot?.checksum, checksum, 'the candidate is committed');
   assert.equal(disk.lockHeld(PAGE), false, 'the lock is released');
+});
+
+test('a plan that leaves the bytes as they are is applied without a lock, a replace or a commit', () => {
+  const disk = fakeWith(TEXT);
+  let replaces = 0;
+  let locks = 0;
+  const counting: DocumentDisk = {
+    read: (path) => disk.read(path),
+    lock: (path) => {
+      locks += 1;
+      return disk.lock(path);
+    },
+    unlock: (lock) => disk.unlock(lock),
+    replace: (path, bytes) => {
+      replaces += 1;
+      return disk.replace(path, bytes);
+    },
+  };
+  const before = disk.read(PAGE);
+  assert.ok(before.ok, 'the page is on the fake disk');
+  // The one empty hunk the host sends for a text equal to the file's (documentEntry.ts UNCHANGED).
+  const intent = toIntent({
+    id: toIntentId('actor-test-unchanged'),
+    file: PAGE,
+    authoredChecksum: sha256(encodeUtf8(TEXT)),
+    anchor: { span: toByteSpan(0, encodeUtf8(TEXT).length), path: [], expectedKind: 'document' },
+    operation: { tag: 'rewrite-text', hunks: [{ span: toByteSpan(0, 0), text: '' }] },
+  });
+  const { state, outcomes, steps } = run(submitted(intent), setup(counting));
+  assert.deepEqual(
+    steps.map((step) => step.state.phase.tag),
+    ['idle'],
+    'planned to nothing, it never leaves idle',
+  );
+  const checksum = sha256(encodeUtf8(TEXT));
+  assert.deepEqual(outcomes, [{ tag: 'applied', intentId: intent.id, changedRanges: [], checksum }]);
+  assert.equal(
+    steps.flatMap((step) => step.effects).some((effect) => effect.tag === 'committed'),
+    false,
+    'no commit: nothing changed, so nothing joins the commit log',
+  );
+  assert.equal(replaces, 0, 'the file is never replaced');
+  assert.equal(locks, 0, 'no lock is taken for a write that does not happen');
+  const after = disk.read(PAGE);
+  assert.ok(after.ok, 'the page is still there');
+  assert.equal(after.value.generation, before.value.generation, 'the disk saw no write');
+  assert.equal(state.snapshot?.checksum, checksum, 'the actor holds the bytes it read');
 });
 
 test('a full queue backpressures the next submission and keeps the queue intact', () => {
@@ -129,9 +174,7 @@ test('an intent authored against other bytes is refused without its authored byt
   const disk = fakeWith(`${TEXT}<!-- outside -->\n`);
   const intent = rewriteIntent(TEXT, 'mine');
   const { outcomes } = run(submitted(intent), setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' }]);
 });
 
 test('a cooperating writer holding the lock is a write-race, and nothing is written', () => {
@@ -150,9 +193,7 @@ test('an outside write between planning and the lock is caught by the re-read', 
   assert.equal(planned.state.phase.tag, 'planned');
   disk.writeExternally(PAGE, encodeUtf8('outside\n'));
   const { outcomes } = run(planned.state, setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' },
-  ]);
+  assert.deepEqual(outcomes, [{ tag: 'rejected', intentId: intent.id, reason: 'region-externally-modified' }]);
   assert.equal(readText(disk), 'outside\n', 'the outside edit survives');
 });
 
@@ -160,17 +201,13 @@ test('a failed replace is write-failed; a replace without a durable directory is
   const failed = fakeWith(TEXT);
   failed.failNextReplace(PAGE, 'failed');
   const first = rewriteIntent(TEXT, 'mine');
-  assert.deepEqual(run(submitted(first), setup(failed)).outcomes, [
-    { tag: 'rejected', intentId: first.id, reason: 'write-failed' },
-  ]);
+  assert.deepEqual(run(submitted(first), setup(failed)).outcomes, [{ tag: 'rejected', intentId: first.id, reason: 'write-failed' }]);
   assert.equal(readText(failed), TEXT);
   const fragile = fakeWith(TEXT);
   fragile.failNextReplace(PAGE, 'not-durable');
   const second = rewriteIntent(TEXT, 'mine');
   const candidateChecksum = sha256(encodeUtf8('mine'));
-  assert.deepEqual(run(submitted(second), setup(fragile)).outcomes, [
-    { tag: 'uncertain', intentId: second.id, candidateChecksum },
-  ]);
+  assert.deepEqual(run(submitted(second), setup(fragile)).outcomes, [{ tag: 'uncertain', intentId: second.id, candidateChecksum }]);
   assert.equal(fragile.lockHeld(PAGE), false, 'the lock is released on every path');
 });
 
@@ -179,9 +216,7 @@ test('the verifying read: another writer is a write-race, an unreadable file is 
   const first = rewriteIntent(TEXT, 'mine');
   const written = run2(submitted(first), setup(raced));
   raced.writeExternally(PAGE, encodeUtf8('theirs'));
-  assert.deepEqual(run(written, setup(raced)).outcomes, [
-    { tag: 'rejected', intentId: first.id, reason: 'write-race' },
-  ]);
+  assert.deepEqual(run(written, setup(raced)).outcomes, [{ tag: 'rejected', intentId: first.id, reason: 'write-race' }]);
   const broken = fakeWith(TEXT);
   const second = rewriteIntent(TEXT, 'mine');
   const unreadable: DocumentDisk = {
@@ -192,9 +227,7 @@ test('the verifying read: another writer is a write-race, an unreadable file is 
   };
   const midway = run2(submitted(second), setup(broken));
   const candidateChecksum = sha256(encodeUtf8('mine'));
-  assert.deepEqual(run(midway, setup(unreadable)).outcomes, [
-    { tag: 'uncertain', intentId: second.id, candidateChecksum },
-  ]);
+  assert.deepEqual(run(midway, setup(unreadable)).outcomes, [{ tag: 'uncertain', intentId: second.id, candidateChecksum }]);
   assert.equal(broken.lockHeld(PAGE), false);
 });
 
@@ -220,15 +253,9 @@ test('reconcileUncertain compares checksums: applied, not applied, changed again
 test('preconditions assert: an intent goes to its own actor with its own snapshot', () => {
   const other = createActor(toFilePath('/project/other.astro'));
   const intent = rewriteIntent(TEXT, 'x');
-  assert.throws(
-    () => submitIntent(other, { intent, authored: undefined }),
-    /Assertion failed: An intent is submitted to its own file actor/,
-  );
+  assert.throws(() => submitIntent(other, { intent, authored: undefined }), /Assertion failed: An intent is submitted to its own file actor/);
   const wrong = SIMULATOR_PROJECTOR.snapshot(PAGE, encodeUtf8('not the authored bytes'));
-  assert.throws(
-    () => submitIntent(createActor(PAGE), { intent, authored: wrong }),
-    /Assertion failed: The authored snapshot is the one the intent names/,
-  );
+  assert.throws(() => submitIntent(createActor(PAGE), { intent, authored: wrong }), /Assertion failed: The authored snapshot is the one the intent names/);
 });
 
 // Run to the `written` phase: the replace has landed, the verify has not run.
@@ -250,14 +277,10 @@ function digestOf(text: string): Digest {
   return sha256(encodeUtf8(text));
 }
 
-// The app's projector derives a snapshot's projection only when something
-// reads it (shared/page/snapshot.ts): once, memoized, measured against its bytes.
-// Found by the step-8 long run (seed 139), reduced by line: outside edits left a
-// comment inside two tags, which the parser reads as bare attributes. The
-// planner appends an attribute where it sees the <img>'s tag end — inside the
-// comment's `-->` — and the candidate still parses, but the loop around the
-// target now reads as code: the node is gone. That crashed the actor on an
-// assertion; outside bytes are input, so it is a refusal (plan §5.2 step 6).
+// Found by the step-8 long run (seed 139): external edits put comments inside
+// unfinished tags. The old parser exposed a fake image and later lost it during
+// an attribute edit. Balanced tag scanning rejects that target before editing;
+// the valid enclosing expression remains opaque and its bytes stay untouched.
 const COMMENTS_IN_TAGS = [
   '<ul class="filter_content_list">',
   '  {items.map((item) => {',
@@ -307,33 +330,13 @@ const COMMENTS_IN_TAGS = [
   '</ul>',
 ].join('\n');
 
-test('an edit that parses but loses its target is refused, not an assertion', () => {
+test('malformed tags inside expressions never expose a false native edit target', () => {
   const disk = fakeWith(COMMENTS_IN_TAGS);
   const snapshot = SIMULATOR_PROJECTOR.snapshot(PAGE, encodeUtf8(COMMENTS_IN_TAGS));
   assert.equal(snapshot.projection.tag, 'valid');
-  const image =
-    snapshot.projection.tag === 'valid'
-      ? snapshot.projection.nodes.find(
-          (node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'),
-        )
-      : undefined;
-  assert.ok(image !== undefined, 'the parser reads an <img> element there');
-  intents += 1;
-  const intent = toIntent({
-    id: toIntentId(`actor-test-${intents}`),
-    file: PAGE,
-    authoredChecksum: snapshot.checksum,
-    anchor: { span: image.span, path: image.path, expectedKind: image.kind },
-    operation: {
-      tag: 'set-attribute',
-      name: 'data-absent',
-      value: { type: 'string', value: 'New' },
-    },
-  });
-  const { outcomes } = run(submitted(intent), setup(disk));
-  assert.deepEqual(outcomes, [
-    { tag: 'rejected', intentId: intent.id, reason: 'unsupported-operation' },
-  ]);
+  assert.ok(snapshot.projection.tag === 'valid');
+  const image = snapshot.projection.nodes.find((node) => node.span.start === COMMENTS_IN_TAGS.indexOf('<img'));
+  assert.equal(image, undefined, 'an unfinished tag cannot become an editable image');
   const held = disk.read(PAGE);
   assert.ok(held.ok);
   assert.equal(new TextDecoder().decode(held.value.bytes), COMMENTS_IN_TAGS, 'nothing written');
@@ -353,14 +356,7 @@ test('a lazy snapshot derives its projection once, on first read, and checks it'
   assert.equal(snapshot.projection, snapshot.projection, 'memoized');
   assert.equal(derivations, 1);
   const wrong = createLazySnapshot({ path: PAGE, bytes }, () => project(), sha256);
-  const short = createLazySnapshot(
-    { path: PAGE, bytes: encodeUtf8(`${TEXT} `) },
-    () => SIMULATOR_PROJECTOR.snapshot(PAGE, bytes).projection,
-    sha256,
-  );
+  const short = createLazySnapshot({ path: PAGE, bytes: encodeUtf8(`${TEXT} `) }, () => SIMULATOR_PROJECTOR.snapshot(PAGE, bytes).projection, sha256);
   assert.equal(wrong.projection.byteLength, bytes.length);
-  assert.throws(
-    () => short.projection,
-    /Assertion failed: The projection was derived from bytes of this length/,
-  );
+  assert.throws(() => short.projection, /Assertion failed: The projection was derived from bytes of this length/);
 });

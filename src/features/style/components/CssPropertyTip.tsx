@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { HoverTooltip } from './SegmentedControl';
+import { HoverTooltip } from '../../../ui/SegmentedControl';
 
 // The style panel's labels are friendly names ("Align", "Gap", "Y") for CSS
 // properties. Hovering one for a beat shows which property (or properties) it
@@ -69,12 +69,7 @@ export function useHoverTip<T extends HTMLElement>(content: ReactNode) {
     }
     const away = (event: Event) => {
       const element = ref.current;
-      if (
-        !element ||
-        !element.isConnected ||
-        !(event.target instanceof Node) ||
-        !element.contains(event.target)
-      ) {
+      if (!element || !element.isConnected || !(event.target instanceof Node) || !element.contains(event.target)) {
         hide();
       }
     };
@@ -97,10 +92,7 @@ export function useHoverTip<T extends HTMLElement>(content: ReactNode) {
     ref,
     hoverProps,
     hide,
-    tip:
-      open && content && ref.current ? (
-        <HoverTooltip anchor={ref.current}>{content}</HoverTooltip>
-      ) : undefined,
+    tip: open && content && ref.current ? <HoverTooltip anchor={ref.current}>{content}</HoverTooltip> : undefined,
   };
 }
 
@@ -134,9 +126,15 @@ export function ProvenanceLabel({
         ref={ref}
         type="button"
         className={`${className} embed-editor_prop-orange`}
-        disabled={busy}
+        // Inert while the panel saves, but never natively disabled: `button:disabled` dims it
+        // to 0.4 (controls.css), so every commit flashed the orange label and back. The click
+        // is refused below instead (FieldLabel's active pill does the same).
+        aria-disabled={busy ? true : undefined}
         {...hoverProps}
         onClick={(event) => {
+          if (busy) {
+            return;
+          }
           const property = anchorProp ?? props[0];
           if (property === undefined) {
             return;

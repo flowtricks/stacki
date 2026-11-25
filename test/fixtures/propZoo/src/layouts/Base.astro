@@ -1,0 +1,18 @@
+---
+interface Props {
+  /** The page title. */
+  title: string;
+  description?: string;
+}
+const { title, description = 'Every prop shape Astro can express.' } = Astro.props;
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

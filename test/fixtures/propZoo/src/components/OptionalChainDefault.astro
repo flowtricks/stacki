@@ -1,0 +1,9 @@
+---
+interface Props {
+  title?: string;
+  subtitle?: string;
+}
+const { title } = Astro.props;
+const subtitle = Astro.props.subtitle ?? 'Fallback subtitle';
+---
+<hgroup class="optional-chain-default"><h3>{title ?? 'Untitled'}</h3><p>{subtitle}</p></hgroup>

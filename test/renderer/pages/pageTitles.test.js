@@ -4,8 +4,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
-const { pageDisplayName, buildPageTree } = load('src/features/pages/pageTree.ts');
+const { buildPageTree } = load('src/features/pages/pageTree.ts');
+const { pageDisplayName } = load('src/lib/pageName.ts');
 const { updatePageTitle } = load('src/features/pages/usePageTitles.ts');
+const { PageSearchPath } = load('src/features/pages/PageSearchPath.tsx');
+const { renderToStaticMarkup } = require('react-dom/server');
+const { JSDOM } = require('jsdom');
 
 const page = (name, title) => ({ path: `/site/src/pages/${name}`, name, route: '/', title });
 
@@ -26,6 +30,23 @@ test('layout titles are labels, never folder or filename identities', () => {
   assert.equal(pageDisplayName(page('contact.astro', '  ')), 'contact');
 });
 
+test('dynamic page labels describe the parent collection without renaming its source', () => {
+  for (const [name, label] of [
+    ['spiritual-development-courses/[slug].astro', 'Spiritual Development Courses Template'],
+    ['campus/[slug].astro', 'Campus Template'],
+    ['blog/news-items/[...slug].astro', 'News Items Template'],
+    ['[slug].astro', 'Page Template'],
+  ]) {
+    const template = page(name, 'Shared layout title');
+    const before = { ...template };
+    assert.equal(pageDisplayName(template), label);
+    assert.deepEqual(template, before);
+    const tree = buildPageTree([template], []);
+    assert.ok(tree);
+    assert.equal(template.name, name);
+  }
+});
+
 test('live title changes and removal update only the matching scan page', () => {
   const about = page('about.astro', 'About');
   const other = page('other.astro', 'Other');
@@ -37,4 +58,27 @@ test('live title changes and removal update only the matching scan page', () => 
   assert.equal(updatePageTitle(edited, about.path, 'About us'), edited);
   assert.equal(updatePageTitle(edited, '/deleted.astro', 'Deleted'), edited);
   assert.equal(pageDisplayName(updatePageTitle(edited, about.path, undefined).pages[0]), 'about');
+});
+
+test('path highlights preserve original text and treat search punctuation literally', () => {
+  for (const [path, query, matches] of [
+    ['/about/beliefs', 'about', ['about']],
+    ['/ABOUT/aboutness', ' about ', ['ABOUT', 'about']],
+    ['/events/[slug]', '[slug]', ['[slug]']],
+    ['/one.two', '.', ['.']],
+    ['/about/beliefs', 'missing', []],
+    ['/about/beliefs', ' ', []],
+    ['/<script>/about', '<script>', ['<script>']],
+  ]) {
+    const dom = new JSDOM(renderToStaticMarkup(PageSearchPath({ path, query })));
+    const element = dom.window.document.querySelector('.page-search-path');
+    assert.equal(element.textContent, path);
+    assert.deepEqual(
+      [...element.querySelectorAll('mark')].map((mark) => mark.textContent),
+      matches,
+    );
+    assert.equal(element.querySelector('script') === null, true);
+    dom.window.close();
+  }
+  assert.throws(() => PageSearchPath({ path: '/about', query: 'x'.repeat(513) }), /query length is bounded/);
 });

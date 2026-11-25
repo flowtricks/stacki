@@ -1,0 +1,10 @@
+/* The prop list's mark on a conditional prop (PropertyVariants.tsx): a dimmed branch, its tip naming where the prop is allowed. */
+.variant-condition-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+.variant-condition-tip {
+  white-space: pre-line;
+}

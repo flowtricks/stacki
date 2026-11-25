@@ -101,7 +101,8 @@ export function elementClasses(node: ClassNode | undefined): readonly string[] {
 /**
  * The name to label an element with: a named slot's name, then its first
  * class, then its tag. Every slot is spelled `slot`, so the name is the only
- * thing that tells one from another.
+ * thing that tells one from another. A class keeps its dot, so a `.label` class
+ * reads differently from a `label` tag.
  */
 export function elementLabel(node: ClassNode | undefined): string {
   if (node?.name === 'slot') {
@@ -110,5 +111,13 @@ export function elementLabel(node: ClassNode | undefined): string {
       return named.value.trim();
     }
   }
-  return elementClasses(node)[0] || node?.name || '';
+  const firstClass = elementClasses(node)[0];
+  return firstClass ? classLabel(firstClass) : node?.name || '';
+}
+
+/** A class name as the UI labels an element with it: `.label`. */
+export function classLabel(name: string): string {
+  assert(name !== '', 'classLabel: a class has a name');
+  assert(!name.startsWith('.'), 'classLabel: the name has no dot yet');
+  return `.${name}`;
 }

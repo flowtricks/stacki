@@ -1,0 +1,123 @@
+/* The globe in the title bar's address bar (PhonePreviewMenu.tsx): an icon button like "Open in browser"
+   (styles.css .titlebar .url-bar .titlebar-btn), just inside it. While the globe is there the address keeps
+   clear of both buttons, so a long URL still ends in an ellipsis before them. */
+.titlebar .url-bar .titlebar-btn.url-phone {
+  inset-inline-end: 30px;
+  /* Shorter than the bar that holds it: the pressed fill must sit inside the bar with room above and below, not touch both edges. */
+  height: 20px;
+  width: 24px;
+}
+.titlebar .url-bar:has(> .url-phone) .url {
+  padding-inline-end: 60px;
+}
+/* On: only the pressed fill every titlebar button takes (styles.css .titlebar-btn.on); the icon keeps its colour. */
+
+/* The phone preview popover (PhonePreviewMenu.tsx): a header, and while on one card. An 8px rhythm
+   throughout; fills, never borders or dividers. Its width is fixed (menuPosition, 20rem or the window less
+   its margins), so nothing in it scrolls sideways. */
+.menu-surface.phone-preview {
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  /* One 12px gutter on every side: the header, the code and the address all sit on the same two edges. The popover is
+     not a scroll container (its content has a fixed height), so no scrollbar gutter can skew those edges. */
+  padding: 12px;
+  overflow: visible;
+}
+.phone-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Title, its "?" tip, and the switch at the end of the row. */
+.phone-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+.phone-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #f5f5f5);
+}
+.phone-preview-switch {
+  display: inline-flex;
+  margin-inline-start: auto;
+}
+
+/* The code, then (with several networks) the address picker, then the address: stacked straight in the popover, with no card inside the popover. */
+.phone-preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The address on one line and its copy button, filling the card's width. */
+.phone-preview-address {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 2px 2px 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.phone-preview-address-pending {
+  padding: 0;
+  background: none;
+}
+.phone-preview-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+.phone-preview-picker {
+  width: 100%;
+}
+
+/* Copy and "?": one fixed box each, so the copied check swaps the icon and nothing else moves. */
+.phone-preview-icon-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim, #b8b8b8);
+}
+.phone-preview-icon-button:hover,
+.phone-preview-icon-button:focus-visible {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text, #f5f5f5);
+  outline: none;
+}
+.phone-preview-icon-button[data-copied] {
+  color: var(--text, #f5f5f5);
+}
+
+/* The code sits on its own light tile in both themes: a camera reads dark modules on a light ground,
+   and the quiet zone around them is part of the tile (QrCodeImage.tsx). */
+.phone-preview-qr {
+  --phone-qr-light: #ffffff;
+  --phone-qr-dark: #111111;
+  display: block;
+  flex: none;
+  border-radius: 8px;
+}
+.phone-preview-qr-tile {
+  fill: var(--phone-qr-light);
+}
+.phone-preview-qr-modules {
+  fill: var(--phone-qr-dark);
+}

@@ -1,10 +1,12 @@
-// Astro stats directory entries before ignoring dotfiles. Keep short-lived save
-// files inside a stable hidden directory so route scans cannot race their removal.
+// Keep save files outside source trees so Astro never scans a disappearing lock
+// or temporary file. Staging must share the target's device for atomic renames.
 import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok, type Result } from '../../shared/core/result';
+import { translateMain } from '../lib/mainLocale';
 
-export const ATOMIC_DIRECTORY = '.stacki-io';
+export const ATOMIC_DIRECTORY = path.join('.stacki', 'io');
+const ANCESTORS_MAX = 256;
 
 interface AtomicDirectoryError {
   readonly code: 'filesystem';
@@ -12,32 +14,61 @@ interface AtomicDirectoryError {
 }
 
 export function atomicDirectoryOf(file: string): string {
-  return path.join(path.dirname(file), ATOMIC_DIRECTORY);
+  return path.join(atomicDirectoryRoot(file), ATOMIC_DIRECTORY);
 }
 
-/** The directory stays in place between saves; removing it recreates the scan race. */
+/** Validate both levels separately so a linked .stacki cannot redirect staging. */
 export function prepareAtomicDirectory(file: string): Result<string, AtomicDirectoryError> {
   const directory = atomicDirectoryOf(file);
   try {
-    fs.mkdirSync(directory);
-  } catch (error: unknown) {
-    if (!prepareAtomicDirectoryExists(error)) {
-      return prepareAtomicDirectoryFailure(directory, error);
-    }
-  }
-  try {
-    const metadata = fs.lstatSync(directory);
-    if (!metadata.isDirectory()) {
-      return prepareAtomicDirectoryFailure(directory, 'Expected a directory, not a file or link');
-    }
-    // A mounted directory would turn the rename into a cross-filesystem move.
-    if (metadata.dev !== fs.statSync(path.dirname(file)).dev) {
-      return prepareAtomicDirectoryFailure(directory, 'Must be on the target filesystem');
+    const device = fs.statSync(path.dirname(file)).dev;
+    for (const folder of [path.dirname(directory), directory]) {
+      try {
+        fs.mkdirSync(folder);
+      } catch (error: unknown) {
+        if (!prepareAtomicDirectoryExists(error)) {
+          return prepareAtomicDirectoryFailure(folder, error);
+        }
+      }
+      const metadata = fs.lstatSync(folder);
+      if (!metadata.isDirectory()) {
+        return prepareAtomicDirectoryFailure(folder, 'Expected a directory, not a file or link');
+      }
+      if (metadata.dev !== device) {
+        return prepareAtomicDirectoryFailure(folder, 'Must be on the target filesystem');
+      }
     }
   } catch (error: unknown) {
     return prepareAtomicDirectoryFailure(directory, error);
   }
   return ok(directory);
+}
+
+function atomicDirectoryRoot(file: string): string {
+  const parent = path.dirname(path.resolve(file));
+  let directory = parent;
+  // Resolve from disk, not the active window: cooperating processes must choose
+  // the same staging directory. Standalone files use their own parent folder.
+  for (let depth = 0; depth < ANCESTORS_MAX; depth += 1) {
+    if (path.basename(directory) === '.stacki') {
+      return path.dirname(directory);
+    }
+    if (fs.existsSync(path.join(directory, '.stacki'))) {
+      return directory;
+    }
+    if (fs.existsSync(path.join(directory, 'package.json'))) {
+      return directory;
+    }
+    if (path.basename(directory) === 'node_modules') {
+      return parent;
+    }
+    const ancestor = path.dirname(directory);
+    if (ancestor === directory) {
+      return parent;
+    }
+    directory = ancestor;
+  }
+  return parent;
 }
 
 function prepareAtomicDirectoryExists(error: unknown): boolean {
@@ -49,10 +80,7 @@ function prepareAtomicDirectoryExists(error: unknown): boolean {
   return false;
 }
 
-function prepareAtomicDirectoryFailure(
-  directory: string,
-  error: unknown,
-): Result<never, AtomicDirectoryError> {
+function prepareAtomicDirectoryFailure(directory: string, error: unknown): Result<never, AtomicDirectoryError> {
   const message = error instanceof Error ? error.message : String(error);
-  return err({ code: 'filesystem', message: `Could not prepare ${directory}: ${message}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.prepareFailed', { folder: directory, reason: message }) });
 }

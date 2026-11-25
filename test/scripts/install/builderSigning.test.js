@@ -13,10 +13,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { test } = require('node:test');
-const {
-  patchSigningSource,
-  fixElectronBuilderSigning,
-} = require('#dist/scripts/install/fixBuilderSigning.js');
+const { patchSigningSource, fixElectronBuilderSigning } = require('#dist/scripts/install/fixBuilderSigning.js');
 
 const builderRequire = createRequire(require.resolve('electron-builder/package.json'));
 const signingFile = builderRequire.resolve('app-builder-lib/out/codeSign/macCodeSign.js');
@@ -33,8 +30,7 @@ const original = fs
     'async function importCerts(keychainFile, paths, keyPasswords) {',
   )
   .replace(
-    '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ' +
-      'keychainPassword, keychainFile]',
+    '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ' + 'keychainPassword, keychainFile]',
     '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", password, keychainFile]',
   );
 
@@ -51,11 +47,7 @@ function loadSigning(source) {
           keychainPassword = args[args.indexOf('-p') + 1];
         }
         if (args[0] === 'set-key-partition-list') {
-          assert.equal(
-            args[args.indexOf('-k') + 1],
-            keychainPassword,
-            'ACL must authenticate with the keychain password',
-          );
+          assert.equal(args[args.indexOf('-k') + 1], keychainPassword, 'ACL must authenticate with the keychain password');
         }
         return '';
       },
@@ -105,57 +97,39 @@ function loadSigning(source) {
 }
 
 for (const installer of [false, true]) {
-  test(
-    `real createKeychain separates keychain ` +
-      `and ${installer ? 'both certificate passwords' : 'certificate password'}`,
-    async () => {
-      const { createKeychain, calls, imports } = loadSigning(patchSigningSource(original));
-      const currentDirectory = path.join(os.tmpdir(), 'stacki-signing-test-project');
-      const temporaryDirectory = {
-        root: path.join(os.tmpdir(), 'stacki-signing-test-certificates'),
-      };
-      const certificatePasswords = installer
-        ? ['app-test-password', 'installer-test-password']
-        : [''];
-      const result = await createKeychain({
-        currentDir: currentDirectory,
-        tmpDir: temporaryDirectory,
-        cscLink: 'app',
-        cscKeyPassword: certificatePasswords[0],
-        ...(installer ? { cscILink: 'installer', cscIKeyPassword: certificatePasswords[1] } : {}),
-      });
-      const created = calls.find(([command]) => command === 'create-keychain');
-      const unlocked = calls.find(([command]) => command === 'unlock-keychain');
-      const keychainPassword = created[created.indexOf('-p') + 1];
-      assert.equal(Buffer.from(keychainPassword, 'base64').length, 32);
-      assert.ok(!certificatePasswords.includes(keychainPassword));
-      assert.equal(unlocked[unlocked.indexOf('-p') + 1], keychainPassword);
-      assert.equal(result.keychainFile, created.at(-1));
-      assert.equal(imports.length, certificatePasswords.length);
-      assert.ok(
-        imports.every(
-          (entry) => entry.tmpDir === temporaryDirectory && entry.currentDir === currentDirectory,
-        ),
-      );
-      const importCommands = calls.filter(([command]) => command === 'import');
-      assert.deepEqual(
-        importCommands.map((args) => args[args.indexOf('-P') + 1]),
-        certificatePasswords,
-      );
-      assert.ok(
-        importCommands.every((args) => args[args.indexOf('-k') + 1] === result.keychainFile),
-      );
-      const aclCommands = calls.filter(([command]) => command === 'set-key-partition-list');
-      assert.equal(aclCommands.length, certificatePasswords.length);
-      assert.ok(
-        aclCommands.every(
-          (args) =>
-            args[args.indexOf('-k') + 1] === keychainPassword &&
-            args.at(-1) === result.keychainFile,
-        ),
-      );
-    },
-  );
+  test(`real createKeychain separates keychain ` + `and ${installer ? 'both certificate passwords' : 'certificate password'}`, async () => {
+    const { createKeychain, calls, imports } = loadSigning(patchSigningSource(original));
+    const currentDirectory = path.join(os.tmpdir(), 'stacki-signing-test-project');
+    const temporaryDirectory = {
+      root: path.join(os.tmpdir(), 'stacki-signing-test-certificates'),
+    };
+    const certificatePasswords = installer ? ['app-test-password', 'installer-test-password'] : [''];
+    const result = await createKeychain({
+      currentDir: currentDirectory,
+      tmpDir: temporaryDirectory,
+      cscLink: 'app',
+      cscKeyPassword: certificatePasswords[0],
+      ...(installer ? { cscILink: 'installer', cscIKeyPassword: certificatePasswords[1] } : {}),
+    });
+    const created = calls.find(([command]) => command === 'create-keychain');
+    const unlocked = calls.find(([command]) => command === 'unlock-keychain');
+    const keychainPassword = created[created.indexOf('-p') + 1];
+    assert.equal(Buffer.from(keychainPassword, 'base64').length, 32);
+    assert.ok(!certificatePasswords.includes(keychainPassword));
+    assert.equal(unlocked[unlocked.indexOf('-p') + 1], keychainPassword);
+    assert.equal(result.keychainFile, created.at(-1));
+    assert.equal(imports.length, certificatePasswords.length);
+    assert.ok(imports.every((entry) => entry.tmpDir === temporaryDirectory && entry.currentDir === currentDirectory));
+    const importCommands = calls.filter(([command]) => command === 'import');
+    assert.deepEqual(
+      importCommands.map((args) => args[args.indexOf('-P') + 1]),
+      certificatePasswords,
+    );
+    assert.ok(importCommands.every((args) => args[args.indexOf('-k') + 1] === result.keychainFile));
+    const aclCommands = calls.filter(([command]) => command === 'set-key-partition-list');
+    assert.equal(aclCommands.length, certificatePasswords.length);
+    assert.ok(aclCommands.every((args) => args[args.indexOf('-k') + 1] === keychainPassword && args.at(-1) === result.keychainFile));
+  });
 }
 
 test('regression harness rejects the original wrong-password implementation', async () => {
@@ -179,14 +153,8 @@ function fixture(context, source = original, version = '26.15.3') {
   const library = path.join(builder, 'node_modules/app-builder-lib');
   const file = path.join(library, 'out/codeSign/macCodeSign.js');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(
-    path.join(builder, 'package.json'),
-    JSON.stringify({ name: 'electron-builder', version }),
-  );
-  fs.writeFileSync(
-    path.join(library, 'package.json'),
-    JSON.stringify({ name: 'app-builder-lib', version }),
-  );
+  fs.writeFileSync(path.join(builder, 'package.json'), JSON.stringify({ name: 'electron-builder', version }));
+  fs.writeFileSync(path.join(library, 'package.json'), JSON.stringify({ name: 'app-builder-lib', version }));
   fs.writeFileSync(file, source);
   return { root, file, builder };
 }
@@ -209,10 +177,7 @@ test('unknown or partly patched sources are refused without changing any bytes',
     'async function importCerts() {}',
   ]) {
     const { root, file } = fixture(context, source);
-    assert.throws(
-      () => fixElectronBuilderSigning(root),
-      /Unrecognized electron-builder signing source/,
-    );
+    assert.throws(() => fixElectronBuilderSigning(root), /Unrecognized electron-builder signing source/);
     assert.equal(fs.readFileSync(file, 'utf8'), source);
     assert.deepEqual(fs.readdirSync(path.dirname(file)), ['macCodeSign.js']);
   }
@@ -224,12 +189,9 @@ test('dependency upgrades fail explicitly before modifying their source', (conte
   assert.equal(fs.readFileSync(file, 'utf8'), original);
 });
 
-test(
-  'production install without electron-builder succeeds ' + 'without creating dependencies',
-  (context) => {
-    const { root, builder } = fixture(context);
-    fs.rmSync(builder, { recursive: true });
-    assert.equal(fixElectronBuilderSigning(root), 'not-installed');
-    assert.deepEqual(fs.readdirSync(path.join(root, 'node_modules')), []);
-  },
-);
+test('production install without electron-builder succeeds ' + 'without creating dependencies', (context) => {
+  const { root, builder } = fixture(context);
+  fs.rmSync(builder, { recursive: true });
+  assert.equal(fixElectronBuilderSigning(root), 'not-installed');
+  assert.deepEqual(fs.readdirSync(path.join(root, 'node_modules')), []);
+});

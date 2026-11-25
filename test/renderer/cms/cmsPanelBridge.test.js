@@ -1,9 +1,11 @@
-// Goal: CmsPanel receives bounded file and content inventories from preload.
+// Goal: CmsPanel receives validated file and content inventories of any size from preload.
 // Methodology: parse valid and malformed replies, then script each operation to
 // distinguish expected transport failures from contract violations.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const bridge = require('../../helpers/rendererModule')('src/features/cms/cmsPanelBridge.ts');
+const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
@@ -51,16 +53,13 @@ test('CMS panel parsers preserve the fields used by the panel', () => {
   });
 });
 
-test('CMS panel parsers reject malformed paths, counts, data, and bounds', () => {
-  for (const value of [
-    jsonNull,
-    { files: jsonNull },
-    { files: [{ ...file, rel: 'bad\0path' }] },
-    { files: [{ ...file, data: Number.NaN }] },
-    { files: Array(100_001).fill(file) },
-  ]) {
+test('CMS panel parsers reject malformed paths, counts, and data, and accept any inventory size', () => {
+  for (const value of [jsonNull, { files: jsonNull }, { files: [{ ...file, rel: 'bad\0path' }] }, { files: [{ ...file, data: Number.NaN }] }]) {
     assert.throws(() => bridge.parseCmsFiles(value));
   }
+  // Stacki has no product size limit: an inventory is bounded only by what an array holds.
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(bridge.parseCmsFiles({ files: Array(100_001).fill(file) }).length, 100_001);
   for (const value of [
     { ...content, collections: [{ ...content.collections[0], count: -1 }] },
     // Absence is `undefined` (AGENTS.md §6): main never sends a null error.
@@ -68,10 +67,10 @@ test('CMS panel parsers reject malformed paths, counts, data, and bounds', () =>
     { ...content, covered: { files: jsonNull, dirs: [] } },
     { collections: [{ ...content.collections[0] }] },
     { collections: [], missing: false },
-    { ...content, collections: Array(100_001).fill(content.collections[0]) },
   ]) {
     assert.throws(() => bridge.parseContentCollections(value));
   }
+  assert.equal(bridge.parseContentCollections({ ...content, collections: Array(100_001).fill(content.collections[0]) }).collections.length, 100_001);
 });
 
 test('CMS panel operations validate payloads and keep transport failures as values', async () => {

@@ -109,20 +109,14 @@ const check = (what, condition, detail) => {
 
   const field = host.querySelector('[contenteditable]');
   check('the field renders', !!field, host.innerHTML.slice(0, 160));
-  check(
-    'with the text in it',
-    field?.textContent === START[0].value,
-    JSON.stringify(field?.textContent),
-  );
+  check('with the text in it', field?.textContent === START[0].value, JSON.stringify(field?.textContent));
 
   // Select "through the noise" — the tail of the only text node.
   const selectTail = async () => {
     // Merge the text nodes first: a wrap-then-unwrap leaves the run split in
     // three, and reaching for `firstChild` after that selects the wrong piece.
     field.normalize();
-    const textNode = [...field.childNodes].find(
-      (node) => node.nodeType === 3 && node.textContent.includes('through the noise'),
-    );
+    const textNode = [...field.childNodes].find((node) => node.nodeType === 3 && node.textContent.includes('through the noise'));
     // Guarded: when a regression leaves the words buried inside a tag, there is
     // no top-level text node to select — a FAILURE to report, not a stack trace
     // that hides which case broke.
@@ -145,10 +139,7 @@ const check = (what, condition, detail) => {
   };
   await selectTail();
 
-  const bubbleButton = (title) =>
-    [...host.querySelectorAll('.rich-bubble button')].find(
-      (button) => button.getAttribute('title') === title,
-    );
+  const bubbleButton = (title) => [...host.querySelectorAll('.rich-bubble button')].find((button) => button.getAttribute('title') === title);
   const press = async (button) => {
     await act(async () => {
       button.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
@@ -161,35 +152,83 @@ const check = (what, condition, detail) => {
   // one in here is the only thing in the bubble nobody designed.
   {
     const buttons = [...host.querySelectorAll('.rich-bubble button')];
-    const emoji = buttons.filter((button) =>
-      /\p{Extended_Pictographic}/u.test(button.textContent || ''),
-    );
+    const emoji = buttons.filter((button) => /\p{Extended_Pictographic}/u.test(button.textContent || ''));
     check(
       'no button in the bubble is an emoji',
       emoji.length === 0,
       emoji.map((button) => `${button.getAttribute('title')}: ${button.textContent}`).join(', '),
     );
     const link = bubbleButton('Link');
-    check(
-      'the link button is there',
-      !!link,
-      buttons.map((button) => button.getAttribute('title')).join(', '),
-    );
+    check('the link button is there', !!link, buttons.map((button) => button.getAttribute('title')).join(', '));
     check('and it is drawn, not typed', !!link?.querySelector('svg'), link?.innerHTML);
+    // The compact bar draws superscript, subscript and code on the icon grid,
+    // so none of them is a typed glyph heavier than its neighbours.
+    for (const title of ['Superscript', 'Subscript', 'Code']) {
+      const button = bubbleButton(title);
+      check(`${title} is drawn, not typed`, !!button?.querySelector('svg'), button?.innerHTML);
+    }
+    // Every function the bar had before the restyle is still in it, in order.
+    check(
+      'the bar keeps every press, in order',
+      JSON.stringify(buttons.map((button) => button.getAttribute('title'))) ===
+        JSON.stringify(['Bold', 'Italic', 'Superscript', 'Subscript', 'Code', 'Wrap in a span', 'Link']),
+      JSON.stringify(buttons.map((button) => button.getAttribute('title'))),
+    );
+    // The pressed state is a fill on screen; for a screen reader it is aria-pressed,
+    // which must agree with the class that draws the fill, on and off alike.
+    const disagree = buttons.filter((button) => (button.getAttribute('aria-pressed') === 'true') !== button.classList.contains('on'));
+    check('each button says whether it is pressed', disagree.length === 0, disagree.map((button) => button.getAttribute('title')).join(', '));
+    // Space separates the buttons; the only other thing in the row is the one
+    // highlight that slides behind them, hidden from assistive technology.
+    const row = host.querySelector('.rich-bubble .rich-format-row');
+    const strangers = [...(row?.children ?? [])].filter((child) => child.tagName !== 'BUTTON' && !child.classList.contains('rich-format-glide'));
+    check('nothing but buttons and the highlight in the row', !!row && strangers.length === 0, strangers.map((child) => child.outerHTML).join(', '));
+    const glides = row ? row.querySelectorAll(':scope > .rich-format-glide') : [];
+    check('one highlight for the whole row', glides.length === 1, String(glides.length));
+    check('and it is not announced', glides[0]?.getAttribute('aria-hidden') === 'true', glides[0]?.outerHTML);
+  }
+
+  // The hover highlight is one element that follows the pointer: it lands in
+  // place on the first button, slides to the next, and fades where it was when
+  // the pointer leaves. JSDOM lays nothing out, so each button is given a place.
+  {
+    const glide = host.querySelector('.rich-format-glide');
+    const row = host.querySelector('.rich-format-row');
+    [...row.querySelectorAll('button')].forEach((button, index) => {
+      Object.defineProperty(button, 'offsetLeft', { configurable: true, value: 3 + index * 30 });
+      Object.defineProperty(button, 'offsetWidth', { configurable: true, value: 28 });
+    });
+    const hover = async (target) => {
+      await act(async () => {
+        target.dispatchEvent(new dom.window.MouseEvent('pointerover', { bubbles: true }));
+      });
+    };
+    // React derives leave from the pointer going out to something outside the row.
+    const leave = async (from) => {
+      await act(async () => {
+        from.dispatchEvent(new dom.window.MouseEvent('pointerout', { bubbles: true, relatedTarget: document.body }));
+      });
+    };
+    check('the highlight starts hidden', !!glide && !glide.classList.contains('shown'), glide?.className);
+    await hover(bubbleButton('Bold'));
+    check('first hover shows it under that button', glide.style.transform === 'translateX(3px)' && glide.style.width === '28px', glide.style.cssText);
+    check('in place, without sliding in', glide.classList.contains('shown') && !glide.classList.contains('slide'), glide.className);
+    await hover(bubbleButton('Italic'));
+    check('the next hover moves it to that button', glide.style.transform === 'translateX(33px)', glide.style.cssText);
+    check('and the move slides', glide.classList.contains('slide'), glide.className);
+    await leave(bubbleButton('Italic'));
+    check('leaving the bar hides it', !glide.classList.contains('shown'), glide.className);
+    check('where it was', glide.style.transform === 'translateX(33px)', glide.style.cssText);
   }
 
   const spanButton = bubbleButton('Wrap in a span');
   check(
     'the bubble offers a span',
     !!spanButton,
-    [...host.querySelectorAll('.rich-bubble button')]
-      .map((button) => button.getAttribute('title'))
-      .join(' | ') || 'no bubble',
+    [...host.querySelectorAll('.rich-bubble button')].map((button) => button.getAttribute('title')).join(' | ') || 'no bubble',
   );
   // It sits alongside the ones that were already there, not instead of them.
-  const titles = [...host.querySelectorAll('.rich-bubble button')].map((button) =>
-    button.getAttribute('title'),
-  );
+  const titles = [...host.querySelectorAll('.rich-bubble button')].map((button) => button.getAttribute('title'));
   check(
     'beside the existing tools',
     ['Bold', 'Italic', 'Code'].every((title) => titles.includes(title)),
@@ -201,49 +240,23 @@ const check = (what, condition, detail) => {
     // The DOM now holds the span:
     const element = field.querySelector('span:not(.expr-chip)');
     check('pressing it wraps the selection', !!element, field.innerHTML);
-    check(
-      'around exactly the words chosen',
-      element?.textContent === 'through the noise',
-      JSON.stringify(element?.textContent),
-    );
-    check(
-      'and with nothing on it — an empty span is the useful result',
-      element && element.attributes.length === 0,
-      element?.outerHTML,
-    );
+    check('around exactly the words chosen', element?.textContent === 'through the noise', JSON.stringify(element?.textContent));
+    check('and with nothing on it — an empty span is the useful result', element && element.attributes.length === 0, element?.outerHTML);
 
     // …and so does the model that gets written back.
     const spans = (emitted || []).filter((node) => node.kind === 'element' && node.name === 'span');
     check('the change reaches the model', spans.length === 1, JSON.stringify(emitted));
-    check(
-      'carrying the words',
-      spans[0]?.children?.[0]?.value === 'through the noise',
-      JSON.stringify(spans[0]),
-    );
-    check(
-      'and the text before it is untouched',
-      (emitted || [])[0]?.value === 'Human-centric strategies to cut ',
-      JSON.stringify((emitted || [])[0]),
-    );
+    check('carrying the words', spans[0]?.children?.[0]?.value === 'through the noise', JSON.stringify(spans[0]));
+    check('and the text before it is untouched', (emitted || [])[0]?.value === 'Human-centric strategies to cut ', JSON.stringify((emitted || [])[0]));
 
     // Pressing again takes it back off — the only way back for an invisible tag.
     const again = bubbleButton('Wrap in a span');
     check('the button is still there to press again', !!again);
     if (again) {
       await press(again);
-      check(
-        'pressing it again unwraps',
-        !field.querySelector('span:not(.expr-chip)'),
-        field.innerHTML,
-      );
-      check(
-        'and the words survive',
-        field.textContent === START[0].value,
-        JSON.stringify(field.textContent),
-      );
-      const after = (emitted || []).filter(
-        (node) => node.kind === 'element' && node.name === 'span',
-      );
+      check('pressing it again unwraps', !field.querySelector('span:not(.expr-chip)'), field.innerHTML);
+      check('and the words survive', field.textContent === START[0].value, JSON.stringify(field.textContent));
+      const after = (emitted || []).filter((node) => node.kind === 'element' && node.name === 'span');
       check('with no span left in the model', after.length === 0, JSON.stringify(emitted));
     }
   }
@@ -256,18 +269,10 @@ const check = (what, condition, detail) => {
   check('Code is still wired', !!codeButton);
   if (codeButton) {
     await press(codeButton);
-    check(
-      'Code still wraps',
-      field.querySelector('code')?.textContent === 'through the noise',
-      field.innerHTML,
-    );
+    check('Code still wraps', field.querySelector('code')?.textContent === 'through the noise', field.innerHTML);
     await press(bubbleButton('Code'));
     check('and now unwraps instead of nesting', !field.querySelector('code'), field.innerHTML);
-    check(
-      'leaving the text whole',
-      field.textContent === START[0].value,
-      JSON.stringify(field.textContent),
-    );
+    check('leaving the text whole', field.textContent === START[0].value, JSON.stringify(field.textContent));
   }
 
   // Twice in the same tick — a double-press, or just a fast one. The toggle
@@ -289,16 +294,8 @@ const check = (what, condition, detail) => {
       fire();
       fire();
     });
-    check(
-      'two presses in one tick still leave no code',
-      field.querySelectorAll('code').length === 0,
-      field.innerHTML,
-    );
-    check(
-      'and the words still whole',
-      field.textContent === START[0].value,
-      JSON.stringify(field.textContent),
-    );
+    check('two presses in one tick still leave no code', field.querySelectorAll('code').length === 0, field.innerHTML);
+    check('and the words still whole', field.textContent === START[0].value, JSON.stringify(field.textContent));
   }
 
   await act(async () => {

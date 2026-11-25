@@ -2,62 +2,29 @@
 // their fallback — and the cards the panel draws: source options, the embed
 // navigation, and the selection, context and source cards (EmbedEditor.tsx).
 
-import { useMemo } from 'react';
+import { CREATE_STYLE_TAG_KEY } from '../model/newStyleTarget';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { useEffect, useMemo, useRef } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
-import { clampNonNegative } from '../model/cssProperties';
-import { contextKeyOf } from '../model/resolved';
+import { writtenValue } from '../model/lengthUnit';
+import { contextKeyOf, ruleOnLayer } from '../model/resolved';
+import { hoverStyle } from '../model/liveRuleEdits';
+import { canvasPreviewProp, type CanvasPreviewContext } from './canvasPreview';
+import type { PreviewProp } from '../connectFieldHelpers';
+import { pseudoPickPending, usePanelLayer } from './editorModel';
 import type { ParsedRule } from '../model/styleTypes';
 import { optionsFor } from '../model/nativeStyles';
 import { embedSourceClassSuffix, type EmbedDocument } from '../model/webflow';
-import {
-  type SetProp,
-  type PropWrite,
-  type LiveSetProp,
-  EMPTY_RESOLVED,
-  EMPTY_RULE_MODEL,
-} from './EditorBasics';
+import { type SetProp, type PropWrite, type LiveSetProp, EMPTY_RESOLVED, EMPTY_RULE_MODEL } from './EditorBasics';
 import { isSupportedCssValue } from './ResolvedRows';
 import { type SourceOption } from './LayoutRows';
-import {
-  useBusyState,
-  useScanState,
-  useSelectionState,
-  useNativeState,
-} from './useEditorFoundation';
+import { useBusyState, useScanState, useSelectionState, useNativeState } from './useEditorFoundation';
 import { useRefresh } from './useEditorScanning';
-import {
-  usePropEdits,
-  useLiveEdits,
-  useRuleActions,
-  useOpenEmbed,
-  useElementTokens,
-} from './useEditorRuleEdits';
-import {
-  useActiveSelector,
-  useSelectorPick,
-  useTypedSelector,
-  useFocusProp,
-  useSourceDocument,
-  useRenameQuery,
-  useQuerySuggestions,
-} from './useEditorElement';
-import {
-  useStyleContexts,
-  useNativeTarget,
-  useResolved,
-  useSelectorChips,
-  useContextChange,
-} from './useEditorContexts';
-import {
-  useNativeOps,
-  useWriteNewRule,
-  useCreateRule,
-  useAddQuery,
-  useNativeSet,
-  useNativeCreate,
-  useAutoSelect,
-} from './useEditorResolution';
+import { usePropEdits, useLiveEdits, useRuleActions, useOpenEmbed, useElementTokens } from './useEditorRuleEdits';
+import { useActiveSelector, useSelectorPick, useTypedSelector, useFocusProp, useSourceDocument, useRenameQuery, useQuerySuggestions } from './useEditorElement';
+import { useStyleContexts, useNativeTarget, useResolved, useSelectorChips, useContextChange } from './useEditorContexts';
+import { useNativeOps, useWriteNewRule, useCreateRule, useAddQuery, useNativeSet, useNativeCreate, useAutoSelect } from './useEditorResolution';
 
 // Commit a property to the pick's layer.
 export function useSetProp(
@@ -84,38 +51,42 @@ export function useSetProp(
   const { autoSelectForEdit } = autoSelect;
 
   const setProp: SetProp = (prop, typed, important) => {
+    // A pick (or any write) of a previewed property takes the preview's place: the canvas keeps it until
+    // the page holds the written value, so the old one never flashes between the hover and the save.
+    hoverStyle.settle(prop, writtenValue(prop, typed));
     // A gap or a padding cannot go below zero. Here rather than in the fields
     // themselves: a value reaches this point from a typed edit, an arrow step, a
     // drag, a variable pick and the add-property row, and a rule enforced in one
-    // field is a rule the other four ways around it don't have.
-    const write: PropWrite = { prop, value: clampNonNegative(prop, typed), important };
+    // field is a rule the other four ways around it don't have. The project's
+    // length unit is held here for the same reason (model/lengthUnit.ts).
+    const write: PropWrite = { prop, value: writtenValue(prop, typed), important };
     // A commit is the new baseline: whatever a live write overwrote on the way here is
     // no longer what "revert" should restore.
     liveOriginRef.current.delete(prop);
+    if (pseudoPickPending(activeSelector)) {
+      setStatus('Reading this pseudo-element’s rules. Try that again in a moment.'); // i18n-ignore: write-only status, never rendered.
+      return undefined;
+    }
     if (!activeSelector) {
       const route = autoSelectForEdit();
       if (route && 'native' in route) {
-        nativeSetOrFallback(route.native, write);
-        return;
+        return nativeSetOrFallback(route.native, write);
       }
       if (route && 'embedSelector' in route) {
-        createSelectedRule(write, route.embedSelector);
-        return;
+        return createSelectedRule(write, route.embedSelector);
       }
-      setStatus('Nothing to style here — add a class in Webflow first.');
-      return;
+      setStatus('Nothing to style here — add a class in Webflow first.'); // i18n-ignore: write-only status, never rendered.
+      return undefined;
     }
     if (propLayer(prop) === 'native') {
       if (selectedNativeIndex !== undefined) {
-        nativeSetOrFallback(selectedNativeIndex, write);
-        return;
+        return nativeSetOrFallback(selectedNativeIndex, write);
       }
       if (creatableClass) {
-        nativeCreateAndSet(creatableClass, write);
-        return;
+        return nativeCreateAndSet(creatableClass, write);
       }
     }
-    writeEmbedProp(write);
+    return writeEmbedProp(write);
   };
   return { setProp };
 }
@@ -140,15 +111,20 @@ export function useClearProp(
   const { selectedNativeIndex } = resolvedHook;
   const { nativeClearAt } = nativeOps;
   const { ruleFor, rulesSetting } = writeNewRuleHook;
-  const { propLayer } = addQuery;
+  const { propLayer, supersedeFirstTagWrite } = addQuery;
 
-  const clearProp = (prop: string | string[]) => {
+  // Resolves once every write has finished and the model has been rebuilt from it, so the
+  // panel knows when its optimistic cleared look (useOptimisticEdits.ts) can hand over.
+  const clearProp = (prop: string | string[]): Promise<void> => {
     const props = Array.isArray(prop) ? prop : [prop];
+    // Clearing is a write too; the page then computes the property's own cascade, not the preview.
+    hoverStyle.clear(props);
+    const settled: Promise<unknown>[] = [];
     props.forEach((prop) => liveOriginRef.current.delete(prop)); // clearing is a commit too
     const nativeProps = props.filter((prop) => propLayer(prop) === 'native');
     const embedProps = props.filter((prop) => propLayer(prop) === 'embed');
     if (nativeProps.length && selectedNativeIndex !== undefined) {
-      void nativeClearAt(selectedNativeIndex, nativeProps, optionsFor(currentContext, stateKey));
+      settled.push(nativeClearAt(selectedNativeIndex, nativeProps, optionsFor(currentContext, stateKey)));
     }
     // Each rule of the pick loses the properties it sets: clearing only the rule
     // whose value shows would surface the same property from an earlier rule.
@@ -160,7 +136,12 @@ export function useClearProp(
         byRule.set(rule.ruleId, entry);
       }
     }
-    byRule.forEach(({ rule, props: ruleProps }) => onClearProp(rule, ruleProps));
+    // A clear is newer than a value still waiting for the page's first tag (firstTagLane.ts).
+    for (const embedProp of embedProps) {
+      supersedeFirstTagWrite(embedProp);
+    }
+    byRule.forEach(({ rule, props: ruleProps }) => settled.push(onClearProp(rule, ruleProps)));
+    return Promise.all(settled).then(() => undefined);
   };
   // Abandon the live writes for `prop` and put back what they overwrote — the dropdown
   // hover-scrub's counterpart to liveSetProp (closing the list without picking).
@@ -186,6 +167,7 @@ export function useLiveSetProp(
   addQuery: ReturnType<typeof useAddQuery>,
   autoSelect: ReturnType<typeof useAutoSelect>,
   clearPropHook: ReturnType<typeof useClearProp>,
+  createRule: ReturnType<typeof useCreateRule>,
 ) {
   const { stateKey } = selectionState;
   const { nativeModelRef } = nativeState;
@@ -197,14 +179,21 @@ export function useLiveSetProp(
   const { nativeHandle, propLayer } = addQuery;
   const { autoSelectForEdit } = autoSelect;
   const { revertProp } = clearPropHook;
+  const { liveCreateInNestedQuery } = createRule;
 
   const liveSetProp: LiveSetProp = (propOrProps, typed, important) => {
     const props = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
+    // Typing over a preview replaces it with what is typed, which the live write shows.
+    hoverStyle.clear(props);
     // `undefined` = abandon this property's live writes and put back what they
     // overwrote — the hover-scrub's counterpart (a dropdown closed without picking, a
     // field's edit cancelled). Nothing to undo if no live write happened.
     if (typed === undefined) {
       props.forEach(revertProp);
+      return;
+    }
+    // The commit says why nothing lands yet (useSetProp).
+    if (pseudoPickPending(activeSelector)) {
       return;
     }
     if (!activeSelector) {
@@ -215,7 +204,7 @@ export function useLiveSetProp(
         const handle = nativeModelRef.current?.styles[route.native]?.style;
         if (handle) {
           for (const prop of props) {
-            const value = clampNonNegative(prop, typed);
+            const value = writtenValue(prop, typed);
             if (isSupportedCssValue(prop, value)) {
               nativeLiveSet(handle, prop, hslaToRgba(value), optionsFor(currentContext, stateKey));
             }
@@ -231,7 +220,7 @@ export function useLiveSetProp(
       readonly important: boolean;
     }> = [];
     for (const prop of props) {
-      const value = clampNonNegative(prop, typed);
+      const value = writtenValue(prop, typed);
       // Don't push half-typed / invalid values live: the native API can get stuck.
       if (!isSupportedCssValue(prop, value)) {
         continue;
@@ -246,11 +235,27 @@ export function useLiveSetProp(
       const rule = ruleFor(prop);
       if (rule) {
         embedWrites.push({ rule, prop, value, important });
+      } else {
+        liveCreateInNestedQuery({ prop, value, important });
       }
     }
     onLiveSetProps(embedWrites);
   };
-  return { liveSetProp };
+  const previewProp = useCanvasPreview({ stateKey, activeSelector });
+  return { liveSetProp, previewProp };
+}
+
+// Every hover preview of the panel: the hovered value shown on the canvas and nowhere else (a picker row,
+// a dropdown option). It goes to the frame as a hover style (shared/properties/liveRules.ts), set inline
+// on the selected element, and no save follows: nothing is mutated, written, put in history or marked
+// dirty, so taking it back is only telling the frame to put the element's own style back, and a restore
+// can never race a write. Fields and dropdowns reach it through PreviewPropContext with liveSetProp's own
+// shape, so a hover-scrub that used to call liveSetProp calls this instead; `undefined` takes it back. A
+// state or pseudo-element context has no element to show it on: there the control alone shows it.
+function useCanvasPreview(context: CanvasPreviewContext): PreviewProp {
+  // Leaving the panel with a preview still up (a project switch) puts the element's own style back.
+  useEffect(() => () => hoverStyle.clear(hoverStyle.showing()), []);
+  return canvasPreviewProp(context);
 }
 
 // The source dropdown: every embed, grouped by component.
@@ -261,36 +266,36 @@ export function useSourceOptions(
   nativeTarget: ReturnType<typeof useNativeTarget>,
   resolvedHook: ReturnType<typeof useResolved>,
 ) {
+  const translate = useTranslate();
   const { nativeModel } = nativeState;
   const { model } = elementTokens;
   const { currentContext } = styleContextsHook;
-  const { creatableClass, embedList } = nativeTarget;
+  const { createOffered, creatableClass, embedList } = nativeTarget;
   const { effectiveSource, selectedNativeIndex } = resolvedHook;
 
   // The name to badge when editing a native class style.
   const nativeStyleName =
     effectiveSource === 'native'
       ? selectedNativeIndex !== undefined && nativeModel
-        ? nativeModel.styles[selectedNativeIndex]?.displayName ||
-          nativeModel.styles[selectedNativeIndex]?.className ||
-          ''
+        ? nativeModel.styles[selectedNativeIndex]?.displayName || nativeModel.styles[selectedNativeIndex]?.className || ''
         : creatableClass
       : undefined;
   const sourceNote: string | undefined = undefined;
 
   // Which embeds carry a rule for this element in the current context (dropdown dot).
+  const layer = usePanelLayer();
   const embedsWithRules = useMemo(() => {
     const set = new Set<string>();
     if (!model || currentContext.embedAtContext === undefined) {
       return set;
     }
     for (const matched of [...model.base, ...model.conditional]) {
-      if (contextKeyOf(matched.rule) === currentContext.embedAtContext) {
+      if (contextKeyOf(matched.rule) === currentContext.embedAtContext && ruleOnLayer(matched, layer)) {
         set.add(matched.rule.embedKey);
       }
     }
     return set;
-  }, [model, currentContext]);
+  }, [model, currentContext, layer]);
 
   // The source dropdown: every embed in page order (later embeds win the cascade).
   // Webflow isn't a choice — styles apply natively first and fall back to the
@@ -306,6 +311,10 @@ export function useSourceOptions(
       indent,
     });
     const optionList: SourceOption[] = [];
+    // First in the list: where a new selector goes when the page has no `<style>` tag of its own.
+    if (createOffered) {
+      optionList.push({ value: CREATE_STYLE_TAG_KEY, label: translate('styleModel.embed.source.createStyleTag', { tag: '<style>' }), create: true });
+    }
     for (const embedDocument of embedList) {
       if (!embedDocument.source.fromComponent) {
         optionList.push(embedOption(embedDocument));
@@ -316,7 +325,7 @@ export function useSourceOptions(
       if (!embedDocument.source.fromComponent) {
         continue;
       }
-      const name = embedDocument.source.componentName ?? 'Component';
+      const name = embedDocument.source.componentName ?? translate('styleModel.embed.source.component');
       byComponent.set(name, [...(byComponent.get(name) ?? []), embedDocument]);
     }
     for (const [name, docs] of byComponent) {
@@ -331,7 +340,7 @@ export function useSourceOptions(
       });
     }
     return optionList;
-  }, [embedList, embedsWithRules]);
+  }, [createOffered, embedList, embedsWithRules, translate]);
   return { nativeStyleName, sourceNote, sourceOptions };
 }
 
@@ -360,10 +369,7 @@ export function useEmbedNav(
 
   // Provided to every ProvenanceList so its embed chips can name (full label) and
   // navigate to the source embed on the canvas.
-  const embedNav = useMemo(
-    () => ({ open: openEmbedByKey, labelFor: (key: string) => embedLabelByKey.get(key) ?? key }),
-    [openEmbedByKey, embedLabelByKey],
-  );
+  const embedNav = useMemo(() => ({ open: openEmbedByKey, labelFor: (key: string) => embedLabelByKey.get(key) ?? key }), [openEmbedByKey, embedLabelByKey]);
 
   const nativeHasAny = nativeModel?.styles.some((style) => style.propsByContext.size > 0) ?? false;
   return { embedLabelByKey, embedNav, nativeHasAny };
@@ -380,7 +386,7 @@ export function useSelectionCard(
   selectorChipsHook: ReturnType<typeof useSelectorChips>,
 ) {
   const { selectedSelectorText } = selectionState;
-  const { selectorSuggestions, snapshot } = elementTokens;
+  const { scan, selectorSuggestions, snapshot } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector } = selectorPick;
   const { addTypedSelector, deselect } = typedSelector;
@@ -391,6 +397,12 @@ export function useSelectionCard(
     snapshot,
     selectedSelector: activeSelector,
     activePicked: selectedSelectorText !== undefined,
+    // No scan at all (the panel's first moments) has nothing on its way to hold for.
+    selectionSettled: scan === undefined || scan.settled,
+    // Set by a change of element until its first settled answer (ScanState.awaitingFirstAnswer). Until then
+    // the sections hold what they last showed (StyleCard HeldBody) rather than draw a skeleton or the
+    // source-only fields that the canvas's answer would replace.
+    selectionAwaiting: scan?.awaitingFirstAnswer === true,
     selectors: selectorChips,
     suggestions: selectorSuggestions,
     activeSelector,
@@ -410,7 +422,6 @@ export function useContextCard(
   sourceDocumentHook: ReturnType<typeof useSourceDocument>,
   renameQuery: ReturnType<typeof useRenameQuery>,
   querySuggestionsHook: ReturnType<typeof useQuerySuggestions>,
-  styleContextsHook: ReturnType<typeof useStyleContexts>,
   resolvedHook: ReturnType<typeof useResolved>,
   selectorChipsHook: ReturnType<typeof useSelectorChips>,
   contextChange: ReturnType<typeof useContextChange>,
@@ -423,31 +434,32 @@ export function useContextCard(
   const { queryUses, sourceDocument } = sourceDocumentHook;
   const { onRenameQuery } = renameQuery;
   const { querySuggestions } = querySuggestionsHook;
-  const { styleContexts } = styleContextsHook;
   const { resolved } = resolvedHook;
-  const { contextInfos } = selectorChipsHook;
-  const { onContextChange } = contextChange;
+  const { contextInfos, orderedContexts } = selectorChipsHook;
+  const { onContextChange, contextFollow, contextsSettled } = contextChange;
   const { onAddQuery } = addQuery;
   const { embedLabelByKey } = embedNavHook;
 
+  // The dropdown's rows, their dots and the checked row are one picture. While the next element's rules
+  // are still arriving they are rebuilt from partial answers, so the open list reshuffles and the trigger
+  // changes label and back; the last settled picture stays until the settled one replaces it.
+  const held = useHeldWhileUnsettled({ contexts: orderedContexts, contextInfos, context }, { settled: contextsSettled });
   const cardContexts = {
     cssCodeOpen,
     onToggleCssCode: () => setCssCodeOpen((open) => !open),
     model: model ?? EMPTY_RULE_MODEL,
     resolved: resolved ?? EMPTY_RESOLVED,
-    contexts: styleContexts,
-    contextInfos,
-    context,
+    contexts: held.contexts,
+    contextInfos: held.contextInfos,
+    context: held.context,
     onContext: onContextChange,
+    contextFollow,
     onAddQuery,
     onRenameQuery,
     queryUses,
     // The name the source pill below shows for the same file, so the two lines agree
     // on what "ContentWrapper" is called.
-    sourceLabel:
-      (sourceDocument && embedLabelByKey.get(sourceDocument.source.key)) ??
-      sourceDocument?.source.label ??
-      'this file',
+    sourceLabel: (sourceDocument && embedLabelByKey.get(sourceDocument.source.key)) ?? sourceDocument?.source.label ?? 'this file',
     querySuggestions,
   };
   return { cardContexts };
@@ -469,20 +481,21 @@ export function useSourceCard(
 ) {
   const { busy } = busyState;
   const { phase, scanningMore } = scanState;
-  const { pendingKeys, setSourceSelection } = nativeState;
+  const { manualSourcePickRef, pendingKeys, selectionKeyRef, setSourceSelection } = nativeState;
   const { resolving } = refreshHook;
   const { onRemoveRule, onSaveCssRule } = ruleActions;
   const { effectiveSourceSelection } = nativeTarget;
   const { selectedRule } = writeNewRuleHook;
   const { setProp } = setPropHook;
   const { clearProp } = clearPropHook;
-  const { liveSetProp } = liveSetPropHook;
+  const { liveSetProp, previewProp } = liveSetPropHook;
   const { nativeStyleName, sourceNote, sourceOptions } = sourceOptionsHook;
 
   const cardSource = {
     sourceValue: effectiveSourceSelection,
     sourceOptions,
     onSourceChange: (value: string) => {
+      manualSourcePickRef.current = { selectionKey: selectionKeyRef.current, sourceKey: value };
       setSourceSelection(value);
       saveEmbedSource(value);
     },
@@ -497,9 +510,23 @@ export function useSourceCard(
     setProp,
     clearProp,
     liveSetProp,
+    previewProp,
     onAdd: setProp,
     onSaveCssRule,
     onRemoveRule,
   };
   return { cardSource, cardWrites };
+}
+
+/**
+ * `value` while `state.settled`, else the last value that was drawn settled (the first value if none yet).
+ * Holding is bounded: it ends the render a settled answer lands, and a value never held back is the
+ * one drawn on the very first render.
+ */
+function useHeldWhileUnsettled<T>(value: T, state: { readonly settled: boolean }): T {
+  const heldRef = useRef(value);
+  if (state.settled) {
+    heldRef.current = value;
+  }
+  return heldRef.current;
 }

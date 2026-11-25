@@ -3,22 +3,13 @@ import path from 'node:path';
 import { parse as parseTOML } from 'smol-toml';
 import { parseConfigFileTextToJson } from 'typescript';
 import { record } from '../../shared/core/boundary';
-import {
-  discoveryIdentifier,
-  type DiscoveryProvider,
-  type PublishProject,
-} from '../../shared/properties/publishDiscovery';
-import {
-  cloudflareProjects,
-  cloudflareAccounts,
-  cloudflareWorkers,
-} from './publishDiscoveryCloudflare';
+import type { Hosting } from '../../shared/properties/publishConfig';
+import { parsePublishedSiteURL } from '../../shared/properties/publishSite';
+import { discoveryIdentifier, discoveryList, type DiscoveryProvider, type PublishProject } from '../../shared/properties/publishDiscovery';
+import { cloudflareProjects, cloudflareAccounts, cloudflareWorkers } from './publishDiscoveryCloudflare';
 
 // Read existing links only: discovery never creates or relinks a remote project.
-export async function linkedPublishProject(
-  root: string,
-  provider: DiscoveryProvider,
-): Promise<readonly PublishProject[]> {
+export async function linkedPublishProject(root: string, provider: DiscoveryProvider): Promise<readonly PublishProject[]> {
   if (provider === 'vercel') {
     const source = await linkedSource(root, '.vercel/project.json');
     if (source === undefined) {
@@ -28,6 +19,7 @@ export async function linkedPublishProject(
     const value = record(input);
     return [
       {
+        // i18n-ignore: a project name written into the Vercel link file, not interface text.
         name: 'Linked Vercel project',
         hosting: {
           provider: 'vercel',
@@ -38,45 +30,78 @@ export async function linkedPublishProject(
     ];
   }
   if (provider === 'cloudflare' || provider === 'cloudflare-workers' || provider === 'linked') {
-    for (const filename of ['wrangler.json', 'wrangler.jsonc', 'wrangler.toml']) {
-      const source = await linkedSource(root, filename);
-      if (source !== undefined) {
-        const projects = await linkedCloudflare(root, filename, source);
-        return provider === 'linked' || provider === 'cloudflare'
-          ? projects
-          : projects.filter((project) => project.hosting.provider === provider);
-      }
+    const value = await linkedWranglerConfig(root);
+    if (value !== undefined) {
+      const projects = await linkedCloudflare(root, value);
+      return provider === 'linked' || provider === 'cloudflare' ? projects : projects.filter((project) => project.hosting.provider === provider);
     }
   }
   return [];
 }
 
-async function linkedCloudflare(
+// Explicit custom domains are usable without provider API credentials. Match the complete
+// destination so a saved hosting change cannot open an unrelated Wrangler project's site.
+export async function configuredWorkerSiteURL(
   root: string,
-  filename: string,
-  source: string,
-): Promise<readonly PublishProject[]> {
-  // TypeScript is already a runtime dependency and parses JSONC without executing project code.
-  const parsed = filename.endsWith('.toml')
-    ? { config: parseTOML(source), error: undefined }
-    : parseConfigFileTextToJson(filename, source);
-  if (parsed.error) {
-    throw new Error('Cannot read existing Wrangler configuration.');
+  hosting: Extract<Hosting, { readonly provider: 'cloudflare-workers' }>,
+): Promise<string | undefined> {
+  const value = await linkedWranglerConfig(root);
+  if (value === undefined) {
+    return undefined;
   }
-  const value = record(parsed.config);
+  if (value['name'] !== hosting.project) {
+    return undefined;
+  }
+  if (value['account_id'] !== hosting.accountId) {
+    return undefined;
+  }
+  const routes = value['routes'] ?? (value['route'] === undefined ? [] : [value['route']]);
+  const domains = discoveryList(routes).flatMap((route) => {
+    if (typeof route === 'string') {
+      return [];
+    }
+    const entry = record(route);
+    if (entry['custom_domain'] !== true) {
+      return [];
+    }
+    if (typeof entry['pattern'] !== 'string') {
+      return [];
+    }
+    // Route patterns and paths are not origins; only literal custom domains qualify.
+    try {
+      return [parsePublishedSiteURL(`https://${entry['pattern'].toLowerCase()}`)];
+    } catch {
+      return [];
+    }
+  });
+  return domains.sort()[0];
+}
+
+async function linkedWranglerConfig(root: string): Promise<Record<string, unknown> | undefined> {
+  for (const filename of ['wrangler.json', 'wrangler.jsonc', 'wrangler.toml']) {
+    const source = await linkedSource(root, filename);
+    if (source !== undefined) {
+      // Parse data only: discovering a link must never execute project code.
+      const parsed = filename.endsWith('.toml') ? { config: parseTOML(source), error: undefined } : parseConfigFileTextToJson(filename, source);
+      if (parsed.error) {
+        throw new Error('Cannot read existing Wrangler configuration.');
+      }
+      return record(parsed.config);
+    }
+  }
+  return undefined;
+}
+
+async function linkedCloudflare(root: string, value: Readonly<Record<string, unknown>>): Promise<readonly PublishProject[]> {
   if (!value['name']) {
     return [];
   }
   const name = discoveryIdentifier(value['name']);
   if (!value['pages_build_output_dir']) {
-    const accountId = value['account_id']
-      ? discoveryIdentifier(value['account_id'])
-      : await linkedWorkerAccount(root, name);
+    const accountId = value['account_id'] ? discoveryIdentifier(value['account_id']) : await linkedWorkerAccount(root, name);
     return [{ name, hosting: { provider: 'cloudflare-workers', accountId, project: name } }];
   }
-  const account = value['account_id']
-    ? discoveryIdentifier(value['account_id'])
-    : await singleCloudflareAccount(root);
+  const account = value['account_id'] ? discoveryIdentifier(value['account_id']) : await singleCloudflareAccount(root);
   if (!account) {
     return [];
   }
@@ -144,9 +169,7 @@ async function linkedWorkerAccount(root: string, name: string): Promise<string> 
         return workers.some((worker) => worker.name === name) ? account.id : undefined;
       }),
     );
-    const found = matches.flatMap((match) =>
-      match.status === 'fulfilled' && match.value ? [match.value] : [],
-    );
+    const found = matches.flatMap((match) => (match.status === 'fulfilled' && match.value ? [match.value] : []));
     return found.length === 1 ? (found[0] ?? '') : '';
   } catch {
     return '';

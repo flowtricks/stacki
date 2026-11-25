@@ -19,10 +19,7 @@ test('presence colors are distinct for active collaborators and stable on reconn
   const colors = new PresenceColors();
   const first = colors.acquire('alice');
   const second = colors.acquire('bob');
-  assert.notEqual(
-    presenceColor({ id: '', color: first }),
-    presenceColor({ id: '', color: second }),
-  );
+  assert.notEqual(presenceColor({ id: '', color: first }), presenceColor({ id: '', color: second }));
   assert.equal(colors.acquire('alice'), first);
   colors.release('alice');
   colors.release('alice');
@@ -54,9 +51,7 @@ test('cursor updates cross file rooms, keep server identity, coalesce, and never
     const bob = await fixture.connect('bob', 'src/components/Heading.astro');
     const room = await fixture.rooms.get(file);
     const before = Y.encodeStateAsUpdate(room.document);
-    alice.socket.send(
-      JSON.stringify({ type: 'cursor', ...state, id: 'forged', name: 'forged', color: 4000 }),
-    );
+    alice.socket.send(JSON.stringify({ type: 'cursor', ...state, id: 'forged', name: 'forged', color: 4000 }));
     const received = parseCursorPacket(await bob.next('cursor'));
     assert.equal(received.name, 'alice');
     assert.notEqual(received.id, 'forged');
@@ -69,11 +64,7 @@ test('cursor updates cross file rooms, keep server identity, coalesce, and never
     assert.deepEqual(Y.encodeStateAsUpdate(room.document), before);
     assert.equal(await readFile(path.join(fixture.root, file), 'utf8'), source);
     const carol = await fixture.connect('carol', file);
-    assert.equal(
-      (await carol.next('cursor'))['text'],
-      '99',
-      'New arrivals receive the latest cursor',
-    );
+    assert.equal((await carol.next('cursor'))['text'], '99', 'New arrivals receive the latest cursor');
     alice.socket.close();
     assert.equal((await bob.next('cursor'))['cursor'], null, 'Disconnect removes the cursor');
     const reconnected = await fixture.connect('alice', file);
@@ -98,19 +89,13 @@ async function collaboration() {
   server.on('connection', (socket, request) => {
     const url = new URL(request.url ?? '', 'http://localhost');
     const login = url.searchParams.get('person') ?? 'alice';
-    void rooms
-      .get(url.searchParams.get('file') ?? file)
-      .then((room) =>
-        room.attach(socket, { login, id: login === 'alice' ? 1 : login === 'bob' ? 2 : 3 }),
-      );
+    void rooms.get(url.searchParams.get('file') ?? file).then((room) => room.attach(socket, { login, id: login === 'alice' ? 1 : login === 'bob' ? 2 : 3 }));
   });
   return {
     root,
     rooms,
     async connect(person: string, file: string) {
-      const socket = new WebSocket(
-        `ws://127.0.0.1:${address.port}/?person=${person}&file=${encodeURIComponent(file)}`,
-      );
+      const socket = new WebSocket(`ws://127.0.0.1:${address.port}/?person=${person}&file=${encodeURIComponent(file)}`);
       const next = inbox(socket);
       await once(socket, 'open');
       await next('sync');

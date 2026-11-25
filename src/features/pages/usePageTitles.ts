@@ -11,21 +11,21 @@ interface PageTitleState {
 
 export function usePageTitles({ currentPage, pageState, setScan }: PageTitleState): void {
   const titlePath = currentPage?.kind === 'page' ? currentPage.path : undefined;
-  const title = pageState?.editable ? layoutPageTitle(pageState.model.nodes) : undefined;
+  const nodes = pageState?.editable ? pageState.model.nodes : undefined;
   useEffect(() => {
     if (titlePath === undefined || !pageState?.editable) {
       return;
     }
     // Self-writes bypass filesystem notifications; remember live labels across page switches.
-    setScan((scan) => updatePageTitle(scan, titlePath, title));
-  }, [titlePath, title, pageState?.editable, setScan]);
+    setScan((scan) => {
+      const page = scan.pages.find((entry) => entry.path === titlePath);
+      const title = nodes ? layoutPageTitle(nodes, page?.inheritedTitle) : undefined;
+      return updatePageTitle(scan, titlePath, title);
+    });
+  }, [titlePath, nodes, pageState?.editable, setScan]);
 }
 
-export function updatePageTitle(
-  scan: ScanResult,
-  path: string,
-  title: string | undefined,
-): ScanResult {
+export function updatePageTitle(scan: ScanResult, path: string, title: string | undefined): ScanResult {
   const page = scan.pages.find((entry) => entry.path === path);
   if (page === undefined || page.title === title) {
     return scan;

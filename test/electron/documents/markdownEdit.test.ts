@@ -19,11 +19,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import type { Edit, NodeRef } from '#dist/shared/engine/editRequest.js';
 import { parsePageNode, type PageModel, type PageNode } from '#dist/shared/page/pageNode.js';
-import {
-  parsePageDiskRead,
-  parsePageEditResult,
-  type PageDiskRead,
-} from '#dist/shared/ipc/pageSave.js';
+import { parsePageDiskRead, parsePageEditResult, type PageDiskRead } from '#dist/shared/ipc/pageSave.js';
 import { mainHarness } from '../../helpers/mainHarness.ts';
 
 const sha256 = (bytes: string | Buffer): string => createHash('sha256').update(bytes).digest('hex');
@@ -108,23 +104,14 @@ async function send(harness: Harness, file: string, checksum: string, request: E
 }
 
 /** Send `request` and require the file to become `expected`, exactly. */
-async function applies(
-  harness: Harness,
-  opened: { readonly file: string; readonly page: PageDiskRead },
-  request: Edit,
-  expected: string,
-): Promise<void> {
+async function applies(harness: Harness, opened: { readonly file: string; readonly page: PageDiskRead }, request: Edit, expected: string): Promise<void> {
   const reply = await send(harness, opened.file, opened.page.checksum, request);
   assert.ok(reply.ok, `${request.tag} applies: ${reply.ok ? '' : JSON.stringify(reply.error)}`);
   assert.equal(fs.readFileSync(opened.file, 'utf8'), expected, `${request.tag} writes its change`);
   assert.equal(reply.value.checksum, sha256(expected));
 }
 
-async function refused(
-  harness: Harness,
-  opened: { readonly file: string; readonly page: PageDiskRead },
-  request: Edit,
-): Promise<string> {
+async function refused(harness: Harness, opened: { readonly file: string; readonly page: PageDiskRead }, request: Edit): Promise<string> {
   const before = fs.readFileSync(opened.file, 'utf8');
   const reply = await send(harness, opened.file, opened.page.checksum, request);
   assert.equal(fs.readFileSync(opened.file, 'utf8'), before, 'a refusal leaves the file');
@@ -218,52 +205,46 @@ test('an image, a fence and a list write their attributes in Markdown', async (c
   assert.equal(await refused(harness, opened, style), 'unsupported-operation');
 });
 
-test(
-  'blocks and items are added, removed and moved ' + 'as Markdown separates them',
-  async (context) => {
-    const harness = fixture();
-    context.after(harness.dispose);
-    let opened = await open(harness, 'post.md', POST);
-    const intro: Edit = {
-      tag: 'insert-node',
-      target: refAt(opened.page, [0]),
-      placement: 'after',
-      content: { tag: 'nodes', nodes: [paragraph('Intro.')] },
-    };
-    await applies(harness, opened, intro, POST.replace('# Title\n', '# Title\n\nIntro.\n'));
-    opened = await open(harness, 'post.md', POST);
-    const remove = (read: PageDiskRead, at: readonly number[]): Edit => ({
-      tag: 'remove-node',
-      target: refAt(read, at),
-    });
-    await applies(harness, opened, remove(opened.page, [2, 1]), POST.replace('- two\n', ''));
-    opened = await open(harness, 'post.md', POST);
-    const withoutParagraph = POST.replace('Some *text* here.\nSecond line.\n\n', '');
-    await applies(harness, opened, remove(opened.page, [1]), withoutParagraph);
-    opened = await open(harness, 'post.md', POST);
-    const swap: Edit = {
-      tag: 'move-node',
-      target: refAt(opened.page, [2, 1]),
-      destination: refAt(opened.page, [2, 0]),
-      placement: 'before',
-    };
-    await applies(harness, opened, swap, POST.replace('- one\n- two\n', '- two\n- one\n'));
-    opened = await open(harness, 'post.md', POST);
-    const quote: Edit = {
-      tag: 'move-node',
-      target: refAt(opened.page, [1]),
-      destination: refAt(opened.page, [3]),
-      placement: 'last-child',
-    };
-    const moved = POST.replace('Some *text* here.\nSecond line.\n\n', '').replace(
-      '> more\n',
-      '> more\n>\n> Some *text* here.\n> Second line.\n',
-    );
-    await applies(harness, opened, quote, moved);
-    opened = await open(harness, 'only.md', '# A\n\n- only\n\nEnd.\n');
-    await applies(harness, opened, remove(opened.page, [1, 0]), '# A\n\nEnd.\n');
-  },
-);
+test('blocks and items are added, removed and moved ' + 'as Markdown separates them', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  let opened = await open(harness, 'post.md', POST);
+  const intro: Edit = {
+    tag: 'insert-node',
+    target: refAt(opened.page, [0]),
+    placement: 'after',
+    content: { tag: 'nodes', nodes: [paragraph('Intro.')] },
+  };
+  await applies(harness, opened, intro, POST.replace('# Title\n', '# Title\n\nIntro.\n'));
+  opened = await open(harness, 'post.md', POST);
+  const remove = (read: PageDiskRead, at: readonly number[]): Edit => ({
+    tag: 'remove-node',
+    target: refAt(read, at),
+  });
+  await applies(harness, opened, remove(opened.page, [2, 1]), POST.replace('- two\n', ''));
+  opened = await open(harness, 'post.md', POST);
+  const withoutParagraph = POST.replace('Some *text* here.\nSecond line.\n\n', '');
+  await applies(harness, opened, remove(opened.page, [1]), withoutParagraph);
+  opened = await open(harness, 'post.md', POST);
+  const swap: Edit = {
+    tag: 'move-node',
+    target: refAt(opened.page, [2, 1]),
+    destination: refAt(opened.page, [2, 0]),
+    placement: 'before',
+  };
+  await applies(harness, opened, swap, POST.replace('- one\n- two\n', '- two\n- one\n'));
+  opened = await open(harness, 'post.md', POST);
+  const quote: Edit = {
+    tag: 'move-node',
+    target: refAt(opened.page, [1]),
+    destination: refAt(opened.page, [3]),
+    placement: 'last-child',
+  };
+  const moved = POST.replace('Some *text* here.\nSecond line.\n\n', '').replace('> more\n', '> more\n>\n> Some *text* here.\n> Second line.\n');
+  await applies(harness, opened, quote, moved);
+  opened = await open(harness, 'only.md', '# A\n\n- only\n\nEnd.\n');
+  await applies(harness, opened, remove(opened.page, [1, 0]), '# A\n\nEnd.\n');
+});
 
 test('the YAML frontmatter changes its slot, or is created at the top', async (context) => {
   const harness = fixture();

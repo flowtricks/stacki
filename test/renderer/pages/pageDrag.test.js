@@ -39,13 +39,11 @@ test('pages and folders share gap ordering and cancel without saving', async () 
   const { act } = React;
   const { createRoot } = require('react-dom/client');
   const { PageTreeView, buildPageTree, usePageOrderDrag } = require(outfile);
-  const pages = ['index.astro', 'contact.astro', 'about/index.astro', 'about/story.astro'].map(
-    (name) => ({
-      name,
-      path: '/site/src/pages/' + name,
-      route: '/' + name.replace('.astro', ''),
-    }),
-  );
+  const pages = ['index.astro', 'contact.astro', 'about/index.astro', 'about/story.astro'].map((name) => ({
+    name,
+    path: '/site/src/pages/' + name,
+    route: '/' + name.replace('.astro', ''),
+  }));
   const tree = buildPageTree(pages, ['about', 'campus']);
   const saved = [];
   const moves = [];
@@ -88,8 +86,7 @@ test('pages and folders share gap ordering and cancel without saving', async () 
   }
   const root = createRoot(document.getElementById('root'));
   const row = (key) => document.querySelector(`[data-order-key="${key}"]`);
-  const gap = (parent, index) =>
-    document.querySelector(`[data-drop-parent="${parent}"][data-drop-index="${index}"]`);
+  const gap = (parent, index) => document.querySelector(`[data-drop-parent="${parent}"][data-drop-index="${index}"]`);
   let transfer;
   function begin(key) {
     const data = new Map();
@@ -114,8 +111,8 @@ test('pages and folders share gap ordering and cancel without saving', async () 
   try {
     await act(async () => root.render(React.createElement(App)));
     assert.equal(document.querySelectorAll('.drag-handle').length, 0);
-    assert.equal(row('index.astro').style.paddingLeft, '8px');
-    assert.equal(row('about/index.astro').style.paddingLeft, '22px');
+    assert.equal(row('index.astro').style.paddingInlineStart, '8px');
+    assert.equal(row('about/index.astro').style.paddingInlineStart, '22px');
     assert.equal(gap('', 0).classList.contains('nav-gap-overlay'), true);
     assert.equal(gap('', 0).style.pointerEvents, 'none');
     begin('campus/');

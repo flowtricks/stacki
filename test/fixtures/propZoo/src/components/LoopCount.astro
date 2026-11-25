@@ -1,0 +1,8 @@
+---
+interface Props {
+  /** How many stars to draw. @min 0 @max 10 */
+  count?: number;
+}
+const { count = 3 } = Astro.props;
+---
+<div class="loop-count">{Array.from({ length: count }, () => '★').join('')}</div>

@@ -10,7 +10,6 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { readCommitDiff } = require('#dist/electron/git/gitCommitDiff.js');
-const { COMMIT_DIFF_LIMITS } = require('#dist/shared/ipc/gitCommitDiff.js');
 const execute = promisify(execFile);
 const git = (cwd, args) => execute('git', args, { cwd, maxBuffer: 2_000_000 });
 
@@ -75,20 +74,18 @@ test('read-only patches cover file lifecycle and first-parent merges', async () 
   }
 });
 
-test('oversized patches and missing commits return explicit errors', async () => {
+test('patches of any length are returned whole and missing commits return explicit errors', async () => {
   const request = {
     projectPath: '/project',
     commit: 'a'.repeat(40),
     path: 'file',
     from: undefined,
   };
-  for (const stdout of [
-    'x'.repeat(COMMIT_DIFF_LIMITS.charactersMax + 1),
-    '\n'.repeat(COMMIT_DIFF_LIMITS.linesMax),
-  ]) {
+  // A patch of any length is returned whole: past the old 500,000 characters and 10,000 lines too.
+  for (const stdout of ['x'.repeat(600_000), '\n'.repeat(20_000)]) {
     const result = await readCommitDiff(async () => ({ stdout }), request);
-    assert.equal(result.ok, false);
-    assert.match(result.error, /too (large|many)/);
+    assert.equal(result.ok, true);
+    assert.equal(result.value, stdout);
   }
   const result = await readCommitDiff(async () => {
     throw new Error('missing commit');

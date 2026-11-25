@@ -19,18 +19,9 @@ import { toFilePath } from '#dist/shared/core/brand.js';
 import { capabilityAcceptsVisualIntent } from '#dist/shared/page/capability.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import type { Splice } from '#dist/shared/engine/planner.js';
-import {
-  hostContext,
-  projectValueSplice,
-  valueBytesNeutral,
-} from '#dist/shared/engine/projectionPatch.js';
+import { hostContext, projectValueSplice, valueBytesNeutral } from '#dist/shared/engine/projectionPatch.js';
 import type { Projection } from '#dist/shared/page/sourceProjection.js';
-import {
-  encodeUtf8,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { encodeUtf8, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import { projectBytes } from './project.ts';
 import { applySplices } from '#dist/shared/engine/splice.js';
 
@@ -236,8 +227,7 @@ function readDirectory(directory: string): readonly fs.Dirent[] {
 }
 
 function report(tally: Tally): void {
-  const share = (count: number): string =>
-    tally.sites === 0 ? '—' : `${((100 * count) / tally.sites).toFixed(1)} %`;
+  const share = (count: number): string => (tally.sites === 0 ? '—' : `${((100 * count) / tally.sites).toFixed(1)} %`);
   console.log(`Distinct .astro files: ${tally.files} (${tally.duplicates} duplicates skipped)`);
   console.log(`Not valid as projected: ${tally.invalid}`);
   console.log(`Editable string value sites: ${tally.sites}`);
@@ -255,8 +245,7 @@ function report(tally: Tally): void {
   }
   console.log(`\nB patches compared with a full reparse: ${tally.compared}, all equal.`);
   const sorted = [...tally.reparseMs].sort((left, right) => left - right);
-  const rank = (percent: number): string =>
-    (sorted[Math.max(Math.ceil((percent / 100) * sorted.length), 1) - 1] ?? 0).toFixed(1);
+  const rank = (percent: number): string => (sorted[Math.max(Math.ceil((percent / 100) * sorted.length), 1) - 1] ?? 0).toFixed(1);
   const max = (sorted.at(-1) ?? 0).toFixed(1);
   console.log(`Full reparse per file, ms: p50 ${rank(50)}, p95 ${rank(95)}, max ${max}`);
 }

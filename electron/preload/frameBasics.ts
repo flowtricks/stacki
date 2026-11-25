@@ -11,6 +11,8 @@ export type ThinTarget = { path: string; el: Element; box: DOMRect };
 export type Spacing = {
   padding: Record<string, number>;
   margin: Record<string, number>;
+  /** The margin each vertical side collapses with, where it is adjoining one (see marginCollapses in frameMeasure.ts). */
+  collapse?: { top?: { partner: 'previous' | 'next' | 'parent'; margin: number }; bottom?: { partner: 'previous' | 'next' | 'parent'; margin: number } };
   gaps: GapBand[];
   /** What one em, rem, vw and vh is worth in px for the element measured. */
   units: Record<string, number>;
@@ -34,5 +36,4 @@ export const PROBE_ATTR = 'data-avb-probe';
 export const isElement = (node: Node): node is Element => node.nodeType === 1;
 export const isComment = (node: Node): node is Comment => node.nodeType === 8;
 export const isText = (node: Node): node is Text => node.nodeType === 3;
-export const isChildNode = (node: Node): node is ChildNode =>
-  'remove' in node && typeof node['remove'] === 'function';
+export const isChildNode = (node: Node): node is ChildNode => 'remove' in node && typeof node['remove'] === 'function';

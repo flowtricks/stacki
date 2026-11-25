@@ -42,9 +42,7 @@ function fixture(context) {
       pages: [{ name: 'index.astro', path: file, route: '/' }],
       pageFolders: [],
       layouts: [{ name: 'BaseLayout', path: layout, folder: '', ...safeSchema(layout, root) }],
-      components: [
-        { name: 'Heading', path: component, folder: '', ...safeSchema(component, root) },
-      ],
+      components: [{ name: 'Heading', path: component, folder: '', ...safeSchema(component, root) }],
     },
   };
 }

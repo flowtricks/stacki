@@ -27,7 +27,7 @@
 // newest step; the older ones are `folded` into it.
 import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
-import type { Edit, EditRequest, NodeRef } from '../../shared/engine/editRequest';
+import { EDIT_BATCH_EDITS_MAX, type Edit, type EditBatchRequest, type EditRequest, type NodeRef } from '../../shared/engine/editRequest';
 import type { RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { LIMITS } from '../../shared/core/limits';
 import type { PageEditError, PageEdited } from '../../shared/ipc/pageSave';
@@ -73,9 +73,10 @@ export interface EditsRecord {
  * nodes), and its effect on the shown model. The effect is a pure function —
  * a new model, the old one untouched. `request` may be undefined when the
  * specialized edit cannot express the syntax; sending then derives a safe,
- * minimal node rewrite from `apply`. */
+ * minimal node rewrite from `apply`. `origin` is there for a gesture that edits
+ * the text itself, which is what its bytes must be stated against. */
 export interface EditGesture {
-  readonly request: (refOf: (nodeId: string) => NodeRef | undefined) => readonly Edit[] | undefined;
+  readonly request: (refOf: (nodeId: string) => NodeRef | undefined, origin: PageOrigin) => readonly Edit[] | undefined;
   readonly apply: (model: EditorModel) => EditorModel;
   /** Groups undo steps and coalesces bursts. */
   readonly coalesceKey: string | undefined;
@@ -270,6 +271,7 @@ function typedBaseline(shown: TypedFrom): CodeBaseline {
   switch (save.tag) {
     case 'clean':
     case 'dirty':
+    case 'failed':
     case 'saving': {
       // Visual edits change the model, never `source`: it is the text of the
       // origin, the bytes the page's edits were stated against.
@@ -320,12 +322,7 @@ export function recordApplied(record: EditsRecord, applied: AppliedEdit): void {
   }
   assert(outcome.waiting > 0, 'An answer arrives for a write the step waits on');
   const done = [...outcome.applied, applied];
-  writeOutcome(
-    record,
-    outcome.waiting === 1
-      ? { tag: 'applied', applied: done }
-      : { tag: 'pending', waiting: outcome.waiting - 1, applied: done },
-  );
+  writeOutcome(record, outcome.waiting === 1 ? { tag: 'applied', applied: done } : { tag: 'pending', waiting: outcome.waiting - 1, applied: done });
 }
 
 /** Settle a request that changed no bytes without erasing earlier undo information. */
@@ -335,12 +332,7 @@ export function recordNoChange(record: EditsRecord): void {
     return;
   }
   assert(outcome.waiting > 0, 'A settled request was owed an answer');
-  writeOutcome(
-    record,
-    outcome.waiting === 1
-      ? { tag: 'applied', applied: outcome.applied }
-      : { ...outcome, waiting: outcome.waiting - 1 },
-  );
+  writeOutcome(record, outcome.waiting === 1 ? { tag: 'applied', applied: outcome.applied } : { ...outcome, waiting: outcome.waiting - 1 });
 }
 
 /** The one writer of an undo step's outcome. A step is a cell shared by the
@@ -396,9 +388,7 @@ export function nodeRefIn(origin: PageOrigin, nodeId: string): NodeRef | undefin
     }
     if ('children' in node && Array.isArray(node.children)) {
       const children: readonly PageNode[] = node.children;
-      children.forEach((child, index) =>
-        pending.push({ node: child, path: [...entry.path, index] }),
-      );
+      children.forEach((child, index) => pending.push({ node: child, path: [...entry.path, index] }));
     }
   }
   return undefined;
@@ -437,14 +427,42 @@ interface GestureSendInput {
   readonly gesture: EditGesture;
   readonly record: EditsRecord;
   readonly send: (request: EditRequest) => Promise<Result<PageEdited, PageEditError>>;
+  /** Writes several requests at once (page:editBatch). Absent where nothing is
+   * written (a preview), which sends them one at a time. */
+  readonly sendBatch?: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>;
 }
 
 export async function sendGesture(input: GestureSendInput): Promise<GestureSent> {
   const { origin } = input;
   const refOf = (nodeId: string): NodeRef | undefined => nodeRefIn(origin, nodeId);
-  const specialized = input.gesture.request(refOf);
-  if (specialized === undefined || specialized.length === 0) {
+  const requested = input.gesture.request(refOf, origin);
+  if (requested === undefined || requested.length === 0) {
     return sendReplacement(input, refOf);
+  }
+  // A request is stated when it is sent, against the origin the last reply left, so
+  // it can restate those bytes exactly: a drag that overshoots a clamped end writes
+  // `100%`, then `99%`, then `100%` again, and the queue replaced the unsent `99%`
+  // with the last value, which is what the first write already put on disk. Main
+  // refuses a rewrite that changes nothing, and that refusal read as an editor
+  // error. Nothing is owed the disk for such a request, so it is settled here.
+  const specialized = requested.filter((edit) => !restatesOrigin(origin, edit));
+  if (specialized.length === 0) {
+    recordNoChange(input.record);
+    return { tag: 'applied', replies: [] };
+  }
+  assert(specialized.length <= requested.length, 'Settling restated requests only removes requests');
+  // A gesture of several requests is one change to the page: written apart,
+  // the dev server renders the page between them (a loop reading a query not
+  // declared yet). Written together when main can; one at a time otherwise.
+  if (specialized.length > 1) {
+    if (input.sendBatch !== undefined) {
+      if (specialized.length <= EDIT_BATCH_EDITS_MAX) {
+        const batched = await sendBatched(input, specialized, input.sendBatch);
+        if (batched !== undefined) {
+          return batched;
+        }
+      }
+    }
   }
   const sent = await sendRequests(input, specialized);
   if (sent.tag !== 'refused' || sent.reason !== 'unsupported-operation') {
@@ -456,13 +474,14 @@ export async function sendGesture(input: GestureSendInput): Promise<GestureSent>
   return sendReplacement(input, refOf);
 }
 
-async function sendReplacement(
-  input: GestureSendInput,
-  refOf: (nodeId: string) => NodeRef | undefined,
-): Promise<GestureSent> {
+async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) => NodeRef | undefined): Promise<GestureSent> {
   const predicted = input.gesture.apply(input.origin.model);
-  const replacements = replacementEdits(input.origin, predicted, refOf);
+  const replacements = replacementRequests(input.origin, predicted, refOf);
   if (replacements !== undefined && replacements.length > 0) {
+    const batched = await sendBatchedWhole(input, replacements);
+    if (batched !== undefined) {
+      return batched;
+    }
     const sent = await sendRequests(input, replacements);
     if (sent.tag !== 'refused' || sent.reason !== 'unsupported-operation') {
       return sent;
@@ -477,14 +496,69 @@ async function sendReplacement(
     recordNoChange(input.record);
     return { tag: 'applied', replies: [] };
   }
-  const page: Edit = { tag: 'replace-page', model: replacementModel(predicted) };
-  return sendRequests(input, [page]);
+  return sendRequests(input, [replacementPageRequest(predicted)]);
 }
 
-async function sendRequests(
+/** A gesture's effect as node rewrites: the frontmatter first when it changed,
+ * then the smallest changed nodes (replacementEdits). Undefined when a changed
+ * node has no reference main can name. Studio's writer sends the same
+ * requests (studio/src/features/source/gestureWrite.ts). */
+export function replacementRequests(origin: PageOrigin, predicted: EditorModel, refOf: (nodeId: string) => NodeRef | undefined): readonly Edit[] | undefined {
+  const replaced = replacementEdits(origin, predicted, refOf);
+  return replaced === undefined ? undefined : [...frontmatterEdits(origin.model, predicted), ...replaced];
+}
+
+/** The last resort: the whole predicted page, whose semantic hunks main maps onto the bytes. */
+export function replacementPageRequest(predicted: EditorModel): Edit {
+  return { tag: 'replace-page', model: replacementModel(predicted) };
+}
+
+// A gesture that changes the block and the markup, such as a component made from
+// a piece of a loop, loses half of itself if only the nodes go. The block goes
+// first so that an instance never reaches disk ahead of its import.
+function frontmatterEdits(before: PageModel, after: EditorModel): readonly Edit[] {
+  if (before.extraFrontmatter === after.extraFrontmatter) {
+    if (JSON.stringify(before.imports) === JSON.stringify(after.imports)) {
+      return [];
+    }
+  }
+  return [{ tag: 'set-frontmatter', model: { ...after, nodes: [] } }];
+}
+
+async function sendBatchedWhole(input: GestureSendInput, requests: readonly Edit[]): Promise<GestureSent | undefined> {
+  if (input.sendBatch === undefined) {
+    return undefined;
+  }
+  if (requests.length <= 1) {
+    return undefined;
+  }
+  return requests.length <= EDIT_BATCH_EDITS_MAX ? sendBatched(input, requests, input.sendBatch) : undefined;
+}
+
+// One write of every request, or undefined when main refused the batch with
+// the page untouched (it changed since, or a request has no batched form): the
+// requests then go one at a time, which rebase through outside writes and
+// report their own refusals.
+async function sendBatched(
   input: GestureSendInput,
   requests: readonly Edit[],
-): Promise<GestureSent> {
+  sendBatch: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>,
+): Promise<GestureSent | undefined> {
+  assert(requests.length > 1, 'A batch holds several requests');
+  assert(requests.length <= EDIT_BATCH_EDITS_MAX, 'A batch stays inside its bound');
+  const answer = await sendBatch({ pagePath: input.path, authoredChecksum: input.origin.checksum, edits: requests });
+  if (answer.ok) {
+    const { checksum, inverse } = answer.value;
+    recordApplied(input.record, { checksum, inverse });
+    return { tag: 'applied', replies: [answer.value] };
+  }
+  if (answer.error.code === 'rejected') {
+    return undefined;
+  }
+  return stopped(answer.error, input.origin.checksum, []);
+}
+
+async function sendRequests(input: GestureSendInput, requests: readonly Edit[]): Promise<GestureSent> {
   const replies: PageEdited[] = [];
   for (const edit of requests) {
     // The queue reserves one write per gesture. A composed gesture can send
@@ -510,15 +584,36 @@ async function sendRequests(
   return { tag: 'applied', replies };
 }
 
+/** Whether `edit` restates the origin: a `<style>` or `<script>` node rewritten with
+ * the tag and the contents the origin already holds. Exactly the change main's raw
+ * contents rewrite finds empty (electron/documents/editRequests.ts, rawContentsDraft);
+ * any other request goes to main, which decides it. */
+export function restatesOrigin(origin: PageOrigin, edit: Edit): boolean {
+  if (edit.tag !== 'replace-node') {
+    return false;
+  }
+  const next = edit.node;
+  if (next.kind !== 'raw') {
+    return false;
+  }
+  const previous = nodesById(origin.model.nodes).get(next.id);
+  if (previous?.kind !== 'raw') {
+    return false;
+  }
+  if (previous.inner !== next.inner) {
+    return false;
+  }
+  if (previous.name !== next.name) {
+    return false;
+  }
+  return JSON.stringify([previous.props, previous.attrOrder]) === JSON.stringify([next.props, next.attrOrder]);
+}
+
 /** The smallest stable changed nodes. A changed child suppresses its changed
  * parent, while a structural change (insert, remove, reorder, or move) selects
  * the parent whose child list changed. Main turns each replacement into hunks
  * inside that node, preserving every untouched byte around and within it. */
-function replacementEdits(
-  origin: PageOrigin,
-  predicted: EditorModel,
-  refOf: (nodeId: string) => NodeRef | undefined,
-): readonly Edit[] | undefined {
+function replacementEdits(origin: PageOrigin, predicted: EditorModel, refOf: (nodeId: string) => NodeRef | undefined): readonly Edit[] | undefined {
   const afterById = nodesById(predicted.nodes);
   const pending: PageNode[] = [...origin.model.nodes];
   const edits: Edit[] = [];
@@ -626,11 +721,7 @@ function childNodes(node: PageNode): readonly PageNode[] {
 }
 
 // A request did not apply: refused over changed bytes, or not written.
-function stopped(
-  error: PageEditError,
-  authored: Digest,
-  replies: readonly PageEdited[],
-): GestureSent {
+function stopped(error: PageEditError, authored: Digest, replies: readonly PageEdited[]): GestureSent {
   const disk = replies[replies.length - 1]?.checksum ?? authored;
   switch (error.code) {
     case 'rejected':
@@ -645,9 +736,7 @@ function stopped(
     case 'backpressured':
       // Refused before anything was written: safe to send again, when none of
       // the gesture's requests applied yet.
-      return replies.length === 0
-        ? { tag: 'retry', message: error.message }
-        : { tag: 'uncertain', message: error.message, replies };
+      return replies.length === 0 ? { tag: 'retry', message: error.message } : { tag: 'uncertain', message: error.message, replies };
     case 'write-race':
     case 'uncertain':
       return { tag: 'uncertain', message: error.message, replies };

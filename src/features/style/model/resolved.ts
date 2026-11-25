@@ -6,17 +6,40 @@
 // so switching selector/context/state just re-derives — no re-scan.
 
 import { compareCascade } from './cascade';
+import type { LayerPosition } from './cascadeLayers';
+import type { LossKind } from './cascadeResolve';
 import type { MatchedRule, RuleModel } from './cascade';
 import { assert } from '../../../../shared/core/assert';
-import { canonicalCompound, compareSpecificity, normalizePseudoElement } from './selectors';
+import {
+  canonicalCompound,
+  compareSpecificity,
+  normalizePseudoElement,
+  parseSelectorList,
+  selectorLayerOf,
+  selectorListLayers,
+  type SelectorLayer,
+} from './selectors';
 import { spacingSides } from './spacingShorthand';
 import type { BreakpointId, ParsedRule, Specificity } from './styleTypes';
+import type { InlineDeclaration } from '../../../../shared/engine/inlineStyle';
+import { INLINE_STYLE_LABEL, INLINE_STYLE_SELECTOR } from './inlineTarget';
 
 export type ContextKey = string; // '' = Base; else the joined atContext
 export type StateKey = '' | ':hover' | ':focus' | ':active';
 
 /** Which layer an edit targets: the embed CSS or the native Webflow class style. */
 export type SourceKey = 'embed' | 'native';
+
+/** Where a contributed value comes from: a layer, or the element's own `style`
+ *  attribute, which outranks every selector (model/inlineTarget.ts). */
+export type ContributorOrigin = SourceKey | 'inline' | 'browser';
+
+/** The selected element's inline declarations, folded in above every rule. */
+export type InlineResolveInput = {
+  readonly declarations: readonly InlineDeclaration[];
+  /** The "Inline styles" chip is the edit target: its values are the selected ones. */
+  readonly selected: boolean;
+};
 
 /**
  * A selectable context in the panel — Base, a Webflow breakpoint, an embed
@@ -30,6 +53,14 @@ export type StyleContext = {
   breakpoint: BreakpointId | undefined;
   /** The embed at-context to match embed rules against ('' = base), or undefined. */
   embedAtContext: string | undefined;
+  /** The selector the query is nested inside (model/queryWrapper.ts), for a
+   *  context keyed by a nested placement; absent for Base, breakpoints and
+   *  top-level queries. */
+  wrapper?: string;
+  /** The key of the stylesheet the query's block is written in, for a context
+   *  that names one (model/queryWrapper.ts); absent for Base, breakpoints and
+   *  queries typed but not yet written. */
+  source?: string;
 };
 
 /** One property value contributed by a native Webflow class style. */
@@ -52,6 +83,13 @@ export type NativeContribution = {
    *  the base state under a :hover/… view) — only these read as "set here" (blue). */
   atState: boolean;
 };
+
+/**
+ * Which boxes the panel lists for the selection: one layer, or `every` for a
+ * host whose navigator has no ::before and ::after rows, where a chip is the
+ * only way to reach a pseudo-element's rules.
+ */
+export type PanelLayer = SelectorLayer | 'every';
 
 export const STATES: readonly StateKey[] = ['', ':hover', ':focus', ':active'];
 const INTERACTION_STATES = new Set<string>([':hover', ':focus', ':active']);
@@ -79,19 +117,25 @@ export type NativeResolveInput = {
    *  "set here" (blue) only at this tier; a lower tier means it's inherited from a
    *  wider breakpoint (orange). Undefined → don't gate (Base / non-breakpoint). */
   currentTier?: number;
+  /** The ::before or ::after layer picked in the navigator (`::after`). With no
+   *  selector picked, the panel shows that box's styles, not the element's: the
+   *  pseudo-element otherwise comes only from the active selector. */
+  pseudoLayer?: string | undefined;
 };
 
 export type Contributor = {
   /** The matched selector's own text (e.g. '.a', '.parent .a', '.a:hover'). */
   selectorText: string;
+  /** How a nested rule's selector reads as written (`.hero {.title}`); matching keeps `selectorText`. */
+  display?: string;
   value: string;
   important: boolean;
   specificity: Specificity;
   /** Document order of the owning rule (ascending = earlier in the cascade). */
   order: number;
   ruleId: string;
-  /** Where this value comes from: an embed rule or a native Webflow style. */
-  origin: SourceKey;
+  /** Where this value comes from: an embed rule, a native Webflow style, or the style attribute. */
+  origin: ContributorOrigin;
   /** For native contributors: the NativeModel.styles index (else undefined). */
   styleIndex?: number;
   /** For native contributors: breakpoint cascade tier (0 = base; else undefined). */
@@ -113,6 +157,12 @@ export type Contributor = {
   winning: boolean;
   /** True when the selector can't be a token chip (combinator / :is / :has / …). */
   complexOnly: boolean;
+  /** The cascade layer the rule is written in, absent when unlayered (model/cascadeLayers.ts). */
+  layer?: LayerPosition | undefined;
+  /** True for the element's own `style` attribute, which the cascade ranks above every rule. */
+  inline?: boolean;
+  /** Why this declaration is not the one in use, once the page has been asked (model/cascadeTruth.ts). */
+  lossReason?: LossKind;
 };
 
 export type ResolvedProp = {
@@ -122,7 +172,7 @@ export type ResolvedProp = {
   /** Which layer the editable (selected) value lives in — so writes/clears target
    *  the right place. 'native' when the Webflow class sets it, 'embed' when the
    *  picked embed does (native-first, embed-fallback). undefined when 'other'. */
-  selectedOrigin?: SourceKey;
+  selectedOrigin?: ContributorOrigin;
   /** The selected selector's own value for this prop (source==='selected'). */
   selectedValue?: { value: string; important: boolean };
   /** The cascade winner across all contributors in this context/state. */
@@ -168,6 +218,12 @@ export type ContextInfo = {
   styledCombos: string[][];
   /** The strongest such combo — what to auto-select when switching here. */
   bestTokens: string[] | undefined;
+  /** The selector this context's query is nested inside (model/queryWrapper.ts),
+   *  the dropdown's first line. Absent for Base and top-level queries. */
+  wrapper?: string;
+  /** The selectors written inside this context's query (model/queryWrapper.ts),
+   *  the dropdown's last line. Absent for Base and a query with none. */
+  querySelectors?: readonly string[];
 };
 
 /**
@@ -177,7 +233,7 @@ export type ContextInfo = {
  * queries with no element styles (so the dropdown can offer them); those come
  * back with hasStyles=false.
  */
-export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): ContextInfo[] {
+export function indexContexts(model: RuleModel, contextKeys: ContextKey[], layer: PanelLayer = ''): ContextInfo[] {
   const all = [...model.base, ...model.conditional];
   return contextKeys.map((key) => {
     let hasStyles = false;
@@ -188,6 +244,9 @@ export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): Cont
       }
       if (matched.rule.declarations.length === 0) {
         continue;
+      }
+      if (!ruleOnLayer(matched, layer)) {
+        continue; // styles another box of this element
       }
       hasStyles = true;
       for (const selector of matched.matchedSelectors) {
@@ -217,6 +276,11 @@ export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): Cont
   });
 }
 
+/** Whether a matched rule styles `layer` of the element, in at least one of its members. */
+export function ruleOnLayer(matched: Pick<MatchedRule, 'matchedSelectors'>, layer: PanelLayer): boolean {
+  return layer === 'every' || matched.matchedSelectors.some((selector) => selectorLayerOf(selector.pseudoElement) === layer);
+}
+
 /** A selector (subject = the element) that has styles — one chip in the picker. */
 export type MatchedSelector = {
   /** The authored selector text, e.g. `.test:hover`, `.parent.is-active .test`. */
@@ -226,10 +290,22 @@ export type MatchedSelector = {
   state: StateKey;
   /** True for a lone tag/class/attr compound (chip-composable / native-eligible). */
   simple: boolean;
-  /** True when at least one matching rule comes from a component's style tag. */
+  /** True when at least one matching rule comes from a component's style tag. This
+   *  says where an edit is saved; the chip's green follows inComponentMarkup. */
   fromComponent: boolean;
+  /** True when every class and attribute the chip needs on the selected element is
+   *  written in the open component's markup (model/componentMarkup.ts): the chip is
+   *  the component's, and green, wherever its CSS lives. */
+  inComponentMarkup?: boolean;
+  /** True when the chip names a class the instance passed to the component open on
+   *  the canvas (`column1Class="hero_copy"`): the page's class, not the component's
+   *  (model/instanceClasses.ts). */
+  fromInstance?: boolean;
   /** Normalized identity key (also used to dedupe + compare). */
   key: string;
+  /** The box this chip's rule styles on the element. Set for chips made from a
+   *  rule; a native or pending chip is read from its text (chipLayer). */
+  layer?: SelectorLayer;
   /** Set for the active selector when no rule exists for it yet (a freshly picked /
    *  typed selector) — rendered as a pending chip until its first property lands. */
   pending?: boolean;
@@ -256,16 +332,22 @@ function listMatchedSelectorsCandidate(input: {
   readonly state: StateKey;
   readonly simple: boolean;
   readonly inContext: boolean;
+  readonly layer: SelectorLayer;
+  /** A chip for one member of the rule's list reads as itself, not as the whole list. */
+  readonly member?: boolean;
 }): MatchedSelectorCandidate {
+  const display = input.member === true ? undefined : input.rule.nestedDisplay;
+  const queryDisplay = input.member === true ? undefined : input.rule.queryDisplay;
   return {
     text: input.text,
+    layer: input.layer,
     specificity: input.specificity,
     state: input.state,
     simple: input.simple,
     inContext: input.inContext,
     fromComponent: input.rule.fromComponent,
-    ...(input.rule.nestedDisplay === undefined ? {} : { display: input.rule.nestedDisplay }),
-    ...(input.rule.queryDisplay === undefined ? {} : { queryDisplay: input.rule.queryDisplay }),
+    ...(display === undefined ? {} : { display }),
+    ...(queryDisplay === undefined ? {} : { queryDisplay }),
   };
 }
 
@@ -292,6 +374,11 @@ export function selectorKey(text: string): string {
 /** Whether two selectors are the same target (subject compound / full selector). */
 export function selectorsMatch(left: string, right: string): boolean {
   return selectorKey(left) === selectorKey(right);
+}
+
+/** The box a chip styles. A chip with no rule behind it says so in its text. */
+export function chipLayer(chip: Pick<MatchedSelector, 'layer' | 'text'>): SelectorLayer {
+  return chip.layer ?? selectorListLayers(chip.text)[0] ?? '';
 }
 
 /** The interaction state a selector targets, from its subject pseudo-classes. */
@@ -338,23 +425,22 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
     }
   }
   assert(order === byKey.size, 'listMatchedSelectors: one order rank per chip');
-  return [...byKey.values()].sort(
-    (left, right) =>
-      compareSpecificity(left.specificity, right.specificity) ||
-      left.text.localeCompare(right.text),
-  );
+  return [...byKey.values()].sort((left, right) => compareSpecificity(left.specificity, right.specificity) || left.text.localeCompare(right.text));
 }
 
 // The chips one matched rule contributes. A splittable selector (`.card::before`) gets
 // its own chip — editing it splits it out of the grouped rule. Complex matched
 // selectors (`:not(.x) > :is(...)`, which can't be cleanly split) are folded into ONE
 // chip showing the rule's FULL grouped selector, so it's clear that editing touches
-// every selector/element it targets.
-function chipsForRule(
-  matched: MatchedRule,
-  options: { readonly inContext: boolean },
-): MatchedSelectorCandidate[] {
+// every selector/element it targets. A rule styling several boxes of the element
+// is the exception: see chipsForMixedRule.
+function chipsForRule(matched: MatchedRule, options: { readonly inContext: boolean }): MatchedSelectorCandidate[] {
   const { inContext } = options;
+  const layers = new Set(matched.matchedSelectors.map((selector) => selectorLayerOf(selector.pseudoElement)));
+  if (layers.size > 1) {
+    return chipsForMixedRule(matched, options);
+  }
+  const [layer = ''] = layers;
   const chips: MatchedSelectorCandidate[] = [];
   let complexSpec: Specificity | undefined;
   for (const selector of matched.matchedSelectors) {
@@ -371,6 +457,7 @@ function chipsForRule(
           state: stateOf(canon.pseudoClasses),
           specificity: selector.specificity,
           inContext,
+          layer,
         }),
       );
     } else if (!complexSpec || compareSpecificity(selector.specificity, complexSpec) > 0) {
@@ -387,28 +474,80 @@ function chipsForRule(
         state: stateOf(canon.pseudoClasses),
         specificity: complexSpec,
         inContext,
+        layer,
       }),
     );
   }
   return chips;
 }
 
+// A rule that styles the element and its ::after (`.a .b, .a .b::after`) belongs in
+// both lists, each showing its own part. So each member is a chip of its own, whatever
+// its shape, and editing one splits it out (groupMemberToSplit) rather than changing
+// the other box too. The nested display reads as the whole list, so a member shows
+// its own resolved text instead.
+function chipsForMixedRule(matched: MatchedRule, options: { readonly inContext: boolean }): MatchedSelectorCandidate[] {
+  const chips = matched.matchedSelectors.flatMap((selector) => {
+    const canon = canonicalCompound(selector.text);
+    if (isBareSelector(canon)) {
+      return [];
+    }
+    return [
+      listMatchedSelectorsCandidate({
+        rule: matched.rule,
+        text: selector.text,
+        simple: canon.simple,
+        state: stateOf(canon.pseudoClasses),
+        specificity: selector.specificity,
+        inContext: options.inContext,
+        layer: selectorLayerOf(selector.pseudoElement),
+        member: true,
+      }),
+    ];
+  });
+  assert(chips.length <= matched.matchedSelectors.length, 'chipsForMixedRule: at most one chip per member');
+  return chips;
+}
+
+/**
+ * The member of `rule`'s written list to split out before editing for `active`, or
+ * undefined to edit the rule whole. A splittable member is split as ever. So is any
+ * member of a rule styling several boxes, since its chip stands for that member
+ * alone (chipsForMixedRule): the written `&::after` is found through its resolved
+ * text, and a list nested in a list resolves one written member per parent, in order.
+ */
+export function groupMemberToSplit(
+  rule: Pick<ParsedRule, 'selectors'> & { readonly node: { readonly selectors?: readonly string[] } },
+  active: string,
+): number | undefined {
+  const written = rule.node.selectors;
+  if (written === undefined || written.length <= 1 || active.length === 0) {
+    return undefined;
+  }
+  const splittable = written.findIndex((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
+  if (splittable >= 0) {
+    return splittable;
+  }
+  const layers = new Set(rule.selectors.map((selector) => selectorLayerOf(selector.pseudoElement)));
+  const member = rule.selectors.findIndex((selector) => selectorsMatch(selector.text, active));
+  if (layers.size < 2 || member < 0 || rule.selectors.length % written.length !== 0) {
+    return undefined;
+  }
+  const index = member % written.length;
+  assert(index < written.length, 'groupMemberToSplit: the member is one of the written ones');
+  return index;
+}
+
 function isBareSelector(canon: ReturnType<typeof canonicalCompound>): boolean {
   // A BARE pseudo-element (`::before`, `*::before`) styles every element's box with
   // no element-specific selector — it'd pollute every element's list; skip it.
-  if (canon.pseudoElement && canon.oneCompound && canon.tokens.length === 0) {
+  if (canon.pseudoElement && canon.oneCompound && canon.tokens.length === 0 && !canon.functional) {
     return true;
   }
   // A lone universal (`*`) matches everything — too generic to be a useful chip on
   // its own. Skip it UNLESS it's part of a more specific selector (a combinator,
   // a state, or a pseudo-element makes it non-bare, so it isn't caught here).
-  return (
-    canon.universal &&
-    canon.oneCompound &&
-    canon.tokens.length === 0 &&
-    !canon.pseudoElement &&
-    canon.pseudoClasses.length === 0
-  );
+  return canon.universal && canon.oneCompound && canon.tokens.length === 0 && !canon.pseudoElement && canon.pseudoClasses.length === 0;
 }
 
 export function resolveStyle(
@@ -416,6 +555,7 @@ export function resolveStyle(
   context: ContextKey,
   activeSelector: string,
   native?: NativeResolveInput,
+  inline?: InlineResolveInput,
 ): ResolvedStyle {
   const all = [...model.base, ...model.conditional];
 
@@ -423,12 +563,12 @@ export function resolveStyle(
   // both derived from the active selector: `.a:hover` → hover state, `.a::before` →
   // the ::before box. Picking a `::before` chip shows only that box's styles (not the
   // element's); picking the element (no pseudo-element) hides `::before`/`::after`.
-  const activeCanon = canonicalCompound(activeSelector);
+  const activePseudo = activePseudoOf(activeSelector, native?.pseudoLayer);
   const view: ResolveView = {
     context,
     activeSelector,
-    state: stateOf(activeCanon.pseudoClasses),
-    activePseudo: activeCanon.pseudoElement,
+    state: stateOfMember(activeSelector, activePseudo),
+    activePseudo,
   };
 
   const byProp = new Map<string, Contributor[]>();
@@ -467,15 +607,20 @@ export function resolveStyle(
     byProp.set(contribution.prop, list);
   }
 
+  // The style attribute applies to the element in every query and state, above any
+  // selector, and never to its ::before or ::after box.
+  for (const [prop, contributor] of view.activePseudo ? [] : inlineContributors(inline)) {
+    const list = byProp.get(prop) ?? [];
+    list.push(contributor);
+    byProp.set(prop, list);
+  }
+
   const props = new Map<string, ResolvedProp>();
   byProp.forEach((list, prop) => {
     props.set(prop, resolveProp(prop, list, native));
   });
   assert(props.size === byProp.size, 'resolveStyle: one resolved entry per property');
-  assert(
-    selectedRule === undefined || selectedRules.has(selectedRule.ruleId),
-    'resolveStyle: the selected rule is one of the picked selector’s rules',
-  );
+  assert(selectedRule === undefined || selectedRules.has(selectedRule.ruleId), 'resolveStyle: the selected rule is one of the picked selector’s rules');
   return { props, selectedRule, selectedRules, contexts: contextsOf(all), states: STATES };
 }
 
@@ -501,9 +646,7 @@ export function selectedRulesSetting(resolved: ResolvedStyle, prop: string): Par
  *  where the cascade ignores it, and the panel keeps showing the old one. */
 export function editableRuleFor(resolved: ResolvedStyle, prop: string): ParsedRule | undefined {
   const shown = resolved.props.get(prop);
-  const setHere = shown?.contributors.find(
-    (contributor) => contributor.origin === 'embed' && contributor.editing === true,
-  );
+  const setHere = shown?.contributors.find((contributor) => contributor.origin === 'embed' && contributor.editing === true);
   if (setHere === undefined) {
     return resolved.selectedRule;
   }
@@ -511,6 +654,27 @@ export function editableRuleFor(resolved: ResolvedStyle, prop: string): ParsedRu
   assert(rule !== undefined, 'editableRuleFor: the edited value comes from a picked rule');
   assert(rule.ruleId === setHere.ruleId, 'editableRuleFor: the rule is the one named');
   return rule;
+}
+
+// The box the panel views. A picked pseudo-element selector names its own target.
+// Otherwise, on a navigator ::after layer, that box is the target: with no chip
+// picked the active selector falls back to the element's own (`.faq_summary`), whose
+// view showed the element's styles and none of the ::after's. A list's first member
+// does not speak for it: a list holding the box in view stays on that box.
+function activePseudoOf(activeSelector: string, pseudoLayer: string | undefined): string {
+  const members = parseSelectorList(activeSelector).map((selector) => normalizePseudoElement(selector.pseudoElement));
+  const named = members.filter((member) => member !== '');
+  if (pseudoLayer !== undefined && pseudoLayer !== '') {
+    return named.includes(pseudoLayer) ? pseudoLayer : (named[0] ?? pseudoLayer);
+  }
+  return members.includes('') ? '' : (named[0] ?? '');
+}
+
+// The interaction state of the active list's member that styles the box in view.
+function stateOfMember(activeSelector: string, activePseudo: string): StateKey {
+  const members = parseSelectorList(activeSelector);
+  const member = members.find((selector) => normalizePseudoElement(selector.pseudoElement) === activePseudo) ?? members[0];
+  return stateOf(canonicalCompound(member?.text ?? activeSelector).pseudoClasses);
 }
 
 /** What resolveStyle is looking at: the context, the active selector, and its view. */
@@ -583,8 +747,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
   // it builds on (as inherited/orange), not only its own overrides. Mirrors how a
   // Webflow breakpoint shows wider-breakpoint values. Sibling queries don't apply.
   const atContext = ruleContext === view.context;
-  const inherited =
-    !atContext && (ruleContext === '' || view.context.startsWith(`${ruleContext} › `));
+  const inherited = !atContext && (ruleContext === '' || view.context.startsWith(`${ruleContext} › `));
   if (!atContext && !inherited) {
     return undefined;
   }
@@ -598,6 +761,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
     prop,
     contributor: {
       selectorText: winner.text,
+      ...(matched.rule.nestedDisplay === undefined ? {} : { display: matched.rule.nestedDisplay }),
       value: decl.value,
       important: decl.important,
       specificity: winner.specificity,
@@ -610,6 +774,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
       isSelected,
       winning: false,
       complexOnly: !winner.simple,
+      ...(matched.rule.layer === undefined ? {} : { layer: matched.rule.layer }),
     },
   }));
   return { isSelected, contributors };
@@ -664,6 +829,48 @@ function isSelectedRule(matched: MatchedRule, view: ResolveView): boolean {
   );
 }
 
+// Above any selector's (no selector has a million ids), so the cascade ranks the
+// style attribute first, below only an `!important` rule over a plain declaration.
+const INLINE_SPECIFICITY: Specificity = [1_000_000, 0, 0];
+const INLINE_ORDER = Number.MAX_SAFE_INTEGER;
+
+// One contributor per property the attribute sets, read as a rule's declarations
+// are (declaredByProp): the last wins unless an earlier one is `!important`, and a
+// box shorthand also counts for each side.
+function inlineContributors(inline: InlineResolveInput | undefined): ReadonlyMap<string, Contributor> {
+  const contributors = new Map<string, Contributor>();
+  if (inline === undefined) {
+    return contributors;
+  }
+  const declare = (prop: string, value: Declared): void => {
+    if (contributors.get(prop)?.important === true && !value.important) {
+      return;
+    }
+    contributors.set(prop, {
+      selectorText: INLINE_STYLE_SELECTOR,
+      display: INLINE_STYLE_LABEL,
+      value: value.value,
+      important: value.important,
+      specificity: INLINE_SPECIFICITY,
+      order: INLINE_ORDER,
+      ruleId: `inline:${prop}`,
+      origin: 'inline',
+      isSelected: inline.selected,
+      winning: false,
+      complexOnly: false,
+      inline: true,
+    });
+  };
+  for (const declaration of inline.declarations) {
+    declare(declaration.property, { value: declaration.value, important: declaration.important });
+    for (const [side, value] of spacingSides(declaration.property, declaration.value)) {
+      declare(side, { value, important: declaration.important });
+    }
+  }
+  assert(contributors.size >= Math.min(inline.declarations.length, 1), 'inlineContributors: none dropped');
+  return contributors;
+}
+
 function nativeContributor(contribution: NativeContribution): Contributor {
   return {
     selectorText: contribution.selector,
@@ -673,9 +880,7 @@ function nativeContributor(contribution: NativeContribution): Contributor {
     // A narrower breakpoint's value (higher bpTier) wins the same-specificity
     // tie over the inherited base value; both stay below any embed rule.
     order: NATIVE_ORDER_BASE + contribution.bpTier * 1_000 + contribution.styleIndex,
-    ruleId:
-      `native:${contribution.styleIndex}:${contribution.bpTier}:` +
-      `${contribution.atState ? 's' : 'b'}:${contribution.prop}`,
+    ruleId: `native:${contribution.styleIndex}:${contribution.bpTier}:` + `${contribution.atState ? 's' : 'b'}:${contribution.prop}`,
     origin: 'native',
     styleIndex: contribution.styleIndex,
     bpTier: contribution.bpTier,
@@ -687,11 +892,7 @@ function nativeContributor(contribution: NativeContribution): Contributor {
 }
 
 // Rank one property's contributors and mark its winner and its editable one.
-function resolveProp(
-  prop: string,
-  list: Contributor[],
-  native: NativeResolveInput | undefined,
-): ResolvedProp {
+function resolveProp(prop: string, list: Contributor[], native: NativeResolveInput | undefined): ResolvedProp {
   const source = native?.source ?? 'embed';
   list.sort((left, right) => compareCascade(left, right, left.order, right.order));
   const winner = list[0];
@@ -717,10 +918,11 @@ function resolveProp(
       (native?.currentTier === undefined || contribution.bpTier === native.currentTier) &&
       contribution.atState !== false,
   );
-  const embedSelected = list.find(
-    (contribution) => contribution.origin === 'embed' && contribution.isSelected,
-  );
-  const selected = source === 'native' ? (nativeSelected ?? embedSelected) : embedSelected;
+  const embedSelected = list.find((contribution) => contribution.origin === 'embed' && contribution.isSelected);
+  // The "Inline styles" chip picked: the attribute is the target, whatever layer is chosen.
+  const inlineSelected = list.find((contribution) => contribution.origin === 'inline' && contribution.isSelected);
+  const layerSelected = source === 'native' ? (nativeSelected ?? embedSelected) : embedSelected;
+  const selected = inlineSelected ?? layerSelected;
   // Mark the contributor whose value is the one being edited (the picked selector's)
   // so the provenance list can highlight it rather than the cascade winner.
   if (selected) {
@@ -730,9 +932,7 @@ function resolveProp(
     prop,
     source: selected ? 'selected' : 'other',
     ...(selected === undefined ? {} : { selectedOrigin: selected.origin }),
-    ...(selected === undefined
-      ? {}
-      : { selectedValue: { value: selected.value, important: selected.important } }),
+    ...(selected === undefined ? {} : { selectedValue: { value: selected.value, important: selected.important } }),
     winner,
     // The picked selector sets it, but a more specific selector wins the cascade.
     overridden: selected !== undefined && winner !== selected,

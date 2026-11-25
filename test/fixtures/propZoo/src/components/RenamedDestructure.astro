@@ -1,0 +1,8 @@
+---
+interface Props {
+  title?: string;
+  class?: string;
+}
+const { title: heading = 'Untitled', class: className } = Astro.props;
+---
+<h3 class:list={['renamed-destructure', className]}>{heading}</h3>

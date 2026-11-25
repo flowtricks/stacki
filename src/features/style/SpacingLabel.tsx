@@ -3,33 +3,27 @@
 // selector (SpacingBox.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import { HoverTooltip } from './components/SegmentedControl';
+import { HoverTooltip } from '../../ui/SegmentedControl';
 import type { ProjectVariable } from './model/webflow';
 import { type ResolvedProp } from './model/resolved';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type Side,
-  displayOf,
-  isWrappedValue,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Side, displayOf, isWrappedValue } from './spacingTypes';
 import { siblingProps, useSideDrag, useSideHover } from './SpacingFill';
 import { withImportant } from './spacingValue';
+import { parseImportant } from './model/styleDisplay';
+import { ImportantBadge } from './components/ImportantMark';
 import { useStyleHint } from './model/computedStyle';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 
 /** Label text: the value with its unit (the empty placeholder when unset), sans
- *  !important. The CSS truncates it to the band, so the unit shows when there's room. */
+ *  !important — the band has no room for the word, so the label carries the
+ *  panel's `!` mark instead (labelLook's `important`). The CSS truncates it to
+ *  the band, so the unit shows when there's room. */
 export function labelFor(value: string, empty: string): string {
   const text = value.trim().replace(/\s*!important$/i, '');
   return text || empty;
 }
 
-export function variableFor(
-  value: string,
-  variables: ProjectVariable[],
-): ProjectVariable | undefined {
+export function variableFor(value: string, variables: ProjectVariable[]): ProjectVariable | undefined {
   const raw = value.trim().replace(/\s*!important$/i, '');
   const binding = raw.match(/var\(\s*--[A-Za-z0-9_-]+[^)]*\)/i)?.[0];
   // Purple is reserved for a direct variable value. Expressions that merely contain
@@ -43,8 +37,28 @@ export function variableFor(
   });
 }
 
-/** `margin-top` -> `Margin top`, `top` -> `Top` for the click editor label. */
-export function humanLabel(prop: string): string {
+const SIDE_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  'margin-top': 'style.spacingLabel.marginTop',
+  'margin-right': 'style.spacingLabel.marginRight',
+  'margin-bottom': 'style.spacingLabel.marginBottom',
+  'margin-left': 'style.spacingLabel.marginLeft',
+  'padding-top': 'style.spacingLabel.paddingTop',
+  'padding-right': 'style.spacingLabel.paddingRight',
+  'padding-bottom': 'style.spacingLabel.paddingBottom',
+  'padding-left': 'style.spacingLabel.paddingLeft',
+  top: 'style.spacingLabel.top',
+  right: 'style.spacingLabel.right',
+  bottom: 'style.spacingLabel.bottom',
+  left: 'style.spacingLabel.left',
+};
+
+/** `margin-top` -> `Margin top`, `top` -> `Top` for the click editor label, in the active language. */
+export function humanLabel(prop: string, translate: Translator): string {
+  const key = SIDE_LABEL_KEYS[prop];
+  if (key !== undefined) {
+    return translate(key);
+  }
+  // Any other property keeps the English wording derived from its CSS name.
   const spaced = prop.replace('-', ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
@@ -105,35 +119,20 @@ export function SpacingLabel(props: SpacingLabelProps) {
         }}
       >
         {look.text}
+        {look.important ? <ImportantBadge /> : undefined}
       </button>
-      {tooltip.shown && look.hasValue && buttonRef.current ? (
-        <SpacingLabelTooltip anchor={buttonRef.current} look={look} />
-      ) : undefined}
+      {tooltip.shown && look.hasValue && buttonRef.current ? <SpacingLabelTooltip anchor={buttonRef.current} look={look} /> : undefined}
     </>
   );
 }
 
 // The label's tooltip: a variable's full name, an override's winner, or the
 // value spelled out.
-export function SpacingLabelTooltip({
-  anchor,
-  look,
-}: {
-  anchor: HTMLElement;
-  look: { variableFullName: string; tooltipContent: string };
-}) {
+export function SpacingLabelTooltip({ anchor, look }: { anchor: HTMLElement; look: { variableFullName: string; tooltipContent: string } }) {
   return (
     <HoverTooltip anchor={anchor}>
       <span className="embed-editor_spacing-tooltip">
-        <span
-          className={
-            look.variableFullName
-              ? 'embed-editor_spacing-tooltip-meta'
-              : 'embed-editor_spacing-tooltip-value'
-          }
-        >
-          {look.tooltipContent}
-        </span>
+        <span className={look.variableFullName ? 'embed-editor_spacing-tooltip-meta' : 'embed-editor_spacing-tooltip-value'}>{look.tooltipContent}</span>
       </span>
     </HoverTooltip>
   );
@@ -151,10 +150,7 @@ export function useLabelGesture({
   liveSetProp,
   onLive,
   onLiveEnd,
-}: Pick<
-  SpacingLabelProps,
-  'prop' | 'side' | 'read' | 'busy' | 'setProp' | 'liveSetProp' | 'onLive' | 'onLiveEnd'
->) {
+}: Pick<SpacingLabelProps, 'prop' | 'side' | 'read' | 'busy' | 'setProp' | 'liveSetProp' | 'onLive' | 'onLiveEnd'>) {
   const propForSide = (other: Side) => siblingProps(prop, side, [other])[0] ?? prop;
   // `padding-top` → padding, `margin-top` → margin, a bare inset (`top`) → the
   // box it is drawn in, which is the margin frame.
@@ -220,25 +216,20 @@ export function labelLook({
   const overridden = override === undefined && display.overridden && !hasWrappedValue;
   const selected = override !== undefined || (display.present && display.isSelected);
   const color = selected ? 'is-selected' : display.present ? 'is-other' : '';
-  const variable =
-    override === undefined && variableLabels && !hasWrappedValue
-      ? variableFor(value, variables)
-      : undefined;
+  const variable = override === undefined && variableLabels && !hasWrappedValue ? variableFor(value, variables) : undefined;
   const state = `${color}${variable ? ' is-variable' : ''}${overridden ? ' is-overridden' : ''}`;
-  const variableFullName = variable
-    ? variable.group
-      ? `${variable.group}/${variable.name}`
-      : variable.name
-    : '';
-  const tooltipValue = variable ? variable.name : labelFor(value, emptyLabel);
-  const tooltipContent =
-    variableFullName || (overridden ? `Overridden by ${display.winnerSelector}` : tooltipValue);
+  const variableFullName = variable ? (variable.group ? `${variable.group}/${variable.name}` : variable.name) : '';
+  // A live drag carries the flag in its text (SpacingFill.tsx), so both read it the same way.
+  const important = parseImportant(value).important;
+  // The tooltip has the room the band lacks, so it spells the flag out.
+  const tooltipValue = variable ? variable.name : withImportant({ value: labelFor(value, emptyLabel), important });
+  const tooltipContent = variableFullName || (overridden ? `Overridden by ${display.winnerSelector}` : tooltipValue);
   // A side with nothing set already reads "Auto" / "0" on its face; a tooltip saying
   // the same thing is noise over every empty side of the box. Only a value worth
   // spelling out — one that's authored, a variable's full name, an override — gets one.
   const hasValue = override !== undefined || display.present;
   const text = variable?.name ?? labelFor(value, emptyLabel);
-  return { state, variableFullName, tooltipContent, hasValue, text };
+  return { state, variableFullName, tooltipContent, hasValue, text, important };
 }
 
 // The label's tooltip: after a short hover, or at once on keyboard focus, and

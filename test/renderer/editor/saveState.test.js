@@ -28,6 +28,7 @@ const states = {
   clean: { tag: 'clean', checksum: base },
   dirty: { tag: 'dirty', baseChecksum: base },
   saving: { tag: 'saving', baseChecksum: base },
+  failed: { tag: 'failed', baseChecksum: base, message: 'EPERM' },
   conflicted: { tag: 'conflicted', baseChecksum: base, diskChecksum: disk },
 };
 
@@ -40,43 +41,35 @@ test('an edit applies in every state; only its path to disk differs', () => {
   assert.equal(save.saveStateEdited(states.dirty), states.dirty);
   // The write in flight does not carry this edit, so another must follow.
   assert.deepEqual(save.saveStateEdited(states.saving), states.dirty);
+  assert.deepEqual(save.saveStateEdited(states.failed), states.dirty);
   // A conflicted page keeps its edits locally and keeps autosave off.
   assert.equal(save.saveStateEdited(states.conflicted), states.conflicted);
 });
 
-test('only a dirty state starts a save', () => {
+test('new and failed edits can start a save', () => {
   assert.deepEqual(save.saveStateStarted(states.dirty), states.saving);
+  assert.deepEqual(save.saveStateStarted(states.failed), states.saving);
   for (const tag of ['clean', 'saving', 'conflicted']) {
-    assert.throws(
-      () => save.saveStateStarted(states[tag]),
-      new RegExp(`Assertion failed: Only a dirty page starts a save, not ${tag}`),
-    );
+    assert.throws(() => save.saveStateStarted(states[tag]), new RegExp(`Assertion failed: Only an unsaved page starts a save, not ${tag}`));
   }
 });
 
-test('a failed save returns the edit to dirty against the same base', () => {
-  assert.deepEqual(save.saveStateFailed(states.saving), states.dirty);
-  for (const tag of ['clean', 'dirty', 'conflicted']) {
-    assert.throws(
-      () => save.saveStateFailed(states[tag]),
-      new RegExp(`Only a saving page can fail a save, not ${tag}`),
-    );
+test('a failed save retains its error and base, including typing during the save', () => {
+  for (const tag of ['saving', 'dirty', 'failed']) {
+    assert.deepEqual(save.saveStateFailed(states[tag], 'EPERM'), states.failed);
   }
+  assert.throws(() => save.saveStateFailed(states.clean, 'EPERM'), /no failed save/);
+  assert.throws(() => save.saveStateFailed(states.conflicted, 'EPERM'), /dismiss a conflict/);
+  assert.throws(() => save.saveStateFailed(states.saving, ''), /explains why/);
 });
 
 test('a refusal records the base compared and the bytes found on disk', () => {
   const conflicted = { tag: 'conflicted', baseChecksum: written, diskChecksum: disk };
-  for (const tag of ['dirty', 'saving', 'conflicted']) {
+  for (const tag of ['dirty', 'saving', 'failed', 'conflicted']) {
     assert.deepEqual(save.saveStateRefused(states[tag], written, disk), conflicted);
   }
-  assert.throws(
-    () => save.saveStateRefused(states.clean, base, disk),
-    /A clean page has nothing to refuse/,
-  );
-  assert.throws(
-    () => save.saveStateRefused(states.dirty, disk, disk),
-    /A refusal names bytes other than the base/,
-  );
+  assert.throws(() => save.saveStateRefused(states.clean, base, disk), /A clean page has nothing to refuse/);
+  assert.throws(() => save.saveStateRefused(states.dirty, disk, disk), /A refusal names bytes other than the base/);
 });
 
 test('keeping the local version after review rebases it on the disk bytes', () => {
@@ -84,18 +77,15 @@ test('keeping the local version after review rebases it on the disk bytes', () =
     tag: 'dirty',
     baseChecksum: disk,
   });
-  for (const tag of ['clean', 'dirty', 'saving']) {
-    assert.throws(
-      () => save.saveStateAccepted(states[tag]),
-      new RegExp(`Only a conflicted page can be accepted, not ${tag}`),
-    );
+  for (const tag of ['clean', 'dirty', 'saving', 'failed']) {
+    assert.throws(() => save.saveStateAccepted(states[tag]), new RegExp(`Only a conflicted page can be accepted, not ${tag}`));
   }
 });
 
-test('autosave writes only a dirty state', () => {
+test('autosave can retry a failed state', () => {
   assert.deepEqual(
     Object.keys(states).filter((tag) => save.saveStateNeedsWrite(states[tag])),
-    ['dirty'],
+    ['dirty', 'failed'],
   );
 });
 

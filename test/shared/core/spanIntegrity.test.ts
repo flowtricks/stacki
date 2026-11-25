@@ -14,15 +14,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import { parseAttrs, parsePage } from '#dist/electron/parse/astroParser.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import { parsePageResult, type PageNode } from '#dist/shared/page/pageNode.js';
 import type { ParserNode } from '#dist/electron/parse/astroParserTypes.js';
 import { projectPage } from '#dist/shared/page/sourceProjection.js';
-import {
-  generateLargeFixtures,
-  manifestEntry,
-  parserNodeCounter,
-} from '#dist/scripts/reports/largeFixtures.js';
+import { generateLargeFixtures, manifestEntry, parserNodeCounter } from '#dist/scripts/reports/largeFixtures.js';
 
 const DIRECTORIES = ['test/corpus', 'test/fixtures/round-trip', 'test/fixtures/editor-core'];
 const collapse = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -41,6 +37,12 @@ function corpusFiles(): readonly { name: string; text: string }[] {
   );
 }
 
+// The fixture scale the committed manifest was generated at. Stacki has no
+// product size limit any more (sourceBytesMax and treeNodesMax are the platform
+// ceilings), and a fixture at a percentage of those ceilings cannot be built in
+// memory, so the large fixtures keep this fixed, buildable scale.
+const FIXTURE_LIMITS = { sourceBytesMax: 10 * 1024 * 1024, treeNodesMax: 20_000 } as const;
+
 function largeFixtures() {
   const corpus = new Map(
     fs
@@ -48,7 +50,7 @@ function largeFixtures() {
       .filter((name) => name.endsWith('.astro'))
       .map((name) => [name, fs.readFileSync(path.join('test/corpus', name), 'utf8')] as const),
   );
-  return generateLargeFixtures(LIMITS, corpus, counter);
+  return generateLargeFixtures(FIXTURE_LIMITS, corpus, counter);
 }
 
 /** Checks one located node against the text its span slices; returns the
@@ -61,10 +63,7 @@ function checkNode(text: string, node: ParserNode, where: string): number {
   switch (node.kind) {
     case 'component':
     case 'element':
-      assert.ok(
-        slice.startsWith(node.shorthand === true ? '<>' : `<${node.name}`),
-        `${where}: opens`,
-      );
+      assert.ok(slice.startsWith(node.shorthand === true ? '<>' : `<${node.name}`), `${where}: opens`);
       assert.ok(slice.endsWith('>'), `${where}: closes`);
       break;
     case 'raw':
@@ -93,10 +92,7 @@ function checkNode(text: string, node: ParserNode, where: string): number {
       if (node.source !== undefined) {
         assert.equal(slice, node.source, `${where}: ${node.kind} source`);
       } else {
-        assert.ok(
-          node.kind === 'cond' && slice.startsWith(node.test),
-          `${where}: nested condition`,
-        );
+        assert.ok(node.kind === 'cond' && slice.startsWith(node.test), `${where}: nested condition`);
       }
       break;
     case 'branch':
@@ -116,19 +112,11 @@ function checkAttributes(text: string, node: ParserNode, where: string): number 
     assert.equal(name, entry.name, `${where}: ${entry.name} span re-parses to its name`);
     assert.equal(attr?.type, entry.type, `${where}: ${entry.name} keeps its type`);
     if ('nameSpan' in entry) {
-      assert.equal(
-        text.slice(entry.nameSpan.start, entry.nameSpan.end),
-        entry.name,
-        `${where}: name span`,
-      );
+      assert.equal(text.slice(entry.nameSpan.start, entry.nameSpan.end), entry.name, `${where}: name span`);
     }
     if ('valueSpan' in entry) {
       const value = attr !== undefined && 'value' in attr ? attr.value : undefined;
-      assert.equal(
-        text.slice(entry.valueSpan.start, entry.valueSpan.end),
-        value,
-        `${where}: value span`,
-      );
+      assert.equal(text.slice(entry.valueSpan.start, entry.valueSpan.end), value, `${where}: value span`);
     }
   }
   return spans.length;
@@ -153,9 +141,7 @@ function checkFile(name: string, text: string): readonly [number, number] {
     nodes += 1;
     attributes += checkNode(text, entry.node, entry.where);
     const children = entry.node.children ?? [];
-    children.forEach((child, index) =>
-      pending.push({ node: child, where: `${entry.where}/${index}` }),
-    );
+    children.forEach((child, index) => pending.push({ node: child, where: `${entry.where}/${index}` }));
   }
   checkBytes(text, parsed);
   return [nodes, attributes];
@@ -210,24 +196,18 @@ test('every node and attribute span of every corpus file reproduces its text', (
 });
 
 test('the large fixtures are deterministic, match the manifest, and keep span integrity', () => {
-  const manifest: unknown = JSON.parse(
-    fs.readFileSync('test/fixtures/large/manifest.json', 'utf8'),
-  );
+  const manifest: unknown = JSON.parse(fs.readFileSync('test/fixtures/large/manifest.json', 'utf8'));
   const fixtures = largeFixtures();
-  const entries = fixtures.map((fixture) => manifestEntry(fixture, LIMITS, counter));
-  assert.deepEqual(
-    entries,
-    manifest,
-    'regenerate with `npm run fixtures:large` after a corpus change',
-  );
+  const entries = fixtures.map((fixture) => manifestEntry(fixture, FIXTURE_LIMITS, counter));
+  // The real bounds are the platform ceilings, so every fixture fits them by construction.
+  assert.equal(LIMITS.sourceBytesMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(LIMITS.treeNodesMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.deepEqual(entries, manifest, 'regenerate with `npm run fixtures:large` after a corpus change');
   for (const entry of entries) {
     assert.ok(entry.bytes <= LIMITS.sourceBytesMax, `${entry.name} fits the file bound`);
     assert.ok(entry.nodes <= LIMITS.treeNodesMax, `${entry.name} fits the node bound`);
     const measured = entry.axis === 'bytes' ? entry.bytes : entry.nodes;
-    assert.ok(
-      measured >= Math.floor(entry.target * 0.97),
-      `${entry.name} is about ${entry.percent} %`,
-    );
+    assert.ok(measured >= Math.floor(entry.target * 0.97), `${entry.name} is about ${entry.percent} %`);
   }
   for (const fixture of fixtures) {
     const [nodes] = checkFile(fixture.name, fixture.text);

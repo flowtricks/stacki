@@ -6,6 +6,10 @@ import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { handleArrowStep } from './model/numberStep';
 import { useLiveColor } from './model/liveColor';
+import { sliderLength, useLengthUnit } from './model/lengthUnit';
+import { projectDefaultUnit } from '../../../shared/properties/lengthUnit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // Shared building blocks for the shadow editors (text-shadow + box-shadow): a labelled
 // length row (drag slider + number field) and the full-width popup modal. Both editors
@@ -13,7 +17,8 @@ import { useLiveColor } from './model/liveColor';
 // differs (box-shadow adds Type + Size).
 
 // Coarse drag ranges for the shadow sliders (px); the number field always allows a
-// precise value outside the range.
+// precise value outside the range. A rem project keeps these pixel ranges and
+// writes rem (model/lengthUnit.ts, sliderLength).
 export const SHADOW_RANGE: Record<string, { min: number; max: number }> = {
   X: { min: -50, max: 50 },
   Y: { min: -50, max: 50 },
@@ -21,14 +26,14 @@ export const SHADOW_RANGE: Record<string, { min: number; max: number }> = {
   Size: { min: -50, max: 50 },
 };
 
-// Split "2px" → { amount: 2, unit: 'px' } (a bare number defaults to px); undefined
+// Split "2px" → { amount: 2, unit: 'px' } (a bare number takes `bareUnit`); undefined
 // when the value isn't a plain length (var()/calc()/…), so the slider is disabled.
-function parseLength(value: string): { amount: number; unit: string } | undefined {
+function parseLength(value: string, bareUnit: string): { amount: number; unit: string } | undefined {
   const match = value.trim().match(/^(-?\d*\.?\d+)\s*([a-z%]*)$/i);
   if (!match) {
     return undefined;
   }
-  return { amount: parseFloat(match[1] ?? ''), unit: match[2] || 'px' };
+  return { amount: parseFloat(match[1] ?? ''), unit: match[2] || bareUnit };
 }
 
 // A live text field for a shadow sub-value (length or color): live on type
@@ -57,11 +62,12 @@ function ShadowTextInput({
   onLive: (value: string) => void;
   onClear: () => void;
 }) {
+  const translate = useTranslate();
   const field = useShadowDraft({ value, busy, onCommit, onLive, onClear });
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.shadowFields.connect', { name: ariaLabel })}
       disabled={busy}
       className="is-fill"
       prop={prop}
@@ -174,11 +180,11 @@ function useDebouncedLive(onLive: (value: string) => void) {
   return { cancel, liveNow, live };
 }
 
-// Enter commits by blurring; an arrow key steps the number under the caret and
+// Enter commits and keeps the focus; an arrow key steps the number under the caret and
 // writes it straight into the input. Returns the stepped text, if any.
 function stepShadowKey(event: KeyboardEvent<HTMLInputElement>): string | undefined {
   if (event.key === 'Enter') {
-    event.currentTarget.blur();
+    commitInPlace(event.currentTarget);
     return undefined;
   }
   const stepped = handleArrowStep(event);
@@ -211,13 +217,16 @@ export function ShadowLength({
   onLive: (value: string) => void;
   /** Override the coarse slider range (defaults to the SHADOW_RANGE for `label`). */
   range?: { min: number; max: number };
-  /** Unit shown/re-attached when there's no length yet, and on clear (defaults to px).
-   *  The number field keeps whatever unit the value carries (em/rem/%/…). */
+  /** Unit shown/re-attached when there's no length yet, and on clear (defaults to px,
+   *  which a rem project writes as rem). The number field keeps whatever unit the
+   *  value carries (em/rem/%/…). */
   defaultUnit?: string;
 }) {
-  const parsed = parseLength(value);
-  const sliderRange = range ?? SHADOW_RANGE[label] ?? { min: -50, max: 50 };
-  const unit = parsed?.unit ?? defaultUnit;
+  const lengthUnit = useLengthUnit();
+  const bareUnit = projectDefaultUnit(defaultUnit, lengthUnit);
+  const parsed = parseLength(value, bareUnit);
+  const slider = sliderLength(parsed, defaultUnit, range ?? SHADOW_RANGE[label] ?? { min: -50, max: 50 }, lengthUnit);
+  const unit = slider.unit;
   // While the slider is dragged, show its live value in the number field (the model
   // `value` only catches up on commit). Cleared whenever `value` actually changes, so
   // after a commit the field falls back to the model with no flash.
@@ -225,34 +234,35 @@ export function ShadowLength({
   useEffect(() => {
     setLive(undefined);
   }, [value]);
-  // A bare typed number gets the current/default unit ("150" → "150%", "5" → "5px");
-  // a value that already carries a unit (em/rem/%/var()/…) passes through untouched.
-  const withUnit = (text: string): string =>
-    /^-?[\d.]+$/.test(text.trim()) ? `${text.trim()}${unit}` : text;
+  // A bare typed number gets the current/default unit ("150" → "150%", "5" → "5px",
+  // or "5rem" in a rem project); a value that already carries a unit
+  // (em/rem/%/var()/…) passes through untouched.
+  const withUnit = (text: string): string => (/^-?[\d.]+$/.test(text.trim()) ? `${text.trim()}${unit}` : text);
   return (
     <div className="embed-editor_size-row">
       <span className="embed-editor_size-label embed-editor_bg-caption">{label}</span>
       <div className="embed-editor_shadow-field">
         <DragSlider
-          value={parsed?.amount ?? 0}
-          min={sliderRange.min}
-          max={sliderRange.max}
+          value={slider.position ?? 0}
+          min={slider.min}
+          max={slider.max}
+          step={slider.step}
           disabled={busy || !parsed}
           ariaLabel={label}
-          onPreview={(amount) => setLive(`${amount}${unit}`)}
-          onInput={(amount) => onLive(`${amount}${unit}`)}
-          onCommit={(amount) => onCommit(`${amount}${unit}`)}
+          onPreview={(position) => setLive(slider.format(position))}
+          onInput={(position) => onLive(slider.format(position))}
+          onCommit={(position) => onCommit(slider.format(position))}
         />
         <ShadowTextInput
           value={live ?? value}
           busy={busy}
           ariaLabel={label}
-          placeholder={`0${defaultUnit}`}
+          placeholder={`0${bareUnit}`}
           className="u-input embed-editor_size-input embed-editor_shadow-num"
           prop="width"
           onCommit={(text) => onCommit(withUnit(text))}
           onLive={(text) => onLive(withUnit(text))}
-          onClear={() => onCommit(`0${defaultUnit}`)}
+          onClear={() => onCommit(`0${bareUnit}`)}
         />
       </div>
     </div>
@@ -266,24 +276,17 @@ export function ShadowLength({
 // would be absurd. So the row shows the colour it last emitted until the model
 // catches up: otherwise the page moves under the pointer while the swatch and
 // the number sit on the colour the drag started from (see liveColor.ts).
-export function ShadowColorRow({
-  color,
-  busy,
-  onChange,
-}: {
-  color: string;
-  busy: boolean;
-  onChange: (color: string, live: boolean) => void;
-}) {
+export function ShadowColorRow({ color, busy, onChange }: { color: string; busy: boolean; onChange: (color: string, live: boolean) => void }) {
+  const translate = useTranslate();
   const [shown, noteLive] = useLiveColor(color);
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.shadowFields.color')}</span>
       <div className="embed-editor_type-field">
         <ColorSwatch
           value={shown}
           busy={busy}
-          ariaLabel="Shadow color"
+          ariaLabel={translate('style.shadowFields.shadowColor')}
           onChange={(next, live) => {
             noteLive(live ? next : undefined);
             onChange(next, live);
@@ -292,7 +295,7 @@ export function ShadowColorRow({
         <ShadowTextInput
           value={shown}
           busy={busy}
-          ariaLabel="Shadow color"
+          ariaLabel={translate('style.shadowFields.shadowColor')}
           placeholder="rgba(0, 0, 0, 0.2)"
           className="u-input embed-editor_size-input"
           prop="color"

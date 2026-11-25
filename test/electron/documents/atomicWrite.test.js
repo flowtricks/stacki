@@ -17,12 +17,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { protocolLeftovers } = require('../../helpers/platformSupport.js');
-const {
-  createFileExclusive,
-  digestOf,
-  isAtomicTemporary,
-  replaceFileAtomic,
-} = require('#dist/electron/documents/atomicWrite.js');
+const { createFileExclusive, digestOf, isAtomicTemporary, replaceFileAtomic } = require('#dist/electron/documents/atomicWrite.js');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -241,6 +236,10 @@ test('only the module’s own temporary and lock names are treated as temporary'
   assert.equal(isAtomicTemporary('.stacki-write-1b2c.astro'), false);
   assert.equal(isAtomicTemporary('page.tmp'), false);
   assert.equal(isAtomicTemporary('stacki-write-1.tmp'), false);
+  assert.equal(isAtomicTemporary('/p/.stacki/io'), true);
+  assert.equal(isAtomicTemporary('G:\\code\\.stacki\\io\\save.tmp'), true);
+  assert.equal(isAtomicTemporary('/p/.stacki/components.json'), false);
+  assert.equal(isAtomicTemporary('/p/.stacki/io.astro'), false);
   assert.equal(isAtomicTemporary('/p/src/pages/.stacki-io'), true);
   assert.equal(isAtomicTemporary('G:\\code\\src\\pages\\.stacki-io\\save.tmp'), true);
   assert.equal(isAtomicTemporary('/p/src/pages/.stacki-io.astro'), false);

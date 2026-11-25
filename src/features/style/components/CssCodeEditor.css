@@ -3,6 +3,11 @@
   min-width: 0;
 }
 
+/* The selectors and queries a nested rule sits in: its address, not editable. */
+.code-editor .code-editor_context {
+  opacity: 0.55;
+}
+
 .code-editor .cm-editor {
   min-height: inherit;
   overflow: hidden;
@@ -40,4 +45,23 @@
 
 .code-editor.is-readonly .cm-cursor {
   display: none;
+}
+
+/* The frame around an editor: the anchor for its variable dot and chooser.
+   It passes the editor's own sizing through, so an editor that grows in a
+   column (the clip-path code) still grows. */
+.embed-editor_varconnect.code-editor_frame {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+/* The frame is the field: its top-left corner is where the dot is drawn
+   (embed-editor_varconnect-dot's top and left), so the visible editor box must
+   start there. The app-wide `.code-editor` fallback adds 10px of padding, which
+   put the rounded box 10px inside the frame and left the dot floating off its
+   corner, up and to the left. The embedded editors own their spacing, so it is
+   dropped here for every one of them rather than per editor. */
+.code-editor_frame > .code-editor {
+  padding: 0;
 }

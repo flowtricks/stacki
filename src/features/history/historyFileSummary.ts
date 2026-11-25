@@ -8,26 +8,28 @@ export interface HistoryFileSummary {
   readonly updated: number;
 }
 
+export type HistoryFileCategory = keyof HistoryFileSummary;
+
+export function historyFileCategory(file: HistoryCommitFile): HistoryFileCategory {
+  switch (file.status) {
+    case 'A':
+    case 'C':
+      return 'added';
+    case 'D':
+      return 'deleted';
+    default:
+      return 'updated';
+  }
+}
+
 export function summarizeHistoryFiles(files: readonly HistoryCommitFile[]): HistoryFileSummary {
   assert(files.length <= BOUNDARY_LIMITS.itemsMax, 'History files: file limit exceeded');
   // Copies create a new path; renames and type changes update an existing file.
   // Local counters keep the three categories disjoint without allocating lists.
-  let added = 0;
-  let deleted = 0;
-  let updated = 0;
+  const counts = { added: 0, deleted: 0, updated: 0 };
   for (const file of files) {
-    switch (file.status) {
-      case 'A':
-      case 'C':
-        added += 1;
-        break;
-      case 'D':
-        deleted += 1;
-        break;
-      default:
-        updated += 1;
-    }
+    counts[historyFileCategory(file)] += 1;
   }
-  assert(added + deleted + updated === files.length, 'History files: every file is counted once');
-  return { added, deleted, updated };
+  assert(counts.added + counts.deleted + counts.updated === files.length, 'History files: every file is counted once');
+  return counts;
 }

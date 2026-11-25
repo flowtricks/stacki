@@ -1,19 +1,21 @@
 import { validateGuidePreferences } from '../../../shared/properties/guidePreferences';
 // One pending settings value coalesces slider changes; saves are serialized per mounted project.
 import { useEffect, useRef, useState } from 'react';
+import { onWindowReturn } from '../../lib/windowReturn';
 import { record } from '../../../shared/core/boundary';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { GUIDE_DEFAULTS, type GuideSettings } from './guideModel';
 import { loadLegacyGuideSettings, parseGuideSettings, type GuideUpdate } from './guideSettings';
 
 export interface GuidePersistence {
-  readonly message: string;
+  /** Why the guide could not be loaded or saved; empty while all is well. Progress is never one. */
+  readonly problem: string;
   readonly loading: boolean;
   readonly reload: () => void;
 }
 interface GuideState {
   readonly settings: GuideSettings;
-  readonly message: string;
+  readonly problem: string;
   readonly loading: boolean;
 }
 interface GuideController {
@@ -25,21 +27,29 @@ interface GuideController {
 export function useProjectGuideSettings(project: string | undefined) {
   const [state, setState] = useState<GuideState>({
     settings: GUIDE_DEFAULTS,
-    message: '',
+    problem: '',
     loading: true,
   });
   const controller = useRef<GuideController>();
   useEffect(() => {
     if (project === undefined) {
-      setState({ settings: GUIDE_DEFAULTS, message: '', loading: false });
+      setState({ settings: GUIDE_DEFAULTS, problem: '', loading: false });
       return;
     }
     const current = createGuideController(project, setState);
     controller.current = current;
     current.reload();
-    window.addEventListener('focus', current.reload);
+    const refresh = () => {
+      if (!document.hidden) {
+        current.reload();
+      }
+    };
+    const offReturn = onWindowReturn(refresh);
+    // Project metadata has no dedicated watcher; reconcile while the editor remains visible.
+    const timer = window.setInterval(refresh, 15_000);
     return () => {
-      window.removeEventListener('focus', current.reload);
+      offReturn();
+      window.clearInterval(timer);
       current.close();
       controller.current = undefined;
     };
@@ -49,16 +59,13 @@ export function useProjectGuideSettings(project: string | undefined) {
     update: (change: Parameters<GuideUpdate>[0]) => controller.current?.change(change),
     persistence: {
       loading: state.loading,
-      message: state.message,
+      problem: state.problem,
       reload: () => controller.current?.reload(),
     },
   };
 }
 
-export function createGuideController(
-  project: string,
-  notify: (state: GuideState) => void,
-): GuideController {
+export function createGuideController(project: string, notify: (state: GuideState) => void): GuideController {
   const controller = new ProjectGuideController(project, notify);
   return {
     change: (change) => controller.change(change),
@@ -86,7 +93,8 @@ class ProjectGuideController {
     }
     this.settings = change(this.settings);
     this.pending = this.settings;
-    this.report('Saving project guide…');
+    // A save in progress is no news: the guide already shows the change.
+    this.report('');
     this.schedule();
   }
 
@@ -97,21 +105,20 @@ class ProjectGuideController {
     const token = {};
     this.loadToken = token;
     this.status = 'loading';
-    this.report('Loading project guide…');
+    this.report('');
     void readMetadata(this.project, 'guide')
       .then(async (stored) => {
         if (this.status === 'closed' || this.loadToken !== token) {
           return;
         }
         this.source = stored.source;
-        this.settings =
-          this.source === undefined
-            ? loadLegacyGuideSettings(this.project)
-            : guideFromSource(this.source);
+        // Without a file, only settings from app storage are written; defaults wait for a change.
+        const legacy = this.source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
+        this.settings = this.source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(this.source);
         this.status = 'ready';
         this.report('');
-        if (this.source === undefined) {
-          this.pending = this.settings;
+        if (legacy !== undefined) {
+          this.pending = legacy;
           await this.save();
         }
       })
@@ -134,9 +141,9 @@ class ProjectGuideController {
     this.timer = setTimeout(() => void this.save(), 200);
   }
 
-  private report(message: string): void {
+  private report(problem: string): void {
     if (this.status !== 'closed') {
-      this.notify({ settings: this.settings, message, loading: this.status === 'loading' });
+      this.notify({ settings: this.settings, problem, loading: this.status === 'loading' });
     }
   }
 
@@ -150,12 +157,7 @@ class ProjectGuideController {
     try {
       const result = await writeMetadata(this.project, {
         kind: 'guide',
-        source:
-          JSON.stringify(
-            { version: 1, settings: { ...next, columnDefaultsVersion: 1 } },
-            undefined,
-            2,
-          ) + '\n',
+        source: JSON.stringify({ version: 1, settings: { ...next, columnDefaultsVersion: 1 } }, undefined, 2) + '\n',
         ...(this.source === undefined ? {} : { base: this.source }),
       });
       this.source = result.source;
@@ -165,7 +167,7 @@ class ProjectGuideController {
       if (this.status !== 'closed') {
         this.status = 'failed';
       }
-      this.report(`${errorMessage(error)} Reload project settings to continue.`);
+      this.report(`${errorMessage(error)} Project settings will retry automatically.`);
     } finally {
       this.writing = false;
       if (this.pending !== undefined) {
@@ -186,5 +188,5 @@ function guideFromSource(source: string): GuideSettings {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Could not save the project guide.';
+  return error instanceof Error ? error.message : 'Could not save the project guide.'; // i18n-ignore: stored fallback for a non-Error throw; every real failure carries the system's own message.
 }

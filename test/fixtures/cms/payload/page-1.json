@@ -1,0 +1,16 @@
+{
+ "id": 1,
+ "name": "Home",
+ "slug": "home",
+ "blurb": "Hello",
+ "layout": [
+  {
+   "id": "6af6fc1973ae4c05fd86d00e",
+   "heading": "Welcome",
+   "blockName": null,
+   "blockType": "hero"
+  }
+ ],
+ "updatedAt": "2026-11-13T12:01:29.353Z",
+ "createdAt": "2026-11-13T12:01:29.353Z"
+}

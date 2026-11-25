@@ -1,3 +1,6 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { MergeIcon, TrashIcon } from '../../ui/Icons';
+
 interface BranchActionsProps {
   readonly branch: string;
   readonly current: string;
@@ -6,82 +9,44 @@ interface BranchActionsProps {
   readonly onDelete?: (branch: string) => void;
   readonly disabled?: boolean;
 }
-import { MergeIcon, TrashIcon } from '../../ui/Icons';
 
-// The merge and delete buttons on a branch row.
-//
-// Shared, because the chip and the History panel both list branches and a row
-// that behaves differently in two places is two things to learn.
-//
-// Two decisions here, both of them about being honest rather than tidy:
-//
-// ALWAYS SHOWN. They used to appear on hover, which meant that until you
-// happened to hover a row there was no sign the app could merge or delete
-// anything at all. A feature nobody can find is not a feature. They sit dim
-// and come up on hover, so the row stays quiet without the actions being a
-// secret.
-//
-// SHOWN EVEN WHERE THEY CANNOT BE USED, disabled and with the reason on them.
-// The alternative — hiding them — asks the reader to work out why a row is
-// missing something, and "why does this branch have no delete button?" is a
-// worse question than a greyed button that says "you're on this branch".
-//
-// What each button is refused for:
-//
-//   merge   only into a DIFFERENT branch. Merging main into the branch you are
-//           working on is completely ordinary and stays available — it is how
-//           you catch up with the trunk — so the only refusal is a branch
-//           against itself.
-//   delete  not the branch you are standing on (git refuses), and not the
-//           trunk. Git will delete main as readily as anything else the moment
-//           it is merged into where you are, and it is the one branch
-//           everything comes back to.
-export default function BranchActions({
-  branch,
-  current,
-  trunk,
-  onMerge,
-  onDelete,
-  disabled,
-}: BranchActionsProps) {
-  const isCurrent = branch === current;
-  const isTrunk = !!trunk && branch === trunk;
-
-  const mergeWhy = isCurrent
-    ? `You’re on ${branch} — a branch can’t be merged into itself`
-    : `Merge ${branch} into ${current}`;
-
-  const deleteWhy = isCurrent
-    ? `You’re on ${branch} — switch to another branch first`
-    : isTrunk
-      ? `${branch} is the branch everything comes back to — it isn’t meant to be deleted`
-      : `Delete ${branch}`;
-
+// Hide actions that cannot apply to this branch; temporary work only disables
+// available actions so the row does not shift while an operation is running.
+export default function BranchActions({ branch, current, trunk, onMerge, onDelete, disabled }: BranchActionsProps) {
+  const translate = useTranslate();
+  if (branch === current) {
+    return undefined;
+  }
   return (
     <>
-      <button
-        className="row-action merge"
-        title={mergeWhy}
-        disabled={disabled || isCurrent}
-        onClick={(event) => {
-          event.stopPropagation();
-          onMerge?.(branch);
-        }}
-      >
-        <MergeIcon size={12} />
-      </button>
-      <button
-        className="row-action branch-action"
-        title={deleteWhy}
-        aria-label={deleteWhy}
-        disabled={disabled || isCurrent || isTrunk}
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete?.(branch);
-        }}
-      >
-        <TrashIcon size={12} />
-      </button>
+      {onMerge && (
+        <button
+          className="row-action merge"
+          title={translate('git.branch.mergeInto', { branch, current })}
+          aria-label={translate('git.branch.mergeInto', { branch, current })}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMerge(branch);
+          }}
+        >
+          <MergeIcon size={12} />
+        </button>
+      )}
+      {branch !== trunk && onDelete && (
+        <button
+          className="row-action branch-action"
+          title={translate('git.branch.delete', { branch })}
+          aria-label={translate('git.branch.delete', { branch })}
+          disabled={disabled}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(branch);
+          }}
+        >
+          <TrashIcon size={12} />
+        </button>
+      )}
     </>
   );
 }

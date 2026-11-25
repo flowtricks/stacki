@@ -1,10 +1,8 @@
+// Goal: publishing survives transient failures and browser suspension without resubmission.
+// Method: inject HTTP responses and clock jumps through the real publish client.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  parsePublishState,
-  publishProject,
-  watchPublish,
-} from '../src/features/publishing/publishClient';
+import { parsePublishState, publishProject, watchPublish } from '../src/features/publishing/publishClient';
 import { hasPendingOperations } from '../src/features/session/activity';
 
 test('publish status recovers from an upstream interruption without resubmitting the publish', async (t) => {
@@ -77,8 +75,24 @@ test('publish progress follows validated server stages and finishes only after t
     kind: 'building',
     id: 'old-worker',
   });
-  assert.throws(
-    () => parsePublishState({ kind: 'building', id: 'job', stage: 'imaginary' }),
-    /Invalid publish stage/,
+  assert.throws(() => parsePublishState({ kind: 'building', id: 'job', stage: 'imaginary' }), /Invalid publish stage/);
+});
+
+test('resuming a suspended tab reads the completed publish before applying a deadline', async (t) => {
+  let now = 0;
+  t.mock.method(Date, 'now', () => {
+    now += 3_600_000;
+    return now;
+  });
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({
+      publishing: {
+        kind: 'committed',
+        id: 'job',
+        sha: 'a'.repeat(40),
+        url: 'https://example.test/commit',
+      },
+    }),
   );
+  assert.equal((await watchPublish('job', new AbortController().signal)).kind, 'committed');
 });

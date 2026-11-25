@@ -1,0 +1,9 @@
+---
+interface Props {
+  value: number;
+  format?: (value: number) => string;
+  onSelect?: () => void;
+}
+const { value, format = (amount) => `$${amount.toFixed(2)}` } = Astro.props;
+---
+<span class="function-prop">{format(value)}</span>

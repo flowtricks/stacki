@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { LIMITS } from '../../shared/core/limits';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { toRecord, toArray } from '../../shared/core/record';
 import { listEntries, writeEntry } from './contentEntries';
 import type { Entry as ListedEntry } from './contentEntries';
@@ -30,11 +32,9 @@ const REFERENCE_LIMITS = {
   mentionsDepthMax: LIMITS.ipcDepthMax,
 } as const;
 
-const isPlainObject = (value: unknown): boolean =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
+const isPlainObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
 
-const definitionsOf = (root: unknown): Record<string, unknown> =>
-  toRecord(toRecord(root)?.['$defs']) ?? {};
+const definitionsOf = (root: unknown): Record<string, unknown> => toRecord(toRecord(root)?.['$defs']) ?? {};
 
 function deref(node: unknown, root: unknown, depth: number): Record<string, unknown> | undefined {
   const ref = toRecord(node)?.['$ref'];
@@ -72,12 +72,7 @@ function referencePaths(
     readonly path?: (string | number)[];
   } = {},
 ): SchemaPath[] {
-  return matchingPaths(
-    schema,
-    data,
-    (node, value) => node['astroReference'] === target && typeof value === 'string',
-    options,
-  );
+  return matchingPaths(schema, data, (node, value) => node['astroReference'] === target && typeof value === 'string', options);
 }
 
 /**
@@ -90,11 +85,7 @@ function matchingPaths(
   schema: unknown,
   data: unknown,
   match: MatchPredicate,
-  {
-    root = schema,
-    depth = 0,
-    path: at = [],
-  }: { readonly root?: unknown; readonly depth?: number; readonly path?: (string | number)[] } = {},
+  { root = schema, depth = 0, path: at = [] }: { readonly root?: unknown; readonly depth?: number; readonly path?: (string | number)[] } = {},
 ): SchemaPath[] {
   const node = deref(schema, root, depth);
   if (!node || depth > REFERENCE_LIMITS.schemaDepthMax) {
@@ -137,9 +128,7 @@ function matchingPaths(
       if (!child) {
         continue;
       }
-      found.push(
-        ...matchingPaths(child, value, match, { root, depth: depth + 1, path: [...at, key] }),
-      );
+      found.push(...matchingPaths(child, value, match, { root, depth: depth + 1, path: [...at, key] }));
     }
   }
   return found;
@@ -204,13 +193,10 @@ function mentions(schema: unknown, target: string, seen = new Set<unknown>(), de
       return true;
     }
   }
-  return Object.values(definitionsOf(node)).some((definition) =>
-    mentions(definition, target, seen, depth + 1),
-  );
+  return Object.values(definitionsOf(node)).some((definition) => mentions(definition, target, seen, depth + 1));
 }
 
-const isRelativeAsset = (value: unknown): boolean =>
-  typeof value === 'string' && !!value && !/^(\/|[a-z][a-z0-9+.-]*:)/i.test(value);
+const isRelativeAsset = (value: unknown): boolean => typeof value === 'string' && !!value && !/^(\/|[a-z][a-z0-9+.-]*:)/i.test(value);
 
 const posix = path.posix;
 
@@ -233,8 +219,8 @@ interface CollectionLike {
 }
 
 type Move =
-  | { readonly kind: 'generated'; readonly note: string }
-  | { readonly kind: 'unknown'; readonly note: string }
+  | { readonly kind: 'generated'; readonly note: string; readonly noteRef: MessageRef }
+  | { readonly kind: 'unknown'; readonly note: string; readonly noteRef: MessageRef }
   | { readonly kind: 'file'; readonly from: string; readonly to: string }
   | { readonly kind: 'key'; readonly file: string; readonly locator: readonly (string | number)[] }
   | {
@@ -269,8 +255,7 @@ export interface RenamePlan {
 }
 
 // The value at a path walked by matchingPaths: records by key, arrays by index.
-const stepInto = (node: unknown, key: string | number): unknown =>
-  typeof key === 'number' ? toArray(node)?.[key] : toRecord(node)?.[key];
+const stepInto = (node: unknown, key: string | number): unknown => (typeof key === 'number' ? toArray(node)?.[key] : toRecord(node)?.[key]);
 
 /**
  * What renaming an entry would touch: the entry itself, and every field
@@ -279,11 +264,7 @@ const stepInto = (node: unknown, key: string | number): unknown =>
 function planRename(
   projectPath: string,
   collections: readonly CollectionLike[],
-  {
-    collection: name,
-    from,
-    to,
-  }: { readonly collection: string; readonly from: string; readonly to: string },
+  { collection: name, from, to }: { readonly collection: string; readonly from: string; readonly to: string },
 ): RenamePlan {
   const collection = collections.find((candidate) => candidate.name === name);
   if (!collection) {
@@ -305,19 +286,11 @@ function planRename(
 
 // The value at a path walked by matchingPaths, or the absence the walk ran into.
 const valueAt = (data: unknown, at: SchemaPath): unknown =>
-  at.reduce<unknown>(
-    (node, key) => (node === undefined || node === null ? node : stepInto(node, key)),
-    data,
-  );
+  at.reduce<unknown>((node, key) => (node === undefined || node === null ? node : stepInto(node, key)), data);
 
 // Every field in the project's editable collections that holds `from` as a reference into
 // the collection `name`.
-function pointersTo(
-  projectPath: string,
-  collections: readonly CollectionLike[],
-  name: string,
-  from: string,
-): Pointer[] {
+function pointersTo(projectPath: string, collections: readonly CollectionLike[], name: string, from: string): Pointer[] {
   const pointers: Pointer[] = [];
   for (const other of collections) {
     if (!other.editable || !other.schema || !mentions(other.schema, name)) {
@@ -352,12 +325,8 @@ function entryMove(
 ): Move {
   if (collection.loader.kind === 'glob') {
     if (collection.loader.generateId) {
-      return {
-        kind: 'generated',
-        note:
-          `${name} builds its ids in its loader, ` +
-          'so its id cannot be changed by renaming a file.',
-      };
+      const problem = described('cmsBackend.entry.generated', { collection: name });
+      return { kind: 'generated', note: problem.message, noteRef: problem.messageRef };
     }
     const extension = path.extname(entry.file);
     const pathPrefix = entry.file.slice(0, entry.file.length - extension.length - from.length);
@@ -369,15 +338,37 @@ function entryMove(
   if (isPlainObject(entry.data) && typeof toRecord(entry.data)?.['id'] === 'string') {
     return { kind: 'field', file: entry.file, locator: entry.locator };
   }
-  return { kind: 'unknown', note: `Nothing in ${entry.file} says what this entry's id is.` };
+  const problem = described('cmsBackend.entry.noId', { file: entry.file });
+  return { kind: 'unknown', note: problem.message, noteRef: problem.messageRef };
+}
+
+/**
+ * Why an entry's id cannot be renamed here, or nothing when it can: a loader
+ * that builds ids in code, a parser between the file and the entry, or a
+ * record that does not write its id down.
+ */
+function entryRenameLock(collection: CollectionLike & { readonly loader: { readonly parser?: unknown } }, entry: ListedEntry): Described | undefined {
+  if (collection.loader.parser) {
+    return described('cmsBackend.entry.parsed', { collection: collection.name });
+  }
+  const move = entryMove(collection, entry, { name: collection.name, from: entry.id, to: entry.id });
+  switch (move.kind) {
+    case 'generated':
+    case 'unknown':
+      return { message: move.note, messageRef: move.noteRef };
+    case 'file':
+    case 'key':
+    case 'field':
+      return undefined;
+    default: {
+      const exhaustive: never = move;
+      return exhaustive;
+    }
+  }
 }
 
 // Moving the file moves what its image paths are relative to.
-function movedImageEdits(
-  collection: CollectionLike,
-  entry: ListedEntry,
-  movedTo: string,
-): ImageEdit[] {
+function movedImageEdits(collection: CollectionLike, entry: ListedEntry, movedTo: string): ImageEdit[] {
   const imageEdits: ImageEdit[] = [];
   if (!collection.schema) {
     return imageEdits;
@@ -387,8 +378,7 @@ function movedImageEdits(
   if (sourceDirectory === targetDirectory) {
     return imageEdits;
   }
-  const isImage = (node: SchemaNode, value: unknown): boolean =>
-    !!node['astroImage'] && isRelativeAsset(value);
+  const isImage = (node: SchemaNode, value: unknown): boolean => !!node['astroImage'] && isRelativeAsset(value);
   for (const at of matchingPaths(collection.schema, entry.data, isImage)) {
     const value = valueAt(entry.data, at);
     imageEdits.push({
@@ -405,10 +395,7 @@ function movedImageEdits(
  * renamed but not yet pointed at is a broken link, and the shorter that window
  * is the better.
  */
-function applyRename(
-  projectPath: string,
-  plan: RenamePlan,
-): { renamed: boolean; pointers: number; files: string[] } {
+function applyRename(projectPath: string, plan: RenamePlan): { renamed: boolean; pointers: number; files: string[] } {
   const touched = new Set<string>();
   for (const pointer of plan.pointers) {
     writeEntry(projectPath, pointer.entry, [{ path: pointer.path, value: plan.to }]);
@@ -432,9 +419,7 @@ function applyRename(
     fs.renameSync(from, to);
     touched.add(move.to);
   } else if (move.kind === 'key') {
-    writeEntry(projectPath, { file: move.file, locator: [] }, [
-      { path: move.locator, rename: plan.to },
-    ]);
+    writeEntry(projectPath, { file: move.file, locator: [] }, [{ path: move.locator, rename: plan.to }]);
     touched.add(move.file);
   } else if (move.kind === 'field') {
     writeEntry(projectPath, plan.entry, [{ path: ['id'], value: plan.to }]);
@@ -448,4 +433,4 @@ function applyRename(
   };
 }
 
-export { planRename, applyRename, referencePaths, matchingPaths, rewriteRelative, mentions };
+export { planRename, applyRename, entryRenameLock, referencePaths, matchingPaths, rewriteRelative, mentions };

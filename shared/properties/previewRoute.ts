@@ -9,10 +9,7 @@ export function defaultsPreviewTransition(previous: string, next: string): boole
   if (!before || !after || before.origin !== after.origin) {
     return false;
   }
-  return (
-    DEFAULTS_ROUTE.test(before.pathname + before.search) ||
-    DEFAULTS_ROUTE.test(after.pathname + after.search)
-  );
+  return DEFAULTS_ROUTE.test(before.pathname + before.search) || DEFAULTS_ROUTE.test(after.pathname + after.search);
 }
 
 export function parsePreviewRoute(input: unknown, current: string): string | undefined {

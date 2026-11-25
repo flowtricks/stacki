@@ -2,10 +2,12 @@
 // is made of: finding a child rule, setting, appending and terminating
 // declarations (css.ts).
 
-import postcss, { type Root, type Rule, type AtRule, type Declaration } from 'postcss';
+import postcss, { type AtRule, type ChildNode, type Declaration, type Document, type Root, type Rule } from 'postcss';
+import { assert } from '../../../../shared/core/assert';
+import { CODE_INDENT_UNIT, indentUnitOf } from '../../../../shared/core/indent';
 import type { StyleRegion } from './styleTypes';
 import { selectorKey } from './resolved';
-import { isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
+import { fillTrailingBlankLine, isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
 
 /** A declaration's value and whether it is `!important` — the two always travel together. */
 export type DeclarationValue = { readonly value: string; readonly important: boolean };
@@ -14,24 +16,14 @@ export type DeclarationValue = { readonly value: string; readonly important: boo
 export const squash = (text: string) => text.replace(/\s+/g, '').toLowerCase();
 
 // The first direct child rule of `container` that `matches` accepts.
-export function childRule(
-  container: Root | Rule | AtRule,
-  matches: (rule: Rule) => boolean,
-): Rule | undefined {
+export function childRule(container: Root | Rule | AtRule, matches: (rule: Rule) => boolean): Rule | undefined {
   return container.nodes?.find((child): child is Rule => child.type === 'rule' && matches(child));
 }
 
 // The first direct child at-rule named `name` (lowercase) whose params equal `params`.
-export function childAtRule(
-  container: Root | Rule | AtRule,
-  name: string,
-  params: string,
-): AtRule | undefined {
+export function childAtRule(container: Root | Rule | AtRule, name: string, params: string): AtRule | undefined {
   return container.nodes?.find(
-    (child): child is AtRule =>
-      child.type === 'atrule' &&
-      child.name.toLowerCase() === name &&
-      squash(child.params) === squash(params),
+    (child): child is AtRule => child.type === 'atrule' && child.name.toLowerCase() === name && squash(child.params) === squash(params),
   );
 }
 
@@ -44,10 +36,7 @@ export function terminateDeclarations(node: Rule | AtRule): void {
 // A direct child rule of `container` whose selector is the SAME target as `selector`
 // (by selectorKey, so `.a.b` === `.b.a`) — used to merge into an existing rule rather
 // than appending a duplicate. Only direct children (not nested) so a flat add stays flat.
-export function findChildRuleBySelector(
-  container: Root | AtRule,
-  selector: string,
-): Rule | undefined {
+export function findChildRuleBySelector(container: Root | AtRule, selector: string): Rule | undefined {
   const key = selectorKey(selector);
   return childRule(container, (rule) => selectorKey(rule.selector) === key);
 }
@@ -58,16 +47,21 @@ export function setDeclOnRule(rule: Rule, prop: string, declared: DeclarationVal
     setPaddingDeclaration(rule, prop, declared);
     return;
   }
-  const found: Declaration[] = [];
-  rule.walkDecls(prop, (declaration) => {
-    found.push(declaration);
-  });
-  const last = found.at(-1);
+  // The rule's own declarations only. A walk of the whole subtree found a nested rule's
+  // declaration of the same property (`.card { .title { color: blue } }`) and rewrote
+  // that, leaving the rule itself unset.
+  const last = directDecls(rule)
+    .filter((declaration) => declaration.prop === prop)
+    .at(-1);
   if (last) {
     last.value = declared.value;
     last.important = declared.important;
+  } else if (rule.nodes?.some((child) => child.type === 'rule' || child.type === 'atrule')) {
+    // Above the nested rules, with the rule's other declarations.
+    appendDecl(rule, prop, declared);
   } else {
     rule.append({ prop, value: declared.value, important: declared.important });
+    fillTrailingBlankLine(rule);
   }
   terminateDeclarations(rule);
 }
@@ -75,13 +69,26 @@ export function setDeclOnRule(rule: Rule, prop: string, declared: DeclarationVal
 export const STYLE_OPEN = /<style\b[^>]*>/gi;
 export const STYLE_CLOSE = '</style>';
 
-/** Locate every `<style>...</style>` region and capture its inner CSS + offsets. */
+/**
+ * Locate every `<style>...</style>` region and capture its inner CSS + offsets. Only the
+ * markup is searched: a `<style` written in a component's frontmatter (a comment, a string)
+ * or inside an HTML comment is text, not a tag. Read as a tag, it swallowed the real block
+ * after it into one region that did not parse, and every rule in that block went unoffered
+ * (SP-14: a component's own `<style is:global>` class got no chip).
+ */
 export function extractStyleRegions(code: string): StyleRegion[] {
   const regions: StyleRegion[] = [];
   const lower = code.toLowerCase();
-  STYLE_OPEN.lastIndex = 0;
+  const comments = htmlCommentRanges(lower);
+  STYLE_OPEN.lastIndex = frontmatterEnd(code);
   // A global regex advances `lastIndex` on every match, so each tag is visited once.
   for (let match = STYLE_OPEN.exec(code); match !== null; match = STYLE_OPEN.exec(code)) {
+    const at = match.index;
+    const comment = comments.find((range) => range.start <= at && at < range.end);
+    if (comment !== undefined) {
+      STYLE_OPEN.lastIndex = comment.end;
+      continue;
+    }
     const innerStart = match.index + match[0].length;
     const closeIndex = lower.indexOf(STYLE_CLOSE, innerStart);
     if (closeIndex === -1) {
@@ -99,11 +106,54 @@ export function extractStyleRegions(code: string): StyleRegion[] {
   return regions;
 }
 
+// An Astro file's frontmatter: a `---` fence on the first line, closed by the next line that
+// is `---`. The offset just past the closing fence, or 0 when the file has none (a stylesheet,
+// an embed) or the fence never closes.
+const FRONTMATTER_OPEN = /^\uFEFF?[ \t]*---[ \t]*\r?\n/;
+const FRONTMATTER_CLOSE = /^[ \t]*---[ \t]*$/m;
+export function frontmatterEnd(code: string): number {
+  const open = FRONTMATTER_OPEN.exec(code);
+  if (open === null) {
+    return 0;
+  }
+  const rest = code.slice(open[0].length);
+  const close = FRONTMATTER_CLOSE.exec(rest);
+  if (close === null) {
+    return 0;
+  }
+  const end = open[0].length + close.index + close[0].length;
+  assert(end <= code.length, 'frontmatterEnd: the fence ends inside the file');
+  return end;
+}
+
+// The `<!-- … -->` comments of lowercased markup, as offsets. At most one per four characters
+// of text, so the walk is bounded by the text's length.
+function htmlCommentRanges(lower: string): { readonly start: number; readonly end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  const rangesMax = Math.ceil(lower.length / 4);
+  for (let start = lower.indexOf('<!--'); start !== -1 && ranges.length < rangesMax; start = lower.indexOf('<!--', start + 4)) {
+    const close = lower.indexOf('-->', start + 4);
+    const end = close === -1 ? lower.length : close + 3;
+    ranges.push({ start, end });
+    if (close === -1) {
+      break;
+    }
+    start = end - 4;
+  }
+  assert(ranges.length <= rangesMax, 'htmlCommentRanges: bounded by the text');
+  return ranges;
+}
+
 /** Parse a region's CSS into a postcss Root, recording any parse error. Returns the
  *  parsed region; the one passed in is left as it was. */
 export function parseRegion(region: StyleRegion): StyleRegion {
   try {
-    return { ...region, root: postcss.parse(region.css), parseError: undefined };
+    const root = postcss.parse(region.css);
+    // With nothing indented to learn from, PostCSS indents a new rule four spaces.
+    if (!/^[ \t]+\S/m.test(region.css)) {
+      root.raws['indent'] = CODE_INDENT_UNIT;
+    }
+    return { ...region, root, parseError: undefined };
   } catch (error: unknown) {
     const parseError = error instanceof Error ? error.message : String(error);
     return { ...region, root: undefined, parseError };
@@ -136,7 +186,7 @@ export function renderEmbed(segments: string[], regions: StyleRegion[]): string 
     if (region === undefined) {
       throw new Error(`Style region ${i} is missing`);
     }
-    out += region.root ? region.root.toString() : region.css;
+    out += regionText(region);
     out += segments[i + 1] ?? '';
   }
   return out;
@@ -170,20 +220,126 @@ export function directDecls(node: Rule | AtRule): Declaration[] {
 
 /** Append a declaration, placing it before any nested rules so a parent's own decls stay
  *  grouped above its nested rules (e.g. bare decls at the top of a query block). */
-export function appendDecl(
-  node: Rule | AtRule,
-  prop: string,
-  declared: DeclarationValue,
-): Declaration {
+export function appendDecl(node: Rule | AtRule, prop: string, declared: DeclarationValue): void {
+  // A padding side joins the rule's padding (`padding: 0.2em` with a new left
+  // and right becomes `padding: 0.2em 0.59em`), never a longhand after it.
+  if (isPaddingProperty(prop)) {
+    setPaddingDeclaration(node, prop, declared);
+    return;
+  }
   const decl = postcss.decl({ prop, value: declared.value, important: declared.important });
   const firstNested = node.nodes?.find((child) => child.type === 'rule' || child.type === 'atrule');
   if (firstNested) {
     node.insertBefore(firstNested, decl);
   } else {
     node.append(decl);
+    fillTrailingBlankLine(node);
   }
+  placeChild(node, decl);
   terminateDeclarations(node);
-  return decl;
+}
+
+/**
+ * Lines a node just added inside `parent` up one level deeper than the parent:
+ * a declaration on its own line, a nested rule with its closing brace under
+ * its selector. PostCSS guesses a new node's indentation from the first
+ * declaration in the whole stylesheet, so in an indented <style> block a
+ * declaration of a nested rule (`&::after { … }`) landed at the top level's
+ * depth plus the block's, and its closing brace somewhere else. A parent
+ * written on one line (`.a { color: red }`) keeps PostCSS's own spacing.
+ */
+export function placeChild(parent: Rule | AtRule, child: ChildNode): void {
+  const indent = indentInside(parent);
+  if (indent === undefined) {
+    return;
+  }
+  assert(!indent.includes('\n'), 'An indentation is one line');
+  const block = child.type === 'rule' || child.type === 'atrule';
+  child.assign({ raws: { ...child.raws, before: `\n${indent}`, ...(block ? { after: `\n${indent}` } : {}) } });
+  assert(child.parent === parent, 'A placed node is inside its parent');
+}
+
+// The indentation of `parent`'s children: that of one already on its own line,
+// or, with none, the parent's own plus the step this stylesheet indents by.
+function indentInside(parent: Rule | AtRule): string | undefined {
+  const own = lineIndentOf(parent.raws.before) ?? regionStartIndent(parent);
+  const children = (parent.nodes ?? []).filter((node) => node.raws.before !== undefined);
+  const lined = children.find((node) => lineIndentOf(node.raws.before) !== undefined);
+  if (lined !== undefined) {
+    return lineIndentOf(lined.raws.before);
+  }
+  if (children.length > 0 || own === undefined) {
+    return undefined; // One line, or a parent not on a line of its own.
+  }
+  return own + indentStep(parent.root());
+}
+
+// A block written first, flush at the start of its stylesheet, starts a line at column 0: a new
+// tag's template (`@layer components {}`) is one, and the tag sets it on a line of its own
+// (firstStyleBlock.ts). Without this its first rule had no indentation to follow and PostCSS
+// guessed the rule's whitespace from other blocks, blank lines included. Anything else that
+// does not start a line is undefined.
+function regionStartIndent(node: Rule | AtRule): string | undefined {
+  const parent = node.parent;
+  if (parent === undefined) {
+    return undefined;
+  }
+  if (parent.type !== 'root') {
+    return undefined;
+  }
+  if (parent.first !== node) {
+    return undefined;
+  }
+  return node.raws.before === '' ? '' : undefined;
+}
+
+/**
+ * The text a region's tree writes back, in the region's own line endings. The panel builds new
+ * nodes with `\n`, so in a stylesheet written with `\r\n` the edited lines came out mixed. A
+ * region that already mixes the two keeps whatever each line has.
+ */
+export function regionText(region: StyleRegion): string {
+  if (region.root === undefined) {
+    return region.css;
+  }
+  const text = region.root.toString();
+  if (!region.css.includes('\r\n')) {
+    return text;
+  }
+  if (/(^|[^\r])\n/.test(region.css)) {
+    return text;
+  }
+  const crlf = text.replace(/\r?\n/g, '\r\n');
+  assert(!/(^|[^\r])\n/.test(crlf), 'regionText: every line ends in \\r\\n');
+  assert(crlf.replace(/\r/g, '') === text.replace(/\r/g, ''), 'regionText: only line endings change');
+  return crlf;
+}
+
+// What follows the last line break of a node's leading whitespace; undefined
+// when it does not start a line.
+function lineIndentOf(raw: string | undefined): string | undefined {
+  if (raw === undefined || !raw.includes('\n')) {
+    return undefined;
+  }
+  return raw.slice(raw.lastIndexOf('\n') + 1).replace(/\S/g, '');
+}
+
+// How far this stylesheet indents a declaration inside its rule: the first
+// declaration on its own line under a rule on its own line says; otherwise the
+// stylesheet's own indentation, which is a tab when nothing in it is indented.
+function indentStep(root: Root | Document): string {
+  let step: string | undefined;
+  root.walkDecls((decl) => {
+    const parent = decl.parent;
+    const inner = lineIndentOf(decl.raws.before);
+    const outer = parent?.type === 'rule' ? lineIndentOf(parent.raws.before) : undefined;
+    if (inner !== undefined && outer !== undefined && inner.length > outer.length && inner.startsWith(outer)) {
+      step = inner.slice(outer.length);
+      return false;
+    }
+    return undefined;
+  });
+  return step ?? indentUnitOf(root.toString());
 }
 
 /** Set (update-or-append) a DIRECT declaration on a node — scoped so a nested rule's
@@ -194,9 +350,7 @@ export function setDeclDirect(node: Rule | AtRule, prop: string, declared: Decla
     return;
   }
   const key = prop.trim().toLowerCase();
-  const existing = directDecls(node).find(
-    (declaration) => declaration.prop.trim().toLowerCase() === key,
-  );
+  const existing = directDecls(node).find((declaration) => declaration.prop.trim().toLowerCase() === key);
   if (existing) {
     existing.value = declared.value;
     existing.important = declared.important;

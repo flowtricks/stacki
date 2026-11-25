@@ -1,21 +1,18 @@
 import { useCodeAccess, ManagedValue } from './CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  EditorView,
-  keymap,
-  drawSelection,
-  placeholder as cmPlaceholder,
-  Decoration,
-  WidgetType,
-} from '@codemirror/view';
+import { EditorView, keymap, drawSelection, placeholder as cmPlaceholder, Decoration, WidgetType } from '@codemirror/view';
 import type { MutableRefObject } from 'react';
 import type { DecorationSet, KeyBinding } from '@codemirror/view';
 import type { Extension, Range } from '@codemirror/state';
 import type { Completion, CompletionContext } from '@codemirror/autocomplete';
 import type { TemplateHole } from '../editor/bindings';
 import { assert } from '../../shared/core/assert';
+import { codeIndentExtensions, codeIndentSettings } from './codeEditorIndent';
+import { editCodeView, openCodeView, sourceCodeView, type CodeView } from './codeIndentView';
+import { codeLineClassifier } from './codeLineRoles';
 import { LIMITS } from '../../shared/core/limits';
-import { EditorState, StateEffect, StateField } from '@codemirror/state';
+import { Annotation, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
+import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -34,6 +31,14 @@ import { appTheme, appHighlight } from './CodeEditor';
 // name is typed away stops being a chip, which is the honest answer.
 export type ChipsOf = (text: string) => readonly TemplateHole[] | undefined;
 const setChips = StateEffect.define<ChipsOf | undefined>();
+
+// A document replaced by `syncValue` is the value arriving from outside, not an
+// edit made in this field, so it never reaches `onChange`. It used to: a field
+// kept mounted while the selection moved to another element with the same kind
+// of value (two elements whose class is an expression) heard the new element's
+// value as typing and wrote it back, so selecting an element rewrote the page.
+const syncedValue = Annotation.define<true>();
+const typedHere = (transaction: Transaction): boolean => transaction.docChanged && transaction.annotation(syncedValue) !== true;
 
 const chipMark = Decoration.mark({ class: 'cm-chip' });
 
@@ -160,17 +165,29 @@ export interface ExprInputProps {
   readonly invalid?: boolean;
   readonly multiline?: boolean;
   readonly wrap?: boolean;
+  /** Pasted line breaks become one space, as an input takes them; typing Enter already commits. */
+  readonly singleLine?: boolean;
   readonly className?: string;
   readonly chip?: string;
   readonly chipsOf?: ChipsOf | undefined;
   readonly onChipClick?: (range: TemplateHole | undefined) => void;
   readonly apiRef?: MutableRefObject<ExprInputAPI | undefined>;
   readonly completions?: readonly Completion[];
+  /** What the text is written in: an expression by default, a TypeScript type, or a line of markup. */
+  readonly language?: 'html' | 'javascript' | 'typescript';
+  /**
+   * A language of the caller's own in place of `language`, for text this
+   * module does not know: a style attribute's declarations (StyleEditor.tsx).
+   */
+  readonly syntax?: Extension | undefined;
+  /** The field's accessible name, for a field no <label> wraps. */
+  readonly ariaLabel?: string;
 }
 interface ExprRefs {
   readonly latest: MutableRefObject<ExprInputProps>;
   readonly view: MutableRefObject<EditorView | undefined>;
   readonly touched: MutableRefObject<boolean>;
+  readonly codeView: MutableRefObject<CodeView>;
 }
 
 export default function ExprInput(props: ExprInputProps) {
@@ -184,11 +201,12 @@ function EditableExprInput(props: ExprInputProps) {
   const latest = useRef(props);
   latest.current = props;
   const [initial] = useState(() => props);
+  const codeView = useRef(exprCodeView(initial, initial.value ?? ''));
   useEffect(() => {
     const parent = hostRef.current;
     assert(parent !== null, 'ExprInput: mounted host exists');
     assert(view.current === undefined, 'ExprInput: only one editor owns the host');
-    const editor = exprCreate(parent, initial, { latest, view, touched });
+    const editor = exprCreate(parent, initial, { latest, view, touched, codeView });
     view.current = editor;
     if (initial.autoFocus) {
       editor.focus();
@@ -198,7 +216,7 @@ function EditableExprInput(props: ExprInputProps) {
       view.current = undefined;
     };
   }, [initial]);
-  useExprAPI(props.apiRef, { latest, view, touched });
+  useExprAPI(props.apiRef, { latest, view, touched, codeView });
   // External edits replace the document, so they also invalidate chip ranges.
   useEffect(() => {
     view.current?.dispatch({ effects: setChips.of(chipsOf || (chip ? findOne(chip) : undefined)) });
@@ -208,24 +226,40 @@ function EditableExprInput(props: ExprInputProps) {
     if (!editor || syncValue === undefined) {
       return;
     }
-    const current = editor.state.doc.toString();
-    if (syncValue !== current) {
-      editor.dispatch({ changes: { from: 0, to: current.length, insert: syncValue } });
+    if (syncValue !== codeView.current.source) {
+      codeView.current = exprCodeView(initial, syncValue);
+      // A value arriving from outside is not an edit made here: kept off the
+      // field's undo stack, so ⌘Z never undoes it back to a stale value.
+      editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: codeView.current.text },
+        annotations: [syncedValue.of(true), Transaction.addToHistory.of(false)],
+      });
     }
-  }, [syncValue]);
+  }, [initial, syncValue]);
   return <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''} ${className}`} />;
+}
+
+// A multi-line field shows its indentation as tabs, as every code editor does.
+// A field with chips or an API is the exception: their offsets are offsets into
+// the value, so that field's document has to be the value byte for byte.
+function exprCodeView(initial: ExprInputProps, value: string): CodeView {
+  const plain = !initial.multiline || initial.chip !== undefined || initial.chipsOf !== undefined || initial.apiRef !== undefined;
+  return plain ? sourceCodeView(value) : openCodeView(value, { extent: 'document', classify: codeLineClassifier(initial.language) });
 }
 
 function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs): EditorView {
   return new EditorView({
     parent,
     state: EditorState.create({
-      doc: initial.value ?? '',
+      doc: refs.codeView.current.text,
       extensions: [
         history(),
         drawSelection(),
+        // A one-line field is shaped like an input, so Tab leaves it as Tab leaves one.
+        initial.multiline ? codeIndentExtensions() : codeIndentSettings(),
         keymap.of(exprKeys(initial, refs)),
-        javascript(),
+        initial.syntax ?? (initial.language === 'html' ? html() : javascript({ typescript: initial.language === 'typescript' })),
+        ...(initial.ariaLabel === undefined ? [] : [EditorView.contentAttributes.of({ 'aria-label': initial.ariaLabel })]),
         // Scope is read at request time: frontmatter can change while this editor stays mounted.
         autocompletion({
           override: [(context) => exprCompletionSource(context, refs.latest.current)],
@@ -241,15 +275,37 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         ...((initial.wrap ?? true) ? [EditorView.lineWrapping] : []),
         cmPlaceholder(initial.placeholder ?? ''),
         exprEvents(refs),
+        ...(initial.singleLine === true ? [singleLinePaste] : []),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            refs.latest.current.onChange?.(update.state.doc.toString());
+            if (!update.transactions.some(typedHere)) {
+              // Only synced values changed the document: the sync effect already holds them as its code view.
+              return;
+            }
+            const codeViewRef = refs.codeView;
+            codeViewRef.current = editCodeView(codeViewRef.current, update.state.doc.toString());
+            refs.latest.current.onChange?.(codeViewRef.current.source);
           }
         }),
       ],
     }),
   });
 }
+
+// A one-line field is shaped like an input, which never holds a line break: a
+// paste of several lines lands as one, the breaks and the space around them
+// folded to a single space.
+const singleLinePaste = EditorView.domEventHandlers({
+  paste: (event, view) => {
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!/[\r\n]/.test(text)) {
+      return false;
+    }
+    event.preventDefault();
+    view.dispatch(view.state.replaceSelection(text.replace(/\s*[\r\n]+\s*/g, ' ')), { userEvent: 'input.paste', scrollIntoView: true });
+    return true;
+  },
+});
 
 function exprKeys(initial: ExprInputProps, refs: ExprRefs): readonly KeyBinding[] {
   if (initial.multiline) {
@@ -301,6 +357,17 @@ function exprCompletions(context: CompletionContext, props: ExprInputProps) {
   return { from: before.from + prefix.length, options, validFor: /^[\w$]*$/ };
 }
 
+// The document position of a chip's element, or undefined when it is not in the document.
+function chipPosition(view: EditorView, chip: Element): number | undefined {
+  try {
+    return view.posAtDOM(chip);
+  } catch (error: unknown) {
+    // posAtDOM throws for a node outside the editor's content: the pointer decides then.
+    void error;
+    return undefined;
+  }
+}
+
 function exprEvents(refs: ExprRefs): Extension {
   const touchedRef = refs.touched;
   return EditorView.domEventHandlers({
@@ -309,17 +376,17 @@ function exprEvents(refs: ExprRefs): Extension {
       if (!ElementType || !(event.target instanceof ElementType)) {
         return false;
       }
-      if (!event.target.closest('.cm-chip, .expr-chip')) {
+      const chip = event.target.closest('.cm-chip, .expr-chip');
+      if (!chip) {
         return false;
       }
       event.preventDefault();
-      const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      // Where the chip sits in the document, read from the chip itself, so the
+      // press finds it whatever the layout; the pointer's place is the fallback.
+      const position = chipPosition(view, chip) ?? view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? undefined;
       const ranges = view.state.field(chipsOfField)?.(view.state.doc.toString()) || [];
       assert(ranges.length <= LIMITS.treeNodesMax, 'ExprInput: chip limit exceeded');
-      const hit =
-        position === null
-          ? undefined
-          : ranges.find((range) => position >= range.from && position <= range.to);
+      const hit = position === undefined ? undefined : ranges.find((range) => position >= range.from && position <= range.to);
       refs.latest.current.onChipClick?.(hit || undefined);
       return true;
     },
@@ -328,7 +395,7 @@ function exprEvents(refs: ExprRefs): Extension {
       return false;
     },
     blur: () => {
-      refs.latest.current.onCommit?.(refs.view.current?.state.doc.toString() ?? '');
+      refs.latest.current.onCommit?.(refs.codeView.current.source);
       return false;
     },
   });
@@ -347,9 +414,7 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
           return undefined;
         }
         const end = view.state.doc.length;
-        const { from, to } = refs.touched.current
-          ? view.state.selection.main
-          : { from: end, to: end };
+        const { from, to } = refs.touched.current ? view.state.selection.main : { from: end, to: end };
         const value = exprReplace(view, from, to, text);
         view.focus();
         return value;
@@ -361,12 +426,7 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
   });
 }
 
-function exprReplace(
-  view: EditorView | undefined,
-  from: number,
-  to: number,
-  text: string,
-): string | undefined {
+function exprReplace(view: EditorView | undefined, from: number, to: number, text: string): string | undefined {
   if (!view) {
     return undefined;
   }

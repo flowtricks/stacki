@@ -1,0 +1,332 @@
+/* Chips in a sent message (MentionChipView.tsx) and the composer's "Copied" state (ComposerInput.tsx). The pill itself is the editor's: .chip-editor-chip in
+   src/ui/chipEditor/chipEditor.css, so a chip looks the same typed and sent. Only what a sent chip adds is here. */
+.mention-chip-view {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+button.mention-chip-view {
+  cursor: pointer;
+}
+.chip-editor-chip.is-copied {
+  background: var(--chip-purple-fill-hover);
+  color: var(--chip-purple-text-hover);
+}
+/* A component or member chip that no longer matches the project (componentMentions.ts): red instead of purple, and the hover text says why.
+   Sending refuses the message until it is removed or picked again. */
+.chip-editor-chip[data-chip-kind='invalid'],
+.chip-editor-chip[data-chip-kind='invalid']:hover {
+  background: color-mix(in srgb, var(--red) 22%, transparent);
+  color: var(--red);
+}
+/* Component and member chips: the components green the Navigator and the canvas use (--component-green, styles.css), a fill and no
+   border, so a component reads the same in a message as everywhere else. Other kinds keep the purple pill. */
+.chip-editor-chip[data-chip-kind='component'],
+.chip-editor-chip[data-chip-kind='member'] {
+  background: var(--component-green-soft);
+  color: var(--component-green);
+}
+.chip-editor-chip[data-chip-kind='component']:hover,
+.chip-editor-chip[data-chip-kind='member']:hover {
+  background: color-mix(in srgb, var(--component-green) 26%, transparent);
+  color: var(--component-green);
+}
+
+/* The popover a component chip opens (ComponentMembersPopover.tsx): the picker's surface, the Properties panel's own fields in
+   rows aligned to the start edge, groups by heading and spacing only (no borders, no dividers). */
+.component-members {
+  z-index: 300;
+  box-sizing: border-box;
+  max-width: 340px;
+  max-height: min(460px, calc(100vh - 16px));
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  border: 0;
+  border-radius: 14px;
+  /* One step above the composer's fill, so the card reads as lifted. */
+  background: color-mix(in srgb, var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b)), #fff 8%);
+  color: var(--text, #f5f5f5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  text-align: start;
+}
+.component-members-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  margin-block-end: 4px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  font: inherit;
+}
+.component-members-search:focus-visible {
+  background: rgba(255, 255, 255, 0.11);
+  outline: none;
+}
+.component-members-group + .component-members-group {
+  margin-block-start: 12px;
+}
+.component-members-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 0 6px;
+  padding-inline: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.component-members-count {
+  padding-inline: 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 10.5px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* A row: the checkbox at the start, then the panel's field (or the slot's icon and name). A mentioned row has a blue-tinted fill. */
+.component-members-prop,
+.component-members-slot {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.component-members-prop:hover,
+.component-members-slot:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.component-members-prop.is-on,
+.component-members-slot.is-on {
+  background: color-mix(in srgb, var(--accent, #4f8cff) 16%, transparent);
+}
+.component-members-slot {
+  align-items: center;
+  min-height: 32px;
+}
+.component-members-icon {
+  flex: none;
+  color: var(--text-dim);
+}
+.component-members-field {
+  flex: 1;
+  min-width: 0;
+}
+/* The panel's own fields, drawn on a lighter fill than the card with a readable placeholder. */
+.component-members-field input,
+.component-members-field textarea {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text, #f5f5f5);
+}
+.component-members-field input::placeholder,
+.component-members-field textarea::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+/* The checkbox: always shown, blue and checked when the member is mentioned. */
+.component-members-include {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.component-members-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.component-members-include:hover .component-members-box {
+  background: rgba(255, 255, 255, 0.26);
+}
+.component-members-include[aria-checked='true'] .component-members-box {
+  background: var(--accent, #4f8cff);
+}
+.component-members-include:focus-visible {
+  outline: none;
+}
+.component-members-include:focus-visible .component-members-box {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #4f8cff) 45%, transparent);
+}
+.component-members-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.component-members-plain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block: 4px;
+}
+.component-members-plain > input {
+  height: 26px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font: inherit;
+}
+.component-members-empty {
+  padding-block: 8px;
+  padding-inline: 4px;
+  color: var(--text-dim);
+}
+
+.component-members-remove {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin-block-start: 4px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--red);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.component-members-remove:hover,
+.component-members-remove:focus-visible {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  outline: none;
+}
+
+/* A project row's colour swatch and image thumbnail in the `@` picker (MentionRowIcon.tsx): the size of an icon, rounded, no border. */
+.mention-row-swatch,
+.mention-row-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.mention-row-thumb {
+  width: 20px;
+  height: 20px;
+}
+.mention-row-thumb > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A CSS class chip: the solid blue of a class tag in the Properties panel (.class-tag, styles.css), white text and icon.
+   A variable keeps the purple pill (chipEditor.css), the colour variables take everywhere. */
+.chip-editor-chip[data-chip-kind='class'] {
+  background: var(--accent, #0099ff);
+  color: #fff;
+}
+.chip-editor-chip[data-chip-kind='class']:hover {
+  background: var(--accent-hover, #1aa3ff);
+  color: #fff;
+}
+
+/* The list a CSS chip opens to swap it (RelatedCssPopover.tsx): the menu surface, compact one-line rows, the check at the end. */
+.related-css {
+  z-index: 300;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text, #f5f5f5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.related-css-search {
+  flex: none;
+  box-sizing: border-box;
+  height: 28px;
+  margin-block-end: 4px;
+  padding-inline: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  color: inherit;
+  font: inherit;
+}
+.related-css-search:focus-visible {
+  outline: none;
+}
+.related-css-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  outline: none;
+}
+.related-css-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: default;
+}
+.related-css-row.is-active {
+  background: color-mix(in srgb, var(--accent, #0099ff) 32%, transparent);
+  color: #fff;
+}
+.related-css-row.is-active .related-css-label {
+  color: #fff;
+}
+.related-css-row.is-active .related-css-description {
+  color: rgba(255, 255, 255, 0.85);
+}
+.related-css-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text, #f5f5f5);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.related-css-description {
+  /* The path gives way long before the name does. */
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim, #b8b8b8);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.related-css-check {
+  display: inline-flex;
+  flex: none;
+  width: 12px;
+  margin-inline-start: auto;
+}

@@ -28,19 +28,8 @@ import {
   DEFAULT_SHAPE_VALUE,
 } from './clipPathConstants';
 import { formatPercent, formatCssScaleNumber } from './clipPathMeasure';
-import {
-  makeInsetRadii,
-  hasRoundedCorners,
-  formatRadii,
-  formatInsetSides,
-  formatRawEditableClipPath,
-} from './clipPathHandles';
-import {
-  formatShapeValueFromCssSubpaths,
-  resolveShapeScaleVarNames,
-  type ShapeOffsetBounds,
-  formatShapeOffsetPoint,
-} from './shapeFunctionModel';
+import { makeInsetRadii, hasRoundedCorners, formatRadii, formatInsetSides } from './clipPathHandles';
+import { formatShapeValueFromCssSubpaths, resolveShapeScaleVarNames, type ShapeOffsetBounds, formatShapeOffsetPoint } from './shapeFunctionModel';
 
 export const PRESETS: Record<string, ClipShape> = {
   [NONE_PRESET]: NONE_SHAPE,
@@ -62,9 +51,7 @@ export const PRESETS: Record<string, ClipShape> = {
 export const PRESET_NAMES = Object.keys(PRESETS);
 
 export function formatPolygon(points: Point[]) {
-  const coords = points
-    .map((point) => `${formatPercent(point.x)} ${formatPercent(point.y)}`)
-    .join(', ');
+  const coords = points.map((point) => `${formatPercent(point.x)} ${formatPercent(point.y)}`).join(', ');
   return `polygon(${coords})`;
 }
 
@@ -81,10 +68,7 @@ export function formatShapeValueFromPoints(points: Point[]) {
   ].join(', ');
 }
 
-export function mapShapeSubpathsToCss(
-  subpaths: SvgShapeSubpath[],
-  mapPoint: (point: Point) => ShapeCssPoint,
-): ShapeCssSubpath[] {
+export function mapShapeSubpathsToCss(subpaths: SvgShapeSubpath[], mapPoint: (point: Point) => ShapeCssPoint): ShapeCssSubpath[] {
   return subpaths.map((subpath) => ({
     start: mapPoint(subpath.start),
     commands: subpath.commands.map((command) => {
@@ -119,11 +103,7 @@ export function formatPathDataFromPoints(points: Point[]) {
     return DEFAULT_SHAPE_PATH_DATA;
   }
 
-  return [
-    `M${firstPoint.x} ${firstPoint.y}`,
-    ...restPoints.map((point) => `L${point.x} ${point.y}`),
-    'Z',
-  ].join('');
+  return [`M${firstPoint.x} ${firstPoint.y}`, ...restPoints.map((point) => `L${point.x} ${point.y}`), 'Z'].join('');
 }
 
 export function formatPathDataFromSubpaths(subpaths: SvgShapeSubpath[]) {
@@ -135,9 +115,7 @@ export function formatPathDataFromSubpaths(subpaths: SvgShapeSubpath[]) {
       }
       if (command.kind === 'curve') {
         return command.control2
-          ? `C${command.control1.x} ${command.control1.y} ` +
-              `${command.control2.x} ${command.control2.y} ` +
-              `${command.to.x} ${command.to.y}`
+          ? `C${command.control1.x} ${command.control1.y} ` + `${command.control2.x} ${command.control2.y} ` + `${command.to.x} ${command.to.y}`
           : `Q${command.control1.x} ${command.control1.y} ${command.to.x} ${command.to.y}`;
       }
       return 'Z';
@@ -155,10 +133,7 @@ export function shapeFromPolygonPoints(points: Point[]): ShapeFunctionShape {
   };
 }
 
-export function shapeFromSvgSubpaths(
-  subpaths: SvgShapeSubpath[],
-  fillRule?: ShapeFunctionShape['fillRule'],
-): ShapeFunctionShape {
+export function shapeFromSvgSubpaths(subpaths: SvgShapeSubpath[], fillRule?: ShapeFunctionShape['fillRule']): ShapeFunctionShape {
   if (!subpaths.length) {
     return shapeFromPolygonPoints([]);
   }
@@ -182,10 +157,7 @@ export function svgShapeCommandPoints(command: SvgShapeCommand) {
 }
 
 export function svgShapeSubpathPoints(subpaths: SvgShapeSubpath[]) {
-  return subpaths.flatMap((subpath) => [
-    subpath.start,
-    ...subpath.commands.flatMap(svgShapeCommandPoints),
-  ]);
+  return subpaths.flatMap((subpath) => [subpath.start, ...subpath.commands.flatMap(svgShapeCommandPoints)]);
 }
 
 export function svgShapeSubpathBounds(subpaths: SvgShapeSubpath[]): SvgShapeBounds | undefined {
@@ -221,10 +193,7 @@ export function svgShapeBoundsFromViewBox(viewBox: SvgViewBox): SvgShapeBounds |
   };
 }
 
-export function mapSvgShapeCommandPoints(
-  command: SvgShapeCommand,
-  mapper: (point: Point) => Point,
-): SvgShapeCommand {
+export function mapSvgShapeCommandPoints(command: SvgShapeCommand, mapper: (point: Point) => Point): SvgShapeCommand {
   if (command.kind === 'close') {
     return command;
   }
@@ -239,10 +208,7 @@ export function mapSvgShapeCommandPoints(
   };
 }
 
-export function fitShapeSubpathsToPercentBox(
-  subpaths: SvgShapeSubpath[],
-  preferredBounds?: SvgShapeBounds | undefined,
-) {
+export function fitShapeSubpathsToPercentBox(subpaths: SvgShapeSubpath[], preferredBounds?: SvgShapeBounds | undefined) {
   const bounds = preferredBounds || svgShapeSubpathBounds(subpaths);
   if (!bounds) {
     return undefined;
@@ -301,7 +267,12 @@ export function formatClipPath(shape: ClipShape) {
     return 'none';
   }
   if (shape.kind === 'raw') {
-    return shape.editable ? formatRawEditableClipPath(shape.editable) : shape.value;
+    // The authored text, byte for byte. A raw shape's value is what was read or
+    // typed, and every edit of its geometry rewrites it (withRawEditable), so it
+    // is always current. Re-serializing the parsed form instead spelled
+    // `inset(0.5rem round 2rem)` out to four sides, and that longer text was
+    // what the next write sent back to the user's rule.
+    return shape.value;
   }
   if (shape.kind === 'polygon') {
     return formatPolygon(shape.points);
@@ -320,9 +291,7 @@ export function formatClipPath(shape: ClipShape) {
     return `ellipse(${radii} at ${center})`;
   }
   const sides = formatInsetSides(shape);
-  return hasRoundedCorners(shape.radii)
-    ? `inset(${sides} round ${formatRadii(shape.radii)})`
-    : `inset(${sides})`;
+  return hasRoundedCorners(shape.radii) ? `inset(${sides} round ${formatRadii(shape.radii)})` : `inset(${sides})`;
 }
 
 export function formatCodeValue(shape: ClipShape) {
@@ -337,10 +306,16 @@ export function previewAxisSize(axis: 'x' | 'y', size: CanvasSize) {
   return axis === 'x' ? size.width : size.height;
 }
 
+// Absolute lengths are drawn at their real size: a CSS pixel is a screen pixel
+// in the preview, a rem the 16px root font size. The preview used to stand for
+// a 1600px element and make a rem 1% of the box, so `round 2rem` drew 7px
+// corners and read as square: the shape has to look like what it will be.
+const PREVIEW_ROOT_FONT_PX = 16;
+
 export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   const axisSize = previewAxisSize(axis, size);
   const normalized = unit.toLowerCase();
-  const pxUnit = axisSize / 1600;
+  const pxUnit = 1;
 
   if (normalized === '%') {
     return axisSize / 100;
@@ -348,11 +323,14 @@ export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   if (normalized === 'px') {
     return pxUnit;
   }
-  if (normalized === 'em' || normalized === 'rem' || normalized === 'lh' || normalized === 'rlh') {
-    return axisSize / 100;
+  if (normalized === 'em' || normalized === 'rem') {
+    return PREVIEW_ROOT_FONT_PX;
+  }
+  if (normalized === 'lh' || normalized === 'rlh') {
+    return PREVIEW_ROOT_FONT_PX * 1.5; // A normal line height.
   }
   if (normalized === 'ch' || normalized === 'ex') {
-    return axisSize / 200;
+    return PREVIEW_ROOT_FONT_PX / 2;
   }
   if (normalized === 'vw' || normalized === 'svw' || normalized === 'lvw' || normalized === 'dvw') {
     return size.width / 100;
@@ -360,20 +338,10 @@ export function previewUnitPx(unit: string, axis: 'x' | 'y', size: CanvasSize) {
   if (normalized === 'vh' || normalized === 'svh' || normalized === 'lvh' || normalized === 'dvh') {
     return size.height / 100;
   }
-  if (
-    normalized === 'vmin' ||
-    normalized === 'svmin' ||
-    normalized === 'lvmin' ||
-    normalized === 'dvmin'
-  ) {
+  if (normalized === 'vmin' || normalized === 'svmin' || normalized === 'lvmin' || normalized === 'dvmin') {
     return Math.min(size.width, size.height) / 100;
   }
-  if (
-    normalized === 'vmax' ||
-    normalized === 'svmax' ||
-    normalized === 'lvmax' ||
-    normalized === 'dvmax'
-  ) {
+  if (normalized === 'vmax' || normalized === 'svmax' || normalized === 'lvmax' || normalized === 'dvmax') {
     return Math.max(size.width, size.height) / 100;
   }
   if (normalized === 'cqw' || normalized === 'cqi') {
@@ -428,16 +396,11 @@ export function previewCssLengthPercentageToken(token: string, axis: 'x' | 'y', 
   if (axisSize <= 0) {
     return token;
   }
-  const percent =
-    unit === '%' ? value : ((value * previewUnitPx(unit, axis, size)) / axisSize) * 100;
+  const percent = unit === '%' ? value : ((value * previewUnitPx(unit, axis, size)) / axisSize) * 100;
   return `${formatCssScaleNumber(percent)}%`;
 }
 
-export function addPreviewVariableFallbacksForAxis(
-  value: string,
-  axis: 'x' | 'y',
-  size: CanvasSize,
-) {
+export function addPreviewVariableFallbacksForAxis(value: string, axis: 'x' | 'y', size: CanvasSize) {
   const fallback = previewCssLengthPercentageToken('1rem', axis, size);
   return value.replace(/var\(\s*(--[a-zA-Z0-9_-]+)\s*\)/g, `var($1, ${fallback})`);
 }

@@ -1,10 +1,15 @@
 import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
-import { parseImportant } from './model/styleDisplay';
+import { parseImportant, withImportant } from './model/styleDisplay';
+import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
+// Its bar is drawn with the segmented control's classes (u-segmented).
+import '../../ui/segmentedControl.css';
 
 // The value editor for `display`. For values we can represent it shows a
 // segmented bar (Block / Flex / Grid + a 4th slot for the inline set, None and
@@ -29,86 +34,48 @@ export const DISPLAY_VALUES: readonly string[] = [...PRIMARY, ...OTHER];
 
 // Compact labels for the bar's narrow 4th segment.
 const SHORT: Record<string, string> = {
-  none: 'None',
-  contents: 'Contents',
-  inline: 'Inline',
-  'inline-block': 'In-block',
-  'inline-flex': 'In-flex',
-  'inline-grid': 'In-grid',
+  none: 'None', // i18n-ignore: CSS display keyword, kept as designers write it.
+  contents: 'Contents', // i18n-ignore: CSS display keyword, kept as designers write it.
+  inline: 'Inline', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-block': 'In-block', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-flex': 'In-flex', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-grid': 'In-grid', // i18n-ignore: CSS display keyword, kept as designers write it.
 };
 // Full labels for the dropdown menu.
 const FULL: Record<string, string> = {
-  none: 'None',
-  contents: 'Contents',
-  inline: 'Inline',
-  'inline-block': 'Inline-block',
-  'inline-flex': 'Inline-flex',
-  'inline-grid': 'Inline-grid',
+  none: 'None', // i18n-ignore: CSS display keyword, kept as designers write it.
+  contents: 'Contents', // i18n-ignore: CSS display keyword, kept as designers write it.
+  inline: 'Inline', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-block': 'Inline-block', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-flex': 'Inline-flex', // i18n-ignore: CSS display keyword, kept as designers write it.
+  'inline-grid': 'Inline-grid', // i18n-ignore: CSS display keyword, kept as designers write it.
 };
 
 // Delayed hover tooltips per display value (reuses the segmented-control tooltip CSS).
 const TOOLTIP_DELAY_MS = 500;
-const TOOLTIPS: Record<string, ReactNode> = {
-  block: (
-    <>
-      <strong>Block</strong> elements start on a new line and take up the full available width.
-    </>
-  ),
-  flex: (
-    <>
-      <strong>Flex</strong> lays out its child elements on a horizontal or vertical axis.
-    </>
-  ),
-  grid: (
-    <>
-      <strong>Grid</strong> lets you place items within rows and columns.
-    </>
-  ),
-  none: (
-    <>
-      <strong>None</strong> hides elements.
-    </>
-  ),
-  contents: (
-    <>
-      <strong>Contents</strong> removes the element's own box. Its children stay, and lay out as
-      though they were children of its parent.
-    </>
-  ),
-  'inline-block': (
-    <>
-      <strong>Inline-block</strong> behaves like inline, but accepts width and height properties.
-    </>
-  ),
-  'inline-flex': (
-    <>
-      <strong>Inline-flex</strong> behaves as an inline element. It stacks its content horizontally
-      or vertically.
-    </>
-  ),
-  'inline-grid': (
-    <>
-      <strong>Inline-grid</strong> behaves as an inline element. It stacks its content in rows and
-      columns.
-    </>
-  ),
-  inline: (
-    <>
-      <strong>Inline</strong> is the default for text content. The text's font size and line height
-      determine its size.
-    </>
-  ),
+const TOOLTIPS: Record<string, MessageKey> = {
+  block: 'style.displayControl.tooltipBlock',
+  flex: 'style.displayControl.tooltipFlex',
+  grid: 'style.displayControl.tooltipGrid',
+  none: 'style.displayControl.tooltipNone',
+  contents: 'style.displayControl.tooltipContents',
+  'inline-block': 'style.displayControl.tooltipInlineBlock',
+  'inline-flex': 'style.displayControl.tooltipInlineFlex',
+  'inline-grid': 'style.displayControl.tooltipInlineGrid',
+  inline: 'style.displayControl.tooltipInline',
 };
 
 const cap = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
+
+/** The menu's name for a display value: its full label, or the keyword capitalised. */
+export function displayMenuLabel(value: string): string {
+  return FULL[value] ?? cap(value);
+}
 
 /** True when the display value maps onto the segmented bar (not a free value). */
 export function isDisplayValueSupported(value: string): boolean {
   return SUPPORTED.has(value.trim().toLowerCase());
 }
-
-const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) =>
-  parsed.important ? `${parsed.value} !important` : parsed.value;
 
 // Editable text field for a custom display value, shown next to the arrow.
 function CustomValueField({
@@ -124,13 +91,14 @@ function CustomValueField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(joinImportant({ value, important }));
+  const translate = useTranslate();
+  const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
 
   // Mirror external edits, but never clobber what the user is typing.
   useEffect(() => {
     if (!focused.current) {
-      setDraft(joinImportant({ value, important }));
+      setDraft(withImportant({ value, important }));
     }
   }, [value, important]);
 
@@ -141,29 +109,42 @@ function CustomValueField({
     }
   };
 
+  // Wrapped like every other field: a `var(--x)` display reads as the purple chip.
   return (
-    <input
-      ref={inputRef}
-      className="embed-editor_value-input embed-editor_display-input"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop="display"
+      canvasProperty="display"
       disabled={busy}
-      spellCheck={false}
-      aria-label="Value"
-      placeholder="custom value"
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.displayControl.display') })}
+      onPick={(binding) => {
+        setDraft(withImportant({ value: binding, important }));
+        onCommit(binding, important);
+      }}
+    >
+      <input
+        ref={inputRef}
+        className="embed-editor_value-input embed-editor_display-input"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        aria-label={translate('style.displayControl.value')}
+        placeholder={translate('style.displayControl.customValuePlaceholder')}
+      />
+    </VariableConnect>
   );
 }
 
@@ -178,10 +159,13 @@ export default function DisplayControl({
   busy: boolean;
   onCommit: (value: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const current = value.trim().toLowerCase();
   // The bar only represents a supported token *without* !important. Anything else
   // — contents, unset, var(--x), or a supported token made !important — is custom.
-  const segmented = isDisplayValueSupported(current) && !important;
+  // No value at all (a code chip's create chip, before anything is written) is the bar with no
+  // segment selected, never the custom field: there is nothing custom to show.
+  const segmented = (current === '' || isDisplayValueSupported(current)) && !important;
   const customMode = !segmented;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -217,36 +201,31 @@ export default function DisplayControl({
   const tooltip = useSegmentTooltip(rootRef);
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label="Display"
+    <KeywordConnect
+      prop="display"
+      value={value}
+      ariaLabel={translate('style.displayControl.display')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => onCommit(binding, important)}
     >
-      {customMode ? (
-        <CustomValueField
-          value={value}
-          important={important}
-          busy={busy}
-          inputRef={inputRef}
-          onCommit={onCommit}
-        />
-      ) : (
-        <DisplaySegments current={current} busy={busy} tooltip={tooltip} pick={pick} />
-      )}
+      <div
+        ref={rootRef}
+        className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
+        role="group"
+        aria-label={translate('style.displayControl.display')}
+      >
+        {customMode ? (
+          <CustomValueField value={value} important={important} busy={busy} inputRef={inputRef} onCommit={onCommit} />
+        ) : (
+          <DisplaySegments current={current} busy={busy} tooltip={tooltip} pick={pick} />
+        )}
 
-      <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
-      {open ? (
-        <DisplayMenu
-          onClose={() => setOpen(false)}
-          customMode={customMode}
-          current={current}
-          pick={pick}
-          enterCustom={enterCustom}
-        />
-      ) : undefined}
-      <SegmentTooltipBubble tooltip={tooltip} />
-    </div>
+        <MenuArrow open={open} busy={busy} onToggle={() => setOpen((value) => !value)} />
+        {open ? <DisplayMenu onClose={() => setOpen(false)} customMode={customMode} current={current} pick={pick} enterCustom={enterCustom} /> : undefined}
+        <SegmentTooltipBubble tooltip={tooltip} />
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -294,22 +273,15 @@ function useSegmentTooltip(rootRef: React.RefObject<HTMLDivElement>): SegmentToo
   return { hoveredValue, arrowRight, startHover, endHover };
 }
 
-function MenuArrow({
-  open,
-  busy,
-  onToggle,
-}: {
-  open: boolean;
-  busy: boolean;
-  onToggle: () => void;
-}) {
+function MenuArrow({ open, busy, onToggle }: { open: boolean; busy: boolean; onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="embed-editor_display-arrow"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label="More display options"
+      aria-label={translate('style.displayControl.moreOptions')}
       disabled={busy}
       onClick={onToggle}
     >
@@ -319,19 +291,17 @@ function MenuArrow({
 }
 
 function SegmentTooltipBubble({ tooltip }: { tooltip: SegmentTooltip }) {
+  const translateRich = useTranslateRich();
   if (tooltip.hoveredValue === undefined) {
     return undefined;
   }
-  const text = TOOLTIPS[tooltip.hoveredValue];
-  if (!text) {
+  const tooltipKey = TOOLTIPS[tooltip.hoveredValue];
+  if (!tooltipKey) {
     return undefined;
   }
+  const text = translateRich(tooltipKey, { strong: (content) => <strong>{content}</strong> });
   return (
-    <div
-      className="u-segmented-tooltip"
-      role="tooltip"
-      style={tooltipArrowStyle(tooltip.arrowRight)}
-    >
+    <div className="u-segmented-tooltip" role="tooltip" style={tooltipArrowStyle(tooltip.arrowRight)}>
       {text}
       <span className="u-segmented-tooltip-arrow" aria-hidden="true" />
     </div>
@@ -339,20 +309,12 @@ function SegmentTooltipBubble({ tooltip }: { tooltip: SegmentTooltip }) {
 }
 
 // The bar: Block / Flex / Grid, then the 4th slot.
-function DisplaySegments({
-  current,
-  busy,
-  tooltip,
-  pick,
-}: {
-  current: string;
-  busy: boolean;
-  tooltip: SegmentTooltip;
-  pick: (next: string) => void;
-}) {
+function DisplaySegments({ current, busy, tooltip, pick }: { current: string; busy: boolean; tooltip: SegmentTooltip; pick: (next: string) => void }) {
   const isPrimary = PRIMARY.some((value) => value === current);
+  // With no value, no segment is selected and the 4th shows None.
+  const isFourth = current !== '' && !isPrimary;
   // The 4th segment shows the chosen inline/none value, or None as the default.
-  const fourth = isPrimary ? 'none' : current;
+  const fourth = isFourth ? current : 'none';
   return (
     <>
       <SegmentPill />
@@ -377,8 +339,8 @@ function DisplaySegments({
       <button
         type="button"
         role="radio"
-        aria-checked={!isPrimary}
-        className={`embed-editor_display-seg ${!isPrimary ? 'is-selected' : ''}`}
+        aria-checked={isFourth}
+        className={`embed-editor_display-seg ${isFourth ? 'is-selected' : ''}`}
         disabled={busy}
         onClick={() => {
           tooltip.endHover();
@@ -395,13 +357,7 @@ function DisplaySegments({
 
 function DisplayMenu(props: Parameters<typeof DisplayMenuContent>[0]) {
   return (
-    <Popup
-      mode="popover"
-      portal={false}
-      role="menu"
-      className="embed-editor_display-menu"
-      onClose={props.onClose}
-    >
+    <Popup mode="popover" portal={false} role="menu" className="embed-editor_display-menu" onClose={props.onClose}>
       <DisplayMenuContent {...props} />
     </Popup>
   );
@@ -412,6 +368,7 @@ function DisplayMenuContent({
   current,
   pick,
   enterCustom,
+  onClose,
 }: {
   customMode: boolean;
   current: string;
@@ -419,60 +376,37 @@ function DisplayMenuContent({
   enterCustom: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
+      <VariableMenuItem onClose={onClose} />
       {customMode ? (
         // From a custom value: offer every built-in to switch back to the bar.
         <>
           {PRIMARY.map((option) => (
-            <MenuItem
-              key={option}
-              label={cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {INLINE.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {BOXLESS.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
         </>
       ) : (
         // From the bar: inline values, None, and an escape hatch to Custom.
         <>
           {INLINE.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
           {BOXLESS.map((option) => (
-            <MenuItem
-              key={option}
-              label={FULL[option] ?? cap(option)}
-              selected={current === option}
-              onClick={() => pick(option)}
-            />
+            <MenuItem key={option} label={FULL[option] ?? cap(option)} selected={current === option} onClick={() => pick(option)} />
           ))}
           <div className="embed-editor_display-menu-divider" />
-          <MenuItem label="Custom" selected={false} onClick={enterCustom} />
+          <MenuItem label={translate('style.displayControl.custom')} selected={false} onClick={enterCustom} />
         </>
       )}
     </>

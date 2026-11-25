@@ -2,16 +2,8 @@ import { resolveSourceImport } from '../../editor/importPaths';
 import { assert } from '../../../shared/core/assert';
 import { mapModuleSpecifiers } from '../../../shared/page/frontmatterSource';
 import { componentFile, type DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
-import {
-  defaultsCanvasSource,
-  type DefaultsCanvasSession,
-} from '../../../shared/properties/defaultsCanvas';
-import {
-  canvasContext,
-  canvasNodeAt,
-  renderDefaultsInstance,
-  type CanvasModel,
-} from './defaultsCanvasModel';
+import { defaultsCanvasSource, type DefaultsCanvasSession } from '../../../shared/properties/defaultsCanvas';
+import { canvasContext, canvasNodeAt, renderDefaultsInstance, type CanvasModel } from './defaultsCanvasModel';
 
 export interface DefaultsContext {
   readonly file: string;
@@ -32,14 +24,14 @@ export function prepareDefaultsCanvas(
     throw new Error('Select a component instance to set its defaults.');
   }
   const specifier = context.model.imports.find((entry) => entry.name === node.name)?.path;
-  const component = specifier && resolveSourceImport(context.file, specifier);
+  const component = specifier && resolveSourceImport(context.file, specifier, snapshot.catalog);
   if (!component) {
     throw new Error('This component does not resolve to a project Astro file.');
   }
   componentFile(component);
   const existing = new Map<string, string>();
   for (const entry of context.model.imports) {
-    const resolved = resolveSourceImport(context.file, entry.path);
+    const resolved = resolveSourceImport(context.file, entry.path, snapshot.catalog);
     if (resolved) {
       existing.set(resolved, entry.name);
     }
@@ -77,7 +69,5 @@ function rebaseCanvasSource(source: string, from: string, declarations: string):
     return `---\n${declarations}\n---\n${source}`;
   }
   const frontmatter = mapModuleSpecifiers(fence[2] ?? '', rebase);
-  return (
-    `${fence[1] ?? ''}---\n${frontmatter}\n${declarations}\n---` + source.slice(fence[0].length)
-  );
+  return `${fence[1] ?? ''}---\n${frontmatter}\n${declarations}\n---` + source.slice(fence[0].length);
 }

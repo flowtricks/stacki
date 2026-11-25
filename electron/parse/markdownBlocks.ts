@@ -60,11 +60,7 @@ export interface BlockRead {
 // Splits `lines` (already dedented to their container) into block nodes at
 // `depth`. Blank lines are carried on the node that follows them, so the exact
 // spacing of the source comes back when it is printed.
-export function parseBlocks(
-  lines: readonly Line[],
-  env: ParseEnv,
-  depth: number,
-): MarkdownNodeList {
+export function parseBlocks(lines: readonly Line[], env: ParseEnv, depth: number): MarkdownNodeList {
   const nodes: MarkdownNodeList = [];
   let pendingBlanks = 0;
   let index = 0;
@@ -96,12 +92,7 @@ export function parseBlocks(
 // The first reader that recognises the line decides the block. The order is
 // the parser's grammar: a thematic break before lists (`- - -` is a rule, not
 // three bullets), a table before a paragraph.
-export function readBlock(
-  lines: readonly Line[],
-  index: number,
-  env: ParseEnv,
-  depth: number,
-): BlockRead {
+export function readBlock(lines: readonly Line[], index: number, env: ParseEnv, depth: number): BlockRead {
   return (
     readEsm(lines, index, env) ??
     readMarkup(lines, index, env) ??
@@ -118,11 +109,7 @@ export function readBlock(
 // MDX: ESM imports and exports. Hoisted into the same `imports` list an
 // .astro page has, so the palette can tell which components this page can
 // use; the block stays in the tree so the block order survives.
-export function readEsm(
-  lines: readonly Line[],
-  index: number,
-  env: ParseEnv,
-): BlockRead | undefined {
+export function readEsm(lines: readonly Line[], index: number, env: ParseEnv): BlockRead | undefined {
   if (!env.mdx) {
     return undefined;
   }
@@ -151,11 +138,7 @@ export function readEsm(
 // same node — which is what makes a component inside a post selectable and
 // editable. It runs to the first blank line, which is how both markdown and
 // MDX delimit an embedded block.
-export function readMarkup(
-  lines: readonly Line[],
-  index: number,
-  env: ParseEnv,
-): BlockRead | undefined {
+export function readMarkup(lines: readonly Line[], index: number, env: ParseEnv): BlockRead | undefined {
   if (!MARKUP_RE.test(lineAt(lines, index).text)) {
     return undefined;
   }
@@ -210,9 +193,7 @@ export function readFence(lines: readonly Line[], index: number): BlockRead | un
     kind: 'element',
     name: 'pre',
     props: lang ? { lang: { type: 'string', value: lang } } : {},
-    children: body.length
-      ? [{ ...placed(lines, index + 1, bodyEnd), kind: 'text', value: joinedLines(body).text }]
-      : [],
+    children: body.length ? [{ ...placed(lines, index + 1, bodyEnd), kind: 'text', value: joinedLines(body).text }] : [],
     mdIndent: fence[1] ?? '',
     mdFence: marker,
     mdInfo: info,
@@ -231,11 +212,7 @@ export function readFence(lines: readonly Line[], index: number): BlockRead | un
 }
 
 // The index of the line closing a fence opened with `marker`, if any.
-export function closingFence(
-  lines: readonly Line[],
-  from: number,
-  marker: string,
-): number | undefined {
+export function closingFence(lines: readonly Line[], from: number, marker: string): number | undefined {
   for (let at = from; at < lines.length; at++) {
     const close = lineAt(lines, at).text.match(FENCE_CLOSE_RE);
     const found = close?.[2] ?? '';
@@ -282,9 +259,7 @@ export function readHeading(lines: readonly Line[], index: number): BlockRead | 
     kind: 'element',
     name: `h${hashes.length}`,
     props: {},
-    children: text
-      ? [{ id: PENDING_ID, kind: 'text', value: text, start: from, end: from + text.length }]
-      : [],
+    children: text ? [{ id: PENDING_ID, kind: 'text', value: text, start: from, end: from + text.length }] : [],
     mdIndent: indent,
     mdGap: gap,
     mdTrail: atx[5] ?? '',
@@ -292,12 +267,7 @@ export function readHeading(lines: readonly Line[], index: number): BlockRead | 
   return { nodes: [node], next: index + 1 };
 }
 
-export function readQuote(
-  lines: readonly Line[],
-  index: number,
-  env: ParseEnv,
-  depth: number,
-): BlockRead | undefined {
+export function readQuote(lines: readonly Line[], index: number, env: ParseEnv, depth: number): BlockRead | undefined {
   if (!QUOTE_RE.test(lineAt(lines, index).text)) {
     return undefined;
   }
@@ -350,12 +320,7 @@ export interface ListShape {
   readonly marker: string;
 }
 
-export function readList(
-  lines: readonly Line[],
-  index: number,
-  env: ParseEnv,
-  depth: number,
-): BlockRead | undefined {
+export function readList(lines: readonly Line[], index: number, env: ParseEnv, depth: number): BlockRead | undefined {
   const first = lineAt(lines, index).text;
   const bullet = first.match(BULLET_RE);
   const ordered = first.match(ORDERED_RE);
@@ -404,11 +369,7 @@ export interface ItemRead {
   readonly next: number;
 }
 
-export function readItem(
-  lines: readonly Line[],
-  index: number,
-  shape: ListShape,
-): ItemRead | undefined {
+export function readItem(lines: readonly Line[], index: number, shape: ListShape): ItemRead | undefined {
   const line = lineAt(lines, index);
   const match = line.text.match(shape.ordered ? ORDERED_RE : BULLET_RE);
   if (!match) {
@@ -468,13 +429,7 @@ export function firstNonBlank(lines: readonly Line[], from: number): number | un
 
 // An item starts at its marker: the list's own indentation belongs to the
 // list, whose first item starts one indentation later than it does.
-export function itemNode(
-  lines: readonly Line[],
-  index: number,
-  item: ItemRead,
-  env: ParseEnv,
-  depth: number,
-): MdNode {
+export function itemNode(lines: readonly Line[], index: number, item: ItemRead, env: ParseEnv, depth: number): MdNode {
   const line = lineAt(lines, index);
   const indent = (line.text.match(/^\s*/)?.[0] ?? '').length;
   return {
@@ -553,14 +508,7 @@ export function readTable(lines: readonly Line[], index: number): BlockRead | un
 
 // A paragraph ends where another block begins.
 export function endsParagraph(text: string): boolean {
-  return (
-    ATX_RE.test(text) ||
-    FENCE_RE.test(text) ||
-    RULE_RE.test(text) ||
-    QUOTE_RE.test(text) ||
-    MARKUP_RE.test(text) ||
-    SETEXT_RE.test(text)
-  );
+  return ATX_RE.test(text) || FENCE_RE.test(text) || RULE_RE.test(text) || QUOTE_RE.test(text) || MARKUP_RE.test(text) || SETEXT_RE.test(text);
 }
 
 // A paragraph, and the setext heading or image it can turn out to be.
@@ -609,12 +557,7 @@ export function readParagraph(lines: readonly Line[], index: number): BlockRead 
 // `![alt](src "title")` alone: its alt, source and title as attributes, each
 // with the range it is written in (the brackets and quotes around alt and
 // title belong to the attribute, not the value).
-export function imageNode(
-  lines: readonly Line[],
-  index: number,
-  next: number,
-  text: Joined,
-): MdNode | undefined {
+export function imageNode(lines: readonly Line[], index: number, next: number, text: Joined): MdNode | undefined {
   const img = text.text.match(IMAGE_ONLY_RE);
   if (!img) {
     return undefined;
@@ -637,9 +580,7 @@ export function imageNode(
     props['title'] = { type: 'string', value: title };
     const titleEnd = text.text.length - 2; // The closing quote, before `)`.
     const titleStart = titleEnd - title.length;
-    spans.push(
-      markdownAttr('title', [at(titleStart - 1), at(titleEnd + 1)], [at(titleStart), at(titleEnd)]),
-    );
+    spans.push(markdownAttr('title', [at(titleStart - 1), at(titleEnd + 1)], [at(titleStart), at(titleEnd)]));
   }
   return {
     ...placed(lines, index, next),
@@ -671,9 +612,7 @@ export function assignPathIds(roots: readonly MdNode[]): { nodes: number; depth:
     if (pending.length > LIMITS.treeNodesMax) {
       return { nodes: pending.length, depth };
     }
-    (entry.node.children ?? []).forEach((child, index) =>
-      pending.push({ node: child, path: `${entry.path}.${index}`, depth: entry.depth + 1 }),
-    );
+    (entry.node.children ?? []).forEach((child, index) => pending.push({ node: child, path: `${entry.path}.${index}`, depth: entry.depth + 1 }));
   }
   return { nodes: pending.length, depth };
 }

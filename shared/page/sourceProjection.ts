@@ -14,16 +14,7 @@ import type { Capability } from './capability';
 import { LIMITS } from '../core/limits';
 import type { Attr, AttrSpan, PageModel, PageNode, ParsePageResult } from './pageNode';
 import { toChildIndex, type NodeKind, type StructuralPath } from './ref';
-import {
-  encodeUtf8,
-  spanContains,
-  spansAscending,
-  toByteSpan,
-  utf16ToByteOffsets,
-  utf8ByteLength,
-  type ByteSpan,
-  type Utf16Span,
-} from '../core/span';
+import { spanContains, spansAscending, toByteSpan, utf16ToByteOffsets, utf8ByteLength, type ByteSpan, type Utf16Span } from '../core/span';
 
 export interface ProjectedAttribute {
   readonly name: string;
@@ -56,6 +47,8 @@ export interface ProjectedNode {
   readonly capability: Capability;
   readonly syntax: NodeSyntax;
   readonly list: NodeList;
+  /** Callback roots occupy separate JavaScript expressions, not a sibling list. */
+  readonly callback?: true;
 }
 
 export interface Diagnostic {
@@ -70,8 +63,8 @@ export type Projection =
       /** Length of the bytes this was derived from: the snapshot checks it. */
       readonly byteLength: number;
       /** UTF-16 code units of the same text. The parser bounds a page in these
-       * (`ipcFieldCharsMax`), so a projection derived without reparsing
-       * (projectionPatch.ts) carries them to stay inside the parser's bound. */
+       * (`ipcFieldCharsMax`, the platform string length), so a projection derived without
+       * reparsing (projectionPatch.ts) carries them to stay inside the parser's bound. */
       readonly utf16Length: number;
       /** The fenced frontmatter block, `---` to `---` inclusive, when present. */
       readonly frontmatter: ByteSpan | undefined;
@@ -102,10 +95,10 @@ export function projectionAcceptsVisualIntents(projection: Projection): boolean 
  * exactly `text` with source offsets on: `parsePage(text, { locs })` for an
  * `.astro` page, `parseMarkdownPage(text)` for Markdown and MDX (step 10). */
 export function projectPage(text: string, result: ParsePageResult): Projection {
-  if (LIMITS.ipcFieldCharsMax < text.length) {
-    assert(!result.editable, 'The parser refuses a page past its UTF-16 bound');
-    return overlong(text);
-  }
+  // A page of any size projects: the only ceiling is the platform's string length, which a string
+  // cannot pass, so this states the fact rather than refusing a page (a page once projected as a
+  // parse error past a fixed 10 MB).
+  assert(text.length <= LIMITS.ipcFieldCharsMax, 'A page is no longer than the platform string');
   const byteLength = utf8ByteLength(text);
   assert(byteLength <= LIMITS.sourceBytesMax, 'Projected source is inside the file bound');
   if (!result.editable) {
@@ -136,9 +129,7 @@ export function projectPage(text: string, result: ParsePageResult): Projection {
  * written through its own actor (plan §3.3). Valid, with no nodes: document
  * anchors and code patches may target it, visual node intents may not. */
 export function projectOpaqueDocument(text: string): Projection {
-  if (LIMITS.ipcFieldCharsMax < text.length) {
-    return overlong(text);
-  }
+  assert(text.length <= LIMITS.ipcFieldCharsMax, 'A document is no longer than the platform string');
   const byteLength = utf8ByteLength(text);
   assert(byteLength <= LIMITS.sourceBytesMax, 'Projected source is inside the file bound');
   assert(byteLength >= text.length, 'UTF-8 never takes fewer bytes than UTF-16 units');
@@ -146,17 +137,6 @@ export function projectOpaqueDocument(text: string): Projection {
 }
 
 // --- Internal ----------------------------------------------------------------
-
-// A file inside the byte bound can still exceed the UTF-16 bound the parser and
-// the offset converter keep: 10 MB of ASCII is 10 485 760 units, over
-// ipcFieldCharsMax. That is user input, so it projects as a parse error; before
-// this check it reached the converter's assertion and crashed (found at step 4).
-function overlong(text: string): Projection {
-  const byteLength = encodeUtf8(text).length;
-  assert(byteLength >= text.length, 'UTF-8 never takes fewer bytes than UTF-16 units');
-  const message = `Source exceeds ${LIMITS.ipcFieldCharsMax} UTF-16 units.`;
-  return { tag: 'parse-error', byteLength, diagnostics: [{ message, near: undefined }] };
-}
 
 interface PendingNode {
   readonly node: PageNode;
@@ -173,17 +153,10 @@ type SpanConverter = (span: Utf16Span) => ByteSpan;
 // Iterative preorder walk: the depth bound is the tree's, not the call stack's.
 // `markdown` is the page's text when it is a Markdown page: its root nodes are
 // blocks, and what a node's children are depends on how the node is written.
-function collectNodes(
-  roots: readonly PageNode[],
-  markdown: string | undefined,
-): readonly PendingNode[] {
+function collectNodes(roots: readonly PageNode[], markdown: string | undefined): readonly PendingNode[] {
   const out: PendingNode[] = [];
   const stack: Omit<PendingNode, 'span'>[] = [];
-  const pushChildren = (
-    children: readonly PageNode[],
-    parent: Pick<PendingNode, 'path' | 'repeated'>,
-    list: NodeList,
-  ) => {
+  const pushChildren = (children: readonly PageNode[], parent: Pick<PendingNode, 'path' | 'repeated'>, list: NodeList) => {
     for (let index = children.length - 1; index >= 0; index--) {
       const child = children[index];
       assert(child !== undefined, 'Child index lies inside its list');
@@ -298,11 +271,7 @@ function frontmatterSpan(text: string, model: PageModel): Utf16Span | undefined 
 // collected in a typed array and sorted natively: a Set, a spread and a
 // comparator sort over a few hundred thousand offsets cost more than the
 // conversion itself. Lookups are a binary search over the unique offsets.
-function spanConverter(
-  text: string,
-  pending: readonly PendingNode[],
-  frontmatter: Utf16Span | undefined,
-): SpanConverter {
+function spanConverter(text: string, pending: readonly PendingNode[], frontmatter: Utf16Span | undefined): SpanConverter {
   const collected: number[] = [];
   const add = (span: Utf16Span): void => {
     collected.push(span.start, span.end);
@@ -416,16 +385,14 @@ function projectNode(entry: PendingNode, convert: SpanConverter): ProjectedNode 
     capability,
     syntax: entry.syntax,
     list: entry.list,
+    ...(entry.node.kind === 'map' && entry.node.bodyParts !== undefined ? { callback: true as const } : {}),
   };
 }
 
 /** Plan §6: native elements, component invocations, text, comments, a page's
  * own `<style>` and the structural nodes are visually editable; opaque code is
  * not; anything inside a loop body is one source node rendered many times. */
-export function classifyNode(
-  node: PageNode,
-  placement: { readonly repeated: boolean },
-): Capability {
+export function classifyNode(node: PageNode, placement: { readonly repeated: boolean }): Capability {
   if (placement.repeated) {
     return 'repeated-source-node';
   }
@@ -475,11 +442,18 @@ function classifyAttribute(attribute: AttrSpan, node: Capability): Capability {
   if (node !== 'editable') {
     return node;
   }
-  return attribute.type === 'spread' ? 'read-only-opaque' : 'editable';
+  if (attribute.type === 'spread') {
+    return 'read-only-opaque';
+  }
+  // A `{name}` shorthand names its prop and its value with one identifier, so
+  // renaming the prop or setting its value by splicing a span would change both.
+  if (attribute.type === 'expr') {
+    const shorthand = attribute.nameSpan.start === attribute.valueSpan.start && attribute.nameSpan.end === attribute.valueSpan.end;
+    return shorthand ? 'read-only-opaque' : 'editable';
+  }
+  return 'editable';
 }
 
 function clip(message: string): string {
-  return message.length <= LIMITS.diagnosticCharsMax
-    ? message
-    : message.slice(0, LIMITS.diagnosticCharsMax);
+  return message.length <= LIMITS.diagnosticCharsMax ? message : message.slice(0, LIMITS.diagnosticCharsMax);
 }

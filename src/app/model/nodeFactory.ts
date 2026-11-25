@@ -2,40 +2,23 @@
 // slot hosts and definitions, finding an element by tag, the opening
 // selection, the names a page already uses, and a node's code text (App.tsx).
 
+// i18n-ignore-file: starter content written into the person's own page (their site's text), not interface text.
 import type { SetStateAction } from 'react';
 import type { Attr, PageModel, PageNode, PairedNode } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
-import { VOID_TAGS } from '../../editor/elementSchemas';
 import { previewGestures } from '../../editor/pageSender';
 import { carryHandles, seedOf } from '../../editor/nodeHandles';
-import {
-  type PageOrigin,
-  type EditGesture,
-  type EditsRecord,
-  type QueueEntry,
-} from '../../editor/pageEdits';
-import {
-  frontmatterGesture,
-  propsGesture,
-  sequence,
-  tagRenameGesture,
-} from '../../editor/editGestures';
+import { type PageOrigin, type EditsRecord, type QueueEntry } from '../../editor/pageEdits';
 import type { PageEdited } from '../../../shared/ipc/pageSave';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
-import { renamedLoopVar, parseLoopHead, disconnectedLoops } from '../../editor/loopBindings';
 import type { InlineNode } from '../../features/props/RichContent';
-import type { Rename } from '../../features/props/propNodeEditors';
-import {
-  findEditorNodeById as findNodeById,
-  type EditablePageState,
-  type EditorPageState,
-  type OpenFile,
-  type TrailingSlash,
-} from '../../editor/pageState';
-import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
+import { type EditablePageState, type EditorPageState, type OpenFile, type TrailingSlash } from '../../editor/pageState';
+import { nodeId, type EditorNode } from '../../editor/pageView';
 import { previewProjectPageEdit } from '../../ipc/appBridge';
+// Pure model edits shared with Studio, which vendors src/editor and not the app.
+export { codeText, collectUsedNames, frontmatterOf, restatedText, statedText, stripComments, tagChangeGesture, type TagChange } from './pageModelGestures';
 
 // A node a gesture creates has no parse yet to name it: its handle is random,
 // unique without a counter, and carried onto the reply that first contains it
@@ -68,11 +51,7 @@ export function inlineWithIds(list: readonly InlineNode[], depth: number): Edito
     if (node.kind === 'text' || node.kind === 'expr') {
       return { ...node, id: newId() };
     }
-    const props = Object.fromEntries(
-      Object.entries(node.props ?? {}).filter(
-        (entry): entry is [string, Attr] => entry[1] !== undefined,
-      ),
-    );
+    const props = Object.fromEntries(Object.entries(node.props ?? {}).filter((entry): entry is [string, Attr] => entry[1] !== undefined));
     return {
       id: newId(),
       kind: 'element',
@@ -165,6 +144,11 @@ export function definitionOf(
   node: Pick<PairedNode, 'name'>,
   insertables: readonly ScanComponent[],
 ): ScanComponent | undefined {
+  const specifier = model.imports.find((item) => item.name === node.name)?.path;
+  const installed = insertables.find((item) => item.origin?.kind === 'package' && item.origin.importPath === specifier);
+  if (installed) {
+    return installed;
+  }
   const byName = insertables.find((component) => component.name === node.name);
   if (byName) {
     return byName;
@@ -180,11 +164,7 @@ export function definitionOf(
 // First element with this tag, depth-first. Used to land the selection on a
 // layout's <body> when it is opened: the html/head wrapper above it is not
 // what anyone came to edit, and <body> is the page's real root.
-export function findElementByTag(
-  nodes: readonly PageNode[] | undefined,
-  tag: string,
-  depth = 0,
-): PairedNode | undefined {
+export function findElementByTag(nodes: readonly PageNode[] | undefined, tag: string, depth = 0): PairedNode | undefined {
   // A parsed tree is bounded by the page-tree depth cap.
   assert(depth <= LIMITS.treeDepthMax, 'findElementByTag: depth exceeds the tree cap');
   for (const node of nodes || []) {
@@ -206,10 +186,7 @@ export function findElementByTag(
 // their <body> selection; files without rendered markup still get a fallback.
 export function openingSelection(nodes: readonly PageNode[] | undefined): PageNode | undefined {
   const list = Array.isArray(nodes) ? nodes : [];
-  const firstRendered = (
-    children: readonly PageNode[] | undefined,
-    depth: number,
-  ): PageNode | undefined => {
+  const firstRendered = (children: readonly PageNode[] | undefined, depth: number): PageNode | undefined => {
     assert(depth <= LIMITS.treeDepthMax, 'openingSelection: depth exceeds the tree cap');
     for (const node of children || []) {
       const markup = node.kind === 'element' || node.kind === 'component';
@@ -218,12 +195,7 @@ export function openingSelection(nodes: readonly PageNode[] | undefined): PageNo
         if (child) {
           return child;
         }
-      } else if (
-        markup &&
-        !['head', 'script', 'style', 'link', 'meta', 'title', 'base', 'template'].includes(
-          node.name,
-        )
-      ) {
+      } else if (markup && !['head', 'script', 'style', 'link', 'meta', 'title', 'base', 'template'].includes(node.name)) {
         return node;
       }
     }
@@ -238,11 +210,7 @@ export function openingSelection(nodes: readonly PageNode[] | undefined): PageNo
 // node beats selecting nothing.
 export function outermostNode(nodes: readonly PageNode[] | undefined): PageNode | undefined {
   const list: readonly PageNode[] = nodes ?? [];
-  return (
-    list.find((node) => node.kind === 'element' || node.kind === 'component') ||
-    list[0] ||
-    undefined
-  );
+  return list.find((node) => node.kind === 'element' || node.kind === 'component') || list[0] || undefined;
 }
 
 export interface OpenFileOptions {
@@ -253,11 +221,7 @@ export interface OpenFileOptions {
 // Returning from a component should land on the instance that opened it. The
 // path is stored with the child stack entry because node ids can change when
 // the parent file is parsed again during the return trip.
-export function openFileSelection(
-  entry: OpenFile,
-  result: EditorPageState,
-  selectionPath: string | undefined,
-): PageNode | undefined {
+export function openFileSelection(entry: OpenFile, result: EditorPageState, selectionPath: string | undefined): PageNode | undefined {
   if (!result.editable) {
     return undefined;
   }
@@ -269,138 +233,18 @@ export function openFileSelection(
       return selected;
     }
   }
-  return entry.kind === 'component'
-    ? openingSelection(result.model.nodes)
-    : outermostNode(result.model.nodes);
-}
-
-export function collectUsedNames(model: PageModel): Set<string> {
-  const used = new Set<string>();
-  const walk = (list: readonly PageNode[], depth: number): void => {
-    assert(depth <= LIMITS.treeDepthMax, 'collectUsedNames: depth exceeds the tree cap');
-    for (const node of list) {
-      if ('name' in node && node.name) {
-        used.add(node.name);
-      }
-      if ('children' in node && Array.isArray(node.children)) {
-        walk(node.children, depth + 1);
-      }
-    }
-  };
-  walk(model.nodes, 0);
-  return used;
-}
-
-// Comments in the frontmatter are prose about the page, and prose names the
-// things the page is built from — `// Hero copy` is talk about <Hero>, not a
-// use of it. Only whole-line `//` comments go: a trailing one can't be told
-// from the `//` inside a URL without really parsing, and cutting a string in
-// half there would hide a reference that is real.
-export function stripComments(code: string): string {
-  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
-}
-
-// Everything in the file that is code rather than markup: the frontmatter, a
-// loop's head, a condition's test, an expression node, and any prop whose
-// value is an expression. An imported name can be used in any of them without
-// ever appearing as a tag.
-//
-// <style> and <script> bodies are pointedly not code for this purpose. Both
-// are their own scope in Astro — CSS never sees a frontmatter binding, and a
-// <script> is a separate module — so a name inside one is a coincidence, not
-// a use. Reading them meant a `.Hero` class or a `/* Hero */` note pinned
-// <Hero>'s import in place for good. What those blocks genuinely share comes
-// in through `define:vars`, which is a prop expression and is still read.
-export function codeText(model: PageModel): string {
-  const parts = [stripComments(model.extraFrontmatter || '')];
-  const walk = (list: readonly PageNode[], depth: number): void => {
-    assert(depth <= LIMITS.treeDepthMax, 'codeText: depth exceeds the tree cap');
-    for (const node of list) {
-      if (node.kind === 'expr' || node.kind === 'raw-line') {
-        parts.push(node.value || '');
-      }
-      if (node.kind === 'map') {
-        parts.push(node.head || '');
-      }
-      if (node.kind === 'cond') {
-        parts.push(node.test || '');
-      }
-      const props = 'props' in node ? node.props : undefined;
-      for (const value of Object.values(props || {})) {
-        if (value && (value.type === 'expr' || value.type === 'spread')) {
-          parts.push(String(value.value ?? ''));
-        }
-      }
-      if ('children' in node && Array.isArray(node.children)) {
-        walk(node.children, depth + 1);
-      }
-    }
-  };
-  walk(model.nodes, 0);
-  return parts.join('\n');
+  return entry.kind === 'component' ? openingSelection(result.model.nodes) : outermostNode(result.model.nodes);
 }
 
 export type BranchNode = Extract<EditorNode, { readonly kind: 'branch' }>;
-
-/** A tag's new name and kind, and the attributes the new name does not keep. */
-export interface TagChange {
-  readonly kind: 'element' | 'component';
-  readonly name: string;
-  readonly asset: boolean;
-  readonly dropped: readonly string[];
-}
-
-// A tag renamed (step 9): the attributes the new name does not keep removed
-// first — removals anchor on the node as authored, and a rename may change
-// its kind, which the next request's anchor would no longer match — then the
-// name, then the imports the new name needs and the old one leaves unused, all
-// one undo step. Void tags keep no children: `<img>` holds none.
-export function tagChangeGesture(
-  model: EditorModel,
-  node: EditorNode,
-  change: TagChange,
-  imports: (model: EditorModel) => EditorModel,
-): EditGesture {
-  const options = { coalesceKey: undefined, urgency: true };
-  const patch = Object.fromEntries(change.dropped.map((attr) => [attr, undefined]));
-  const removal = propsGesture(node.id, patch, options);
-  const kept = change.dropped.length > 0 ? removal.apply(model) : model;
-  const before = findNodeById(kept.nodes, node.id);
-  assert(before !== undefined, 'The renamed node survives its attribute removals');
-  const children = VOID_TAGS.has(change.name) ? undefined : before.children;
-  // A fresh copy, so taking the old tag's flags off it edits nothing shown.
-  const next: EditorNode = Object.assign({}, before, {
-    kind: change.kind,
-    name: change.name,
-    children,
-  });
-  Reflect.deleteProperty(next, 'dynamicTag');
-  Reflect.deleteProperty(next, 'astroAsset');
-  if (change.asset) {
-    Object.assign(next, { astroAsset: true });
-  }
-  const rename = tagRenameGesture(node, next, options);
-  const renamed = rename.apply(kept);
-  const named = change.dropped.length > 0 ? sequence(removal, rename) : rename;
-  if (frontmatterOf(imports(renamed)) === frontmatterOf(renamed)) {
-    return named;
-  }
-  return sequence(named, frontmatterGesture(renamed, options, imports));
-}
 
 // The unsaved version of a conflicted page as text, for review (plan §7). The
 // page's queued gestures are planned as the splices they would write, against
 // the bytes they were stated on (page:previewEdit) — never printed whole, on
 // any page since step 10.
-export type Reviewed =
-  | { readonly tag: 'shown'; readonly source: string }
-  | { readonly tag: 'failed'; readonly message: string };
+export type Reviewed = { readonly tag: 'shown'; readonly source: string } | { readonly tag: 'failed'; readonly message: string };
 
-export async function reviewedSource(
-  path: string,
-  state: EditablePageState,
-  queued: readonly QueueEntry[],
-): Promise<Reviewed> {
+export async function reviewedSource(path: string, state: EditablePageState, queued: readonly QueueEntry[]): Promise<Reviewed> {
   // Only typed code leaves a page without an origin, and typed code is
   // reviewed as it was typed (the caller's branch).
   assert(state.origin !== undefined, 'A page with only gestures queued has an origin');
@@ -419,80 +263,6 @@ export async function reviewedSource(
       return shown;
     default: {
       const exhaustive: never = shown;
-      return exhaustive;
-    }
-  }
-}
-
-// The node as a text field states it (step 9): a loop's head — the renames
-// followed below it, and loops reading an item whose data changed disconnected
-// — a condition's test, a style or script body, or the value of a text, an
-// expression or a note. A new node; the shown one is left as it was, and the
-// loop helpers edit a private copy of the loop only.
-export function restatedText(
-  node: EditorNode,
-  value: string,
-  renames: readonly Rename[] | undefined,
-): EditorNode | undefined {
-  switch (node.kind) {
-    case 'map': {
-      const renamed = (renames || []).reduce(
-        (children, { from, to }) =>
-          from && to && from !== to ? renamedLoopVar(children, from, to) : children,
-        node.children,
-      );
-      // Renames above already re-pointed the children, so compare the data
-      // sources and orphan-proof what reads from this item.
-      const before = parseLoopHead(node.head);
-      const after = parseLoopHead(value);
-      const vars = after ? [after.item, after.index].filter(Boolean) : [];
-      const moved = before && after && before.data !== after.data && vars.length > 0;
-      const children = moved ? disconnectedLoops(renamed, vars) : renamed;
-      return { ...node, head: value, children };
-    }
-    case 'cond':
-      return { ...node, test: value };
-    case 'raw':
-      return { ...node, inner: value };
-    case 'text':
-    case 'expr':
-    case 'comment':
-      return { ...node, value };
-    case 'element':
-    case 'component':
-    case 'branch':
-    case 'raw-line':
-    case 'chunk-group':
-      return undefined; // No text field states these.
-    default: {
-      const exhaustive: never = node;
-      return exhaustive;
-    }
-  }
-}
-
-// The text a node's field states, as restatedText writes it back: undefined
-// for a node no text field states.
-export function statedText(node: EditorNode): string | undefined {
-  switch (node.kind) {
-    case 'map':
-      return node.head;
-    case 'cond':
-      return node.test;
-    case 'raw':
-      return node.inner;
-    case 'text':
-    case 'expr':
-    case 'comment':
-      return node.value;
-    case 'element':
-    case 'component':
-    case 'branch':
-    case 'raw-line':
-    case 'chunk-group':
-      return undefined;
-    default: {
-      const exhaustive: never = node;
       return exhaustive;
     }
   }
@@ -517,10 +287,7 @@ export function voided(outcome: EditsRecord['outcome']): boolean {
 
 // The origin after an Undo's revert: its reply, carried from the origin
 // through the revert's own splices (an .astro page; undefined otherwise).
-export function revertedOrigin(
-  origin: PageOrigin | undefined,
-  reply: PageEdited,
-): PageOrigin | undefined {
+export function revertedOrigin(origin: PageOrigin | undefined, reply: PageEdited): PageOrigin | undefined {
   if (origin === undefined || !reply.editable) {
     return undefined;
   }
@@ -538,6 +305,46 @@ export function saveDelay({ urgency }: { readonly urgency: boolean | 'live' }): 
     return 120;
   }
   return 300;
+}
+
+/** A save waiting on its timer: the handle that cancels it and the time it is due. */
+export interface PendingSave {
+  readonly handle: ReturnType<typeof setTimeout>;
+  readonly dueMs: number;
+}
+
+// What a new save request does to the save already pending: keep it, or
+// replace it with one that waits `delayMs`.
+//
+// Typing is a debounce on purpose: each keystroke pushes the save back, so a
+// word saves once. A live request (a style-panel drag or scrub) must not do
+// that. It arrives once per animation frame, far closer together than its own
+// delay, so a debounce never fired while the hand kept moving and the canvas
+// stood still until the pointer rested. A live request therefore keeps any
+// save already due no later than it would be, which turns the stream into one
+// save per delay; the save that runs reads the model as it is then, so it
+// carries the latest frame. An immediate request is due at once and always
+// replaces.
+export function nextSave({
+  urgency,
+  pending,
+  nowMs,
+}: {
+  readonly urgency: boolean | 'live';
+  readonly pending: PendingSave | undefined;
+  readonly nowMs: number;
+}): { readonly tag: 'keep' } | { readonly tag: 'replace'; readonly delayMs: number } {
+  assert(Number.isFinite(nowMs), 'nextSave: the clock reads a finite time');
+  const delayMs = saveDelay({ urgency });
+  assert(delayMs >= 0, 'nextSave: a save never waits a negative time');
+  if (urgency === 'live') {
+    if (pending !== undefined) {
+      if (pending.dueMs <= nowMs + delayMs) {
+        return { tag: 'keep' };
+      }
+    }
+  }
+  return { tag: 'replace', delayMs };
 }
 
 // A route is stored the way it identifies a page — slashless, so /de/hotel
@@ -568,9 +375,4 @@ export function parseTrailingSlash(value: string): TrailingSlash {
     return value;
   }
   throw new Error(`Unknown trailing-slash mode: ${value}`);
-}
-
-// The frontmatter a model describes, compared as data.
-export function frontmatterOf(model: PageModel): string {
-  return JSON.stringify([model.imports, model.extraFrontmatter]);
 }

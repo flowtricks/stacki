@@ -19,13 +19,13 @@ test('empty frontmatter closes before body text beginning with dashes', () => {
   assert.equal(parsePage('---\r\n---\r\n<p>x</p>').model.extraFrontmatter, '');
 });
 
-test("closing-fence suffixes retain the Astro compiler's existing support", () => {
-  const source = '---\nconst note = 1;\n---body text\n<p>Text</p>\n';
-  const parsed = parsePage(source);
+test('closing-fence trailing spaces are kept apart from the page, and text after the fence opens as code', () => {
+  const parsed = parsePage('---\nconst note = 1;\n--- \t\n<p>Text</p>\n');
   assert.equal(parsed.editable, true);
   assert.equal(parsed.model.extraFrontmatter, 'const note = 1;');
-  assert.equal(parsed.model.nodes[0].value.trim(), 'body text');
   assert.equal(parsePage('---\nconst note = 1;\n--- \t\n<p>Text</p>').model.hadFrontmatter, true);
+  // The compiler eats a character of text that follows the fence on its line, so the editor will not read it.
+  assert.equal(parsePage('---\nconst note = 1;\n---body text\n<p>Text</p>\n').editable, false);
 });
 
 test('prototype-looking names remain ordinary own attributes', () => {
@@ -48,10 +48,18 @@ test('unknown entities never resolve through Object.prototype', () => {
 test('package attribution handles Windows, nested dependencies, and pnpm', () => {
   assert.equal(packageOf('C:\\site\\node_modules\\@scope\\cards\\Page.astro'), '@scope/cards');
   assert.equal(packageOf('/site/node_modules/outer/node_modules/inner/Page.astro'), 'inner');
-  assert.equal(
-    packageOf('/site/node_modules/.pnpm/@scope+cards@1.0/node_modules/@scope/cards/Page.astro'),
-    '@scope/cards',
-  );
+  assert.equal(packageOf('/site/node_modules/.pnpm/@scope+cards@1.0/node_modules/@scope/cards/Page.astro'), '@scope/cards');
   assert.equal(packageOf('/site/mynode_modules/not-a-package/Page.astro'), undefined);
   assert.equal(packageOf('node_modules/package/Page.astro'), 'package');
+});
+
+test('an expression attribute ending in a line comment is written with its brace on a new line', () => {
+  const source = '<div data-y={a // trailing comment }\n}>x</div>\n';
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true);
+  const written = serializePage(parsed.model);
+  assert.ok(/\/\/ trailing comment \}\n\}/.test(written), written);
+  assert.ok(!/comment \}\}/.test(written), 'the comment never swallows the closing brace');
+  const plain = parsePage('<div data-y={a}>x</div>\n');
+  assert.equal(serializePage(plain.model), '<div data-y={a}>x</div>\n');
 });

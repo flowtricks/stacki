@@ -1,20 +1,14 @@
+// i18n-ignore-file: the labels are English next to their `labelKey`, which the panel translates; the rest of the file holds no interface text.
 // `filter` / `backdrop-filter` are a SPACE-separated list of filter functions
 // (blur/brightness/…/drop-shadow). We model each as one editable layer and
 // parse/serialize back, splitting on TOP-LEVEL spaces so drop-shadow()'s inner
 // lengths + rgba() survive. Mirrors lib/transform.ts.
 
-import { splitTopLevelSpaces } from './background';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
+import { isShadowLength, splitTopLevelSpaces } from './background';
 
-export type FilterType =
-  | 'blur'
-  | 'brightness'
-  | 'contrast'
-  | 'grayscale'
-  | 'hue-rotate'
-  | 'invert'
-  | 'saturate'
-  | 'sepia'
-  | 'drop-shadow';
+export type FilterType = 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hue-rotate' | 'invert' | 'saturate' | 'sepia' | 'drop-shadow';
 
 /** One filter layer: an amount (for the value filters) OR the drop-shadow fields. */
 export type Filter = {
@@ -27,41 +21,37 @@ export type Filter = {
 };
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
-export type FilterPatch =
-  | Pick<Filter, 'amount'>
-  | Pick<Filter, 'x'>
-  | Pick<Filter, 'y'>
-  | Pick<Filter, 'blur'>
-  | Pick<Filter, 'color'>;
+export type FilterPatch = Pick<Filter, 'amount'> | Pick<Filter, 'x'> | Pick<Filter, 'y'> | Pick<Filter, 'blur'> | Pick<Filter, 'color'>;
 
 export type FilterControl = 'amount' | 'angle' | 'shadow';
 export const FILTER_META: Record<
   FilterType,
-  { label: string; unit: string; min: number; max: number; control: FilterControl; def: string }
+  { label: string; labelKey: MessageKey; unit: string; min: number; max: number; control: FilterControl; def: string }
 > = {
-  blur: { label: 'Blur', unit: 'px', min: 0, max: 100, control: 'amount', def: '4px' },
-  brightness: { label: 'Brightness', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  contrast: { label: 'Contrast', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  saturate: { label: 'Saturation', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  grayscale: { label: 'Grayscale', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
-  invert: { label: 'Invert', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
-  sepia: { label: 'Sepia', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+  blur: { label: 'Blur', labelKey: 'styleModel.filter.type.blur', unit: 'px', min: 0, max: 100, control: 'amount', def: '4px' },
+  brightness: { label: 'Brightness', labelKey: 'styleModel.filter.type.brightness', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  contrast: { label: 'Contrast', labelKey: 'styleModel.filter.type.contrast', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  saturate: { label: 'Saturation', labelKey: 'styleModel.filter.type.saturate', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  grayscale: { label: 'Grayscale', labelKey: 'styleModel.filter.type.grayscale', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+  invert: { label: 'Invert', labelKey: 'styleModel.filter.type.invert', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+  sepia: { label: 'Sepia', labelKey: 'styleModel.filter.type.sepia', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
   'hue-rotate': {
     label: 'Hue rotate',
+    labelKey: 'styleModel.filter.type.hueRotate',
     unit: 'deg',
     min: 0,
     max: 360,
     control: 'angle',
     def: '0deg',
   },
-  'drop-shadow': { label: 'Drop shadow', unit: 'px', min: 0, max: 100, control: 'shadow', def: '' },
+  'drop-shadow': { label: 'Drop shadow', labelKey: 'styleModel.filter.type.dropShadow', unit: 'px', min: 0, max: 100, control: 'shadow', def: '' },
 };
 
 // Grouped exactly like Webflow's filter menu.
-export const FILTER_GROUPS: ReadonlyArray<{ heading: string; types: FilterType[] }> = [
-  { heading: 'General', types: ['blur', 'drop-shadow'] },
-  { heading: 'Color adjustments', types: ['brightness', 'contrast', 'hue-rotate', 'saturate'] },
-  { heading: 'Color effects', types: ['grayscale', 'invert', 'sepia'] },
+export const FILTER_GROUPS: ReadonlyArray<{ heading: string; headingKey: MessageKey; types: FilterType[] }> = [
+  { heading: 'General', headingKey: 'styleModel.filter.group.general', types: ['blur', 'drop-shadow'] },
+  { heading: 'Color adjustments', headingKey: 'styleModel.filter.group.colorAdjustments', types: ['brightness', 'contrast', 'hue-rotate', 'saturate'] },
+  { heading: 'Color effects', headingKey: 'styleModel.filter.group.colorEffects', types: ['grayscale', 'invert', 'sepia'] },
 ];
 
 function isFilterType(value: string): value is FilterType {
@@ -71,17 +61,12 @@ function isFilterType(value: string): value is FilterType {
 const DROP_DEFAULT = { x: '0px', y: '2px', blur: '5px', color: 'rgba(0, 0, 0, 0.7)' };
 const round = (value: number) => Math.round(value * 100) / 100;
 
-const functionName = (call: string): string =>
-  call.slice(0, call.indexOf('(')).trim().toLowerCase();
+const functionName = (call: string): string => call.slice(0, call.indexOf('(')).trim().toLowerCase();
 const innerOf = (call: string): string => {
   const openIndex = call.indexOf('(');
   const closeIndex = call.lastIndexOf(')');
-  return openIndex < 0 || closeIndex <= openIndex
-    ? ''
-    : call.slice(openIndex + 1, closeIndex).trim();
+  return openIndex < 0 || closeIndex <= openIndex ? '' : call.slice(openIndex + 1, closeIndex).trim();
 };
-const isLength = (token: string): boolean =>
-  /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax)?$/i.test(token.trim());
 
 // Normalize a value filter's argument to the meta unit: %-filters store a percentage
 // (a unitless `1.5` → `150%`), deg-filters store degrees, blur stores px. A value we
@@ -126,7 +111,7 @@ export function parseFilters(value: string): Filter[] {
       const lens: string[] = [];
       let color = '';
       for (const argument of splitTopLevelSpaces(innerOf(call))) {
-        if (isLength(argument)) {
+        if (isShadowLength(argument)) {
           lens.push(argument);
         } else {
           color = argument;
@@ -181,11 +166,12 @@ export function retypeFilter(type: FilterType): Filter {
 }
 
 /** A short label for a collapsed row. */
-export function filterLabel(filter: Filter): string {
+export function filterLabel(filter: Filter, translate: Translator = ENGLISH_TRANSLATE): string {
   const meta = FILTER_META[filter.type];
+  const name = translate(meta.labelKey);
   if (filter.type === 'drop-shadow') {
     const lengths = [filter.x, filter.y, filter.blur].map((length) => length.trim() || '0px');
-    return `${meta.label}: ${lengths.join(' ')}`;
+    return `${name}: ${lengths.join(' ')}`;
   }
-  return `${meta.label}: ${filter.amount.trim() || meta.def}`;
+  return `${name}: ${filter.amount.trim() || meta.def}`;
 }

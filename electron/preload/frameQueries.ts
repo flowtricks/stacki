@@ -1,16 +1,33 @@
+import { receiveLiveVariables } from './frameLiveVariables';
+import { receiveLiveRules } from './frameLiveRules';
+import { receiveAppCursor } from './frameAppCursor';
+import { receivePointQuery } from './framePointQuery';
+import { receiveOutlineMode } from './frameOutlineMode';
+import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
+import { receiveCanvasScrollbar } from './frameScrollbar';
+import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
+import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from './framePendingDelete';
+import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
+import { listenForCanvasEdits, revertCanvasEdits, showCanvasEdits } from './framePendingEdit';
+import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from './framePendingInsert';
+import { parseCanvasInsert } from '../../shared/page/canvasInsert';
+import { parseCanvasMove } from '../../shared/page/canvasMove';
+import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 // The app asking the frame: a path's elements and computed values, the paths
 // it tracks, scrolling a node into view and the viewport height to freeze; and
 // starting the frame once the document is ready.
 
-import { PROBE_ATTR, isElement, isText } from './frameBasics';
+import { isElement, isText } from './frameBasics';
+import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
+import { inspectScopedProperties, inspectWinningDeclarations, WINNING_LIMITS, type WinningDeclaration } from './frameAuthoredStyles';
 import { list, pathText, text } from '../../shared/core/boundary';
-import { LIMITS } from '../../shared/core/limits';
+import { renderedPageImage, renderedPageType } from './framePageMetadata';
+import { renderedPageText } from './framePageText';
 import { freezeViewportHeight, report } from './frameViewport';
 import { startGuide, type GuideFrame } from './frameGuide';
 import {
   PATH_ATTR,
-  STAMP_ATTRIBUTE,
   activeScope,
   allElementsWithPath,
   elementsWithPath,
@@ -24,15 +41,9 @@ import {
   setTracking,
 } from './frameRegions';
 import { ownClasses, resetThinCache } from './frameMeasure';
-import {
-  forgetReportedKeys,
-  paintOpened,
-  scrollPathIntoView,
-  sendClasses,
-  sendRects,
-  sendRendered,
-} from './frameReports';
-import { enterDesignMode, startOutlines } from './frameTargets';
+import { forgetReportedKeys, paintOpened, scrollPathIntoView, sendClasses, sendRects, sendRendered } from './frameReports';
+import { answerClickQuery, enterDesignMode, nodeAtPoint, startOutlines } from './frameTargets';
+import { installCanvasDrag, receiveDragMessage } from './frameDrag';
 
 // Nodes that put nothing on the page: a component that returns null for the
 // props it was given (an <Img> with no src, a grid with no children) still
@@ -88,9 +99,7 @@ const elementsForPath = (nodePath: string): Element[] => {
   // `display: contents`) still has descendants that do — the first of those
   // stands in for it, the same fallback the rect measuring uses.
   if (!out.length) {
-    const first = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).find((element) =>
-      pathsOf(element).some((x) => x.startsWith(nodePath + '.')),
-    );
+    const first = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).find((element) => pathsOf(element).some((x) => x.startsWith(nodePath + '.')));
     if (first) {
       out.push(first);
     }
@@ -104,24 +113,73 @@ const identityOf = (element: Element) => ({
   classes: ownClasses(element),
   attributes: Object.fromEntries(
     Array.from(element.attributes)
-      .filter((attribute) => attribute.name !== PATH_ATTR && attribute.name !== STAMP_ATTRIBUTE)
+      .filter((attribute) => !attribute.name.startsWith('data-avb-'))
       .map((attribute) => [attribute.name, attribute.value]),
   ),
 });
 
 // The app posts these messages with structured payloads; anything else from
 // its window — or from another frame entirely — is not ours to act on.
-const recordPayload = (x: unknown): x is Record<string, unknown> =>
-  typeof x === 'object' && x !== null;
+const recordPayload = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null;
 
 // The app's questions and instructions, from its own window only.
 export function listenForQueries(): void {
+  // After the patch has swapped the nodes and their stamps (see the listener's note).
+  listenForPendingDeletes();
+  // A reorder shown at once, and reconciled by the patch that follows (frameMove.ts).
+  listenForCanvasMoves();
+  // A palette pick drawn at once, and reconciled the same way (framePendingInsert.ts).
+  listenForCanvasInserts();
+  listenForCanvasEdits();
+  // Dragging on the canvas: the frame follows the pointer and the editor decides the drop (frameDrag.ts).
+  installCanvasDrag({ locate: nodeAtPoint, send: (message) => window.parent.postMessage(message, '*') });
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
     }
     const data: unknown = event.data;
     if (!recordPayload(data)) {
+      return;
+    }
+    const interaction = parseCanvasInteraction(data);
+    if (interaction !== undefined) {
+      setCanvasInteraction(interaction);
+      return;
+    }
+    const pages = parseCanvasSitePages(data);
+    if (pages !== undefined) {
+      setCanvasSitePages(pages);
+      return;
+    }
+    if (receiveLiveVariables(data)) {
+      return;
+    }
+    if (receiveLiveRules(data)) {
+      return;
+    }
+    if (receiveAppCursor(data)) {
+      return;
+    }
+    if (receiveCanvasScrollbar(data)) {
+      return;
+    }
+    if (data['type'] === 'avb:click-query') {
+      receiveClickQuery(data);
+      return;
+    }
+    if (receivePointQuery(data, nodeAtPoint, (message) => window.parent.postMessage(message, '*'))) {
+      return;
+    }
+    if (receiveDragMessage(data)) {
+      return;
+    }
+    if (receiveOutlineMode(data)) {
+      return; // The next hover resolves in the new mode.
+    }
+    if (receiveAppScroll(data)) {
+      return;
+    }
+    if (receiveAppWheel(data)) {
       return;
     }
     if (data['type'] === 'avb:query' && typeof data['id'] === 'number') {
@@ -134,6 +192,50 @@ export function listenForQueries(): void {
     }
     if (data['type'] === 'avb:request-render') {
       reportRender();
+      return;
+    }
+    if (data['type'] === 'avb:resend-reports') {
+      // The app dropped what the page told it (its tree changed shape): say it all again.
+      forgetReportedKeys();
+      sendRendered();
+      sendClasses();
+      return;
+    }
+    if (data['type'] === 'avb:hide-pending') {
+      hidePending(data['path']);
+      return;
+    }
+    if (data['type'] === 'avb:optimistic-move') {
+      const move = parseCanvasMove(data['move']);
+      if (move !== undefined) {
+        showCanvasMove(move);
+        sendRects();
+      }
+      return;
+    }
+    if (data['type'] === 'avb:optimistic-insert') {
+      const insert = parseCanvasInsert(data['insert']);
+      if (insert !== undefined && showCanvasInsert(insert)) {
+        sendRects();
+      }
+      return;
+    }
+    if (data['type'] === 'avb:optimistic-edit') {
+      if (showCanvasEdits(data['edits']) > 0) {
+        sendRects();
+      }
+      return;
+    }
+    if (data['type'] === 'avb:insert-revert') {
+      revertCanvasEdits();
+      revertCanvasInserts();
+      clearPendingDeletes();
+      sendRects();
+      return;
+    }
+    if (data['type'] === 'avb:move-revert') {
+      revertCanvasMoves();
+      sendRects();
       return;
     }
     guideFrame?.receive(data);
@@ -149,8 +251,19 @@ export function listenForQueries(): void {
   });
 }
 
+// A deleted node, hidden until the rebuilt page confirms it (framePendingDelete.ts).
+function hidePending(input: unknown): void {
+  let path: string;
+  try {
+    path = pathText(input);
+  } catch {
+    return;
+  }
+  hidePendingDelete(path);
+  sendRects();
+}
+
 const CLASS_PATCH_NAMES_MAX = 64;
-const CLASS_PATCH_OCCURRENCES_MAX = 1024;
 
 function applyClassPatch(data: Record<string, unknown>): void {
   let path: string;
@@ -169,10 +282,7 @@ function applyClassPatch(data: Record<string, unknown>): void {
   if ([...add, ...remove].some((name) => !name || name.length > 256 || /\s/.test(name))) {
     return;
   }
-  const elements = allElementsWithPath(path, CLASS_PATCH_OCCURRENCES_MAX);
-  if (!elements) {
-    return;
-  }
+  const elements = allElementsWithPath(path);
   for (const element of elements) {
     for (const name of remove) {
       element.classList.remove(name);
@@ -186,12 +296,27 @@ function applyClassPatch(data: Record<string, unknown>): void {
 }
 
 const answerQuery = (data: Record<string, unknown>, id: number) => {
+  if (data['pageText'] === true) {
+    window.parent.postMessage({ type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) }, '*');
+    return;
+  }
+  if (data['pageMetadata'] === true) {
+    window.parent.postMessage(
+      {
+        type: 'avb:query-result',
+        id,
+        found: true,
+        pageImage: renderedPageImage(document),
+        pageType: renderedPageType(document),
+      },
+      '*',
+    );
+    return;
+  }
   const path = typeof data['path'] === 'string' ? data['path'] : '';
   const els = path ? elementsForPath(path) : [];
   const styleHost = els[0] ?? answerQueryTextHost(path, data['textParentPath']);
-  const wanted = (Array.isArray(data['compute']) ? data['compute'] : []).filter(
-    (value): value is string => typeof value === 'string',
-  );
+  const wanted = (Array.isArray(data['compute']) ? data['compute'] : []).filter((value): value is string => typeof value === 'string');
   // No element named, or none found: the question is about the page rather
   // than about a node. That is what the variables panel asks — a value is
   // the same colour wherever it is written, and the custom properties it
@@ -202,9 +327,8 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   const computed = wanted.length && host ? computeValues(host, wanted) : {};
   const props = Array.isArray(data['props']) ? data['props'] : [];
   const computedProps = props.length && styleHost ? computeProperties(styleHost, props) : {};
-  const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter(
-    (value): value is string => typeof value === 'string',
-  );
+  const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter((value): value is string => typeof value === 'string');
+  const winning = (Array.isArray(data['winning']) ? data['winning'] : []).filter((value): value is string => typeof value === 'string');
   const matched: Record<string, boolean | undefined> = {};
   for (const selector of selectors) {
     try {
@@ -215,6 +339,9 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
       matched[selector] = undefined; // not a selector this engine accepts
     }
   }
+  const answered = answerDeclarations(els[0], winning, { scoped: data['scoped'] === true });
+  // The computed value of each scoped name, for the swatch and the validity filter.
+  const scopedComputed = answered.scoped !== undefined && styleHost ? computeProperties(styleHost, Object.keys(answered.scoped)) : {};
   window.parent.postMessage(
     {
       type: 'avb:query-result',
@@ -222,7 +349,7 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
       ready: mapped,
       found: styleHost !== undefined,
       computed,
-      computedProps,
+      computedProps: { ...computedProps, ...scopedComputed },
       ...(styleHost
         ? queryAuthoredStyles(
             styleHost,
@@ -230,6 +357,12 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
             els[0] ? 'element' : 'text',
           )
         : {}),
+      // Which declaration of each asked custom property wins for the selected element, traced up its
+      // parents (frameAuthoredStyles.ts): the picker's row text, never the computed value.
+      ...(answered.winning === undefined ? {} : { winning: answered.winning }),
+      // The custom properties declared in scope of the element (its own rules and its parents'): the picker lists
+      // the ones the project's stylesheets do not hold, such as a component's own `--_mw`.
+      ...(answered.scoped === undefined ? {} : { scoped: answered.scoped }),
       identity: els[0] ? identityOf(els[0]) : undefined,
       matched,
     },
@@ -237,22 +370,32 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   );
 };
 
+// The winning declarations of the asked custom properties, and the ones declared in scope. The scoped names
+// are traced too (bounded together), so a local row shows its winner as written like any other.
+type Declared = Readonly<Record<string, WinningDeclaration>>;
+function answerDeclarations(
+  element: Element | undefined,
+  asked: readonly string[],
+  { scoped: wantScoped }: { readonly scoped: boolean },
+): { readonly winning?: Declared; readonly scoped?: Declared } {
+  if (element === undefined || (asked.length === 0 && !wantScoped)) {
+    return {};
+  }
+  const scoped = wantScoped ? inspectScopedProperties(element) : undefined;
+  const names = [...new Set([...asked, ...Object.keys(scoped ?? {})])].slice(0, WINNING_LIMITS.namesMax);
+  return { winning: inspectWinningDeclarations(element, names), ...(scoped === undefined ? {} : { scoped }) };
+}
+
 // A text run inherits its rendered parent's style, including styles inside a
 // component that the source tree cannot see. This host is only for computed
 // reads: attributing its selectors or classes to the text would target edits
 // at the parent instead of the selected node.
 function answerQueryTextHost(path: string, parent: unknown): Element | undefined {
   const runs = runsOf(path) ?? [];
-  if (runs.length > LIMITS.treeNodesMax) {
-    return undefined;
-  }
-  let visited = 0;
+  // No node cap: each loop below walks a finite array the page already holds, so
+  // its bound is that array's own length, and it stops at the first text node.
   for (const run of runs) {
     for (const node of run) {
-      visited += 1;
-      if (visited > LIMITS.treeNodesMax) {
-        return undefined;
-      }
       if (isText(node)) {
         if (node.isConnected) {
           if (node.data.trim().length > 0) {
@@ -286,44 +429,11 @@ function answerQueryTextParent(path: string, input: unknown): Element | undefine
   return elementsWithPath(parent)[0];
 }
 
-// What a value actually resolves to ON THIS ELEMENT. `var(--background)`
-// means nothing in the app's own document — the panel painted it there
-// and got transparent — and it can mean different things on two elements
-// of the same page (a theme class, a container query, a colour scheme).
-// Only the page can say, so it is asked: a throwaway span in the element
-// inherits its custom properties, takes the value as a colour, and the
-// engine hands back the computed one.
-const computeValues = (host: Element, wanted: string[]): Record<string, string | undefined> => {
-  const computed: Record<string, string | undefined> = {};
-  const probe = document.createElement('span');
-  probe.setAttribute(PROBE_ATTR, ''); // The canvas's own: no page walk (mutationKind).
-  probe.setAttribute('style', 'position:absolute;width:0;height:0;visibility:hidden');
-  host.appendChild(probe);
-  for (const value of wanted) {
-    try {
-      // A sentinel first: assigning a value the engine rejects leaves the
-      // previous one in place, and reading that back would report a
-      // colour the value never had.
-      probe.style.color = 'rgb(1, 2, 3)';
-      probe.style.color = value;
-      computed[value] =
-        probe.style.color === 'rgb(1, 2, 3)' ? undefined : getComputedStyle(probe).color;
-    } catch {
-      computed[value] = undefined;
-    }
-  }
-  probe.remove();
-  return computed;
-};
-
 // What the element's style ACTUALLY is for a property nothing in the panel
 // sets — inherited from a parent, painted by a `*` rule the panel can't see
 // past a component edge, or a user-agent default. The panel highlights that
 // value in its dropdowns so an unset control still shows what's on the page.
-const computeProperties = (
-  element: Element,
-  props: unknown[],
-): Record<string, string | undefined> => {
+const computeProperties = (element: Element, props: unknown[]): Record<string, string | undefined> => {
   const computedProps: Record<string, string | undefined> = {};
   // Design mode paints `cursor: default !important` over everything (see the
   // top of this file), so the page's own cursor is hidden behind it. Lift that
@@ -381,6 +491,36 @@ const track = (data: Record<string, unknown>, paths: unknown[]) => {
   }
 };
 
+// The editor's second look at a click it could not apply (frameTargets.ts
+// answerClickQuery). Ids count up from 1 and points are viewport pixels; a
+// malformed question is ours but answered by nobody, and the editor's own
+// bound on waiting covers it.
+const CLICK_QUERY_ID_MAX = 2 ** 31;
+const CLICK_QUERY_COORDINATE_PX_MAX = 1_000_000;
+function receiveClickQuery(data: Record<string, unknown>): void {
+  const id = data['id'];
+  const x = data['x'];
+  const y = data['y'];
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id < 1 || CLICK_QUERY_ID_MAX < id) {
+    return;
+  }
+  if (typeof x !== 'number' || !Number.isFinite(x) || CLICK_QUERY_COORDINATE_PX_MAX < Math.abs(x)) {
+    return;
+  }
+  if (typeof y !== 'number' || !Number.isFinite(y) || CLICK_QUERY_COORDINATE_PX_MAX < Math.abs(y)) {
+    return;
+  }
+  answerClickQuery(id, x, y);
+}
+
+function reportNavigation(): void {
+  try {
+    window.parent.postMessage({ type: 'avb:navigated', path: location.pathname + location.search }, '*');
+  } catch {
+    /* no parent to tell */
+  }
+}
+
 // The column guide's page side, once the frame has started.
 let guideFrame: GuideFrame | undefined;
 
@@ -389,15 +529,12 @@ const start = () => {
   startOutlines();
   guideFrame = startGuide((message) => window.parent.postMessage(message, '*'));
   // Tell the app which route this frame is on (used by interactive
-  // preview mode to follow link navigation).
-  try {
-    window.parent.postMessage(
-      { type: 'avb:navigated', path: location.pathname + location.search },
-      '*',
-    );
-  } catch {
-    /* ignore */
-  }
+  // preview mode to follow link navigation): now, and after each
+  // client-side navigation (Astro's <ClientRouter /> swaps pages without
+  // loading a document), as Studio's frame client does.
+  reportNavigation();
+  document.addEventListener('astro:page-load', reportNavigation);
+  window.addEventListener('popstate', reportNavigation);
   try {
     const ro = new ResizeObserver(report);
     ro.observe(document.documentElement);

@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 // so the negative space below includes it. It is read from JSON, because our own
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
-const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS } =
+const { parsePreviewMessage, parseShortcutMessage, describePreviewReload, PREVIEW_RELOAD_REASONS, OVERLAY_MESSAGE_CHARS_MAX } =
   require('../../helpers/rendererModule')('src/features/preview/previewMessages.ts');
 
 const box = { x: -1.5, y: 2, w: 30, h: 40 };
@@ -30,7 +30,7 @@ test('preview message parser preserves every supported message variant', () => {
     },
     { type: 'avb:node-classes', classes: { 0: ['card'] } },
     { type: 'avb:rendered-nodes', paths: ['0'] },
-    { type: 'avb:node-states', hidden: ['0'], inert: [] },
+    { type: 'avb:node-states', hidden: ['0'], inert: [], before: ['0.1'], after: [] },
     { type: 'avb:modifiers', shiftKey: true, altKey: false },
     { type: 'avb:hover-node', path: undefined, occurrence: 0 },
     { type: 'avb:click-node', path: '0', occurrence: 1, outside: false },
@@ -45,21 +45,41 @@ test('preview message parser preserves every supported message variant', () => {
   ];
   assert.deepEqual(
     messages.map((message) => parsePreviewMessage(message)?.kind),
-    [
-      'rects',
-      'node-classes',
-      'rendered-nodes',
-      'node-states',
-      'modifiers',
-      'hover-node',
-      'click-node',
-      'open-node',
-      'canvas-ready',
-      'query-result',
-      'render',
-    ],
+    ['rects', 'node-classes', 'rendered-nodes', 'node-states', 'modifiers', 'hover-node', 'click-node', 'open-node', 'canvas-ready', 'query-result', 'render'],
   );
   assert.deepEqual(parsePreviewMessage(messages[0]).spacing['0'], [spacing]);
+});
+
+// A negative margin is ordinary CSS (`calc(-1 * var(--space-8))`). Rejecting it
+// dropped the whole rects message, so every outline and spacing band went stale
+// while such an element was tracked. Padding has no negative space, so it still
+// refuses one, and a margin still has to be a finite number.
+test('a negative margin is a measurement, a negative padding is not', () => {
+  const rectsWith = (measured) => ({ type: 'avb:rects', rects: { 0: [box] }, classes: {}, spacing: { 0: [measured] } });
+  const pulled = { margin: { top: -20.54, bottom: -8 }, padding: { top: 4 } };
+  assert.deepEqual(parsePreviewMessage(rectsWith(pulled))?.spacing['0'], [pulled]);
+  assert.equal(parsePreviewMessage(rectsWith({ padding: { top: -1 } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: Number.NaN } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: Number.NEGATIVE_INFINITY } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: '-4' } })), undefined);
+});
+
+test('a hover or click on a ::before or ::after names the pseudo-element with its node', () => {
+  for (const type of ['avb:hover-node', 'avb:click-node']) {
+    const located = { type, path: '0.2', occurrence: 1, outside: false };
+    // Without the field the message is about the element itself, as it always was.
+    assert.equal(parsePreviewMessage(located).pseudo, undefined);
+    assert.equal(parsePreviewMessage({ ...located, pseudo: undefined }).pseudo, undefined);
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'before' }).pseudo, 'before');
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'after' }).pseudo, 'after');
+    assert.equal(parsePreviewMessage({ ...located, pseudo: 'after' }).path, '0.2');
+    // Anything else is malformed: other pseudo-elements, the CSS spelling, the
+    // wrong type, null, and a pseudo-element with no node to belong to.
+    for (const pseudo of ['marker', '::before', 'Before', '', 1, true, {}, PLATFORM_NULL]) {
+      assert.equal(parsePreviewMessage({ ...located, pseudo }), undefined, `${type} pseudo ${String(pseudo)}`);
+    }
+    assert.equal(parsePreviewMessage({ ...located, path: undefined, pseudo: 'before' }), undefined);
+  }
 });
 
 test('located events carry the rendering token they landed on (step 7)', () => {
@@ -81,10 +101,7 @@ test('located events carry the rendering token they landed on (step 7)', () => {
   // The protocol spells absence `undefined`, like the rest of the app; the
   // retired `null` spelling is a malformed message, not an absent value.
   assert.equal(parsePreviewMessage({ ...click, token: PLATFORM_NULL }), undefined);
-  assert.equal(
-    parsePreviewMessage({ type: 'avb:hover-node', path: PLATFORM_NULL, occurrence: 0 }),
-    undefined,
-  );
+  assert.equal(parsePreviewMessage({ type: 'avb:hover-node', path: PLATFORM_NULL, occurrence: 0 }), undefined);
   assert.equal(
     parsePreviewMessage({
       type: 'avb:rects',
@@ -94,10 +111,7 @@ test('located events carry the rendering token they landed on (step 7)', () => {
     }),
     undefined,
   );
-  assert.equal(
-    parsePreviewMessage({ type: 'avb:open-node', path: '1', occurrence: 2, token: TOKEN }).token,
-    TOKEN,
-  );
+  assert.equal(parsePreviewMessage({ type: 'avb:open-node', path: '1', occurrence: 2, token: TOKEN }).token, TOKEN);
 });
 
 test('a reload names its reason; only the caps are announced to the user (step 7)', () => {
@@ -111,6 +125,18 @@ test('a reload names its reason; only the caps are announced to the user (step 7
   assert.equal(parsePreviewMessage({ type: 'avb:preview-reload' }), undefined);
   const announced = PREVIEW_RELOAD_REASONS.filter((reason) => describePreviewReload(reason));
   assert.deepEqual(announced, ['markers-over-cap', 'diff-over-cap']);
+});
+
+test('the error overlay message carries whether it shows and its bounded words', () => {
+  const shown = { type: 'avb:error-overlay', shown: true, message: 'No Astro CSS at index 0' };
+  assert.deepEqual(parsePreviewMessage(shown), { kind: 'error-overlay', shown: true, message: 'No Astro CSS at index 0' });
+  assert.deepEqual(parsePreviewMessage({ type: 'avb:error-overlay', shown: false }), { kind: 'error-overlay', shown: false, message: undefined });
+  assert.deepEqual(parsePreviewMessage({ ...shown, message: 'x'.repeat(OVERLAY_MESSAGE_CHARS_MAX) }).message.length, OVERLAY_MESSAGE_CHARS_MAX);
+  assert.equal(parsePreviewMessage({ ...shown, message: 'x'.repeat(OVERLAY_MESSAGE_CHARS_MAX + 1) }), undefined, 'over the bound');
+  assert.equal(parsePreviewMessage({ ...shown, message: 42 }), undefined, 'words are text');
+  assert.equal(parsePreviewMessage({ ...shown, message: PLATFORM_NULL }), undefined, 'null is not absence');
+  assert.equal(parsePreviewMessage({ type: 'avb:error-overlay', message: 'x' }), undefined, 'shown is required');
+  assert.equal(parsePreviewMessage({ type: 'avb:error-overlay', shown: 'yes' }), undefined, 'shown is a boolean');
 });
 
 test('preview message parser ignores unknown and malformed project messages', () => {
@@ -130,7 +156,6 @@ test('preview message parser ignores unknown and malformed project messages', ()
     { type: 'avb:rects', rects: {}, classes: {}, spacing: { 0: [{ units: [16] }] } },
     { type: 'avb:click-node', path: '0', occurrence: -1, outside: false },
     { type: 'avb:modifiers', shiftKey: 'yes', altKey: false },
-    { type: 'avb:rendered-nodes', paths: Array(100_001).fill('0') },
     { type: 'avb:click-node', path: '0', occurrence: 0, outside: false, token: 'not-a-digest' },
     { type: 'avb:render', token: 'x', stamps: [] },
     { type: 'avb:render', token: TOKEN, stamps: [{ file: '../escape.astro', checksum: TOKEN }] },
@@ -143,23 +168,23 @@ test('preview message parser ignores unknown and malformed project messages', ()
       ],
     },
   ]) {
-    assert.equal(parsePreviewMessage(value), undefined);
+    // Compared as a boolean: a failed assert.equal would print the whole parsed message.
+    assert.ok(parsePreviewMessage(value) === undefined, JSON.stringify(value).slice(0, 200));
   }
+  // A page of any size: the rendered paths have no product limit (a805ae62), so 100 001 of them parse.
+  const many = parsePreviewMessage({ type: 'avb:rendered-nodes', paths: Array(100_001).fill('0') });
+  assert.ok(many?.kind === 'rendered-nodes' && many.paths.length === 100_001, 'every rendered path is kept');
 });
 
 test('forwarded shortcuts parse each variant and ignore every other or malformed message', () => {
   const shortcut = (fields) => parseShortcutMessage({ type: 'avb:shortcut', ...fields });
   assert.deepEqual(shortcut({ name: 'insert' }), { name: 'insert' });
+  // ⌥P from a canvas or preview frame carries nothing but its name.
+  assert.deepEqual(shortcut({ name: 'preview', key: 'π', meta: true }), { name: 'preview' });
   assert.deepEqual(shortcut({ name: 'arrow', key: 'ArrowUp' }), { name: 'arrow', key: 'ArrowUp' });
-  assert.deepEqual(
-    parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'd', meta: true }),
-    { name: 'key', key: 'd', meta: true },
-  );
+  assert.deepEqual(parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'd', meta: true }), { name: 'key', key: 'd', meta: true });
   // Anything but a literal true is no modifier: a page cannot smuggle one in.
-  assert.deepEqual(
-    parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'Delete', meta: 'yes' }),
-    { name: 'key', key: 'Delete', meta: false },
-  );
+  assert.deepEqual(parseShortcutMessage({ type: 'avb:shortcut', name: 'key', key: 'Delete', meta: 'yes' }), { name: 'key', key: 'Delete', meta: false });
   for (const input of [
     undefined,
     PLATFORM_NULL,
@@ -244,6 +269,7 @@ test('context menu coordinates are bounded and preserve the located target', () 
     occurrence: 2,
     token: TOKEN,
     outside: false,
+    pseudo: undefined,
     left: 12.5,
     top: 400,
   });
@@ -251,7 +277,10 @@ test('context menu coordinates are bounded and preserve the located target', () 
     assert.equal(parsePreviewMessage({ ...message, left: bad }), undefined);
     assert.equal(parsePreviewMessage({ ...message, top: bad }), undefined);
   }
-  for (const bad of [{ occurrence: -1 }, { outside: undefined }, { token: 'invalid' }]) {
+  for (const bad of [{ occurrence: -1 }, { outside: undefined }, { token: 'invalid' }, { pseudo: 'marker' }]) {
     assert.equal(parsePreviewMessage({ ...message, ...bad }), undefined);
   }
+  assert.equal(parsePreviewMessage({ ...message, pseudo: 'before' }).pseudo, 'before');
+  assert.equal(parsePreviewMessage({ ...message, pseudo: 'after' }).pseudo, 'after');
+  assert.equal(parsePreviewMessage({ ...message, path: undefined, pseudo: 'after' }), undefined, 'a pseudo-element belongs to a node');
 });

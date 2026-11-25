@@ -15,9 +15,7 @@
 // drag reporting to the canvas, is in test/renderer/style/spacingDragReport.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { lengthToPx, withLiveSpacing, spacingBands } = require('../../helpers/rendererModule')(
-  'src/features/preview/spacingBands.ts',
-);
+const { lengthToPx, withLiveSpacing, spacingBands } = require('../../helpers/rendererModule')('src/features/preview/spacingBands.ts');
 
 const units = { em: 20, rem: 16, vw: 12, vh: 8 };
 const measured = {

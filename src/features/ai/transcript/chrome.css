@@ -1,0 +1,234 @@
+/* Message chrome, permission requests and the failed-reply row (Messages.tsx, PermissionCard.tsx, ErrorRow.tsx).
+   Surfaces are separated by background fills, never borders. Selectors that restate a rule of transcript.css use two classes so they win whichever sheet loads first. */
+
+/* Messages */
+.ai-msg {
+  position: relative;
+  min-width: 0;
+}
+.ai-msg.ai-msg-user {
+  align-self: flex-end;
+  max-width: 88%;
+}
+.ai-transcript > .ai-msg:first-child {
+  margin-top: 10px;
+}
+.ai-msg-body.ai-msg-folded {
+  max-height: 16em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+.ai-msg-more {
+  margin-top: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.ai-msg-more:hover {
+  color: var(--text);
+}
+.ai-msg {
+  display: flex;
+  flex-direction: column;
+}
+/* Under each message is a slot of its own, 1.25rem tall: the time and the actions live in it, invisible (not removed)
+   until the message is hovered or holds focus, so showing them never overlaps the next block or moves anything. The
+   gap to the next block is this slot plus the transcript's tool gap, shown or not. */
+.ai-msg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.25rem;
+  margin: 0;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ai-msg-user > .ai-msg-toolbar {
+  align-self: flex-end;
+}
+.ai-msg-agent > .ai-msg-toolbar {
+  align-self: flex-start;
+}
+.ai-msg:hover > .ai-msg-toolbar,
+.ai-msg:focus-within > .ai-msg-toolbar {
+  opacity: 1;
+}
+/* Touch has no hover, so the slot's row stays visible there. */
+@media (hover: none) {
+  .ai-msg-toolbar {
+    opacity: 1;
+  }
+}
+.ai-msg-time {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.ai-msg-action {
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+}
+.ai-msg-action:hover,
+.ai-msg-action:focus-visible {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-msg-toolbar {
+    transition: none;
+  }
+}
+
+/* Permission requests */
+.ai-permission.ai-ask {
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px;
+  gap: 6px;
+  outline: none;
+}
+.ai-ask:focus-visible {
+  background: var(--accent-soft);
+}
+.ai-ask-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+.ai-ask-title {
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.ai-ask-code {
+  max-height: 96px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-ask-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-ask-more {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-ask-paths {
+  margin: 0;
+  padding-block: 0;
+  padding-inline: 16px 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.ai-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-ask-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.ai-ask-actions .ai-allow-secondary {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-ask-actions .ai-reject {
+  background: var(--bg-active);
+  color: var(--text-dim);
+}
+/* The global button:hover fill would turn these grey, so each keeps its resting
+   background on hover (written as button.* so it outweighs that rule) and gets a
+   non-grey cue instead: a brighter label, or the brighter accent (never a grey) on the accent fill. */
+.ai-ask-actions button.ai-allow:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.ai-ask-actions button.ai-allow:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+.ai-ask-actions button.ai-allow-secondary:hover:not(:disabled),
+.ai-ask-actions button.ai-reject:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-permission.ai-ask-done {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.ai-ask-verdict {
+  flex: none;
+  color: var(--text-dim);
+}
+.ai-ask-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-ask-pin {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.ai-ask-pin-text {
+  flex: 1 1 0;
+  min-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-ask-pin-actions {
+  display: flex;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+.ai-ask-pin-actions button {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+/* A failed reply */
+.ai-error-copy {
+  margin-top: 4px;
+  font-size: 11px;
+}

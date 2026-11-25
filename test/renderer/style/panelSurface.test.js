@@ -16,7 +16,7 @@
 // <button>, so `justify-content: center` centred it in a full-width row, and
 // `button:hover` painted a pill around that button instead of the row. Both are
 // invisible to jsdom, which has no cascade to speak of and no layout at all — so
-// this is measured in a real browser.
+// this is measured in a real browser, each read after a bounded wait on the state it reads.
 
 const fs = require('fs');
 const path = require('path');
@@ -40,9 +40,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'panel-surface: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]',
-    );
+    console.log('panel-surface: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]');
     return;
   }
 
@@ -89,9 +87,15 @@ const check = (what, condition, detail) => {
     path.join(pageDirectory, 'app.css'),
     [
       'src/features/style/tokens.css',
+      // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
       'src/app/styles.css',
+      'src/ui/popup.css',
       'src/features/style/utilities.css',
       'src/features/style/embedEditor.css',
+      'src/features/style/components/PanelSheet.css',
     ]
       .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n'),
@@ -99,7 +103,8 @@ const check = (what, condition, detail) => {
   fs.writeFileSync(
     path.join(pageDirectory, 'index.html'),
     '<!doctype html><meta charset=utf-8><link rel="stylesheet" href="app.css">' +
-      '<style>body{margin:0;background:#1a1a1a}</style><div id="root"></div>' +
+      // A style panel at the right of the window, where StylePanel would publish it.
+      '<style>body{margin:0;background:#1a1a1a}:root{--style-panel-left:400px;--style-panel-top:0px;--style-panel-width:320px;--style-panel-height:900px}</style><div id="root"></div>' +
       '<script src="bundle.js"></script>',
   );
 
@@ -110,11 +115,16 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
-     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 720, height: 900 });
        await win.loadFile(path.join(__dirname, 'index.html'));
-       await sleep(800);
+       // Bounded waits on what is read next (test/helpers/waitFor.js), not fixed sleeps: the
+       // modal drawn, and its sheet done easing into place before it is measured at rest.
+       const js = (code) => win.webContents.executeJavaScript(code);
+       await pollUntil({ what: 'the grid modal drawn', read: () => js("document.querySelector('.embed-editor_grid-track') !== null"), until: (drawn) => drawn });
+       const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
+       await settled('the sheet in place');
        const read = () => win.webContents.executeJavaScript(\`(() => {
          const row = document.querySelector('.embed-editor_grid-track');
          const main = row.querySelector('.embed-editor_grid-track-main');
@@ -122,7 +132,9 @@ const check = (what, condition, detail) => {
          const heads = [...document.querySelectorAll('.embed-editor_grid-section-head')];
          const body = document.querySelector('.embed-editor_grid-modal-body');
          const bodyLeft = body.getBoundingClientRect().left;
+         const sheet = document.querySelector('.embed-editor_grid-modal').getBoundingClientRect();
          return {
+           sheet: { left: Math.round(sheet.left), right: Math.round(sheet.right), top: Math.round(sheet.top), bottom: Math.round(sheet.bottom) },
            portaledOutOfHost: !main.closest('.style-panel-host'),
            inSurface: !!main.closest('.style-panel-surface'),
            justify: getComputedStyle(main).justifyContent,
@@ -139,13 +151,30 @@ const check = (what, condition, detail) => {
          };
        })()\`);
        const resting = await read();
-       const pt = await win.webContents.executeJavaScript(\`(() => {
-         const m = document.querySelector('.embed-editor_grid-track-main');
-         const r = m.getBoundingClientRect();
-         return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
-       })()\`);
-       win.webContents.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y });
-       await sleep(300);
+       // The sheet eases into place, and a slow runner (Linux under xvfb) can
+       // still be moving it when one pointer move lands, so the row is not
+       // under the pointer when it is read. Aim at the row where it is now and
+       // move again until it reports :hover, a bounded number of times.
+       const HOVER_TRIES_MAX = 20;
+       for (let attempt = 0; attempt < HOVER_TRIES_MAX; attempt += 1) {
+         const pt = await win.webContents.executeJavaScript(\`(() => {
+           const m = document.querySelector('.embed-editor_grid-track-main');
+           const r = m.getBoundingClientRect();
+           return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+         })()\`);
+         win.webContents.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y });
+         const over = await pollUntil({
+           what: 'the row under the pointer',
+           read: () => js("document.querySelector('.embed-editor_grid-track').matches(':hover')"),
+           until: (hovering) => hovering,
+           pollCountMax: 6,
+         });
+         if (over.kind === 'reached') {
+           break;
+         }
+       }
+       // The hover paints through a transition: read it once that has run.
+       await settled('the hover painted');
        const hovered = await read();
        console.log(JSON.stringify({ resting, hovered }));
        app.quit();
@@ -161,49 +190,29 @@ const check = (what, condition, detail) => {
     const { resting, hovered } = JSON.parse(line);
 
     // The premise: this really is a surface outside the host.
-    check(
-      'the modal is portaled out of the panel host',
-      resting.portaledOutOfHost,
-      'it is inside the host — this test is no longer testing anything',
-    );
-    check(
-      'and carries the panel-surface scope',
-      resting.inSurface,
-      'without it the global button rules apply',
-    );
+    check('the modal is portaled out of the panel host', resting.portaledOutOfHost, 'it is inside the host — this test is no longer testing anything');
+    check('and carries the panel-surface scope', resting.inSurface, 'without it the global button rules apply');
+
+    // Over the style panel and nowhere else: never centred on the window, over the canvas.
+    check('the sheet sits over the style panel only', resting.sheet.left === 400 && resting.sheet.right === 720, JSON.stringify(resting.sheet));
+    check('and inside its height', resting.sheet.top >= 0 && resting.sheet.bottom <= 900, JSON.stringify(resting.sheet));
 
     // Left-aligned: the label starts at the row's left, not the middle of it.
     check('a track label is not centred', resting.justify !== 'center', resting.justify);
-    check(
-      'it sits at the left of its row',
-      resting.labelInset < resting.mainWidth / 4,
-      `label is ${resting.labelInset}px into a ${resting.mainWidth}px row`,
-    );
+    check('it sits at the left of its row', resting.labelInset < resting.mainWidth / 4, `label is ${resting.labelInset}px into a ${resting.mainWidth}px row`);
 
     // Hover highlights the row, not a shape inside it.
     const painted = (color) => color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent';
-    check(
-      'nothing is highlighted at rest',
-      !painted(resting.rowBg) && !painted(resting.mainBg),
-      JSON.stringify([resting.rowBg, resting.mainBg]),
-    );
+    check('nothing is highlighted at rest', !painted(resting.rowBg) && !painted(resting.mainBg), JSON.stringify([resting.rowBg, resting.mainBg]));
     check('hovering highlights the row', painted(hovered.rowBg), hovered.rowBg);
-    check(
-      'and not the button inside it',
-      !painted(hovered.mainBg),
-      `the button painted ${hovered.mainBg} — that is the pill`,
-    );
+    check('and not the button inside it', !painted(hovered.mainBg), `the button painted ${hovered.mainBg} — that is the pill`);
 
     // Every heading starts at the same edge. A head holding only its title had
     // that title as its last child too, and the rule that pushes a trailing
     // control right pushed the heading itself to the far edge.
     const lefts = resting.headingLefts;
     check('there are several sections to compare', lefts.length >= 3, JSON.stringify(lefts));
-    check(
-      'every section heading starts at the same left edge',
-      new Set(lefts).size === 1,
-      `${JSON.stringify(lefts)} — one of them is pushed out`,
-    );
+    check('every section heading starts at the same left edge', new Set(lefts).size === 1, `${JSON.stringify(lefts)} — one of them is pushed out`);
   }
 
   if (failures.length) {

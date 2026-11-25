@@ -1,25 +1,24 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { MapNode } from '../../../shared/page/pageNode';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
+import type { LoopReadInput } from '../../editor/loopQueryRead';
+import type { TreeNode } from '../../editor/dataSuggest';
+import type { SourcePickerData } from './LoopSourcePicker';
+import LoopSettings, { type LoopListOption, type LoopSettingsProps } from './LoopSettings';
 import type { RichContext } from './RichContent';
-import type { ExprInputAPI } from '../../ui/ExprInput';
 import type { FieldPosition, SourceContext } from './propBindings';
 import { assert } from '../../../shared/core/assert';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
+import { splitDestructuredHead } from '../../editor/loopBindings';
 import { LIMITS } from '../../../shared/core/limits';
 import { HTML_TAGS } from '../../editor/elementSchemas';
 import { dataTree, listsOnly } from '../../editor/dataSuggest';
 import ExprInput from '../../ui/ExprInput';
-import { BindHandle, FieldDataPicker, SourceEditButton, referencedName } from './propBindings';
-import { VarSourceEditor } from './BindingEditors';
-import { useLoopSourceInspection } from './useLoopSourceInspection';
-import {
-  elementIcon,
-  astroAssetIcon,
-  LayoutIcon,
-  ElementComponentIcon,
-  CodeIcon,
-  TagIcon,
-} from '../../ui/Icons';
+import { SourceEditButton } from './propBindings';
+import PropTip from './PropTip';
+import { elementIcon, astroAssetIcon, LayoutIcon, ElementComponentIcon, CodeIcon, TagIcon } from '../../ui/Icons';
 
 export interface Rename {
   readonly from: string;
@@ -32,16 +31,13 @@ interface MapEditorProps {
   readonly bindContext?: RichContext | undefined;
   readonly dataContext?: SourceContext | undefined;
   readonly onSetText: SetText;
-}
-interface MapFields {
-  readonly data: string;
-  readonly item: string;
-  readonly index: string;
-}
-type MapPatch = Pick<MapFields, 'data'> | Pick<MapFields, 'item'> | Pick<MapFields, 'index'>;
-interface MapInsert {
-  readonly field: 'data' | 'code';
-  readonly pos: FieldPosition;
+  /** The file's imports, which say where a loop's list comes from. */
+  readonly imports?: readonly ImportDecl[] | undefined;
+  readonly projectPath?: string | undefined;
+  /** Writes the head, or says why it can't be; without it the head goes straight to onSetText. */
+  readonly onCommitHead?: ((value: string, renames: readonly Rename[]) => string | undefined) | undefined;
+  readonly onSetLoopSource?: LoopSettingsProps['onApply'] | undefined;
+  readonly onEditLoopProperty?: LoopSettingsProps['onEditProperty'];
 }
 export interface TagOption {
   readonly name: string;
@@ -53,243 +49,118 @@ export interface TagFieldProps {
   readonly onChangeTag: (name: string) => void | boolean | Promise<void | boolean>;
 }
 const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
-
 // Parses a loop head like `service.tags.map((tag) => (` or
 // `items.filter(i => i.on).map((item, index) => (` into friendly fields.
 // The data part is any expression, so filtered/sorted collections still fit;
 // the single parameter may be bare — `items.map(item => (` — the way a
-// one-argument arrow is often written. Only destructured params or non-arrow
-// callbacks fall back to code.
-export function parseMapHead(head: string) {
+// one-argument arrow is often written, or a flat destructuring —
+// `work.map(({ data, id }) => (` — which AI-built pages write for a content
+// collection; it has no one item name (`item` is undefined) and the pattern is
+// kept as written. A nested pattern or a non-arrow callback falls back to code.
+export function parseMapHead(head: string): { readonly data: string; readonly item: string | undefined; readonly index: string } | undefined {
   assert(head.length <= LIMITS.nodeValueCharsMax, 'MapEditor: head limit exceeded');
   const match = String(head)
     .trim()
     .match(/^([\s\S]+?)\.map\(\s*(?:\(\s*([\w$]+)\s*(?:,\s*([\w$]+)\s*)?\)|([\w$]+))\s*=>\s*\($/);
-  if (!match?.[1]) {
-    return undefined;
+  if (match?.[1]) {
+    const item = match[2] || match[4];
+    return item ? { data: match[1].trim(), item, index: match[3] || '' } : undefined;
   }
-  const item = match[2] || match[4];
-  if (!item) {
-    return undefined;
-  }
-  return { data: match[1].trim(), item, index: match[3] || '' };
+  const destructured = splitDestructuredHead(head);
+  return destructured === undefined ? undefined : { data: destructured.data, item: undefined, index: destructured.index };
 }
 
-// The leading name in an expression — what the value is a list OF, before
-// anything is done to it. `posts.filter(p => p.draft)[0]` is `posts`; a lone
-// `Astro.props.items` is all of it.
-const SOURCE_RE = /^\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)/;
-
-export function sourceChip(value: string) {
-  assert(value.length <= LIMITS.nodeValueCharsMax, 'MapEditor: source limit exceeded');
-  const text = String(value || '').trim();
-  if (!text || text === NO_SOURCE) {
-    return '';
+/** Why a loop head is edited as code only, as the message that says it. */
+export function customLoopReason(node: Pick<MapNode, 'head' | 'bodyParts'>): MessageKey {
+  if (node.bodyParts !== undefined) {
+    return 'props.map.why.statements';
   }
-  const match = SOURCE_RE.exec(text);
-  if (!match?.[1]) {
-    return '';
+  if (/\.map\(\s*\(?\s*\{[\s\S]*\}[\s\S]*=>/.test(node.head)) {
+    return 'props.map.why.nestedPattern';
   }
-  let name = match[1];
-  // A segment that is called is not part of the path: `posts.filter(…)` is
-  // `posts`, done to — and a call on the whole thing (`getPosts()`) names a
-  // function, which is not a source anything can be swapped for.
-  while (text[name.length] === '(') {
-    // Each pass removes a segment, so the source length bounds traversal.
-    const at = name.lastIndexOf('.');
-    if (at < 0) {
-      return '';
-    }
-    name = name.slice(0, at);
-  }
-  return name;
+  return 'props.map.why.shape';
 }
 
-// The same expression with a different source: what follows the old one is
-// kept, so choosing another list does not throw away the code around it.
-export function withSource(value: string, path: string) {
-  assert(path.length <= LIMITS.nodeValueCharsMax, 'MapEditor: path limit exceeded');
-  const current = sourceChip(value);
-  if (!current) {
-    return path;
+// The renames a new head makes: the item or index renamed with the list kept,
+// carried into every binding inside the loop so none is left pointing at a
+// name the loop no longer declares. Adding or removing an index renames nothing.
+export function headRenames(before: string, after: string): readonly Rename[] {
+  assert(before.length <= LIMITS.nodeValueCharsMax, 'MapEditor: head limit exceeded');
+  assert(after.length <= LIMITS.nodeValueCharsMax, 'MapEditor: head limit exceeded');
+  const previous = parseMapHead(before);
+  const next = parseMapHead(after);
+  if (!previous || !next) {
+    return [];
   }
-  const text = String(value);
-  const at = text.indexOf(current);
-  return text.slice(0, at) + path + text.slice(at + current.length);
+  const renames: Rename[] = [];
+  for (const key of ['item', 'index'] as const) {
+    if (previous[key] && next[key] && previous[key] !== next[key]) {
+      renames.push({ from: previous[key], to: next[key] });
+    }
+  }
+  assert(renames.length <= 2, 'MapEditor: rename count exceeded');
+  return renames;
 }
 
-const IDENT_RE = /^[A-Za-z_$][\w$]*$/;
-
-// "No source yet" has to be written as real code, since the head is what
-// lands in the page. An empty literal is valid, renders nothing, and — unlike
-// a placeholder name like `items` — can't throw "items is not defined" and
-// take the whole preview down before the user has picked anything.
-const NO_SOURCE = '[]';
-const DEFAULT_ITEM = 'item'; // a value no expression can collide with
-
-function useMapModel({ node, onSetText }: MapEditorProps) {
-  const parsed = parseMapHead(node.head);
-  const [fields, setFields] = useState(parsed || { data: '', item: '', index: '' });
-  const lastBuiltRef = useRef(node.head);
-
-  // External changes (undo, file reload, code edits below) re-sync fields.
-  useEffect(() => {
-    if (node.head !== lastBuiltRef.current) {
-      const parsed = parseMapHead(node.head);
-      if (parsed) {
-        setFields(parsed);
-      }
-      lastBuiltRef.current = node.head;
-    }
-  }, [node.head]);
-
-  // Typing only updates local state; the head is written on blur/Enter/pick
-  // so half-typed values never run in the preview.
-  const update = (patch: MapPatch) => setFields((previous) => ({ ...previous, ...patch }));
-  const commit = (next: MapFields) => {
-    setFields(next);
-    const itemOk = IDENT_RE.test(next.item);
-    const indexOk = !next.index || IDENT_RE.test(next.index);
-    if (!next.data.trim() || !itemOk || !indexOk) {
-      return;
-    } // incomplete — don't write broken code
-    const parameters = next.item + (next.index ? `, ${next.index}` : '');
-    const head = `${next.data.trim()}.map((${parameters}) => (`;
-    if (head.length > LIMITS.nodeValueCharsMax) {
-      return;
-    }
-    if (head === node.head) {
-      return;
-    }
-    // Renaming the item or index has to carry into the children that
-    // reference it. Only a rename counts — adding or removing an index
-    // leaves nothing to point the old name at.
-    const renames = mapRenames(node.head, next);
-    lastBuiltRef.current = head;
-    onSetText(head, renames);
-  };
-  const commitOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      commit(fields);
-    }
-  };
-
-  // Changing the source changes what the item *is*, so a name describing the
-  // old data ("service" for a list of projects) is worse than none. Back to
-  // the default; the rename above carries the children with it.
-  const commitSource = (data: string) => {
-    // The source, not the whole expression: `.slice(0, 3)` typed after a list
-    // — or a value dropped into it — leaves the item exactly what it was, and
-    // only picking a different list makes the old name wrong.
-    const changed = sourceChip(parseMapHead(node.head)?.data || '') !== sourceChip(data);
-    commit({ ...fields, data, item: changed ? DEFAULT_ITEM : fields.item });
-  };
-
-  return { fields, update, commit, commitOnEnter, commitSource };
-}
-function useMapEditor(props: MapEditorProps) {
-  const { node, loopContext, bindContext, dataContext, onSetText } = props;
-  const { fields, update, commit, commitOnEnter, commitSource } = useMapModel(props);
-  // Anchors the source popup under the Data row.
-  const dataRef = useRef<HTMLDivElement>(null);
-  const codeRef = useRef<HTMLDivElement>(null);
-  const [sourceMenu, setSourceMenu] = useState<FieldPosition | undefined>(undefined);
-  // The bind handle's picker, and the way into whichever field it belongs to.
-  // The source picker chooses what is being looped over; this drops a value
-  // into the expression around it — `posts.slice(0, count)` needs `count` from
-  // somewhere, and there was no way to reach it from here.
-  const [insertAt, setInsertAt] = useState<MapInsert | undefined>(undefined); // {pos, field}
-  const dataApiRef = useRef<ExprInputAPI | undefined>(undefined);
-  const codeApiRef = useRef<ExprInputAPI | undefined>(undefined);
-  const openInsert = (field: 'data' | 'code', ref: React.RefObject<HTMLElement>) => {
-    if (insertAt) {
-      setInsertAt(undefined);
-      return;
-    }
-    const rect = ref.current?.getBoundingClientRect();
-    if (!rect) {
-      return;
-    }
-    setInsertAt({
-      field,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
-    });
-  };
-  const openSourceMenu = () => {
-    const rect = dataRef.current?.getBoundingClientRect();
-    if (!rect) {
-      return;
-    }
-    setSourceMenu({
-      left: rect.left,
-      top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 564)),
-      width: Math.max(rect.width, 240),
-    });
-  };
-
-  const parseableNow = !!parseMapHead(node.head);
-  const isNoSource = !fields.data.trim() || fields.data.trim() === NO_SOURCE;
-  const itemBad = fields.item !== '' && !IDENT_RE.test(fields.item);
-  const indexBad = fields.index !== '' && !IDENT_RE.test(fields.index);
-
-  return {
-    node,
-    loopContext,
-    bindContext,
-    dataContext,
-    onSetText,
-    fields,
-    update,
-    commit,
-    commitOnEnter,
-    commitSource,
-    dataRef,
-    codeRef,
-    sourceMenu,
-    setSourceMenu,
-    insertAt,
-    setInsertAt,
-    dataApiRef,
-    codeApiRef,
-    openInsert,
-    openSourceMenu,
-    parseableNow,
-    isNoSource,
-    itemBad,
-    indexBad,
-  };
-}
-
+// A loop's settings: what it loops over (LoopSettings.tsx) and its head as one
+// line of code — the list, the item's name and the index's — where a rename
+// is carried into the bindings inside. A head the editor does not split (a
+// destructured item, a statement body) is edited as code only.
 export function MapEditor(props: MapEditorProps) {
-  const state = useMapEditor(props);
-  return <MapEditorView state={state} />;
-}
-
-function MapEditorView({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const { parseableNow } = state;
-  return (
+  const translate = useTranslate();
+  const { node, onSetText, onCommitHead } = props;
+  const splittable = node.bodyParts === undefined && parseMapHead(node.head) !== undefined;
+  // What was typed stays, with the reason under it, until it is put right: this
+  // text compiles into the page, and a refused head must not be lost to retyping.
+  const [draft, setDraft] = useState(node.head);
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setDraft(node.head);
+    setProblem(undefined);
+  }, [node.head]);
+  const commitCode = (value: string): void => {
+    if (value === node.head) {
+      setProblem(undefined);
+      return;
+    }
+    if (value.length > LIMITS.nodeValueCharsMax) {
+      setProblem(translate('props.map.tooLong'));
+      return;
+    }
+    const renames = node.bodyParts === undefined ? headRenames(node.head, value) : [];
+    if (onCommitHead === undefined) {
+      onSetText(value, renames);
+      return;
+    }
+    setProblem(onCommitHead(value, renames));
+  };
+  const code = (
     <>
-      {parseableNow ? (
-        <>
-          <MapDataField state={state} />
-          <MapNames state={state} />
-        </>
-      ) : (
-        <div
-          className="props-field"
-          style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}
-        >
-          Custom loop code — edit it below.
-        </div>
-      )}
-      <MapCodeField state={state} />
-      <MapInsertPicker state={state} />
+      <div className="props-field loop-settings-row">
+        <label onClick={noLabelActivation}>
+          <span className="prop-label">
+            <CodeIcon size={12} className="prop-label-icon" />
+            {translate('props.map.code')}
+          </span>
+          {/* Why the controls are not offered: a tip on the label, never a paragraph in the panel. */}
+          {!splittable && <PropTip text={translate(customLoopReason(node))} />}
+        </label>
+        <ExprInput
+          value={draft}
+          syncValue={node.head}
+          invalid={problem !== undefined}
+          onChange={(text) => {
+            setDraft(text);
+            setProblem(undefined);
+          }}
+          onCommit={commitCode}
+        />
+      </div>
+      <ErrorToast message={problem} />
     </>
   );
+  // The Code field goes inside the settings, so their Details come after it.
+  return splittable ? <MapListSettings props={props}>{code}</MapListSettings> : <>{code}</>;
 }
 
 // Tag switcher for plain elements: free text with a suggestion list of
@@ -343,8 +214,7 @@ function useTagModel({ tag, options }: TagFieldProps) {
   // frontmatter already imports).
   assert(tag.length <= LIMITS.tagNameCharsMax, 'TagField: tag limit exceeded');
   assert((options?.length ?? 0) <= LIMITS.scanEntriesMax, 'TagField: option limit exceeded');
-  const pool =
-    options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
+  const pool = options && options.length ? options : HTML_TAGS.map((name) => ({ name, kind: 'element' }));
   const query = draft.trim();
   const ql = query.toLowerCase();
   const matches =
@@ -471,26 +341,14 @@ export function TagField(props: TagFieldProps) {
 }
 
 function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField> }) {
-  const {
-    draft,
-    setFocused,
-    highlight,
-    setHighlight,
-    popupPos: popupPosition,
-    wrapRef,
-    inputRef,
-    draftRef,
-    updateDraft,
-    matches,
-    commit,
-    onKeyDown,
-  } = state;
+  const translate = useTranslate();
+  const { draft, setFocused, highlight, setHighlight, popupPos: popupPosition, wrapRef, inputRef, draftRef, updateDraft, matches, commit, onKeyDown } = state;
   return (
     <div className="props-field" ref={wrapRef}>
       <label onClick={noLabelActivation}>
         <span className="prop-label">
           <TagIcon size={12} className="prop-label-icon" />
-          Tag
+          {translate('props.map.tag')}
         </span>
       </label>
       <input
@@ -540,274 +398,68 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
   );
 }
 
-function MapSourcePicker({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const {
-    loopContext,
-    bindContext,
-    dataContext,
-    fields,
-    update,
-
-    commitSource,
-
-    sourceMenu,
-    setSourceMenu,
-
-    isNoSource,
-  } = state;
-  const path = isNoSource ? '' : sourceChip(fields.data);
-  const source = useLoopSourceInspection(dataContext, path, { open: sourceMenu !== undefined });
-  const [sourceEditor, setSourceEditor] = useState<FieldPosition | undefined>(undefined);
-  const tree = dataTree(bindContext || loopContext || {}).map((node) =>
-    node.path === source.root && source.inspection?.tree
-      ? { ...source.inspection.tree, ...(node.section ? { section: node.section } : {}) }
-      : node,
+// The list settings, when the app can write them.
+function MapListSettings({ props, children }: { readonly props: MapEditorProps; readonly children: React.ReactNode }) {
+  const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } = props;
+  const data = parseMapHead(node.head)?.data ?? '';
+  const frontmatter = dataContext?.frontmatter ?? '';
+  const input = useMemo<Omit<LoopReadInput, 'fieldKind'>>(() => ({ frontmatter, imports: imports ?? [], data }), [frontmatter, imports, data]);
+  const context = bindContext || loopContext;
+  const tree = useMemo(() => dataTree(context || {}), [context]);
+  const lists = useMemo(() => pageLists(tree), [tree]);
+  const pickerData = useMemo<SourcePickerData>(
+    () => ({
+      tree,
+      samples: context?.collectionSamples ?? {},
+      onNeedSample: context?.onNeedSample,
+      onStepItem: context?.onStepItem,
+      frontmatter,
+      file: dataContext?.filePath,
+      projectModules: context?.projectModules,
+    }),
+    [tree, context, frontmatter, dataContext?.filePath],
   );
-  const editSource = () => {
-    if (source.local && sourceMenu) {
-      setSourceEditor(sourceMenu);
-    } else if (source.imported) {
-      dataContext?.onOpenSymbol?.(source.root);
-    }
-    setSourceMenu(undefined);
-  };
-  return (
-    <>
-      {sourceMenu && (
-        <FieldDataPicker
-          pos={sourceMenu}
-          bindContext={bindContext || loopContext}
-          tree={listsOnly(tree)}
-          sourceInspection={source.inspection}
-          onEditSource={source.local || source.imported ? editSource : undefined}
-          current={isNoSource ? undefined : sourceChip(fields.data) || fields.data.trim()}
-          onPick={(path) => {
-            setSourceMenu(undefined);
-            // Picking swaps the source and keeps the code after it: a
-            // list chosen again is still `.filter(…)`-ed the same way.
-            commitSource(withSource(fields.data, path));
-          }}
-          onWrite={() => {
-            setSourceMenu(undefined);
-            if (isNoSource) {
-              update({ data: '' });
-            }
-          }}
-          onClose={() => setSourceMenu(undefined)}
-        />
-      )}
-      {sourceEditor && (
-        <VarSourceEditor
-          pos={sourceEditor}
-          name={source.root}
-          code={dataContext?.frontmatter ?? ''}
-          onChangeCode={dataContext?.onSetFrontmatter}
-          onClose={() => setSourceEditor(undefined)}
-        />
-      )}
-    </>
-  );
-}
-
-function MapDataField({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const {
-    dataContext,
-
-    fields,
-    update,
-
-    commitSource,
-    dataRef,
-
-    sourceMenu,
-    setSourceMenu,
-    insertAt,
-
-    dataApiRef,
-
-    openInsert,
-    openSourceMenu,
-
-    isNoSource,
-  } = state;
-  return (
-    <div className="props-field" style={{ marginTop: 8 }} ref={dataRef}>
-      <label onClick={noLabelActivation}>
-        <span className="prop-label">Data</span>
-        <BindHandle
-          active={insertAt?.field === 'data'}
-          onOpen={() => openInsert('data', dataRef)}
-        />
-      </label>
-      {/* One field, holding one expression. What names the source is
-                drawn as a chip inside it — the same purple a binding wears
-                everywhere else — and everything after it is ordinary code, so
-                `.filter(…)` or `[1]` is typed where it reads. The chip IS the
-                way to another list: it is the thing on screen that names the
-                one in use, so pressing it opens the picker, and the chevron
-                that used to sit beside it was a second button for the job the
-                chip was already doing. The pencil goes to where the list is
-                declared, which is usually another file. */}
-      <div className="prop-expr-row">
-        <ExprInput
-          value={isNoSource ? '' : fields.data}
-          syncValue={isNoSource ? '' : fields.data}
-          placeholder="Choose or write a list…"
-          chip={sourceChip(fields.data)}
-          apiRef={dataApiRef}
-          onChipClick={() => (sourceMenu ? setSourceMenu(undefined) : openSourceMenu())}
-          onChange={(value) => update({ data: value })}
-          onCommit={(value) => commitSource(value.trim() || NO_SOURCE)}
-        />
-        <SourceEditButton
-          name={referencedName(fields.data)}
-          dataContext={dataContext}
-          anchorRef={dataRef}
-        />
-      </div>
-      <MapSourcePicker state={state} />
-    </div>
-  );
-}
-
-function MapNames({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const {
-    fields,
-    update,
-    commit,
-    commitOnEnter,
-
-    itemBad,
-    indexBad,
-  } = state;
-  return (
-    <>
-      <div className="props-field">
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">Item name</span>
-        </label>
-        <input
-          value={fields.item}
-          placeholder="e.g. service"
-          spellCheck={false}
-          style={itemBad ? { borderColor: 'var(--red)' } : undefined}
-          onChange={(event) => update({ item: event.target.value })}
-          onBlur={() => commit(fields)}
-          onKeyDown={commitOnEnter}
-        />
-      </div>
-      <div className="props-field">
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">Index name</span>
-          <span className="type-tag">optional</span>
-        </label>
-        <input
-          value={fields.index}
-          placeholder="e.g. index"
-          spellCheck={false}
-          style={indexBad ? { borderColor: 'var(--red)' } : undefined}
-          onChange={(event) => update({ index: event.target.value })}
-          onBlur={() => commit(fields)}
-          onKeyDown={commitOnEnter}
-        />
-      </div>
-    </>
-  );
-}
-
-function MapCodeField({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const {
-    node,
-
-    onSetText,
-
-    codeRef,
-
-    insertAt,
-
-    codeApiRef,
-    openInsert,
-
-    parseableNow,
-  } = state;
-  return (
-    <div className="props-field" style={{ marginTop: parseableNow ? 2 : 0 }} ref={codeRef}>
-      <label onClick={noLabelActivation}>
-        <span className="prop-label">
-          <CodeIcon size={12} className="prop-label-icon" />
-          Code
-        </span>
-        <BindHandle
-          active={insertAt?.field === 'code'}
-          onOpen={() => openInsert('code', codeRef)}
-        />
-      </label>
-      <ExprInput
-        value={node.head}
-        syncValue={node.head}
-        apiRef={codeApiRef}
-        onCommit={(value) => value !== node.head && onSetText(value)}
-      />
-    </div>
-  );
-}
-
-function MapInsertPicker({ state }: { readonly state: ReturnType<typeof useMapEditor> }) {
-  const {
-    node,
-    loopContext,
-    bindContext,
-
-    onSetText,
-
-    commitSource,
-
-    insertAt,
-    setInsertAt,
-    dataApiRef,
-    codeApiRef,
-  } = state;
-  return (
-    <>
-      {insertAt && (
-        <FieldDataPicker
-          pos={insertAt.pos}
-          bindContext={bindContext || loopContext}
-          current={undefined}
-          onPick={(path) => {
-            const field = insertAt.field;
-            setInsertAt(undefined);
-            const next =
-              field === 'data'
-                ? dataApiRef.current?.insert(path)
-                : codeApiRef.current?.insert(path);
-            if (next === undefined) {
-              return;
-            }
-            if (field === 'data') {
-              commitSource(next.trim() || NO_SOURCE);
-            } else if (next !== node.head) {
-              onSetText(next);
-            }
-          }}
-          onClose={() => setInsertAt(undefined)}
-        />
-      )}
-    </>
-  );
-}
-
-function mapRenames(head: string, next: MapFields): readonly Rename[] {
-  const previous = parseMapHead(head);
-  if (!previous) {
-    return [];
+  if (onSetLoopSource === undefined) {
+    return children;
   }
-  const renames: Rename[] = [];
-  for (const key of ['item', 'index'] as const) {
-    if (previous[key] && next[key] && previous[key] !== next[key]) {
-      renames.push({ from: previous[key], to: next[key] });
+  return (
+    <LoopSettings
+      input={input}
+      item={parseMapHead(node.head)?.item}
+      projectPath={projectPath}
+      filePath={dataContext?.filePath}
+      lists={lists}
+      pickerData={pickerData}
+      newProp={context?.newProp}
+      onApply={onSetLoopSource}
+      onEditProperty={props.onEditLoopProperty}
+      sourceButton={(name, anchorRef) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}
+    >
+      {children}
+    </LoopSettings>
+  );
+}
+
+// Lists the page already holds — props, constants, an outer loop item's lists
+// — for the Source menu. Collections are offered by the catalog instead.
+const PAGE_LISTS_MAX = 100;
+
+export function pageLists(tree: readonly TreeNode[]): readonly LoopListOption[] {
+  const out: LoopListOption[] = [];
+  // Children of a pickable node are pickable nodes too (listsOnly marks the
+  // whole tree), but are typed as plain tree nodes; `pickable` is read as a key.
+  const pending: TreeNode[] = [...listsOnly(tree)].reverse();
+  for (let count = 0; pending.length > 0 && out.length < PAGE_LISTS_MAX && count < LIMITS.treeNodesMax; count++) {
+    const node = pending.pop();
+    if (node === undefined || node.section === 'collections' || node.query !== undefined) {
+      continue;
+    }
+    if ('pickable' in node && node.pickable === true) {
+      out.push({ path: node.path, label: node.path, hint: node.preview || '' });
+    }
+    for (const child of [...(node.children ?? [])].reverse()) {
+      pending.push(child);
     }
   }
-  assert(renames.length <= 2, 'MapEditor: rename count exceeded');
-  return renames;
+  return out;
 }

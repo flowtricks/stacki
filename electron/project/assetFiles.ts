@@ -5,10 +5,14 @@
 import { MAIN_LIMITS, directoryBudget } from '../lib/mainLimits';
 import { isPathWithin } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import { capture } from '../lib/mainHelpers';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
+import { capture, toPosix } from '../lib/mainHelpers';
+import { projectFoldersFor } from '../lib/projectFolders';
+import { folderHolding, isAboveFolder } from '../../shared/properties/projectFolders';
 
 // ---------------------------------------------------------------------------
 // Assets (public/) — list, upload, move, rename, folders
@@ -31,14 +35,15 @@ export const ASSET_ROOTS = ['public', 'src'];
 // Media only under src/: everything else there is code. public/ lists whatever
 // is in it — that folder exists to be served.
 export const MEDIA_EXT = new RegExp(
-  '\\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?|' +
-    'mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot)$',
+  '\\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|tiff?|' + 'mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot)$',
   'i',
 );
 
 export const rootOfRel = (rel: string) => String(rel || '').split('/')[0] ?? '';
 
-// Refuses anything that escapes the two roots.
+// Refuses anything that escapes the two roots, and anything outside the
+// project's asset folders (.stacki/folders.json; by default the whole of both
+// roots), so configuring a folder can only narrow where the panel writes.
 export function assetAbs(projectPath: string, rel: string) {
   const clean = String(rel || '').replace(/^\/+/, '');
   const root = rootOfRel(clean);
@@ -50,7 +55,96 @@ export function assetAbs(projectPath: string, rel: string) {
   if (!isPathWithin(rootAbs, abs)) {
     throw new Error('Invalid asset path');
   }
+  // The resolved path, not the text: `src/assets/../pages` names src/pages.
+  const resolved = toPosix(path.relative(path.resolve(projectPath), abs));
+  if (folderHolding(projectFoldersFor(projectPath, 'assets'), resolved) === undefined) {
+    throw new Error(`${resolved} is not in one of the project's asset folders.`);
+  }
   return abs;
+}
+
+/**
+ * Why a write may not touch the file at `rel`, or undefined when it may. Under
+ * public/ every file is an asset: the folder exists to be served. Anywhere
+ * else only media is: the rest is code (pages, components, stylesheets) that
+ * only the document actors write, so a raw byte copy or a rename must never
+ * reach it, whichever folders the project lists as asset folders
+ * (test/electron/documents/singleWriter.test.ts).
+ */
+export function assetWriteRefusal(rel: string): Described | undefined {
+  assert(rel.length > 0, 'assetWriteRefusal: the asset is named');
+  if (rootOfRel(rel) === 'public') {
+    return undefined;
+  }
+  assert(rootOfRel(rel) === 'src', 'assetWriteRefusal: an asset is under public/ or src/');
+  if (MEDIA_EXT.test(rel)) {
+    return undefined;
+  }
+  return described('assets.error.sourceCode', { name: path.posix.basename(rel) });
+}
+
+/**
+ * Everything the assets panel lists: each root (`public`, `src`) that holds a
+ * configured asset folder, the folders between a root and a configured folder
+ * (so the tree reaches it), and each configured folder's tree. Under src/ only
+ * media is listed. With the default folders this is both roots' whole trees,
+ * as it always was.
+ */
+export interface AssetListing {
+  readonly entries: AssetEntry[];
+  readonly hasPublic: boolean;
+}
+
+export function* assetEntriesSliced(projectPath: string): SlicedWork<AssetListing> {
+  const folders = projectFoldersFor(projectPath, 'assets');
+  const entries: AssetEntry[] = [];
+  let hasPublic = false;
+  for (const root of ASSET_ROOTS) {
+    const rootFolders = folders.filter((folder) => rootOfRel(folder) === root);
+    const rootDirectory = path.join(projectPath, root);
+    if (rootFolders.length === 0 || !fs.existsSync(rootDirectory)) {
+      continue;
+    }
+    if (root === 'public') {
+      hasPublic = true;
+    }
+    // The roots themselves are entries, so the panel navigates and drops into
+    // them with the folder handling it already has.
+    entries.push({ rel: root, name: root, parent: '', isDir: true, root, isRoot: true });
+    const listed = new Set<string>([root]);
+    for (const folder of rootFolders) {
+      const directory = path.join(projectPath, ...folder.split('/'));
+      if (!fs.existsSync(directory)) {
+        continue;
+      }
+      // Folders between the root and the configured one, then the folder itself.
+      const segments = folder.split('/');
+      for (let depth = 2; depth <= segments.length; depth++) {
+        const rel = segments.slice(0, depth).join('/');
+        assert(depth === 2 || isAboveFolder(folders, segments.slice(0, depth - 1).join('/')), 'listAssetEntries: each step leads to the folder');
+        if (!listed.has(rel)) {
+          listed.add(rel);
+          entries.push({ rel, name: segments[depth - 1] ?? rel, parent: segments.slice(0, depth - 1).join('/'), isDir: true, root });
+        }
+      }
+      for (const entry of yield* assetTreeSliced(directory, folder, { mediaOnly: root === 'src' })) {
+        if (!listed.has(entry.rel)) {
+          listed.add(entry.rel);
+          entries.push(entry);
+        }
+      }
+    }
+  }
+  assert(entries.length === new Set(entries.map((entry) => entry.rel)).size, 'listAssetEntries: each path is listed once');
+  return { entries, hasPublic };
+}
+
+export function listAssetEntries(projectPath: string): AssetListing {
+  return runSync(assetEntriesSliced(projectPath));
+}
+
+export function listAssetEntriesSliced(projectPath: string): Promise<AssetListing> {
+  return runSliced(assetEntriesSliced(projectPath));
 }
 
 // A destination name that doesn't collide: name.ext, name-1.ext, name-2.ext and on.
@@ -59,10 +153,14 @@ export function uniqueTarget(directory: string, name: string) {
   const base = path.basename(name, ext);
   let candidate = name;
   let i = 1;
+  // Each retry meets a name already taken, so the directory's own entry count bounds how many
+  // there can be: one more than that always finds a free name. Read once, on the first collision.
+  let attemptsMax = 0;
   while (fs.existsSync(path.join(directory, candidate))) {
-    if (i > MAIN_LIMITS.fileNameAttemptsMax) {
-      throw new Error('File name attempts exceed limit');
+    if (attemptsMax === 0) {
+      attemptsMax = fs.readdirSync(directory).length + 1;
     }
+    assert(i <= attemptsMax, 'uniqueTarget: a directory cannot hold more taken names than it has entries');
     candidate = `${base}-${i++}${ext}`;
   }
   return path.join(directory, candidate);
@@ -146,18 +244,18 @@ export function imageSizeOf(abs: string) {
   return undefined;
 }
 
-export function listAssetTree(
-  root: string,
-  rel: string,
-  options: { readonly mediaOnly: boolean },
-): AssetEntry[] {
+export function listAssetTree(root: string, rel: string, options: { readonly mediaOnly: boolean }): AssetEntry[] {
+  return runSync(assetTreeSliced(root, rel, options));
+}
+
+export function* assetTreeSliced(root: string, rel: string, options: { readonly mediaOnly: boolean }): SlicedWork<AssetEntry[]> {
   const entries: AssetEntry[] = [];
   // Folders are only worth showing when something is in them, which for src/
   // means "holds media somewhere below" — otherwise every component folder in
   // the project would show up as an empty asset folder.
   const checkDirectory = directoryBudget(root);
   const mediaOnly = options.mediaOnly;
-  const walk = (directory: string, rel: string, depth: number): boolean => {
+  function* walk(directory: string, rel: string, depth: number): SlicedWork<boolean> {
     let held = false;
     let names = [];
     try {
@@ -183,7 +281,7 @@ export function listAssetTree(
           root: rootOfRel(rel),
         };
         entries.push(placeholder);
-        const any = walk(full, entryRel, depth + 1);
+        const any = yield* walk(full, entryRel, depth + 1);
         if (any) {
           held = true;
         } else if (mediaOnly) {
@@ -193,38 +291,34 @@ export function listAssetTree(
         if (mediaOnly && !MEDIA_EXT.test(entry.name)) {
           continue;
         }
+        // The one stat a file costs gives its size and its modified time (the panel's Newest and
+        // Oldest sorts); a file gone between the read and the stat lists as empty, with no time.
         let size = 0;
+        let modifiedMs: number | undefined;
         try {
-          size = fs.statSync(full).size;
+          const info = fs.statSync(full);
+          size = info.size;
+          modifiedMs = Math.max(0, Math.floor(info.mtimeMs));
         } catch {
           /* race */
         }
         held = true;
-        entries.push({
-          rel: entryRel,
-          name: entry.name,
-          parent: rel,
-          isDir: false,
-          size,
-          abs: full,
-          root: rootOfRel(rel),
-        });
+        const file = { rel: entryRel, name: entry.name, parent: rel, isDir: false as const, size, abs: full, root: rootOfRel(rel) };
+        entries.push(modifiedMs === undefined ? file : { ...file, modifiedMs });
+        // A folder of tens of thousands of files is that many units, each a stat and a push.
+        yield;
       }
     }
     return held;
-  };
+  }
 
-  walk(root, rel, 0);
+  yield* walk(root, rel, 0);
   return entries;
 }
 
 export function webpImageSize(buf: Buffer) {
   // WebP: VP8 (lossy), VP8L (lossless) and VP8X (extended) each differ.
-  if (
-    buf.length > 30 &&
-    buf.toString('binary', 0, 4) === 'RIFF' &&
-    buf.toString('binary', 8, 12) === 'WEBP'
-  ) {
+  if (buf.length > 30 && buf.toString('binary', 0, 4) === 'RIFF' && buf.toString('binary', 8, 12) === 'WEBP') {
     const kind = buf.toString('binary', 12, 16);
     if (kind === 'VP8 ') {
       return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff };

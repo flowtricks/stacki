@@ -14,7 +14,8 @@
 // unit; a ring around the input alone leaves the `%` outside the box it belongs
 // to. The ring is the box's.
 //
-// Both are questions about rendered boxes, so this runs in a real browser.
+// Both are questions about rendered boxes, so this runs in a real browser. Each step
+// waits, bounded, on the state it reads next (test/helpers/waitFor.js), not a fixed sleep.
 
 const fs = require('fs');
 const path = require('path');
@@ -107,10 +108,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'panel-field: skipped — no Electron to lay it out in ' +
-        '(see test/electron/preload/gapBands.test.js for the pattern)',
-    );
+    console.log('panel-field: skipped — no Electron to lay it out in ' + '(see test/electron/preload/gapBands.test.js for the pattern)');
     return;
   }
 
@@ -123,7 +121,22 @@ const check = (what, condition, detail) => {
        const win = new BrowserWindow({ show: false, width: 900, height: 700 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
-       await new Promise((r) => setTimeout(r, 400));
+       // Hidden windows and busy runners can delay the popup's exit timer. Wait
+       // for its actual removal before aiming a press at the row underneath.
+       const waitForPopup = async (state) => {
+         for (let attempt = 0; attempt < 100; attempt++) {
+           const present = await js("!!document.querySelector('.embed-editor_layer-popover')");
+           if (present === (state === 'open')) return;
+           await new Promise((resolve) => setTimeout(resolve, 50));
+         }
+         throw new Error('Transition popup did not become ' + state);
+       };
+       const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       await pollUntil({
+         what: 'the transition rows drawn',
+         read: () => js("document.querySelectorAll('.embed-editor_transitions .embed-editor_bg-layer-main').length"),
+         until: (count) => count >= 2,
+       });
        // A window that is not on screen does not run transitions, so a transitioned
        // box-shadow would read as its starting value forever. Nothing here is about
        // the animation.
@@ -135,7 +148,6 @@ const check = (what, condition, detail) => {
        const clickAt = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-         await new Promise((r) => setTimeout(r, 220));
        };
        // The effects section is long; the row has to be on screen before a press
        // at its coordinates means anything.
@@ -145,9 +157,23 @@ const check = (what, condition, detail) => {
          "r.scrollIntoView({ block: 'center' }); const b = r.getBoundingClientRect(); " +
          "return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) } " +
          "})()");
-       const layerRow = await rowAt(1);
-       await new Promise((r) => setTimeout(r, 120));
+       // Pressed once the scrolled row holds still: two reads of its centre agree.
+       const rowStill = async (n) => {
+         let last = 'none';
+         const held = await pollUntil({
+           what: 'row ' + n + ' still after scrolling',
+           read: () => rowAt(n),
+           until: (point) => {
+             const still = JSON.stringify(point) === last;
+             last = JSON.stringify(point);
+             return still;
+           },
+         });
+         return held.value;
+       };
+       const layerRow = await rowStill(1);
        if (layerRow) await clickAt(layerRow.x, layerRow.y);
+       await waitForPopup('open');
        const opening = {
          open: await js("!!document.querySelector('.embed-editor_layer-popover')"),
          foundRow: !!layerRow,
@@ -181,11 +207,14 @@ const check = (what, condition, detail) => {
          "slider: slider && Math.round(slider.getBoundingClientRect().width) } })()");
        // Close the open one first — it is drawn over the rows, so a press aimed at
        // another row would land on the popover instead.
+       // Keys go to the focused page; a hidden window is not focused by itself.
+       win.webContents.focus();
        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-       await new Promise((r) => setTimeout(r, 220));
-       const plainRow = await rowAt(0);
+       await waitForPopup('closed');
+       const plainRow = await rowStill(0);
        if (plainRow) await clickAt(plainRow.x, plainRow.y);
+       await waitForPopup('open');
        out.plainFields = await js("(() => { const pop = " +
          "document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; " +
          "const shape = (el) => { const c = getComputedStyle(el); " +
@@ -225,31 +254,19 @@ const check = (what, condition, detail) => {
     check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 400));
   } else {
     const out = JSON.parse(line);
-    check(
-      'the popup field is as tall as a panel field',
-      out.popup.h === out.panel.h,
-      `${out.popup.h} vs ${out.panel.h}`,
-    );
+    check('the popup field is as tall as a panel field', out.popup.h === out.panel.h, `${out.popup.h} vs ${out.panel.h}`);
     check(
       'and set in the same type',
       out.popup.font === out.panel.font && out.popup.family === out.panel.family,
       `${out.popup.font} ${out.popup.family} vs ${out.panel.font} ${out.panel.family}`,
     );
-    check(
-      'and padded the same',
-      out.popup.padding === out.panel.padding,
-      `${out.popup.padding} vs ${out.panel.padding}`,
-    );
+    check('and padded the same', out.popup.padding === out.panel.padding, `${out.popup.padding} vs ${out.panel.padding}`);
     check('the field carries its unit', out.suffix === '%', String(out.suffix));
     // The visible half of the field is the contenteditable VariableConnect draws
     // (see test/renderer/style/fieldFocus.test.js) — that is what a press focuses, so that is what
     // has to raise the ring.
     check('focus reaches the field', out.focus.focusWithin === true);
-    check(
-      'the ring is drawn round the box',
-      /rgb/.test(out.focus.onBox) && out.focus.onBox !== 'none',
-      out.focus.onBox,
-    );
+    check('the ring is drawn round the box', /rgb/.test(out.focus.onBox) && out.focus.onBox !== 'none', out.focus.onBox);
     check('and not round the input inside it', out.focus.onInput === 'none', out.focus.onInput);
     check('nor round the visible half of it', out.focus.onVisible === 'none', out.focus.onVisible);
     check('so the unit is inside the ring', out.focus.suffixInside === true);
@@ -258,44 +275,16 @@ const check = (what, condition, detail) => {
     // grown their own plain inputs: no way to reach a variable, and a slider
     // squeezed to nothing beside them.
     check('the transition editor opens', out.opening?.open === true, JSON.stringify(out.opening));
-    check(
-      'the transition editor uses the panel field',
-      out.varFields?.sharedField === true,
-      JSON.stringify(out.varFields),
-    );
-    check(
-      'at the same height as the panel',
-      out.varFields?.input?.h === out.panel.h,
-      `${out.varFields?.input?.h} vs ${out.panel.h}`,
-    );
-    check(
-      'and the same type',
-      out.varFields?.input?.font === out.panel.font,
-      `${out.varFields?.input?.font} vs ${out.panel.font}`,
-    );
-    check(
-      'a variable in either field reads as a chip',
-      out.varFields?.chips?.every(Boolean) === true,
-      JSON.stringify(out.varFields?.chips),
-    );
-    check(
-      'and the value is drawn as code',
-      out.varFields?.code?.every(Boolean) === true,
-      JSON.stringify(out.varFields?.code),
-    );
+    check('the transition editor uses the panel field', out.varFields?.sharedField === true, JSON.stringify(out.varFields));
+    check('at the same height as the panel', out.varFields?.input?.h === out.panel.h, `${out.varFields?.input?.h} vs ${out.panel.h}`);
+    check('and the same type', out.varFields?.input?.font === out.panel.font, `${out.varFields?.input?.font} vs ${out.panel.font}`);
+    check('a variable in either field reads as a chip', out.varFields?.chips?.every(Boolean) === true, JSON.stringify(out.varFields?.chips));
+    check('and the value is drawn as code', out.varFields?.code?.every(Boolean) === true, JSON.stringify(out.varFields?.code));
     // A track you cannot aim at is not a control. Beside a variable's name it
     // had about four pixels of it.
-    check(
-      'the duration slider is still wide enough to drag',
-      out.varFields?.slider >= 80,
-      `${out.varFields?.slider}px`,
-    );
+    check('the duration slider is still wide enough to drag', out.varFields?.slider >= 80, `${out.varFields?.slider}px`);
     // And on a plain value, the way in to the picker is the dot.
-    check(
-      'a plain value offers the variable dot instead',
-      out.plainFields?.dots?.every(Boolean) === true,
-      JSON.stringify(out.plainFields),
-    );
+    check('a plain value offers the variable dot instead', out.plainFields?.dots?.every(Boolean) === true, JSON.stringify(out.plainFields));
   }
 
   if (failures.length) {

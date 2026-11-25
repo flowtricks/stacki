@@ -45,12 +45,7 @@ export interface Edit {
   readonly value?: unknown;
 }
 
-const setIn = (
-  target: unknown,
-  path: readonly (string | number)[],
-  value: unknown,
-  depth = 0,
-): unknown => {
+const setIn = (target: unknown, path: readonly (string | number)[], value: unknown, depth = 0): unknown => {
   // The path arrives with an edit from the renderer. One deeper than any value that crosses a
   // boundary names nothing a record can hold, so the edit fails rather than the stack.
   if (depth > LIMITS.ipcDepthMax) {

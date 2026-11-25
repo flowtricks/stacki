@@ -940,7 +940,7 @@
      "fillRule": "evenodd"
     }
    },
-   "preview": "polygon(evenodd, 0.625% 0.625%, 90% 0.625%, 50% 90%)",
+   "preview": "polygon(evenodd, 5% 10%, 90% 10%, 50% 90%)",
    "previewNoSize": "polygon(evenodd, 10px 10px, 90% 10px, 50% 90%)",
    "highlights": [
     {
@@ -1926,7 +1926,7 @@
      }
     }
    },
-   "preview": "circle(2.5% at 30% 70%)",
+   "preview": "circle(20% at 30% 70%)",
    "previewNoSize": "circle(40px at 30% 70%)",
    "highlights": [
     {
@@ -2469,7 +2469,7 @@
      }
     }
    },
-   "preview": "ellipse(25% 40% at 1.25% 1.875%)",
+   "preview": "ellipse(25% 40% at 10% 30%)",
    "previewNoSize": "ellipse(25% 40% at 20px 30px)",
    "highlights": [
     {
@@ -3219,12 +3219,12 @@
       }
      }
     },
-    "css": "inset(10px 20% 10px 20%)"
+    "css": "inset(10px 20%)"
    },
-   "formatted": "inset(10px 20% 10px 20%)",
+   "formatted": "inset(10px 20%)",
    "reparsed": {
     "kind": "raw",
-    "value": "inset(10px 20% 10px 20%)",
+    "value": "inset(10px 20%)",
     "preset": "Inset",
     "editable": {
      "kind": "inset",
@@ -3246,8 +3246,8 @@
      }
     }
    },
-   "preview": "inset(0.625% 20% 0.625% 20%)",
-   "previewNoSize": "inset(10px 20% 10px 20%)",
+   "preview": "inset(10% 20% 10% 20%)",
+   "previewNoSize": "inset(10px 20%)",
    "highlights": [
     {
      "from": 6,
@@ -3255,6 +3255,9 @@
      "handles": [
       {
        "kind": "inset-top"
+      },
+      {
+       "kind": "inset-bottom"
       }
      ],
      "colorClass": "clip-path_color-a",
@@ -3266,32 +3269,13 @@
      "handles": [
       {
        "kind": "inset-right"
-      }
-     ],
-     "colorClass": "clip-path_color-b",
-     "className": "clip-path_code-token clip-path_color-b"
-    },
-    {
-     "from": 15,
-     "to": 19,
-     "handles": [
-      {
-       "kind": "inset-bottom"
-      }
-     ],
-     "colorClass": "clip-path_color-c",
-     "className": "clip-path_code-token clip-path_color-c"
-    },
-    {
-     "from": 20,
-     "to": 23,
-     "handles": [
+      },
       {
        "kind": "inset-left"
       }
      ],
-     "colorClass": "clip-path_color-d",
-     "className": "clip-path_code-token clip-path_color-d"
+     "colorClass": "clip-path_color-b",
+     "className": "clip-path_code-token clip-path_color-b"
     }
    ],
    "tokens": [
@@ -3302,14 +3286,6 @@
     {
      "from": 11,
      "to": 14
-    },
-    {
-     "from": 15,
-     "to": 19
-    },
-    {
-     "from": 20,
-     "to": 23
     }
    ],
    "preset": "Inset",
@@ -3449,7 +3425,7 @@
      }
     }
    },
-   "preview": "inset(5% 10% 15% 20% round 0.5% 0.5% 0.5% 0.5%)",
+   "preview": "inset(5% 10% 15% 20% round 4% 4% 4% 4% / 8% 8% 8% 8%)",
    "previewNoSize": "inset(5% 10% 15% 20% round 8px)",
    "highlights": [
     {
@@ -3711,12 +3687,12 @@
       }
      }
     },
-    "css": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)"
+    "css": "inset(0 round 10% 20% 30% 40% / 5px 6px)"
    },
-   "formatted": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+   "formatted": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
    "reparsed": {
     "kind": "raw",
-    "value": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+    "value": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
     "preset": "Inset",
     "editable": {
      "kind": "inset",
@@ -3768,56 +3744,32 @@
      }
     }
    },
-   "preview": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 0.3125% 0.375% 0.3125% 0.375%)",
-   "previewNoSize": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+   "preview": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5% 6% 5% 6%)",
+   "previewNoSize": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
    "highlights": [
     {
      "from": 6,
-     "to": 8,
+     "to": 7,
      "handles": [
       {
        "kind": "inset-top"
+      },
+      {
+       "kind": "inset-right"
+      },
+      {
+       "kind": "inset-bottom"
+      },
+      {
+       "kind": "inset-left"
       }
      ],
      "colorClass": "clip-path_color-a",
      "className": "clip-path_code-token clip-path_color-a"
     },
     {
-     "from": 9,
-     "to": 11,
-     "handles": [
-      {
-       "kind": "inset-right"
-      }
-     ],
-     "colorClass": "clip-path_color-b",
-     "className": "clip-path_code-token clip-path_color-b"
-    },
-    {
-     "from": 12,
-     "to": 14,
-     "handles": [
-      {
-       "kind": "inset-bottom"
-      }
-     ],
-     "colorClass": "clip-path_color-c",
-     "className": "clip-path_code-token clip-path_color-c"
-    },
-    {
-     "from": 15,
+     "from": 14,
      "to": 17,
-     "handles": [
-      {
-       "kind": "inset-left"
-      }
-     ],
-     "colorClass": "clip-path_color-d",
-     "className": "clip-path_code-token clip-path_color-d"
-    },
-    {
-     "from": 24,
-     "to": 27,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3828,8 +3780,8 @@
      "className": "clip-path_code-token clip-path_color-e"
     },
     {
-     "from": 28,
-     "to": 31,
+     "from": 18,
+     "to": 21,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3840,8 +3792,8 @@
      "className": "clip-path_code-token clip-path_color-f"
     },
     {
-     "from": 32,
-     "to": 35,
+     "from": 22,
+     "to": 25,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3852,8 +3804,8 @@
      "className": "clip-path_code-token clip-path_color-g"
     },
     {
-     "from": 36,
-     "to": 39,
+     "from": 26,
+     "to": 29,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3864,8 +3816,8 @@
      "className": "clip-path_code-token clip-path_color-h"
     },
     {
-     "from": 42,
-     "to": 45,
+     "from": 32,
+     "to": 35,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3880,8 +3832,8 @@
      "className": "clip-path_code-token clip-path_color-e"
     },
     {
-     "from": 46,
-     "to": 49,
+     "from": 36,
+     "to": 39,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3899,27 +3851,23 @@
    "tokens": [
     {
      "from": 6,
-     "to": 8
+     "to": 7
     },
     {
-     "from": 9,
-     "to": 11
-    },
-    {
-     "from": 12,
-     "to": 14
-    },
-    {
-     "from": 15,
+     "from": 14,
      "to": 17
     },
     {
-     "from": 24,
-     "to": 27
+     "from": 18,
+     "to": 21
     },
     {
-     "from": 28,
-     "to": 31
+     "from": 22,
+     "to": 25
+    },
+    {
+     "from": 26,
+     "to": 29
     },
     {
      "from": 32,
@@ -3928,14 +3876,6 @@
     {
      "from": 36,
      "to": 39
-    },
-    {
-     "from": 42,
-     "to": 45
-    },
-    {
-     "from": 46,
-     "to": 49
     }
    ],
    "preset": "Inset",
@@ -3967,7 +3907,7 @@
     "value": "inset(calc(10% + 4px) 0)",
     "preset": "Inset"
    },
-   "preview": "inset(calc(10% + 0.25%) 0 calc(10% + 0.25%) 0)",
+   "preview": "inset(calc(10% + 4%) 0 calc(10% + 4%) 0)",
    "previewNoSize": "inset(calc(10% + 4px) 0)",
    "highlights": [],
    "tokens": [],
@@ -4000,7 +3940,7 @@
     "value": "inset(var(--gap, 10px))",
     "preset": "Inset"
    },
-   "preview": "inset(var(--gap, 0.625%) var(--gap, 0.625%) var(--gap, 0.625%) var(--gap, 0.625%))",
+   "preview": "inset(var(--gap, 10%) var(--gap, 5%) var(--gap, 10%) var(--gap, 5%))",
    "previewNoSize": "inset(var(--gap, 10px))",
    "highlights": [],
    "tokens": [],
@@ -5688,22 +5628,8 @@
    },
    "css": "shape(from calc(0.6 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.5 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)), curve to calc(0.5 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.6 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) with calc(0.6 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.5552 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) / calc(0.5552 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.6 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)), curve to calc(0.4 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.5 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) with calc(0.4448 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.6 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) / calc(0.4 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.5552 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)), curve to calc(0.5 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.4 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) with calc(0.4 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.4448 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) / calc(0.4448 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.4 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)), curve to calc(0.6 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.5 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) with calc(0.5552 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.4 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)) / calc(0.6 * 100cqw + 0.5 * (100cqw - 1 * 100cqw)) calc(0.4448 * 100cqw + 0.5 * (100cqh - 1 * 100cqw)), close)"
   },
-  "stretch: <svg viewBox=\"0 0 100 100\"></svg>": {
-   "shape": {
-    "kind": "shape",
-    "value": "from 56.8% 43.2%, line to 100% 43.2%, line to 100% 56.8%, curve to 56.8% 100% with 76.2% 56.8% / 56.8% 76.2%, line to 43.2% 100%, line to 43.2% 56.8%, line to 0% 56.8%, line to 0% 43.2%, curve to 43.2% 0% with 23.8% 43.2% / 43.2% 23.8%, line to 56.8% 0%, line to 56.8% 43.2%, close",
-    "pathData": "M56.8 43.2H100V56.8C76.2 56.8 56.8 76.2 56.8 100H43.2V56.8H0V43.2C23.8 43.2 43.2 23.8 43.2 0H56.8V43.2Z"
-   },
-   "css": "shape(from 56.8% 43.2%, line to 100% 43.2%, line to 100% 56.8%, curve to 56.8% 100% with 76.2% 56.8% / 56.8% 76.2%, line to 43.2% 100%, line to 43.2% 56.8%, line to 0% 56.8%, line to 0% 43.2%, curve to 43.2% 0% with 23.8% 43.2% / 43.2% 23.8%, line to 56.8% 0%, line to 56.8% 43.2%, close)"
-  },
-  "contain: <svg viewBox=\"0 0 100 100\"></svg>": {
-   "shape": {
-    "kind": "shape",
-    "value": "from 56.8% 43.2%, line to 100% 43.2%, line to 100% 56.8%, curve to 56.8% 100% with 76.2% 56.8% / 56.8% 76.2%, line to 43.2% 100%, line to 43.2% 56.8%, line to 0% 56.8%, line to 0% 43.2%, curve to 43.2% 0% with 23.8% 43.2% / 43.2% 23.8%, line to 56.8% 0%, line to 56.8% 43.2%, close",
-    "pathData": "M56.8 43.2H100V56.8C76.2 56.8 56.8 76.2 56.8 100H43.2V56.8H0V43.2C23.8 43.2 43.2 23.8 43.2 0H56.8V43.2Z"
-   },
-   "css": "shape(from 56.8% 43.2%, line to 100% 43.2%, line to 100% 56.8%, curve to 56.8% 100% with 76.2% 56.8% / 56.8% 76.2%, line to 43.2% 100%, line to 43.2% 56.8%, line to 0% 56.8%, line to 0% 43.2%, curve to 43.2% 0% with 23.8% 43.2% / 43.2% 23.8%, line to 56.8% 0%, line to 56.8% 43.2%, close)"
-  },
+  "stretch: <svg viewBox=\"0 0 100 100\"></svg>": "<undefined>",
+  "contain: <svg viewBox=\"0 0 100 100\"></svg>": "<undefined>",
   "stretch: not svg at all": "<undefined>",
   "contain: not svg at all": "<undefined>",
   "stretch: M 0 0 L 100 0 L 100 100 Z": "<undefined>",

@@ -33,23 +33,7 @@ const SCHEMAS: Readonly<Record<string, readonly BuiltinField[]>> = {
     {
       name: 'type',
       type: 'enum',
-      options: [
-        'text',
-        'email',
-        'password',
-        'number',
-        'search',
-        'tel',
-        'url',
-        'checkbox',
-        'radio',
-        'date',
-        'time',
-        'file',
-        'hidden',
-        'range',
-        'color',
-      ],
+      options: ['text', 'email', 'password', 'number', 'search', 'tel', 'url', 'checkbox', 'radio', 'date', 'time', 'file', 'hidden', 'range', 'color'],
       default: 'text',
     },
     { name: 'name', type: 'string' },
@@ -126,20 +110,23 @@ export function getElementSchema(tag: unknown): readonly BuiltinField[] {
   return SCHEMAS[String(tag).toLowerCase()] || [];
 }
 
-// Standard body-level HTML tags for the element tag-switcher autocomplete
-// (document/metadata tags like html, head, meta, and script/style are
-// intentionally left out).
+// Every standard HTML tag, for the insert search and the tag-switcher autocomplete.
+// Document and metadata tags (html, head, meta, link, script, style) are included
+// because people add them in layouts and search for them by name.
 export const HTML_TAGS = [
   'a',
   'abbr',
   'address',
+  'area',
   'article',
   'aside',
   'audio',
   'b',
+  'base',
   'bdi',
   'bdo',
   'blockquote',
+  'body',
   'br',
   'button',
   'canvas',
@@ -171,9 +158,11 @@ export const HTML_TAGS = [
   'h4',
   'h5',
   'h6',
+  'head',
   'header',
   'hgroup',
   'hr',
+  'html',
   'i',
   'iframe',
   'img',
@@ -183,9 +172,12 @@ export const HTML_TAGS = [
   'label',
   'legend',
   'li',
+  'link',
   'main',
+  'map',
   'mark',
   'menu',
+  'meta',
   'meter',
   'nav',
   'noscript',
@@ -199,15 +191,20 @@ export const HTML_TAGS = [
   'pre',
   'progress',
   'q',
+  'rp',
+  'rt',
   'ruby',
   's',
   'samp',
+  'script',
+  'search',
   'section',
   'select',
   'small',
   'source',
   'span',
   'strong',
+  'style',
   'sub',
   'summary',
   'sup',
@@ -220,6 +217,7 @@ export const HTML_TAGS = [
   'th',
   'thead',
   'time',
+  'title',
   'tr',
   'track',
   'u',
@@ -230,110 +228,13 @@ export const HTML_TAGS = [
 ];
 
 // Elements that can never hold children (so never any text content).
-export const VOID_TAGS = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-]);
+export { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
+import { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
 
-// Inline (phrasing) tags — the only element content a heading, paragraph, or
-// other text-level container may hold.
-export const PHRASING_TAGS = new Set([
-  'a',
-  'abbr',
-  'b',
-  'bdi',
-  'bdo',
-  'br',
-  'button',
-  'cite',
-  'code',
-  'data',
-  'datalist',
-  'del',
-  'dfn',
-  'em',
-  'i',
-  'img',
-  'input',
-  'ins',
-  'kbd',
-  'label',
-  'mark',
-  'meter',
-  'output',
-  'picture',
-  'progress',
-  'q',
-  'ruby',
-  's',
-  'samp',
-  'select',
-  'small',
-  'span',
-  'strong',
-  'sub',
-  'sup',
-  'svg',
-  'textarea',
-  'time',
-  // Astro's <slot />: whatever the caller passes lands here, so it's allowed
-  // wherever text is — `<h1><slot /></h1>` is the standard layout heading.
-  'slot',
-  'u',
-  'var',
-  'wbr',
-]);
-
-// Containers whose content model is phrasing-only: dropping a <div> or a
-// second <p> inside one produces markup the browser silently reparents.
-const TEXT_ONLY_PARENTS = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'p',
-  'span',
-  'strong',
-  'em',
-  'b',
-  'i',
-  'u',
-  's',
-  'small',
-  'code',
-  'kbd',
-  'samp',
-  'sub',
-  'sup',
-  'mark',
-  'abbr',
-  'cite',
-  'q',
-  'dfn',
-  'label',
-  'legend',
-  'summary',
-  'dt',
-  'figcaption',
-  'caption',
-  'option',
-  'textarea',
-  'title',
-]);
+// The phrasing tags and the text-only parents live beside the void tags, in shared,
+// because the planner lays out new source by the same classification.
+export { HTML_PHRASING_TAGS as PHRASING_TAGS } from '../../shared/page/htmlTags';
+import { HTML_PHRASING_TAGS as PHRASING_TAGS, HTML_TEXT_ONLY_PARENTS as TEXT_ONLY_PARENTS } from '../../shared/page/htmlTags';
 
 // Parents that accept only a fixed set of children.
 const ONLY_CHILDREN: Readonly<Record<string, readonly string[] | undefined>> = {
@@ -384,19 +285,7 @@ export function canContainTag(parentTag: unknown, childTag: unknown): boolean {
   }
   // <li>, <div>, <section>, … take flow content; only list/table parts are
   // out of place without their proper parent.
-  return ![
-    'li',
-    'dt',
-    'dd',
-    'tr',
-    'td',
-    'th',
-    'thead',
-    'tbody',
-    'tfoot',
-    'option',
-    'optgroup',
-  ].includes(child);
+  return !['li', 'dt', 'dd', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'option', 'optgroup'].includes(child);
 }
 
 // Attributes that stay valid on any element when its tag changes.

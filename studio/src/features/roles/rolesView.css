@@ -1,0 +1,124 @@
+/* The hosted Roles view: Desktop's tokens, backgrounds rather than borders, a stable scrollbar gutter. */
+.roles-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 16px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.roles-view-note {
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin: 0;
+}
+.roles-view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.roles-view-role {
+  background: var(--bg-panel-2);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roles-view-role h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.roles-view-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  border-radius: var(--radius);
+  padding: 0 4px;
+}
+.roles-view-member:hover {
+  background: var(--bg-hover);
+}
+.roles-view-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.roles-view-who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roles-view-you {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.roles-view-form {
+  background: var(--bg-active);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.roles-view-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.roles-view-form input {
+  background: var(--bg-input);
+  color: var(--text);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+.roles-view-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.roles-view-error {
+  color: var(--red);
+  margin: 0;
+}
+.roles-view-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.roles-view-link code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  /* A link reads left to right in every language: a right-to-left interface never mirrors it. */
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.roles-view-reminder {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin: 0;
+}
+.roles-view-member .dd-trigger {
+  flex: none;
+  width: auto;
+  min-width: 96px;
+  max-width: 120px;
+}
+.roles-view-who {
+  flex: 1 1 0;
+}

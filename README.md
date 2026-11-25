@@ -16,7 +16,7 @@ MIT licensed — fork it, build on it, ship your own version.
 - **Git & GitHub** — the branch chip in the title bar shows the current branch and dirty state. From its dropdown you can switch branches, create branches, commit, push, or publish a brand-new repo to GitHub (via the `gh` CLI).
 - **Tell an AI what's selected** — **⇧⌘C** copies whatever the canvas has selected as the trail of `file:line-range` pointers that leads to it: the page, each component drilled into on the way down, then the node itself. Paste that into Claude Code or any AI chat that can read the project and it knows exactly which markup you mean.
 - **Code fallback** — pages with markup too complex for the visual model open in a code editor instead, still with live preview.
-- **New project** — "New Project…" scaffolds a minimal Astro starter (layout + 5 components + home page) and runs `npm install` for you.
+- **New project.** Choose "Start from Lumos", "Start from shadcn", or "Start from Astro". Stacki creates the site and installs its dependencies. A new shadcn site opens on Style Gallery and includes a Component Gallery page. Set Astro’s `site` option to your public URL before deploying so the sitemap, canonical links, and social image URLs use that domain.
 
 ## Running in development
 
@@ -84,8 +84,9 @@ npm run dist:mac   # requires a Developer ID cert + notarization credentials
 
 Official builds are published by CI, not from anyone's laptop. Pushing a
 `v*` tag runs `.github/workflows/release.yml`, which builds a signed and
-notarized macOS universal build, a Windows installer, and Linux x64 AppImage
-and Debian packages, plus a versioned Studio source bundle. It uploads them to the `stacki-releases` repo and only
+notarized macOS builds for Apple Silicon and Intel, a Windows installer, and Linux x64
+AppImage and Debian packages, plus a versioned Studio source bundle. It uploads them to the
+`stacki-releases` repo and only
 makes the release visible once every platform has landed and the Linux
 packages pass installed-app smoke tests. Shipped apps auto-update from that feed via
 `electron-updater`.

@@ -1,3 +1,4 @@
+import { ReferencedError } from '../../shared/referencedError';
 import { assetDirectoryContents } from './assetDirectories';
 import { access, mkdir, readFile, rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -5,6 +6,7 @@ import { safePath } from '../project/projectServer';
 import { saveAsset, forgetAsset } from '../storage/assetStorage';
 import { filePath, record, string } from '../../shared/validation';
 import { managedAsset } from './assetStateTypes';
+import { assetFolderPath } from './assetFolders';
 import { readAssetState, saveAssetState } from './assetState';
 
 export async function mutateAsset(root: string, input: unknown) {
@@ -12,7 +14,7 @@ export async function mutateAsset(root: string, input: unknown) {
   const kind = string(value['kind'], 12);
   const rel = directoryOrFile(value['rel']);
   if (kind === 'mkdir') {
-    const destination = child(rel, value['name']);
+    const destination = assetFolderPath(root, child(rel, value['name']));
     await vacant(root, destination);
     const state = await readAssetState(root);
     await saveAssetState(root, {
@@ -24,12 +26,13 @@ export async function mutateAsset(root: string, input: unknown) {
     return { ok: true };
   }
   filePath(rel); // Root directories cannot be renamed, moved, or deleted.
+  assetFolderPath(root, rel);
   const source = await safePath(root, rel);
   const info = await stat(source);
   if (kind === 'delete') {
     managedAsset(rel);
     if (!info.isFile()) {
-      throw new Error('Only files can be deleted');
+      throw new ReferencedError('assets.error.onlyFilesDeleted');
     }
     const state = await readAssetState(root);
     await saveAssetState(root, { ...state, deleted: [...state.deleted, rel] });
@@ -49,26 +52,25 @@ export async function mutateAsset(root: string, input: unknown) {
   if (destination === rel) {
     return { ok: true };
   }
+  assetFolderPath(root, destination);
   if (destination.startsWith(rel + '/')) {
-    throw new Error('A folder cannot be moved into itself');
+    throw new ReferencedError('assets.error.moveIntoItself');
   }
   await vacant(root, destination);
   await relocate(root, rel, destination, info.isDirectory());
   return { ok: true };
 }
 async function relocate(root: string, rel: string, destination: string, directory: boolean) {
-  const contents = directory
-    ? await assetDirectoryContents(root, rel)
-    : { files: [rel], directories: [] };
+  const contents = directory ? await assetDirectoryContents(root, rel) : { files: [rel], directories: [] };
   const { files } = contents;
   if (files.length > 200) {
-    throw new Error('Move at most 200 assets at once');
+    throw new ReferencedError('assets.error.moveMax', { count: 200 });
   }
   for (const file of files) {
     managedAsset(file);
     managedAsset(destination + file.slice(rel.length));
     if ((await stat(await safePath(root, file))).size > 20_000_000) {
-      throw new Error('Asset exceeds 20 MB');
+      throw new ReferencedError('assets.error.tooBig', { size: 20 });
     }
   }
   const state = await readAssetState(root);
@@ -77,22 +79,12 @@ async function relocate(root: string, rel: string, destination: string, director
     await saveAsset(root, target, await readFile(await safePath(root, file)));
   }
   const targets = files.map((file) => destination + file.slice(rel.length));
-  const directories = state.directories.map((item) =>
-    item === rel || item.startsWith(rel + '/') ? destination + item.slice(rel.length) : item,
-  );
+  const directories = state.directories.map((item) => (item === rel || item.startsWith(rel + '/') ? destination + item.slice(rel.length) : item));
   await saveAssetState(root, {
     deleted: [...state.deleted.filter((file) => !targets.includes(file)), ...files],
-    directories: [
-      ...directories,
-      ...contents.directories.map((item) => destination + item.slice(rel.length)),
-    ],
+    directories: [...directories, ...contents.directories.map((item) => destination + item.slice(rel.length))],
     removedDirectories: directory
-      ? [
-          ...state.removedDirectories.filter(
-            (item) => item !== destination && !item.startsWith(destination + '/'),
-          ),
-          ...contents.directories,
-        ]
+      ? [...state.removedDirectories.filter((item) => item !== destination && !item.startsWith(destination + '/')), ...contents.directories]
       : state.removedDirectories,
   });
   for (const file of files) {
@@ -115,7 +107,7 @@ function directoryOrFile(input: unknown) {
 function child(parent: string, input: unknown) {
   const name = string(input, 255).trim();
   if (!name || name.includes('/') || name.includes('\\')) {
-    throw new Error('Use a single folder or file name');
+    throw new ReferencedError('assets.error.singleName');
   }
   return filePath(parent + '/' + name);
 }
@@ -128,5 +120,5 @@ async function vacant(root: string, file: string) {
     }
     throw error;
   }
-  throw new Error('An asset or folder with that name already exists');
+  throw new ReferencedError('assets.error.nameTaken');
 }

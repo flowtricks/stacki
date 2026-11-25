@@ -7,8 +7,10 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { repoPath } = require('../../helpers/sources.js');
 
-const settle = (milliseconds = 0) =>
-  new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+let runFrame;
+const frame = () => runFrame();
 
 (async () => {
   const esbuild = require('esbuild');
@@ -29,6 +31,24 @@ const settle = (milliseconds = 0) =>
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  // Frames the test runs by hand: a timer-driven frame could land inside an act and make
+  // "nothing has run yet" depend on machine load.
+  const pendingFrames = new Map();
+  let frameIdNext = 1;
+  dom.window.requestAnimationFrame = (callback) => {
+    const id = frameIdNext;
+    frameIdNext += 1;
+    pendingFrames.set(id, callback);
+    return id;
+  };
+  dom.window.cancelAnimationFrame = (id) => {
+    pendingFrames.delete(id);
+  };
+  runFrame = () => {
+    const callbacks = [...pendingFrames.values()];
+    pendingFrames.clear();
+    callbacks.forEach((callback) => callback(0));
+  };
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;
@@ -67,9 +87,7 @@ const settle = (milliseconds = 0) =>
     document.querySelector('.u-select-button').click();
     await settle();
   });
-  const relative = [...document.querySelectorAll('.u-select-option')].find((option) =>
-    option.textContent.includes('Relative'),
-  );
+  const relative = [...document.querySelectorAll('.u-select-option')].find((option) => option.textContent.includes('Relative'));
   const list = document.querySelector('.u-select-list');
   assert.ok(relative, 'the option to preview is rendered');
   assert.ok(list, 'the open menu is rendered');
@@ -82,6 +100,11 @@ const settle = (milliseconds = 0) =>
       }),
     );
     await settle();
+  });
+  // The preview goes out on the next animation frame (see instantFeedback.test.js).
+  assert.deepEqual(previews, []);
+  await act(async () => {
+    await frame();
   });
   assert.deepEqual(previews, ['relative']);
 
@@ -105,6 +128,9 @@ const settle = (milliseconds = 0) =>
       }),
     );
     await settle();
+  });
+  await act(async () => {
+    await frame();
   });
   assert.deepEqual(previews, ['relative', undefined, 'relative']);
 

@@ -3,18 +3,14 @@
 
 import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
-import { MAIN_LIMITS } from './variableWorkspace';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { assert } from '../../shared/core/assert';
-import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
-import {
-  labelForRule,
-  commonStem,
-  namesOf,
-  groupRules,
-  findFamilies,
-  prefixSections,
-} from './cssVarGroups';
-import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
+import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
+import { toPosix, stylesheetsSliced, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
+import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
+import { shortLabel } from '../../shared/properties/variableGroups';
+import { resolveValue, colorOf, isUncomputableColor, kindOf, type ValueLookup } from './cssVarValues';
+import { astroSourcesSliced, isAstroFile, readAstroVariables, relativeTo, type VariableScope } from './cssVarRegions';
 
 export interface Column {
   readonly id: string;
@@ -47,6 +43,8 @@ export interface Block {
   readonly title: string | undefined;
   readonly titleStart?: number;
   readonly titleEnd?: number;
+  /** The heading comment in full, when it says more than the title. */
+  readonly description?: string;
   readonly rows: Row[];
   readonly columns?: Column[];
 }
@@ -56,6 +54,8 @@ export interface Group {
   readonly label: string;
   readonly columns: Column[];
   readonly blocks: Block[];
+  /** Who a `<style>` block's variables reach; absent for a stylesheet's, which are project CSS. */
+  readonly scope?: VariableScope;
 }
 
 export interface FileModel {
@@ -63,6 +63,8 @@ export interface FileModel {
   readonly name: string;
   readonly groups: Group[];
   readonly error?: string;
+  /** The reference the panel translates `error` from; absent for text received from elsewhere. */
+  readonly errorRef?: MessageRef | undefined;
   readonly count?: number;
   declarations?: Rule[];
 }
@@ -101,21 +103,14 @@ export function buildGroup(members: readonly Rule[], file: string): Group {
   if (!rule) {
     return { kind: 'single', label: '', columns, blocks: [] };
   }
-  const blocks = commentSections(rule).flatMap((section) =>
-    sectionBlocks(section, rule, byName[0], file),
-  );
+  const blocks = commentSections(rule).flatMap((section) => sectionBlocks(section, rule, byName[0], file));
   return { kind: 'single', label: labelForRule(rule), columns, blocks };
 }
 
 // Several rules declaring the same names: the columns are the modes, so the names are the rows.
 // Sub-sections come from shared prefixes.
-export function modesGroup(
-  columns: Column[],
-  byName: readonly Map<string, TaggedVar>[],
-  file: string,
-): Group {
-  const cellsFor = (name: string): (Cell | undefined)[] =>
-    byName.map((map, index) => cellFor(map, name, file, columns[index]?.id ?? ''));
+export function modesGroup(columns: Column[], byName: readonly Map<string, TaggedVar>[], file: string): Group {
+  const cellsFor = (name: string): (Cell | undefined)[] => byName.map((map, index) => cellFor(map, name, file, columns[index]?.id ?? ''));
   const names: string[] = [];
   for (const map of byName) {
     for (const name of map.keys()) {
@@ -158,6 +153,7 @@ export interface CommentSection {
   title: string | undefined;
   titleStart?: number;
   titleEnd?: number;
+  description?: string;
   names: string[];
 }
 
@@ -177,6 +173,7 @@ export function commentSections(rule: Rule): CommentSection[] {
         title: entry.text,
         titleStart: entry.textStart,
         titleEnd: entry.textEnd,
+        ...(entry.description === undefined ? {} : { description: entry.description }),
         names: [],
       };
       continue;
@@ -190,12 +187,7 @@ export function commentSections(rule: Rule): CommentSection[] {
 }
 
 // One heading's blocks: a matrix per family its names form, then a list of whatever is left.
-export function sectionBlocks(
-  section: CommentSection,
-  rule: Rule,
-  map: Map<string, TaggedVar> | undefined,
-  file: string,
-): Block[] {
+export function sectionBlocks(section: CommentSection, rule: Rule, map: Map<string, TaggedVar> | undefined, file: string): Block[] {
   const blocks: Block[] = [];
   const { families, used } = findFamilies(section.names);
   const claimed = new Set<string>();
@@ -232,9 +224,8 @@ export function sectionBlocks(
       rows: rows.filter((row) => row.cells.some(Boolean)),
       // The inner sections of a one-rule file carry their comment's span so
       // the heading can be renamed in place; a comment-less section has none.
-      ...(section.titleStart !== undefined
-        ? { titleStart: section.titleStart, titleEnd: section.titleEnd }
-        : {}),
+      ...(section.titleStart !== undefined ? { titleStart: section.titleStart, titleEnd: section.titleEnd } : {}),
+      ...descriptionOf(section),
     });
   }
   const leftovers = section.names.filter((name) => !claimed.has(name) && !used.has(name));
@@ -248,17 +239,18 @@ export function sectionBlocks(
         cells: [cellFor(map, name, file, '0')],
       })),
       ...(families.length ? {} : { titleStart: section.titleStart, titleEnd: section.titleEnd }),
+      ...(families.length ? {} : descriptionOf(section)),
     });
   }
   return blocks;
 }
 
-export function cellFor(
-  map: Map<string, TaggedVar> | undefined,
-  name: string,
-  file: string,
-  column: string,
-): Cell | undefined {
+// A heading's description as a field to spread in, or nothing when it has none.
+function descriptionOf(section: CommentSection): { readonly description?: string } {
+  return section.description === undefined ? {} : { description: section.description };
+}
+
+export function cellFor(map: Map<string, TaggedVar> | undefined, name: string, file: string, column: string): Cell | undefined {
   const entry = map?.get(name);
   if (!entry) {
     return undefined;
@@ -286,10 +278,7 @@ export interface DescribedCell extends Cell {
 
 // A cell's value said three ways: what the file holds, what it comes out as,
 // and what colour to draw beside it (if any).
-export function describeCell(
-  cell: Cell | undefined,
-  map: Map<string, string>,
-): DescribedCell | undefined {
+export function describeCell(cell: Cell | undefined, map: ValueLookup): DescribedCell | undefined {
   if (!cell) {
     return undefined;
   }
@@ -311,27 +300,27 @@ export function describeCell(
   };
 }
 
-export const shortLabel = (name: string, prefix?: string): string => {
-  const body = name.replace(/^--/, '');
-  return prefix && body.startsWith(`${prefix}-`) ? body.slice(prefix.length + 1) : body;
-};
+// Shared with the variable picker, so both name a variable the same way under its group.
+export { shortLabel };
 
 /**
- * Every stylesheet in the project that declares custom properties, as groups of
- * tables. Files with none are left out — a variables panel is a place to find
- * variables, not a file browser.
+ * Every stylesheet and Astro `<style>` block in the project that declares custom
+ * properties, as groups of tables. Files with none are left out — a variables
+ * panel is a place to find variables, not a file browser. Stylesheets come first:
+ * where a name is declared in both, the stylesheet is the project-wide answer.
  */
-export function readVariables(projectPath: string): {
+export interface VariablesModel {
   files: FileModel[];
   values: Record<string, string>;
-} {
+}
+
+export function* variablesSliced(projectPath: string): SlicedWork<VariablesModel> {
   const files: FileModel[] = [];
-  for (const abs of findStylesheets(projectPath)) {
+  for (const abs of yield* stylesheetsSliced(projectPath)) {
+    // One stylesheet is one unit: a project with thousands of them is a longer run, never a refusal.
+    yield;
     let text: string;
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.cssVariableFileBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;
@@ -341,12 +330,8 @@ export function readVariables(projectPath: string): {
     try {
       rules = readDeclarations(text);
     } catch (error: unknown) {
-      files.push({
-        rel,
-        name: path.basename(abs),
-        error: `Could not parse — ${error instanceof Error ? error.message : String(error)}`,
-        groups: [],
-      });
+      const parseFailure = described('variables.error.parse', { detail: error instanceof Error ? error.message : String(error) });
+      files.push({ rel, name: path.basename(abs), error: parseFailure.message, errorRef: parseFailure.messageRef, groups: [] });
       continue;
     }
     if (!rules.length) {
@@ -361,6 +346,7 @@ export function readVariables(projectPath: string): {
       count: rules.reduce((sum, rule) => sum + namesOf(rule).length, 0),
     });
   }
+  files.push(...(yield* readAstroFiles(projectPath)));
   // Values reference each other across files as freely as within one, so the
   // map every value is resolved against is the project's, not the file's.
   const map = new Map<string, string>();
@@ -368,21 +354,146 @@ export function readVariables(projectPath: string): {
     for (const rule of file.declarations || []) {
       for (const entry of rule.entries) {
         if (entry.kind === 'var') {
-          map.set(entry.name, entry.value);
+          // A `<style>` block's value holds where the block is rendered, so it
+          // answers only for a name no stylesheet declares.
+          if (!isAstroFile(file.rel) || !map.has(entry.name)) {
+            map.set(entry.name, entry.value);
+          }
         }
       }
     }
   }
   const values = Object.fromEntries(map);
+  const scopes = variableScopes(files);
   for (const file of files) {
     delete file.declarations;
     for (const group of file.groups) {
       for (const block of group.blocks) {
         for (const row of block.rows) {
-          row.cells = row.cells.map((cell) => describeCell(cell, map));
+          row.cells = row.cells.map((cell) => describeCell(cell, cell === undefined ? map : scopes.mapFor(cell)));
+        }
+      }
+    }
+    yield;
+  }
+  return { files, values };
+}
+
+export function readVariables(projectPath: string): VariablesModel {
+  return runSync(variablesSliced(projectPath));
+}
+
+export function readVariablesSliced(projectPath: string): Promise<VariablesModel> {
+  return runSliced(variablesSliced(projectPath));
+}
+
+// One model per Astro file whose `<style>` blocks declare custom properties. Its
+// offsets are the file's, so a cell is written back exactly as a stylesheet's is.
+function* readAstroFiles(projectPath: string): SlicedWork<FileModel[]> {
+  const files: FileModel[] = [];
+  for (const abs of yield* astroSourcesSliced(projectPath)) {
+    yield;
+    let text: string;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    const rel = relativeTo(projectPath, abs);
+    // Two pages are often both `index.astro`; the folder tells them apart.
+    const name = rel.replace(/^src\//, '');
+    const read = readAstroVariables(rel, text);
+    if (read.kind === 'error') {
+      // A reference from the reader already names the whole sentence; one without it is wrapped as the English always was.
+      const parseFailure = described('variables.error.parse', { detail: read.message });
+      files.push({ rel, name, error: parseFailure.message, errorRef: read.messageRef ?? parseFailure.messageRef, groups: [] });
+    } else if (read.kind === 'rules') {
+      const rules = read.sections.flatMap((section) => section.rules);
+      assert(rules.length > 0, 'readAstroFiles: a read with sections holds rules');
+      const groups = read.sections.flatMap((section) => groupRules(section.rules).map((members) => ({ ...buildGroup(members, rel), scope: section.scope })));
+      files.push({ rel, name, groups, declarations: rules, count: rules.reduce((sum, rule) => sum + namesOf(rule).length, 0) });
+    }
+  }
+  return files;
+}
+
+// The map a cell resolves against: the base values, overlaid with what the
+// cell's own rule (its selector, under its at-rules) declares. One flat map let
+// the last theme in the project answer for every column, so a light row's
+// `var(--surface)` was drawn in the dark theme's colour (issue #69). The base is
+// what rules outside any at-rule declare first; a theme overrides it after.
+//
+// A `<style>` block is its own scope, overlaid with the rest of its file: a page's
+// `:root` must not answer for a stylesheet's `:root`, nor for another page's.
+// Stylesheets are read first, so they are the base wherever a name is in both.
+function variableScopes(files: readonly FileModel[]) {
+  const base = new Map<string, string>();
+  const fallback = new Map<string, string>();
+  const scopes = new Map<string, Map<string, string>>();
+  const scopeOfEntry = new Map<string, string>();
+  const fileBases = new Map<string, Map<string, string>>();
+  for (const file of files) {
+    const astro = isAstroFile(file.rel);
+    const fileBase = new Map<string, string>();
+    if (astro) {
+      fileBases.set(file.rel, fileBase);
+    }
+    for (const rule of file.declarations || []) {
+      const scope = `${astro ? file.rel : ''}\n${rule.context.join('\n')}\n${rule.selector}`;
+      const declared = scopes.get(scope) ?? new Map<string, string>();
+      scopes.set(scope, declared);
+      for (const entry of rule.entries) {
+        if (entry.kind !== 'var') {
+          continue;
+        }
+        declared.set(entry.name, entry.value);
+        scopeOfEntry.set(`${file.rel}:${entry.valueStart}`, scope);
+        if (!fallback.has(entry.name)) {
+          fallback.set(entry.name, entry.value);
+        }
+        if (rule.context.length === 0) {
+          if (!base.has(entry.name)) {
+            base.set(entry.name, entry.value);
+          }
+          if (!fileBase.has(entry.name)) {
+            fileBase.set(entry.name, entry.value);
+          }
         }
       }
     }
   }
-  return { files, values };
+  assert(base.size <= fallback.size, 'Base values are a subset of every declared name');
+  // A cell's map is its scope's declarations over the file's base, the project's base and then any declaration. It is read
+  // through layers rather than copied: a copy per scope is the whole project's names once per scope, which for a stylesheet
+  // of tens of thousands of rules (each its own scope) is quadratic memory.
+  const layered = new Map<string, ValueLookup>();
+  const mapFor = (cell: Cell): ValueLookup => {
+    const scope = scopeOfEntry.get(`${cell.file}:${cell.valueStart}`);
+    assert(scope !== undefined, 'Every described cell was read from a rule');
+    const known = layered.get(scope);
+    if (known !== undefined) {
+      return known;
+    }
+    const layers: readonly ValueLookup[] = [
+      scopes.get(scope) ?? new Map<string, string>(),
+      fileBases.get(cell.file) ?? new Map<string, string>(),
+      base,
+      fallback,
+    ];
+    const lookup: ValueLookup = {
+      get(name: string): string | undefined {
+        for (const layer of layers) {
+          const found = layer.get(name);
+          if (found !== undefined) {
+            return found;
+          }
+        }
+        return undefined;
+      },
+    };
+    assert(lookup.get(cell.name) !== undefined, 'A cell resolves in a scope that declares it');
+    layered.set(scope, lookup);
+    return lookup;
+  };
+  return { mapFor };
 }

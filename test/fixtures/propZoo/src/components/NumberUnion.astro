@@ -1,0 +1,10 @@
+---
+interface Props {
+  cols?: 1 | 2 | 3 | 4;
+  gap?: 0 | 0.5 | 1 | 2;
+}
+const { cols = 3, gap = 1 } = Astro.props;
+---
+<div class="number-union" style={`display:grid;grid-template-columns:repeat(${cols},1fr);gap:${gap}rem`}>
+  {Array.from({ length: cols }, (_, index) => <span>Col {index + 1}</span>)}
+</div>

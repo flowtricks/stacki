@@ -1,0 +1,10 @@
+---
+interface Props {
+  title?: string;
+}
+const { title = 'Card' } = Astro.props;
+---
+<div class="slots-default">
+  <h4>{title}</h4>
+  <slot>Fallback body when nothing is passed.</slot>
+</div>

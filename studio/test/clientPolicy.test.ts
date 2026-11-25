@@ -5,13 +5,8 @@ import * as Y from 'yjs';
 import { assertClientAction, assertClientSourceChange } from '../src/features/roles/clientPolicy';
 import { setEditorRole } from '../src/features/roles/roleStore';
 import { EditorHistory } from '../src/features/collaboration/editorHistory';
-import {
-  applyEdits,
-  flatten,
-  nodesOf,
-  structuralEdits,
-  type TreeAction,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, flatten, nodesOf, type TreeAction } from '../src/features/source/source';
 
 const source = await readFile(new URL('./fixtures/homepage.astro', import.meta.url), 'utf8');
 const heading = flatten(nodesOf(source)).find((node) => node.name === 'Heading');
@@ -68,13 +63,11 @@ test('Client direct edits cannot remove/replace the layout or alter outer markup
   ]) {
     assert.throws(() => assertClientSourceChange(page, source, next));
   }
-  assert.throws(() =>
-    assertClientSourceChange(page, withScript, withScript.replace('kept', 'changed')),
-  );
+  assert.throws(() => assertClientSourceChange(page, withScript, withScript.replace('kept', 'changed')));
   assert.throws(() => assertClientSourceChange('src/components/Test.astro', source, source));
   assertClientSourceChange('src/content/posts/example.md', 'Old', 'New');
 });
-test('Client undo cannot cross back into Designer history or coalesce across roles', async () => {
+test('Client undo cannot cross back into Admin history or coalesce across roles ("designer" still means admin)', async () => {
   const doc = new Y.Doc();
   const undo = new Y.UndoManager(doc.getText('source'));
   const history = new EditorHistory(undo);
@@ -85,7 +78,7 @@ test('Client undo cannot cross back into Designer history or coalesce across rol
     setEditorRole('client');
     history.record({ undo: () => applied.push('client'), redo: () => {}, coalesceKey: 'text' });
     await history.step('undo');
-    await assert.rejects(history.step('undo'), /Switch to Designer/);
+    await assert.rejects(history.step('undo'), /Switch to Admin/);
     assert.deepEqual(applied, ['client']);
     setEditorRole('designer');
     await history.step('undo');

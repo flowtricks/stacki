@@ -7,6 +7,20 @@ export type SelectOption<T extends string> = {
   value: T;
   /** Plain-text label — also used for type-ahead matching. */
   label: string;
+  /** A smaller, muted first line above the label, in the list and the closed
+   *  trigger alike (e.g. the selector a nested query is written inside). Absent
+   *  means the option is one line. Not used for type-ahead: the label names it. */
+  overline?: string;
+  /** Items for a smaller, muted last line under the label, comma separated (e.g.
+   *  the selectors written inside a query). As many whole items as fit the row
+   *  show, then an ellipsis; the row's title holds them all. List rows only: the
+   *  closed trigger keeps its height. Not used for type-ahead. */
+  subline?: readonly string[];
+  /** A small chip at the start of the first line saying where the option comes
+   *  from (the stylesheet a query is written in). It takes the first line when
+   *  there is no overline. In the closed trigger it shows only beside an
+   *  overline, so a one-line trigger never grows a second line for it. */
+  tag?: SelectTag;
   /** Optional leading icon (e.g. a preset glyph). */
   icon?: ReactNode;
   /** Show a trailing status dot (white on the selected row, accent otherwise). */
@@ -14,8 +28,28 @@ export type SelectOption<T extends string> = {
   /** Render as a non-selectable group subheader — skipped by keyboard nav,
    *  type-ahead, and selection. Its `value` just needs to be unique. */
   heading?: boolean;
+  /** Whether the row is drawn checked, when that is not "its value is the control's value" (a row that toggles a setting, like Follow canvas size). */
+  checked?: boolean;
   /** Indent the option to show it nests under the preceding heading. */
   indent?: boolean;
+  /** Muted text after the label in a list row (a breakpoint's condition beside its name). */
+  detail?: string;
+  /** The row's tooltip: the whole, raw text of what the row stands for. */
+  title?: string;
+  /** In the closed trigger, text before the label (the selector a query is nested in), cut with an ellipsis
+   *  when the trigger is narrow while the label itself stays whole. */
+  triggerPrefix?: string;
+  /** A row that is a switch: the switch ends it instead of a check, and choosing it does not close the list. */
+  switch?: boolean;
+  /** Pinned to the top of the open list, apart from the rows below it (a setting that applies to them all). */
+  header?: boolean;
+  /** Pinned to the bottom of the open list, apart from the options above it (an
+   *  "Add …" row): it stays in view while the list scrolls. */
+  footer?: boolean;
+  /** The closed trigger's overline and chip when this option is selected, for an option
+   *  whose list row leaves them to its group's heading. Fall back to `overline`/`tag`. */
+  triggerOverline?: string;
+  triggerTag?: SelectTag;
   /** Text for the closed trigger when this option is selected — use when the
    *  list label is context-scoped (e.g. "Embed #1" under a group) but the trigger
    *  needs the full name ("Global Styles #1"). Falls back to `label`. */
@@ -23,6 +57,8 @@ export type SelectOption<T extends string> = {
   /** Icon for the closed trigger when this option is selected. Falls back to
    *  `icon` — use when the trigger icon differs from the list-row icon. */
   triggerIcon?: ReactNode;
+  /** A small mark after the closed trigger's label when this option is selected (a pin: the choice is held, not followed). */
+  triggerMark?: ReactNode;
   /** Opaque tone token exposed on the trigger as `data-tone` when this option is
    *  selected, so the consumer can color the trigger per option (via its CSS). */
   tone?: string;
@@ -31,6 +67,10 @@ export type SelectOption<T extends string> = {
    *  rather than picking it. Shown on the hovered/active row only. */
   action?: { icon: ReactNode; label: string; onSelect: () => void };
 };
+
+/** An option's source chip: its name, an icon, and a tone token the consumer's
+ *  CSS colours it by (`data-tone`). */
+export type SelectTag = { readonly label: string; readonly icon?: ReactNode; readonly tone?: string };
 
 export type Props<T extends string> = {
   value: T;

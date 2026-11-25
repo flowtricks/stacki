@@ -1,131 +1,108 @@
-// The element icons the navigator and palette draw beside a tag, filled on a
-// 16px grid, and the table from tag name to icon (Icons.tsx).
+// Element icons shared by the Navigator, canvas labels and insert palette.
+import { centralIcon, centralIconSize } from './central/CentralIcon';
+import {
+  bulletList as centralBulletList,
+  code as centralCode,
+  headingOne as centralH1,
+  headingTwo as centralH2,
+  headingThree as centralH3,
+  home as centralHome,
+  homeRoundDoor as centralHomeRoundDoor,
+  image as centralImage,
+  input as centralInput,
+  info as centralInfo,
+  link as centralLink,
+  search as centralSearch,
+  select as centralSelect,
+  slot as centralSlot,
+  square as centralSquare,
+  video as centralVideo,
+  audio as centralAudio,
+  block as centralBlock,
+  bold as centralBold,
+  book as centralBook,
+  bookmark as centralBookmark,
+  chainLink as centralChainLink,
+  caption as centralCaption,
+  check as centralCheck,
+  chevronDown as centralChevronDown,
+  circle as centralCircle,
+  clock as centralClock,
+  collection as centralCollection,
+  cube as centralCube,
+  columns as centralColumns,
+  comment as centralComment,
+  divider as centralDivider,
+  document as centralDocument,
+  file as centralFile,
+  form as centralForm,
+  globe as centralGlobe,
+  heading as centralHeading,
+  highlight as centralHighlight,
+  indentRight as centralIndentRight,
+  italic as centralItalic,
+  keyboard as centralKeyboard,
+  layers as centralLayers,
+  layout as centralLayout,
+  linebreak as centralLinebreak,
+  listMenu as centralListMenu,
+  mapPin as centralMapPin,
+  number as centralNumber,
+  numberList as centralNumberList,
+  panelRight as centralPanelRight,
+  pieChartOne as centralPieChartOne,
+  pointerHand as centralPointerHand,
+  quote as centralQuote,
+  rewrite as centralRewrite,
+  sectionRows as centralSectionRows,
+  spinner as centralSpinner,
+  strike as centralStrike,
+  styles as centralStyles,
+  subscript as centralSubscript,
+  superscript as centralSuperscript,
+  terminal as centralTerminal,
+  text as centralText,
+  textBlock as centralTextBlock,
+  textSize as centralTextSize,
+  underline as centralUnderline,
+  variables as centralVariables,
+  vector as centralVector,
+} from './central/centralGeometry';
 
 import type { ReactElement } from 'react';
+import type { HTML_TAGS } from '../editor/elementSchemas';
 import { type IconProps, I } from './IconBase';
-import {
-  elementComponentIconPath1,
-  elementSlotIconPath1,
-  customElementIconPath1,
-  elementDivIconPath1,
-  elementImageIconPath1,
-  elementImageIconPath2,
-  elementSectionIconPath1,
-  elementListDefaultIconPath1,
-  elementListDefaultIconPath2,
-  elementListDefaultIconPath3,
-  elementListItemIconPath1,
-  elementListItemIconPath2,
-  elementListItemIconPath3,
-  elementLinkIconPath1,
-  elementHeading1IconPath1,
-  elementHeading2IconPath1,
-  elementHeading3IconPath1,
-  elementHeading4IconPath1,
-  elementHeading5IconPath1,
-  elementHeading6IconPath1,
-  elementParagraphIconPath1,
-  elementVideoIconPath1,
-  elementFormBlockIconPath1,
-  elementInputIconPath1,
-  elementSelectIconPath1,
-  elementSelectIconPath2,
-  elementButtonIconPath1,
-  homeIconPath1,
-} from './iconPaths';
+import { elementHeading4IconPath1, elementHeading5IconPath1, elementHeading6IconPath1 } from './iconPaths';
 
-export const ElementComponentIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementComponentIconPath1} />
-  </I>
-);
+// Astro components keep their cube so they stand apart from HTML elements.
+export const ElementComponentIcon = centralIcon(centralCube);
 
-export const ElementSlotIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementSlotIconPath1} />
-  </I>
-);
+export const ElementSlotIcon = centralIcon(centralSlot);
 
-// --- Webflow-style element icons (filled, 16px grid) -----------------------
+export const CustomElementIcon = centralIcon(centralCode);
 
-export const CustomElementIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M5.35353 11.3536L11.3535 5.35359L10.6464 4.64648L4.64642 10.6465L5.35353 11.3536Z" />
-    <path fillRule="evenodd" clipRule="evenodd" d={customElementIconPath1} />
-  </I>
-);
+export const ElementDivIcon = centralIcon(centralSquare);
 
-export const ElementDivIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementDivIconPath1} />
-  </I>
-);
+export const ElementImageIcon = centralIcon(centralImage);
 
-export const ElementImageIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={elementImageIconPath1} />
-    <path fillRule="evenodd" clipRule="evenodd" d={elementImageIconPath2} />
-  </I>
-);
+export const ElementSectionIcon = centralIcon(centralSectionRows);
 
-export const ElementSectionIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementSectionIconPath1} />
-  </I>
-);
+export const ElementListDefaultIcon = centralIcon(centralBulletList);
 
-export const ElementListDefaultIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={elementListDefaultIconPath1} />
-    <path d="M6 4H14V3H6V4Z" />
-    <path d="M6 8H14V7H6V8Z" />
-    <path d="M6 12H14V11H6V12Z" />
-    <path d={elementListDefaultIconPath2} />
-    <path d={elementListDefaultIconPath3} />
-  </I>
-);
+export const ElementListItemIcon = centralIcon(centralBulletList);
 
-export const ElementListItemIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <g opacity="0.4">
-      <path d={elementListItemIconPath1} />
-      <path d="M14 12H6V11H14V12Z" />
-    </g>
-    <path d={elementListItemIconPath2} />
-    <path d="M14 8H6V7H14V8Z" />
-    <g opacity="0.4">
-      <path d={elementListItemIconPath3} />
-      <path d="M14 4H6V3H14V4Z" />
-    </g>
-  </I>
-);
+export const ElementLinkIcon = centralIcon(centralLink);
 
-export const ElementLinkIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementLinkIconPath1} />
-  </I>
-);
+// A different chain from <a>'s link, so the head's <link> reads apart from anchors.
+const ElementStylesheetLinkIcon = centralIcon(centralChainLink);
+const InfoIcon = centralIcon(centralInfo);
+const SearchIcon = centralIcon(centralSearch);
 
-export const ElementHeading1Icon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M3 12V4H4V8H7V4H8V12H7V9H4V12H3Z" />
-    <path d={elementHeading1IconPath1} />
-  </I>
-);
+export const ElementHeading1Icon = centralIcon(centralH1);
 
-export const ElementHeading2Icon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M3 4V12H4V9H7V12H8V4H7V8H4V4H3Z" />
-    <path d={elementHeading2IconPath1} />
-  </I>
-);
+export const ElementHeading2Icon = centralIcon(centralH2);
 
-export const ElementHeading3Icon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M3 12V4H4V8H7V4H8V12H7V9H4V12H3Z" />
-    <path d={elementHeading3IconPath1} />
-  </I>
-);
+export const ElementHeading3Icon = centralIcon(centralH3);
 
 export const ElementHeading4Icon = (props: IconProps) => (
   <I {...props} filled>
@@ -148,80 +125,240 @@ export const ElementHeading6Icon = (props: IconProps) => (
   </I>
 );
 
-export const ElementParagraphIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementParagraphIconPath1} />
+export const ElementVideoIcon = centralIcon(centralVideo);
+
+export const ElementFormBlockIcon = centralIcon(centralForm);
+
+export const ElementInputIcon = centralIcon(centralInput);
+
+export const ElementSelectIcon = centralIcon(centralSelect);
+
+// The pointing hand says "press me"; the plain pill outline looked like a toggle or a generic shape.
+export const ElementButtonIcon = centralIcon(centralPointerHand);
+
+export const HomeIcon = centralIcon(centralHome);
+
+// Text with edit arrows: a textarea is a field people rewrite text in, apart from static text blocks.
+const RewriteIcon = centralIcon(centralRewrite);
+
+// A home with a round door: <nav> holds the site's way around.
+const NavIcon = centralIcon(centralHomeRoundDoor);
+
+const AsideIcon = centralIcon(centralPanelRight);
+const AudioIcon = centralIcon(centralAudio);
+const ArticleIcon = centralIcon(centralDocument);
+const BoldIcon = centralIcon(centralBold);
+const BookIcon = centralIcon(centralBook);
+const CaptionIcon = centralIcon(centralCaption);
+const CellIcon = centralIcon(centralSquare);
+const CheckIcon = centralIcon(centralCheck);
+const CircleIcon = centralIcon(centralCircle);
+const CodeDisabledIcon = centralIcon(centralBlock);
+const ColumnsIcon = centralIcon(centralColumns);
+const DataIcon = centralIcon(centralNumber);
+const DetailsIcon = centralIcon(centralChevronDown);
+const DialogIcon = centralIcon(centralComment);
+const DividerIcon = centralIcon(centralDivider);
+const FileIcon = centralIcon(centralFile);
+const FooterIcon = (props: IconProps) => (
+  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.9}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.2" />
+    <path d="M2.5 10.5h11" />
   </I>
 );
-
-export const ElementVideoIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementVideoIconPath1} />
+const GlobeIcon = centralIcon(centralGlobe);
+const HeaderIcon = (props: IconProps) => (
+  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.9}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.2" />
+    <path d="M2.5 5.5h11" />
   </I>
 );
+const HeadingGroupIcon = centralIcon(centralHeading);
+const HighlightIcon = centralIcon(centralHighlight);
+const ItalicIcon = centralIcon(centralItalic);
+const KeyboardIcon = centralIcon(centralKeyboard);
+const LabelIcon = centralIcon(centralBookmark);
+const LayersIcon = centralIcon(centralLayers);
+const LineBreakIcon = centralIcon(centralLinebreak);
+const LocationIcon = centralIcon(centralMapPin);
+const MenuIcon = centralIcon(centralListMenu);
+// A filled share of a circle: a meter shows where a value sits in its range. Not the gauge, which is the Audits
+// panel's icon in the rail, so the tile does not read as that panel.
+const MeterIcon = centralIcon(centralPieChartOne);
+const NumberedListIcon = centralIcon(centralNumberList);
+const OutputIcon = centralIcon(centralTerminal);
+const PictureIcon = centralIcon(centralLayers);
+// The loader: a progress bar tells how far a task has run.
+const ProgressIcon = centralIcon(centralSpinner);
+const QuoteIcon = centralIcon(centralQuote);
+const RowIcon = centralIcon(centralSectionRows);
+const StrikeIcon = centralIcon(centralStrike);
+const StyleIcon = centralIcon(centralStyles);
+const SubscriptIcon = centralIcon(centralSubscript);
+const SuperscriptIcon = centralIcon(centralSuperscript);
+const TableIcon = centralIcon(centralCollection);
+const TemplateIcon = centralIcon(centralSlot);
+const TerminalIcon = centralIcon(centralTerminal);
+const TextBlockIcon = centralIcon(centralTextBlock);
+const TextDirectionIcon = centralIcon(centralIndentRight);
+const TextIcon = centralIcon(centralText);
+const TextSizeIcon = centralIcon(centralTextSize);
+const TimeIcon = centralIcon(centralClock);
+const UnderlineIcon = centralIcon(centralUnderline);
+const VariableIcon = centralIcon(centralVariables);
+const VectorIcon = centralIcon(centralVector);
+const WindowIcon = centralIcon(centralLayout);
 
-export const ElementFormBlockIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M14 5H2V4H14V5Z" />
-    <path d="M14 8H2V7H14V8Z" />
-    <path d={elementFormBlockIconPath1} />
-  </I>
-);
+type ElementIcon = (props: IconProps) => ReactElement;
 
-export const ElementInputIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={elementInputIconPath1} />
-    <path opacity="0.6" fillRule="evenodd" clipRule="evenodd" d="M4 11V5H5V11H4Z" />
-  </I>
-);
-
-export const ElementSelectIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={elementSelectIconPath1} />
-    <path fillRule="evenodd" clipRule="evenodd" d={elementSelectIconPath2} />
-  </I>
-);
-
-export const ElementButtonIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={elementButtonIconPath1} />
-  </I>
-);
-
-// Tag-specific element icons; anything without a dedicated icon gets the
-// generic custom-element box.
-export const HomeIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={homeIconPath1} />
-  </I>
-);
-
-export const TAG_ICONS: Readonly<Record<string, (props: IconProps) => ReactElement>> = {
-  div: ElementDivIcon,
-  nav: HomeIcon,
-  img: ElementImageIcon,
-  section: ElementSectionIcon,
-  ul: ElementListDefaultIcon,
-  ol: ElementListDefaultIcon,
-  li: ElementListItemIcon,
+// Each insertable tag has an icon, including when new tags are added to the palette.
+const HTML_ICONS = {
   a: ElementLinkIcon,
+  abbr: TextIcon,
+  address: LocationIcon,
+  article: ArticleIcon,
+  aside: AsideIcon,
+  audio: AudioIcon,
+  b: BoldIcon,
+  bdi: TextIcon,
+  bdo: TextDirectionIcon,
+  blockquote: QuoteIcon,
+  br: LineBreakIcon,
+  button: ElementButtonIcon,
+  canvas: VectorIcon,
+  caption: CaptionIcon,
+  cite: QuoteIcon,
+  code: CustomElementIcon,
+  col: ColumnsIcon,
+  colgroup: ColumnsIcon,
+  data: DataIcon,
+  datalist: ElementListDefaultIcon,
+  dd: TextBlockIcon,
+  del: StrikeIcon,
+  details: DetailsIcon,
+  dfn: BookIcon,
+  dialog: DialogIcon,
+  div: ElementDivIcon,
+  dl: ElementListDefaultIcon,
+  dt: TextIcon,
+  em: ItalicIcon,
+  embed: WindowIcon,
+  fieldset: ElementFormBlockIcon,
+  figcaption: CaptionIcon,
+  figure: ElementImageIcon,
+  footer: FooterIcon,
+  form: ElementFormBlockIcon,
   h1: ElementHeading1Icon,
   h2: ElementHeading2Icon,
   h3: ElementHeading3Icon,
   h4: ElementHeading4Icon,
   h5: ElementHeading5Icon,
   h6: ElementHeading6Icon,
-  p: ElementParagraphIcon,
-  video: ElementVideoIcon,
-  form: ElementFormBlockIcon,
+  header: HeaderIcon,
+  hgroup: HeadingGroupIcon,
+  hr: DividerIcon,
+  i: ItalicIcon,
+  iframe: WindowIcon,
+  img: ElementImageIcon,
   input: ElementInputIcon,
-  textarea: ElementInputIcon,
+  ins: UnderlineIcon,
+  kbd: KeyboardIcon,
+  label: LabelIcon,
+  legend: LabelIcon,
+  li: ElementListItemIcon,
+  main: WindowIcon,
+  mark: HighlightIcon,
+  menu: MenuIcon,
+  meter: MeterIcon,
+  nav: NavIcon,
+  noscript: CodeDisabledIcon,
+  object: WindowIcon,
+  ol: NumberedListIcon,
+  optgroup: ElementListDefaultIcon,
+  option: CheckIcon,
+  output: OutputIcon,
+  p: TextIcon,
+  picture: PictureIcon,
+  pre: TextBlockIcon,
+  progress: ProgressIcon,
+  q: QuoteIcon,
+  ruby: TextSizeIcon,
+  s: StrikeIcon,
+  samp: TerminalIcon,
+  section: ElementSectionIcon,
   select: ElementSelectIcon,
-  button: ElementButtonIcon,
+  small: TextSizeIcon,
+  source: FileIcon,
+  span: TextIcon,
+  strong: BoldIcon,
+  sub: SubscriptIcon,
+  summary: DetailsIcon,
+  sup: SuperscriptIcon,
+  table: TableIcon,
+  tbody: TableIcon,
+  td: CellIcon,
+  template: TemplateIcon,
+  textarea: RewriteIcon,
+  tfoot: FooterIcon,
+  th: BoldIcon,
+  thead: HeaderIcon,
+  time: TimeIcon,
+  tr: RowIcon,
+  track: CaptionIcon,
+  u: UnderlineIcon,
+  ul: ElementListDefaultIcon,
+  var: VariableIcon,
+  video: ElementVideoIcon,
+  wbr: LineBreakIcon,
+  area: CellIcon,
+  base: ElementLinkIcon,
+  body: WindowIcon,
+  head: HeaderIcon,
+  html: GlobeIcon,
+  meta: InfoIcon,
+  script: CustomElementIcon,
+  style: StyleIcon,
+  title: TextIcon,
+  link: ElementStylesheetLinkIcon,
+  map: LocationIcon,
+  rp: TextSizeIcon,
+  rt: TextSizeIcon,
+  search: SearchIcon,
+} satisfies Readonly<Record<(typeof HTML_TAGS)[number], ElementIcon>>;
+
+// Existing pages also contain document-level and inline SVG elements.
+const EXTRA_ICONS = {
+  content: ArticleIcon,
+  fragment: CodeDisabledIcon,
+  circle: CircleIcon,
+  defs: TemplateIcon,
+  ellipse: CircleIcon,
+  g: LayersIcon,
+  line: DividerIcon,
+  math: DataIcon,
+  param: ElementInputIcon,
+  path: VectorIcon,
+  polygon: VectorIcon,
+  polyline: VectorIcon,
+  rect: ElementDivIcon,
   slot: ElementSlotIcon,
+  svg: VectorIcon,
+  symbol: TemplateIcon,
+  text: TextIcon,
+  tspan: TextIcon,
+  use: ElementLinkIcon,
 };
 
+const TAG_ICONS: ReadonlyMap<string, ElementIcon> = new Map([...Object.entries(HTML_ICONS), ...Object.entries(EXTRA_ICONS)]);
+const TAG_NAME_LENGTH_MAX = 32;
+
+/** Whether `tag` has an icon of its own rather than the generic custom-element one (the Add elements catalog's test asks). */
+export function hasElementIcon(tag: string): boolean {
+  return TAG_ICONS.has(tag.toLowerCase());
+}
+
 export function elementIcon(tag: unknown, size = 12, className?: string) {
-  const Icon = TAG_ICONS[String(tag).toLowerCase()] || CustomElementIcon;
+  const name = typeof tag === 'string' ? tag.slice(0, TAG_NAME_LENGTH_MAX + 1).toLowerCase() : '';
+  const Icon = TAG_ICONS.get(name) ?? CustomElementIcon;
   return <Icon size={size} className={className} />;
 }

@@ -187,11 +187,7 @@ export function nonBlankEnd(lines: readonly Line[], from: number): number {
 }
 
 // A new node's id and the range of lines `first` up to (not including) `next`.
-export function placed(
-  lines: readonly Line[],
-  first: number,
-  next: number,
-): { id: string; start: number; end: number } {
+export function placed(lines: readonly Line[], first: number, next: number): { id: string; start: number; end: number } {
   assert(first < next, 'A node covers at least one line');
   const start = lineAt(lines, first).start;
   return { id: PENDING_ID, start, end: lineEnd(lineAt(lines, next - 1)) };
@@ -258,8 +254,7 @@ export function relocate(roots: readonly MdNode[], at: (offset: number) => numbe
 }
 
 export function relocatedAttr(entry: AttrSpan, at: (offset: number) => number): AttrSpan {
-  const moved = (span: { readonly start: number; readonly end: number }) =>
-    toUtf16Span(at(span.start), at(span.end));
+  const moved = (span: { readonly start: number; readonly end: number }) => toUtf16Span(at(span.start), at(span.end));
   switch (entry.type) {
     case 'string':
     case 'expr':
@@ -284,11 +279,7 @@ export function relocatedAttr(entry: AttrSpan, at: (offset: number) => number): 
 // An attribute Markdown writes in its own syntax: `span` includes its
 // delimiters (the brackets around alt text, the quotes around a title), the
 // value span is the value alone.
-export function markdownAttr(
-  name: string,
-  span: readonly [number, number],
-  value: readonly [number, number],
-): AttrSpan {
+export function markdownAttr(name: string, span: readonly [number, number], value: readonly [number, number]): AttrSpan {
   return {
     type: 'markdown',
     name,

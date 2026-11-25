@@ -7,6 +7,7 @@
 // come from.
 
 import type { Root, Rule, Declaration as PostcssDeclaration } from 'postcss';
+import type { LayerPosition } from './cascadeLayers';
 
 /** A `<style>...</style>` region located inside an embed's code string. */
 export type StyleRegion = {
@@ -60,8 +61,13 @@ export type ParsedRule = {
   queryDisplay?: string;
   /** At-rule chain wrapping the rule, e.g. `['@media (max-width: 767px)']`. */
   atContext: string[];
+  /** The rule as its file writes it, for display, when anything encloses it:
+   *  `selectorText` is resolved for matching and never shown as the source. */
+  written?: { readonly parents: readonly string[]; readonly head: string };
   selectors: SelectorInfo[];
   declarations: ParsedDeclaration[];
+  /** The cascade layer the rule is written in, absent when it is unlayered (model/cascadeLayers.ts). */
+  layer?: LayerPosition;
 };
 
 export type ParsedDeclaration = {

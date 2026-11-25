@@ -1,5 +1,6 @@
 import { assert } from '../core/assert';
 import { list, text, record, boolean, pathText } from '../core/boundary';
+import { parseOptionalMessageRef } from '../core/i18n/messageReference';
 
 export function parseGitHubRepository(input: unknown): string {
   const value = text(input);
@@ -30,7 +31,10 @@ export function parseCloneResult(input: unknown) {
     return { canceled: true as const };
   }
   if (value['error'] !== undefined) {
-    return { canceled: false as const, error: text(value['error']) };
+    const errorRef = parseOptionalMessageRef(value['errorRef']);
+    return errorRef === undefined
+      ? { canceled: false as const, error: text(value['error']) }
+      : { canceled: false as const, error: text(value['error']), errorRef };
   }
   return { canceled: false as const, projectPath: pathText(value['projectPath']) };
 }

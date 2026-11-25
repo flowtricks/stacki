@@ -1,41 +1,8 @@
 import Popup from '../../ui/Popup';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import Dropdown from '../../ui/Dropdown';
-
-export function RenameInput({
-  initial,
-  onCommit,
-}: {
-  readonly initial: string;
-  readonly onCommit: (text: string) => void;
-}) {
-  const [text, setText] = useState(initial);
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
-  return (
-    <input
-      ref={inputRef}
-      className="rename-input"
-      value={text}
-      spellCheck={false}
-      onClick={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      onChange={(event) => setText(event.currentTarget.value)}
-      onBlur={() => onCommit(text)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          onCommit(text);
-        } else if (event.key === 'Escape') {
-          onCommit(initial);
-        }
-      }}
-    />
-  );
-}
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function NewPageModal({
   layouts,
@@ -46,6 +13,7 @@ export function NewPageModal({
   readonly onClose: () => void;
   readonly onCreate: (name: string, layout: string | undefined) => void;
 }) {
+  const translate = useTranslate();
   const [name, setName] = useState('');
   const [layout, setLayout] = useState(layouts.at(0)?.name ?? '');
   const submit = (): void => {
@@ -58,10 +26,10 @@ export function NewPageModal({
     <Popup className="modal" onClose={onClose} dismissible={true}>
       {({ close }) => (
         <>
-          <div className="modal-header">New Page</div>
+          <div className="modal-header">{translate('pages.new.title')}</div>
           <div className="modal-body">
             <div>
-              <label>Page name (e.g. &quot;about&quot; or &quot;blog/post-1&quot;)</label>
+              <label>{translate('pages.new.nameLabel')}</label>
               <input
                 autoFocus
                 value={name}
@@ -71,25 +39,22 @@ export function NewPageModal({
                     submit();
                   }
                 }}
-                placeholder="about"
+                placeholder={translate('pages.new.namePlaceholder')}
               />
             </div>
             <div>
-              <label>Layout</label>
+              <label>{translate('pages.layout')}</label>
               <Dropdown
                 value={layout}
-                options={[
-                  { value: '', label: '(no layout)', dim: true },
-                  ...layouts.map((item) => ({ value: item.name, label: item.name })),
-                ]}
+                options={[{ value: '', label: translate('pages.new.noLayout'), dim: true }, ...layouts.map((item) => ({ value: item.name, label: item.name }))]}
                 onChange={setLayout}
               />
             </div>
           </div>
           <div className="modal-footer">
-            <button onClick={close}>Cancel</button>
+            <button onClick={close}>{translate('ui.cancel')}</button>
             <button className="primary" disabled={!name.trim()} onClick={submit}>
-              Create Page
+              {translate('pages.new.create')}
             </button>
           </div>
         </>

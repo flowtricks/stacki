@@ -1,0 +1,55 @@
+/* The AI panel's agent choice (AgentChoices.tsx): a small dialog of one row per surface, and the chat's
+   notice line. Backgrounds, never borders, as everywhere in Stacki. */
+.ai-agent-choices {
+  width: min(420px, calc(100vw - 32px));
+}
+.ai-agent-choices-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.ai-agent-choices-body h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.ai-agent-choices-intro {
+  margin: 0;
+  color: var(--text-dim);
+}
+.ai-agent-choices-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-agent-choice {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 4px 10px;
+}
+.ai-agent-choice-label {
+  color: var(--text-dim);
+}
+.ai-agent-choice .ai-agent-choices-notice {
+  grid-column: 2;
+}
+.ai-agent-choices-notice {
+  margin: 0;
+  color: var(--text-faint);
+}
+.ai-agent-choices-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ai-agent-choice-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}

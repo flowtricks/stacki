@@ -1,0 +1,7 @@
+---
+interface Props {
+  names: Promise<string[]>;
+}
+const names = await Astro.props.names;
+---
+<ul class="promise-prop">{names.map((name) => <li>{name}</li>)}</ul>

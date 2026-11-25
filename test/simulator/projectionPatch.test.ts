@@ -9,32 +9,21 @@
 // refuses, the refusal must follow from the rule, so the fast path is not
 // silently narrower than claimed. (2) The negative space, pinned: each refused
 // byte in the new value and in the old one, a host under a condition or a
-// loop, a splice that is not a value, a file that does not parse, a value over
-// the attribute bound. (3) Seeded simulator runs, where the actor compares
+// loop, a splice that is not a value, a file that does not parse. The attribute
+// and UTF-16 bounds are the platform's string ceiling, so they are pinned and
+// long values and large pages are shown to patch. (3) Seeded simulator runs, where the actor compares
 // every patched candidate with its reparse (candidate.ts) and fails the run on
 // a difference; the test checks the reference compared something.
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { parsePage } from '#dist/electron/parse/astroParser.js';
 import { toFilePath } from '#dist/shared/core/brand.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import type { Splice } from '#dist/shared/engine/planner.js';
-import {
-  hostContext,
-  projectValueSplice,
-  valueBytesNeutral,
-} from '#dist/shared/engine/projectionPatch.js';
+import { hostContext, projectValueSplice, valueBytesNeutral } from '#dist/shared/engine/projectionPatch.js';
 import type { ProjectedNode, Projection } from '#dist/shared/page/sourceProjection.js';
-import {
-  decodeUtf8,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { encodeUtf8, toByteSpan, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import { patchCounts } from './candidate.ts';
 import { Prng } from './prng.ts';
 import { loadSimulationFixtures } from './fixtures.entry.ts';
@@ -93,11 +82,7 @@ function stringValues(projection: Projection): readonly ValueSite[] {
     return [];
   }
   return projection.nodes.flatMap((node) =>
-    node.attributes.flatMap((attribute) =>
-      attribute.type === 'string' && attribute.valueSpan !== undefined
-        ? [{ node, range: attribute.valueSpan }]
-        : [],
-    ),
+    node.attributes.flatMap((attribute) => (attribute.type === 'string' && attribute.valueSpan !== undefined ? [{ node, range: attribute.valueSpan }] : [])),
   );
 }
 
@@ -141,10 +126,7 @@ test('the patched projection is the reparsed one on every fixture value', () => 
       }
     }
   }
-  console.log(
-    `compared ${compared}; refused: host context ${refusedByHost}, ` +
-      `a value outside its context's bytes ${refusedByBytes}`,
-  );
+  console.log(`compared ${compared}; refused: host context ${refusedByHost}, ` + `a value outside its context's bytes ${refusedByBytes}`);
   assert.ok(compared > 500, `the sweep compared a real sample (${compared})`);
 });
 
@@ -182,10 +164,17 @@ test('a refused byte in the old value refuses the patch, whatever the new one is
   }
 });
 
-test('why `<` is refused: a value can change the parse, pinned', () => {
+test('tag-like values use a full reparse and remain ordinary attribute text', () => {
   const { projection, bytes, splice } = titleSplice(NESTED, '</div>');
   assert.equal(projectValueSplice(projection, bytes, splice), undefined);
-  assert.equal(projectBytes(PAGE, applySplices(bytes, [splice])).tag, 'parse-error');
+  const changed = projectBytes(PAGE, applySplices(bytes, [splice]));
+  assert.equal(changed.tag, 'valid');
+  assert.ok(changed.tag === 'valid');
+  assert.ok(projection.tag === 'valid');
+  assert.deepEqual(
+    changed.nodes.map((node) => node.kind),
+    projection.nodes.map((node) => node.kind),
+  );
 });
 
 const EXPRESSION_PAGES = [
@@ -253,39 +242,30 @@ test('a splice that is not a string value, or a file that does not parse, is ref
   assert.equal(projectValueSplice(invalid, broken, splice), undefined);
 });
 
-test('a value over the attribute bound is refused', () => {
-  const { projection, bytes, splice } = titleSplice(NESTED, 'w'.repeat(LIMITS.attrCharsMax + 1));
-  assert.equal(projectValueSplice(projection, bytes, splice), undefined);
+test('a long value patches: the attribute bound is the string ceiling', () => {
+  // A value past attrCharsMax cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const { projection, bytes, splice } = titleSplice(NESTED, 'w'.repeat(1024 * 1024));
+  const patched = projectValueSplice(projection, bytes, splice);
+  assert.notEqual(patched, undefined, 'A long value stays on the fast path');
+  assert.deepEqual(patched, projectBytes(PAGE, applySplices(bytes, [splice])));
 });
 
-// The parser bounds a page in UTF-16 units (ipcFieldCharsMax), and the patch
-// keeps that bound from the projection's own count, never by walking the file.
-// A page exactly at the bound: an edit that keeps the units patches and equals
-// the reparse; one that adds a unit is refused, and the parser refuses it too.
-test('the UTF-16 bound is kept from the projection count, on both sides of it', () => {
-  const head = '<div title="ab">\n';
-  const tail = '</div>\n';
-  // Paragraphs of 100 000 characters: a text node has its own bound.
+// The parser bounds a page in UTF-16 units (ipcFieldCharsMax), which is the
+// platform's string ceiling: a page past it cannot be built. A large page (a
+// few MB) patches whether an edit keeps, shrinks or grows its units, and every
+// patch equals the reparse.
+test('a large page patches on either side of its own length; the UTF-16 bound is the string ceiling', () => {
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
   const paragraph = `<p>${'x'.repeat(100_000 - 8)}</p>\n`;
-  const room = LIMITS.ipcFieldCharsMax - head.length - tail.length;
-  const last = room % paragraph.length;
-  assert.ok(last > 8, 'The remainder holds a paragraph of its own');
-  const filler = paragraph.repeat(Math.floor(room / paragraph.length));
-  const text = head + filler + `<p>${'x'.repeat(last - 8)}</p>\n` + tail;
-  assert.equal(text.length, LIMITS.ipcFieldCharsMax, 'The page sits exactly at the bound');
-  for (const value of ['cd', 'é']) {
+  const text = `<div title="ab">\n${paragraph.repeat(30)}</div>\n`;
+  for (const value of ['cd', 'é', 'abc', '']) {
     const { projection, bytes, splice } = titleSplice(text, value);
-    assert.equal(projection.tag, 'valid', 'A page at the bound parses');
+    assert.equal(projection.tag, 'valid', 'A large page parses');
     const patched = projectValueSplice(projection, bytes, splice);
-    assert.notEqual(patched, undefined, `${value} keeps the page inside the bound`);
+    assert.notEqual(patched, undefined, `${JSON.stringify(value)} patches a large page`);
     assert.deepEqual(patched, projectBytes(PAGE, applySplices(bytes, [splice])));
   }
-  const grown = titleSplice(text, 'abc');
-  assert.equal(projectValueSplice(grown.projection, grown.bytes, grown.splice), undefined);
-  const grownText = decodeUtf8(applySplices(grown.bytes, [grown.splice]));
-  assert.ok(grownText.ok, 'The grown page is UTF-8');
-  const reparsed = parsePage(grownText.value, { locs: true });
-  assert.equal(reparsed.editable, false, 'The parser refuses one unit past the bound too');
 });
 
 // Pages built to drive the JavaScript scanners into every mode around a value:
@@ -323,12 +303,7 @@ const AROUND: readonly (readonly [string, string])[] = [
   ['a // b\n', ''],
 ];
 const ORIGINALS = ['x', 'Old title', 'a-b_c', 'é', "it's", 'a/b', 'q?r', ''] as const;
-const ALPHABET = [
-  ...Array.from({ length: 0x7f - 0x20 }, (_, index) => String.fromCharCode(0x20 + index)),
-  'é',
-  '漢',
-  '😀',
-];
+const ALPHABET = [...Array.from({ length: 0x7f - 0x20 }, (_, index) => String.fromCharCode(0x20 + index)), 'é', '漢', '😀'];
 
 function propertyBody(prng: Prng, depth: number): string {
   const text = (): string => prng.pick(TEXTS);

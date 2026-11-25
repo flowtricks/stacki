@@ -25,7 +25,7 @@
 .info-label-tip {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  inset-inline-start: 0;
   z-index: 2;
   width: min(340px, calc(100vw - 100px));
   padding: 12px;

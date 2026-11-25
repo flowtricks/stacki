@@ -22,8 +22,7 @@ function align(left: readonly string[], right: readonly string[]): Map<number, n
   const cell = (i: number, j: number): number => table[i * (rightCount + 1) + j] ?? 0;
   for (let i = leftCount - 1; i >= 0; i--) {
     for (let j = rightCount - 1; j >= 0; j--) {
-      table[i * (rightCount + 1) + j] =
-        left[i] === right[j] ? cell(i + 1, j + 1) + 1 : Math.max(cell(i + 1, j), cell(i, j + 1));
+      table[i * (rightCount + 1) + j] = left[i] === right[j] ? cell(i + 1, j + 1) + 1 : Math.max(cell(i + 1, j), cell(i, j + 1));
     }
   }
   const map = new Map<number, number>();
@@ -126,19 +125,12 @@ function transplant(original: string, before: string, after: string): string {
     // Both sides of the region are mapped by construction (the loops above stop
     // at a mapped line or at an edge); the fallbacks are unreachable.
     const from = start === 0 ? 0 : (toOriginal.get(start - 1) ?? 0) + 1;
-    const to =
-      end === beforeLines.length
-        ? originalLines.length
-        : (toOriginal.get(end) ?? originalLines.length);
+    const to = end === beforeLines.length ? originalLines.length : (toOriginal.get(end) ?? originalLines.length);
     if (to < from) {
       return after;
     }
 
-    const lines = [
-      ...beforeLines.slice(start, hunk.start),
-      ...hunk.lines,
-      ...beforeLines.slice(hunk.end, end),
-    ];
+    const lines = [...beforeLines.slice(start, hunk.start), ...hunk.lines, ...beforeLines.slice(hunk.end, end)];
     out.splice(from, to - from, ...lines);
   }
   return out.join('\n');

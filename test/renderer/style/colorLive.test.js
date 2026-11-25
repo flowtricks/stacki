@@ -120,9 +120,7 @@ const START = 'rgb(1, 2, 3)';
   check('the colour field shows what the model resolved', field()?.value === START, field()?.value);
 
   // Open the picker on that field's swatch.
-  const swatch = [...document.querySelectorAll('.u-color-swatch')].find(
-    (button) => button.getAttribute('aria-label') === 'Background color',
-  );
+  const swatch = [...document.querySelectorAll('.u-color-swatch')].find((button) => button.getAttribute('aria-label') === 'Background color');
   check('the field has a swatch', swatch !== null);
   await act(async () => {
     swatch.click();
@@ -142,16 +140,8 @@ const START = 'rgb(1, 2, 3)';
 
   const afterDown = field()?.value;
   check('the field moves with the drag', afterDown !== START && !!afterDown, `${afterDown}`);
-  check(
-    'and shows the colour the drag emitted',
-    afterDown === live[live.length - 1]?.split('=')[1],
-    `${afterDown} vs ${live[live.length - 1]}`,
-  );
-  check(
-    'which went to the canvas, not the model',
-    live.length > 0 && committed.length === 0,
-    `${live.length} live / ${committed.length} committed`,
-  );
+  check('and shows the colour the drag emitted', afterDown === live[live.length - 1]?.split('=')[1], `${afterDown} vs ${live[live.length - 1]}`);
+  check('which went to the canvas, not the model', live.length > 0 && committed.length === 0, `${live.length} live / ${committed.length} committed`);
 
   // Further along the same drag.
   await act(async () => {
@@ -172,11 +162,7 @@ const START = 'rgb(1, 2, 3)';
     at('pointerup', 0.2, 0.6);
   });
   check('releasing commits to the model', committed.length === 1, committed.join(','));
-  check(
-    'and the field holds the colour that was picked',
-    field()?.value === committed[0].split('=')[1],
-    `${field()?.value} vs ${committed[0]}`,
-  );
+  check('and the field holds the colour that was picked', field()?.value === committed[0].split('=')[1], `${field()?.value} vs ${committed[0]}`);
 
   // The model answers with a colour of its own (an undo, another selector
   // winning, a rescan): that is more authoritative than what a drag emitted.
@@ -185,11 +171,7 @@ const START = 'rgb(1, 2, 3)';
     root.render(React.createElement(BackgroundSection, { ...props }));
   });
   await act(async () => {});
-  check(
-    'a value from the model wins over the last drag',
-    field()?.value === 'rgb(9, 9, 9)',
-    field()?.value,
-  );
+  check('a value from the model wins over the last drag', field()?.value === 'rgb(9, 9, 9)', field()?.value);
 
   // --- the swatch on its own ---------------------------------------------------
   // The rows above hand the swatch a value they track themselves. A row that
@@ -238,20 +220,12 @@ const START = 'rgb(1, 2, 3)';
       seen.some((entry) => entry.startsWith('live=')),
       seen.join(', '),
     );
-    check(
-      'and paints what it emitted, with the value it was given unchanged',
-      fill() !== before,
-      `${before} → ${fill()}`,
-    );
+    check('and paints what it emitted, with the value it was given unchanged', fill() !== before, `${before} → ${fill()}`);
     const last = seen
       .filter((entry) => entry.startsWith('live='))
       .pop()
       .split('=')[1];
-    check(
-      'the same colour, not an older one',
-      fill().replace(/\s/g, '').includes(last.replace(/\s/g, '')),
-      `${fill()} vs ${last}`,
-    );
+    check('the same colour, not an older one', fill().replace(/\s/g, '').includes(last.replace(/\s/g, '')), `${fill()} vs ${last}`);
     await act(async () => {
       drag('pointerup', 0.3, 0.7);
     });

@@ -2,9 +2,7 @@ import type { DropLocation } from '../../../vendor/stacki/src/features/structure
 import { flatten, type ParserNode } from '../source/source';
 
 export function dropTarget(nodes: readonly ParserNode[], location: DropLocation) {
-  const parent = location.parentId
-    ? flatten(nodes).find((node) => node.id === location.parentId)
-    : undefined;
+  const parent = location.parentId ? flatten(nodes).find((node) => node.id === location.parentId) : undefined;
   const siblings = parent ? (parent.children ?? []) : nodes;
   const next = siblings[location.index];
   if (next?.id) {

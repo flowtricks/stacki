@@ -1,10 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { WebSocket } from 'ws';
 
-export function reauthorizeConnection(
-  request: IncomingMessage,
-  audience: 'studio' | 'preview' = 'studio',
-) {
+export function reauthorizeConnection(request: IncomingMessage, audience: 'studio' | 'preview' = 'studio') {
   const backend = process.env['STUDIO_BACKEND_URL'];
   const token = process.env['STUDIO_CONTAINER_TOKEN'];
   const session = request.headers['x-studio-session'];

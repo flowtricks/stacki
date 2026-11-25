@@ -1,0 +1,13 @@
+---
+import type { Author, Tone, LinkItem } from '../types';
+interface Props {
+  author: Author;
+  tone?: Tone;
+  links?: LinkItem[];
+}
+const { author, tone = 'success', links = [] } = Astro.props;
+---
+<aside class={`imported-member tone-${tone}`}>
+  <span>{author.name}</span>
+  {links.map((link) => <a href={link.href}>{link.label}</a>)}
+</aside>

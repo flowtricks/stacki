@@ -15,9 +15,7 @@ export function useDefaultsKeyboard(
       if (event.defaultPrevented || event.isComposing) {
         return;
       }
-      if (
-        document.querySelector('[role="dialog"], dialog[open], [role="menu"], [role="listbox"]')
-      ) {
+      if (document.querySelector('[role="dialog"], dialog[open], [role="menu"], [role="listbox"]')) {
         return;
       }
       if (event.key === 'Escape') {
@@ -26,19 +24,14 @@ export function useDefaultsKeyboard(
         void canvas.run('done');
         return;
       }
-      if (
-        event.target instanceof Element &&
-        event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor')
-      ) {
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor')) {
         return;
       }
       if (selection.root === undefined || selection.selected !== selection.root) {
         return;
       }
       const destructive =
-        event.key === 'Delete' ||
-        event.key === 'Backspace' ||
-        ((event.metaKey || event.ctrlKey) && ['d', 'x'].includes(event.key.toLowerCase()));
+        event.key === 'Delete' || event.key === 'Backspace' || ((event.metaKey || event.ctrlKey) && ['d', 'x'].includes(event.key.toLowerCase()));
       if (destructive) {
         event.preventDefault();
         event.stopImmediatePropagation();

@@ -13,8 +13,7 @@ export type SymbolReadResult =
   | { readonly ok: true; readonly rel: string; readonly text: string; readonly line: number }
   | { readonly ok: false; readonly reason?: 'not-found' | 'too-large' };
 
-export type ResolvePathResult =
-  { readonly ok: true; readonly rel: string } | { readonly ok: false };
+export type ResolvePathResult = { readonly ok: true; readonly rel: string } | { readonly ok: false };
 
 export type IpcContract = {
   readonly [K in IpcChannel]: {
@@ -25,9 +24,7 @@ export type IpcContract = {
 
 /** window.avb as the renderer sees it: one method per contracted channel. */
 export type AvbBridge = {
-  readonly [K in keyof IpcContract]: (
-    payload: IpcContract[K]['payload'],
-  ) => Promise<IpcContract[K]['result']>;
+  readonly [K in keyof IpcContract]: (payload: IpcContract[K]['payload']) => Promise<IpcContract[K]['result']>;
 };
 
 // --- Parsers for the small result unions -----------------------------------

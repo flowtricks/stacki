@@ -6,31 +6,23 @@ import { assert } from '../../shared/core/assert';
 export function componentPreviewStylesModule(projectDirectory: string): string {
   const sources = componentPreviewStyleSources(projectDirectory);
   const entries = componentPreviewStylePaths(sources);
-  assert(
-    entries.length <= Object.keys(sources).length,
-    'Preview styles must belong to the project',
-  );
+  assert(entries.length <= Object.keys(sources).length, 'Preview styles must belong to the project');
   assert(new Set(entries).size === entries.length, 'Preview style entries must be unique');
   return entries.map((file) => `import ${JSON.stringify(file)};`).join('\n');
 }
 
-export function componentPreviewStylePaths(
-  sources: Readonly<Record<string, string>>,
-): readonly string[] {
+/** The text of every stylesheet the preview imports, for the key of a snapshot: a style edit changes how every tile looks. */
+export function componentPreviewStyleText(projectDirectory: string): string {
+  return Object.values(componentPreviewStyleSources(projectDirectory)).join('\n');
+}
+
+export function componentPreviewStylePaths(sources: Readonly<Record<string, string>>): readonly string[] {
   const paths = Object.keys(sources);
-  if (paths.length > 1024) {
-    throw new Error('Preview stylesheet count exceeds limit');
-  }
   const imported = new Set<string>();
-  let sourceChars = 0;
   for (const file of paths) {
     const source = sources[file];
     if (typeof source !== 'string') {
       throw new Error('Preview stylesheet: expected source text');
-    }
-    sourceChars += source.length;
-    if (sourceChars > 10 * 1024 * 1024) {
-      throw new Error('Preview stylesheets exceed source limit');
     }
     // Consume comments and strings as whole tokens so examples inside them cannot
     // remove a real entry point. Import tokens capture their own quoted paths.
@@ -45,20 +37,13 @@ export function componentPreviewStylePaths(
       if (specifier === undefined) {
         continue;
       }
-      const target = new URL(
-        specifier.replace(/^[@~]\//, '/src/'),
-        new URL(file, 'https://preview'),
-      );
+      const target = new URL(specifier.replace(/^[@~]\//, '/src/'), new URL(file, 'https://preview'));
       if (target.origin !== 'https://preview') {
         continue;
       }
       const pathname = target.pathname;
       const extension = /\.(css|scss)$/.test(pathname) ? '' : '.scss';
-      const candidates = [
-        pathname,
-        pathname + extension,
-        pathname.replace(/([^/]+)$/, '_$1') + extension,
-      ];
+      const candidates = [pathname, pathname + extension, pathname.replace(/([^/]+)$/, '_$1') + extension];
       for (const candidate of candidates) {
         if (Object.hasOwn(sources, candidate)) {
           imported.add(candidate);
@@ -78,26 +63,18 @@ function componentPreviewStyleSources(projectDirectory: string): Readonly<Record
   if (!fs.existsSync(root)) {
     return {};
   }
-  // Bound the directory queue and total bytes before allocating stylesheet contents.
+  // No size limit: the queue holds each directory once, so it is bounded by the tree itself.
   const directories = [root];
   const sources: Record<string, string> = {};
-  let entriesCount = 0;
-  let sourceBytes = 0;
   for (let index = 0; index < directories.length; index++) {
     const directory = directories[index];
     assert(directory !== undefined, 'Preview style directory must exist in the queue');
     const entries = fs.readdirSync(directory, { withFileTypes: true });
-    entriesCount += entries.length;
-    assert(entriesCount <= 4096, 'Preview stylesheet directory entries exceed limit');
     for (const entry of entries) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        assert(directories.length < 128, 'Preview stylesheet directories exceed limit');
         directories.push(file);
       } else if (entry.isFile() && /\.(css|scss)$/.test(entry.name)) {
-        sourceBytes += fs.statSync(file).size;
-        assert(sourceBytes <= 10 * 1024 * 1024, 'Preview stylesheets exceed source limit');
-        assert(Object.keys(sources).length < 1024, 'Preview stylesheet count exceeds limit');
         const key = '/' + path.relative(projectDirectory, file).split(path.sep).join('/');
         sources[key] = fs.readFileSync(file, 'utf8');
       }

@@ -3,37 +3,61 @@
 // (dataSuggest.ts).
 
 import { toRecord, toArray } from '../../shared/core/record';
-import {
-  parseDeclarations,
-  firstObjectIn,
-  objectEntries,
-  kindOf,
-  parseDestructures,
-  referenceCallIn,
-} from './dataSource';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import { englishText, messageRef, type MessageKey, type Translator, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
+import { parseDeclarations, firstObjectIn, objectEntries, kindOf, parseDestructures, referenceCallIn } from './dataSource';
 
-/** The value at a dotted path inside sampled data: `post.data.author` → {id, collection}. */
-export function sampleAt(sample: unknown, path: unknown): unknown {
-  let current: unknown = sample;
-  for (const step of String(path || '').split('.')) {
-    const match = step.match(/^([^[]*)((?:\[\d+\])*)$/);
-    if (!match) {
+/** One step of a data path, and where in the path's text it ends. */
+export interface PathStep {
+  readonly key: string | number;
+  readonly end: number;
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+// `.name`, `[0]`, or `["name"]` (a field a dot can't reach: `campus-description`).
+const STEP = /^(?:\.?([A-Za-z_$][\w$]*)|\[(\d+)\]|\[("(?:[^"\\]|\\.)*")\])/;
+
+/** A data path's steps: `post.data["campus-name"][0]` → post, data, campus-name, 0. */
+export function pathSteps(path: string): readonly PathStep[] | undefined {
+  const steps: PathStep[] = [];
+  let at = 0;
+  // Each step consumes at least one character, so the text's length bounds the loop.
+  while (at < path.length) {
+    const match = STEP.exec(path.slice(at));
+    if (match === null || (steps.length === 0 && path.charAt(at) === '.')) {
       return undefined;
     }
-    const name = match[1];
-    if (name) {
-      const record = toRecord(current);
-      if (!record) {
-        return undefined;
-      }
-      current = record[name];
+    at += match[0].length;
+    const quoted: unknown = match[3] === undefined ? undefined : JSON.parse(match[3]);
+    const key = match[1] ?? (match[2] === undefined ? (typeof quoted === 'string' ? quoted : undefined) : Number(match[2]));
+    if (key === undefined) {
+      return undefined;
     }
-    for (const indexText of match[2]?.match(/\d+/g) ?? []) {
-      const list = toArray(current);
-      if (!list) {
-        return undefined;
-      }
-      current = list[Number(indexText)];
+    steps.push({ key, end: at });
+  }
+  return steps;
+}
+
+/** A field's path under its parent's: `.title`, or `["campus-name"]` when a dot can't reach it. */
+export function childPath(base: string, key: string): string {
+  return IDENTIFIER.test(key) ? `${base}.${key}` : `${base}[${JSON.stringify(key)}]`;
+}
+
+/** The value at a path inside sampled data: `post.data.author` → {id, collection}. */
+export function sampleAt(sample: unknown, path: unknown): unknown {
+  const steps = pathSteps(String(path || ''));
+  if (steps === undefined) {
+    return undefined;
+  }
+  let current: unknown = sample;
+  for (const step of steps) {
+    if (typeof step.key === 'number') {
+      current = toArray(current)?.[step.key];
+    } else {
+      current = toRecord(current)?.[step.key];
+    }
+    if (current === undefined) {
+      return undefined;
     }
   }
   return current;
@@ -43,17 +67,18 @@ export function sampleAt(sample: unknown, path: unknown): unknown {
 // named by collection and id, with nothing loaded yet.
 export const isRef = (candidate: unknown): candidate is { id: string; collection: string } => {
   const record = toRecord(candidate);
-  return (
-    record !== undefined &&
-    typeof record['id'] === 'string' &&
-    typeof record['collection'] === 'string' &&
-    record['data'] === undefined
-  );
+  return record !== undefined && typeof record['id'] === 'string' && typeof record['collection'] === 'string' && record['data'] === undefined;
 };
 
 /** How a fetched entry is keyed. One per collection+id, so refs to the same entry share. */
-export const sampleKey = (collection: string, id?: string): string =>
-  id ? `${collection}#${id}` : collection;
+export const sampleKey = (collection: string, id?: string): string => (id ? `${collection}#${id}` : collection);
+
+/**
+ * How the entry at a position in a collection is keyed: `stats[2]`, written as
+ * the page's code would index it. A collection name is a bare word (the data
+ * route refuses anything else), so this never collides with `sampleKey`.
+ */
+export const entrySampleKey = (collection: string, index: number): string => `${collection}[${index}]`;
 
 export interface ReferenceNeed {
   readonly key: string;
@@ -66,10 +91,7 @@ export interface ReferenceNeed {
  * getEntry(post.data.author)` — as {key, collection, id} to fetch. Needs the
  * props sample, since the reference's target is in the data, not the source.
  */
-export function referencesInScope(
-  frontmatter: string | undefined,
-  propsSample: unknown,
-): ReferenceNeed[] {
+export function referencesInScope(frontmatter: string | undefined, propsSample: unknown): ReferenceNeed[] {
   if (!propsSample) {
     return [];
   }
@@ -139,25 +161,14 @@ export function sampleKind(sample: unknown): string {
 // Bookkeeping Astro puts on a content entry: where the file is, what its hash
 // is, the rendered HTML. Real keys, and never what anyone means to bind — they
 // would sit at the top of every entry, above the fields that matter.
-export const ENTRY_INTERNALS = new Set([
-  'filePath',
-  'digest',
-  'rendered',
-  'deferredRender',
-  'legacyId',
-  'assetImports',
-]);
-export const isEntry = (entry: Record<string, unknown>): boolean =>
-  'collection' in entry && 'data' in entry;
+export const ENTRY_INTERNALS = new Set(['filePath', 'digest', 'rendered', 'deferredRender', 'legacyId', 'assetImports']);
+export const isEntry = (entry: Record<string, unknown>): boolean => 'collection' in entry && 'data' in entry;
 export const shownKeys = (sample: unknown): string[] => {
   const record = toRecord(sample) ?? {};
-  return isEntry(record)
-    ? Object.keys(record).filter((key) => !ENTRY_INTERNALS.has(key))
-    : Object.keys(record);
+  return isEntry(record) ? Object.keys(record).filter((key) => !ENTRY_INTERNALS.has(key)) : Object.keys(record);
 };
 
-export const clip = (text: unknown, max: number): string =>
-  String(text).length > max ? `${String(text).slice(0, max)}…` : String(text);
+export const clip = (text: unknown, max: number): string => (String(text).length > max ? `${String(text).slice(0, max)}…` : String(text));
 
 // One line saying what a value IS — the thing a designer reads down the right
 // of the picker to find the field they mean. A container says how much is in
@@ -189,25 +200,135 @@ export function samplePreview(sample: unknown): string {
     const shown = list.length - (more ? 1 : 0);
     const count = toRecord(more)?.['count'];
     const total = more ? shown + (typeof count === 'number' ? count : 0) : shown;
-    return `${total} ${total === 1 ? 'item' : 'items'}`;
+    return englishText(messageRef('editor.dataTree.items', { count: total }));
   }
   const keys = shownKeys(sample);
-  return keys.length ? `${keys.length} ${keys.length === 1 ? 'field' : 'fields'}` : '{}';
+  return keys.length ? englishText(messageRef('editor.dataTree.fields', { count: keys.length })) : '{}';
+}
+
+/**
+ * The words of `samplePreview` as a reference the picker translates, or undefined when the preview is the value itself (`"hello"`, `42`) or a
+ * symbol. `samplePreview` stays the English line: search matches against it and logs print it.
+ */
+export function samplePreviewRef(sample: unknown): TypedMessageRef | undefined {
+  const kind = sampleKind(sample);
+  if (kind === 'date') {
+    return toRecord(sample)?.['value'] ? undefined : messageRef('editor.dataTree.kind.date');
+  }
+  if (kind === 'deep') {
+    return messageRef('editor.dataTree.deeper');
+  }
+  if (kind === 'more') {
+    return messageRef('editor.dataTree.more', { count: Number(toRecord(sample)?.['count']) });
+  }
+  if (kind === 'list') {
+    const list = toArray(sample) ?? [];
+    const more = list.find((x) => marker(x) === 'more');
+    const shown = list.length - (more ? 1 : 0);
+    const count = toRecord(more)?.['count'];
+    return messageRef('editor.dataTree.items', { count: more ? shown + (typeof count === 'number' ? count : 0) : shown });
+  }
+  if (kind === 'object') {
+    const count = shownKeys(sample).length;
+    return count > 0 ? messageRef('editor.dataTree.fields', { count }) : undefined;
+  }
+  return undefined;
+}
+
+/** A tree node's preview in the language `translate` speaks: its reference when it has one, else the English line. */
+export function previewText(node: Pick<TreeNode, 'preview' | 'previewRef'>, translate: Translator = ENGLISH_TRANSLATE): string {
+  if (node.previewRef === undefined) {
+    return node.preview;
+  }
+  return node.previewRef.params === undefined ? translate(node.previewRef.key) : translate(node.previewRef.key, node.previewRef.params);
+}
+
+/** The two fields a worded preview sets on a node: the English line in `preview`, the reference beside it in `previewRef`. */
+export function previewFields(ref: TypedMessageRef): { readonly preview: string; readonly previewRef: TypedMessageRef } {
+  return { preview: englishText(ref), previewRef: ref };
+}
+
+// The message that names each kind of tree node, for the kinds the picker draws as a word.
+const TREE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
+  text: 'editor.dataTree.kind.text',
+  number: 'editor.dataTree.kind.number',
+  boolean: 'editor.dataTree.kind.boolean',
+  list: 'editor.dataTree.kind.list',
+  object: 'editor.dataTree.kind.object',
+  date: 'editor.dataTree.kind.date',
+  'image url': 'editor.dataTree.kind.imageUrl',
+  imported: 'editor.dataTree.kind.imported',
+  function: 'editor.dataTree.kind.function',
+  value: 'editor.dataTree.kind.value',
+  empty: 'editor.dataTree.kind.empty',
+  'loop item': 'editor.dataTree.kind.loopItem',
+};
+
+/** The word a tree node's kind is drawn as, in the language `translate` speaks; a kind with no message (a schema's own type name) stays as it is. */
+export function treeKindLabel(kind: string, translate: Translator = ENGLISH_TRANSLATE): string {
+  const key = Object.hasOwn(TREE_KIND_KEYS, kind) ? TREE_KIND_KEYS[kind] : undefined;
+  return key === undefined ? kind : translate(key);
 }
 
 export const TREE_DEPTH_MAX = 6;
+
+/**
+ * An import a pick writes before its path means anything: `exported` from the
+ * module `spec`, read here as `name` (`import { SITE } from '@/consts'`). A
+ * JSON file's data is its `default` export.
+ */
+export interface ImportNeed {
+  readonly spec: string;
+  readonly exported: string;
+  readonly name: string;
+}
 
 export interface TreeNode {
   path: string;
   key: string;
   kind: string;
   preview: string;
+  /** The same preview as a reference when it is worded ("3 items"), so the picker can translate it; `preview` is its English. */
+  previewRef?: TypedMessageRef | undefined;
   children: TreeNode[] | undefined;
   section?: string;
   nav?: { index: number; count: number };
+  /**
+   * A list whose children are its entries (`[0]`, `[1]`, …): how many there
+   * are, so the picker can show one at a time behind a pager rather than a
+   * column of numbers. Counts the entries the picker can reach — a sampled
+   * list's sampled ones, or a project collection's real total.
+   */
+  entryCount?: number;
   query?: { collection: string; name: string };
+  /**
+   * What picking anything under this node has to import first: an export of
+   * a project data file the file does not import yet (projectDataSources.ts).
+   */
+  importNeed?: ImportNeed;
+  /**
+   * Why this row cannot be bound, when it cannot: an imported function is
+   * something to call, and a binding to it would print the function itself.
+   */
+  unbindable?: string;
+  /** `unbindable` as a reference the picker translates. */
+  unbindableRef?: TypedMessageRef | undefined;
+  /** A muted word in the value column where there is no value to show: "not set". */
+  note?: string;
+  /** `note` as a reference the picker translates. */
+  noteRef?: TypedMessageRef | undefined;
+  /**
+   * A data file export written as a list but computed (`[...a, ...b]`): it is a list,
+   * and its items are known only to the code. The loop's Source menu lists it, disabled.
+   */
+  computedList?: boolean;
   lazy?: boolean;
+  /** The whole address of an image the value names: the preview is clipped. */
+  image?: string;
 }
+
+// A web address that names an image by its extension, or Sanity's image CDN.
+const IMAGE_URL = /^https:\/\/(?:cdn\.sanity\.io\/images\/\S+|\S+\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#]\S*)?)$/i;
 
 // A value the app has actually seen — every key is real, so the tree is the
 // data rather than a guess at it.
@@ -218,15 +339,11 @@ export function fromSample(value: unknown, base: string, depth: number): TreeNod
   const kind = sampleKind(value);
   if (kind === 'object') {
     const record = toRecord(value) ?? {};
-    return shownKeys(value).map((key) => sampleNode(`${base}.${key}`, key, record[key], depth + 1));
+    return shownKeys(value).map((key) => sampleNode(childPath(base, key), key, record[key], depth + 1));
   }
   if (kind === 'list') {
     return (toArray(value) ?? [])
-      .map((entry, i) =>
-        marker(entry) === 'more'
-          ? undefined
-          : sampleNode(`${base}[${i}]`, String(i), entry, depth + 1),
-      )
+      .map((entry, i) => (marker(entry) === 'more' ? undefined : sampleNode(`${base}[${i}]`, String(i), entry, depth + 1)))
       .filter((node): node is TreeNode => node !== undefined);
   }
   return undefined;
@@ -234,13 +351,31 @@ export function fromSample(value: unknown, base: string, depth: number): TreeNod
 
 export function sampleNode(path: string, key: string, value: unknown, depth: number): TreeNode {
   const children = fromSample(value, path, depth);
+  const image = typeof value === 'string' && IMAGE_URL.test(value) ? value : undefined;
+  const kind = sampleKind(value);
+  const entryCount = kind === 'list' ? entryCountOf(children) : undefined;
   return {
     path,
     key,
-    kind: sampleKind(value),
+    kind,
     preview: samplePreview(value),
+    ...(samplePreviewRef(value) === undefined ? {} : { previewRef: samplePreviewRef(value) }),
     children: children && children.length ? children : undefined,
+    ...(image === undefined ? {} : { image }),
+    ...(entryCount === undefined ? {} : { entryCount }),
   };
+}
+
+// A list of records is a list of entries, browsed one at a time; a list of
+// words or numbers reads best as it is, every value in a column.
+function entryCountOf(children: readonly TreeNode[] | undefined): number | undefined {
+  if (children === undefined) {
+    return undefined;
+  }
+  if (children.length < 2) {
+    return undefined;
+  }
+  return children.every((child) => child.children !== undefined) ? children.length : undefined;
 }
 
 export const LITERAL_DEPTH_MAX = 4;
@@ -255,11 +390,7 @@ export function fromLiteral(text: unknown, base: string, depth: number): TreeNod
   const trimmed = String(text || '').trim();
   if (trimmed.startsWith('{')) {
     const entries = objectEntries(trimmed);
-    return entries.length
-      ? entries.map((entry) =>
-          literalNode(`${base}.${entry.key}`, entry.key, entry.value, depth + 1),
-        )
-      : undefined;
+    return entries.length ? entries.map((entry) => literalNode(childPath(base, entry.key), entry.key, entry.value, depth + 1)) : undefined;
   }
   if (trimmed.startsWith('[')) {
     const first = firstObjectIn(trimmed);
@@ -272,12 +403,7 @@ export function fromLiteral(text: unknown, base: string, depth: number): TreeNod
   return undefined;
 }
 
-export function literalNode(
-  path: string,
-  key: string,
-  valueText: unknown,
-  depth: number,
-): TreeNode {
+export function literalNode(path: string, key: string, valueText: unknown, depth: number): TreeNode {
   const trimmed = String(valueText || '').trim();
   const kind = kindOf(trimmed) || 'value';
   const children = fromLiteral(trimmed, path, depth);

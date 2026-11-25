@@ -1,0 +1,71 @@
+// Goal: the registry of `.stacki/styles.json` accepts the keep list the Selectors panel writes and refuses what the parser rejects
+// or the app would drop (the legacy trustedScripts key).
+// Method: a realistic file passes the registry and the app parser, and survives the file's own serializer unchanged in key order;
+// known-bad documents (unknown key, legacy key, wrong type, whitespace pattern, absolute path, missing required) are refused.
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { STYLES_FILE } from '#dist/shared/properties/cli/files/stylesFile.js';
+import { refusalOfSource, serializeDocument } from '#dist/shared/properties/cli/stackiFiles.js';
+import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
+
+const registryRefusal = (document: unknown): string | undefined => checkValue({ kind: 'object', fields: STYLES_FILE.fields }, document, 'styles');
+
+const good = { version: 1, keep: ['is-*', 'js-open'], lockedStylesheets: ['src/styles/patterns.css', 'src/styles/vendor/'] };
+
+test('a keep list written by the app passes the registry and the app parser', () => {
+  assert.equal(registryRefusal(good), undefined);
+  assert.equal(refusalOfSource(STYLES_FILE, serializeDocument(STYLES_FILE, good)), undefined);
+  assert.equal(serializeDocument(STYLES_FILE, good), `${JSON.stringify(good, undefined, 2)}\n`);
+});
+
+test('the empty document passes both', () => {
+  assert.equal(registryRefusal(STYLES_FILE.empty), undefined);
+  assert.equal(refusalOfSource(STYLES_FILE, serializeDocument(STYLES_FILE, { ...STYLES_FILE.empty })), undefined);
+});
+
+test('known-bad documents are refused by the registry', () => {
+  const bad: ReadonlyArray<readonly [string, unknown, RegExp]> = [
+    ['an unknown key', { ...good, kept: [] }, /unknown key/],
+    ['the legacy trustedScripts key', { ...good, trustedScripts: [] }, /unknown key/],
+    ['a wrong type', { version: 1, keep: 'is-*' }, /expected a list/],
+    ['a wrong version', { version: 2 }, /expected 1/],
+    ['a missing version', { keep: [] }, /version: required/],
+    ['a pattern with a space', { version: 1, keep: ['is open'] }, /does not match/],
+    ['a pattern with a comma', { version: 1, keep: ['a,b'] }, /does not match/],
+    ['an overlong pattern', { version: 1, keep: ['a'.repeat(129)] }, /1 to 128/],
+    ['too many patterns', { version: 1, keep: Array.from({ length: 1001 }, (_, index) => `c${index}`) }, /at most 1000/],
+    ['an absolute locked path', { version: 1, lockedStylesheets: ['/src/a.css'] }, /does not match/],
+    ['a backslash locked path', { version: 1, lockedStylesheets: ['src\\a.css'] }, /does not match/],
+    ['a duplicate locked path', { version: 1, lockedStylesheets: ['a.css', 'a.css'] }, /unique/],
+  ];
+  for (const [what, document, reason] of bad) {
+    const refusal = registryRefusal(document);
+    assert.ok(refusal !== undefined && reason.test(refusal), `${what}: ${String(refusal)}`);
+  }
+});
+
+test('the newStyleTag section is reachable, round-trips as version 2, and bad shapes are refused', () => {
+  const withSection = { version: 1, keep: [], newStyleTag: { version: 2, attributes: 'is:global lang="scss"', content: '@layer components {}' } };
+  assert.equal(registryRefusal(withSection), undefined);
+  assert.equal(refusalOfSource(STYLES_FILE, serializeDocument(STYLES_FILE, withSection)), undefined);
+  assert.equal(serializeDocument(STYLES_FILE, withSection), `${JSON.stringify(withSection, undefined, 2)}\n`);
+  // A version 1 section an older Stacki wrote is still accepted, and written back as version 2.
+  const older = { version: 1, keep: [], newStyleTag: { version: 1, isGlobal: false, content: '@layer components {}' } };
+  assert.equal(registryRefusal(older), undefined);
+  assert.ok(
+    serializeDocument(STYLES_FILE, older).includes('"newStyleTag": {\n    "version": 2,\n    "attributes": "",\n    "content": "@layer components {}"\n  }'),
+    'written back as version 2',
+  );
+  const bad: ReadonlyArray<readonly [string, unknown, RegExp]> = [
+    ['an unknown section key', { version: 1, newStyleTag: { global: true } }, /unknown key/],
+    ['a non-boolean isGlobal', { version: 1, newStyleTag: { isGlobal: 'yes' } }, /true or false/],
+    ['a non-string content', { version: 1, newStyleTag: { content: 4 } }, /expected text/],
+    ['a wrong section version', { version: 1, newStyleTag: { version: 3 } }, /2/],
+  ];
+  for (const [what, document, reason] of bad) {
+    const refusal = registryRefusal(document);
+    assert.ok(refusal !== undefined && reason.test(refusal), `${what}: ${String(refusal)}`);
+  }
+  assert.throws(() => serializeDocument(STYLES_FILE, { version: 1, newStyleTag: { content: '@layer a {' } }), /unclosed/);
+  assert.throws(() => serializeDocument(STYLES_FILE, { version: 1, newStyleTag: { version: 2, attributes: 'lang={x}' } }), /expressions/);
+});

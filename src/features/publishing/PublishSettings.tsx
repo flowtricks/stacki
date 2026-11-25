@@ -1,22 +1,25 @@
+import { usePublishSettingsConfig } from './usePublishSettingsConfig';
+import { PublishedSiteField } from './PublishedSiteField';
+import { PublishWorkflow } from './PublishWorkflow';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
 import { PublishRepositories } from './PublishRepositories';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
 import type { RepositoryRequest } from '../../../shared/ipc/publishRepository';
 import Popup from '../../ui/Popup';
 import Dropdown from '../../ui/Dropdown';
 import { PublishProviderIcon } from './PublishProviderIcon';
+import { UploadCloudIcon } from '../../ui/Icons';
 import { PublishConnections } from './PublishConnections';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
-import {
-  DEFAULT_PUBLISH_CONFIG,
-  parsePublishConfig,
-  parsePublishSource,
-  type PublishConfig,
-  type Hosting,
-} from '../../../shared/properties/publishConfig';
+import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, type PublishConfig, type Hosting } from '../../../shared/properties/publishConfig';
+import { findMissingPublishField, type MissingPublishField } from '../../../shared/properties/publishMissing';
+import { PublishInvalidFieldContext } from './publishInvalidField';
+import { PublishSettingsRebaseContext } from './setUpWorker';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { cleanError } from '../../lib/cleanError';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 
 interface Props {
   readonly projectPath: string;
@@ -28,13 +31,14 @@ type SettingsState =
   | { readonly kind: 'ready'; readonly base: string | undefined; readonly config: PublishConfig };
 
 export function PublishSettings(props: Props) {
+  const translate = useTranslate();
   const [state, setState] = useState<SettingsState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     void readMetadata(props.projectPath, 'publish')
-      .then(async (file) => {
-        const config = await initialSettings(props.projectPath, file.source);
+      .then((file) => {
+        const config = parsePublishSource(file.source);
         if (active) {
           setState({ kind: 'ready', base: file.source, config });
         }
@@ -49,38 +53,29 @@ export function PublishSettings(props: Props) {
     };
   }, [props.projectPath, attempt]);
   return (
-    <Popup
-      className="modal publish-settings"
-      label="Publish settings"
-      onClose={props.close}
-      dismissible={true}
-    >
+    <Popup className="modal publish-settings" label={translate('publish.settings.title')} onClose={props.close} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header" aria-busy={state.kind === 'loading'}>
-            Publish settings
+            {translate('publish.settings.title')}
           </div>
-          <span
-            className="publish-settings-loading mini-spinner"
-            role="status"
-            aria-label="Loading publish settings"
-          />
+          <span className="publish-settings-loading mini-spinner" role="status" aria-label={translate('publish.settings.loadingLabel')} />
           {state.kind === 'ready' ? (
-            <PublishSettingsForm {...props} close={close} stored={state} />
+            <PublishSettingsForm key={props.projectPath} {...props} close={close} stored={state} />
           ) : state.kind === 'loading' ? (
             <PublishSettingsSkeleton close={close} />
           ) : (
-            <div className="modal-body publish-fields">
-              <ErrorToast message={settingsErrorMessage(state.message)} />
+            <div className="modal-body publish-fields publish-settings-scroll">
+              <ErrorToast message={settingsErrorMessage(state.message, translate)} />
               <button
                 onClick={() => {
                   setState({ kind: 'loading' });
                   setAttempt((value) => value + 1);
                 }}
               >
-                Try again
+                {translate('publish.common.tryAgain')}
               </button>
-              <button onClick={close}>Close</button>
+              <button onClick={close}>{translate('ui.close')}</button>
             </div>
           )}
         </>
@@ -90,41 +85,47 @@ export function PublishSettings(props: Props) {
 }
 
 function PublishSettingsSkeleton({ close }: Pick<Props, 'close'>) {
+  const translate = useTranslate();
   return (
     <>
-      <fieldset className="modal-body publish-fields" disabled aria-busy="true">
-        {['GitHub account', 'GitHub repository', 'Hosting provider', 'Hosting project'].map(
-          (label) => (
-            <div className="publish-field" key={label}>
-              <span className="publish-label">{label}</span>
-              <button className="dd-trigger" aria-label={label} disabled>
-                <span className="dd-label">Loading…</span>
-              </button>
-            </div>
-          ),
-        )}
-        <details className="publish-advanced">
-          <summary aria-disabled="true" onClick={(event) => event.preventDefault()}>
-            Advanced
-          </summary>
-        </details>
-      </fieldset>
+      <div className="publish-settings-scroll">
+        <fieldset className="modal-body publish-fields" disabled aria-busy="true" data-loading="true">
+          {[
+            { name: translate('publish.settings.publishButton'), labels: [translate('publish.settings.targetAction')] },
+            { name: 'GitHub', labels: [translate('publish.common.githubAccount'), translate('publish.repositories.title')] }, // i18n-ignore: product name.
+            { name: translate('publish.settings.hosting'), labels: [translate('publish.settings.provider'), translate('publish.hosting.project')] },
+          ].map((section) => (
+            <section className="publish-settings-section" aria-label={section.name} key={section.name}>
+              {section.labels.map((label) => (
+                <div className="publish-field" key={label}>
+                  <span className="publish-label">{label}</span>
+                  <button className="dd-trigger" aria-label={label} disabled>
+                    <span className="dd-label">{translate('publish.common.loading')}</span>
+                  </button>
+                </div>
+              ))}
+            </section>
+          ))}
+          <details className="publish-advanced">
+            <summary aria-disabled="true" onClick={(event) => event.preventDefault()}>
+              {translate('publish.common.advanced')}
+            </summary>
+          </details>
+        </fieldset>
+      </div>
       <div className="modal-footer">
-        <button onClick={close}>Cancel</button>
+        <button onClick={close}>{translate('ui.cancel')}</button>
         <button className="primary" disabled>
-          Save
+          {translate('publish.common.save')}
         </button>
       </div>
     </>
   );
 }
 
-function settingsErrorMessage(message: string): string {
+function settingsErrorMessage(message: string, translate: Translator): string {
   if (message.includes('No handler registered')) {
-    return (
-      'Desktop needs to reload its new publishing support. ' +
-      'Use View → Reload All Code, then open Publish settings to configure your provider.'
-    );
+    return translate('publish.settings.reloadNeeded');
   }
   return message;
 }
@@ -135,13 +136,141 @@ function PublishSettingsForm({
 }: Props & {
   readonly stored: Extract<SettingsState, { kind: 'ready' }>;
 }) {
-  const [config, setConfig] = useState(stored.config);
-  const [base, setBase] = useState(stored.base);
+  const translate = useTranslate();
+  const { config, changeConfig: setConfig, changeHosting, discoveringHosting } = usePublishSettingsConfig(projectPath, stored);
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
+  const scroll = useRef<HTMLDivElement>(null);
+  const [refused, setRefused] = useState<{ readonly field: MissingPublishField; readonly attempt: number }>();
+  const { error, saving, save, rebase } = usePublishSettingsSave({
+    projectPath,
+    config,
+    base: stored.base,
+    repository,
+    close,
+    translate,
+    refuse: (field) => setRefused({ field, attempt: (refused?.attempt ?? 0) + 1 }),
+  });
+  // The mark clears itself: it shows only while the refused field is still the first one missing.
+  const missing = findMissingPublishField(config);
+  const invalidField = refused !== undefined && !missing.ok && missing.error.field === refused.field ? refused.field : undefined;
+  useEffect(() => {
+    // Each refused Save brings the empty field into view, even when it was already marked.
+    if (refused !== undefined) {
+      const target = scroll.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
+      target?.scrollIntoView({ block: 'center' });
+      target?.focus();
+    }
+  }, [refused]);
+  return (
+    <PublishInvalidFieldContext.Provider value={invalidField}>
+      <PublishSettingsRebaseContext.Provider value={rebase}>
+        <div className="publish-settings-scroll" ref={scroll}>
+          <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
+            <PublishTargetField config={config} setConfig={setConfig} />
+            <section className="publish-settings-section" aria-label="GitHub" /* i18n-ignore: product name. */>
+              <PublishWorkflow config={config} change={setConfig} />
+              <PublishConnections
+                projectPath={projectPath}
+                provider="github"
+                value={config.githubAccount}
+                change={(githubAccount) => setConfig({ ...config, githubAccount })}
+              />
+              <PublishRepositories
+                key={config.githubAccount}
+                projectPath={projectPath}
+                account={config.githubAccount}
+                selection={repository}
+                change={setRepository}
+                busy={setRepositoryBusy}
+              />
+            </section>
+            <section className="publish-settings-section" aria-label={translate('publish.settings.hosting')}>
+              <HostingFields projectPath={projectPath} hosting={config.hosting} discoveringHosting={discoveringHosting} change={changeHosting} />
+              <PublishedSiteField config={config} change={setConfig} />
+            </section>
+            <AdvancedFields config={config} setConfig={setConfig} />
+            {error && <ErrorToast message={error} />}
+          </fieldset>
+        </div>
+        <SettingsFooter busy={saving || repositoryBusy} discoveringHosting={discoveringHosting} saving={saving} close={close} save={save} />
+      </PublishSettingsRebaseContext.Provider>
+    </PublishInvalidFieldContext.Provider>
+  );
+}
+
+function PublishTargetField({ config, setConfig }: { readonly config: PublishConfig; readonly setConfig: (config: PublishConfig) => void }) {
+  const translate = useTranslate();
+  return (
+    <section className="publish-settings-section" aria-label={translate('publish.settings.publishButton')}>
+      <div className="publish-field">
+        <span className="publish-label">{translate('publish.settings.targetAction')}</span>
+        <div className="publish-target-cards">
+          <PublishTargetToggle target="github" config={config} setConfig={setConfig} />
+          <PublishTargetToggle target="hosting" config={config} setConfig={setConfig} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PublishTargetToggle({
+  target,
+  config,
+  setConfig,
+}: {
+  readonly target: 'github' | 'hosting';
+  readonly config: PublishConfig;
+  readonly setConfig: (config: PublishConfig) => void;
+}) {
+  const translate = useTranslate();
+  const other = target === 'github' ? 'hosting' : 'github';
+  const lastEnabled = config.defaultTarget === target;
+  return (
+    <label className="publish-target-card" title={lastEnabled ? translate('publish.settings.keepOneDestination') : undefined}>
+      {target === 'github' ? <PublishProviderIcon provider="github" /> : <UploadCloudIcon />}
+      <span>{target === 'github' ? 'GitHub' /* i18n-ignore: product name. */ : translate('publish.settings.hosting')}</span>
+      <input
+        className="publish-target-switch"
+        type="checkbox"
+        role="switch"
+        checked={config.defaultTarget !== other}
+        disabled={lastEnabled}
+        onChange={(event) => setConfig({ ...config, defaultTarget: event.currentTarget.checked ? 'all' : other })}
+      />
+    </label>
+  );
+}
+
+function usePublishSettingsSave({
+  projectPath,
+  config,
+  base: initialBase,
+  repository,
+  close,
+  translate,
+  refuse,
+}: {
+  readonly translate: Translator;
+  readonly refuse: (field: MissingPublishField) => void;
+  readonly projectPath: string;
+  readonly config: PublishConfig;
+  readonly base: string | undefined;
+  readonly repository: Extract<RepositoryRequest, { action: 'connect' }> | undefined;
+  readonly close: () => void;
+}) {
+  const translateDescribed = useTranslateDescribed();
+  const [base, setBase] = useState(initialBase);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save() {
+    const missing = findMissingPublishField(config);
+    if (!missing.ok) {
+      // Said as a toast (never a paragraph) that names the field; the form marks it and takes the person to it.
+      reportErrorToast(translate(MISSING_FIELD_MESSAGES[missing.error.field]));
+      refuse(missing.error.field);
+      return;
+    }
     setSaving(true);
     try {
       const validated = validateSettings(config);
@@ -154,7 +283,7 @@ function PublishSettingsForm({
       if (repository?.account === config.githubAccount) {
         const result = await publishingRepositories(projectPath, repository);
         if (!result.ok) {
-          setError(`Settings saved. ${result.error}`);
+          setError(translate('publish.settings.savedWithError', { message: translateDescribed({ message: result.error, messageRef: result.errorRef }) }));
           return;
         }
       }
@@ -165,74 +294,56 @@ function PublishSettingsForm({
       setSaving(false);
     }
   }
-  return (
-    <>
-      <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
-        <PublishConnections
-          projectPath={projectPath}
-          provider="github"
-          value={config.githubAccount}
-          change={(githubAccount) => setConfig({ ...config, githubAccount })}
-        />
-        <PublishRepositories
-          projectPath={projectPath}
-          account={config.githubAccount}
-          selection={repository}
-          change={setRepository}
-          busy={setRepositoryBusy}
-        />
-        <HostingFields
-          projectPath={projectPath}
-          hosting={config.hosting}
-          change={(hosting) => setConfig({ ...config, hosting })}
-        />
-        <AdvancedFields config={config} setConfig={setConfig} />
-        {error && <ErrorToast message={error} />}
-      </fieldset>
-      <SettingsFooter busy={saving || repositoryBusy} saving={saving} close={close} save={save} />
-    </>
-  );
+  return { error, saving, save, rebase: setBase };
 }
 
 function HostingFields({
   projectPath,
   hosting,
+  discoveringHosting,
   change,
 }: {
   readonly projectPath: string;
   readonly hosting: Hosting;
+  readonly discoveringHosting: boolean;
   readonly change: (value: Hosting) => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
-      <div className="publish-field">
-        <span className="publish-label">Hosting provider</span>
-        <Dropdown<Hosting['provider']>
-          ariaLabel="Hosting provider"
+      <div className="publish-field" aria-busy={discoveringHosting}>
+        <span className="publish-label">{translate('publish.settings.provider')}</span>
+        <Dropdown<Hosting['provider'] | undefined>
+          ariaLabel={translate('publish.settings.provider')}
+          placeholder={translate('publish.settings.providerChecking')}
           options={[
             {
               value: 'none',
-              label: 'None (GitHub only)',
+              label: translate('publish.settings.noneGitHubOnly'),
               icon: <PublishProviderIcon provider="none" />,
             },
             {
               value: 'cloudflare',
-              label: 'Cloudflare',
+              label: 'Cloudflare', // i18n-ignore: product name.
               icon: <PublishProviderIcon provider="cloudflare" />,
             },
-            { value: 'vercel', label: 'Vercel', icon: <PublishProviderIcon provider="vercel" /> },
+            { value: 'vercel', label: 'Vercel' /* i18n-ignore: product name. */, icon: <PublishProviderIcon provider="vercel" /> },
           ]}
           menuClassName="publish-dropdown"
           livePreview={false}
-          value={hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
-          onChange={(provider) => change(emptyHosting(provider))}
+          value={discoveringHosting ? undefined : hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
+          onChange={(provider) => {
+            if (provider !== undefined) {
+              change(emptyHosting(provider));
+            }
+          }}
         />
       </div>
       {hosting.provider === 'none' ? (
         <div className="publish-field">
-          <span className="publish-label">Hosting project</span>
-          <button className="dd-trigger" aria-label="Hosting project" disabled>
-            <span className="dd-label dim">Choose a hosting provider first</span>
+          <span className="publish-label">{translate('publish.hosting.project')}</span>
+          <button className="dd-trigger" aria-label={translate('publish.hosting.project')} disabled>
+            <span className="dd-label dim">{translate('publish.settings.chooseProviderFirst')}</span>
           </button>
         </div>
       ) : (
@@ -248,15 +359,7 @@ function HostingFields({
   );
 }
 
-function TextField({
-  label,
-  value,
-  change,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly change: (value: string) => void;
-}) {
+function TextField({ label, value, change }: { readonly label: string; readonly value: string; readonly change: (value: string) => void }) {
   return (
     <label>
       {label}
@@ -296,42 +399,29 @@ function ScriptField({
   );
 }
 
-function AdvancedFields({
-  config,
-  setConfig,
-}: {
-  readonly config: PublishConfig;
-  readonly setConfig: (config: PublishConfig) => void;
-}) {
+function AdvancedFields({ config, setConfig }: { readonly config: PublishConfig; readonly setConfig: (config: PublishConfig) => void }) {
+  const translate = useTranslate();
   return (
     <details className="publish-advanced">
-      <summary>Advanced</summary>
+      <summary>{translate('publish.common.advanced')}</summary>
       <div className="publish-advanced-fields">
+        <ManualHosting hosting={config.hosting} change={(hosting) => setConfig({ ...config, hosting })} />
         <TextField
-          label="GitHub username"
-          value={config.githubAccount}
-          change={(githubAccount) => setConfig({ ...config, githubAccount })}
-        />
-        <ManualHosting
-          hosting={config.hosting}
-          change={(hosting) => setConfig({ ...config, hosting })}
-        />
-        <TextField
-          label="Build script"
+          label={translate('publish.settings.advanced.buildScript')}
           value={config.buildScript}
           change={(buildScript) => setConfig({ ...config, buildScript })}
         />
         <ScriptField
-          label="Before publish"
+          label={translate('publish.settings.advanced.beforePublish')}
           values={config.beforePublish}
           change={(beforePublish) => setConfig({ ...config, beforePublish })}
         />
         <ScriptField
-          label="After publish"
+          label={translate('publish.settings.advanced.afterPublish')}
           values={config.afterPublish}
           change={(afterPublish) => setConfig({ ...config, afterPublish })}
         />
-        <p className="hint-text">Use npm script names, separated by commas.</p>
+        <p className="hint-text">{translate('publish.settings.advanced.scriptsHint')}</p>
       </div>
     </details>
   );
@@ -344,25 +434,13 @@ function CloudflareFields({
   readonly hosting: Extract<Hosting, { provider: 'cloudflare' }>;
   readonly change: (hosting: Hosting) => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
+      <TextField label={translate('publish.settings.advanced.pagesProject')} value={hosting.project} change={(project) => change({ ...hosting, project })} />
+      <TextField label={translate('publish.settings.advanced.productionBranch')} value={hosting.branch} change={(branch) => change({ ...hosting, branch })} />
       <TextField
-        label="Cloudflare account ID"
-        value={hosting.accountId}
-        change={(accountId) => change({ ...hosting, accountId })}
-      />
-      <TextField
-        label="Pages project name"
-        value={hosting.project}
-        change={(project) => change({ ...hosting, project })}
-      />
-      <TextField
-        label="Production branch"
-        value={hosting.branch}
-        change={(branch) => change({ ...hosting, branch })}
-      />
-      <TextField
-        label="Build output directory"
+        label={translate('publish.settings.advanced.outputDirectory')}
         value={hosting.directory}
         change={(directory) => change({ ...hosting, directory })}
       />
@@ -370,39 +448,20 @@ function CloudflareFields({
   );
 }
 
-function ManualHosting({
-  hosting,
-  change,
-}: {
-  readonly hosting: Hosting;
-  readonly change: (hosting: Hosting) => void;
-}) {
+function ManualHosting({ hosting, change }: { readonly hosting: Hosting; readonly change: (hosting: Hosting) => void }) {
+  const translate = useTranslate();
   return (
     <>
       {hosting.provider === 'cloudflare' && <CloudflareFields hosting={hosting} change={change} />}
-      {hosting.provider === 'cloudflare-workers' && (
-        <>
-          <TextField
-            label="Cloudflare account ID"
-            value={hosting.accountId}
-            change={(accountId) => change({ ...hosting, accountId })}
-          />
-          <TextField
-            label="Worker name"
-            value={hosting.project}
-            change={(project) => change({ ...hosting, project })}
-          />
-        </>
-      )}
       {hosting.provider === 'vercel' && (
         <>
           <TextField
-            label="Vercel organization / team ID"
+            label={translate('publish.settings.advanced.vercelOrganization')}
             value={hosting.organizationId}
             change={(organizationId) => change({ ...hosting, organizationId })}
           />
           <TextField
-            label="Vercel project ID"
+            label={translate('publish.settings.advanced.vercelProject')}
             value={hosting.projectId}
             change={(projectId) => change({ ...hosting, projectId })}
           />
@@ -414,45 +473,28 @@ function ManualHosting({
 
 function SettingsFooter({
   busy,
+  discoveringHosting,
   saving,
   close,
   save,
 }: {
   readonly busy: boolean;
+  readonly discoveringHosting: boolean;
   readonly saving: boolean;
   readonly close: () => void;
   readonly save: () => Promise<void>;
 }) {
+  const translate = useTranslate();
   return (
     <div className="modal-footer">
       <button disabled={busy} onClick={close}>
-        Cancel
+        {translate('ui.cancel')}
       </button>
-      <button className="primary" disabled={busy} onClick={() => void save()}>
-        {saving ? 'Saving…' : 'Save'}
+      <button className="primary" disabled={busy || discoveringHosting} onClick={() => void save()}>
+        {saving ? translate('publish.common.saving') : translate('publish.common.save')}
       </button>
     </div>
   );
-}
-
-async function initialSettings(
-  projectPath: string,
-  source: string | undefined,
-): Promise<PublishConfig> {
-  const config = parsePublishSource(source);
-  if (source !== undefined) {
-    return config;
-  }
-  // Saved choices win; only a single configured destination can prefill a new configuration.
-  const discovered = await discoverPublishing(projectPath, {
-    provider: 'linked',
-    account: '',
-  }).catch(() => undefined);
-  const linked =
-    discovered?.kind === 'ready' && discovered.projects.length === 1
-      ? discovered.projects[0]
-      : undefined;
-  return linked ? { ...config, hosting: linked.hosting } : config;
 }
 
 function emptyHosting(provider: Hosting['provider']): Hosting {
@@ -468,9 +510,14 @@ function emptyHosting(provider: Hosting['provider']): Hosting {
   }
 }
 
+const MISSING_FIELD_MESSAGES = {
+  cloudflareAccount: 'publish.settings.missing.cloudflareAccount',
+  hostingProject: 'publish.settings.missing.hostingProject',
+  vercelOrganization: 'publish.settings.missing.vercelOrganization',
+  buildScript: 'publish.settings.missing.buildScript',
+} as const satisfies Record<MissingPublishField, MessageKey>;
+
 function validateSettings(config: PublishConfig): PublishConfig {
-  if (config.hosting.provider === 'cloudflare-workers' && !config.hosting.accountId) {
-    throw new Error('Choose the Worker under its Cloudflare account before saving.');
-  }
-  return parsePublishConfig(config);
+  const saved = config.publishedSite;
+  return parsePublishConfig(saved === undefined ? config : { ...config, publishedSite: { ...saved, url: saved.url.trim().replace(/\/$/, '') } });
 }

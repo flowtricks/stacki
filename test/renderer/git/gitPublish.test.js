@@ -9,14 +9,14 @@ const path = require('node:path');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull = JSON.parse('null');
-const { parseGitHubStatus, readGitHubStatus, repoSlug, webUrl } =
-  require('../../helpers/rendererModule')('src/features/git/gitPublish.ts');
+const { parseGitHubStatus, readGitHubStatus, repoSlug, webUrl } = require('../../helpers/rendererModule')('src/features/git/gitPublish.ts');
 
-test('GitHub preflight parses each state and rejects impossible or oversized data', async () => {
+test('GitHub preflight parses each state and rejects impossible data or oversized paths', async () => {
   for (const status of [
     { installed: false, authed: false },
     { installed: true, authed: false },
@@ -32,10 +32,11 @@ test('GitHub preflight parses each state and rejects impossible or oversized dat
     // Absence is `undefined` (AGENTS.md §6): an unknown user is never sent as null.
     { installed: true, authed: true, user: jsonNull },
     { installed: 1, authed: false },
-    { installed: true, authed: true, user: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) },
   ]) {
     assert.throws(() => parseGitHubStatus(status));
   }
+  // A longer user name than the platform's string ceiling cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
   let project;
   global.window = {
     avb: {
@@ -88,8 +89,7 @@ test('publish dialog passes its project to preflight and ignores old replies', a
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const reads = [];
   window.avb = {
-    ghStatus: (project) =>
-      new Promise((resolve, reject) => reads.push({ project, resolve, reject })),
+    ghStatus: (project) => new Promise((resolve, reject) => reads.push({ project, resolve, reject })),
   };
   const React = require('react');
   const { act } = React;
@@ -115,12 +115,20 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     assert.match(document.body.textContent, /Checking GitHub CLI/);
     await show('/second');
     assert.equal(reads[1].project, '/second');
-    await act(async () =>
-      reads[1].resolve({ installed: true, authed: true, user: 'current-user' }),
-    );
+    await act(async () => reads[1].resolve({ installed: true, authed: true, user: 'current-user' }));
     await act(async () => reads[0].resolve({ installed: false, authed: false }));
     assert.match(document.body.textContent, /current-user/);
     assert.equal(document.querySelector('.modal-footer .primary').disabled, false);
+    // The destination is the app's Dropdown, not a native select, and picking a row switches the form.
+    assert.equal(document.querySelector('.modal select') === null, true);
+    const destination = document.querySelector('[aria-label="Repository destination"]');
+    assert.ok(destination.classList.contains('dd-trigger'));
+    assert.equal(destination.textContent, 'Create a new repository');
+    await act(async () => destination.click());
+    const existing = [...document.querySelectorAll('.dd-option')].find((row) => row.textContent === 'Use an existing repository');
+    await act(async () => existing.click());
+    assert.equal(destination.textContent, 'Use an existing repository');
+    assert.equal(document.body.textContent.includes('Repository name'), false);
     await show('/third');
     await act(async () => reads[2].reject(new Error('cannot inspect CLI')));
     assert.match(toastMessages(), /cannot inspect CLI/);
@@ -129,22 +137,25 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     await act(async () => root.unmount());
     await act(async () => reads[3].resolve({ installed: true, authed: true, user: 'late-user' }));
     assert.equal(document.getElementById('root').textContent, '');
-    const { renderToStaticMarkup } = require('react-dom/server');
-    assert.throws(
-      () =>
-        renderToStaticMarkup(
-          React.createElement(SwitchBranchModal, {
-            from: 'main',
-            to: 'topic',
-            files: Array(100001).fill('a'),
-            busy: undefined,
-            onCancel() {},
-            onLeaveHere() {},
-            onCommitFirst() {},
-          }),
-        ),
-      /Branch switch: file limit exceeded/,
+    // A branch switch lists any number of changed files: the count is bounded only by the
+    // platform's array ceiling (no product size limit), and the modal names the first five.
+    assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+    const switchRoot = createRoot(document.getElementById('root'));
+    await act(async () =>
+      switchRoot.render(
+        React.createElement(SwitchBranchModal, {
+          from: 'main',
+          to: 'topic',
+          files: Array.from({ length: 100_001 }, (_, index) => `src/file${index}.astro`),
+          busy: undefined,
+          onCancel() {},
+          onLeaveHere() {},
+          onCommitFirst() {},
+        }),
+      ),
     );
+    assert.equal(document.querySelectorAll('.dirty-files li').length >= 5, true);
+    await act(async () => switchRoot.unmount());
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

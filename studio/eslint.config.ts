@@ -1,16 +1,12 @@
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
+// AGENTS.md "Dropdowns", the same rule the Desktop config runs. The rule file is
+// vendored with the shared source (scripts/shared-source.json) and imports types
+// only, so it loads here on its own.
+import { noNativeSelect } from './vendor/stacki/scripts/eslintPlugin/noNativeSelect.mts';
 export default tseslint.config(
   {
-    ignores: [
-      'vendor/**',
-      'test/fixtures/**',
-      '.studio/**',
-      'dist/**',
-      'node_modules/**',
-      '**/test-results/**',
-      '**/.wrangler/**',
-    ],
+    ignores: ['vendor/**', 'test/fixtures/**', '.studio/**', 'dist/**', 'node_modules/**', '**/test-results/**', '**/.wrangler/**'],
   },
   ...tseslint.configs.recommended,
   {
@@ -22,17 +18,17 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       curly: ['error', 'all'],
-      'max-lines-per-function': ['error', { max: 70, skipBlankLines: true, skipComments: true }],
-      'no-restricted-syntax': [
-        'error',
-        { selector: 'TSEnumDeclaration', message: 'Use a literal union.' },
-      ],
+      'no-restricted-syntax': ['error', { selector: 'TSEnumDeclaration', message: 'Use a literal union.' }],
     },
+  },
+  {
+    // The editor and the stacki.build demo choose from lists with the custom
+    // dropdown (vendor/stacki/src/ui/Dropdown.tsx), never a native <select>.
+    files: ['src/**/*.{ts,tsx}', 'demo/**/*.{ts,tsx}'],
+    plugins: { stacki: { rules: { 'no-native-select': noNativeSelect } } },
+    rules: { 'stacki/no-native-select': 'error' },
   },
   {
     files: ['src/**/*.ts', 'src/**/*.tsx', 'scripts/**/*.ts', 'test/**/*.ts'],

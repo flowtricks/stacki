@@ -1,3 +1,4 @@
+import { gitDraftHeaders } from '../history/gitWorkspaceStorage';
 import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -16,7 +17,7 @@ export class DraftStorage {
         throw new Error('Could not remove durable draft');
       }
     }
-    await rm(this.filename(file), { force: true });
+    await rm(await this.filename(file), { force: true });
   }
   async read(file: string): Promise<Uint8Array | undefined> {
     const backend = process.env['STUDIO_BACKEND_URL'];
@@ -33,7 +34,7 @@ export class DraftStorage {
       return bytes;
     }
     try {
-      const bytes = await readFile(this.filename(file));
+      const bytes = await readFile(await this.filename(file));
       this.saved.set(file, this.digest(bytes));
       return bytes;
     } catch (error) {
@@ -55,7 +56,7 @@ export class DraftStorage {
         throw new Error('Draft storage is unavailable. Keep the studio open and retry.');
       }
     }
-    const destination = this.filename(file);
+    const destination = await this.filename(file);
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(destination + '.tmp', bytes);
     await rename(destination + '.tmp', destination);
@@ -64,13 +65,15 @@ export class DraftStorage {
   private digest(bytes: Uint8Array) {
     return createHash('sha256').update(bytes).digest('hex');
   }
-  private filename(file: string) {
-    return path.join(this.root, '.studio-state', Buffer.from(file).toString('base64url') + '.bin');
+  private async filename(file: string) {
+    const namespace = (await gitDraftHeaders(this.root))['x-studio-draft'];
+    const directory = namespace === 'legacy' ? '.stacki/studio/state' : '.stacki/studio/state/drafts/' + namespace;
+    return path.join(this.root, directory, Buffer.from(file).toString('base64url') + '.bin');
   }
-  private remote(backend: string, file: string, method: string, bytes?: Uint8Array) {
+  private async remote(backend: string, file: string, method: string, bytes?: Uint8Array) {
     return fetch(`${backend}/studio/internal/state?file=${encodeURIComponent(file)}`, {
       method,
-      headers: { 'x-studio-token': process.env['STUDIO_CONTAINER_TOKEN'] ?? '' },
+      headers: await gitDraftHeaders(this.root),
       ...(bytes ? { body: Buffer.from(bytes) } : {}),
       signal: AbortSignal.timeout(15_000),
     });

@@ -16,13 +16,7 @@ const Module = require('node:module');
 const { createHash } = require('node:crypto');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
-const {
-  canonicalManifest,
-  manifestOf,
-  stampData,
-  stampComment,
-  parsePreviewRender,
-} = require('#dist/shared/page/previewToken.js');
+const { canonicalManifest, manifestOf, stampData, stampComment, parsePreviewRender } = require('#dist/shared/page/previewToken.js');
 
 const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
 const FIRST_CHECKSUM = 'a'.repeat(64);
@@ -185,11 +179,7 @@ test('unmarked text reads parent styles without changing its edit target', async
   for (const invalid of [123, [], {}, 'other|0', 'src/Heading.astro|0.1', 'x'.repeat(9000)]) {
     assert.equal(query(path, invalid).found, false, 'invalid parent contexts are rejected');
   }
-  assert.equal(
-    query('src/Heading.astro|0.0.1', parent).found,
-    false,
-    'only the immediate parent may supply text styles',
-  );
+  assert.equal(query('src/Heading.astro|0.0.1', parent).found, false, 'only the immediate parent may supply text styles');
   window.close();
 });
 
@@ -212,9 +202,7 @@ test('the frame announces the token shared computes; events carry it', async () 
     token: announced.token,
     stamps: [card, head, page],
   });
-  window.document
-    .querySelector('p')
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  window.document.querySelector('p').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
   const click = sent.find((message) => message.type === 'avb:click-node');
   assert.ok(click, 'the click is reported');
   assert.equal(click.token, announced.token, 'the click names the rendering it landed on');
@@ -227,25 +215,25 @@ test('the frame announces the token shared computes; events carry it', async () 
   });
   window.document.querySelector('p').dispatchEvent(context);
   assert.equal(context.defaultPrevented, true, 'the designer replaces the browser menu');
-  assert.deepEqual(
-    sent.find((message) => message.type === 'avb:context-node'),
-    {
-      type: 'avb:context-node',
-      path: click.path,
-      occurrence: click.occurrence,
-      outside: false,
-      left: 10,
-      top: 12,
-      token: announced.token,
-    },
-  );
+  const contextMessage = sent.find((message) => message.type === 'avb:context-node');
+  assert.ok(contextMessage, 'the context menu is reported');
+  // The press time is stamped on the epoch clock so the renderer can tell a press from a stale one (popupDismiss.ts); it varies per run.
+  const { pressedAtMs, ...contextRest } = contextMessage;
+  assert.equal(typeof pressedAtMs, 'number', 'the context press carries its time');
+  assert.ok(Number.isFinite(pressedAtMs), 'the press time is a finite number');
+  assert.deepEqual(contextRest, {
+    type: 'avb:context-node',
+    path: click.path,
+    occurrence: click.occurrence,
+    outside: false,
+    left: 10,
+    top: 12,
+    token: announced.token,
+  });
 });
 
 test('late editor registration recovers the current render', async () => {
-  const { window, sent } = await frame(
-    '<!doctype html><html><body><!--avb-s:0--><p>Ready</p><!--avb-e:0-->' +
-      `${stampComment(page)}</body></html>`,
-  );
+  const { window, sent } = await frame('<!doctype html><html><body><!--avb-s:0--><p>Ready</p><!--avb-e:0-->' + `${stampComment(page)}</body></html>`);
   const first = sent.find((message) => message.type === 'avb:render');
   assert.ok(first, 'the frame announced its initial rendering');
   sent.length = 0; // The editor missed the announcement while its listener mounted.
@@ -254,37 +242,22 @@ test('late editor registration recovers the current render', async () => {
   window.dispatchEvent(request);
   const recovered = sent.filter((message) => message.type === 'avb:render');
   assert.deepEqual(recovered, [first], 'registration gets the exact current manifest');
-  window.document
-    .querySelector('p')
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  assert.equal(
-    sent.find((message) => message.type === 'avb:click-node')?.token,
-    first.token,
-    'the recovered rendering still names subsequent clicks',
-  );
+  window.document.querySelector('p').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.equal(sent.find((message) => message.type === 'avb:click-node')?.token, first.token, 'the recovered rendering still names subsequent clicks');
 });
 
 test('a patched page announces again; a forged second version, never', async () => {
-  const { window, sent } = await frame(
-    '<!doctype html><html><body><!--avb-s:0--><p>x</p><!--avb-e:0-->' +
-      `${stampComment(page)}</body></html>`,
-  );
+  const { window, sent } = await frame('<!doctype html><html><body><!--avb-s:0--><p>x</p><!--avb-e:0-->' + `${stampComment(page)}</body></html>`);
   const first = sent.filter((message) => message.type === 'avb:render');
   assert.equal(first.length, 1);
   // The patcher gathers the new rendering's stamps at the document's end and
   // says so; the frame reads them again.
-  for (const comment of [...window.document.body.childNodes].filter(
-    (node) => node.nodeType === 8,
-  )) {
+  for (const comment of [...window.document.body.childNodes].filter((node) => node.nodeType === 8)) {
     if (comment.data.startsWith('avb-d:')) {
       comment.remove();
     }
   }
-  window.document.appendChild(
-    window.document.createComment(
-      stampComment({ ...page, checksum: SECOND_CHECKSUM }).slice(4, -3),
-    ),
-  );
+  window.document.appendChild(window.document.createComment(stampComment({ ...page, checksum: SECOND_CHECKSUM }).slice(4, -3)));
   window.document.dispatchEvent(new window.CustomEvent('avb:morphed'));
   await settle();
   const second = sent.filter((message) => message.type === 'avb:render');
@@ -301,18 +274,76 @@ test('a patched page announces again; a forged second version, never', async () 
   const request = new window.MessageEvent('message', { data: { type: 'avb:request-render' } });
   Object.defineProperty(request, 'source', { value: window.parent });
   window.dispatchEvent(request);
-  assert.equal(
-    sent.filter((message) => message.type === 'avb:render').length,
-    2,
-    'registration cannot replay a token from before an invalid patch',
-  );
-  window.document
-    .querySelector('p')
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  assert.equal(sent.filter((message) => message.type === 'avb:render').length, 2, 'registration cannot replay a token from before an invalid patch');
+  window.document.querySelector('p').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
   const clicks = sent.filter((message) => message.type === 'avb:click-node');
   const lastClick = clicks.at(-1);
   assert.ok(lastClick !== undefined, 'the click is still reported');
   // The key is sent, and it names no rendering: absent, as the protocol spells it.
   assert.ok('token' in lastClick, 'the click states its token');
   assert.ok(lastClick.token === undefined, 'a rendering with no token vouches for no click');
+});
+
+test('canvas interaction toggles clicks without cancelling slider pointer streams', async () => {
+  const { window, sent } = await frame('<!doctype html><body><!--avb-s:0--><button>Open dialog</button><!--avb-e:0--></body>');
+  const button = window.document.querySelector('button');
+  let clicked = 0;
+  let moved = 0;
+  window.document.addEventListener(
+    'click',
+    () => {
+      clicked += 1;
+    },
+    true,
+  );
+  button.addEventListener('pointermove', () => {
+    moved += 1;
+  });
+  const fire = (type, x = 0) => {
+    const event = new window.MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: x,
+      clientY: 0,
+    });
+    button.dispatchEvent(event);
+    return event;
+  };
+  const mode = (value, source = window.parent) => {
+    const event = new window.MessageEvent('message', {
+      data: { type: 'avb:interaction', mode: value },
+    });
+    Object.defineProperty(event, 'source', { value: source });
+    window.dispatchEvent(event);
+  };
+  try {
+    assert.equal(fire('click').defaultPrevented, true);
+    assert.equal(clicked, 0);
+    mode('interact', {});
+    assert.equal(fire('click').defaultPrevented, true);
+    mode('invalid');
+    assert.equal(fire('click').defaultPrevented, true);
+    for (const next of ['interact', 'select']) {
+      mode(next);
+      const hoverCount = sent.filter((item) => item.type === 'avb:hover-node').length;
+      window.document.documentElement.dispatchEvent(new window.MouseEvent('mouseleave'));
+      fire('mousemove');
+      assert.ok(sent.filter((item) => item.type === 'avb:hover-node').length > hoverCount);
+      const previousSelections = sent.filter((item) => item.type === 'avb:click-node').length;
+      assert.equal(fire('pointerdown').defaultPrevented, false);
+      assert.equal(fire('pointermove', 30).defaultPrevented, false);
+      fire('pointerup', 30);
+      assert.equal(fire('click', 30).defaultPrevented, next === 'select');
+      assert.equal(sent.filter((item) => item.type === 'avb:click-node').length, previousSelections);
+    }
+    assert.equal(moved, 2);
+    assert.equal(clicked, 1);
+    fire('pointerdown');
+    fire('pointerup');
+    fire('click');
+    assert.equal(clicked, 1);
+  } finally {
+    window.close();
+  }
 });

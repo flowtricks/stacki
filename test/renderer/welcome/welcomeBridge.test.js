@@ -21,23 +21,17 @@ const recent = {
 
 test('welcome parsers preserve valid recent, thumbnail, and dialog variants', () => {
   assert.deepEqual(welcome.parseRecentProjects([recent]), [recent]);
-  assert.deepEqual(
-    welcome.parseRefreshThumb({ ok: true, thumb: 'data:image/png,x', stale: false }),
-    {
-      ok: true,
-      thumb: 'data:image/png,x',
-      stale: false,
-    },
-  );
-  assert.deepEqual(
-    welcome.parseRefreshThumb({ ok: false, error: 'failed', thumb: undefined, stale: true }),
-    {
-      ok: false,
-      error: 'failed',
-      thumb: undefined,
-      stale: true,
-    },
-  );
+  assert.deepEqual(welcome.parseRefreshThumb({ ok: true, thumb: 'data:image/png,x', stale: false }), {
+    ok: true,
+    thumb: 'data:image/png,x',
+    stale: false,
+  });
+  assert.deepEqual(welcome.parseRefreshThumb({ ok: false, error: 'failed', thumb: undefined, stale: true }), {
+    ok: false,
+    error: 'failed',
+    thumb: undefined,
+    stale: true,
+  });
   assert.deepEqual(welcome.parseProjectDialog({ canceled: true }), { canceled: true });
   assert.deepEqual(welcome.parseProjectDialog({ canceled: false, error: 'not Astro' }), {
     canceled: false,
@@ -87,4 +81,29 @@ test('welcome operations validate replies and preserve expected transport failur
     error: 'disk unavailable',
   });
   delete global.window;
+});
+
+test('shadcn preset inspection parses the code and rejects malformed IPC replies', async () => {
+  const requests = [];
+  let reply = { ok: true, value: { iconLibrary: 'remixicon', style: 'nova' } };
+  global.window = {
+    avb: {
+      inspectShadcnPreset: async (request) => {
+        requests.push(request);
+        return reply;
+      },
+    },
+  };
+  try {
+    assert.throws(() => welcome.inspectShadcnPreset('--preset'));
+    assert.equal(requests.length, 0);
+    assert.deepEqual(await welcome.inspectShadcnPreset('b0'), { ok: true, value: reply });
+    assert.deepEqual(requests, [{ preset: 'b0' }]);
+    reply = { ok: false, error: { message: 'Preset checking is busy.' } };
+    assert.deepEqual(await welcome.inspectShadcnPreset('b0'), { ok: true, value: reply });
+    reply = { ok: true, value: { iconLibrary: 'unknown', style: 'nova' } };
+    await assert.rejects(welcome.inspectShadcnPreset('b0'), /supported shadcn icon library/);
+  } finally {
+    delete global.window;
+  }
 });

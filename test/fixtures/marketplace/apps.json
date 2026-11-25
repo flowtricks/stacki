@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "heat-map",
+      "name": "Heat map",
+      "description": "Shows where visitors click on each page, over the canvas.",
+      "author": "octocat",
+      "icon": "https://stacki.build/api/marketplace/icons/heat-map.png",
+      "categories": ["analytics", "canvas"],
+      "source": { "owner": "octocat", "repository": "heat-map", "asset": "heat-map.zip" },
+      "versions": [
+        { "version": "1.0.0", "tag": "v1.0.0", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" },
+        { "version": "1.1.0", "tag": "v1.1.0", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" }
+      ]
+    },
+    {
+      "id": "alt-text-check",
+      "name": "Alt text check",
+      "description": "Lists every image on the page that has no alt text.",
+      "author": "hubot",
+      "icon": "https://stacki.build/api/marketplace/icons/alt-text-check.svg",
+      "categories": ["accessibility"],
+      "source": { "owner": "hubot", "repository": "stacki-alt-text", "asset": "alt-text-check.zip" },
+      "versions": [{ "version": "0.3.2", "tag": "0.3.2", "sha256": "3333333333333333333333333333333333333333333333333333333333333333" }]
+    }
+  ]
+}

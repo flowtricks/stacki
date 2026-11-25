@@ -3,8 +3,12 @@
 // token that says which rendering the frame shows. Lowest of the frame's
 // modules; the measuring, reporting and hit-testing above it read this state.
 
+import { assert } from '../../shared/core/assert';
 import type { Box, Rect, TaggedPlace } from './frameBasics';
 import { PRELOAD_LIMITS, isChildNode, isComment, isElement, isText } from './frameBasics';
+import { isIterationData, recordIterationMarks } from './frameIterations';
+import { parentPath } from './framePaths';
+import { PREVIEW_STAMP_PREFIX, parseStampData, type FrameRenderProblem } from '../../shared/page/previewToken';
 
 // --- Node outlines --------------------------------------------------------
 // Pages served through the app's marker plugin wrap every model node in
@@ -33,8 +37,7 @@ export let trackedPaths: string[] = [];
 // namespace while one is open. Every .astro under src carries markers now,
 // so hover and click must resolve within the file being edited.
 export let activeScope = '';
-export const inScope = (nodePath: string) =>
-  activeScope ? nodePath.startsWith(activeScope) : !nodePath.includes('|');
+export const inScope = (nodePath: string) => (activeScope ? nodePath.startsWith(activeScope) : !nodePath.includes('|'));
 
 // Which rendered copy of the open component is being edited. A component
 // used inside a loop renders once per item, and drilling into one card
@@ -45,7 +48,17 @@ export let focusPath = '';
 export let focusOcc = 0;
 // A run whose every node has left the document isn't an instance any more:
 // a patched page collects fresh runs and leaves the old ones in the map.
-const isLive = (run: Node[]) => run.some((node) => node.isConnected);
+// Content decides it when the run has any: a patch that removes a card can
+// leave the blank text beside it in place, and that whitespace alone kept
+// the removed card's run answering for its path. A run of nothing but
+// whitespace (a comment's region) is live while that whitespace is.
+const isLive = (run: Node[]) => {
+  const content = run.filter((node) => isElement(node) || (isText(node) && node.textContent.trim() !== ''));
+  if (content.length > 0) {
+    return content.some((node) => node.isConnected);
+  }
+  return run.some((node) => node.isConnected);
+};
 // Undefined until asked, then the answer: no roots (nothing to narrow) or
 // the run of nodes the focused instance rendered. Recomputed whenever the
 // DOM moves — a patched page rebuilds the regions these come from.
@@ -60,12 +73,7 @@ export function resetFocusCache(): void {
 // What the app tracks, set as one by its `avb:track` message: the paths it
 // watches, the scope that decides what is hit-testable, and the instance
 // being edited.
-export function setTracking(next: {
-  readonly paths: string[];
-  readonly scope: string;
-  readonly focus: string;
-  readonly occurrence: number;
-}): void {
+export function setTracking(next: { readonly paths: string[]; readonly scope: string; readonly focus: string; readonly occurrence: number }): void {
   trackedPaths = next.paths;
   activeScope = next.scope;
   focusPath = next.focus;
@@ -156,46 +164,72 @@ export const announceMapped = () => {
 // naming the bytes it was marked from. The stamps on the page are the
 // manifest of this rendering, and its token — the SHA-256 of the manifest's
 // canonical text — rides on every located event, so the app can refuse a
-// click from a rendering the files have since moved past. Mirrors
-// shared/page/previewToken.ts, which this sandboxed preload cannot require; the
-// contract test (test/electron/previewServer/previewBridge.test.ts) pins the two to each
-// other. The patcher gathers the stamps at the document's end after each
-// patch; the page arrives with them wherever each file rendered.
-const STAMP_PREFIX = 'avb-d:';
+// click from a rendering the files have since moved past. Each stamp is read
+// with shared/page/previewToken.ts's own parser, so the frame and the app's
+// boundary (parsePreviewRender) accept exactly the same stamps: a forged or
+// malformed one is skipped here instead of making the app drop the whole
+// announcement, which left every click refused as "still loading". The
+// contract test (test/electron/previewServer/previewBridge.test.ts) pins the
+// canonical text to the shared one. The patcher gathers the stamps at the
+// document's end after each patch; the page arrives with them wherever each
+// file rendered.
+const STAMP_PREFIX = PREVIEW_STAMP_PREFIX;
 export const STAMP_ATTRIBUTE = 'data-avb-d';
-const STAMPS_MAX = 20000; // LIMITS.previewMarkersMax
-const MANIFEST_FILES_MAX = 512; // LIMITS.previewManifestFilesMax
+// No size limit: a page of any length, with any number of stamps and files, has
+// a token. What scales instead is the walk: it works in slices of a few
+// milliseconds and yields between them (readManifest), so a page of hundreds of
+// thousands of nodes never freezes the canvas while its stamps are gathered.
 export let renderToken: string | undefined = undefined;
 let renderStamps: { readonly file: string; readonly checksum: string }[] | undefined;
 let renderSeq = 0;
-// Undefined when the page's stamps cannot form one manifest: too many, or
-// one file stamped with two checksums (a rendering mixing versions of it).
-const readManifest = (): { file: string; checksum: string }[] | undefined => {
+export function canvasTextSourceMatches(file: string, checksum: string): boolean {
+  return renderStamps?.some((stamp) => stamp.file === file && stamp.checksum === checksum) ?? false;
+}
+
+type ManifestReading =
+  | { readonly kind: 'manifest'; readonly stamps: readonly { readonly file: string; readonly checksum: string }[] }
+  | { readonly kind: 'problem'; readonly problem: FrameRenderProblem };
+
+// How long one slice of the stamp walk runs before it hands the thread back,
+// and how many elements it visits between looks at the clock (a clock read per
+// element would cost more than the visit). Eight milliseconds leaves a frame's
+// budget for input and paint at 60 Hz.
+const MANIFEST_SLICE_MS = 8;
+const MANIFEST_SLICE_CHECK_ELEMENTS = 512;
+
+// One turn of the event loop, taken with a timer so a pending click or paint
+// runs first; the walk resumes after them.
+const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+// The page's stamps as one manifest, or why they cannot form one: one file
+// stamped with two checksums (a rendering mixing versions of it). Undefined when
+// a newer rendering announced itself during a yield: this walk's answer is moot.
+const readManifest = async (seq: number): Promise<ManifestReading | undefined> => {
   const byFile = new Map<string, string>();
-  let stamps = 0;
-  const record = (data: string): boolean => {
-    stamps += 1;
-    if (stamps > STAMPS_MAX) {
-      return false;
+  const record = (data: string): FrameRenderProblem | undefined => {
+    const stamp = parseStampData(data);
+    if (stamp === undefined) {
+      return undefined; // Not a stamp, or a forged one: never trusted, never fatal.
     }
-    if (!data.startsWith(STAMP_PREFIX)) {
-      return true;
+    const seen = byFile.get(stamp.file);
+    if (seen !== undefined && seen !== stamp.checksum) {
+      return 'conflicting-stamps';
     }
-    const rest = data.slice(STAMP_PREFIX.length);
-    const checksum = rest.slice(0, 64);
-    const file = rest.slice(65);
-    if (!/^[0-9a-f]{64}$/.test(checksum) || rest[64] !== ':' || !file) {
-      return true;
-    }
-    const seen = byFile.get(file);
-    if (seen !== undefined && seen !== checksum) {
-      return false;
-    }
-    byFile.set(file, checksum);
-    return true;
+    byFile.set(stamp.file, stamp.checksum);
+    return undefined;
   };
   const stack: Node[] = [document];
-  while (stack.length) {
+  let sliceStartedMs = performance.now();
+  for (let visited = 1; stack.length > 0; visited++) {
+    if (visited % MANIFEST_SLICE_CHECK_ELEMENTS === 0) {
+      if (MANIFEST_SLICE_MS < performance.now() - sliceStartedMs) {
+        await yieldToEventLoop();
+        if (seq !== renderSeq) {
+          return undefined;
+        }
+        sliceStartedMs = performance.now();
+      }
+    }
     const parent = stack.pop();
     if (!parent) {
       break;
@@ -204,19 +238,16 @@ const readManifest = (): { file: string; checksum: string }[] | undefined => {
       if (isElement(node)) {
         const carried = node.getAttribute(STAMP_ATTRIBUTE);
         if (carried !== null) {
-          if (STAMPS_MAX * (65 + 1_024) < carried.length) {
-            return undefined;
-          }
           // Newlines cannot occur in a stamped path, unlike spaces, so a file
           // such as `Hero Card.astro` remains one token while inherited stamps
           // can still travel together through component props.
-          const tokens = carried.split('\n').filter(Boolean);
-          if (STAMPS_MAX < tokens.length) {
-            return undefined;
-          }
-          for (const token of tokens) {
-            if (!record(token)) {
-              return undefined;
+          for (const token of carried.split('\n')) {
+            if (token.length === 0) {
+              continue;
+            }
+            const problem = record(token);
+            if (problem !== undefined) {
+              return { kind: 'problem', problem };
             }
           }
         }
@@ -226,43 +257,81 @@ const readManifest = (): { file: string; checksum: string }[] | undefined => {
       if (!isComment(node) || !node.data.startsWith(STAMP_PREFIX)) {
         continue;
       }
-      if (!record(node.data)) {
-        return undefined;
+      const problem = record(node.data);
+      if (problem !== undefined) {
+        return { kind: 'problem', problem };
       }
     }
   }
-  if (byFile.size > MANIFEST_FILES_MAX) {
-    return undefined;
-  }
-  return [...byFile.keys()]
-    .sort((left, right) => (left < right ? -1 : left === right ? 0 : 1))
-    .map((file) => ({ file, checksum: byFile.get(file) ?? '' }));
+  const files = [...byFile.keys()].sort((left, right) => (left < right ? -1 : left === right ? 0 : 1));
+  return { kind: 'manifest', stamps: files.map((file) => ({ file, checksum: byFile.get(file) ?? '' })) };
 };
-const announceRender = () => {
+
+// Called each time a rendering's token becomes known (frameTargets.ts re-hit-tests
+// a resting pointer then). One listener: the frame has one pointer.
+let renderListener: (() => void) | undefined;
+export function setRenderListener(listener: () => void): void {
+  renderListener = listener;
+}
+
+// Said once per rendering that cannot be vouched for, so the app can heal the
+// canvas instead of refusing every click on it — and again when the app asks
+// (reportRender), since a report sent before its listener mounted is lost.
+let renderProblem: FrameRenderProblem | undefined;
+const reportRenderProblem = (problem: FrameRenderProblem): void => {
+  renderProblem = problem;
+  try {
+    window.parent.postMessage({ type: 'avb:render-problem', problem }, '*');
+  } catch {
+    /* no parent to tell */
+  }
+};
+
+const announceRender = (): void => {
   renderSeq += 1;
   const seq = renderSeq;
   renderToken = undefined; // Until this rendering's digest is known, events carry none.
   renderStamps = undefined;
-  const stamps = readManifest();
-  const subtle = globalThis.crypto?.subtle;
-  if (!stamps || !subtle) {
+  renderProblem = undefined;
+  void finishRender(seq);
+};
+
+// The rest of an announcement, after the walk: the digest, then the report. Each
+// step first asks whether a newer rendering has announced itself meanwhile, since
+// the walk and the digest both yield.
+const finishRender = async (seq: number): Promise<void> => {
+  const reading = await readManifest(seq);
+  if (reading === undefined || seq !== renderSeq) {
     return;
   }
+  if (reading.kind === 'problem') {
+    reportRenderProblem(reading.problem);
+    return;
+  }
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    reportRenderProblem('no-digest');
+    return;
+  }
+  const stamps = [...reading.stamps];
   const canonical = stamps.map((stamp) => `${stamp.checksum} ${stamp.file}\n`).join('');
-  subtle.digest('SHA-256', new TextEncoder().encode(canonical)).then(
-    (digest) => {
-      if (seq !== renderSeq) {
-        return;
-      } // A newer rendering has announced itself.
-      const bytes = Array.from(new Uint8Array(digest));
-      renderToken = bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
-      renderStamps = stamps;
-      reportRender();
-    },
-    () => {
-      /* no digest, no token: the app refuses this rendering's events */
-    },
-  );
+  let digest: ArrayBuffer;
+  try {
+    digest = await subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+  } catch {
+    if (seq === renderSeq) {
+      reportRenderProblem('no-digest'); // No digest, no token: the app refuses this rendering's events.
+    }
+    return;
+  }
+  if (seq !== renderSeq) {
+    return; // A newer rendering has announced itself.
+  }
+  const bytes = Array.from(new Uint8Array(digest));
+  renderToken = bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  renderStamps = stamps;
+  reportRender();
+  renderListener?.();
 };
 
 // The first announcement can precede the editor's message listener on a fast
@@ -270,13 +339,13 @@ const announceRender = () => {
 // frame, without rehashing or briefly clearing its token.
 export function reportRender(): void {
   if (renderToken === undefined || renderStamps === undefined) {
+    if (renderProblem !== undefined) {
+      reportRenderProblem(renderProblem);
+    }
     return;
   }
   try {
-    window.parent.postMessage(
-      { type: 'avb:render', token: renderToken, stamps: renderStamps },
-      '*',
-    );
+    window.parent.postMessage({ type: 'avb:render', token: renderToken, stamps: renderStamps }, '*');
   } catch {
     /* no parent to tell */
   }
@@ -297,8 +366,7 @@ export const PATH_ATTR = 'data-avb-p';
 // the serializer, since a slotted node can't be wrapped in markers); the
 // component that renders the slot addresses that same element by its own
 // path. Whichever file is open picks its namespace out of the list.
-export const pathsOf = (element: Element): string[] =>
-  (element.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
+export const pathsOf = (element: Element): string[] => (element.getAttribute(PATH_ATTR) || '').split(' ').filter(Boolean);
 // Which tags this file put on an element itself, as opposed to the ones the
 // page arrived with. The serializer writes a tag into the markup wherever a
 // marker pair can't go — a slotted node, a word in an inline run, a component
@@ -340,8 +408,7 @@ const nsParent = (element: Element, file: string, inner: string): Element | unde
   return undefined;
 };
 // The nearest strict ancestor that carries a path, if any.
-export const taggedAncestor = (element: Element): Element | undefined =>
-  element.parentElement?.closest(`[${PATH_ATTR}]`) ?? undefined;
+export const taggedAncestor = (element: Element): Element | undefined => element.parentElement?.closest(`[${PATH_ATTR}]`) ?? undefined;
 
 // What the page calls a component instance belongs on the element the
 // instance rendered as its root. It does not always land there: the
@@ -388,9 +455,7 @@ const rodeIn = (element: Element, path: string): boolean => {
 
 const promoteInstanceTags = () => {
   for (const element of Array.from(document.querySelectorAll(`[${PATH_ATTR}]`))) {
-    const page = pathsOf(element).filter(
-      (nodePath) => !nodePath.includes('|') && rodeIn(element, nodePath),
-    );
+    const page = pathsOf(element).filter((nodePath) => !nodePath.includes('|') && rodeIn(element, nodePath));
     if (!page.length) {
       continue;
     }
@@ -452,19 +517,35 @@ const addPath = (element: Element, nodePath: string): void => {
 // "copy 2" for a click in the wrong half of itself — and the classes and
 // spacing lists, which are one entry per occurrence, disagree with the boxes.
 export const elementsWithPath = (nodePath: string): Element[] => {
-  const all: Element[] = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).filter(
-    (element) => pathsOf(element).includes(nodePath) && inFocus(element),
-  );
-  return all.filter(
-    (element) => !all.some((other) => other !== element && other.contains(element)),
-  );
+  const all: Element[] = Array.from(elementsTaggedForPath(nodePath)).filter((element) => pathsOf(element).includes(nodePath) && inFocus(element));
+  return outermostElements(all);
 };
+
+// The elements none of the others contain. `all` is in document order, which is
+// what makes one pass enough: a container comes before everything inside it, and
+// whatever sits between a kept container and its last descendant is inside it too,
+// so the last element kept is the only candidate that can contain the next one.
+// (The obvious `some(contains)` per element is quadratic: a loop of a few hundred
+// thousand copies would stall the frame for minutes.)
+function outermostElements(all: readonly Element[]): Element[] {
+  const outermost: Element[] = [];
+  let container: Element | undefined;
+  for (const element of all) {
+    if (container !== undefined && container.contains(element)) {
+      continue;
+    }
+    outermost.push(element);
+    container = element;
+  }
+  assert(outermost.length <= all.length, 'The outermost elements are a subset');
+  return outermost;
+}
 
 // A source class edit changes every rendering of that node, including loop
 // copies outside the focused instance. Measurement still uses the focused set.
-export const allElementsWithPath = (nodePath: string, countMax: number): Element[] | undefined => {
+export const allElementsWithPath = (nodePath: string): Element[] => {
   const all: Element[] = [];
-  const tagged = document.querySelectorAll(`[${PATH_ATTR}]`);
+  const tagged = elementsTaggedForPath(nodePath);
   for (let index = 0; index < tagged.length; index += 1) {
     const element = tagged.item(index);
     if (!element) {
@@ -474,14 +555,18 @@ export const allElementsWithPath = (nodePath: string, countMax: number): Element
       continue;
     }
     all.push(element);
-    if (all.length > countMax) {
-      return undefined;
-    }
   }
-  return all.filter(
-    (element) => !all.some((other) => other !== element && other.contains(element)),
-  );
+  return outermostElements(all);
 };
+
+function elementsTaggedForPath(nodePath: string): NodeListOf<Element> {
+  // Let the browser filter ordinary paths before allocating arrays or parsing
+  // tags in JavaScript. This stays live, so clones and morphs need no cache
+  // invalidation. Unusual file names use the original exact-token filter rather
+  // than interpolating untrusted quotes, escapes or whitespace into a selector.
+  const selector = /[^A-Za-z0-9_./:|@-]/.test(nodePath) ? `[${PATH_ATTR}]` : `[${PATH_ATTR}~="${nodePath}"]`;
+  return document.querySelectorAll(selector);
+}
 
 // The path a node marks, or undefined when it isn't a marker. `kind` is 's'/'e'.
 const markerPath = (node: Node, kind: 's' | 'e'): string | undefined => {
@@ -495,18 +580,38 @@ const markerPath = (node: Node, kind: 's' | 'e'): string | undefined => {
   return undefined;
 };
 
+// The document order of the start marker that opened each run, counted up
+// across passes: two runs holding exactly the same nodes (a component's root
+// inside the marker pair of the instance that renders it) are told apart by
+// it, the later start being the inner run. The markers themselves are gone
+// once collected, so this is the one place that order is kept. Runs from an
+// earlier pass have lower numbers than this pass's, which reads them as
+// outer: right for the page-script survivors pruneRegions keeps.
+const runOrders = new WeakMap<readonly Node[], number>();
+let runOrderNext = 0;
+
+/** Where the marker that opened `run` stood in document order; undefined for a run no marker opened. */
+export const runOrder = (run: readonly Node[]): number | undefined => runOrders.get(run);
+
 export const collectRegions = () => {
+  forgetHollowRegions();
   pruneRegions();
-  const { starts, markers } = findMarkers();
+  const { starts, markers, iterations } = findMarkers();
   // What each path was found to hold this pass, so a tag left on an element
   // the region no longer contains can be taken off again (untagStale).
   const collected = new Map<string, Set<Node>>();
+  // This pass's runs, gathered apart from what earlier passes recorded and
+  // then put in their place whole (see replaceRuns).
+  const fresh = new Map<string, Node[][]>();
   for (const start of starts) {
     const nodePath = markerPath(start, 's');
     if (nodePath === undefined) {
       continue;
     } // a start marker always carries a path
     const run = runAfter(start, nodePath);
+    runOrders.set(run, runOrderNext);
+    runOrderNext += 1;
+    assert(Number.isSafeInteger(runOrderNext), 'collectRegions: run order stays a safe integer');
     let set = collected.get(nodePath);
     if (!set) {
       set = new Set();
@@ -515,17 +620,173 @@ export const collectRegions = () => {
     for (const node of run) {
       set.add(node);
     }
-    recordRun(nodePath, run);
+    recordRun(fresh, nodePath, run);
   }
+  replaceRuns(fresh, collected);
   untagStale(collected);
-  for (const node of markers) {
+  // Where each pass of a loop began, kept before the comments that say so go with the markers.
+  recordIterationMarks(iterations);
+  for (const node of [...markers, ...iterations]) {
     if (isChildNode(node)) {
       node.remove();
     }
   }
   promoteInstanceTags();
+  collectHollowRegions();
   focusCache = undefined; // new runs — the focused instance may be among them
 };
+
+// --- Nodes whose markers were stripped -------------------------------------
+// A loop, a condition or a fragment puts no element of its own on the page: its
+// markers are all that say where it is. A component that renders its slot to a
+// string and strips the comments out (`slots.render()` then a regex, the usual way
+// to ask "is my slot empty?") takes those markers with it. The items the loop
+// rendered keep their `data-avb-p`, though, and each one's path is the loop's path
+// plus its own index. So a path that no element carries and no marker pair
+// encloses, but that is an ancestor of paths elements do carry, with only such
+// paths between, is a node with no element: its runs are those elements, grouped
+// by the element holding them, one run per rendered copy, in document order.
+// Markers stay the first answer: a path with a marker pair is never derived.
+// Derived runs tag nothing (a tag would make the path look carried by an element
+// on the next pass) and are recollected each pass, so a page whose markers come
+// back drops them.
+//
+// Every hollow ancestor, not only the parent: a `<Fragment slot>` holding a loop
+// and a button has the button as its child but the loop's items as grandchildren
+// (the loop is hollow too), and a fragment inside a fragment likewise. Taking only
+// the parent outlined such a fragment around the button and left the loop out.
+const hollowPaths = new Set<string>();
+
+const forgetHollowRegions = () => {
+  for (const nodePath of hollowPaths) {
+    regions.delete(nodePath);
+  }
+  hollowPaths.clear();
+};
+
+const collectHollowRegions = () => {
+  const elements = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`));
+  const carried = new Set<string>();
+  for (const element of elements) {
+    for (const nodePath of pathsOf(element)) {
+      carried.add(nodePath);
+    }
+  }
+  // Path -> one copy (see hollowCopyKey) -> that copy's elements, all in document order.
+  const found = new Map<string, Map<string, Node[]>>();
+  const holders = new Map<Node, number>();
+  const callers = new Map<Node, ReadonlySet<string>>();
+  for (const element of elements) {
+    const holder = element.parentNode;
+    if (holder === null) {
+      continue;
+    }
+    for (const nodePath of pathsOf(element)) {
+      // Climbs one level per step, so the cap is the depth a path can have; nearly always
+      // the parent is carried and this stops at once.
+      let child = nodePath;
+      for (let level = 0; level < PRELOAD_LIMITS.domDepthMax; level++) {
+        const parent = parentPath(child);
+        if (parent === undefined || carried.has(parent) || regions.has(parent)) {
+          break;
+        }
+        assert(parent.length < child.length, 'collectHollowRegions: a parent path is shorter than its child');
+        const copies = found.get(parent) ?? new Map<string, Node[]>();
+        found.set(parent, copies);
+        const holderIndex = holders.get(holder) ?? holders.size;
+        holders.set(holder, holderIndex);
+        const key = hollowCopyKey(holderIndex, nodePath, pathsOf(element), callerNamespaces(holder, callers));
+        const run = copies.get(key) ?? [];
+        copies.set(key, run);
+        // The last element pushed is the only one that can repeat: an element visits
+        // its paths one after another, so a second path of the same copy comes right
+        // behind the first. (`includes` over the whole run is quadratic in a loop's size.)
+        if (run.at(-1) !== element) {
+          run.push(element);
+        }
+        child = parent;
+      }
+    }
+  }
+  for (const [nodePath, copies] of found) {
+    const runs = Array.from(copies.values(), hollowRunSpan);
+    assert(runs.length > 0, 'collectHollowRegions: a derived path has at least one run');
+    regions.set(nodePath, runs);
+    hollowPaths.add(nodePath);
+  }
+};
+
+// A copy's run is everything from its first element to its last, the text and untagged
+// markup between them included: a fragment's children are siblings, and the bare text
+// among them (which carries no tag) is as much the fragment as the elements around it.
+// Elements of one copy share a holder (hollowCopyKey), so this walks siblings only.
+// Linear in the nodes it returns, and a copy's elements are found in document order.
+function hollowRunSpan(elements: readonly Node[]): Node[] {
+  const first = elements[0];
+  const last = elements.at(-1);
+  assert(first !== undefined, 'hollowRunSpan: a derived copy has an element');
+  assert(last !== undefined, 'hollowRunSpan: a derived copy has a last element');
+  const span: Node[] = [];
+  for (let node: Node | undefined = first; node !== undefined; node = node.nextSibling ?? undefined) {
+    span.push(node);
+    if (node === last) {
+      return span;
+    }
+  }
+  // The last element was not a later sibling of the first: the copy is not one run of
+  // siblings after all, so it stays the elements alone rather than a guessed range.
+  return [...elements];
+}
+
+// The files whose paths sit on the holder or above it: the files that CALL whatever
+// renders in the holder. Memoized per holder, so a loop of thousands of items in one
+// holder walks its ancestors once.
+function callerNamespaces(holder: Node, memo: Map<Node, ReadonlySet<string>>): ReadonlySet<string> {
+  const known = memo.get(holder);
+  if (known !== undefined) {
+    return known;
+  }
+  // The page is the outermost file: it calls everything and nothing calls it.
+  const namespaces = new Set<string>(['']);
+  let up: Element | undefined = isElement(holder) ? (holder.closest(`[${PATH_ATTR}]`) ?? undefined) : undefined;
+  for (let depth = 0; up !== undefined && depth < PRELOAD_LIMITS.domDepthMax; depth++) {
+    for (const nodePath of pathsOf(up)) {
+      namespaces.add(namespaceOf(nodePath));
+    }
+    up = taggedAncestor(up);
+  }
+  assert(namespaces.has(''), 'callerNamespaces: the page is always a caller');
+  memo.set(holder, namespaces);
+  return namespaces;
+}
+
+const namespaceOf = (nodePath: string): string => nodePath.slice(0, nodePath.lastIndexOf('|') + 1);
+
+// Which copy of a derived node an element belongs to. Elements in one holder are
+// one copy, unless they are the roots of separate component instances: five
+// <Button>s side by side all carry `Button.astro|0.0.0`, and each is a copy of
+// its own, told apart by the paths the calling file gave them (`0.1`, `0.2`…).
+// A loop's items carry the same paths as each other, so they stay one copy.
+// Grouping the buttons as one would put the open instance's siblings inside it.
+//
+// Only the CALLING files' paths tell instances apart. An element also carries the
+// path of its own component's root (`Paragraph.astro|0` on the paragraph a
+// `<Paragraph>` renders), and that names the file rendered inside it, not which copy
+// it is: a `<Fragment slot>` holding a Paragraph and a ButtonWrapper split in two by
+// those paths, and its outline wrapped the paragraph alone. A file is a caller when
+// its paths sit on the holder or above it (callerNamespaces); a file rendered inside
+// the element never does.
+function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly string[], callers: ReadonlySet<string>): string {
+  const namespace = namespaceOf(nodePath);
+  assert(callers.has(''), 'hollowCopyKey: the page is a caller');
+  const others = paths
+    .filter((other) => namespaceOf(other) !== namespace)
+    .filter((other) => callers.has(namespaceOf(other)))
+    .sort();
+  return `${holderIndex} ${others.join(' ')}`;
+}
+
+export { parentPath } from './framePaths';
 
 // Runs that have left the document go first. A patched page collects
 // again, and what it collected last time is either the same nodes (the
@@ -549,9 +810,10 @@ const pruneRegions = () => {
 // keeps it working whatever that world does or doesn't expose. It is also
 // the only thing standing between the page and no outlines at all —
 // startOutlines gives up entirely when nothing is recorded.
-const findMarkers = (): { starts: Node[]; markers: Node[] } => {
+const findMarkers = (): { starts: Node[]; markers: Node[]; iterations: Comment[] } => {
   const starts: Node[] = [];
   const markers: Node[] = [];
+  const iterations: Comment[] = [];
   const visit = (parent: Node, depth: number) => {
     if (depth > PRELOAD_LIMITS.domDepthMax) {
       return;
@@ -564,13 +826,16 @@ const findMarkers = (): { starts: Node[]; markers: Node[] } => {
       if (isStart || markerPath(node, 'e') !== undefined) {
         markers.push(node);
       }
+      if (isComment(node) && isIterationData(node.data)) {
+        iterations.push(node);
+      }
       if (isElement(node)) {
         visit(node, depth + 1);
       }
     }
   };
   visit(document, 0);
-  return { starts, markers };
+  return { starts, markers, iterations };
 };
 
 // The run a start marker opens, tagging each element in it with the path.
@@ -605,21 +870,99 @@ const runAfter = (start: Node, nodePath: string): Node[] => {
   return run;
 };
 
-// The same place, collected again: it replaces itself. Appending would
-// make one node look like many — the same box drawn over and over (and
-// the overlays are translucent, so a node hovered after fourteen edits
-// was painted fourteen times, an opaque wash over the page), and every
-// count of "which copy" off by however many edits had been made.
-const recordRun = (nodePath: string, run: Node[]) => {
-  if (!regions.has(nodePath)) {
-    regions.set(nodePath, []);
+// The same place, collected again in one pass: it replaces itself.
+// Appending would make one node look like many — the same box drawn over
+// and over (and the overlays are translucent, so a node hovered after
+// fourteen edits was painted fourteen times, an opaque wash over the
+// page), and every count of "which copy" off by however many edits had
+// been made.
+// Which run holds each node of a path's runs, so that finding the run a new one
+// replaces costs the new run's length, not a scan of every run recorded so far (a
+// loop of a few hundred thousand copies records that many runs under one path).
+const runOwners = new WeakMap<Node[][], Map<Node, number>>();
+
+const recordRun = (fresh: Map<string, Node[][]>, nodePath: string, run: Node[]) => {
+  const runs = fresh.get(nodePath) ?? [];
+  if (!fresh.has(nodePath)) {
+    fresh.set(nodePath, runs);
   }
-  const runs = regions.get(nodePath) ?? [];
-  const again = runs.findIndex((other) => other.some((node) => run.includes(node)));
+  let owners = runOwners.get(runs);
+  if (owners === undefined) {
+    owners = new Map<Node, number>();
+    runOwners.set(runs, owners);
+  }
+  let again = -1;
+  for (const node of run) {
+    const owner = owners.get(node);
+    if (owner !== undefined && (again < 0 || owner < again)) {
+      again = owner;
+    }
+  }
+  let index = again;
   if (again >= 0) {
+    for (const node of runs[again] ?? []) {
+      if (owners.get(node) === again) {
+        owners.delete(node);
+      }
+    }
     runs[again] = run;
   } else {
+    index = runs.length;
     runs.push(run);
+  }
+  for (const node of run) {
+    owners.set(node, index);
+  }
+  if (run.length > 0) {
+    assert(runs[index] === run, 'recordRun: a collected run is recorded for its path');
+  }
+};
+
+// A path this pass found markers for is exactly the runs it found: what an
+// earlier pass recorded for it is dropped, not merged in. Merging assumed a
+// patch either morphs a node in place as the same place or takes it away,
+// but a patch reuses nodes by position. Moving two cards into a loop, or
+// taking them out again, turned cards into copies of other loop children;
+// the old runs stayed live and kept their paths, and the loop's second
+// child answered with the "43%" card, a copy of the FIRST child.
+//
+// A path with no markers this pass keeps its live runs (pruneRegions): a
+// page script may have moved its nodes where the anchor sync could not put
+// markers back, and an old run is still the best answer for those. Not a
+// run whose nodes this pass placed somewhere else, though: those nodes now
+// stand for another place, and the path they were is gone from the page.
+// Its narrowed node set goes into `collected`, so the tags it put on them
+// come off too (untagStale).
+const replaceRuns = (fresh: ReadonlyMap<string, Node[][]>, collected: Map<string, Set<Node>>) => {
+  const claimed = new Set<Node>();
+  for (const nodes of collected.values()) {
+    for (const node of nodes) {
+      claimed.add(node);
+    }
+  }
+  for (const [nodePath, runs] of regions) {
+    if (fresh.has(nodePath)) {
+      continue;
+    }
+    const kept = runs.filter((run) => !run.some((node) => claimed.has(node)));
+    if (kept.length === runs.length) {
+      continue;
+    }
+    if (kept.length > 0) {
+      regions.set(nodePath, kept);
+    } else {
+      regions.delete(nodePath);
+    }
+    collected.set(nodePath, new Set(kept.flat()));
+  }
+  for (const [nodePath, runs] of fresh) {
+    regions.set(nodePath, runs);
+  }
+  for (const [nodePath, runs] of fresh) {
+    assert(regions.get(nodePath) === runs, 'replaceRuns: a path collected this pass holds only this pass runs');
+  }
+  for (const runs of regions.values()) {
+    assert(runs.length > 0, 'replaceRuns: a recorded path has at least one run');
   }
 };
 
@@ -639,12 +982,7 @@ const recordRun = (nodePath: string, run: Node[]) => {
 const untagStale = (collected: Map<string, Set<Node>>) => {
   for (const element of Array.from(document.querySelectorAll(`[${PATH_ATTR}]`))) {
     const mine = ourTags.get(element);
-    const kept = pathsOf(element).filter(
-      (nodePath) =>
-        !mine?.has(nodePath) ||
-        !collected.has(nodePath) ||
-        (collected.get(nodePath)?.has(element) ?? false),
-    );
+    const kept = pathsOf(element).filter((nodePath) => !mine?.has(nodePath) || !collected.has(nodePath) || (collected.get(nodePath)?.has(element) ?? false));
     if (kept.length === pathsOf(element).length) {
       continue;
     }
@@ -728,9 +1066,12 @@ export const toRect = (box: Box): Rect => ({
 // counted tagged elements and the click counted marker runs, of which a
 // tagged node has none — so clicking the second link in a list reported
 // occurrence 0 and the first one lit up.
-export const taggedPlaces = (nodePath: string): TaggedPlace[] => {
+export const taggedPlaces = (nodePath: string): TaggedPlace[] => placesOf(elementsWithPath(nodePath));
+
+/** The places of elements already found for a path (elementsWithPath), for a caller that needs the elements too. */
+export const placesOf = (elements: readonly Element[]): TaggedPlace[] => {
   const out: TaggedPlace[] = [];
-  for (const element of elementsWithPath(nodePath)) {
+  for (const element of elements) {
     const acc = addNode(undefined, element);
     if (acc) {
       out.push({ el: element, rect: toRect(acc) });

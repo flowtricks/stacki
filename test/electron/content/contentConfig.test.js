@@ -35,9 +35,7 @@ const os = require('os');
 const { readContentConfig, stopAllServices } = require('#dist/electron/content/contentConfig.js');
 
 const DEFAULT_FIXTURE = path.join(os.homedir(), 'Downloads', 'awesome-client-main');
-const projectPath = path.resolve(
-  process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE,
-);
+const projectPath = path.resolve(process.argv[2] || process.env.STACKI_CONTENT_FIXTURE || DEFAULT_FIXTURE);
 
 const failures = [];
 let checked = 0;
@@ -83,9 +81,7 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
     process.exit(1);
   }
 
-  const by = Object.fromEntries(
-    result.collections.map((collection) => [collection.name, collection]),
-  );
+  const by = Object.fromEntries(result.collections.map((collection) => [collection.name, collection]));
   const has = (name) => {
     const collection = by[name];
     if (!collection) {
@@ -97,29 +93,17 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
   // Loader kinds decide what is editable at all.
   for (const name of ['blog', 'docs', 'landingPages', 'apiEndpoints']) {
     const collection = has(name);
-    check(
-      `${name}: glob loader`,
-      collection?.loader?.kind === 'glob',
-      `got ${collection?.loader?.kind}`,
-    );
+    check(`${name}: glob loader`, collection?.loader?.kind === 'glob', `got ${collection?.loader?.kind}`);
     check(`${name}: editable`, collection?.editable === true);
   }
   for (const name of ['authors', 'pricingPlans', 'testimonials', 'jobs']) {
     const collection = has(name);
-    check(
-      `${name}: file loader`,
-      collection?.loader?.kind === 'file',
-      `got ${collection?.loader?.kind}`,
-    );
+    check(`${name}: file loader`, collection?.loader?.kind === 'file', `got ${collection?.loader?.kind}`);
     check(`${name}: names its file`, !!collection?.loader?.file);
   }
   for (const name of ['events', 'releases', 'iconLibrary', 'announcements', 'buildInfo']) {
     const collection = has(name);
-    check(
-      `${name}: custom loader`,
-      collection?.loader?.kind === 'custom',
-      `got ${collection?.loader?.kind}`,
-    );
+    check(`${name}: custom loader`, collection?.loader?.kind === 'custom', `got ${collection?.loader?.kind}`);
     check(`${name}: read-only`, collection?.editable === false);
   }
 
@@ -148,15 +132,11 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
   check('blog: no cross-field checks', by.blog?.crossFieldChecks === false);
 
   const blog = by.blog?.schema;
-  check(
-    'blog.title: length bounds',
-    propAt(blog, 'title')?.minLength === 3 && propAt(blog, 'title')?.maxLength === 120,
-  );
+  check('blog.title: length bounds', propAt(blog, 'title')?.minLength === 3 && propAt(blog, 'title')?.maxLength === 120);
   check('blog.author: reference to authors', propAt(blog, 'author')?.astroReference === 'authors');
   check(
     'blog.contributors: array of references, default []',
-    propAt(blog, 'contributors')?.items?.astroReference === 'authors' &&
-      Array.isArray(propAt(blog, 'contributors')?.default),
+    propAt(blog, 'contributors')?.items?.astroReference === 'authors' && Array.isArray(propAt(blog, 'contributors')?.default),
   );
   check('blog.heroImage: image', propAt(blog, 'heroImage')?.astroImage === true);
   check('blog.pubDate: date', propAt(blog, 'pubDate')?.astroDate === true);
@@ -164,10 +144,7 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
   check('blog.heroImage: optional', !(blog?.required || []).includes('heroImage'));
   check('blog.draft: default false', propAt(blog, 'draft')?.default === false);
   check('blog.category: enum', (propAt(blog, 'category')?.enum || []).includes('engineering'));
-  check(
-    'blog.tags: item bounds',
-    propAt(blog, 'tags')?.minItems === 1 && propAt(blog, 'tags')?.maxItems === 8,
-  );
+  check('blog.tags: item bounds', propAt(blog, 'tags')?.minItems === 1 && propAt(blog, 'tags')?.maxItems === 8);
   check('blog.seo.ogImage: image, nested', propAt(blog, 'seo.ogImage')?.astroImage === true);
 
   // A value that is one thing on disk and another in the entry.
@@ -185,29 +162,19 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
 
   // Discriminated unions, at entry level and inside an array.
   const settings = by.siteSettings?.schema;
-  check(
-    'siteSettings: union of kinds',
-    Array.isArray(settings?.oneOf) && settings.oneOf.length === 5,
-  );
-  check(
-    'siteSettings: discriminator is a literal',
-    settings?.oneOf?.[0]?.properties?.kind?.const === 'brand',
-  );
+  check('siteSettings: union of kinds', Array.isArray(settings?.oneOf) && settings.oneOf.length === 5);
+  check('siteSettings: discriminator is a literal', settings?.oneOf?.[0]?.properties?.kind?.const === 'brand');
   const blocks = propAt(by.landingPages?.schema, 'blocks');
   check('landingPages.blocks: at least one', blocks?.minItems === 1);
   check('landingPages.blocks: block union', (blocks?.items?.oneOf || []).length === 12);
   check(
     'landingPages.blocks: a block can hold an image',
-    (blocks?.items?.oneOf || []).some((block) =>
-      Object.values(block.properties || {}).some((property) => property.astroImage === true),
-    ),
+    (blocks?.items?.oneOf || []).some((block) => Object.values(block.properties || {}).some((property) => property.astroImage === true)),
   );
   check(
     'landingPages.blocks: a block can hold a reference',
     (blocks?.items?.oneOf || []).some((block) =>
-      Object.values(block.properties || {}).some(
-        (property) => property.astroReference || property.items?.astroReference,
-      ),
+      Object.values(block.properties || {}).some((property) => property.astroReference || property.items?.astroReference),
     ),
   );
 
@@ -216,42 +183,28 @@ const definitionOf = (root, ref) => root?.$defs?.[String(ref).split('/').pop()] 
   const items = nav?.properties?.items;
   check('navigation.items: recursive $ref', typeof items?.items?.$ref === 'string');
   const navItem = definitionOf(nav, items?.items?.$ref);
-  check(
-    'navigation: item children recurse',
-    navItem?.properties?.children?.items?.$ref === items?.items?.$ref,
-  );
+  check('navigation: item children recurse', navItem?.properties?.children?.items?.$ref === items?.items?.$ref);
   check(
     'navigation: a section header has no href',
     (navItem?.properties?.href?.anyOf || []).some((schema) => schema.type === 'null'),
   );
 
   // looseObject: fields nobody declared still exist and must survive a save.
-  check(
-    'notes: extra keys allowed',
-    !!by.notes?.schema && by.notes.schema.additionalProperties !== false,
-  );
+  check('notes: extra keys allowed', !!by.notes?.schema && by.notes.schema.additionalProperties !== false);
 
   // Patterns reach the UI as patterns, so a field can say what it wants.
-  check(
-    'apiEndpoints.path: leading slash',
-    propAt(by.apiEndpoints?.schema, 'path')?.pattern?.includes('^'),
-  );
+  check('apiEndpoints.path: leading slash', propAt(by.apiEndpoints?.schema, 'path')?.pattern?.includes('^'));
   check('docs.version: pattern', typeof propAt(by.docs?.schema, 'version')?.pattern === 'string');
 
   const total = result.collections.length;
   if (failures.length) {
-    console.error(
-      `\ncontent-config: ${failures.length} failed, ${checked - failures.length} passed  ` +
-        `[${total} collections]\n`,
-    );
+    console.error(`\ncontent-config: ${failures.length} failed, ${checked - failures.length} passed  ` + `[${total} collections]\n`);
     console.error(failures.join('\n') + '\n');
     stopAllServices();
     process.exit(1);
   }
   // Logged before the service is stopped: with nothing left holding the loop
   // open, node can exit before a piped stdout has flushed.
-  console.log(
-    `content-config: ${checked} passed  [${total} collections, ${path.basename(projectPath)}]`,
-  );
+  console.log(`content-config: ${checked} passed  [${total} collections, ${path.basename(projectPath)}]`);
   stopAllServices();
 })();

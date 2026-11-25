@@ -1,26 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import type {
-  ComponentProperties,
-  PropertyChange,
-} from '../../../shared/properties/propertyEditing';
+import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
+import type { PropertyError } from '../../../shared/properties/propertyErrors';
 import { onPropertyFilesChanged as onFilesChanged } from '../../ipc/editorEnvironment';
 import { onWindowReturn } from '../../lib/windowReturn';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { err, ok } from '../../../shared/core/result';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
+import { confirmPropertyRemoval } from './propertyRemovalDialog';
+import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
+import { refusalOf, savePhaseOf, type PropertySaveHost, type PropertySaveOutcome } from './propertyAutosave';
 
 export interface ComponentPropertiesPanelProps {
   readonly projectPath: string;
   readonly file: string;
   readonly name: string;
   readonly flushSave: () => Promise<unknown>;
-  readonly onSavePhase: (phase: 'idle' | 'saving') => void;
+  readonly onSavePhase: (phase: 'idle' | 'saving' | 'autosaving') => void;
   readonly onSaved: () => Promise<void>;
   /** An applied batch can be undone with this token (step 6). */
   readonly onRecordUndo?: (token: string) => void;
 }
 type PanelState =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'error'; readonly message: string; readonly error?: PropertyError | undefined }
   | { readonly kind: 'ready'; readonly data: ComponentProperties };
 type LoadReason = 'initial' | 'external';
 interface Snapshot {
@@ -29,47 +32,51 @@ interface Snapshot {
 }
 
 export function useComponentProperties(props: ComponentPropertiesPanelProps) {
+  const translate = useTranslate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
   const snapshot = usePropertySnapshot(props, pending, setError);
-  const save = async (change: PropertyChange): Promise<boolean> => {
-    if (snapshot.state.kind !== 'ready' || pending.current) {
-      return false;
+  // `reports` says who tells the person. The panel's own actions fail as a toast
+  // and refresh the list. A form saving itself shows the reason beside its fields
+  // and reloads under itself: a refresh would remount the panel and close it.
+  const run = async (change: PropertyChange, reports: 'panel' | 'form'): Promise<PropertySaveOutcome> => {
+    const current = snapshot.latest.current;
+    if (current.kind !== 'ready' || pending.current) {
+      return { kind: 'refused', message: translate('componentProps.panel.saveBusy') };
     }
     pending.current = true;
     snapshot.invalidate();
-    props.onSavePhase('saving');
-    setBusy(true);
-    setError('');
+    props.onSavePhase(reports === 'panel' ? 'saving' : savePhaseOf(change));
+    if (reports === 'panel') {
+      setBusy(true);
+      setError('');
+    }
+    const tell = (message: string): void => {
+      if (reports === 'panel' && snapshot.active.current) {
+        setError(message);
+      }
+    };
     try {
       await props.flushSave();
-      const result = await editComponentProperties(
-        props.projectPath,
-        props.file,
-        snapshot.state.data.source,
-        change,
-      );
+      const result = await editComponentProperties(props.projectPath, props.file, current.data.source, change);
       if (!result.ok) {
-        if (snapshot.active.current) {
-          if (result.error.code === 'conflict') {
-            snapshot.requestRefresh();
-          }
-          setError(result.error.message);
+        const conflict = result.error.code === 'conflict';
+        if (conflict && reports === 'panel' && snapshot.active.current) {
+          snapshot.requestRefresh();
         }
-        return false;
+        tell(propertyErrorTextFor(result.error, translate));
+        return refusalOf(result.error, translate);
       }
       if (snapshot.active.current) {
         snapshot.accept(result.value);
       }
       props.onRecordUndo?.(result.value.undo);
       await props.onSaved();
-      return true;
+      return { kind: 'saved', source: result.value.source };
     } catch (caught: unknown) {
-      if (snapshot.active.current) {
-        setError(String(caught));
-      }
-      return false;
+      tell(String(caught));
+      return { kind: 'refused', message: String(caught) };
     } finally {
       pending.current = false;
       props.onSavePhase('idle');
@@ -79,15 +86,37 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
       }
     }
   };
-  return { state: snapshot.state, revision: snapshot.revision, busy, error, save };
+  const save = async (change: PropertyChange): Promise<boolean> => {
+    // A deletion reaches every instance on the site, so it is confirmed first, with what it will take out (propertyRemovalDialog.tsx).
+    if (change.kind === 'remove' && !(await confirmPropertyRemoval({ projectPath: props.projectPath, file: props.file, name: change.name, translate }))) {
+      return false;
+    }
+    return (await run(change, 'panel')).kind === 'saved';
+  };
+  const saveHost: PropertySaveHost = {
+    save: (change) => run(change, 'form'),
+    reload: async (name) => {
+      const read = await readComponentProperties(props.projectPath, props.file);
+      if (!read.ok) {
+        return err(propertyErrorTextFor(read.error, translate));
+      }
+      snapshot.accept(read.value);
+      const property = read.value.properties.find((candidate) => candidate.name === name);
+      return property === undefined ? err(translate('componentProps.panel.propertyGone', { name })) : ok(property);
+    },
+  };
+  // A read that failed is worded in the language on screen, not the one the refusal was made in.
+  const shown = snapshot.state;
+  const state: PanelState = shown.kind === 'error' && shown.error !== undefined ? { ...shown, message: propertyErrorTextFor(shown.error, translate) } : shown;
+  return { state, revision: snapshot.revision, busy, error, save, saveHost };
 }
 
-function usePropertySnapshot(
-  props: ComponentPropertiesPanelProps,
-  pending: MutableRefObject<boolean>,
-  setError: (message: string) => void,
-) {
+function usePropertySnapshot(props: ComponentPropertiesPanelProps, pending: MutableRefObject<boolean>, setError: (message: string) => void) {
   const [snapshot, setSnapshot] = useState<Snapshot>({ state: { kind: 'loading' }, revision: 0 });
+  // What the next save is checked against, ahead of the render: back-to-back
+  // saves must each see the source the one before left.
+  const latest = useRef<PanelState>(snapshot.state);
+  latest.current = snapshot.state;
   const active = useRef(false);
   const version = useRef(0);
   const invalidateReads = useCallback(() => {
@@ -121,11 +150,14 @@ function usePropertySnapshot(
   return {
     ...snapshot,
     active,
-    accept: (data: ComponentProperties) =>
+    latest,
+    accept: (data: ComponentProperties) => {
+      latest.current = { kind: 'ready', data };
       setSnapshot((previous) => ({
         ...previous,
         state: { kind: 'ready', data },
-      })),
+      }));
+    },
     invalidate: () => {
       invalidateReads();
       queued.current = queued.current || reading.current === 'external';
@@ -183,19 +215,14 @@ function refreshSnapshot(previous: Snapshot, state: PanelState): Snapshot {
   return { state, revision: previous.revision + 1 };
 }
 
-async function loadPropertiesPanel(
-  props: ComponentPropertiesPanelProps,
-  reason: LoadReason,
-): Promise<PanelState> {
+async function loadPropertiesPanel(props: ComponentPropertiesPanelProps, reason: LoadReason): Promise<PanelState> {
   try {
     // An external read must never flush a stale model over the new disk source.
     if (reason === 'initial') {
       await props.flushSave();
     }
     const result = await readComponentProperties(props.projectPath, props.file);
-    return result.ok
-      ? { kind: 'ready', data: result.value }
-      : { kind: 'error', message: result.error.message };
+    return result.ok ? { kind: 'ready', data: result.value } : { kind: 'error', message: result.error.message, error: result.error };
   } catch (caught: unknown) {
     return { kind: 'error', message: String(caught) };
   }

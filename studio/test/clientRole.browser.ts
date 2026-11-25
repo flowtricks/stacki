@@ -1,11 +1,12 @@
+// Goal: verify Client restrictions and transitions to the Admin role (formerly Developer).
+// Method: use a live draft to check editing, history, persistence and menu controls.
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -45,18 +46,12 @@ try {
   assert.equal(await readSource(), original);
   await page.locator('.rich-content').fill('Client role content check');
   await saved();
-  await page
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'Client role content check', exact: true })
-    .waitFor();
+  await page.frameLocator('iframe').getByRole('heading', { name: 'Client role content check', exact: true }).waitFor();
   assert.ok((await readSource()).includes('Client role content check'));
   await row('Heading').click();
   await page.keyboard.press('Meta+z');
   await saved();
-  await page
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'Style Guide', exact: true })
-    .waitFor();
+  await page.frameLocator('iframe').getByRole('heading', { name: 'Style Guide', exact: true }).waitFor();
   assert.equal(await readSource(), original);
   await row('Heading').click({ button: 'right' });
   await page.getByRole('menuitem', { name: /Duplicate/ }).click();
@@ -64,12 +59,7 @@ try {
   await row('Heading').nth(1).waitFor();
   await page.keyboard.press('Meta+z');
   await saved();
-  await page.waitForFunction(
-    () =>
-      [...document.querySelectorAll('.structure-node .label')].filter(
-        (el) => el.textContent === 'Heading',
-      ).length === 1,
-  );
+  await page.waitForFunction(() => [...document.querySelectorAll('.structure-node .label')].filter((el) => el.textContent === 'Heading').length === 1);
   assert.equal(await readSource(), original);
   await page.reload();
   await saved();
@@ -78,13 +68,13 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/client-role-menu.png' });
   await page.keyboard.press('Escape');
-  await switchRole('Designer');
+  await switchRole('Admin');
   await page.getByRole('button', { name: 'Code', exact: true }).waitFor();
   await page.locator('.frontmatter-node').dblclick();
   await page.getByRole('dialog', { name: 'Frontmatter', exact: true }).waitFor();
   await switchRole('Client');
   assert.equal(await page.getByRole('dialog').count(), 0);
-  await switchRole('Designer');
+  await switchRole('Admin');
   await page.getByRole('button', { name: 'Expand all', exact: true }).click();
   await row('Heading').dblclick();
   await page.locator('.comp-back').waitFor();
@@ -116,31 +106,23 @@ try {
   await browser.close();
 }
 function row(name: string) {
-  return page
-    .locator('.structure-node')
-    .filter({ has: page.locator('.label', { hasText: new RegExp('^' + name + '$') }) });
+  return page.locator('.structure-node').filter({ has: page.locator('.label', { hasText: new RegExp('^' + name + '$') }) });
 }
 async function saved() {
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
 }
-async function switchRole(role: 'Client' | 'Designer') {
+async function switchRole(role: 'Client' | 'Admin') {
   await page.getByLabel('Stacki account menu', { exact: true }).click();
   await page.getByRole('menuitemradio', { name: new RegExp(role) }).click();
 }
 async function readSource() {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/index.astro', url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/index.astro', url).href);
   return string(record(await response.json())['source']);
 }
 async function assertClientChrome(page: Page) {
   await page.locator('.client-role-badge').waitFor();
   for (const name of ['Code', 'Variables', 'Style', 'Edit code']) {
-    assert.equal(
-      await page.getByRole('button', { name, exact: true }).count(),
-      0,
-      name + ' hidden',
-    );
+    assert.equal(await page.getByRole('button', { name, exact: true }).count(), 0, name + ' hidden');
   }
   assert.equal(await page.locator('.frontmatter-node').count(), 0);
 }

@@ -1,0 +1,161 @@
+{
+ "collections": {
+  "media": {
+   "fields": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "categories": {
+   "fields": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "posts": {
+   "fields": true,
+   "readVersions": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "pages": {
+   "fields": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "payload-locked-documents": {
+   "fields": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "payload-preferences": {
+   "fields": true,
+   "create": true,
+   "read": {
+    "permission": true,
+    "where": {
+     "and": [
+      {
+       "user.value": {
+        "equals": 1
+       }
+      },
+      {
+       "user.relationTo": {
+        "equals": "users"
+       }
+      }
+     ]
+    }
+   },
+   "update": {
+    "permission": true,
+    "where": {
+     "and": [
+      {
+       "user.value": {
+        "equals": 1
+       }
+      },
+      {
+       "user.relationTo": {
+        "equals": "users"
+       }
+      }
+     ]
+    }
+   },
+   "delete": {
+    "permission": true,
+    "where": {
+     "and": [
+      {
+       "user.value": {
+        "equals": 1
+       }
+      },
+      {
+       "user.relationTo": {
+        "equals": "users"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "payload-migrations": {
+   "fields": true,
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true
+  },
+  "users": {
+   "fields": {
+    "name": true,
+    "updatedAt": true,
+    "createdAt": true,
+    "enableAPIKey": true,
+    "apiKey": {
+     "create": true,
+     "update": true
+    },
+    "apiKeyIndex": {
+     "create": true,
+     "update": true
+    },
+    "hasAPIKey": true,
+    "email": true,
+    "resetPasswordToken": {
+     "read": true
+    },
+    "resetPasswordExpiration": {
+     "read": true
+    },
+    "salt": {
+     "read": true
+    },
+    "hash": {
+     "read": true
+    },
+    "resetPasswordRequestedAt": {
+     "read": true
+    },
+    "loginAttempts": {
+     "read": true
+    },
+    "lockUntil": {
+     "read": true
+    },
+    "sessions": {
+     "create": true,
+     "fields": {
+      "id": {
+       "create": true
+      },
+      "createdAt": {
+       "create": true
+      },
+      "expiresAt": {
+       "create": true
+      }
+     }
+    }
+   },
+   "create": true,
+   "read": true,
+   "update": true,
+   "delete": true,
+   "unlock": true
+  }
+ },
+ "canAccessAdmin": true
+}

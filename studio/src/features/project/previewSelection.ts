@@ -3,12 +3,7 @@ import { flatten, type ParserNode } from '../source/source';
 import type { usePreview } from '../preview/usePreview';
 import type { ComponentFocus } from './editorNavigation';
 
-export function previewSelection(
-  preview: ReturnType<typeof usePreview>,
-  file: string,
-  nodes: readonly ParserNode[],
-  focus?: ComponentFocus,
-) {
+export function previewSelection(preview: ReturnType<typeof usePreview>, file: string, nodes: readonly ParserNode[], focus?: ComponentFocus) {
   const labels = () =>
     preview.send({
       type: 'studio:labels',

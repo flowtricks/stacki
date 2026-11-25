@@ -3,20 +3,11 @@
 // Method: the scan's checks are pure functions of a path and its text, so each
 // is fed in-memory files — a known-good file, then each known-bad shape — and
 // the reported rule ids are compared exactly. The dependency record and the
-// assertion-density counter get the same treatment with small inputs. Limits
-// are exercised at their boundary: exactly 100 columns passes, 101 fails.
+// assertion-density counter get the same treatment with small inputs.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { countFile } from '../../../scripts/policy/density.mts';
-import { POLICY_LIMITS } from '../../../scripts/policy/limits.mts';
-import {
-  dependencyViolations,
-  isExempt,
-  layoutUniquenessViolations,
-  testMirrorViolations,
-  normalizePath,
-  scanFile,
-} from '../../../scripts/policy/scan.mts';
+import { dependencyViolations, isExempt, layoutUniquenessViolations, testMirrorViolations, normalizePath, scanFile } from '../../../scripts/policy/scan.mts';
 
 function rules(file: string, text: string): readonly string[] {
   return scanFile(file, text).map((violation) => violation.rule);
@@ -26,22 +17,11 @@ test('a clean source file passes', () => {
   assert.deepEqual(rules('src/a.ts', '// Header.\nexport const a = 1;\n'), []);
 });
 
-test('line width: the limit is inclusive and counted in code points', () => {
-  const limit = POLICY_LIMITS.lineColumnsMax;
-  assert.deepEqual(rules('src/a.ts', 'x'.repeat(limit)), []);
-  assert.deepEqual(rules('src/a.ts', 'x'.repeat(limit + 1)), ['line-width']);
-  // One emoji is one column, though it is two UTF-16 code units.
-  assert.deepEqual(rules('src/a.ts', '😀'.repeat(limit)), []);
-  // A CRLF line ending is not a column.
-  assert.deepEqual(rules('src/a.ts', `${'x'.repeat(limit)}\r\n`), []);
-});
-
-test('line width: code and config are held, prose is not', () => {
-  const long = 'x'.repeat(POLICY_LIMITS.lineColumnsMax + 1);
-  for (const file of ['a.json', 'a.yml', 'a.css', 'a.mjs', 'a.tsx', 'a.html']) {
-    assert.deepEqual(rules(file, long), ['line-width'], file);
+test('a long line is not a violation', () => {
+  const long = 'x'.repeat(400);
+  for (const file of ['src/a.ts', 'a.json', 'a.yml', 'a.css', 'a.mjs', 'a.tsx', 'a.html']) {
+    assert.deepEqual(rules(file, long), [], file);
   }
-  assert.deepEqual(rules('README.md', long), []);
 });
 
 test('shell scripts are rejected by extension and by shebang', () => {
@@ -168,6 +148,17 @@ test('layout names are unique within a root, ignoring case', () => {
   assert.deepEqual(layoutUniquenessViolations(['shared/a.ts', 'electron/a.ts']), []);
 });
 
+test('per-locale message catalogs may repeat file names', () => {
+  const catalogs = ['shared/properties/i18n/messages/en/audits.ts', 'shared/properties/i18n/messages/es/audits.ts'];
+  assert.deepEqual(layoutUniquenessViolations(catalogs), []);
+  // A non-catalog file with the same name is still a clash with another non-catalog file.
+  const clash = ['shared/properties/audits.ts', 'shared/page/audits.ts'];
+  assert.deepEqual(
+    layoutUniquenessViolations(clash).map((violation) => violation.rule),
+    ['layout-unique'],
+  );
+});
+
 test('test/ mirrors the source: suites in their area, helpers apart', () => {
   const header = '// Header.\n';
   for (const file of [
@@ -181,12 +172,7 @@ test('test/ mirrors the source: suites in their area, helpers apart', () => {
   ]) {
     assert.deepEqual(rules(file, header), [], file);
   }
-  for (const file of [
-    'test/sampleSuite.test.js',
-    'test/misc/sample.test.js',
-    'test/renderer/sample.test.js',
-    'test/renderer/style/harness.js',
-  ]) {
+  for (const file of ['test/sampleSuite.test.js', 'test/misc/sample.test.js', 'test/renderer/sample.test.js', 'test/renderer/style/harness.js']) {
     assert.deepEqual(rules(file, header), ['test-layout'], file);
   }
 });

@@ -3,17 +3,19 @@
 // (TypographySection.tsx).
 
 import Select, { type SelectOption } from './components/Select';
+import { VariableSelect, variableIn } from './KeywordConnect';
+import { RatioOtherInput } from './AspectRatioField';
 import ColorSwatch from './components/ColorSwatch';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf } from './model/styleDisplay';
-import {
-  DecorNoneIcon,
-  DecorStrikeIcon,
-  DecorUnderlineIcon,
-  DecorOverlineIcon,
-} from './TypographyIcons';
+import TipAnchor from '../../ui/TipAnchor';
+import ImportantMark from './components/ImportantMark';
+import { DecorNoneIcon, DecorStrikeIcon, DecorUnderlineIcon, DecorOverlineIcon } from './TypographyIcons';
 import { type Props, LiveInput } from './TypographyKit';
 import { PopLabel, LengthRow } from './TypographyColumns';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────────────────── Text-decoration advanced options ───────────────────────────
 
@@ -24,11 +26,7 @@ import { PopLabel, LengthRow } from './TypographyColumns';
 export const DECOR_LINE_KW = ['underline', 'overline', 'line-through', 'blink'];
 export const DECOR_STYLE_KW = ['solid', 'double', 'dotted', 'dashed', 'wavy'];
 export const LINE_ORDER = ['underline', 'overline', 'line-through'];
-export const DECOR_PROPS = [
-  'text-decoration',
-  'text-decoration-thickness',
-  'text-decoration-skip-ink',
-] as const;
+export const DECOR_PROPS = ['text-decoration', 'text-decoration-thickness', 'text-decoration-skip-ink'] as const;
 
 export type DecorParts = { lines: string[]; style: string; color: string };
 
@@ -64,11 +62,7 @@ export function lineKey(lines: string[]): string {
 }
 
 // Small horizontal glyphs for the Style select (a decoration line drawn each way).
-export function StyleGlyph({
-  variant,
-}: {
-  variant: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy';
-}) {
+export function StyleGlyph({ variant }: { variant: 'solid' | 'double' | 'dotted' | 'dashed' | 'wavy' }) {
   if (variant === 'double') {
     return (
       <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -86,60 +80,48 @@ export function StyleGlyph({
   const dash = variant === 'dotted' ? '1 2' : variant === 'dashed' ? '3 2' : undefined;
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M2 8h12"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeDasharray={dash}
-      />
+      <path d="M2 8h12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeDasharray={dash} />
     </svg>
   );
 }
 
-export const DECOR_LINE_OPTIONS: SelectOption<string>[] = [
-  { value: 'none', label: 'None', icon: <DecorNoneIcon /> },
-  { value: 'line-through', label: 'Strikethrough', icon: <DecorStrikeIcon /> },
-  { value: 'underline', label: 'Underline', icon: <DecorUnderlineIcon /> },
-  { value: 'overline', label: 'Overline', icon: <DecorOverlineIcon /> },
-  { value: 'underline overline', label: 'Underline + Overline' },
-  { value: 'underline line-through', label: 'Underline + Strikethrough' },
-  { value: 'overline line-through', label: 'Overline + Strikethrough' },
-  { value: 'underline overline line-through', label: 'All' },
+export const decorLineOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'none', label: translate('style.decorationPopover.lineNone'), icon: <DecorNoneIcon /> },
+  { value: 'line-through', label: translate('style.decorationPopover.lineStrike'), icon: <DecorStrikeIcon /> },
+  { value: 'underline', label: translate('style.decorationPopover.lineUnderline'), icon: <DecorUnderlineIcon /> },
+  { value: 'overline', label: translate('style.decorationPopover.lineOverline'), icon: <DecorOverlineIcon /> },
+  { value: 'underline overline', label: translate('style.decorationPopover.lineUnderOver') },
+  { value: 'underline line-through', label: translate('style.decorationPopover.lineUnderStrike') },
+  { value: 'overline line-through', label: translate('style.decorationPopover.lineOverStrike') },
+  { value: 'underline overline line-through', label: translate('style.decorationPopover.lineAll') },
 ];
-export const DECOR_STYLE_OPTIONS: SelectOption<string>[] = [
-  { value: 'solid', label: 'Solid', icon: <StyleGlyph variant="solid" /> },
-  { value: 'double', label: 'Double', icon: <StyleGlyph variant="double" /> },
-  { value: 'dotted', label: 'Dotted', icon: <StyleGlyph variant="dotted" /> },
-  { value: 'dashed', label: 'Dashed', icon: <StyleGlyph variant="dashed" /> },
-  { value: 'wavy', label: 'Wavy', icon: <StyleGlyph variant="wavy" /> },
+export const decorStyleOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'solid', label: translate('style.decorationPopover.styleSolid'), icon: <StyleGlyph variant="solid" /> },
+  { value: 'double', label: translate('style.decorationPopover.styleDouble'), icon: <StyleGlyph variant="double" /> },
+  { value: 'dotted', label: translate('style.decorationPopover.styleDotted'), icon: <StyleGlyph variant="dotted" /> },
+  { value: 'dashed', label: translate('style.decorationPopover.styleDashed'), icon: <StyleGlyph variant="dashed" /> },
+  { value: 'wavy', label: translate('style.decorationPopover.styleWavy'), icon: <StyleGlyph variant="wavy" /> },
 ];
-export const SKIP_INK_OPTIONS: SelectOption<string>[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'none', label: 'None' },
+export const skipInkOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'auto', label: translate('style.decorationPopover.skipAuto') },
+  { value: 'none', label: translate('style.decorationPopover.skipNone') },
 ];
 
 // The Decoration & underline popover body: Line / Style / Color compose the
 // `text-decoration` shorthand; Thick and Skip ink are their own longhands.
 export function DecorationPopover(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, liveSetProp } = props;
+  const translate = useTranslate();
   const display = displayOf(read('text-decoration'));
   const raw = display.present ? display.value : displayOf(read('text-decoration-line')).value;
   const parts = parseDecoration(raw);
   const write: DecorationWrite = (next, mode = 'commit') =>
-    (mode === 'live' ? liveSetProp : setProp)(
-      'text-decoration',
-      composeDecoration(next),
-      display.important,
-    );
+    (mode === 'live' ? liveSetProp : setProp)('text-decoration', composeDecoration(next), display.important);
   // A preview that ends (the menu closed without a pick) puts the live write back.
   const preview = (value: string | undefined, next: (value: string) => DecorParts) => {
-    if (value === undefined) {
-      liveSetProp('text-decoration', undefined, display.important);
-    } else {
-      write(next(value), 'live');
-    }
+    hoverPreview('text-decoration', value === undefined ? undefined : composeDecoration(next(value)), display.important);
   };
   const rowProps = { props, parts, shorthandSet: display.isSelected, write };
   const skip = displayOf(read('text-decoration-skip-ink'));
@@ -148,44 +130,65 @@ export function DecorationPopover(props: Props) {
     <div className="embed-editor_more-group">
       <DecorationSelectRow
         {...rowProps}
-        label="Line"
+        label={translate('style.decorationPopover.line')}
         facet="lines"
         value={lineKey(parts.lines)}
-        options={DECOR_LINE_OPTIONS}
+        options={decorLineOptions(translate)}
         toParts={(value) => ({ ...parts, lines: value === 'none' ? [] : value.split(' ') })}
         preview={preview}
       />
       <DecorationSelectRow
         {...rowProps}
-        label="Style"
+        label={translate('style.decorationPopover.style')}
         facet="style"
         value={parts.style || 'solid'}
-        options={DECOR_STYLE_OPTIONS}
+        options={decorStyleOptions(translate)}
         toParts={(value) => ({ ...parts, style: value === 'solid' ? '' : value })}
         preview={preview}
       />
-      <LengthRow prop="text-decoration-thickness" label="Thick" placeholder="Auto" {...props} />
+      <LengthRow prop="text-decoration-thickness" label={translate('style.decorationPopover.thick')} placeholder={AUTO_KEYWORD} {...props} />
       <DecorationColorRow {...rowProps} />
       <div className="embed-editor_size-row">
-        <PopLabel label="Skip ink" prop="text-decoration-skip-ink" {...props} />
-        <Select
-          value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
-          options={SKIP_INK_OPTIONS}
-          onChange={(value) => setProp('text-decoration-skip-ink', value, false)}
-          onPreview={(value) => liveSetProp('text-decoration-skip-ink', value ?? undefined, false)}
-          ariaLabel="Skip ink"
-          disabled={busy}
-        />
+        <PopLabel label={translate('style.decorationPopover.skipInk')} prop="text-decoration-skip-ink" {...props} />
+        {/* No custom field: a flagged value is marked, and picks keep the flag. */}
+        {/* What skip ink does is the control's tooltip (hover and keyboard focus), not a paragraph under the rows. */}
+        <TipAnchor text={translate('style.decorationPopover.note')}>
+          <ImportantMark important={skip.important}>
+            <VariableSelect
+              prop="text-decoration-skip-ink"
+              rawValue={skip.present ? skip.value : ''}
+              onVariable={(binding) => setProp('text-decoration-skip-ink', binding, skip.important)}
+              customInput={
+                skip.present && variableIn(skip.value) !== undefined ? (
+                  <RatioOtherInput
+                    value={skip.value}
+                    busy={busy}
+                    prop="text-decoration-skip-ink"
+                    ariaLabel={translate('style.decorationPopover.skipInk')}
+                    onCommit={(value, important) => setProp('text-decoration-skip-ink', value, important || skip.important)}
+                    onLiveCommit={(value, important) => props.liveSetProp('text-decoration-skip-ink', value, important || skip.important)}
+                    onClear={() => props.clearProp('text-decoration-skip-ink')}
+                  />
+                ) : undefined
+              }
+              value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
+              options={skipInkOptions(translate)}
+              onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
+              onPreview={(value) => hoverPreview('text-decoration-skip-ink', value ?? undefined, skip.important)}
+              ariaLabel={translate('style.decorationPopover.skipInk')}
+              disabled={busy}
+            />
+          </ImportantMark>
+        </TipAnchor>
       </div>
-      <p className="embed-editor_more-note">
-        The browser will try to interrupt overlines and underlines to prevent drawing over glyphs.
-      </p>
     </div>
   );
 }
 
 // Writes the `text-decoration` shorthand composed from its facets, committed by
 // default or as a live preview.
+const AUTO_KEYWORD = 'Auto'; // i18n-ignore: the CSS keyword `auto`, shown as the empty value.
+
 export type DecorationWrite = (next: DecorParts, mode?: 'live' | 'commit') => void;
 
 export type DecorationRowProps = {
@@ -216,6 +219,7 @@ export function DecorationSelectRow({
   toParts: (value: string) => DecorParts;
   preview: (value: string | undefined, next: (value: string) => DecorParts) => void;
 }) {
+  const translate = useTranslate();
   // The Line label clears the whole shorthand (and the longhand an embed may use);
   // the Style label clears only its own facet.
   const lines = facet === 'lines';
@@ -226,18 +230,14 @@ export function DecorationSelectRow({
         prop="text-decoration"
         {...props}
         active={lines ? shorthandSet : shorthandSet && parts.style !== ''}
-        onClear={() =>
-          lines
-            ? props.clearProp(['text-decoration', 'text-decoration-line'])
-            : write({ ...parts, style: '' })
-        }
+        onClear={() => (lines ? props.clearProp(['text-decoration', 'text-decoration-line']) : write({ ...parts, style: '' }))}
       />
       <Select
         value={value}
         options={options}
         onChange={(next) => write(toParts(next))}
         onPreview={(next) => preview(next ?? undefined, toParts)}
-        ariaLabel={lines ? 'Decoration line' : 'Decoration style'}
+        ariaLabel={lines ? translate('style.decorationPopover.decorationLine') : translate('style.decorationPopover.decorationStyle')}
         disabled={props.busy}
       />
     </div>
@@ -246,10 +246,11 @@ export function DecorationSelectRow({
 
 // The Color row: a swatch and a field for the shorthand's colour facet.
 export function DecorationColorRow({ props, parts, shorthandSet, write }: DecorationRowProps) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
       <PopLabel
-        label="Color"
+        label={translate('style.decorationPopover.color')}
         prop="text-decoration"
         {...props}
         active={shorthandSet && parts.color !== ''}
@@ -259,14 +260,14 @@ export function DecorationColorRow({ props, parts, shorthandSet, write }: Decora
         <ColorSwatch
           value={parts.color}
           busy={props.busy}
-          ariaLabel="Decoration color"
+          ariaLabel={translate('style.decorationPopover.decorationColor')}
           onChange={(color, live) => write({ ...parts, color }, live ? 'live' : 'commit')}
         />
         <LiveInput
           value={parts.color}
           busy={props.busy}
-          placeholder="Set a color"
-          ariaLabel="Decoration color"
+          placeholder={translate('style.decorationPopover.setColor')}
+          ariaLabel={translate('style.decorationPopover.decorationColor')}
           className="u-input embed-editor_size-input"
           prop="color"
           onCommit={(value) => write({ ...parts, color: value })}

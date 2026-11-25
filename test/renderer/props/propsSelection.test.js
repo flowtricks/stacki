@@ -19,9 +19,10 @@ buildSync({
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   logLevel: 'silent',
 });
-const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true, url: 'http://localhost/' });
 global.window = dom.window;
 global.document = dom.window.document;
+global.localStorage = dom.window.localStorage;
 for (const name of ['Node', 'Element', 'HTMLElement', 'MutationObserver', 'DOMRect', 'Window']) {
   global[name] = dom.window[name];
 }
@@ -90,68 +91,45 @@ const fragment = {
     }
   }
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
+  // Settings starts open; closing it is remembered across selections and in storage.
   const toggle = document.querySelector('.props-group [aria-expanded]');
   assert.ok(toggle);
-  await act(async () =>
-    toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })),
-  );
-  assert.equal(
-    document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'),
-    'true',
-  );
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'Settings is open by default');
+  await act(async () => toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'false');
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[2] })));
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
-  assert.equal(
-    document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'),
-    'true',
-  );
-  await act(async () =>
-    root.render(React.createElement(PropsPanel, { ...props, allowAttrs: false, node: fragment })),
-  );
-  assert.equal(
-    document.querySelector('.attr-name')?.textContent,
-    'set:html',
-    'Fragment directives appear in Attributes without a component rest prop',
-  );
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'false', 'closed stays closed across selections');
+  assert.equal(dom.window.localStorage.getItem('stacki.props.settingsOpen'), 'closed', 'the choice is stored for other projects and restarts');
+  await act(async () => document.querySelector('.props-group [aria-expanded]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(dom.window.localStorage.getItem('stacki.props.settingsOpen'), 'open', 'reopening is stored too');
+  await act(async () => root.render(React.createElement(PropsPanel, { ...props, allowAttrs: false, node: fragment })));
+  assert.equal(document.querySelector('.attr-name')?.textContent, 'set:html', 'Fragment directives appear in Attributes without a component rest prop');
   await act(async () => root.unmount());
-  assert.throws(
-    () =>
-      renderToStaticMarkup(
-        React.createElement(BindField, {
-          value: { type: 'expr', value: 'x'.repeat(8193) },
-          onChange: noop,
-        }),
-      ),
-    /BindField: value limit exceeded/,
-  );
-  for (const [patch, message] of [
-    [{ schema: Array(513).fill({ name: 'title', type: 'string' }) }, /schema limit exceeded/],
-    [{ layouts: Array(10001).fill({ name: 'Layout' }) }, /layout limit exceeded/],
-    [
-      {
-        node: {
-          ...nodes[1],
-          props: Object.fromEntries(
-            Array.from({ length: 257 }, (_, index) => [`attr${index}`, { type: 'bare' }]),
-          ),
-        },
+  // No size limit: a value, a layout list, an attribute list and a child list far past the old caps are drawn, not refused.
+  assert.doesNotThrow(() => renderToStaticMarkup(React.createElement(BindField, { value: { type: 'expr', value: 'x'.repeat(100_000) }, onChange: noop })));
+  // The panel reads a live store the server renderer has no snapshot for, so these draw on the client as the app does.
+  for (const patch of [
+    { layouts: Array(10001).fill({ name: 'Layout' }) },
+    {
+      node: {
+        ...nodes[1],
+        props: Object.fromEntries(Array.from({ length: 2_000 }, (_, index) => [`attr${index}`, { type: 'bare' }])),
       },
-      /attribute limit exceeded/,
-    ],
-    [{ node: { ...nodes[1], children: Array(20001).fill(nodes[2]) } }, /child limit exceeded/],
+    },
+    { node: { ...nodes[1], children: Array(20001).fill(nodes[2]) } },
   ]) {
-    assert.throws(
-      () =>
-        renderToStaticMarkup(
-          React.createElement(PropsPanel, { ...props, node: nodes[1], ...patch }),
-        ),
-      message,
-    );
+    const crowdedRoot = createRoot(document.createElement('div'));
+    await act(async () => crowdedRoot.render(React.createElement(PropsPanel, { ...props, node: nodes[1], ...patch })));
+    await act(async () => crowdedRoot.unmount());
   }
-  dom.window.close();
-  console.log(
-    'props-selection: 24 node-kind transitions, settings retention and binding bounds passed',
+  // The schema's width is structural (LIMITS.propSchemaFieldsMax), so it still fails loudly.
+  assert.throws(
+    () => renderToStaticMarkup(React.createElement(PropsPanel, { ...props, node: nodes[1], schema: Array(513).fill({ name: 'title', type: 'string' }) })),
+    /schema limit exceeded/,
   );
+  dom.window.close();
+  console.log('props-selection: 24 node-kind transitions, settings retention, large inputs and structural bounds passed');
   process.exit(0);
 })().catch((error) => {
   console.error(error);

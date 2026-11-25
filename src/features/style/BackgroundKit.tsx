@@ -4,7 +4,7 @@
 // (BackgroundSection.tsx).
 
 import { useEffect, useRef } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import { useFieldDraft } from './model/fieldDraft';
 import FieldLabel from './components/FieldLabel';
@@ -17,8 +17,9 @@ import VariableConnect from './VariableConnect';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import type { Contributor, ResolvedProp } from './model/resolved';
-import { commitInPlace } from './model/commitInPlace';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { commitInPlace } from './model/commitStyleInPlace';
+import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -41,11 +42,7 @@ export interface WriteOptions {
 }
 
 // The layers with one layer's fields replaced.
-export function replaceLayer<K extends keyof BgLayer>(
-  layers: BgLayer[],
-  index: number,
-  patch: Pick<BgLayer, K>,
-): BgLayer[] {
+export function replaceLayer<K extends keyof BgLayer>(layers: BgLayer[], index: number, patch: Pick<BgLayer, K>): BgLayer[] {
   return layers.map((layer, i) => (i === index ? { ...layer, ...patch } : layer));
 }
 
@@ -111,6 +108,7 @@ export function BgLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (display.present && !display.isSelected) {
     return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />;
   }
@@ -121,9 +119,9 @@ export function BgLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
-      resetLabel="Clear"
+      resetLabel={translate('style.backgroundKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.backgroundKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -165,20 +163,11 @@ export function BgField({
   swatchLabel?: string;
 } & Props) {
   const display = displayOf(read(prop));
-  const external = display.present
-    ? display.important
-      ? `${display.value} !important`
-      : display.value
-    : '';
+  const external = displayText(display);
   const field = useBgFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   const input = <BgFieldInput prop={prop} label={label} placeholder={placeholder} field={field} />;
   const swatch = swatchLabel ? (
-    <ColorSwatch
-      value={field.shown}
-      busy={busy}
-      ariaLabel={swatchLabel}
-      onChange={(color, live) => field.swatchChange(color, { live })}
-    />
+    <ColorSwatch value={field.shown} busy={busy} ariaLabel={swatchLabel} onChange={(color, live) => field.swatchChange(color, { live })} />
   ) : undefined;
   const before = swatch ?? prefix;
 
@@ -306,38 +295,38 @@ export function useBgFieldEditing({
     cancelLive,
     commit,
   });
-  const pick = (binding: string) => setProp(prop, binding, false);
+  // A variable pick and the swatch change the colour, not the flag: they have no
+  // text to delete `!important` from, so they keep the one the field shows.
+  const shownImportant = { important: parseImportant(external).important };
+  const pick = (binding: string) => {
+    const kept = keepImportant(binding, shownImportant);
+    setProp(prop, kept.value, kept.important);
+  };
   // Show a swatch drag in the field as it happens; the model only hears about it when
   // the drag ends, and only then is `shown` handed back to it.
   const swatchChange = (color: string, options: WriteOptions) => {
-    noteLive(options.live ? color : undefined);
+    const kept = keepImportant(color, shownImportant);
+    const text = withImportant(kept);
+    noteLive(options.live ? text : undefined);
     if (options.live) {
-      liveSetProp(prop, color, false);
+      liveSetProp(prop, kept.value, kept.important);
       return;
     }
-    setDraft(color);
-    setProp(prop, color, false);
+    setDraft(text);
+    setProp(prop, kept.value, kept.important);
   };
   return { busy, shown, cleared, scrub, inputHandlers, pick, swatchChange };
 }
 
-export function BgFieldInput({
-  prop,
-  label,
-  placeholder,
-  field,
-}: {
-  prop: string;
-  label: string;
-  placeholder: string;
-  field: BgFieldEditing;
-}) {
+export function BgFieldInput({ prop, label, placeholder, field }: { prop: string; label: string; placeholder: string; field: BgFieldEditing }) {
+  const translate = useTranslate();
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${label} to a variable`}
+      ariaLabel={translate('style.backgroundKit.connect', { name: label })}
       disabled={field.busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={field.pick}
     >
       <input
@@ -361,21 +350,11 @@ export function BgFieldInput({
 // rather than expanding inline. Portaled to <body> so it escapes the panel's
 // clipping / stacking; closes on backdrop click or Escape. No header — the rows
 // (label left / control right, divider-separated) run edge to edge like Webflow.
-export function LayerEditorModal({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function LayerEditorModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <Popup
-      className="embed-editor_bg-modal u-surface-surface"
-
-      label="Background layer"
-      onClose={onClose}
-    >
+    <PanelSheet className="embed-editor_bg-modal u-surface-surface" label={translate('style.backgroundKit.backgroundLayer')} onClose={onClose}>
       {children}
-    </Popup>
+    </PanelSheet>
   );
 }

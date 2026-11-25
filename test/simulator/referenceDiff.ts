@@ -60,13 +60,7 @@ export function referenceTables(source: ByteString, target: ByteString): Referen
 // Distance to (x, y): the cheapest of deleting source[x − 1], inserting
 // target[y − 1], or matching them when they are equal. The first row and
 // column are the edges: only insertions, or only deletions, reach them.
-function cellCost(
-  table: Int32Array,
-  width: number,
-  x: number,
-  y: number,
-  equal: () => boolean,
-): number {
+function cellCost(table: Int32Array, width: number, x: number, y: number, equal: () => boolean): number {
   if (x === 0) {
     return y;
   }
@@ -81,13 +75,7 @@ function cellCost(
 
 // The mirror of cellCost, from (x, y) to the end: the last row and column are
 // the edges, where nothing of the source, or of the target, is left.
-function cellCostAfter(
-  table: Int32Array,
-  width: number,
-  x: number,
-  y: number,
-  equal: () => boolean,
-): number {
+function cellCostAfter(table: Int32Array, width: number, x: number, y: number, equal: () => boolean): number {
   const sourceLeft = table.length / width - 1 - x;
   const targetLeft = width - 1 - y;
   if (sourceLeft === 0) {
@@ -104,10 +92,7 @@ function cellCostAfter(
 
 /** Every way minimum scripts cross source byte x: matched target bytes and
  * whether some script deletes it — computed over every target byte. */
-export function referenceCrossings(
-  tables: ReferenceTables,
-  x: number,
-): { readonly matches: readonly number[]; readonly deleted: boolean } {
+export function referenceCrossings(tables: ReferenceTables, x: number): { readonly matches: readonly number[]; readonly deleted: boolean } {
   const matches: number[] = [];
   let deleted = false;
   for (let y = 0; y <= tables.target.length; y++) {

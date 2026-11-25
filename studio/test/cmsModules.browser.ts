@@ -9,12 +9,10 @@ assert.ok(root, 'Set STUDIO_TEST_WORKSPACE to an isolated running draft');
 const url = process.env['STUDIO_URL'] ?? 'http://localhost:4365/studio';
 const rel = `cms-settings-${Date.now()}.ts`;
 const file = path.join(root, 'src', rel);
-const source =
-  '// Keep this comment.\nexport const title: string = "Module title";\nexport const routes: string[] = ["/404"];\n';
+const source = '// Keep this comment.\nexport const title: string = "Module title";\nexport const routes: string[] = ["/404"];\n';
 await writeFile(file, source, { flag: 'wx' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const first = await (await browser.newContext()).newPage();
@@ -26,21 +24,14 @@ for (const page of [first, second]) {
 try {
   await Promise.all([open(first), open(second)]);
   const saved = first.waitForResponse(
-    (response) =>
-      response.url().endsWith('/studio/api/cms') &&
-      response.request().postData()?.includes('cms:write') === true,
+    (response) => response.url().endsWith('/studio/api/cms') && response.request().postData()?.includes('cms:write') === true,
   );
   await title(first).fill('Updated module title');
   assert.ok((await saved).ok());
   await second.waitForFunction(() =>
-    [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some(
-      (input) => input.value === 'Updated module title',
-    ),
+    [...document.querySelectorAll<HTMLInputElement>('.cms-field input')].some((input) => input.value === 'Updated module title'),
   );
-  assert.equal(
-    await readFile(file, 'utf8'),
-    source.replace('Module title', 'Updated module title'),
-  );
+  assert.equal(await readFile(file, 'utf8'), source.replace('Module title', 'Updated module title'));
   assert.deepEqual(errors, []);
   console.log('TypeScript settings appear, save without changing surrounding source, and sync.');
 } finally {

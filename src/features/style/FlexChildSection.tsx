@@ -1,18 +1,16 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown, close as centralClose, more as centralMore } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 import { useRef, useState } from 'react';
-import {
-  SegBar,
-  StackedField,
-  LiveInput,
-  PropLabel,
-  GroupLabel,
-  type Props,
-  type Seg,
-} from './TypographySection';
+import { SegBar, StackedField, LiveInput, PropLabel, GroupLabel, type Props, type Seg } from './TypographySection';
 import { parseFlexShorthand } from './model/webflow';
 import { splitTopLevelSpaces } from './model/background';
 import SegmentPill from './components/SegmentPill';
-import { displayOf } from './model/styleDisplay';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
+import { displayOf, displayText } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
 
 // The Flex Child section — the controls that apply to the selected element when it
 // is a child of a flex (or grid) container: its sizing (the `flex` shorthand), its
@@ -25,11 +23,9 @@ const norm = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
 // ─────────────────────────── Icons (from Webflow) ───────────────────────────
 
 const FLEX_SHRINK_ICON_SECOND_PATH =
-  'M8.00004 10.7071L5.85359 12.8536L5.14648 12.1464L8.50004 8.79289L11.8536 12.1464' +
-  'L11.1465 12.8536L9.00004 10.7071V15H8.00004V10.7071Z';
+  'M8.00004 10.7071L5.85359 12.8536L5.14648 12.1464L8.50004 8.79289L11.8536 12.1464' + 'L11.1465 12.8536L9.00004 10.7071V15H8.00004V10.7071Z';
 const FLEX_SHRINK_ICON_THIRD_PATH =
-  'M8.00004 4.29289L5.85359 2.14645L5.14648 2.85355L8.50004 6.20711L11.8536 2.85355' +
-  'L11.1465 2.14645L9.00004 4.29289V0L8.00004 4.37103e-08V4.29289Z';
+  'M8.00004 4.29289L5.85359 2.14645L5.14648 2.85355L8.50004 6.20711L11.8536 2.85355' + 'L11.1465 2.14645L9.00004 4.29289V0L8.00004 4.37103e-08V4.29289Z';
 
 function FlexShrinkIcon() {
   return (
@@ -48,13 +44,7 @@ const FLEX_GROW_ICON_SECOND_PATH =
 function FlexGrowIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M2 0.999999L14 1L14 2L2 2L2 0.999999ZM2 14L14 14L14 15L2 15L2 14Z"
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d="M2 0.999999L14 1L14 2L2 2L2 0.999999ZM2 14L14 14L14 15L2 15L2 14Z" fill="currentColor" />
       <path d={FLEX_GROW_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
@@ -67,73 +57,17 @@ const FLEX_NONE_ICON_SECOND_PATH =
 function FlexNoneIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M12 14H4L4 13H12V14ZM12 3L4 3L4 2L12 2V3Z"
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={FLEX_NONE_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d="M12 14H4L4 13H12V14ZM12 3L4 3L4 2L12 2V3Z" fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d={FLEX_NONE_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
-const CLOSE_ICON_PATH =
-  'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293L4.35353 3.64648' +
-  'L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536L7.99998 8.70714' +
-  'L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={CLOSE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-const MORE_DOTS_ICON_FIRST_PATH =
-  'M3 8C3 7.44772 3.44772 7 4 7C4.55228 7 5 7.44772 5 8C5 8.55228 4.55228 9 4 9' +
-  'C3.44772 9 3 8.55228 3 8Z';
-const MORE_DOTS_ICON_SECOND_PATH =
-  'M7 8C7 7.44772 7.44772 7 8 7C8.55228 7 9 7.44772 9 8C9 8.55228 8.55228 9 8 9' +
-  'C7.44772 9 7 8.55228 7 8Z';
-const MORE_DOTS_ICON_THIRD_PATH =
-  'M11 8C11 7.44772 11.4477 7 12 7C12.5523 7 13 7.44772 13 8C13 8.55228 12.5523 9 12 9' +
-  'C11.4477 9 11 8.55228 11 8Z';
-
-function MoreDotsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={MORE_DOTS_ICON_FIRST_PATH} fill="currentColor" />
-      <path d={MORE_DOTS_ICON_SECOND_PATH} fill="currentColor" />
-      <path d={MORE_DOTS_ICON_THIRD_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M4 6L8 10L12 6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+const CloseIcon = centralIcon(centralClose);
+const MoreDotsIcon = centralIcon(centralMore);
+const ChevronIcon = centralIcon(centralChevronDown);
 function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      className="embed-editor_display-menu-item"
-      onClick={onClick}
-    >
+    <button type="button" role="menuitem" className="embed-editor_display-menu-item" onClick={onClick}>
       {label}
     </button>
   );
@@ -141,34 +75,22 @@ function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
 function AlignSelfStartIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M2 1V15H3V9H11.5C11.7761 9 12 8.77614 12 8.5V7.5C12 7.22386 11.7761 7 11.5 7H3V1H2Z"
-        fill="currentColor"
-      />
+      <path d="M2 1V15H3V9H11.5C11.7761 9 12 8.77614 12 8.5V7.5C12 7.22386 11.7761 7 11.5 7H3V1H2Z" fill="currentColor" />
     </svg>
   );
 }
 function AlignSelfCenterIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M7 15V9H2.5C2.22386 9 2 8.77614 2 8.5V7.5C2 7.22386 2.22386 7 2.5 7H7V1H8V15H7Z"
-        fill="currentColor"
-      />
-      <path
-        d="M14 7.5C14 7.22386 13.7761 7 13.5 7H9V9H13.5C13.7761 9 14 8.77614 14 8.5V7.5Z"
-        fill="currentColor"
-      />
+      <path d="M7 15V9H2.5C2.22386 9 2 8.77614 2 8.5V7.5C2 7.22386 2.22386 7 2.5 7H7V1H8V15H7Z" fill="currentColor" />
+      <path d="M14 7.5C14 7.22386 13.7761 7 13.5 7H9V9H13.5C13.7761 9 14 8.77614 14 8.5V7.5Z" fill="currentColor" />
     </svg>
   );
 }
 function AlignSelfEndIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M13 9V15H14V1H13V7H4.5C4.22386 7 4 7.22386 4 7.5V8.5C4 8.77614 4.22386 9 4.5 9H13Z"
-        fill="currentColor"
-      />
+      <path d="M13 9V15H14V1H13V7H4.5C4.22386 7 4 7.22386 4 7.5V8.5C4 8.77614 4.22386 9 4.5 9H13Z" fill="currentColor" />
     </svg>
   );
 }
@@ -179,9 +101,7 @@ function AlignSelfStretchIcon() {
     </svg>
   );
 }
-const ALIGN_SELF_BASELINE_ICON_FIRST_PATH =
-  'M13 2V8.29289L14.6464 6.64645L15.3536 7.35355L12.5 10.2071L9.64645 7.35355L10.3536 6.64645' +
-  'L12 8.29289V2H13Z';
+const ALIGN_SELF_BASELINE_ICON_FIRST_PATH = 'M13 2V8.29289L14.6464 6.64645L15.3536 7.35355L12.5 10.2071L9.64645 7.35355L10.3536 6.64645' + 'L12 8.29289V2H13Z';
 const ALIGN_SELF_BASELINE_ICON_THIRD_PATH =
   'M4.62582 2H6.37412L8.72712 10H7.68476L7.09649 7.99994H3.90349L3.31524 10H2.27288L4.62582 2' +
   'ZM6.80237 6.99994L5.62585 2.9999H5.37409L4.19761 6.99994H6.80237Z';
@@ -191,12 +111,7 @@ function AlignSelfBaselineIcon() {
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={ALIGN_SELF_BASELINE_ICON_FIRST_PATH} fill="currentColor" />
       <path d="M16 12L1 12V13L16 13V12Z" fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={ALIGN_SELF_BASELINE_ICON_THIRD_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={ALIGN_SELF_BASELINE_ICON_THIRD_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -205,40 +120,58 @@ function AlignSelfBaselineIcon() {
 
 // Sizing writes the `flex` shorthand — the three presets mirror Webflow's own
 // Flex Child sizing (Shrink if needed / Grow if possible / Don't shrink or grow).
-const FLEX_SEGS: readonly Seg[] = [
-  { value: '0 1 auto', icon: <FlexShrinkIcon />, label: 'Shrink if needed' },
-  { value: '1 1 0%', icon: <FlexGrowIcon />, label: 'Grow if possible' },
-  { value: '0 0 auto', icon: <FlexNoneIcon />, label: "Don't shrink or grow" },
-];
+function flexSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: '0 1 auto', icon: <FlexShrinkIcon />, label: translate('style.flexChildSection.shrinkIfNeeded') },
+    { value: '1 1 0%', icon: <FlexGrowIcon />, label: translate('style.flexChildSection.growIfPossible') },
+    { value: '0 0 auto', icon: <FlexNoneIcon />, label: translate('style.flexChildSection.noShrinkOrGrow') },
+  ];
+}
 
-const ALIGN_SELF_SEGS: readonly Seg[] = [
-  { value: 'auto', icon: <CloseIcon />, label: 'Auto' },
-  { value: 'flex-start', icon: <AlignSelfStartIcon />, label: 'Start' },
-  { value: 'center', icon: <AlignSelfCenterIcon />, label: 'Center' },
-  { value: 'flex-end', icon: <AlignSelfEndIcon />, label: 'End' },
-  { value: 'stretch', icon: <AlignSelfStretchIcon />, label: 'Stretch' },
-  { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: 'Baseline' },
-];
+function alignSelfSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'auto', icon: <CloseIcon />, label: translate('style.flexChildSection.auto') },
+    { value: 'flex-start', icon: <AlignSelfStartIcon />, label: translate('style.flexChildSection.start') },
+    { value: 'center', icon: <AlignSelfCenterIcon />, label: translate('style.flexChildSection.center') },
+    { value: 'flex-end', icon: <AlignSelfEndIcon />, label: translate('style.flexChildSection.end') },
+    { value: 'stretch', icon: <AlignSelfStretchIcon />, label: translate('style.flexChildSection.stretch') },
+    { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: translate('style.flexChildSection.baseline') },
+  ];
+}
 
 // justify-self = the item's INLINE-axis self alignment (grid items). Same glyphs as
 // align-self, but box-alignment keywords (start/end, not flex-start/flex-end).
-const JUSTIFY_SELF_SEGS: readonly Seg[] = [
-  { value: 'auto', icon: <CloseIcon />, label: 'Auto' },
-  { value: 'start', icon: <AlignSelfStartIcon />, label: 'Start' },
-  { value: 'center', icon: <AlignSelfCenterIcon />, label: 'Center' },
-  { value: 'end', icon: <AlignSelfEndIcon />, label: 'End' },
-  { value: 'stretch', icon: <AlignSelfStretchIcon />, label: 'Stretch' },
-  { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: 'Baseline' },
-];
+function justifySelfSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'auto', icon: <CloseIcon />, label: translate('style.flexChildSection.auto') },
+    { value: 'start', icon: <AlignSelfStartIcon />, label: translate('style.flexChildSection.start') },
+    { value: 'center', icon: <AlignSelfCenterIcon />, label: translate('style.flexChildSection.center') },
+    { value: 'end', icon: <AlignSelfEndIcon />, label: translate('style.flexChildSection.end') },
+    { value: 'stretch', icon: <AlignSelfStretchIcon />, label: translate('style.flexChildSection.stretch') },
+    { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: translate('style.flexChildSection.baseline') },
+  ];
+}
 
 // Order presets: a lower order floats an item ahead of its siblings, a higher order
 // sinks it behind. The X writes the explicit default (`order: 0`); the label's Clear
 // removes the property.
-const ORDER_SEGS: readonly Seg[] = [
-  { value: '0', icon: <CloseIcon />, label: 'Default order' },
-  { value: '-1', icon: <span className="embed-editor_seg-text">First</span>, label: 'First' },
-  { value: '1', icon: <span className="embed-editor_seg-text">Last</span>, label: 'Last' },
-];
+function orderSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: '0', icon: <CloseIcon />, label: translate('style.flexChildSection.defaultOrder') },
+    {
+      value: '-1',
+      icon: <span className="embed-editor_seg-text">{translate('style.flexChildSection.first')}</span>,
+      label: translate('style.flexChildSection.first'),
+    },
+    {
+      value: '1',
+      icon: <span className="embed-editor_seg-text">{translate('style.flexChildSection.last')}</span>,
+      label: translate('style.flexChildSection.last'),
+    },
+  ];
+}
+
+const SPAN_ONE_PLACEHOLDER = 'span 1'; // i18n-ignore: CSS grid-line syntax, not prose.
 
 // Canonicalize a flex-basis token so a zero in ANY unit (0 / 0px / 0%) compares equal
 // — Webflow may normalize the basis we write (`0%`) to a different zero on read-back.
@@ -254,6 +187,10 @@ function canonBasis(basis: string): string {
 function flexCurrent(read: Props['read']): string {
   const shorthand = displayOf(read('flex'));
   let grow: string, shrink: string, basis: string;
+  if (shorthand.important) {
+    // The flag rides in the text, so the bar opens its single field and shows it.
+    return norm(displayText(shorthand));
+  }
   if (shorthand.present) {
     const parsed = parseFlexShorthand(shorthand.value);
     if (!parsed) {
@@ -267,7 +204,7 @@ function flexCurrent(read: Props['read']): string {
     const shrinkDisplay = displayOf(read('flex-shrink'));
     const basisDisplay = displayOf(read('flex-basis'));
     if (!growDisplay.present && !shrinkDisplay.present && !basisDisplay.present) {
-      return '0 1 auto';
+      return '0 1 auto'; // i18n-ignore: the flex shorthand default, CSS.
     }
     grow = growDisplay.present ? norm(growDisplay.value) : '0';
     shrink = shrinkDisplay.present ? norm(shrinkDisplay.value) : '1';
@@ -281,17 +218,18 @@ function flexCurrent(read: Props['read']): string {
 // a selected one first (blue), then any present, falling back to `flex`.
 const FLEX_PROPS = ['flex', 'flex-grow', 'flex-shrink', 'flex-basis'] as const;
 function flexLabelProp(read: Props['read']): string {
-  return (
-    FLEX_PROPS.find((prop) => read(prop)?.source === 'selected') ??
-    FLEX_PROPS.find((prop) => read(prop) !== undefined) ??
-    'flex'
-  );
+  return FLEX_PROPS.find((prop) => read(prop)?.source === 'selected') ?? FLEX_PROPS.find((prop) => read(prop) !== undefined) ?? 'flex';
 }
 
 function alignSelfCurrent(read: Props['read']): string {
   const display = displayOf(read('align-self'));
   if (!display.present) {
     return 'auto';
+  }
+  // A flagged value keeps its `!important` in the text: no segment matches it,
+  // so the bar opens its custom field, which shows the flag.
+  if (display.important) {
+    return norm(displayText(display));
   }
   const normalized = norm(display.value);
   if (normalized === 'start' || normalized === 'self-start') {
@@ -308,6 +246,11 @@ function justifySelfCurrent(read: Props['read']): string {
   if (!display.present) {
     return 'auto';
   }
+  // A flagged value keeps its `!important` in the text: no segment matches it,
+  // so the bar opens its custom field, which shows the flag.
+  if (display.important) {
+    return norm(displayText(display));
+  }
   const normalized = norm(display.value);
   if (normalized === 'flex-start' || normalized === 'self-start' || normalized === 'left') {
     return 'start';
@@ -320,7 +263,7 @@ function justifySelfCurrent(read: Props['read']): string {
 
 function orderCurrent(read: Props['read']): string {
   const display = displayOf(read('order'));
-  return display.present ? norm(display.value) : '0';
+  return display.present ? norm(displayText(display)) : '0';
 }
 
 // ─────────────────────────── Sizing (flex) ───────────────────────────
@@ -329,9 +272,11 @@ function orderCurrent(read: Props['read']): string {
 // the Grow / Shrink / Basis longhand inputs below (Webflow's "Customize grow and shrink
 // behavior"), and a dropdown arrow to switch the whole `flex` to a single custom value
 // (`unset`, `var(…)`) that can't be split into longhands.
-const FLEX_SEG_VALUES = new Set(FLEX_SEGS.map((segment) => segment.value));
+// Values only, so no wording is needed to tell whether the current value is a preset.
+const FLEX_SEG_VALUES = new Set(['0 1 auto', '1 1 0%', '0 0 auto']);
 
 function SizingControl(props: Props) {
+  const translate = useTranslate();
   const { read, busy, setProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const sizing = useFlexSizing(props);
   const { current, showSingle, showPanel, clearFlex, pickPreset } = sizing;
@@ -341,7 +286,7 @@ function SizingControl(props: Props) {
     <>
       <div className="embed-editor_size-row">
         <PropLabel
-          label="Sizing"
+          label={translate('style.flexChildSection.sizing')}
           prop={flexProp}
           display={displayOf(read(flexProp))}
           contributors={read(flexProp)?.contributors ?? []}
@@ -350,49 +295,52 @@ function SizingControl(props: Props) {
           onProvenance={onProvenance}
           onSelectSelector={onSelectSelector}
         />
-        <div
-          ref={sizing.rootRef}
-          className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`}
-          role="group"
-          aria-label="Flex sizing"
+        <KeywordConnect
+          prop="flex"
+          value={current}
+          ariaLabel={translate('style.flexChildSection.flexSizing')}
+          disabled={busy}
+          dot={showSingle ? 'field' : 'wrapper'}
+          onPick={pickPreset}
         >
-          <SegmentPill />
-          {showSingle ? (
-            <LiveInput
-              value={current}
+          <div
+            ref={sizing.rootRef}
+            className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`}
+            role="group"
+            aria-label={translate('style.flexChildSection.flexSizing')}
+          >
+            <SegmentPill />
+            {showSingle ? (
+              <LiveInput
+                value={current}
+                busy={busy}
+                placeholder="unset, var(…)"
+                ariaLabel={translate('style.flexChildSection.flexSizing')}
+                className="embed-editor_value-input embed-editor_display-input"
+                prop="flex"
+                onCommit={(value, important) => setProp('flex', value, important)}
+                onLiveCommit={(value, important) => liveSetProp('flex', value, important)}
+                onClear={sizing.clearSingle}
+              />
+            ) : (
+              <FlexSegments current={current} busy={busy} customized={sizing.customized} pickPreset={pickPreset} togglePanel={sizing.togglePanel} />
+            )}
+            <FlexSizingMenu
+              open={sizing.menuOpen}
+              showSingle={showSingle}
               busy={busy}
-              placeholder="unset, var(…)"
-              ariaLabel="Flex sizing"
-              className="embed-editor_value-input embed-editor_display-input"
-              prop="flex"
-              onCommit={(value, important) => setProp('flex', value, important)}
-              onLiveCommit={(value, important) => liveSetProp('flex', value, important)}
-              onClear={sizing.clearSingle}
-            />
-          ) : (
-            <FlexSegments
-              current={current}
-              busy={busy}
-              customized={sizing.customized}
+              onToggle={sizing.toggleMenu}
               pickPreset={pickPreset}
-              togglePanel={sizing.togglePanel}
+              enterSingleCustom={sizing.enterSingleCustom}
             />
-          )}
-          <FlexSizingMenu
-            open={sizing.menuOpen}
-            showSingle={showSingle}
-            busy={busy}
-            onToggle={sizing.toggleMenu}
-            pickPreset={pickPreset}
-            enterSingleCustom={sizing.enterSingleCustom}
-          />
-        </div>
+          </div>
+        </KeywordConnect>
       </div>
       {showPanel ? (
         <div className="embed-editor_type-triple embed-editor_flex-custom">
-          <StackedField prop="flex-grow" label="Grow" placeholder="0" {...props} />
-          <StackedField prop="flex-shrink" label="Shrink" placeholder="1" {...props} />
-          <StackedField prop="flex-basis" label="Basis" placeholder="auto" {...props} />
+          <StackedField prop="flex-grow" label={translate('style.flexChildSection.grow')} placeholder="0" {...props} />
+          <StackedField prop="flex-shrink" label={translate('style.flexChildSection.shrink')} placeholder="1" {...props} />
+          <StackedField prop="flex-basis" label={translate('style.flexChildSection.basis')} placeholder="auto" {...props} />
         </div>
       ) : undefined}
     </>
@@ -408,7 +356,7 @@ function useFlexSizing({ read, setProp, clearProp }: Props) {
   // custom value (unset / var() / a keyword) that belongs in the single input.
   const isTriple = splitTopLevelSpaces(current).length === 3;
   const [panelOpen, setPanelOpen] = useState(false);
-  const [singleCustom, setSingleCustom] = useState(false);
+  const [singleCustom, setSingleCustom] = useSelectorState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -468,9 +416,10 @@ function FlexSegments({
   pickPreset: (value: string) => void;
   togglePanel: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
-      {FLEX_SEGS.map((seg) => (
+      {flexSegs(translate).map((seg) => (
         <button
           key={seg.value}
           type="button"
@@ -490,8 +439,8 @@ function FlexSegments({
         className={'embed-editor_display-seg ' + (customized ? 'is-selected' : '')}
         disabled={busy}
         aria-pressed={customized}
-        aria-label="Customize grow and shrink behavior"
-        title="Customize grow and shrink behavior"
+        aria-label={translate('style.flexChildSection.customizeGrowShrink')}
+        title={translate('style.flexChildSection.customizeGrowShrink')}
         onClick={togglePanel}
       >
         <MoreDotsIcon />
@@ -517,6 +466,7 @@ function FlexSizingMenu({
   pickPreset: (value: string) => void;
   enterSingleCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -524,26 +474,19 @@ function FlexSizingMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="More flex sizing options"
+        aria-label={translate('style.flexChildSection.moreSizingOptions')}
         disabled={busy}
         onClick={onToggle}
       >
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {showSingle ? (
-            FLEX_SEGS.map((seg) => (
-              <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />
-            ))
+            flexSegs(translate).map((seg) => <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />)
           ) : (
-            <MenuItem label="Custom" onClick={enterSingleCustom} />
+            <MenuItem label={translate('style.flexChildSection.custom')} onClick={enterSingleCustom} />
           )}
         </Popup>
       ) : undefined}
@@ -553,8 +496,7 @@ function FlexSizingMenu({
 
 // ─────────────────────────── Grid-item position ───────────────────────────
 
-const rawOf = (display: ReturnType<typeof displayOf>) =>
-  display.present ? (display.important ? `${display.value} !important` : display.value) : '';
+const rawOf = displayText;
 
 // Split a `grid-column` / `grid-row` shorthand into its start / end line values
 // (`auto / span 2` → ['auto', 'span 2']); a lone value is the start (end blank).
@@ -565,7 +507,7 @@ function splitSlash(value: string): [string, string] {
 
 // Build the grid-column / grid-row shorthand from a start & end line ('' when both auto).
 // `auto / span 2`, or just `2` when the end is auto. Webflow's grid-child placement reads
-// this shorthand — the *-start / *-end longhands land in Custom properties instead.
+// this shorthand — the *-start / *-end longhands land in Other properties instead.
 function buildLine(start: string, end: string): string {
   const startLine = start.trim() || 'auto';
   const endLine = end.trim() || 'auto';
@@ -580,16 +522,9 @@ function buildLine(start: string, end: string): string {
 // value comes from the shorthand expands it to longhands (dropping the shorthand) so
 // they never conflict. The Start / End labels carry the blue/orange/clear state; the
 // axis name (Column / Row) is a plain caption on the left.
-function AxisRow({
-  axis,
-  label,
-  props: sp,
-}: {
-  axis: 'column' | 'row';
-  label: string;
-  props: Props;
-}) {
+function AxisRow({ axis, label, props: sp }: { axis: 'column' | 'row'; label: string; props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = sp;
+  const translate = useTranslate();
   const startProp = `grid-${axis}-start`;
   const endProp = `grid-${axis}-end`;
   const shortProp = `grid-${axis}`;
@@ -599,11 +534,7 @@ function AxisRow({
   const shorthandDisplay = displayOf(read(shortProp));
   const [shStart, shEnd] = shorthandDisplay.present ? splitSlash(shorthandDisplay.value) : ['', ''];
   // Prefer the shorthand (what we write); fall back to any legacy *-start / *-end longhands.
-  const startValue = shorthandDisplay.present
-    ? shStart
-    : startDisplay.present
-      ? rawOf(startDisplay)
-      : '';
+  const startValue = shorthandDisplay.present ? shStart : startDisplay.present ? rawOf(startDisplay) : '';
   const endValue = shorthandDisplay.present ? shEnd : endDisplay.present ? rawOf(endDisplay) : '';
 
   // Clear THIS axis's placement. Webflow keeps grid-column & grid-row together as one grid
@@ -619,7 +550,7 @@ function AxisRow({
 
   // Write the grid-column / grid-row SHORTHAND, combining this edit with the other axis end.
   // Webflow's grid-child placement reads the shorthand; the *-start / *-end longhands park in
-  // Custom properties instead. Live updates as you type (the shorthand replaces itself cleanly).
+  // Other properties instead. Live updates as you type (the shorthand replaces itself cleanly).
   const commit = (which: 'start' | 'end', value: string, options: CommitOptions) => {
     const { important, live } = options;
     const start = (which === 'start' ? value : startValue).trim();
@@ -655,8 +586,8 @@ function AxisRow({
         onSelectSelector={onSelectSelector}
       />
       <div className="embed-editor_line-cells">
-        <LineCell which="start" caption="Start" value={startValue} {...cellProps} />
-        <LineCell which="end" caption="End" value={endValue} {...cellProps} />
+        <LineCell which="start" caption={translate('style.flexChildSection.start')} value={startValue} {...cellProps} />
+        <LineCell which="end" caption={translate('style.flexChildSection.end')} value={endValue} {...cellProps} />
       </div>
     </div>
   );
@@ -686,13 +617,14 @@ function LineCell({
   busy: boolean;
   commit: (which: 'start' | 'end', value: string, options: CommitOptions) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_line-cell">
       <LiveInput
         value={value}
         busy={busy}
-        placeholder={which === 'end' ? 'span 1' : 'auto'}
-        ariaLabel={`${axisLabel} ${caption}`}
+        placeholder={which === 'end' ? SPAN_ONE_PLACEHOLDER : 'auto'}
+        ariaLabel={translate('style.flexChildSection.lineAria', { axis: axisLabel, caption })}
         className="u-input embed-editor_size-input"
         onCommit={(next, important) => commit(which, next, { important, live: false })}
         onLiveCommit={(next, important) => commit(which, next, { important, live: true })}
@@ -706,10 +638,11 @@ function LineCell({
 // Grid-item Position: the Column / Row line placement (start / end each), which read
 // the longhands or split the axis shorthand.
 function PositionControl(props: Props) {
+  const translate = useTranslate();
   return (
     <>
-      <AxisRow axis="column" label="Column" props={props} />
-      <AxisRow axis="row" label="Row" props={props} />
+      <AxisRow axis="column" label={translate('style.flexChildSection.column')} props={props} />
+      <AxisRow axis="row" label={translate('style.flexChildSection.row')} props={props} />
     </>
   );
 }
@@ -718,32 +651,33 @@ function PositionControl(props: Props) {
 
 export default function FlexChildSection(props: Props) {
   const { read } = props;
+  const translate = useTranslate();
   return (
     <>
       <SizingControl {...props} />
       <PositionControl {...props} />
       <SelfRow
-        label="Align"
+        label={translate('style.flexChildSection.align')}
         prop="align-self"
-        segs={ALIGN_SELF_SEGS}
+        segs={alignSelfSegs(translate)}
         current={alignSelfCurrent(read)}
-        ariaLabel="Align self"
+        ariaLabel={translate('style.flexChildSection.alignSelf')}
         props={props}
       />
       <SelfRow
-        label="Justify"
+        label={translate('style.flexChildSection.justify')}
         prop="justify-self"
-        segs={JUSTIFY_SELF_SEGS}
+        segs={justifySelfSegs(translate)}
         current={justifySelfCurrent(read)}
-        ariaLabel="Justify self"
+        ariaLabel={translate('style.flexChildSection.justifySelf')}
         props={props}
       />
       <SelfRow
-        label="Order"
+        label={translate('style.flexChildSection.order')}
         prop="order"
-        segs={ORDER_SEGS}
+        segs={orderSegs(translate)}
         current={orderCurrent(read)}
-        ariaLabel="Order"
+        ariaLabel={translate('style.flexChildSection.order')}
         more={{ value: '2' }}
         props={props}
       />

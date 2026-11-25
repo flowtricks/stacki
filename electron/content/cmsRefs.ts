@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { readComponentSources } from '../lib/componentSources';
+import { componentSourceRoot } from '../../shared/properties/componentSources';
 
 import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
@@ -20,9 +22,7 @@ function readJsonc(file: string): unknown {
   try {
     const raw = fs
       .readFileSync(file, 'utf8')
-      .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, (match, comment) =>
-        comment ? '' : match,
-      )
+      .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, (match, comment) => (comment ? '' : match))
       .replace(/,(\s*[}\]])/g, '$1');
     return JSON.parse(raw);
   } catch {
@@ -39,22 +39,26 @@ export interface Alias {
 // Path aliases from tsconfig ("@/*": ["src/*"]), so an aliased import of a
 // collection is recognised as the same file a relative one points at.
 function aliasMap(projectPath: string): Alias[] {
-  const config =
-    readJsonc(path.join(projectPath, 'tsconfig.json')) ??
-    readJsonc(path.join(projectPath, 'jsconfig.json'));
+  const packages = readComponentSources(projectPath).map((source) => ({
+    prefix: source.importPrefix,
+    wildcard: true,
+    targets: [path.resolve(projectPath, componentSourceRoot(source))],
+  }));
+  const config = readJsonc(path.join(projectPath, 'tsconfig.json')) ?? readJsonc(path.join(projectPath, 'jsconfig.json'));
   const compilerOptions = toRecord(toRecord(config)?.['compilerOptions']);
   const paths = toRecord(compilerOptions?.['paths']);
   if (!compilerOptions || !paths) {
-    return [];
+    return packages;
   }
   const base = path.resolve(projectPath, String(compilerOptions['baseUrl'] ?? '.'));
-  return Object.entries(paths).map(([pattern, targets]) => ({
-    prefix: pattern.replace(/\*$/, ''),
-    wildcard: pattern.endsWith('*'),
-    targets: (toArray(targets) ?? []).map((target) =>
-      path.resolve(base, String(target).replace(/\*$/, '')),
-    ),
-  }));
+  return [
+    ...packages,
+    ...Object.entries(paths).map(([pattern, targets]) => ({
+      prefix: pattern.replace(/\*$/, ''),
+      wildcard: pattern.endsWith('*'),
+      targets: (toArray(targets) ?? []).map((target) => path.resolve(base, String(target).replace(/\*$/, ''))),
+    })),
+  ];
 }
 
 function resolveSpec(spec: string, fromFile: string, aliases: readonly Alias[]): string[] {

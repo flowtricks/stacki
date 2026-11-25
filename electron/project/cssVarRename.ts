@@ -4,9 +4,11 @@
 
 import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
+import { runSync, type SlicedWork } from '../lib/slicedWork';
 import { writeProjectText } from './variableWorkspace';
-import { MAIN_LIMITS } from './variableWorkspace';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './cssVarRead';
+import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
+import { astroDeclaredNames, findAstroSources, relativeTo } from './cssVarRegions';
 
 // --- renaming ----------------------------------------------------------------
 //
@@ -25,8 +27,7 @@ import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './css
 // Where a name can be written. CSS files hold most of them; an Astro component
 // keeps its rules in a `<style>` block, and a `style="--x: 1"` can sit in markup
 // or a template — a token spelled `--x` in any of these is that variable.
-export const RENAME_EXTS =
-  /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|mdx|mdoc|svelte|vue|jsx|tsx|[cm]?[jt]s)$/i;
+export const RENAME_EXTS = /\.(css|s[ac]ss|less|pcss|postcss|astro|html|htm|md|mdx|mdoc|svelte|vue|jsx|tsx|[cm]?[jt]s)$/i;
 
 /**
  * Every file in the project that could spell a variable's name.
@@ -42,9 +43,9 @@ export const RENAME_EXTS =
  * resolving somewhere the panel cannot see, which is the failure that has no
  * symptom until someone looks at the page.
  */
-export function findRenameTargets(projectPath: string): string[] {
+export function* renameTargetsSliced(projectPath: string): SlicedWork<string[]> {
   const found: string[] = [];
-  const walk = (directory: string, depth: number): void => {
+  function* walk(directory: string, depth: number): SlicedWork<void> {
     if (depth > CSS_VARIABLE_LIMITS.renameTargetDepthMax) {
       return;
     }
@@ -62,14 +63,19 @@ export function findRenameTargets(projectPath: string): string[] {
         if (entry.name.startsWith('.') || SKIPPED_DIRECTORIES.has(entry.name)) {
           continue;
         }
-        walk(path.join(directory, entry.name), depth + 1);
+        yield* walk(path.join(directory, entry.name), depth + 1);
       } else if (RENAME_EXTS.test(entry.name)) {
         found.push(path.join(directory, entry.name));
       }
     }
-  };
-  walk(projectPath, 0);
+    yield;
+  }
+  yield* walk(projectPath, 0);
   return [...new Set(found)].sort();
+}
+
+export function findRenameTargets(projectPath: string): string[] {
+  return runSync(renameTargetsSliced(projectPath));
 }
 
 /** A custom property name, as a name and not as a prefix of a longer one. */
@@ -95,14 +101,14 @@ export interface Rename {
 export function renameVariables(
   projectPath: string,
   { renames }: { readonly renames?: readonly Rename[] },
-): { ok: boolean; files?: number; occurrences?: number; error?: string } {
+): { ok: boolean; files?: number; occurrences?: number; paths?: readonly string[]; error?: string; errorRef?: MessageRef | undefined } {
   const list = (renames || []).filter((rename) => rename && rename.from !== rename.to);
   if (!list.length) {
-    return { ok: true, files: 0, occurrences: 0 };
+    return { ok: true, files: 0, occurrences: 0, paths: [] };
   }
   const problem = renameBatchProblem(list) ?? renameTakenProblem(projectPath, list);
   if (problem !== undefined) {
-    return { ok: false, error: problem };
+    return { ok: false, error: problem.message, errorRef: problem.messageRef };
   }
 
   const by = new Map(list.map(({ from, to }) => [from, to]));
@@ -119,9 +125,6 @@ export function renameVariables(
   for (const abs of findRenameTargets(projectPath)) {
     let text: string;
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.cssVariableFileBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;
@@ -145,26 +148,26 @@ export function renameVariables(
   for (const [abs, next] of writes) {
     writeProjectText(abs, next);
   }
-  return { ok: true, files: writes.length, occurrences };
+  return { ok: true, files: writes.length, occurrences, paths: writes.map(([abs]) => abs) };
 }
 
 // Why the batch cannot be applied as asked, before looking at the project: a name that is not
 // one, or two renames that collide with each other.
-export function renameBatchProblem(list: readonly Rename[]): string | undefined {
+export function renameBatchProblem(list: readonly Rename[]): Described | undefined {
   const froms = new Set<string>();
   const tos = new Set<string>();
   for (const { from, to } of list) {
     if (!NAME_RE.test(String(from || ''))) {
-      return `${from} is not a variable name.`;
+      return described('variables.error.notVariableName', { name: from });
     }
     if (!NAME_RE.test(String(to || ''))) {
-      return `"${String(to || '').replace(/^--/, '')}" cannot be a variable name.`;
+      return described('variables.error.badVariableName', { name: String(to || '').replace(/^--/, '') });
     }
     if (froms.has(from)) {
-      return `${from} is renamed twice in one go.`;
+      return described('variables.error.renamedTwice', { name: from });
     }
     if (tos.has(to)) {
-      return `Two variables would both be called ${to}.`;
+      return described('variables.error.sameNameTwice', { name: to });
     }
     froms.add(from);
     tos.add(to);
@@ -174,10 +177,7 @@ export function renameBatchProblem(list: readonly Rename[]): string | undefined 
 
 // Taken names, minus the ones this batch is freeing up: renaming a group means
 // every member moves at once, and a swap within it is legitimate.
-export function renameTakenProblem(
-  projectPath: string,
-  list: readonly Rename[],
-): string | undefined {
+export function renameTakenProblem(projectPath: string, list: readonly Rename[]): Described | undefined {
   const froms = new Set(list.map(({ from }) => from));
   const declared = new Set<string>();
   for (const abs of findStylesheets(projectPath)) {
@@ -194,9 +194,22 @@ export function renameTakenProblem(
       }
     }
   }
+  // A `<style>` block declares names as a stylesheet does; only its CSS counts,
+  // so a `--x:` in a page's frontmatter or markup does not take the name.
+  for (const abs of findAstroSources(projectPath)) {
+    let text: string;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const name of astroDeclaredNames(relativeTo(projectPath, abs), text)) {
+      declared.add(name);
+    }
+  }
   for (const { to } of list) {
     if (declared.has(to) && !froms.has(to)) {
-      return `${to} already exists.`;
+      return described('variables.error.alreadyExists', { name: to });
     }
   }
   return undefined;

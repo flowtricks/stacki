@@ -31,10 +31,7 @@ function pageOf() {
   for (let section = 0; section < SECTIONS; section += 1) {
     const cards = [];
     for (let card = 0; card < CARDS; card += 1) {
-      cards.push(
-        `    <article class="card"><h3>Card ${card}</h3><p>Text ${card}</p>` +
-          `<a href="#">Read</a></article>`,
-      );
+      cards.push(`    <article class="card"><h3>Card ${card}</h3><p>Text ${card}</p>` + `<a href="#">Read</a></article>`);
     }
     sections.push(`  <section class="section">\n${cards.join('\n')}\n  </section>`);
   }
@@ -78,34 +75,13 @@ function operations(emitLog) {
   const act = (app, body) => app.act(async () => body());
   const rendered = ['0', '0.0', '0.1'];
   return [
-    [
-      'keystroke in a content field',
-      (index, app) => act(app, () => __panels.PropsPanel.onSetContent(`Heading ${index}`)),
-    ],
+    ['keystroke in a content field', (index, app) => act(app, () => __panels.PropsPanel.onSetContent(`Heading ${index}`))],
     ['  its save (reply installed)', (_, app) => app.act(() => saved())],
-    [
-      'hover a navigator row',
-      (index, app) =>
-        act(app, () => __panels.StructurePanel.onHoverNode(index % 2 ? undefined : 'n')),
-    ],
-    [
-      'one dev-server log chunk',
-      (index, app) =>
-        act(app, () => emitLog(`[vite] page reload src/pages/index.astro (x${index})\n`)),
-    ],
-    [
-      'canvas: rendered paths, same',
-      (_, app) => act(app, () => __panels.PreviewPane.onRenderedPaths([...rendered])),
-    ],
-    [
-      'canvas: rendered paths, changed',
-      (index, app) =>
-        act(app, () => __panels.PreviewPane.onRenderedPaths([...rendered, `1.${index}`])),
-    ],
-    [
-      'canvas: node classes, same',
-      (_, app) => act(app, () => __panels.PreviewPane.onNodeClasses({ 0: ['section'] })),
-    ],
+    ['hover a navigator row', (index, app) => act(app, () => __panels.StructurePanel.onHoverNode(index % 2 ? undefined : 'n'))],
+    ['one dev-server log chunk', (index, app) => act(app, () => emitLog(`[vite] page reload src/pages/index.astro (x${index})\n`))],
+    ['canvas: rendered paths, same', (_, app) => act(app, () => __panels.PreviewPane.onRenderedPaths([...rendered]))],
+    ['canvas: rendered paths, changed', (index, app) => act(app, () => __panels.PreviewPane.onRenderedPaths([...rendered, `1.${index}`]))],
+    ['canvas: node classes, same', (_, app) => act(app, () => __panels.PreviewPane.onNodeClasses({ 0: ['section'] }))],
   ];
 }
 
@@ -143,9 +119,7 @@ async function main() {
     const rows = [];
     for (const [label, run] of operations((chunk) => emit(chunk))) {
       const runWithId = (index, mounted) =>
-        label.startsWith('hover') && index % 2 === 0
-          ? mounted.act(async () => __panels.StructurePanel.onHoverNode(hovered))
-          : run(index, mounted);
+        label.startsWith('hover') && index % 2 === 0 ? mounted.act(async () => __panels.StructurePanel.onHoverNode(hovered)) : run(index, mounted);
       rows.push([label, await sampleOperation(app, profile, runWithId)]);
     }
     report(rows);
@@ -161,9 +135,7 @@ function report(rows) {
     `React cost per operation, stubbed panels, ~400-node page; p50 / p95 of ${SAMPLES} ` +
       `samples after ${WARM_UPS} warm-ups. Panels: renders summed over the samples.`,
   );
-  console.log(
-    'operation                          commits  App ms p50  App ms p95  panels re-rendered',
-  );
+  console.log('operation                          commits  App ms p50  App ms p95  panels re-rendered');
   for (const [label, sample] of rows) {
     const panels = [...sample.panels]
       .sort((left, right) => right[1] - left[1])

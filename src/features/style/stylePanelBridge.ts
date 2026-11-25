@@ -10,9 +10,7 @@ export function parseStyleFiles(input: unknown) {
   return object({ files: list(styleFile) })(input).files;
 }
 
-async function request(
-  invoke: () => Promise<unknown>,
-): Promise<Result<ReturnType<typeof parseStyleFiles>, string>> {
+async function request(invoke: () => Promise<unknown>): Promise<Result<ReturnType<typeof parseStyleFiles>, string>> {
   let response: unknown;
   try {
     response = await invoke();

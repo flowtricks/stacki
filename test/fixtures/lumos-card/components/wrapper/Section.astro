@@ -1,0 +1,101 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+type SectionSpace =
+  "none" | "even" | "small" | "medium" | "large" | "navoverlap";
+
+type ContainerGap =
+  | "0"
+  | "1"
+  | "2"
+  | "3"
+  | "4"
+  | "5"
+  | "6"
+  | "7"
+  | "8"
+  | "small"
+  | "medium"
+  | "large";
+
+interface Props extends HTMLAttributes<"section"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Color theme of element and its children. */
+  theme?: "inherit" | "light" | "dark" | "brand";
+  /** Top padding. */
+  paddingTop?: SectionSpace;
+  /** Bottom padding. */
+  paddingBottom?: SectionSpace;
+  /** Child gap. */
+  gap?: ContainerGap;
+  /** Content alignment. */
+  align?: "start" | "center" | "end";
+  /** Fill the viewport height. */
+  fullHeight?: boolean;
+  /** Inner container classes. */
+  containerClass?: string;
+  /** Inner container attributes. */
+  containerAttrs?: HTMLAttributes<"div">;
+}
+
+const {
+  render = true,
+  theme = "inherit",
+  paddingTop = "medium",
+  paddingBottom = "medium",
+  gap = "8",
+  align,
+  fullHeight = false,
+  containerClass,
+  containerAttrs = {},
+  class: className,
+  ...rest
+} = Astro.props;
+
+const { class: containerAttrsClass, ...containerRest } = containerAttrs;
+
+const padSuffix: Partial<Record<SectionSpace, string>> = {
+  none: "0",
+  even: "sitemargin",
+};
+
+const padClass = (side: "top" | "bottom", value: SectionSpace) =>
+  !!value &&
+  value !== "medium" &&
+  `padding-${side}-${padSuffix[value] ?? value}`;
+
+const content = await slotContent(Astro.slots);
+const background = await slotContent(Astro.slots, "background");
+---
+
+{render && (content || background) && (
+  <section
+    class:list={[
+      "section",
+      padClass("top", paddingTop),
+      padClass("bottom", paddingBottom),
+      fullHeight && "min-height-screen",
+      theme !== "inherit" && `theme-${theme}`,
+      align && `alignment-${align}`,
+      className,
+    ]}
+    {...rest}
+  >
+    <Fragment set:html={background} />
+    {content && (
+      <div
+        class:list={[
+          "container",
+          gap !== "8" && `gap-${gap}`,
+          containerClass,
+          containerAttrsClass,
+        ]}
+        {...containerRest}
+      >
+        <Fragment set:html={content} />
+      </div>
+    )}
+  </section>
+)}

@@ -2,19 +2,13 @@ import { parseConversionResult, type ImageFormat } from '../../../shared/ipc/ass
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
-import {
-  BOUNDARY_LIMITS,
-  boolean,
-  count,
-  list,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { BOUNDARY_LIMITS, boolean, count, list, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { toProjectPath } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { parseAssetEntry } from '../../ipc/assetBridge';
+import { parseMediaResult } from '../../../shared/properties/mediaHosting';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 
 export type AssetRoot = 'public' | 'src';
 export type AssetPanelEntry = WireAssetEntry & { readonly root: AssetRoot };
@@ -35,9 +29,7 @@ export function parseAssetListing(input: unknown): AssetListing {
     seen.add(entry.rel);
   }
   const missing = boolean(value['missing']);
-  const hasPublicRoot = entries.some(
-    (entry) => entry.isDir && entry.isRoot === true && entry.root === 'public',
-  );
+  const hasPublicRoot = entries.some((entry) => entry.isDir && entry.isRoot === true && entry.root === 'public');
   if (missing === hasPublicRoot) {
     throw new Error('Asset listing: missing state contradicts public root');
   }
@@ -57,14 +49,8 @@ export function pickUploadAssets(projectPath: string, destinationRel: string) {
   return request(parseAdded, () => window.avb.pickUploadAssets(payload));
 }
 
-export function uploadAssets(
-  projectPath: string,
-  destinationRel: string,
-  files: readonly (File | string)[],
-) {
-  const filePaths = files
-    .map((file) => (typeof file === 'string' ? file : window.avb.getFilePath(file)))
-    .filter((file): file is string => !!file);
+export function uploadAssets(projectPath: string, destinationRel: string, files: readonly (File | string)[]) {
+  const filePaths = files.map((file) => (typeof file === 'string' ? file : window.avb.getFilePath(file))).filter((file): file is string => !!file);
   const payload = parseIpcPayload('assets:upload', {
     projectPath: toProjectPath(projectPath),
     destRel: parseAssetDestination(destinationRel),
@@ -79,7 +65,7 @@ export function moveAsset(projectPath: string, fromRel: string, toDirectoryRel: 
     fromRel: parseAssetRelativePath(fromRel),
     toDirRel: parseAssetDestination(toDirectoryRel),
   });
-  return request(parseOutcome, () => window.avb.moveAsset(payload));
+  return request(parseMoved, () => window.avb.moveAsset(payload));
 }
 
 export function renameAsset(projectPath: string, rel: string, newName: string) {
@@ -97,6 +83,27 @@ export function deleteAsset(projectPath: string, rel: string) {
     rel: parseAssetRelativePath(rel),
   });
   return request(parseOutcome, () => window.avb.deleteAsset(payload));
+}
+
+/** Asks for a file in the system dialog and writes it over the asset, keeping its path; false when cancelled. */
+export async function replaceAsset(
+  projectPath: string,
+  rel: string,
+): Promise<{ readonly ok: true; readonly value: boolean } | { readonly ok: false; readonly error: string; readonly messageRef?: MessageRef | undefined }> {
+  const payload = parseIpcPayload('assets:replace', {
+    projectPath: toProjectPath(projectPath),
+    rel: parseAssetRelativePath(rel),
+  });
+  const answer = await request(
+    (input) => parseMediaResult(input, boolean),
+    () => window.avb.replaceAsset(payload),
+  );
+  if (!answer.ok) {
+    return answer;
+  }
+  return answer.value.ok
+    ? { ok: true, value: answer.value.value }
+    : { ok: false, error: answer.value.message, ...(answer.value.messageRef === undefined ? {} : { messageRef: answer.value.messageRef }) };
 }
 
 export function makeAssetDirectory(projectPath: string, parentRel: string, name: string) {
@@ -145,10 +152,7 @@ function assetSegments(rel: string): readonly string[] {
   if (segments.length > BOUNDARY_LIMITS.depthMax) {
     throw new Error('Asset listing: path depth exceeds limit');
   }
-  if (
-    segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
+  if (segments.length === 0 || segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
     throw new Error('Asset listing: invalid relative path');
   }
   return segments;
@@ -194,16 +198,23 @@ function parseOutcome(input: unknown): boolean {
   return boolean(record(input)['ok']);
 }
 
+// False when the source was already gone. A path when main says where it landed; a host that never renames a moved file
+// (Studio refuses a taken name) answers true.
+function parseMoved(input: unknown): string | boolean {
+  const value = record(input);
+  if (!boolean(value['ok'])) {
+    return false;
+  }
+  return value['rel'] === undefined ? true : parseAssetRelativePath(text(value['rel']));
+}
+
 function parseSuccess(input: unknown): void {
   if (!boolean(record(input)['ok'])) {
     throw new Error('Asset operation: expected success');
   }
 }
 
-async function request<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

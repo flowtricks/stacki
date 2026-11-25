@@ -18,19 +18,13 @@ import {
   describeCapability,
   parseCapability,
 } from '#dist/shared/page/capability.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import { parsePageResult } from '#dist/shared/page/pageNode.js';
 import { createSnapshot } from '#dist/shared/page/snapshot.js';
-import {
-  projectionAcceptsVisualIntents,
-  projectOpaqueDocument,
-  projectPage,
-  type ProjectedNode,
-} from '#dist/shared/page/sourceProjection.js';
+import { projectionAcceptsVisualIntents, projectOpaqueDocument, projectPage, type ProjectedNode } from '#dist/shared/page/sourceProjection.js';
 import { encodeUtf8, type ByteString } from '#dist/shared/core/span.js';
 
-const project = (text: string) =>
-  projectPage(text, parsePageResult(parsePage(text, { locs: true })));
+const project = (text: string) => projectPage(text, parsePageResult(parsePage(text, { locs: true })));
 const sha256 = (bytes: ByteString) => toDigest(createHash('sha256').update(bytes).digest('hex'));
 
 function valid(text: string): readonly ProjectedNode[] {
@@ -40,70 +34,50 @@ function valid(text: string): readonly ProjectedNode[] {
 }
 
 test('capabilities are a closed set with a visual-edit answer and notice for each', () => {
-  assert.deepEqual(CAPABILITIES, [
-    'editable',
-    'read-only-opaque',
-    'repeated-source-node',
-    'runtime-aggregate',
-    'unsupported',
-  ]);
-  assert.deepEqual(CAPABILITIES.filter(capabilityAcceptsVisualIntent), [
-    'editable',
-    'repeated-source-node',
-  ]);
-  assert.deepEqual(CAPABILITIES.filter(capabilityAcceptsNodeRewrite), [
-    'editable',
-    'read-only-opaque',
-    'repeated-source-node',
-  ]);
+  assert.deepEqual(CAPABILITIES, ['editable', 'read-only-opaque', 'repeated-source-node', 'runtime-aggregate', 'unsupported']);
+  assert.deepEqual(CAPABILITIES.filter(capabilityAcceptsVisualIntent), ['editable', 'repeated-source-node']);
+  assert.deepEqual(CAPABILITIES.filter(capabilityAcceptsNodeRewrite), ['editable', 'read-only-opaque', 'repeated-source-node']);
   assert.equal(new Set(CAPABILITIES.map(describeCapability)).size, CAPABILITIES.length);
   assert.equal(parseCapability('editable'), 'editable');
   assert.throws(() => parseCapability('writable'), /unknown value/);
 });
 
-test(
-  'each node is classified by plan §6: loops ' + 'repeat, code is opaque, the rest is editable',
-  () => {
-    const nodes = valid(
-      [
-        '---',
-        'const items = [1];',
-        '---',
-        '<main class="page" {...rest}>',
-        '  <p set:html={html}></p>',
-        '  {items.map((item) => (<li>{item}</li>))}',
-        '  {value}',
-        '  <!-- note -->',
-        '</main>',
-        '<script>let a = 1;</script>',
-        '<style>.page { color: red; }</style>',
-      ].join('\n'),
-    );
-    const byPath = new Map(nodes.map((node) => [node.path.join('/'), node]));
-    assert.equal(byPath.get('0')?.capability, 'editable');
-    assert.deepEqual(
-      byPath.get('0')?.attributes.map((attribute) => [attribute.name, attribute.capability]),
-      [
-        ['class', 'editable'],
-        ['...rest', 'read-only-opaque'],
-      ],
-    );
-    assert.equal(
-      byPath.get('0/0')?.capability,
-      'read-only-opaque',
-      'set:html writes children at runtime',
-    );
-    assert.equal(byPath.get('0/1')?.kind, 'map');
-    assert.equal(byPath.get('0/1')?.capability, 'editable', 'the loop itself is the source node');
-    assert.equal(byPath.get('0/1/0')?.capability, 'repeated-source-node');
-    assert.equal(byPath.get('0/1/0/0')?.capability, 'repeated-source-node');
-    assert.equal(byPath.get('0/2')?.capability, 'read-only-opaque');
-    assert.equal(byPath.get('0/3')?.capability, 'editable');
-    assert.equal(byPath.get('1')?.capability, 'read-only-opaque', 'a script is code kept verbatim');
-    // Same-file styles (plan §6): the style panel restates a page's own rules.
-    assert.equal(byPath.get('2')?.capability, 'editable', "a page's own <style> is editable");
-  },
-);
+test('each node is classified by plan §6: loops ' + 'repeat, code is opaque, the rest is editable', () => {
+  const nodes = valid(
+    [
+      '---',
+      'const items = [1];',
+      '---',
+      '<main class="page" {...rest}>',
+      '  <p set:html={html}></p>',
+      '  {items.map((item) => (<li>{item}</li>))}',
+      '  {value}',
+      '  <!-- note -->',
+      '</main>',
+      '<script>let a = 1;</script>',
+      '<style>.page { color: red; }</style>',
+    ].join('\n'),
+  );
+  const byPath = new Map(nodes.map((node) => [node.path.join('/'), node]));
+  assert.equal(byPath.get('0')?.capability, 'editable');
+  assert.deepEqual(
+    byPath.get('0')?.attributes.map((attribute) => [attribute.name, attribute.capability]),
+    [
+      ['class', 'editable'],
+      ['...rest', 'read-only-opaque'],
+    ],
+  );
+  assert.equal(byPath.get('0/0')?.capability, 'read-only-opaque', 'set:html writes children at runtime');
+  assert.equal(byPath.get('0/1')?.kind, 'map');
+  assert.equal(byPath.get('0/1')?.capability, 'editable', 'the loop itself is the source node');
+  assert.equal(byPath.get('0/1/0')?.capability, 'repeated-source-node');
+  assert.equal(byPath.get('0/1/0/0')?.capability, 'repeated-source-node');
+  assert.equal(byPath.get('0/2')?.capability, 'read-only-opaque');
+  assert.equal(byPath.get('0/3')?.capability, 'editable');
+  assert.equal(byPath.get('1')?.capability, 'read-only-opaque', 'a script is code kept verbatim');
+  // Same-file styles (plan §6): the style panel restates a page's own rules.
+  assert.equal(byPath.get('2')?.capability, 'editable', "a page's own <style> is editable");
+});
 
 test('a Fragment with set:html is markup and exposes the directive as an attribute', () => {
   const [fragment] = valid('<Fragment set:html={content} />\n');
@@ -129,8 +103,7 @@ test('spans are bytes: paths are preorder, and attribute parts are exact', () =>
   assert.deepEqual(paragraph?.path, [0]);
   assert.deepEqual(child?.path, [0, 0]);
   const [title, hidden] = paragraph?.attributes ?? [];
-  const slice = (span: { start: number; end: number } | undefined) =>
-    span === undefined ? undefined : bytes.subarray(span.start, span.end).toString();
+  const slice = (span: { start: number; end: number } | undefined) => (span === undefined ? undefined : bytes.subarray(span.start, span.end).toString());
   assert.equal(slice(title?.valueSpan), 'Zoë 🎉');
   assert.equal(slice(title?.nameSpan), 'title');
   assert.equal(slice(hidden?.span), 'hidden');
@@ -181,9 +154,7 @@ test('a Markdown page projects its blocks, items and text, and its JSX as markup
     ['3', 'markdown', 'blocks'],
   ]);
   const attributes = (path: string) =>
-    projection.nodes
-      .find((node) => node.path.join('/') === path)
-      ?.attributes.map((attribute) => [attribute.name, attribute.type]);
+    projection.nodes.find((node) => node.path.join('/') === path)?.attributes.map((attribute) => [attribute.name, attribute.type]);
   assert.deepEqual(attributes('2'), [['title', 'string']]);
   assert.deepEqual(attributes('3'), [
     ['alt', 'markdown'],
@@ -202,19 +173,17 @@ test('an .astro page is markup throughout; a stylesheet is an opaque document', 
   assert.deepEqual(css, { ...opaque, nodes: [] });
 });
 
-// Inside the byte bound but past the UTF-16 bound: 10 MB of ASCII. The parser
-// refuses it, and the projection must too — as a parse error, not the offset
-// converter's assertion (a crash before step 4 found it). One unit less passes.
-test('a page past the UTF-16 bound projects as a parse error, not a crash', () => {
-  const over = 'x'.repeat(LIMITS.ipcFieldCharsMax + 1);
-  assert.ok(Buffer.byteLength(over) <= LIMITS.sourceBytesMax, 'The file fits the byte bound');
-  const page = projectPage(over, parsePageResult(parsePage(over, { locs: true })));
-  assert.equal(page.tag, 'parse-error');
-  assert.equal(page.byteLength, LIMITS.ipcFieldCharsMax + 1);
-  assert.match(page.tag === 'parse-error' ? (page.diagnostics[0]?.message ?? '') : '', /UTF-16/);
-  assert.equal(projectOpaqueDocument(over).tag, 'parse-error');
-  const at = over.slice(1);
-  assert.equal(projectOpaqueDocument(at).tag, 'valid', 'Exactly at the bound is valid');
+// The UTF-16 bound is the platform's string length, so a page past it cannot be
+// built: Stacki has no product size limit. The bound is pinned, and a large page
+// (a few MB) projects as valid instead of being refused.
+test('a large page projects as valid; the UTF-16 bound is the platform ceiling', () => {
+  assert.equal(LIMITS.ipcFieldCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(LIMITS.sourceBytesMax, PLATFORM_LIMITS.stringUnitsMax);
+  const large = 'x'.repeat(2 * 1024 * 1024);
+  const page = projectPage(large, parsePageResult(parsePage(large, { locs: true })));
+  assert.equal(page.tag, 'valid');
+  assert.equal(page.byteLength, large.length);
+  assert.equal(projectOpaqueDocument(large).tag, 'valid');
 });
 
 test('a snapshot computes its checksum from its bytes and matches its projection', () => {
@@ -224,14 +193,6 @@ test('a snapshot computes its checksum from its bytes and matches its projection
   const snapshot = createSnapshot({ path, bytes, projection: project(text) }, sha256);
   assert.equal(snapshot.checksum, createHash('sha256').update(text, 'utf8').digest('hex'));
   assert.equal(snapshot.bytes, bytes);
-  assert.deepEqual(
-    Object.keys(snapshot).sort(),
-    ['bytes', 'checksum', 'path', 'projection'],
-    'no version field',
-  );
-  assert.throws(
-    () =>
-      createSnapshot({ path, bytes: encodeUtf8(`${text} `), projection: project(text) }, sha256),
-    /derived from bytes of this length/,
-  );
+  assert.deepEqual(Object.keys(snapshot).sort(), ['bytes', 'checksum', 'path', 'projection'], 'no version field');
+  assert.throws(() => createSnapshot({ path, bytes: encodeUtf8(`${text} `), projection: project(text) }, sha256), /derived from bytes of this length/);
 });

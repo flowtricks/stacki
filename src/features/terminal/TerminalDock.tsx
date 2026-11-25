@@ -1,11 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type {
-  Dispatch,
-  MutableRefObject,
-  PointerEvent as ReactPointerEvent,
-  SetStateAction,
-} from 'react';
+import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
 import { ChevronDownIcon, CloseIcon, PlusIcon } from '../../ui/Icons';
@@ -13,6 +10,7 @@ import { usePointerDrag } from '../../ui/usePointerDrag';
 import { closeTerminal, onTerminalProcess } from './terminalBridge';
 import type { TerminalPaneHandle } from './TerminalPane';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
+import { TERMINAL_LAUNCH_MODE_KEY, onTerminalTabRequest, parseLaunchMode, type LaunchMode } from './terminalAgent';
 
 const TerminalPane = lazy(() => import('./TerminalPane'));
 
@@ -25,16 +23,16 @@ const CUSTOM_COMMAND_CHARS_MAX = 4_096;
 const LABEL_CHARS_MAX = 22;
 
 const HEIGHT_KEY = 'stacki.terminal.height';
-const MODE_KEY = 'stacki.terminal.autoLaunch';
+const MODE_KEY = TERMINAL_LAUNCH_MODE_KEY;
 const CUSTOM_KEY = 'stacki.terminal.autoLaunchCustom';
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
-
-type LaunchMode = 'none' | 'claude' | 'codex' | 'custom';
 
 interface TerminalTab {
   readonly id: string;
   readonly oscTitle: string;
   readonly processName: string;
+  /** A command this tab starts with in place of the dock's auto-launch: an agent handed a task (terminalAgent.ts). */
+  readonly launch?: string;
 }
 
 interface TerminalDockProps {
@@ -43,12 +41,17 @@ interface TerminalDockProps {
   readonly onClose: () => void;
 }
 
-const AUTO_LAUNCH_OPTIONS = [
-  { value: 'none', label: 'Shell only' },
-  { value: 'claude', label: 'Claude Code' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'custom', label: 'Custom…' },
-] as const satisfies readonly DropdownOption<LaunchMode>[];
+// Claude Code and Codex are product names; the other two choices are words of the interface.
+function autoLaunchOptions(translate: Translator): readonly DropdownOption<LaunchMode>[] {
+  return [
+    { value: 'none', label: translate('workspace.terminal.shellOnly') },
+    // i18n-ignore: Claude Code and Codex are product names.
+    { value: 'claude', label: 'Claude Code' },
+    // i18n-ignore: Codex is a product name.
+    { value: 'codex', label: 'Codex' },
+    { value: 'custom', label: translate('workspace.terminal.custom') },
+  ];
+}
 
 export function tabLabel(tab: TerminalTab, index: number): string {
   assert(Number.isSafeInteger(index), 'Terminal tab index must be an integer');
@@ -64,30 +67,19 @@ export function tabLabels(tabs: readonly TerminalTab[]): readonly string[] {
   for (const label of raw) {
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  return raw.map((label, index) =>
-    (counts.get(label) ?? 0) > 1 ? `${label} ${index + 1}` : label,
-  );
+  return raw.map((label, index) => ((counts.get(label) ?? 0) > 1 ? `${label} ${index + 1}` : label));
 }
 
 export default function TerminalDock(props: TerminalDockProps) {
+  const translate = useTranslate();
   const settings = useDockSettings();
   const terminals = useTerminalTabs(props.projectPath, { open: props.open });
   const onHandleDown = useDockResize(settings.height, settings.setHeight, settings.setDragging);
-  useVisiblePaneFit(
-    { open: props.open, activeId: terminals.activeId, height: settings.height },
-    terminals.paneRefs.current,
-  );
+  useVisiblePaneFit({ open: props.open, activeId: terminals.activeId, height: settings.height }, terminals.paneRefs.current);
   const autoLaunch = launchCommand(settings.mode, settings.custom);
   return (
-    <div
-      className={`term-dock ${props.open ? 'on' : ''}`}
-      style={{ height: props.open ? settings.height : 0 }}
-    >
-      <div
-        className={`term-resize ${settings.dragging ? 'on' : ''}`}
-        onPointerDown={onHandleDown}
-        title="Drag to resize"
-      />
+    <div className={`term-dock ${props.open ? 'on' : ''}`} style={{ height: props.open ? settings.height : 0 }}>
+      <div className={`term-resize ${settings.dragging ? 'on' : ''}`} onPointerDown={onHandleDown} title={translate('workspace.terminal.resize')} />
       <TerminalBar
         tabs={terminals.tabs}
         activeId={terminals.activeId}
@@ -99,17 +91,13 @@ export default function TerminalDock(props: TerminalDockProps) {
       />
       <div className="term-panes">
         {terminals.tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className="term-pane-wrap"
-            style={{ display: tab.id === terminals.activeId ? 'block' : 'none' }}
-          >
-            <Suspense fallback={<div className="term-pane">Loading terminal…</div>}>
+          <div key={tab.id} className="term-pane-wrap" style={{ display: tab.id === terminals.activeId ? 'block' : 'none' }}>
+            <Suspense fallback={<div className="term-pane" role="status" aria-busy="true" aria-label={translate('workspace.terminal.loading')} />}>
               <TerminalPane
                 ref={(pane) => terminals.setPaneRef(tab.id, pane ?? undefined)}
                 terminalId={tab.id}
                 projectPath={props.projectPath}
-                autoLaunch={autoLaunch}
+                autoLaunch={tab.launch ?? autoLaunch}
                 onTitleChange={(title) => terminals.setTabTitle(tab.id, title)}
               />
             </Suspense>
@@ -158,15 +146,28 @@ function useTerminalTabs(projectPath: string, dock: { readonly open: boolean }):
   const nextNumber = useRef(1);
   const seeded = useRef(false);
   tabsRef.current = tabs;
-  const createTab = useCallback(() => {
-    if (tabsRef.current.length >= TERMINAL_TABS_MAX) {
-      return;
-    }
-    const id = `${projectPath}:term-${nextNumber.current}`;
-    nextNumber.current += 1;
-    setTabs((previous) => [...previous, { id, oscTitle: '', processName: '' }]);
-    setActiveId(id);
-  }, [projectPath]);
+  const createTab = useCallback(
+    (launch?: string) => {
+      if (tabsRef.current.length >= TERMINAL_TABS_MAX) {
+        return;
+      }
+      const id = `${projectPath}:term-${nextNumber.current}`;
+      nextNumber.current += 1;
+      const tab: TerminalTab = launch === undefined ? { id, oscTitle: '', processName: '' } : { id, oscTitle: '', processName: '', launch };
+      setTabs((previous) => [...previous, tab]);
+      setActiveId(id);
+    },
+    [projectPath],
+  );
+  // A hand-off to the agent opens its own tab; it counts as the dock's first, so opening adds no idle shell beside it.
+  useEffect(
+    () =>
+      onTerminalTabRequest((command) => {
+        seeded.current = true;
+        createTab(command);
+      }),
+    [createTab],
+  );
   const closeTab = useCallback((id: string) => {
     void closeTerminal(id);
     paneRefs.current.delete(id);
@@ -208,12 +209,7 @@ interface LifecycleRefs {
   readonly setActiveId: Dispatch<SetStateAction<string | undefined>>;
 }
 
-function useProjectTerminalLifecycle(
-  projectPath: string,
-  dock: { readonly open: boolean },
-  refs: LifecycleRefs,
-  createTab: () => void,
-): void {
+function useProjectTerminalLifecycle(projectPath: string, dock: { readonly open: boolean }, refs: LifecycleRefs, createTab: () => void): void {
   const { open } = dock;
   const { paneRefs, seeded, setActiveId, setTabs, tabsRef, nextNumber } = refs;
   useEffect(() => {
@@ -251,11 +247,7 @@ function useTerminalProcessNames(setTabs: Dispatch<SetStateAction<readonly Termi
   );
 }
 
-function closeTabFromList(
-  previous: readonly TerminalTab[],
-  id: string,
-  setActiveId: Dispatch<SetStateAction<string | undefined>>,
-): readonly TerminalTab[] {
+function closeTabFromList(previous: readonly TerminalTab[], id: string, setActiveId: Dispatch<SetStateAction<string | undefined>>): readonly TerminalTab[] {
   const index = previous.findIndex((tab) => tab.id === id);
   assert(index >= 0, 'Closed terminal tab must exist');
   const next = previous.filter((tab) => tab.id !== id);
@@ -268,12 +260,7 @@ function closeTabFromList(
   return next;
 }
 
-function updateTab(
-  tabs: readonly TerminalTab[],
-  id: string,
-  field: 'oscTitle' | 'processName',
-  value: string,
-): readonly TerminalTab[] {
+function updateTab(tabs: readonly TerminalTab[], id: string, field: 'oscTitle' | 'processName', value: string): readonly TerminalTab[] {
   if (!tabs.some((tab) => tab.id === id && tab[field] !== value)) {
     return tabs;
   }
@@ -291,6 +278,7 @@ interface TerminalBarProps {
 }
 
 function TerminalBar(props: TerminalBarProps) {
+  const translate = useTranslate();
   const labels = tabLabels(props.tabs);
   return (
     <div className="term-bar">
@@ -306,7 +294,7 @@ function TerminalBar(props: TerminalBarProps) {
             {props.tabs.length > 1 && (
               <span
                 className="term-tab-x"
-                title="Close terminal"
+                title={translate('workspace.terminal.close')}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.closeTab(tab.id);
@@ -319,8 +307,8 @@ function TerminalBar(props: TerminalBarProps) {
         ))}
         <button
           className="ghost term-add"
-          title="New terminal"
-          onClick={props.createTab}
+          title={translate('workspace.terminal.new')}
+          onClick={() => props.createTab()}
           disabled={props.tabs.length >= TERMINAL_TABS_MAX}
         >
           <PlusIcon size={13} />
@@ -333,6 +321,7 @@ function TerminalBar(props: TerminalBarProps) {
 
 function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>) {
   const { settings } = props;
+  const translate = useTranslate();
   return (
     <div className="term-bar-right">
       {settings.mode === 'custom' && (
@@ -340,8 +329,8 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
           className="term-custom"
           value={settings.custom}
           maxLength={CUSTOM_COMMAND_CHARS_MAX}
-          placeholder="e.g. bun run watch"
-          title="Run once in each new terminal"
+          placeholder={translate('workspace.terminal.customPlaceholder')}
+          title={translate('workspace.terminal.customTitle')}
           onChange={(event) => {
             settings.setCustom(event.target.value);
             storeSetting(CUSTOM_KEY, event.target.value);
@@ -351,7 +340,7 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
       <Dropdown
         className="term-launch"
         value={settings.mode}
-        options={AUTO_LAUNCH_OPTIONS}
+        options={autoLaunchOptions(translate)}
         livePreview={false}
         onChange={(mode) => {
           settings.setMode(mode);
@@ -360,7 +349,7 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
       />
       <button
         className="ghost"
-        title={`Hide terminal (${shortcutLabel('J', 'primary', currentDesktopPlatform())})`}
+        title={translate('workspace.terminal.hide', { shortcut: shortcutLabel('J', 'primary', currentDesktopPlatform()) })}
         onClick={props.onClose}
       >
         <ChevronDownIcon size={13} />
@@ -385,10 +374,7 @@ function useDockResize(
     startDrag(event, {
       cursor: 'ns-resize',
       onMove: (move) => {
-        nextHeight = Math.min(
-          heightMax,
-          Math.max(HEIGHT_PX_MIN, startHeight + startY - move.clientY),
-        );
+        nextHeight = Math.min(heightMax, Math.max(HEIGHT_PX_MIN, startHeight + startY - move.clientY));
         setHeight(nextHeight);
       },
       onEnd: () => {
@@ -424,9 +410,7 @@ function useVisiblePaneFit(
 function cleanLabel(raw: string): string {
   const flat = raw.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim();
   const short = shortenPathLike(flat);
-  return short.length <= LABEL_CHARS_MAX
-    ? short
-    : `${short.slice(0, LABEL_CHARS_MAX - 1).trimEnd()}…`;
+  return short.length <= LABEL_CHARS_MAX ? short : `${short.slice(0, LABEL_CHARS_MAX - 1).trimEnd()}…`;
 }
 
 function shortenPathLike(label: string): string {
@@ -446,18 +430,6 @@ function launchCommand(mode: LaunchMode, custom: string): string {
       return custom;
     case 'none':
       return '';
-  }
-}
-
-function parseLaunchMode(value: string): LaunchMode {
-  switch (value) {
-    case 'claude':
-    case 'codex':
-    case 'custom':
-    case 'none':
-      return value;
-    default:
-      return 'none';
   }
 }
 

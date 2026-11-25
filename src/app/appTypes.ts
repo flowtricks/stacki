@@ -1,6 +1,6 @@
 // The application shell's own types: history, toasts, tabs, the project and
 // what the shell keeps about it. A page's state is src/editor/pageState.ts.
-import type { CSSProperties } from 'react';
+import type { PasteSource } from '../editor/pasteDependencies';
 import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireGitInfo, WireInjectedRoute } from '../../shared/ipc/ipcResults';
 import type { ScanResult } from '../../shared/properties/projectScan';
@@ -8,7 +8,8 @@ import type { AssetRequest } from '../ui/assetPick';
 import type { CoalescedRun } from '../lib/coalescedRun';
 import type { EditsRecord } from '../editor/pageEdits';
 import type { EditorNode } from '../editor/pageView';
-import type { VariableSelection } from '../features/variables/variablesBridge';
+import type { TypedMessageRef } from '../../shared/properties/i18n/messageRef';
+import type { VariableSelection } from '../ipc/variablesBridge';
 
 export interface ProjectIdentity {
   readonly path: string;
@@ -20,6 +21,8 @@ export interface UndoCommand {
   readonly undo: () => unknown | Promise<unknown>;
   redo: () => unknown | Promise<unknown>;
   label?: string;
+  /** The step's name as a reference, so it is worded in the language chosen when it is undone, not when it was made. Wins over `label`. */
+  labelRef?: TypedMessageRef | undefined;
   readonly coalesceKey?: string | undefined;
 }
 
@@ -30,6 +33,29 @@ export interface UndoCommand {
 export interface EditsEntry {
   readonly kind: 'edits';
   readonly record: EditsRecord;
+  /** The step's name when an app named it (docs/apps.md, "Undo labels"); shown when it is undone or redone. */
+  label?: string;
+  /** Files the same step made, such as a component created from the selection
+   *  (src/app/model/componentCreation.ts): one ⌘Z takes back both. */
+  readonly files?: StepFiles;
+}
+
+/** A step's work on files beside its page writes. Undo runs once the page's
+ *  writes are reverted, redo before they are replayed, so the page never
+ *  imports a file that is not there. Both are idempotent: a step that undid
+ *  only part of its page writes is undone again later, and runs them again.
+ *
+ *  Copy first, delete last: what must exist while the page still reads it goes
+ *  back before the page is reverted (undoBeforePage) and leaves only after the
+ *  page is replayed (redoAfterPage), so no content is ever missing between two
+ *  writes. `check` is asked before anything moves, either way: a sentence
+ *  refuses the whole step and nothing is written. */
+export interface StepFiles {
+  readonly check: (direction: 'undo' | 'redo') => Promise<string | undefined>;
+  readonly undoBeforePage: () => Promise<void>;
+  readonly undo: () => Promise<void>;
+  readonly redo: () => Promise<void>;
+  readonly redoAfterPage: () => Promise<void>;
 }
 
 export type HistoryEntry = UndoCommand | EditsEntry;
@@ -40,8 +66,9 @@ export interface AppHistory {
   lastKey: string | undefined;
 }
 
-export type ToastKind = 'info' | 'success' | 'error';
+export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 export type LeftTab =
+  | 'elements'
   | 'pages'
   | 'navigator'
   | 'properties'
@@ -49,8 +76,13 @@ export type LeftTab =
   | 'assets'
   | 'cms'
   | 'variables'
+  | 'selectors'
   | 'code'
   | 'history'
+  | 'apps'
+  | 'audits'
+  | 'projectSettings'
+  | 'ai'
   | undefined;
 export type RightTab = 'style' | 'settings';
 export type DevStatus = 'off' | 'starting' | 'on';
@@ -58,6 +90,20 @@ export type DevStatus = 'off' | 'starting' | 'on';
 export interface NodeStates {
   readonly hidden: readonly string[];
   readonly inert: readonly string[];
+  /** Nodes whose ::before is drawn, and whose ::after is: layers in the navigator. */
+  readonly before: readonly string[];
+  readonly after: readonly string[];
+}
+
+/**
+ * A ::before or ::after picked in the navigator: its element, which one, and a
+ * count that makes picking the same one again a new request for the Style
+ * panel to select its selector.
+ */
+export interface PseudoPick {
+  readonly nodeId: string;
+  readonly pseudo: 'before' | 'after';
+  readonly serial: number;
 }
 
 export interface PreviewCommitInfo {
@@ -69,12 +115,26 @@ export interface PreviewCommitInfo {
 export type DynamicEntry = IpcResults['page:dynamicPaths']['entries'][number];
 export type CollectionSample = Data;
 export type CollectionSamples = Readonly<Record<string, CollectionSample>>;
+/** What a file's import calls returned, keyed `<file>|<value name>`; absent: never asked. */
+export type ValueSamples = Readonly<Record<string, Data>>;
 export type ItemIndexes = Readonly<Record<string, number>>;
+/** The loop items the data picker's arrows chose, for the one selection (`key`) they were chosen under. */
+export interface ItemPaging {
+  readonly key: string;
+  readonly pages: ItemIndexes;
+}
+/** The copy of a node in a loop the canvas click named: which of the node's copies on the page it was. */
+export interface CanvasCopy {
+  readonly nodeId: string;
+  readonly occurrence: number;
+  readonly copies: number | undefined;
+  /** The pass of each loop around the node the click landed in, by the loop's canvas path; undefined from a page that marks none. */
+  readonly iterations: readonly { readonly path: string; readonly index: number }[] | undefined;
+}
 export type GitInfo = IpcResults['git:info'];
 export type RepositoryInfo = WireGitInfo;
 export type InjectedRoute = WireInjectedRoute;
 export type VariablesGroup = VariableSelection;
-export type RightTabIndicator = Pick<CSSProperties, 'left' | 'width'>;
 export type AssetPick = AssetRequest;
 
 /** The open project's scans: one in flight, at most one waiting. */
@@ -89,4 +149,6 @@ export interface NodeClipboard {
   readonly frontmatter: string;
   readonly imports: readonly { readonly name: string; readonly path: string }[];
   readonly pagePath: string | undefined;
+  /** The whole file the node was copied from, for the context-aware paste (src/editor/pasteDependencies.ts). */
+  readonly source?: PasteSource;
 }

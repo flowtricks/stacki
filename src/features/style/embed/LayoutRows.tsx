@@ -1,8 +1,15 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronRight as centralChevronRight } from '../../../ui/central/centralGeometry';
 // The layout section's rows: which properties each section owns, direction
 // and alignment, and the sections a display mode brings (EmbedEditor.tsx).
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import type { InlineChip } from './useInlineTarget';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { ClassPlacement } from '../../../editor/classAttr';
 import FieldLabel from '../components/FieldLabel';
 import { PropTip } from '../components/CssPropertyTip';
 import DirectionControl from '../DirectionControl';
@@ -11,16 +18,11 @@ import GapControl from '../GapControl';
 import GridControls from '../GridControls';
 import { GroupLabel } from '../TypographySection';
 import { type MatchedSelector, type ResolvedProp } from '../model/resolved';
-import { selectorDependsOnAncestor } from '../model/selectors';
+import { isGlobalSelector, selectorDependsOnAncestor, selectorKind, type SelectorKind } from '../model/selectors';
 import { getHost, onHostChange } from '../model/host';
 import { type LiveSetProp } from './EditorBasics';
-import {
-  VALIGN_DISPLAYS,
-  VerticalAlignRow,
-  effectiveValue,
-  rawEffective,
-  currentFlexFlow,
-} from './ResolvedRows';
+import { keepImportant } from '../model/styleDisplay';
+import { VALIGN_DISPLAYS, VerticalAlignRow, effectiveValue, rawEffective, currentFlexFlow } from './ResolvedRows';
 
 // The flex Direction control — only rendered when `display` is flex. Writes the
 // `flex-direction` + `flex-wrap` longhands; the label clears them (and any legacy
@@ -40,10 +42,11 @@ export function DirectionRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
       <GroupLabel
-        label="Direction"
+        label={translate('styleModel.embed.layout.direction')}
         props={['flex-flow', 'flex-direction', 'flex-wrap']}
         read={read}
         busy={busy}
@@ -106,6 +109,7 @@ export function AlignRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const column = currentFlexFlow(read).startsWith('column');
   return (
     <div className="embed-editor_size-row embed-editor_align-row">
@@ -117,7 +121,7 @@ export function AlignRow({
         onReset={() => {}}
         tooltip={<PropTip props={['justify-content', 'align-items']} />}
       >
-        Align
+        {translate('styleModel.embed.layout.align')}
       </FieldLabel>
       <AlignControl
         justify={effectiveValue(read('justify-content'))}
@@ -125,8 +129,22 @@ export function AlignRow({
         column={column}
         busy={busy}
         read={read}
-        onSet={(prop, value) => setProp(prop, value, false)}
-        onLive={(prop, value) => liveSetProp(prop, value, false)}
+        // The box, its dots and the axis menus have no text that shows the flag
+        // (the menus carry the `!` mark instead), so every write keeps the flag
+        // the property already has; a flag typed into a custom field adds it.
+        onSet={(prop, value) => {
+          const kept = keepImportant(value, rawEffective(read(prop)));
+          setProp(prop, kept.value, kept.important);
+        }}
+        onLive={(prop, value) => {
+          // An undefined preview restores the committed value; there is no flag to carry.
+          if (value === undefined) {
+            liveSetProp(prop, undefined, false);
+            return;
+          }
+          const kept = keepImportant(value, rawEffective(read(prop)));
+          liveSetProp(prop, kept.value, kept.important);
+        }}
         onClear={(prop) => clearProp(prop)}
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
@@ -135,17 +153,7 @@ export function AlignRow({
   );
 }
 
-export const ChevronRightIcon = () => (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-    <path
-      d="M6 4l4 4-4 4"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+export const ChevronRightIcon = centralIcon(centralChevronRight);
 
 // Which layout-mode disclosure a Display value implies. `grid` wins over `inline` for
 // `inline-grid`, `flex` over `inline` for `inline-flex`; a custom value (e.g.
@@ -166,25 +174,10 @@ export function layoutMode(display: string): 'grid' | 'flex' | 'inline' | undefi
 
 // A collapsible disclosure (Webflow's "More alignment options" button): a full-width
 // header whose chevron rotates open to reveal its rows.
-export function LayoutDisclosure({
-  label,
-  open,
-  onToggle,
-  children,
-}: {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
+export function LayoutDisclosure({ label, open, onToggle, children }: { label: string; open: boolean; onToggle: () => void; children: ReactNode }) {
   return (
     <div className={`embed-editor_disclosure ${open ? 'is-open' : ''}`}>
-      <button
-        type="button"
-        className="embed-editor_disclosure-btn"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
+      <button type="button" className="embed-editor_disclosure-btn" aria-expanded={open} onClick={onToggle}>
         <span className={`embed-editor_disclosure-arrow ${open ? 'is-open' : ''}`}>
           <ChevronRightIcon />
         </span>
@@ -217,36 +210,26 @@ export function LayoutModeSections({
   activeSelector: string;
   resolving: boolean;
 }) {
+  const translate = useTranslate();
   const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = rowProps;
   const display = effectiveValue(read('display'));
   const mode = layoutMode(display);
   const [open, toggle] = useLayoutModeOpen(mode, { resolving });
   // A gap set in ANY spelling keeps the Gap row visible (it reads all of them).
-  const hasGridGap = ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'gap'].some(
-    (prop) => read(prop) !== undefined,
-  );
+  const hasGridGap = ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'gap'].some((prop) => read(prop) !== undefined);
   return (
     <>
-      <LayoutDisclosure label="Flex settings" open={open.flex} onToggle={() => toggle('flex')}>
+      <LayoutDisclosure label={translate('styleModel.embed.layout.flexSettings')} open={open.flex} onToggle={() => toggle('flex')}>
         <DirectionRow {...rowProps} />
         <AlignRow {...rowProps} liveSetProp={liveSetProp} />
       </LayoutDisclosure>
-      <LayoutDisclosure label="Grid settings" open={open.grid} onToggle={() => toggle('grid')}>
+      <LayoutDisclosure label={translate('styleModel.embed.layout.gridSettings')} open={open.grid} onToggle={() => toggle('grid')}>
         <GridControls {...rowProps} liveSetProp={liveSetProp} />
       </LayoutDisclosure>
       {/* Gap is shared by flex + grid — always mounted (keeps its link-toggle state),
           shown whenever the element is a flex/grid container. */}
-      <GapControl
-        key={activeSelector}
-        show={mode === 'flex' || mode === 'grid' || hasGridGap}
-        {...rowProps}
-        liveSetProp={liveSetProp}
-      />
-      <LayoutDisclosure
-        label="Inline settings"
-        open={open.inline}
-        onToggle={() => toggle('inline')}
-      >
+      <GapControl key={activeSelector} show={mode === 'flex' || mode === 'grid' || hasGridGap} {...rowProps} liveSetProp={liveSetProp} />
+      <LayoutDisclosure label={translate('styleModel.embed.layout.inlineSettings')} open={open.inline} onToggle={() => toggle('inline')}>
         {/* Align Y = vertical-align: the inline-level alignment property. Dimmed unless
             Display is inline-level or table-cell, where it actually applies. */}
         <VerticalAlignRow
@@ -264,29 +247,40 @@ export function LayoutModeSections({
 }
 
 // Which disclosures are open. Changing Display's mode opens the matching one and
-// closes the others; hand-toggles persist between changes.
-export function useLayoutModeOpen(
-  mode: ReturnType<typeof layoutMode>,
-  options: { readonly resolving: boolean },
-) {
+// closes the others; hand-toggles persist between changes. Followed while rendering, so
+// the disclosures of the element just shown open and close in the frame its rows arrive
+// (in a layout effect they followed one commit later, which a switch painted).
+export function useLayoutModeOpen(mode: ReturnType<typeof layoutMode>, options: { readonly resolving: boolean }) {
   const { resolving } = options;
+  const elementKey = getHost().selectedId ?? '';
   const [open, setOpen] = useState({
     flex: mode === 'flex',
     grid: mode === 'grid',
     inline: mode === 'inline',
   });
-  useLayoutEffect(() => {
-    // Resolution briefly removes `display` from the model. Keep the disclosure
-    // that was already open through that gap; closing it would remove controls
-    // for one paint, only to insert them again when the same display returns.
-    if (resolving && mode === undefined) {
-      return;
+  const [seen, setSeen] = useState({ mode, resolving, elementKey });
+  if (seen.mode !== mode || seen.resolving !== resolving || seen.elementKey !== elementKey) {
+    setSeen({ mode, resolving, elementKey });
+    // Resolution briefly removes `display` from the model. Keep the disclosure that was
+    // already open through that gap, for the same element only: closing it would remove
+    // controls for one paint, only to insert them again when the same display returns,
+    // but another element's open disclosure would show rows that element does not have.
+    if (!heldThroughResolution({ sameElement: seen.elementKey === elementKey, resolving, mode })) {
+      setOpen({ flex: mode === 'flex', grid: mode === 'grid', inline: mode === 'inline' });
     }
-    setOpen({ flex: mode === 'flex', grid: mode === 'grid', inline: mode === 'inline' });
-  }, [mode, resolving]);
-  const toggle = (key: 'flex' | 'grid' | 'inline') =>
-    setOpen((previous) => ({ ...previous, [key]: !previous[key] }));
+  }
+  const toggle = (key: 'flex' | 'grid' | 'inline') => setOpen((previous) => ({ ...previous, [key]: !previous[key] }));
   return [open, toggle] as const;
+}
+
+function heldThroughResolution(state: { readonly sameElement: boolean; readonly resolving: boolean; readonly mode: ReturnType<typeof layoutMode> }): boolean {
+  if (!state.sameElement) {
+    return false;
+  }
+  if (!state.resolving) {
+    return false;
+  }
+  return state.mode === undefined;
 }
 
 // ─────────────────────────── Style card ───────────────────────────
@@ -306,6 +300,8 @@ export type SourceOption = {
   /** Full name shown on the closed trigger (e.g. "Global Styles #1"), while the
    *  list row stays the group-scoped "Embed #1". */
   triggerLabel?: string;
+  /** The virtual "Create <style>" entry: nothing is written until the first style is. */
+  create?: boolean;
 };
 
 // A selector the element can be targeted by, offered as an autocomplete suggestion:
@@ -324,9 +320,7 @@ export function useProjectClasses(): string[] {
     const sync = () =>
       setList((previous) => {
         const next = getHost().projectClasses ?? [];
-        return next.length === previous.length && next.every((name, i) => name === previous[i])
-          ? previous
-          : next;
+        return next.length === previous.length && next.every((name, i) => name === previous[i]) ? previous : next;
       });
     sync();
     return onHostChange(sync);
@@ -337,25 +331,20 @@ export function useProjectClasses(): string[] {
 // to pick from, few enough that the list stays a list.
 export const PROJECT_CLASS_LIMIT = 30;
 
-export const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
-  tag: 'tag',
-  class: 'class',
-  attribute: 'attribute',
-  'attribute-value': 'attribute',
-  combo: 'combo',
+export const SUGGESTION_KIND_LABEL_KEY: Record<SelectorSuggestion['kind'], MessageKey> = {
+  tag: 'styleModel.embed.picker.kind.tag',
+  class: 'styleModel.embed.picker.kind.class',
+  attribute: 'styleModel.embed.picker.kind.attribute',
+  'attribute-value': 'styleModel.embed.picker.kind.attribute',
+  combo: 'styleModel.embed.picker.kind.combo',
 };
-
-// A selector made only from tags, universal selectors, and pseudos describes a
-// project-wide group rather than this element's identity. A class, id, or attribute
-// anywhere in the selector (including inside `:is(...)`) makes it specific.
-export function isGlobalSelector(text: string): boolean {
-  return !/[.#[]/.test(text);
-}
 
 export type ClassifiedSelector = {
   readonly selector: MatchedSelector;
   readonly global: boolean;
   readonly inherited: boolean;
+  /** The chip's colour family: blue for a class chip, grey for a plain one (selectorKind). */
+  readonly kind: SelectorKind;
 };
 
 export function classifySelector(selector: MatchedSelector): ClassifiedSelector {
@@ -366,24 +355,31 @@ export function classifySelector(selector: MatchedSelector): ClassifiedSelector 
     // definitions overlap, so each reveal control owns a disjoint list.
     global: !inherited && isGlobalSelector(selector.text),
     inherited,
+    kind: selectorKind(selector.text),
   };
 }
 
-export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string): string {
+export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string, translate: Translator = ENGLISH_TRANSLATE): string {
   const categories: string[] = [];
   if (entry.global) {
-    categories.push('global');
+    categories.push(translate('styleModel.embed.layout.category.global'));
   }
   if (entry.inherited) {
-    categories.push('inherited');
+    categories.push(translate('styleModel.embed.layout.category.inherited'));
   }
-  if (entry.selector.fromComponent) {
-    categories.push('component');
+  if (entry.selector.inComponentMarkup === true) {
+    categories.push(translate('styleModel.embed.layout.category.component'));
   }
-  if (categories.length === 0) {
+  if (entry.selector.fromInstance === true) {
+    categories.push(translate('styleModel.embed.layout.category.instance'));
+  }
+  const last = categories.pop();
+  if (last === undefined) {
     return label;
   }
-  return `${label}, ${categories.join(' and ')} selector`;
+  // The list reads `a, b and c`: the last joins through a message, since the word for "and" differs by language.
+  const joined = categories.length === 0 ? last : translate('styleModel.embed.layout.categoriesAnd', { rest: categories.join(', '), last });
+  return translate('styleModel.embed.layout.selectorLabel', { label, categories: joined });
 }
 
 // The selector picker: a chip per selector that styles the element (its own
@@ -394,7 +390,7 @@ export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
 export type SelectorPickerProps = {
-  selectors: MatchedSelector[];
+  selectors: readonly MatchedSelector[];
   suggestions: SelectorSuggestion[];
   activeSelector: string;
   /** True when the active selector is one the user clicked or typed, rather than
@@ -403,8 +399,15 @@ export type SelectorPickerProps = {
   busy: boolean;
   /** Still scanning — the chips that will fill this well are on their way. */
   loading: boolean;
+  /** False while a newly selected element's chips are still landing; the well draws
+   *  a placeholder until they settle (SelectorPicker.tsx). Absent means settled. */
+  settled?: boolean;
   onSelect: (selector: string) => void;
   onDeselect: () => void;
-  onAdd: (selector: string) => void;
+  /** Adds a typed selector; a lone class is written at `placement` among the
+   *  element's classes (the caret's gap among the chips, selectorCaret.ts). */
+  onAdd: (selector: string, placement: ClassPlacement) => void;
   onVisibleSelectorsChange?: (selectors: readonly string[]) => void;
+  /** The "Inline styles" chip, drawn after the last selector (InlineStyleChip.tsx). */
+  inline?: InlineChip | undefined;
 };

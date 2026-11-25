@@ -7,10 +7,6 @@ export function slotOptions(project: Project, file: string, source: string, sele
   if (!parsed.editable || selected === 'layout') {
     return undefined;
   }
-  const parent = flatten(parsed.model.nodes).find((node) =>
-    node.children?.some((child) => child.id === selected),
-  );
-  return parent?.id && (parent.id === 'layout' || parent.kind === 'component')
-    ? componentAt(project, file, parsed, parent.id)?.slots
-    : undefined;
+  const parent = flatten(parsed.model.nodes).find((node) => node.children?.some((child) => child.id === selected));
+  return parent?.id && (parent.id === 'layout' || parent.kind === 'component') ? componentAt(project, file, parsed, parent.id)?.slots : undefined;
 }

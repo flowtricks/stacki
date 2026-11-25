@@ -1,61 +1,26 @@
-import { useState } from 'react';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trashCanSimple as centralTrashCanSimple } from '../../ui/central/centralGeometry';
+import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // A reusable layer stack (background image/gradient layers, text-shadow layers):
 // drag-to-reorder, click a row to open its editor, and a hover-revealed Remove (trash)
 // action. The grip/trash only show on row hover. Rendering of a row's preview + label
 // is delegated via `renderRow`; the owner keeps the data model.
 
-const GripIcon = () => (
-  <svg viewBox="0 0 16 16" aria-hidden="true" className="embed-editor_bg-glyph">
-    <circle cx="6" cy="4" r="1" />
-    <circle cx="10" cy="4" r="1" />
-    <circle cx="6" cy="8" r="1" />
-    <circle cx="10" cy="8" r="1" />
-    <circle cx="6" cy="12" r="1" />
-    <circle cx="10" cy="12" r="1" />
-  </svg>
-);
-const EyeIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
-    <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M1.5 8S4 3.5 8 3.5c1.2 0 2.3.4 3.2 1M14.5 8s-2.5 4.5-6.5 4.5c-1.2 0-2.3-.4-3.2-1"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M6.6 6.6a2 2 0 0 0 2.8 2.8"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-    <path d="m2.5 2.5 11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M3 4h10M6.5 4V3h3v1M5 4l.5 8.5a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L11 4"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const GripIcon = centralIcon(centralDrag);
+const EyeIcon = centralIcon(centralEye);
+const EyeOffIcon = centralIcon(centralEyeOff);
+const TrashIcon = centralIcon(centralTrashCanSimple);
+
+/**
+ * Whether a list with exactly one row opens that row's editor by itself, as it is drawn: a code chip's
+ * popover (CodeChips.tsx) asks for it, so pressing the chip of a one-layer value shows that layer's
+ * fields at once rather than a one-row list to press again. The Style panel leaves it off: there the
+ * list is always on screen and opening an editor is the person's choice.
+ */
+export const LayerListOpensSingleRow = createContext(false);
 
 export type LayerListProps = {
   /** Number of rows (top layer first). */
@@ -73,19 +38,10 @@ export type LayerListProps = {
   onToggleHidden?: (index: number) => void;
 };
 
-export default function LayerList({
-  count,
-  busy,
-  ariaLabel,
-  renderRow,
-  onOpen,
-  onReorder,
-  onRemove,
-  isHidden,
-  onToggleHidden,
-}: LayerListProps) {
+export default function LayerList({ count, busy, ariaLabel, renderRow, onOpen, onReorder, onRemove, isHidden, onToggleHidden }: LayerListProps) {
   const [dragFrom, setDragFrom] = useState<number | undefined>(undefined);
   const [dragOver, setDragOver] = useState<number | undefined>(undefined);
+  const listRef = useSingleRowOpen(count, onOpen);
   if (!count) {
     return undefined;
   }
@@ -94,7 +50,7 @@ export default function LayerList({
     setDragOver(undefined);
   };
   return (
-    <ul className="embed-editor_bg-layers" aria-label={ariaLabel}>
+    <ul ref={listRef} className="embed-editor_bg-layers" aria-label={ariaLabel}>
       {Array.from({ length: count }, (_, index) => {
         const { preview, label } = renderRow(index);
         const hidden = isHidden?.(index) ?? false;
@@ -125,6 +81,27 @@ export default function LayerList({
       })}
     </ul>
   );
+}
+
+// Opens the one row's editor once, the first time the list holds exactly one row (as it is drawn, or
+// as the first layer is added to an empty one), when LayerListOpensSingleRow asks for it. Once per
+// list: closing that editor leaves it closed.
+function useSingleRowOpen(count: number, onOpen: LayerListProps['onOpen']) {
+  const opensSingleRow = useContext(LayerListOpensSingleRow);
+  const listRef = useRef<HTMLUListElement>(null);
+  const opened = useRef(false);
+  useLayoutEffect(() => {
+    if (!opensSingleRow || opened.current || count !== 1) {
+      return;
+    }
+    const row = listRef.current?.querySelector<HTMLElement>(':scope > li');
+    if (row === null || row === undefined) {
+      return;
+    }
+    opened.current = true;
+    onOpen(0, row);
+  }, [opensSingleRow, count, onOpen]);
+  return listRef;
 }
 
 type LayerRowProps = {
@@ -162,12 +139,10 @@ function LayerRow({
   onRemove,
   onToggleHidden,
 }: LayerRowProps) {
+  const translate = useTranslate();
   return (
     <li
-      className={
-        `embed-editor_bg-layer ${dropTarget ? 'is-drop-target' : ''} ` +
-        `${dragging ? 'is-dragging' : ''} ${hidden ? 'is-hidden' : ''}`
-      }
+      className={`embed-editor_bg-layer ${dropTarget ? 'is-drop-target' : ''} ` + `${dragging ? 'is-dragging' : ''} ${hidden ? 'is-hidden' : ''}`}
       onDragOver={(event) => {
         event.preventDefault();
         onDragOverRow();
@@ -188,30 +163,22 @@ function LayerRow({
             transfer.setData('text/plain', String(index));
           }}
           onDragEnd={onDragEndRow}
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
+          title={translate('style.layerList.dragToReorder')}
+          aria-label={translate('style.layerList.dragToReorder')}
         >
           <GripIcon />
         </span>
         <button
           type="button"
           className="embed-editor_bg-layer-main"
-          onClick={(event) =>
-            onOpen(index, event.currentTarget.closest<HTMLElement>('li') ?? event.currentTarget)
-          }
+          onClick={(event) => onOpen(index, event.currentTarget.closest<HTMLElement>('li') ?? event.currentTarget)}
           disabled={busy}
-          title="Edit layer"
+          title={translate('style.layerList.editLayer')}
         >
           {preview}
           <span className="embed-editor_bg-layer-label">{label}</span>
         </button>
-        <LayerRowActions
-          index={index}
-          busy={busy}
-          hidden={hidden}
-          onRemove={onRemove}
-          onToggleHidden={onToggleHidden}
-        />
+        <LayerRowActions index={index} busy={busy} hidden={hidden} onRemove={onRemove} onToggleHidden={onToggleHidden} />
       </div>
     </li>
   );
@@ -219,13 +186,8 @@ function LayerRow({
 
 // The hover-revealed row actions: the eye (only when hiding is supported) and
 // the trash.
-function LayerRowActions({
-  index,
-  busy,
-  hidden,
-  onRemove,
-  onToggleHidden,
-}: Pick<LayerRowProps, 'index' | 'busy' | 'hidden' | 'onRemove' | 'onToggleHidden'>) {
+function LayerRowActions({ index, busy, hidden, onRemove, onToggleHidden }: Pick<LayerRowProps, 'index' | 'busy' | 'hidden' | 'onRemove' | 'onToggleHidden'>) {
+  const translate = useTranslate();
   return (
     <>
       {onToggleHidden ? (
@@ -235,8 +197,8 @@ function LayerRowActions({
           onClick={() => onToggleHidden(index)}
           disabled={busy}
           aria-pressed={hidden}
-          title={hidden ? 'Show' : 'Hide'}
-          aria-label={hidden ? 'Show layer' : 'Hide layer'}
+          title={hidden ? translate('style.layerList.show') : translate('style.layerList.hide')}
+          aria-label={hidden ? translate('style.layerList.showLayer') : translate('style.layerList.hideLayer')}
         >
           {hidden ? <EyeOffIcon /> : <EyeIcon />}
         </button>
@@ -246,8 +208,8 @@ function LayerRowActions({
         className="embed-editor_bg-layer-action embed-editor_bg-layer-trash"
         onClick={() => onRemove(index)}
         disabled={busy}
-        title="Remove layer"
-        aria-label="Remove layer"
+        title={translate('style.layerList.removeLayer')}
+        aria-label={translate('style.layerList.removeLayer')}
       >
         <TrashIcon />
       </button>

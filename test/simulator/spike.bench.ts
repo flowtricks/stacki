@@ -124,8 +124,7 @@ function mappingReport(): string {
   const lines = [
     `## Mapping correctness: ${SEEDS} seeds × ${SIMULATION_STEPS} steps`,
     '',
-    '| Fixture | Stale decisions | Applied, correct | Wrong site | Conservative | ' +
-      'Rejected, conflict | Rejected, gone | Other | Unjudged |',
+    '| Fixture | Stale decisions | Applied, correct | Wrong site | Conservative | ' + 'Rejected, conflict | Rejected, gone | Other | Unjudged |',
     '|---|---|---|---|---|---|---|---|---|',
     ...files.map((name) => mappingRow(name, perFile(tally, name))),
     mappingRow('**All**', perFile(tally, undefined)),
@@ -189,9 +188,7 @@ function wrongSites(tally: Record<string, number>): readonly string[] {
 }
 
 function ages(tally: Record<string, number>): string {
-  return ['1', '2', '3+', 'unseen']
-    .map((age) => `${age}: ${tally[`authored-age:${age}`] ?? 0}`)
-    .join(', ');
+  return ['1', '2', '3+', 'unseen'].map((age) => `${age}: ${tally[`authored-age:${age}`] ?? 0}`).join(', ');
 }
 
 // --- Part 2: engine latency -----------------------------------------------------
@@ -233,13 +230,7 @@ function latencyRow(file: string, fixture: FixtureEntry, scenario: 'fresh' | 'st
   );
   const verdict = percentile95 <= THRESHOLD_INTENT_MS ? 'pass' : 'FAIL';
   const outcome = `${recorded.length} / ${rejected.length}${rejectionNote(rejected)}`;
-  const cells = [
-    fixture.name,
-    scenario,
-    outcome,
-    format(percentile(totals, 50)),
-    format(percentile95),
-  ];
+  const cells = [fixture.name, scenario, outcome, format(percentile(totals, 50)), format(percentile95)];
   return `| ${[...cells, format(Math.max(...totals)), verdict, ...medians].join(' | ')} |`;
 }
 
@@ -345,9 +336,7 @@ function setAttributeIntent(snapshot: Snapshot, target: Target, index: number): 
 /** The other editor: rewrites another element's attribute value in place, with
  * the same byte length, so the file size never moves past sourceBytesMax. */
 function writeExternally(file: string, bytes: ByteString, target: Target, index: number): void {
-  const value = target.node.attributes.find(
-    (attribute) => attribute.name === target.name,
-  )?.valueSpan;
+  const value = target.node.attributes.find((attribute) => attribute.name === target.name)?.valueSpan;
   if (value === undefined) {
     throw new Error('Assertion failed: the external target has a value');
   }
@@ -358,9 +347,7 @@ function writeExternally(file: string, bytes: ByteString, target: Target, index:
 
 /** ASCII letters of exactly `bytes` bytes; no quote, so every edit is plannable. */
 function sameLengthValue(bytes: number, seed: number): string {
-  return Array.from({ length: bytes }, (_, offset) =>
-    String.fromCharCode(97 + ((seed + offset) % 26)),
-  ).join('');
+  return Array.from({ length: bytes }, (_, offset) => String.fromCharCode(97 + ((seed + offset) % 26))).join('');
 }
 
 // Where the reprojection time goes, for the step-4 lever (plan §12: incremental
@@ -429,11 +416,7 @@ async function keystrokeRow(file: string, fixture: FixtureEntry): Promise<string
   }
   const percentile95 = percentile(latencies, 95);
   const verdict = percentile95 <= THRESHOLD_KEYSTROKE_MS ? 'pass' : 'FAIL';
-  const cells = [
-    format(percentile(latencies, 50)),
-    format(percentile95),
-    format(Math.max(...latencies)),
-  ];
+  const cells = [format(percentile(latencies, 50)), format(percentile95), format(Math.max(...latencies))];
   const row = [fixture.name, ...cells, format(percentile(lateness, 95)), verdict];
   return `| ${row.join(' | ')} |`;
 }
@@ -524,11 +507,7 @@ function parseManifest(input: unknown): readonly FixtureEntry[] {
     if (typeof name !== 'string' || !/^[a-z0-9-]{1,64}$/.test(name)) {
       throw new Error(`manifest[${index}].name: expected a fixture name`);
     }
-    if (
-      typeof bytes !== 'number' ||
-      !Number.isSafeInteger(bytes) ||
-      bytes > LIMITS.sourceBytesMax
-    ) {
+    if (typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes > LIMITS.sourceBytesMax) {
       throw new Error(`manifest[${index}].bytes: expected a size inside sourceBytesMax`);
     }
     if (typeof nodes !== 'number' || !Number.isSafeInteger(nodes) || nodes > LIMITS.treeNodesMax) {
@@ -570,9 +549,7 @@ function latencyTable(rows: readonly string[]): string {
   return [
     `## Intent → applied (threshold p95 ≤ ${THRESHOLD_INTENT_MS} ms), milliseconds`,
     '',
-    '| Fixture | Scenario | Applied / rejected | p50 | p95 | max | Verdict | ' +
-      STAGE_NAMES.map((name) => `${name} p50`).join(' | ') +
-      ' |',
+    '| Fixture | Scenario | Applied / rejected | p50 | p95 | max | Verdict | ' + STAGE_NAMES.map((name) => `${name} p50`).join(' | ') + ' |',
     `|${'---|'.repeat(7 + STAGE_NAMES.length)}`,
     ...rows,
     '',

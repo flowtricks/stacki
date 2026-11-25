@@ -43,9 +43,7 @@ const check = (what, condition, detail) => {
   const bundlePath = path.join(buildDirectory, 'vars-drop.bundle.js');
   await esbuild.build({
     stdin: {
-      contents:
-        `export { movesForDrop, dropPlan, friendlyError } ` +
-        `from './src/features/variables/VariablesView.tsx'`,
+      contents: `export { movesForDrop, dropPlan, friendlyError } ` + `from './src/features/variables/VariablesView.tsx'`,
       resolveDir: ROOT,
       loader: 'js',
     },
@@ -105,16 +103,8 @@ const check = (what, condition, detail) => {
       JSON.stringify(moves),
     );
     const down = movesForDrop(slots, 1, 3);
-    check(
-      'and dragging downwards lands in front of the one it stopped at',
-      down[0]?.target === '--dark-900',
-      JSON.stringify(down),
-    );
-    check(
-      'dropping a row where it already is does nothing',
-      movesForDrop(slots, 2, 2).length === 0,
-      JSON.stringify(movesForDrop(slots, 2, 2)),
-    );
+    check('and dragging downwards lands in front of the one it stopped at', down[0]?.target === '--dark-900', JSON.stringify(down));
+    check('dropping a row where it already is does nothing', movesForDrop(slots, 2, 2).length === 0, JSON.stringify(movesForDrop(slots, 2, 2)));
   }
 
   // --- into another group ---------------------------------------------------
@@ -123,44 +113,24 @@ const check = (what, condition, detail) => {
     // the empty group, which is the first line of the group after it — so it
     // ends up between the two comments, which is what "inside" means here.
     const moves = movesForDrop(slots, 1, 6);
-    check(
-      'dropping into an empty group moves the line there',
-      moves.length === 1 && moves[0].name === '--light-100',
-      JSON.stringify(moves),
-    );
+    check('dropping into an empty group moves the line there', moves.length === 1 && moves[0].name === '--light-100', JSON.stringify(moves));
     // Not "in front of the next variable" — that variable is on the far side of
     // the next comment, and landing in front of it would put the line in the
     // next group. The group ends at that comment, so that is where it goes.
-    check(
-      'landing in front of the comment that ends that group',
-      moves[0].at === radius.titleStart,
-      JSON.stringify(moves),
-    );
+    check('landing in front of the comment that ends that group', moves[0].at === radius.titleStart, JSON.stringify(moves));
 
     const intoRadius = movesForDrop(slots, 1, 8);
-    check(
-      'dropping onto a row in another group lands in front of it',
-      intoRadius[0]?.target === '--radius-main',
-      JSON.stringify(intoRadius),
-    );
+    check('dropping onto a row in another group lands in front of it', intoRadius[0]?.target === '--radius-main', JSON.stringify(intoRadius));
 
     // The end of the last group has nothing after it: the line goes to the end
     // of the rule, which is still inside that last group.
     const toEnd = movesForDrop(slots, 1, 9);
-    check(
-      'dropping past everything goes to the end of the rule',
-      toEnd.length === 1 && toEnd[0].target === undefined,
-      JSON.stringify(toEnd),
-    );
+    check('dropping past everything goes to the end of the rule', toEnd.length === 1 && toEnd[0].target === undefined, JSON.stringify(toEnd));
 
     // The slot at the end of a group with rows means "after its last row",
     // which is the same as in front of the next group's first row.
     const afterSwatches = movesForDrop(slots, 1, 4);
-    check(
-      "a group's own end slot keeps the row in that group",
-      afterSwatches[0]?.at === empty.titleStart,
-      JSON.stringify(afterSwatches),
-    );
+    check("a group's own end slot keeps the row in that group", afterSwatches[0]?.at === empty.titleStart, JSON.stringify(afterSwatches));
   }
 
   // --- a row that is one name in several rules ------------------------------
@@ -178,16 +148,8 @@ const check = (what, condition, detail) => {
     // These headings are shared name prefixes rather than comments (no
     // titleStart), so a name is the right thing to land in front of.
     const moves = movesForDrop(modeSlots, 1, 4); // --background into group b
-    check(
-      'a row in modes moves in every rule it is declared in',
-      moves.length === 2,
-      JSON.stringify(moves),
-    );
-    check(
-      'each in its own rule',
-      moves.map((move) => move.selector).join('|') === ':root|.theme-dark',
-      JSON.stringify(moves.map((move) => move.selector)),
-    );
+    check('a row in modes moves in every rule it is declared in', moves.length === 2, JSON.stringify(moves));
+    check('each in its own rule', moves.map((move) => move.selector).join('|') === ':root|.theme-dark', JSON.stringify(moves.map((move) => move.selector)));
     check(
       'and each in front of that rule’s copy of the target',
       moves.every((move) => move.target === '--link'),
@@ -212,11 +174,7 @@ const check = (what, condition, detail) => {
     };
     const partialSlots = slotsOf([partial]);
     const moves = movesForDrop(partialSlots, 1, 3);
-    check(
-      'a column with no cell for that row is skipped',
-      moves.length === 1 && moves[0].name === '--only-light',
-      JSON.stringify(moves),
-    );
+    check('a column with no cell for that row is skipped', moves.length === 1 && moves[0].name === '--only-light', JSON.stringify(moves));
   }
 
   // --- nothing to do --------------------------------------------------------
@@ -234,22 +192,11 @@ const check = (what, condition, detail) => {
   // What comes back is "No handler registered for 'css:moveHeading'", which
   // reads like a broken feature instead of an app that needs restarting.
   {
-    const missing = friendlyError(
-      new Error(
-        "Error invoking remote method 'css:moveHeading': Error: No handler registered for " +
-          "'css:moveHeading'",
-      ),
-    );
+    const missing = friendlyError(new Error("Error invoking remote method 'css:moveHeading': Error: No handler registered for " + "'css:moveHeading'"));
     check('a missing handler says to restart', /restarted/i.test(missing), missing);
-    check(
-      'and does not say it in Electron’s words',
-      !/No handler registered/.test(missing),
-      missing,
-    );
+    check('and does not say it in Electron’s words', !/No handler registered/.test(missing), missing);
 
-    const real = friendlyError(
-      new Error("Error invoking remote method 'css:moveHeading': Error: EACCES: permission denied"),
-    );
+    const real = friendlyError(new Error("Error invoking remote method 'css:moveHeading': Error: EACCES: permission denied"));
     check('a real failure still says what happened', real === 'EACCES: permission denied', real);
     check('a plain string is handled', typeof friendlyError('nope') === 'string');
   }
@@ -262,19 +209,11 @@ const check = (what, condition, detail) => {
   {
     const plan = dropPlan(slots, 0, 3); // Swatches' heading, dropped on --dark-900
     check('dragging a heading is a heading move', plan?.kind === 'heading', JSON.stringify(plan));
-    check(
-      'landing above the variable it was dropped on',
-      plan?.before === '--dark-900',
-      JSON.stringify(plan),
-    );
+    check('landing above the variable it was dropped on', plan?.before === '--dark-900', JSON.stringify(plan));
     check('and it carries no variables with it', plan?.moves === undefined, JSON.stringify(plan));
 
     const toEnd = dropPlan(slots, 0, 9);
-    check(
-      'dropped past everything it heads nothing yet',
-      toEnd?.kind === 'heading' && toEnd.before === undefined,
-      JSON.stringify(toEnd),
-    );
+    check('dropped past everything it heads nothing yet', toEnd?.kind === 'heading' && toEnd.before === undefined, JSON.stringify(toEnd));
 
     const intoOther = dropPlan(slots, 7, 2);
     check(
@@ -283,23 +222,11 @@ const check = (what, condition, detail) => {
       JSON.stringify(intoOther),
     );
 
-    check(
-      'a heading dropped where it already is does nothing',
-      dropPlan(slots, 0, 0) === undefined,
-      JSON.stringify(dropPlan(slots, 0, 0)),
-    );
-    check(
-      'and dropped just below itself does nothing either',
-      dropPlan(slots, 0, 1) === undefined,
-      JSON.stringify(dropPlan(slots, 0, 1)),
-    );
+    check('a heading dropped where it already is does nothing', dropPlan(slots, 0, 0) === undefined, JSON.stringify(dropPlan(slots, 0, 0)));
+    check('and dropped just below itself does nothing either', dropPlan(slots, 0, 1) === undefined, JSON.stringify(dropPlan(slots, 0, 1)));
 
     const rowPlan = dropPlan(slots, 1, 8);
-    check(
-      'a row still plans a row move',
-      rowPlan?.kind === 'rows' && rowPlan.moves[0].name === '--light-100',
-      JSON.stringify(rowPlan),
-    );
+    check('a row still plans a row move', rowPlan?.kind === 'rows' && rowPlan.moves[0].name === '--light-100', JSON.stringify(rowPlan));
   }
 
   // --- and then actually doing it -------------------------------------------
@@ -339,32 +266,18 @@ const check = (what, condition, detail) => {
 
     // Drop --light-100 on the empty group's own line.
     let live = liveSlots();
-    const emptyEnd = live.findIndex(
-      (slot) => slot.kind === 'end' && slot.block.title === 'Swatches',
-    );
+    const emptyEnd = live.findIndex((slot) => slot.kind === 'end' && slot.block.title === 'Swatches');
     const intoEmpty = movesForDrop(live, 0, emptyEnd);
     for (const move of intoEmpty) {
       cssVars.moveVariable(directory, move);
     }
-    check(
-      'a variable dropped into an empty group ends up in it',
-      groupsNow().includes('Swatches:--light-100'),
-      groupsNow(),
-    );
-    check(
-      'and not in the group after it',
-      !groupsNow().includes('Typography:--light-100'),
-      groupsNow(),
-    );
+    check('a variable dropped into an empty group ends up in it', groupsNow().includes('Swatches:--light-100'), groupsNow());
+    check('and not in the group after it', !groupsNow().includes('Typography:--light-100'), groupsNow());
 
     // And onto a variable in another group: in front of that one.
     live = liveSlots();
-    const onBold = live.findIndex(
-      (slot) => slot.kind === 'row' && slot.row.name === '--primary-bold',
-    );
-    const light200 = live.findIndex(
-      (slot) => slot.kind === 'row' && slot.row.name === '--light-200',
-    );
+    const onBold = live.findIndex((slot) => slot.kind === 'row' && slot.row.name === '--primary-bold');
+    const light200 = live.findIndex((slot) => slot.kind === 'row' && slot.row.name === '--light-200');
     for (const move of movesForDrop(live, light200, onBold)) {
       cssVars.moveVariable(directory, move);
     }
@@ -373,11 +286,7 @@ const check = (what, condition, detail) => {
       /--light-200: #eee;\n\s*--primary-bold/.test(fs.readFileSync(sheet, 'utf8')),
       fs.readFileSync(sheet, 'utf8'),
     );
-    check(
-      'which puts it in that group',
-      groupsNow().includes('Typography:--primary-family,--light-200,--primary-bold'),
-      groupsNow(),
-    );
+    check('which puts it in that group', groupsNow().includes('Typography:--primary-family,--light-200,--primary-bold'), groupsNow());
 
     // Dropped past everything: the end of the rule, inside the last group.
     live = liveSlots();
@@ -387,8 +296,7 @@ const check = (what, condition, detail) => {
     }
     check(
       'a variable dropped past everything goes to the last group',
-      groupsNow().endsWith('--primary-bold,--light-100') ||
-        groupsNow().includes('--primary-bold,--light-100'),
+      groupsNow().endsWith('--primary-bold,--light-100') || groupsNow().includes('--primary-bold,--light-100'),
       groupsNow(),
     );
 

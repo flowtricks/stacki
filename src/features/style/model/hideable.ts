@@ -82,11 +82,7 @@ function splitRuns(value: string): Array<{ text: string; hidden: boolean }> {
  * CSS, so no parser has to learn about any of this — or lose the grouping it
  * does across several functions.
  */
-export function parseHideable<T>(
-  value: string,
-  _sep: ',' | ' ',
-  parseAll: (text: string) => T[],
-): Array<Hideable<T>> {
+export function parseHideable<T>(value: string, _sep: ',' | ' ', parseAll: (text: string) => T[]): Array<Hideable<T>> {
   const out: Array<Hideable<T>> = [];
   for (const run of splitRuns(value)) {
     // The placeholder written when every layer is hidden — not a layer, and a
@@ -129,14 +125,8 @@ export function parseHideable<T>(
  * So a comma next to a hidden entry goes INSIDE its comment, and only the
  * commas between two showing entries are left in the value itself.
  */
-export function serializeHideable<T>(
-  rows: ReadonlyArray<Hideable<T>>,
-  sep: ',' | ' ',
-  serializeAll: (items: T[]) => string,
-): string {
-  const parts = rows
-    .map((row) => ({ text: serializeAll([row.item]).trim(), hidden: row.hidden }))
-    .filter((part) => part.text);
+export function serializeHideable<T>(rows: ReadonlyArray<Hideable<T>>, sep: ',' | ' ', serializeAll: (items: T[]) => string): string {
+  const parts = rows.map((row) => ({ text: serializeAll([row.item]).trim(), hidden: row.hidden })).filter((part) => part.text);
   if (!parts.length) {
     return '';
   }
@@ -167,5 +157,4 @@ export function serializeHideable<T>(
 }
 
 /** Whether every layer is hidden — the caller may prefer to clear the property. */
-export const allHidden = <T>(rows: ReadonlyArray<Hideable<T>>): boolean =>
-  rows.length > 0 && rows.every((row) => row.hidden);
+export const allHidden = <T>(rows: ReadonlyArray<Hideable<T>>): boolean => rows.length > 0 && rows.every((row) => row.hidden);

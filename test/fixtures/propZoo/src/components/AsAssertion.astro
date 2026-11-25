@@ -1,0 +1,8 @@
+---
+interface CardOptions {
+  title: string;
+  compact?: boolean;
+}
+const { title, compact = false } = Astro.props as CardOptions;
+---
+<div class:list={['as-assertion', { compact }]}>{title}</div>

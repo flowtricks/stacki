@@ -1,67 +1,169 @@
 // The content collections' IPC: the project's content config, its entries,
-// validation, renames across references, and a sample entry for the canvas.
+// validation, renames across references, and sample data for the canvas.
+import path from 'node:path';
+import { englishText, messageRef } from '../../shared/properties/i18n/messageRef';
 
-import { definedFields } from '../../shared/core/boundary';
-import { parseValidationResult, parseContentConfig, parseSampleEntry } from '../app/mainValidation';
+import { definedFields, record } from '../../shared/core/boundary';
+import { assert } from '../../shared/core/assert';
+import { parseValidationResult, parseContentConfig, parseSampleEntry, parseSampleValue } from '../app/mainValidation';
 import { resolveImport } from '../content/cmsRefs';
 import { readContentConfig, validateEntry } from '../content/contentConfig';
-import { listEntries, writeEntry, countEntries, coveredPaths } from '../content/contentEntries';
+import { listEntriesSliced, writeEntry, countEntriesSliced, coveredPathsSliced } from '../content/contentEntries';
+import { createSliceClock } from '../lib/slicedWork';
 import { planRename, applyRename } from '../content/contentRefs';
-import { errorMessage } from '../lib/mainHelpers';
+import { astroRemoteService, firstImageField, type AstroRemoteService } from '../content/astroRemoteService';
+import { entryImage } from '../content/astroRecordReferences';
+import type { AstroRemoteEdit, AstroRemoteEditAnswer, AstroRemoteRead, AstroRemoteReadAnswer } from '../../shared/properties/astroContent';
+import type { RemoteResult } from '../../shared/properties/cmsRemote';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
 
-export function registerContentHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>,
-): void {
-  registerContentConfigHandlers(host);
-  registerContentRenameHandlers(host);
+/** What the content handlers ask of the running preview. */
+export interface ContentPreview {
+  /** Restart the dev server at this URL if its content config is newer than it (DevServers). */
+  readonly restartForNewContentConfig: (devUrl: string) => Promise<boolean>;
 }
 
-function registerContentConfigHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+export function registerContentHandlers(host: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>, preview: ContentPreview): void {
+  registerContentConfigHandlers(host);
+  registerContentRenameHandlers(host, preview);
+  registerContentRemoteHandlers(host);
+}
+
+// The CMS panel's reads and edits of content collections, answered as a
+// connected CMS's are (astroRemoteService.ts): an expected failure — a config
+// that will not load, an entry deleted meanwhile — is an answer the panel
+// shows, not a crash.
+function registerContentRemoteHandlers({ ipcMain, noteAppWrite, send, shell }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+  const service = (projectPath: string) =>
+    astroRemoteService(projectPath, {
+      readConfig: async () => parseContentConfig(await readContentConfig(projectPath)),
+      trash: (file) => shell.trashItem(file),
+    });
+  ipcMain.handle('content:remoteRead', async (_event, { projectPath, request }) => answered(() => readRemote(service(projectPath), request)));
+  ipcMain.handle('content:remoteEdit', async (_event, { projectPath, request }) => {
+    const result = await answered(() => editRemote(service(projectPath), request));
+    noteAppWrite();
+    send('cms:changed', {});
+    return result;
+  });
+}
+
+function readRemote(service: AstroRemoteService, request: AstroRemoteRead): Promise<AstroRemoteReadAnswer> {
+  switch (request.operation) {
+    case 'collections':
+      return service.collections();
+    case 'documents':
+      return service.documents(request.collection, request.columns);
+    case 'document':
+      return service.document(request.id);
+    case 'template':
+      return service.template(request.collection);
+    case 'settings':
+      return service.settings(request.collection);
+    default: {
+      const exhaustive: never = request;
+      return exhaustive;
+    }
+  }
+}
+
+function editRemote(service: AstroRemoteService, request: AstroRemoteEdit): Promise<AstroRemoteEditAnswer> {
+  switch (request.operation) {
+    case 'write':
+      return service.write(request.write);
+    case 'rename':
+      return service.rename(request.id, request.slug);
+    case 'create':
+      return service.create(request.collection);
+    case 'delete':
+      return service.remove(request.ids);
+    case 'createCollection':
+      return service.createCollection(request.name);
+    case 'settings':
+      return service.changeSettings(request.collection, request.change);
+    default: {
+      const exhaustive: never = request;
+      return exhaustive;
+    }
+  }
+}
+
+async function answered<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (error: unknown) {
+    // A described refusal keeps its reference so the panel can say it in the language on screen.
+    if (error instanceof DescribedError) {
+      return {
+        ok: false,
+        message: error.problem.message.slice(0, 900),
+        ...(error.problem.messageRef === undefined ? {} : { messageRef: error.problem.messageRef }),
+      };
+    }
+    const message = errorMessage(error).slice(0, 900);
+    return message ? { ok: false, message } : { ok: false, ...described('cmsBackend.content.unreadable') };
+  }
+}
+
+function registerContentConfigHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
   // What the project's content config declares: every collection, where its
   // entries live, whether they can be written at all, and the JSON Schema its
   // zod schema amounts to. Read from the config itself rather than inferred from
   // the data, so the editor enforces the same rules the build does — see
   // contentConfig.js for how, and why it happens in a child process.
-  ipcMain.handle('content:config', async (_event, { projectPath, force }) =>
-    parseContentConfig(await readContentConfig(projectPath, { force: !!force })),
-  );
+  ipcMain.handle('content:config', async (_event, { projectPath, force }) => parseContentConfig(await readContentConfig(projectPath, { force: !!force })));
 
   ipcMain.handle('content:collections', async (_event, projectPath) => {
     const config = parseContentConfig(await readContentConfig(projectPath));
     if (config.missing || config.error) {
       return { ...config, collections: [] };
     }
-    const collections = (config.collections || []).map((collection) => ({
-      name: collection.name,
-      editable: collection.editable,
-      loader: collection.loader,
-      hasSchema: !!collection.schema,
-      freeform: !!collection.freeform,
-      error: collection.error || undefined,
-      count: countEntries(projectPath, collection),
-    }));
+    // One collection at a time, each counted in slices, so a project with many large collections
+    // never holds the main thread for the whole panel.
+    const collections = [];
+    for (const collection of config.collections || []) {
+      collections.push({
+        name: collection.name,
+        editable: collection.editable,
+        loader: collection.loader,
+        hasSchema: !!collection.schema,
+        freeform: !!collection.freeform,
+        error: collection.error || undefined,
+        count: await countEntriesSliced(projectPath, collection),
+      });
+    }
     return {
       collections,
-      covered: coveredPaths(projectPath, config.collections || []),
+      covered: await coveredPathsSliced(projectPath, config.collections || []),
       configPath: config.configPath,
     };
   });
 
+  // Each entry with its picture (the project file its collection's first image
+  // field names), so a list of entries to pick from can show them.
   ipcMain.handle('content:entries', async (_event, { projectPath, name }) => {
     const { collection } = await collectionOf(projectPath, name);
-    return { collection, ...listEntries(projectPath, collection) };
+    const listed = await listEntriesSliced(projectPath, collection);
+    const imageField = firstImageField(collection);
+    const clock = createSliceClock();
+    const entries = [];
+    for (const entry of listed.entries) {
+      const imageFile = entryImage(projectPath, entry, imageField);
+      entries.push(imageFile === undefined ? entry : { ...entry, imageFile });
+      await clock.yieldIfDue();
+    }
+    assert(entries.length === listed.entries.length, 'Every entry is listed');
+    return { collection, ...listed, entries };
   });
 
   // A save is a list of edits against one entry, not a new copy of the file: see
   // contentEntries.js and ./formats for what that protects.
-  ipcMain.handle('content:writeEntry', async (_event, { projectPath, entry, edits, body }) => {
-    const result = writeEntry(projectPath, entry, edits || [], definedFields({ body }));
+  ipcMain.handle('content:writeEntry', async (_event, { projectPath, entry, edits, body, expected }) => {
+    const result = writeEntry(projectPath, entry, edits || [], definedFields({ body, expected }));
     noteAppWrite();
     send('cms:changed', {});
     return result;
@@ -91,11 +193,7 @@ function registerContentConfigHandlers({
   });
 }
 
-function registerContentRenameHandlers({
-  ipcMain,
-  noteAppWrite,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+function registerContentRenameHandlers({ ipcMain, noteAppWrite, send }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send'>, preview: ContentPreview): void {
   ipcMain.handle('content:rename', async (_event, { projectPath, name, from, to }) => {
     const config = parseContentConfig(await readContentConfig(projectPath));
     const plan = planRename(
@@ -118,27 +216,70 @@ function registerContentRenameHandlers({
   // reference field offers instead of asking the user to remember ids.
   ipcMain.handle('content:targets', async (_event, { projectPath, name }) => {
     const { collection } = await collectionOf(projectPath, name);
-    const { entries } = listEntries(projectPath, collection);
+    const { entries } = await listEntriesSliced(projectPath, collection);
     return { targets: entries.map((entry) => ({ id: entry.id, title: entry.title })) };
   });
 
   // One entry of a collection, sampled — what a picker shows beside the fields
   // of a page that lists them. Answered by the dev server because only it can
   // run the project's loaders; without one there is simply no sample.
-  ipcMain.handle('content:sampleEntry', async (_event, { devUrl, name, id }) => {
+  ipcMain.handle('content:sampleEntry', async (_event, { devUrl, name, id, index }) => {
     if (!devUrl || !name) {
       return { entry: undefined };
     }
     try {
-      const query = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
-      const response = await fetch(`${devUrl}/__avb/data?${query}`);
-      if (!response.ok) {
-        return { entry: undefined, error: `Dev server returned ${response.status}` };
+      const query = `c=${encodeURIComponent(name)}${id ? `&id=${encodeURIComponent(id)}` : ''}${index === undefined ? '' : `&i=${index}`}`;
+      const first = await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      if (first.error !== undefined) {
+        return first;
       }
-      const input: unknown = await response.json();
-      return parseSampleEntry(input);
+      if (first.entry !== undefined && first.entry !== null) {
+        return first;
+      }
+      // None read: the dev server's content store can be stale (see the
+      // refresh hook in markerConfig), so it syncs once and is asked again.
+      const refreshed = await fetch(`${devUrl}/__avb/refresh`, { method: 'POST' });
+      if (!refreshed.ok) {
+        // An Astro without the refresh hook answers 404: the empty read stands.
+        return first;
+      }
+      // A sync that fails names the entry its schema rejects: that is the answer.
+      const refreshError = optionalText(record(await refreshed.json())['error']);
+      if (refreshError !== undefined) {
+        return { entry: undefined, error: refreshError };
+      }
+      const synced = await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      if (synced.error !== undefined || (synced.entry !== undefined && synced.entry !== null)) {
+        return synced;
+      }
+      // Still none: a server started before the project had a content config
+      // never loaded it, and no sync will. It restarts once with the config,
+      // and is asked again.
+      if (await preview.restartForNewContentConfig(devUrl)) {
+        return await fetchSampleEntry(`${devUrl}/__avb/data?${query}`);
+      }
+      return synced;
     } catch (error: unknown) {
       return { entry: undefined, error: errorMessage(error) };
+    }
+  });
+
+  // What a page holds, sampled by the dev server: one of its own data calls —
+  // `await getCampusPastors()` — run as the page's render does, or the values
+  // its last render computed (previewServer/scopeCapture.ts).
+  ipcMain.handle('content:sampleValue', async (_event, { projectPath, devUrl, pagePath, source }) => {
+    if (!devUrl) {
+      return { value: undefined };
+    }
+    switch (source.kind) {
+      case 'call':
+        return sampleCall(devUrl, projectPath, pagePath, source);
+      case 'scope':
+        return sampleScope(devUrl, projectPath, pagePath, source.sinceMs);
+      default: {
+        const exhaustive: never = source;
+        return exhaustive;
+      }
     }
   });
 
@@ -149,4 +290,64 @@ function registerContentRenameHandlers({
   ipcMain.handle('project:resolveImport', async (_event, { projectPath, fromFile, spec }) => ({
     path: resolveImport(projectPath, fromFile, spec) ?? undefined,
   }));
+}
+
+// The value route waits up to 8 s for a render (SCOPE_SOURCE) and a call may
+// take 10 s (VALUE_ENDPOINT); past this the dev server is not answering.
+const SAMPLE_VALUE_MS_MAX = 15_000;
+
+// One import's export, called with no arguments. The import is resolved here,
+// so only a project module under src is ever asked for.
+async function sampleCall(
+  devUrl: string,
+  projectPath: string,
+  pagePath: string,
+  call: { readonly spec: string; readonly name: string },
+): Promise<ReturnType<typeof parseSampleValue>> {
+  const target = resolveImport(projectPath, pagePath, call.spec);
+  const rel = target ? toPosix(path.relative(projectPath, target)) : '';
+  if (!rel.startsWith('src/')) {
+    return { value: undefined };
+  }
+  const query = `m=${encodeURIComponent('/' + rel)}&f=${encodeURIComponent(call.name)}`;
+  return fetchSampleValue(`${devUrl}/__avb/value?${query}`);
+}
+
+// The page's own last-rendered frontmatter values, by name. Only a project
+// .astro file under src is asked for: that is what the preview marks.
+async function sampleScope(devUrl: string, projectPath: string, pagePath: string, sinceMs: number): Promise<ReturnType<typeof parseSampleValue>> {
+  const rel = toPosix(path.relative(projectPath, path.resolve(projectPath, pagePath)));
+  if (!rel.startsWith('src/') || !rel.endsWith('.astro')) {
+    return { value: undefined };
+  }
+  return fetchSampleValue(`${devUrl}/__avb/value?p=${encodeURIComponent(rel)}&since=${sinceMs}`);
+}
+
+async function fetchSampleValue(url: string): Promise<ReturnType<typeof parseSampleValue>> {
+  assert(url.includes('/__avb/value?'), 'A value is read from the value route');
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(SAMPLE_VALUE_MS_MAX) });
+    if (!response.ok) {
+      return { value: undefined, error: englishText(messageRef('error.pages.devServerStatus', { status: response.status })) };
+    }
+    const input: unknown = await response.json();
+    return parseSampleValue(input);
+  } catch (error: unknown) {
+    return { value: undefined, error: errorMessage(error) };
+  }
+}
+
+async function fetchSampleEntry(url: string): Promise<ReturnType<typeof parseSampleEntry>> {
+  assert(url.includes('/__avb/data?'), 'A sample is read from the data route');
+  const response = await fetch(url);
+  if (!response.ok) {
+    return { entry: undefined, error: englishText(messageRef('error.pages.devServerStatus', { status: response.status })) };
+  }
+  const input: unknown = await response.json();
+  return parseSampleEntry(input);
+}
+
+// The refresh hook writes `null` for no error.
+function optionalText(input: unknown): string | undefined {
+  return typeof input === 'string' && input.length > 0 ? input : undefined;
 }

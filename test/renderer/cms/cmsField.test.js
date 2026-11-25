@@ -1,6 +1,7 @@
 // Mount the real CMS controls and exercise nested dialogs, focus preservation,
 // and imported-image selection. Rendering assertions also pin collection, text,
-// and recursion limits before a malformed model can grow the editor without bound.
+// and recursion limits before a malformed model can grow the editor without bound,
+// and that text past a prop attribute's limit (a sermon transcript) still renders.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -8,6 +9,7 @@ const fs = require('node:fs');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
+const { PLATFORM_LIMITS } = require('#dist/shared/core/limits.js');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const output = repoPath('node_modules/.stacki-test/cms-field.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -29,14 +31,7 @@ buildSync({
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 require('../../helpers/popupDom').installPopupDOM(dom.window);
 global.window = dom.window;
-for (const name of [
-  'document',
-  'navigator',
-  'HTMLElement',
-  'HTMLInputElement',
-  'Element',
-  'Node',
-]) {
+for (const name of ['document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'Element', 'Node']) {
   global[name] = dom.window[name];
 }
 global.IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,8 +46,7 @@ const click = (element) => act(async () => element.click());
 
 test('a focused CMS field retains its input until blur', async () => {
   const root = createRoot(document.getElementById('root'));
-  const show = (type) =>
-    act(async () => root.render(React.createElement(Field, { ...context, type, value: 'text' })));
+  const show = (type) => act(async () => root.render(React.createElement(Field, { ...context, type, value: 'text' })));
   try {
     await show('text');
     const input = document.querySelector('input');
@@ -67,63 +61,52 @@ test('a focused CMS field retains its input until blur', async () => {
   }
 });
 
-test(
-  'nested repeaters keep image imports and ' + 'Escape closes only the innermost dialog',
-  async () => {
-    const root = createRoot(document.getElementById('root'));
-    let value = [{ title: 'Outer', nested: [{ title: 'Inner', image: 'old.png' }] }];
-    const imports = [];
-    const pickAsset = async (picked) => {
-      imports.push(picked);
-      return { ok: true, value: { __expr: 'newImage', __asset: picked.rel } };
-    };
-    // eslint-disable-next-line stacki/bounded-recursion -- Event re-entry: onChange re-renders.
-    const render = () =>
-      root.render(
-        React.createElement(Field, {
-          ...context,
-          type: 'objects',
-          value,
-          pickAsset,
-          onChange(next) {
-            value = next;
-            render();
-          },
-        }),
-      );
-    try {
-      await act(async () => render());
-      await click(document.querySelector('.cms-repeat-row'));
-      assert.match(
-        document.querySelector('.cms-delete-action').textContent,
-        /Delete/,
-        'the item dialog uses the quieter destructive action',
-      );
-      await click(document.querySelector('.cms-modal .cms-repeat-row'));
-      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 2);
-      await click(document.querySelectorAll('.cms-modal .af-choose')[0]);
-      const request = getPendingAsset();
-      assert.ok(request);
-      await act(async () => request.onPick('src/assets/new.png'));
-      assert.deepEqual(imports, [{ rel: 'src/assets/new.png', root: 'src' }]);
-      assert.deepEqual(value[0].nested[0].image, {
-        __expr: 'newImage',
-        __asset: 'src/assets/new.png',
-      });
-      await act(async () =>
-        document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
-      );
-      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 1);
-      assert.match(document.querySelector('.cms-modal-header').textContent, /Outer/);
-      await act(async () =>
-        document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
-      );
-      assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 0);
-    } finally {
-      await act(async () => root.unmount());
-    }
-  },
-);
+test('nested repeaters keep image imports and ' + 'Escape closes only the innermost dialog', async () => {
+  const root = createRoot(document.getElementById('root'));
+  let value = [{ title: 'Outer', nested: [{ title: 'Inner', image: 'old.png' }] }];
+  const imports = [];
+  const pickAsset = async (picked) => {
+    imports.push(picked);
+    return { ok: true, value: { __expr: 'newImage', __asset: picked.rel } };
+  };
+  // eslint-disable-next-line stacki/bounded-recursion -- Event re-entry: onChange re-renders.
+  const render = () =>
+    root.render(
+      React.createElement(Field, {
+        ...context,
+        type: 'objects',
+        value,
+        pickAsset,
+        onChange(next) {
+          value = next;
+          render();
+        },
+      }),
+    );
+  try {
+    await act(async () => render());
+    await click(document.querySelector('.cms-repeat-row'));
+    assert.match(document.querySelector('.cms-delete-action').textContent, /Delete/, 'the item dialog uses the quieter destructive action');
+    await click(document.querySelector('.cms-modal .cms-repeat-row'));
+    assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 2);
+    await click(document.querySelectorAll('.cms-modal .af-choose')[0]);
+    const request = getPendingAsset();
+    assert.ok(request);
+    await act(async () => request.onPick('src/assets/new.png'));
+    assert.deepEqual(imports, [{ rel: 'src/assets/new.png', root: 'src' }]);
+    assert.deepEqual(value[0].nested[0].image, {
+      __expr: 'newImage',
+      __asset: 'src/assets/new.png',
+    });
+    await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })));
+    assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 1);
+    assert.match(document.querySelector('.cms-modal-header').textContent, /Outer/);
+    await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })));
+    assert.equal(document.querySelectorAll('dialog.popup-dialog').length, 0);
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
 
 test('reordering a repeater preserves the entry shown by its open dialog', async () => {
   const root = createRoot(document.getElementById('root'));
@@ -141,10 +124,7 @@ test('reordering a repeater preserves the entry shown by its open dialog', async
         },
       }),
     );
-  const pointer = (target, type, y) =>
-    act(async () =>
-      target.dispatchEvent(new window.MouseEvent(type, { bubbles: true, button: 0, clientY: y })),
-    );
+  const pointer = (target, type, y) => act(async () => target.dispatchEvent(new window.MouseEvent(type, { bubbles: true, button: 0, clientY: y })));
   try {
     await act(async () => render());
     await click(document.querySelectorAll('.cms-repeat-row')[1]);
@@ -165,7 +145,7 @@ test('reordering a repeater preserves the entry shown by its open dialog', async
   }
 });
 
-test('CMS editor bounds reject invalid depth, text, and list size', () => {
+test('CMS editor bounds reject invalid depth and pin the platform text and list ceilings', () => {
   const render = (props) =>
     renderToStaticMarkup(
       React.createElement(Field, {
@@ -178,15 +158,43 @@ test('CMS editor bounds reject invalid depth, text, and list size', () => {
   assert.throws(() => render({ depth: -1 }), /CMS field: depth must be nonnegative/);
   assert.throws(() => render({ depth: 0.5 }), /CMS field: depth must be an integer/);
   assert.throws(() => render({ depth: 129 }), /CMS field: nesting limit exceeded/);
-  assert.throws(
-    () => render({ value: 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }),
-    /CMS field: text limit exceeded/,
-  );
-  assert.throws(
-    () => render({ type: 'list', value: Array(100001).fill('') }),
-    /CMS list: item limit exceeded/,
-  );
+  // A longer string or array than the platform holds cannot be built; Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
   assert.match(render({ depth: 128, value: 'ok' }), /ok/);
+});
+
+test('CMS text of any length renders in an editable box instead of failing', async () => {
+  const { LIMITS } = require('#dist/shared/core/limits.js');
+  // A prop attribute holds any string the platform can build, so no CMS text is past it.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const root = createRoot(document.getElementById('root'));
+  const changes = [];
+  // A few MB stands in for a sermon transcript without straining the test process.
+  const long = 'Sermon transcript. '.repeat(100_000);
+  const show = (type, value) =>
+    act(async () =>
+      root.render(
+        React.createElement(Field, {
+          ...context,
+          type,
+          value,
+          onChange: (next) => changes.push(next),
+        }),
+      ),
+    );
+  try {
+    for (const type of ['text', 'longtext']) {
+      await show(type, long);
+      const box = document.querySelector('textarea, input');
+      assert.ok(box, type);
+      assert.equal(box.value, long);
+    }
+    await show('text', 'Short title');
+    assert.equal(document.querySelector('input').value, 'Short title');
+  } finally {
+    await act(async () => root.unmount());
+  }
 });
 
 test.after(() => dom.window.close());

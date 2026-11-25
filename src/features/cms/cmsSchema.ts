@@ -1,6 +1,8 @@
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS, data as parseData } from '../../../shared/core/boundary';
 import { toArray, toRecord } from '../../../shared/core/record';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 export interface CmsFile {
   readonly rel: string;
   readonly name: string;
@@ -33,11 +35,17 @@ type ObjectEdit = (object: Readonly<Record<string, unknown>>) => Readonly<Record
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico)$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}|$)/;
-const COLOR_RE = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+/**
+ * A CSS colour written out: a hex value, or a colour function such as
+ * `rgba(0, 0, 0, 0.5)` or `hsl(210 50% 40%)`. Names like `red` are left out, as
+ * a word is as likely to be plain text. Stacki's colour picker reads them all.
+ */
+const HEX_COLOR = '#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})';
+const COLOR_FUNCTION = '(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\([^()]*\\)';
+export const CSS_COLOR = new RegExp(`^(?:${HEX_COLOR}|${COLOR_FUNCTION})$`, 'i');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  toRecord(value) !== undefined;
+const isPlainObject = (value: unknown): value is Record<string, unknown> => toRecord(value) !== undefined;
 
 /**
  * A value the CMS carries as source rather than data: `{ __expr: "new
@@ -47,9 +55,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * The same marker is produced and consumed in electron/content/jsCollections.ts.
  */
 export const EXPR_KEY = '__expr';
-export const isExpr = (
-  value: unknown,
-): value is Record<string, unknown> & { readonly __expr: string } =>
+export const isExpr = (value: unknown): value is Record<string, unknown> & { readonly __expr: string } =>
   isPlainObject(value) && typeof value[EXPR_KEY] === 'string';
 
 // Field types, most specific first. When items disagree about a field (one has
@@ -78,9 +84,7 @@ export function inferType(value: unknown): FieldType {
   // is handed that beside the name — so the field can show it and swap it,
   // rather than showing the word `dailyDevotionals` in a code box.
   if (isExpr(value)) {
-    return typeof value['__asset'] === 'string' && IMAGE_RE.test(value['__asset'])
-      ? 'image'
-      : 'code';
+    return typeof value['__asset'] === 'string' && IMAGE_RE.test(value['__asset']) ? 'image' : 'code';
   }
   if (value === null || value === undefined || value === '') {
     return 'empty';
@@ -105,7 +109,7 @@ export function inferType(value: unknown): FieldType {
   if (IMAGE_RE.test(text)) {
     return 'image';
   }
-  if (COLOR_RE.test(text)) {
+  if (CSS_COLOR.test(text.trim())) {
     return 'color';
   }
   if (DATE_RE.test(text)) {
@@ -210,10 +214,7 @@ export function fieldsOf(items: readonly unknown[]): readonly CmsField[] {
         const seen = types.get(key);
         assert(seen !== undefined, 'Known CMS field must have a type');
         const next = inferType(value);
-        if (
-          next !== 'empty' &&
-          (seen === 'empty' || CMS_FIELD_TYPES.indexOf(next) < CMS_FIELD_TYPES.indexOf(seen))
-        ) {
+        if (next !== 'empty' && (seen === 'empty' || CMS_FIELD_TYPES.indexOf(next) < CMS_FIELD_TYPES.indexOf(seen))) {
           types.set(key, next);
         }
       }
@@ -271,24 +272,14 @@ function contentValue(value: unknown, depth: number): boolean {
   return true;
 }
 
-const TITLE_KEYS = [
-  'name',
-  'title',
-  'label',
-  'heading',
-  'headline',
-  'question',
-  'slug',
-  'id',
-  'key',
-];
+const TITLE_KEYS = ['name', 'title', 'label', 'heading', 'headline', 'question', 'slug', 'id', 'key'];
 
 // What to call an item in the list. Falls back to the first short string.
-export function titleOf(item: unknown, index: number): string {
+export function titleOf(item: unknown, index: number, translate: Translator = ENGLISH_TRANSLATE): string {
   if (!isPlainObject(item)) {
     // A list of plain values labels itself; blank ones still need a handle.
     const own = String(item ?? '').trim();
-    return own || `Item ${index + 1}`;
+    return own || translate('cms.item.numbered', { number: index + 1 });
   }
   for (const key of TITLE_KEYS) {
     const value = item[key];
@@ -301,7 +292,7 @@ export function titleOf(item: unknown, index: number): string {
       return value.trim();
     }
   }
-  return `Item ${index + 1}`;
+  return translate('cms.item.numbered', { number: index + 1 });
 }
 
 // A blank value of the same shape, so "New item" arrives with the collection's
@@ -358,11 +349,7 @@ export function keyFor(name: unknown): string {
   if (!words.length) {
     return '';
   }
-  return words
-    .map((word, i) =>
-      i === 0 ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-    )
-    .join('');
+  return words.map((word, i) => (i === 0 ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())).join('');
 }
 
 export function emptyValueFor(type: string): unknown {
@@ -414,10 +401,7 @@ export { isPlainObject };
 // ---------------------------------------------------------------------------
 
 // Every object living at `path`, for reading the fields defined there.
-export function objectsAt(
-  items: readonly unknown[],
-  path: readonly string[],
-): readonly Record<string, unknown>[] {
+export function objectsAt(items: readonly unknown[], path: readonly string[]): readonly Record<string, unknown>[] {
   assert(path.length <= BOUNDARY_LIMITS.depthMax, 'CMS path exceeds depth limit');
   let current = items.filter(isPlainObject);
   for (const key of path) {
@@ -437,18 +421,11 @@ export function objectsAt(
   return current;
 }
 
-export const fieldsAt = (items: readonly unknown[], path: readonly string[]) =>
-  fieldsOf(objectsAt(items, path));
+export const fieldsAt = (items: readonly unknown[], path: readonly string[]) => fieldsOf(objectsAt(items, path));
 
-export const contentFieldsAt = (items: readonly unknown[], path: readonly string[]) =>
-  contentFieldsOf(objectsAt(items, path));
+export const contentFieldsAt = (items: readonly unknown[], path: readonly string[]) => contentFieldsOf(objectsAt(items, path));
 
-function transformAt(
-  value: unknown,
-  path: readonly string[],
-  depth: number,
-  edit: ObjectEdit,
-): unknown {
+function transformAt(value: unknown, path: readonly string[], depth: number, edit: ObjectEdit): unknown {
   // Each level consumes one key of a path its callers bound to depthMax.
   assert(depth <= BOUNDARY_LIMITS.depthMax, 'CMS transform exceeds depth limit');
   if (!path.length) {
@@ -465,17 +442,11 @@ function transformAt(
   }
   return {
     ...value,
-    [key]: toArray(child)
-      ? (toArray(child) ?? []).map((entry) => transformAt(entry, rest, depth + 1, edit))
-      : transformAt(child, rest, depth + 1, edit),
+    [key]: toArray(child) ? (toArray(child) ?? []).map((entry) => transformAt(entry, rest, depth + 1, edit)) : transformAt(child, rest, depth + 1, edit),
   };
 }
 
-export function applyToItems(
-  items: readonly unknown[],
-  path: readonly string[],
-  edit: ObjectEdit,
-): readonly unknown[] {
+export function applyToItems(items: readonly unknown[], path: readonly string[], edit: ObjectEdit): readonly unknown[] {
   assert(path.length <= BOUNDARY_LIMITS.depthMax, 'CMS path exceeds depth limit');
   assert(items.length <= BOUNDARY_LIMITS.itemsMax, 'CMS item count exceeds limit');
   return items.map((item) => transformAt(item, path, 0, edit));
@@ -510,6 +481,13 @@ export const putKey =
   (key: string, type: string): ObjectEdit =>
   (object) =>
     key in object ? object : { ...object, [key]: emptyValueFor(type) };
+
+// The first field defined inside a repeater that holds no entries yet gives it
+// one entry to hold that field; with none, the field would have nowhere to live.
+export const seedEntry =
+  (key: string, field: string, type: string): ObjectEdit =>
+  (object) =>
+    toArray(object[key])?.length === 0 ? { ...object, [key]: [{ [field]: emptyValueFor(type) }] } : object;
 
 export const orderKeys =
   (keys: readonly string[]): ObjectEdit =>

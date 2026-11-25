@@ -30,9 +30,7 @@ export interface Suite {
 /** Every test file under `test/`, repository-relative, sorted. */
 export function discoverTestFiles(root: string): readonly string[] {
   const found: string[] = [];
-  const pending: { readonly folder: string; readonly depth: number }[] = [
-    { folder: 'test', depth: 0 },
-  ];
+  const pending: { readonly folder: string; readonly depth: number }[] = [{ folder: 'test', depth: 0 }];
   while (pending.length > 0) {
     const next = pending.pop();
     if (next === undefined) {
@@ -70,6 +68,18 @@ export function suitesFor(files: readonly string[]): readonly Suite[] {
     name: file.slice('test/'.length).replace(TEST_FILE, ''),
     options: TEST_SUITES[file] ?? {},
   }));
+}
+
+// A suite that opens Electron either runs under the Electron binary or starts it from a probe by
+// `electronPath`, the name every probe here gives the path `require('electron')` returns.
+const STARTS_ELECTRON = /\belectronPath\b|require\(['"]electron['"]\)/;
+
+/** Whether this suite launches real Electron processes, so the pool can cap how many run at once. */
+export function startsElectron(root: string, suite: Suite): boolean {
+  if (suite.options.runner === 'electron') {
+    return true;
+  }
+  return STARTS_ELECTRON.test(fs.readFileSync(path.join(root, suite.file), 'utf8'));
 }
 
 // A query's letters only, lower-cased: `test:popoverdropdown`, `popover-dropdown`

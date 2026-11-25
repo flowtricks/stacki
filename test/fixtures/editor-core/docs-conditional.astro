@@ -1,0 +1,99 @@
+---
+import DocsShell from './DocsShell.astro';
+import DocsLayout from './DocsLayout.astro';
+import Operation from './Operation.astro';
+import Webhook from './Webhook.astro';
+import GuideCode from './GuideCode.astro';
+const {
+  route, guide, page, webhook, Content, pageMarkdown, dataVersionForPath, readFernFile,
+} = Astro.props;
+---
+{
+  route.tab === "examples" && guide?.data.productId !== "mcp" ? (
+    <DocsShell
+      title={guide!.data.title}
+      description={guide!.data.description}
+      tab="examples"
+      navigation={[]}
+    >
+      <div class="examples_wrap">{Content && <Content />}</div>
+    </DocsShell>
+  ) : (
+    <DocsLayout
+      guide={Boolean(guide)}
+      title={
+        route.kind === "operation" || route.kind === "webhook"
+          ? route.title
+          : guide!.data.title
+      }
+      description={guide?.data.description}
+      canonicalUrl={
+        guide &&
+        ["devlink", "code-components", "webflow-cloud", "flowkit", "mcp"].includes(
+          guide.data.productId,
+        )
+          ? guide.data.canonicalUrl
+          : undefined
+      }
+      maxTocDepth={
+        guide &&
+        ["devlink", "code-components", "webflow-cloud", "flowkit", "mcp"].includes(
+          guide.data.productId,
+        )
+          ? guide.data.maxTocDepth
+          : undefined
+      }
+      subtitle={
+        guide &&
+        [
+          "browser", "apps", "cli", "devlink", "code-components",
+          "webflow-cloud", "flowkit", "mcp",
+        ].includes(
+          guide.data.productId,
+        )
+          ? guide.data.subtitle
+          : undefined
+      }
+      hideToc={
+        guide?.data.productId === "home" ||
+        (guide &&
+          [
+          "browser", "apps", "cli", "devlink", "code-components",
+          "webflow-cloud", "flowkit", "mcp",
+        ].includes(
+            guide.data.productId,
+          ) &&
+          guide.data.hideToc)
+      }
+      navigation={route.navigation}
+      tab={route.tab === "api" || route.tab === "" ? "reference" : route.tab}
+      noindex={
+        (route.kind === "operation" || route.kind === "webhook") && route.hidden
+      }
+      markdown={
+        page
+          ? pageMarkdown(
+              page,
+              new URL(Astro.url.pathname, "https://developers.webflow.com").href,
+              dataVersionForPath(Astro.url.pathname).operationMetadata,
+              dataVersionForPath(Astro.url.pathname).version.isDefault,
+            )
+          : guide
+            ? readFernFile(guide.data.source).replace(/^---[\s\S]*?---\s*/, "")
+            : webhook
+              ? `# ${webhook.title}\n\n${
+                  webhook.description
+                }\n\n## Payload\n\n\`\`\`json\n${
+                  JSON.stringify(webhook.example, null, 2)
+                }\n\`\`\`\n\n## Response\n${
+                  webhook.responses.map((r) => `${r.status}: ${r.description}`).join("\n")
+                }`
+              : undefined
+      }
+    >
+      {page && <Operation page={page} />}
+      {route.kind === "webhook" && <Webhook eventKey={route.key} />}
+      {Content && <Content components={{ pre: GuideCode }} />}
+    </DocsLayout>
+  )
+}

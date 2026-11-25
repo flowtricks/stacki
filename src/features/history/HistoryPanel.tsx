@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 export { dayGroup, relativeTime, summarize } from './historyModel';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { HistorySection } from './HistorySections';
 import HistoryTimeline from './HistoryTimeline';
 import type { HistoryPanelProps } from './historyPanelTypes';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export default function HistoryPanel(props: HistoryPanelProps) {
+  const translate = useTranslate();
   const [timelineOpen, setTimelineOpen] = useState(true);
   const branch = props.gitInfo?.isRepo ? props.gitInfo.branch : undefined;
   const head = props.gitInfo?.isRepo ? props.gitInfo.head : undefined;
@@ -15,25 +18,22 @@ export default function HistoryPanel(props: HistoryPanelProps) {
   const userEmail = props.gitInfo?.isRepo ? props.gitInfo.userEmail : undefined;
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <h2>Git</h2>
-      </div>
+      {/* i18n-ignore: Git is a product name. */}
+      <PanelHeader title="Git" />
       <div className="panel-body history-body">
         {props.controls}
         {props.previewRef && (
-          <button className="history-exit-preview" onClick={props.onExitPreview}>
-            Back to now
+          <button className="history-exit-preview primary" onClick={props.onExitPreview}>
+            {translate('history.backToNow')}
           </button>
         )}
         {props.gitInfo?.isRepo && (
-          <HistorySection
-            title="Source Control Graph"
-            open={timelineOpen}
-            onToggle={() => setTimelineOpen((value) => !value)}
-          >
+          <HistorySection title={translate('history.versionHistory')} open={timelineOpen} onToggle={() => setTimelineOpen((value) => !value)}>
             <HistoryTimeline
               projectPath={props.project.path}
               branch={branch}
+              trunk={props.gitInfo.trunk ?? 'main'}
+              branches={props.gitInfo.branches}
               head={head}
               userEmail={userEmail}
               previewRef={props.previewRef}

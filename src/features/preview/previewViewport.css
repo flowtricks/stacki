@@ -1,13 +1,17 @@
-/* Keep viewport controls with the preview so global input styles cannot expand them. */
-.preview-toolbar .device-btns {
+/* Keep viewport controls with the preview so global input styles cannot expand them.
+   The "More" popover shows the same controls, so it carries the same rules. */
+.preview-toolbar .device-btns,
+.preview-toolbar-menu .device-btns {
   flex-shrink: 0;
 }
-.preview-toolbar .preview-size-controls {
+.preview-toolbar .preview-size-controls,
+.preview-toolbar-menu .preview-size-controls {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
   gap: 8px;
-  padding: 2px 4px 2px 8px;
+  padding-block: 2px;
+  padding-inline: 8px 4px;
   border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-dim);
@@ -31,15 +35,15 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  text-align: right;
+  text-align: end;
 }
 .preview-width-field input:focus-visible {
   outline: 1px solid var(--accent);
 }
 .preview-size-controls output {
   min-width: 38px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
+  padding-inline-start: 8px;
+  border-inline-start: 1px solid var(--border);
   text-align: center;
 }
 .preview-size-controls button {
@@ -50,16 +54,59 @@
 
 /* Only the iframe frame scales. The sibling overlay uses screen coordinates so
    outlines retain their stroke width and labels retain their readable size. */
-.preview-frame-wrap > .frame-sized {
+.preview-frame-wrap > .frame-sized,
+.preview-mode-stage > .frame-sized {
   transform-origin: top center;
   /* The frame and overlay must move in the same paint when changing devices. */
   transition: none;
 }
+/* The canvas's own scrollbar for the page (CanvasScrollbar.tsx): a solid thumb in the gutter beside the frame, never over
+   the page, at the frame's inline end. Its width and offset come in screen pixels divided by the frame's scale.
+   The side resize handles sit 12 screen pixels out at every zoom (SizedFrame.tsx), past the bar's 7, so neither covers
+   the other; the bar stays under them (z-index 5) all the same. */
+.canvas-scrollbar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  cursor: default;
+}
+.canvas-scrollbar-thumb {
+  position: absolute;
+  inset-inline: 0;
+  background: var(--border-strong);
+  transition: background 0.12s;
+}
+.canvas-scrollbar:hover .canvas-scrollbar-thumb,
+.canvas-scrolling .canvas-scrollbar-thumb {
+  background: var(--text-dim);
+}
+/* A thumb drag crosses the page: the iframe would take the pointer from the canvas. */
+.canvas-scrolling iframe {
+  pointer-events: none;
+}
+/* The canvas chrome's stacking order, bottom to top. One scale, so a new layer
+   is placed by name against the others rather than by a number picked to beat
+   one of them. The layer is its own stacking context (`isolation`), so these
+   values order the chrome only among itself: the layer as a whole stays under
+   every popup, menu, dialog and tooltip of the editor, which open above the
+   canvas in the shell's own z-index terms. App overlays (AppOverlayLayer.tsx)
+   are on top of Stacki's outlines, tags and bands: an app draws a pin or a
+   label to be read and clicked, and a selection outline or name tag over it
+   would hide it. Only an app's drawn parts take the pointer, so an outline's
+   controls stay usable wherever no app item is drawn (appCanvasTools.css).
+   Studio adds its collaborators' outlines (studio.css) between the two. */
 .preview-overlay-layer {
+  --canvas-layer-focus: 3;
+  --canvas-layer-spacing: 3;
+  --canvas-layer-outline: 4;
+  --canvas-layer-collaborator: 6;
+  --canvas-layer-app: 8;
   position: absolute;
   top: 16px;
-  left: 50%;
+  left: 50%; /* physical: overlay centred over the LTR canvas */
   transform: translateX(-50%);
+  isolation: isolate;
   overflow: hidden;
   pointer-events: none;
 }

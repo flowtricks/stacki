@@ -1,0 +1,93 @@
+/* The upgrade parts of the Studio status card: the tag after the installed version, one line of progress or result,
+   and the backup's file list. Fills only (no borders); the primary button keeps the shared blue states. */
+.studio-upgrade-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 2px;
+  padding-inline: 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 14px;
+}
+.studio-upgrade-tag[data-kind='current'] {
+  padding-inline: 0;
+  color: var(--green);
+}
+.studio-upgrade-tag[data-kind='available'] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-hover, var(--accent));
+}
+.studio-upgrade-tag-skeleton {
+  display: inline-flex;
+}
+.studio-upgrade-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.studio-status-card p.studio-upgrade-line,
+.studio-status-card span.studio-upgrade-line {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studio-status-card p.studio-upgrade-current {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+}
+.studio-upgrade-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.studio-upgrade-progress progress {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: var(--bg-active);
+  accent-color: var(--accent);
+}
+.studio-upgrade-progress progress::-webkit-progress-bar {
+  border-radius: 2px;
+  background: var(--bg-active);
+}
+.studio-upgrade-progress progress::-webkit-progress-value {
+  border-radius: 2px;
+  background: var(--accent);
+}
+.studio-upgrade-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.studio-upgrade-files li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.studio-upgrade-files li code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-upgrade-restore {
+  align-self: flex-start;
+}

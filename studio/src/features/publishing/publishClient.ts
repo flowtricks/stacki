@@ -4,6 +4,8 @@ import { request } from '../project/projectClient';
 import { StudioRequestError } from '../project/responseError';
 import { beginOperation } from '../session/activity';
 import { record, string } from '../../shared/validation';
+import { parseOptionalMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
+import { parseReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 
 export function parsePublishState(value: unknown): PublishState {
   const data = record(value);
@@ -12,6 +14,9 @@ export function parsePublishState(value: unknown): PublishState {
     return { kind };
   }
   const id = string(data['id'] ?? '', 64);
+  if (kind === 'review-open') {
+    return { kind, id, ...parseReviewReceipt(data) };
+  }
   const deployment = data['deployment'];
   if (deployment !== undefined && deployment !== 'pending' && deployment !== 'live') {
     throw new Error('Invalid deployment status');
@@ -21,13 +26,7 @@ export function parsePublishState(value: unknown): PublishState {
     if (stage === undefined) {
       return { kind, id };
     }
-    if (
-      stage === 'preparing' ||
-      stage === 'building' ||
-      stage === 'committing' ||
-      stage === 'cleanup' ||
-      stage === 'deploying'
-    ) {
+    if (stage === 'preparing' || stage === 'building' || stage === 'committing' || stage === 'cleanup' || stage === 'deploying') {
       return {
         kind,
         id,
@@ -38,7 +37,8 @@ export function parsePublishState(value: unknown): PublishState {
     throw new Error('Invalid publish stage');
   }
   if (kind === 'failed') {
-    return { kind, id, message: string(data['message'], 20_000) };
+    const messageRef = parseOptionalMessageRef(data['messageRef']);
+    return { kind, id, message: string(data['message'], 20_000), ...(messageRef === undefined ? {} : { messageRef }) };
   }
   if (kind === 'committed') {
     if (data['github'] !== undefined && data['github'] !== 'skipped') {
@@ -52,15 +52,14 @@ export function parsePublishState(value: unknown): PublishState {
       ...(deployment ? { deployment } : {}),
       ...(data['github'] === 'skipped' ? { github: 'skipped' as const } : {}),
       ...(data['cleanupWarning'] ? { cleanupWarning: string(data['cleanupWarning'], 2000) } : {}),
+      ...(data['cleanupWarning'] && parseOptionalMessageRef(data['cleanupWarningRef'])
+        ? { cleanupWarningRef: parseOptionalMessageRef(data['cleanupWarningRef']) }
+        : {}),
     };
   }
   throw new Error('Invalid publish status');
 }
-export async function publishProject(
-  signal: AbortSignal,
-  target: PublishTarget = 'all',
-  progress?: (state: PublishState) => void,
-): Promise<PublishState> {
+export async function publishProject(signal: AbortSignal, target: PublishTarget = 'all', progress?: (state: PublishState) => void): Promise<PublishState> {
   const finish = beginOperation();
   try {
     // Never automatically retry a POST: it may already have started a commit.
@@ -74,23 +73,18 @@ export async function publishProject(
     return state.kind === 'building' ? await watchPublish(state.id, signal, progress) : state;
   } catch (error) {
     if (error instanceof StudioRequestError && error.transient) {
-      throw new Error(
-        'The publish connection was interrupted. Check GitHub before publishing again. Your sign-in has not been cleared.',
-      );
+      throw new Error('The publish connection was interrupted. Check GitHub before publishing again. Your sign-in has not been cleared.');
     }
     throw error;
   } finally {
     finish();
   }
 }
-export async function watchPublish(
-  id: string,
-  signal: AbortSignal,
-  progress?: (state: PublishState) => void,
-): Promise<PublishState> {
-  const deadline = Date.now() + 600_000;
+export async function watchPublish(id: string, signal: AbortSignal, progress?: (state: PublishState) => void): Promise<PublishState> {
+  const deadline = Date.now() + 1_800_000;
   let unavailable = 0;
-  while (Date.now() < deadline) {
+  // A background tab may resume after the deadline: read the final result before timing out.
+  for (let attempt = 0; attempt < 1200; attempt++) {
     await delay(1500, signal);
     try {
       const status = record(
@@ -101,13 +95,14 @@ export async function watchPublish(
       const state = parsePublishState(status['publishing']);
       unavailable = 0;
       if (state.kind === 'idle' || state.id !== id) {
-        throw new Error(
-          'Studio restarted or the publish job changed. Check GitHub before publishing again.',
-        );
+        throw new Error('Studio restarted or the publish job changed. Check GitHub before publishing again.');
       }
       progress?.(state);
       if (state.kind !== 'building') {
         return state;
+      }
+      if (Date.now() >= deadline) {
+        break;
       }
     } catch (error) {
       if (signal.aborted) {
@@ -119,9 +114,7 @@ export async function watchPublish(
       await delay(error.status === 429 ? 30_000 : 3000, signal);
     }
   }
-  throw new Error(
-    'Publishing is taking longer than expected. Check GitHub before publishing again.',
-  );
+  throw new Error('Publishing is taking longer than expected. Check GitHub before publishing again.');
 }
 function delay(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

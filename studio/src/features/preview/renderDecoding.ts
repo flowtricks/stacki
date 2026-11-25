@@ -6,19 +6,11 @@ export async function decodeRenderedHTML(input: unknown): Promise<string | undef
   if ('html' in input && typeof input.html === 'string' && input.html.length <= MAX_HTML) {
     return input.html;
   }
-  if (
-    !('htmlGzip' in input) ||
-    typeof input.htmlGzip !== 'string' ||
-    input.htmlGzip.length > MAX_HTML ||
-    !/^[A-Za-z0-9+/]*={0,2}$/.test(input.htmlGzip)
-  ) {
+  if (!('htmlGzip' in input) || typeof input.htmlGzip !== 'string' || input.htmlGzip.length > MAX_HTML || !/^[A-Za-z0-9+/]*={0,2}$/.test(input.htmlGzip)) {
     return;
   }
   const bytes = Uint8Array.from(atob(input.htmlGzip), (character) => character.charCodeAt(0));
-  const reader = new Blob([bytes])
-    .stream()
-    .pipeThrough(new DecompressionStream('gzip'))
-    .getReader();
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (;;) {

@@ -1,0 +1,116 @@
+import type { Translator } from '../../../vendor/stacki/src/lib/i18n/localeContext';
+import { canvasContentEdits } from '../../../vendor/stacki/src/app/model/canvasTextContent';
+import { canvasBoundEdits } from '../../../vendor/stacki/src/app/model/canvasBoundText';
+import { canvasPropEdits, type ComponentSource } from '../../../vendor/stacki/src/app/model/canvasPropText';
+import { canvasTextFormatter } from '../../../vendor/stacki/src/app/model/canvasTextFormat';
+import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import type { ScanComponent } from '../../../vendor/stacki/shared/properties/projectScan';
+import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
+import type { CanvasTextDocument } from '../../../vendor/stacki/src/features/preview/useCanvasText';
+import { reportErrorToast } from '../../../vendor/stacki/src/ui/errorNotices';
+import type { SharedDocument } from '../collaboration/useDocument';
+import { applyEdits, parsePage, type ParserNode } from '../source/source';
+import { pathFor } from '../project/previewSelection';
+import { request, type Component } from '../project/projectClient';
+import { record, string } from '../../shared/validation';
+import { inlineContentEdit, setAttributes } from '../settings/settingsEdits';
+
+// Studio's files are project-relative; the prop finder resolves imports against
+// a project root, so both are read under this one stand-in.
+const ROOT = 'studio';
+
+export function studioCanvasText(
+  file: string,
+  document: SharedDocument | undefined,
+  nodes: readonly ParserNode[],
+  context: { readonly components: readonly Component[]; readonly selected: string },
+  translate: Translator,
+): CanvasTextDocument | undefined {
+  if (!document?.ready || !file.endsWith('.astro')) {
+    return undefined;
+  }
+  const source = document.text.toString();
+  const replace = (next: string) => {
+    if (document.text.toString() !== source) {
+      throw new Error('The shared source changed. Select the text again.');
+    }
+    document.replaceSource(next);
+    if (document.text.toString() !== next) {
+      throw new Error('Text was not changed. Check your editing access or selection lock.');
+    }
+  };
+  const pathOf = (id: string) => (isCanvasPage(file) ? '' : file + '|') + pathFor(id);
+  return {
+    file,
+    source,
+    nodes,
+    projectPath: ROOT,
+    loadContent: async (canvas) => [
+      ...(await canvasContentEdits(canvas, translate('shell.canvasText.sharedContent'))),
+      // The page's own frontmatter data: a data module beside the page is Desktop's to write.
+      ...(await canvasBoundEdits(
+        canvas,
+        { readModule: async () => undefined, readFile: async () => undefined },
+        {
+          saved: (path, file) => translate('preview.text.source.saved', { path, file }),
+          undo: translate('preview.text.source.undo'),
+          sourceChanged: translate('preview.text.sourceChanged'),
+        },
+      )),
+      ...(await canvasPropEdits(canvas, {
+        label: translate('shell.canvasText.componentText'),
+        projectPath: ROOT,
+        file: `${ROOT}/${file}`,
+        nodes,
+        imports: importsOf(source),
+        components: context.components.map(scanComponent),
+        relative: (path) => path.slice(ROOT.length + 1),
+        read: readComponent,
+        // A prop typed on the canvas is written as the props panel writes it.
+        setProp: (id: string, prop: string, value: Attr) => replace(setAttributes(source, id, { [prop]: value })),
+      })),
+    ],
+    pathFor: pathOf,
+    apply: async (next) => replace(next),
+    report: reportErrorToast,
+    components: context.components,
+    // Words selected on the canvas get Desktop's format bar, written as the
+    // Content field writes them: the element's inline content in this page's
+    // source. Slot text is the page's own markup, so it formats the same way.
+    format: canvasTextFormatter(nodes, (rootId, children) => {
+      try {
+        replace(applyEdits(source, [inlineContentEdit(source, rootId, children)]));
+      } catch (error: unknown) {
+        reportErrorToast(error instanceof Error ? error.message : String(error));
+      }
+    }),
+    // The selected node's page path: its text from a prop or a slot is marked.
+    focus: context.selected ? [pathOf(context.selected)] : [],
+  };
+}
+
+function importsOf(source: string) {
+  const parsed = parsePage(source);
+  return parsed.editable && 'imports' in parsed.model ? parsed.model.imports : [];
+}
+
+function scanComponent(component: Component): ScanComponent {
+  return {
+    name: component.name,
+    path: `${ROOT}/${component.file}`,
+    folder: component.file.slice(0, component.file.lastIndexOf('/')),
+    schema: component.fields,
+    ...(component.origin === undefined ? {} : { origin: component.origin }),
+  };
+}
+
+// A component's template, read from the project, for the props it shows.
+async function readComponent(path: string): Promise<ComponentSource | undefined> {
+  const file = path.slice(ROOT.length + 1);
+  const answer = record(await request(`/studio/api/file?file=${encodeURIComponent(file)}`));
+  const parsed = parsePage(string(answer['source'], 2_000_000));
+  if (!parsed.editable || !('imports' in parsed.model)) {
+    return undefined;
+  }
+  return { nodes: parsed.model.nodes, imports: parsed.model.imports, extraFrontmatter: parsed.model.extraFrontmatter };
+}

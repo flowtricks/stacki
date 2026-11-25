@@ -1,24 +1,26 @@
-import { ErrorToast } from '../../ui/ErrorToast';
-import React, { useEffect, useRef, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { PanelReadStatus } from '../../ui/PanelReadStatus';
+import { usePanelData } from '../../lib/usePanelData';
+import { variableCache } from './variableCache';
+import { readCSSVariables } from '../../ipc/variablesBridge';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type { Result } from '../../../shared/core/result';
-import type {
-  VariableFile,
-  VariableGroup,
-  VariableSelection,
-  VariablesSnapshot,
-} from './variablesBridge';
-import { readCSSVariables } from './variablesBridge';
-import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
+import type { VariableFile, VariableGroup, VariableSelection } from '../../ipc/variablesBridge';
+import { ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
+import { VariableScopeBadge } from './VariableScopeBadge';
+import { variableFileListed, type VariablePlace } from '../../editor/variablePlace';
+import { assert } from '../../../shared/core/assert';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 export interface VariablesPanelProps {
   readonly project: { readonly path: string };
+  /** Where the user is: a page's or a component's own variables are listed only while it is open (variablePlace.ts). */
+  readonly place: VariablePlace;
   readonly selected?: VariableSelection | undefined;
   readonly onSelect: (selection: VariableSelection | undefined) => void;
 }
 
 const EMPTY_FILES: readonly VariableFile[] = [];
-
 // Files preserve the author's stylesheet boundaries; groups preserve the rules inside them.
 export default function VariablesPanel(props: VariablesPanelProps) {
   // Project navigation starts with fresh file and default-selection state.
@@ -26,80 +28,74 @@ export default function VariablesPanel(props: VariablesPanelProps) {
 }
 
 function VariableFilesPanel(props: VariablesPanelProps) {
-  const { selected, onSelect, project } = props;
-  const result = useVariableFiles(project.path);
-  const files = result.ok ? result.value.files : EMPTY_FILES;
-  const error = result.ok ? undefined : result.error;
-  const [openFile, setOpenFile] = useState<string | undefined>(undefined);
+  const translate = useTranslate();
+  const { selected, onSelect, project, place } = props;
+  const { state, refresh, files } = useVariableFiles(project.path, place);
+  // The first frame opens the file the selection (or the default one) is in: opening
+  // it from an effect drew the file list for a frame and then swapped in the
+  // file's groups, on every open of the panel.
+  const [openFile, setOpenFile] = useState<string | undefined>(() => fileToOpen(files, selected));
   useDefaultVariableSelection(files, selected, onSelect);
   useEffect(() => {
-    if (!selected || openFile) {
+    if (openFile) {
       return;
     }
-    const file = files.find((entry) => entry.rel === selected.file);
-    if (!file || onlyGroup(file)) {
-      return;
+    // Files that arrive after the first frame (nothing was cached) open the same way.
+    if (selected) {
+      const rel = fileToOpen(files, selected);
+      if (rel !== undefined) {
+        setOpenFile(rel);
+      }
     }
-    setOpenFile(selected.file);
   }, [selected, openFile, files]);
   const open = openFile ? files.find((file) => file.rel === openFile) : undefined;
   return (
     <div className="panel-section grow">
-      <div className="panel-header">
-        <div className="cms-crumb">
-          {open && (
-            <button
-              className="ghost"
-              title="All stylesheets"
-              onClick={() => {
-                setOpenFile(undefined);
-                onSelect(undefined);
-              }}
-            >
-              <ChevronLeftIcon size={14} />
-            </button>
-          )}
-          <h2 title={open ? open.rel : undefined}>{open ? open.name : 'Variables'}</h2>
-        </div>
-      </div>
+      <PanelHeader
+        title={open ? open.name : translate('variables.title')}
+        titleHint={open?.rel}
+        back={
+          open
+            ? {
+                label: translate('variables.panel.allFiles'),
+                onBack: () => {
+                  setOpenFile(undefined);
+                  onSelect(undefined);
+                },
+              }
+            : undefined
+        }
+      />
       <div className="panel-body">
-        {!open &&
-          files.map((file) => (
-            <VariableFileRow
-              key={file.rel}
-              file={file}
-              selected={selected}
-              onOpen={setOpenFile}
-              onSelect={onSelect}
-            />
-          ))}
+        {!open && files.map((file) => <VariableFileRow key={file.rel} file={file} selected={selected} onOpen={setOpenFile} onSelect={onSelect} />)}
         {open &&
           open.groups.map((group, index) => (
-            <VariableGroupRow
-              key={`${group.label}-${index}`}
-              group={group}
-              file={open.rel}
-              index={index}
-              selected={selected}
-              onSelect={onSelect}
-            />
+            <VariableGroupRow key={`${group.label}-${index}`} group={group} file={open.rel} index={index} selected={selected} onSelect={onSelect} />
           ))}
-        {error && <ErrorToast message={error} />}
-        {!files.length && !error && (
-          <div className="props-empty">
-            No CSS custom properties found in this project&rsquo;s stylesheets.
-          </div>
-        )}
+        <PanelReadStatus state={state} label={translate('variables.panel.cssVariables')} retry={refresh} />
+        {state.kind === 'ready' && files.length === 0 && <div className="props-empty">{translate('variables.panel.empty', { tag: '<style>' })}</div>}
       </div>
     </div>
   );
 }
 
-function useDefaultVariableSelection(
-  files: readonly VariableFile[],
-  selected: VariableSelection | undefined,
-  onSelect: VariablesPanelProps['onSelect'],
-): void {
+// The list follows the open file, never the selection: selecting on the canvas
+// while the panel is open must not add and drop rows under the pointer.
+function useVariableFiles(projectPath: string, place: VariablePlace) {
+  const read = useCallback(() => readCSSVariables(projectPath), [projectPath]);
+  const { state, refresh } = usePanelData(variableCache, projectPath, read, onVariablesChanged);
+  const { openFile, contextPage } = place;
+  const files = useMemo(() => {
+    if (state.kind !== 'ready') {
+      return EMPTY_FILES;
+    }
+    const here = { openFile, contextPage };
+    return state.value.files.filter((file) => (file.error || (file.count ?? 0) > 0) && variableFileListed(file.rel, here));
+  }, [state, openFile, contextPage]);
+  return { state, refresh, files };
+}
+
+function useDefaultVariableSelection(files: readonly VariableFile[], selected: VariableSelection | undefined, onSelect: VariablesPanelProps['onSelect']): void {
   const initialized = useRef(false);
   useEffect(() => {
     if (initialized.current) {
@@ -122,61 +118,6 @@ function useDefaultVariableSelection(
   }, [files, selected, onSelect]);
 }
 
-function useVariableFiles(projectPath: string) {
-  const [result, setResult] = useState<Result<VariablesSnapshot, string>>({
-    ok: true,
-    value: { files: [], values: {} },
-  });
-  useEffect(() => {
-    // One request plus one pending refresh bounds watcher bursts. Each callback
-    // finishes before a queued read starts; obsolete project responses are ignored.
-    let live = true;
-    let running = false;
-    let pending = false;
-    // It calls itself again only from the read's callback, never on the stack.
-    // eslint-disable-next-line stacki/bounded-recursion -- Event re-entry from a promise callback.
-    const refresh = () => {
-      if (!live) {
-        return;
-      }
-      if (running) {
-        pending = true;
-        return;
-      }
-      running = true;
-      void readCSSVariables(projectPath).then((next) => {
-        running = false;
-        if (!live) {
-          return;
-        }
-        // Keep read errors visible, but omit stylesheets with no editable variables.
-        setResult(
-          next.ok
-            ? {
-                ok: true,
-                value: {
-                  ...next.value,
-                  files: next.value.files.filter((file) => file.error || (file.count ?? 0) > 0),
-                },
-              }
-            : next,
-        );
-        if (pending) {
-          pending = false;
-          refresh();
-        }
-      });
-    };
-    refresh();
-    const unsubscribe = onVariablesChanged(refresh);
-    return () => {
-      live = false;
-      unsubscribe();
-    };
-  }, [projectPath]);
-  return result;
-}
-
 interface FileRowProps {
   readonly file: VariableFile;
   readonly selected: VariableSelection | undefined;
@@ -184,11 +125,10 @@ interface FileRowProps {
   readonly onSelect: VariablesPanelProps['onSelect'];
 }
 function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
+  const translate = useTranslate();
   return (
     <div
-      className={`cms-collection ${file.error ? 'broken' : ''} ${
-        onlyGroup(file) && selected?.file === file.rel ? 'on' : ''
-      }`}
+      className={`cms-collection ${file.error ? 'broken' : ''} ${onlyGroup(file) && selected?.file === file.rel ? 'on' : ''}`}
       title={file.rel}
       onClick={() => {
         if (!file.groups.length) {
@@ -202,9 +142,8 @@ function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
     >
       <FileIcon size={14} />
       <span className="cms-collection-name">{file.name}</span>
-      <span className="cms-collection-count">
-        {file.error ? '' : file.count === 1 ? '1 variable' : `${file.count} variables`}
-      </span>
+      {onlyGroup(file) && <VariableScopeBadge scope={file.groups[0]?.scope} />}
+      <span className="cms-collection-count">{file.error ? '' : translate('variables.count', { count: file.count ?? 0 })}</span>
       {!onlyGroup(file) && (
         <span className="cms-collection-chevron">
           <ChevronRightIcon size={10} />
@@ -221,22 +160,18 @@ interface GroupRowProps {
   readonly onSelect: VariablesPanelProps['onSelect'];
 }
 function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowProps) {
+  const translate = useTranslate();
   return (
     <div
-      className={`cms-collection ${
-        selected && selected.file === file && selected.index === index ? 'on' : ''
-      }`}
+      className={`cms-collection ${selected && selected.file === file && selected.index === index ? 'on' : ''}`}
       title={group.columns.map((column) => column.selector).join(',\n')}
       onClick={() => onSelect({ file, index })}
     >
       <VariableIcon size={14} />
       <span className="cms-collection-name">{group.label}</span>
+      <VariableScopeBadge scope={group.scope} />
       <span className="cms-collection-count">
-        {group.kind === 'modes'
-          ? `${group.columns.length} modes`
-          : countOf(group) === 1
-            ? '1 variable'
-            : `${countOf(group)} variables`}
+        {group.kind === 'modes' ? translate('variables.modes', { count: group.columns.length }) : translate('variables.count', { count: countOf(group) })}
       </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
@@ -244,13 +179,25 @@ function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowPr
     </div>
   );
 }
+/**
+ * The file whose groups the panel opens on: the selection's, or with nothing
+ * selected the project's only file (useDefaultVariableSelection selects its first
+ * group). A file with one group is never opened: its row is the group.
+ */
+export function fileToOpen(files: readonly VariableFile[], selected: VariableSelection | undefined): string | undefined {
+  const file = selected === undefined ? (files.length === 1 ? files[0] : undefined) : files.find((entry) => entry.rel === selected.file);
+  if (file === undefined) {
+    return undefined;
+  }
+  if (file.groups.length > 1) {
+    return file.rel;
+  }
+  assert(onlyGroup(file) || file.groups.length === 0, 'fileToOpen: a file not opened has at most one group');
+  return undefined;
+}
 function onlyGroup(file: VariableFile): boolean {
   return file.groups.length === 1;
 }
 function countOf(group: VariableGroup): number {
-  return group.blocks.reduce(
-    (sum, block) =>
-      sum + block.rows.reduce((count, row) => count + row.cells.filter(Boolean).length, 0),
-    0,
-  );
+  return group.blocks.reduce((sum, block) => sum + block.rows.reduce((count, row) => count + row.cells.filter(Boolean).length, 0), 0);
 }

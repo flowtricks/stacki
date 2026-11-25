@@ -10,22 +10,16 @@
 import { assert } from '../../shared/core/assert';
 import { toUtf16Offset } from '../../shared/core/brand';
 import { diffCodePatch } from '../../shared/engine/codePatch';
-import { DIFF_BUDGET, diffBytes, type ByteDiff } from '../../shared/engine/diff';
+import { DIFF_BUDGET, diffBytes, type DiffOutcome } from '../../shared/engine/diff';
 import type { NodeRef } from '../../shared/engine/editRequest';
 import type { RejectionReason, SourceEdit } from '../../shared/engine/intent';
-import { mapSpanThroughDiff } from '../../shared/engine/mapSpan';
+import { mapSpanThroughOutcome } from '../../shared/engine/mapSpan';
 import { nodeAtPath, type ValidProjection } from '../../shared/engine/planSupport';
 import { toAnchorRef, toChildIndex, type AnchorRef } from '../../shared/page/ref';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
 import type { ProjectedNode } from '../../shared/page/sourceProjection';
-import {
-  encodeUtf8,
-  spansAscending,
-  toByteSpan,
-  utf16ToByteOffsets,
-  type ByteSpan,
-} from '../../shared/core/span';
+import { encodeUtf8, spansAscending, toByteSpan, utf16ToByteOffsets, type ByteSpan } from '../../shared/core/span';
 
 /** How a page is written: its file's extension decides the parser. */
 export type PageFormat = 'astro' | 'md' | 'mdx';
@@ -103,11 +97,7 @@ export function splitsPair(text: string, offset: number): boolean {
  * the change applies as it is; otherwise each hunk is placed on `own` through
  * the diff from `before`, and a hunk the formatting itself changed has no
  * place: refused, never reprinted. */
-export function placedHunks(
-  before: string,
-  after: string,
-  own: string,
-): Result<readonly SourceEdit[], RejectionReason> {
+export function placedHunks(before: string, after: string, own: string): Result<readonly SourceEdit[], RejectionReason> {
   const change = diffCodePatch(before, after);
   if (!change.ok) {
     return change;
@@ -119,12 +109,9 @@ export function placedHunks(
     return ok(change.value.map((hunk) => ({ span: hunk.span, text: hunk.text })));
   }
   const diff = diffBytes(encodeUtf8(before), encodeUtf8(own), DIFF_BUDGET);
-  if (diff.tag === 'too-costly') {
-    return err('resource-limit');
-  }
   const placed: SourceEdit[] = [];
   for (const hunk of change.value) {
-    const span = placedSpan(diff.diff, hunk.span);
+    const span = placedSpan(diff, hunk.span);
     if (span === undefined) {
       return err('unsupported-operation');
     }
@@ -138,19 +125,19 @@ export function placedHunks(
 
 // A range of the rendering on the node's bytes: its own bytes kept whole, or,
 // for an insertion, a neighbouring byte kept whole beside it.
-function placedSpan(diff: ByteDiff, span: ByteSpan): ByteSpan | undefined {
+function placedSpan(diff: DiffOutcome, span: ByteSpan): ByteSpan | undefined {
   if (span.start < span.end) {
-    const mapped = mapSpanThroughDiff(diff, span);
+    const mapped = mapSpanThroughOutcome(diff, span);
     return mapped.tag === 'resolved' ? mapped.span : undefined;
   }
   if (span.start > 0) {
-    const before = mapSpanThroughDiff(diff, toByteSpan(span.start - 1, span.start));
+    const before = mapSpanThroughOutcome(diff, toByteSpan(span.start - 1, span.start));
     if (before.tag === 'resolved') {
       return toByteSpan(before.span.end, before.span.end);
     }
   }
-  if (span.start < diff.source.length) {
-    const after = mapSpanThroughDiff(diff, toByteSpan(span.start, span.start + 1));
+  if (span.start < diff.diff.source.length) {
+    const after = mapSpanThroughOutcome(diff, toByteSpan(span.start, span.start + 1));
     if (after.tag === 'resolved') {
       return toByteSpan(after.span.start, after.span.start);
     }
@@ -169,22 +156,14 @@ export function shiftedHunks(hunks: readonly SourceEdit[], start: number): reado
 
 /** A frontmatter block's new text as the slot where it differs from the block
  * on disk: the common start and end are kept, whole code points only. */
-export function frontmatterSlot(
-  block: ByteSpan,
-  before: string,
-  printed: string,
-): { readonly slot: ByteSpan; readonly text: string } {
+export function frontmatterSlot(block: ByteSpan, before: string, printed: string): { readonly slot: ByteSpan; readonly text: string } {
   let prefix = 0;
   const shorter = Math.min(before.length, printed.length);
   while (prefix < shorter && before.charCodeAt(prefix) === printed.charCodeAt(prefix)) {
     prefix++;
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    before.charCodeAt(before.length - 1 - suffix) ===
-      printed.charCodeAt(printed.length - 1 - suffix)
-  ) {
+  while (suffix < shorter - prefix && before.charCodeAt(before.length - 1 - suffix) === printed.charCodeAt(printed.length - 1 - suffix)) {
     suffix++;
   }
   // Whole code points only: a boundary inside a pair moves out of it.

@@ -1,11 +1,13 @@
-import { componentReference } from '../model/componentReference';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { componentFileOf, componentReference } from '../model/componentReference';
+import { useListProps } from './useListProps';
 // Page operations: changing the layout, creating, moving and deleting pages
 // and folders, the selection's model, creating from a selection, the
 // selected schema, and composing the shortcuts (App.tsx).
 
+import { assert } from '../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { ScanPage, ScanComponent } from '../../../shared/properties/projectScan';
-import { confirmDialog } from '../../ui/ConfirmDialog';
 import { astroAsset as astroAssetDef } from '../../features/palette/astroAssets';
 import { getElementSchema } from '../../editor/elementSchemas';
 import { frontmatterGesture, unwrapGesture } from '../../editor/editGestures';
@@ -14,23 +16,19 @@ import { writeFrontmatter } from '../../../shared/page/frontmatterSource';
 import { namesIn } from '../../editor/classAttr';
 import { toComponentName } from '../../features/palette/componentName';
 import { cleanError } from '../../lib/cleanError';
-import { autoQueryName, namesInScope, queriesInScope, QUERY_MARK } from '../../editor/dataSuggest';
+import { entrySampleKey, type ImportNeed } from '../../editor/dataSample';
+import { withCollectionQuery, withDataImport } from '../../editor/frontmatterAdditions';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { ComponentCreationSource } from '../../features/palette/PaletteDialogs';
+import { loadMoveStyleCandidates } from './componentStyleChoices';
+import { planExtraction, type ExtractionRead } from '../../editor/extractFrontmatter';
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
-import { type EditorModel, type EditorNode } from '../../editor/pageView';
-import {
-  createProjectPage,
-  createProjectPageFolder,
-  deleteProjectPage,
-  deleteProjectPageFolder,
-  moveProjectPage,
-  readSampleEntry,
-  renameProjectPageFolder,
-} from '../../ipc/appBridge';
+import { type EditorNode } from '../../editor/pageView';
+import { createProjectPage, createProjectPageFolder, moveProjectPage, readSampleEntry, renameProjectPageFolder } from '../../ipc/appBridge';
 import { withPrunedImports, schemaFor, withClassField } from '../model/pageGestures';
 import { markdownLayoutGesture, withImportsGesture, layoutWrapperGesture } from '../model/appKeys';
+import { selectedPseudo, structuralSelection } from '../model/selectionStructure';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -42,11 +40,20 @@ import {
   useMenuShortcuts,
   useInteractivePreview,
   useEscapeKeys,
+  usePreviewKey,
   useRoutes,
   useCollections,
   useSampleEntries,
+  useSampleValues,
   useQueryCleanup,
 } from './appShortcuts';
+import { useScopeSamples } from './scopeSamples';
+import { useDesktopProjectSources, useImportedValues } from './appImportedValues';
+import { newPropGesture, releasedRestGesture } from '../model/newPropGesture';
+import type { PropDeclaration } from '../../editor/propDeclaration';
+import { err, ok, type Result } from '../../../shared/core/result';
+import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
+import { createPageTemplate } from '../../ipc/pageTemplateBridge';
 
 // Shortcuts, previews and the data the page reads.
 export function useShortcuts(
@@ -61,11 +68,16 @@ export function useShortcuts(
   useMenuShortcuts(lifecycle, coreState, insertItemScope, nodeEdits, history);
   const interactivePreview = useInteractivePreview(coreState, navigation);
   useEscapeKeys(coreState, navigation, interactivePreview);
+  usePreviewKey(navigation, interactivePreview, coreState);
   const routes = useRoutes(coreState);
   useCollections(coreState);
   useSampleEntries(coreState, routes);
+  useSampleValues(coreState, routes);
+  useScopeSamples(coreState, routes);
+  const importedValues = useImportedValues(coreState, routes);
+  const projectSources = useDesktopProjectSources(coreState, routes);
   useQueryCleanup(routes, history);
-  return { ...insertItemScope, ...interactivePreview, ...routes };
+  return { ...insertItemScope, ...interactivePreview, ...routes, importedValues, projectSources };
 }
 
 // Changing the page’s layout.
@@ -79,9 +91,7 @@ export function useLayoutChange(
   const { commitEdit } = history;
 
   const isMarkdownFormatRef = useRef(false);
-  isMarkdownFormatRef.current =
-    pageState?.editable === true &&
-    (pageState.model.format === 'md' || pageState.model.format === 'mdx');
+  isMarkdownFormatRef.current = pageState?.editable === true && (pageState.model.format === 'md' || pageState.model.format === 'mdx');
 
   // The latest layout change, as an identity token (see pageLoadRef).
   const layoutSeq = useRef<object>({});
@@ -93,9 +103,7 @@ export function useLayoutChange(
       // from the `layout:` frontmatter key, as a path relative to the file.
       // Same picker, different place to write the answer.
       if (isMarkdownFormatRef.current) {
-        const layout = layoutName
-          ? scan.layouts.find((candidate) => candidate.name === layoutName)
-          : undefined;
+        const layout = layoutName ? scan.layouts.find((candidate) => candidate.name === layoutName) : undefined;
         if (layoutName && !layout) {
           return;
         }
@@ -153,7 +161,8 @@ export function usePageCreation(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
-  const { currentPage, projectRef, scan, setCurrentPage, setPageState } = coreState;
+  const translate = useTranslate();
+  const { devStatus, devUrl, projectRef, scan } = coreState;
   const { rescan, showToast } = lifecycle;
   const { selectPage } = navigation;
 
@@ -176,49 +185,37 @@ export function usePageCreation(
           // Opening a page reports its own failures.
           void selectPage(page);
         }
-        showToast(`Created ${name}.astro`, 'success');
+        showToast(translate('shell.pages.created', { name: `${name}.astro` }), 'success');
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');
       }
     },
-    [scan.layouts, rescan, selectPage, showToast, projectRef],
+    [scan.layouts, rescan, selectPage, showToast, projectRef, translate],
   );
 
-  const deletePage = useCallback(
-    async (page: ScanPage) => {
-      if (
-        !(await confirmDialog({
-          title: `Delete ${page.name}?`,
-          body:
-            'This removes the file from disk. ' +
-            'It can be brought back from History if it was saved in a version.',
-          confirmLabel: 'Delete page',
-          danger: true,
-        }))
-      ) {
-        return;
-      }
+  // Answers what went wrong for the form to show, and keeps the form open for it.
+  const createTemplate = useCallback(
+    async (draft: PageTemplateDraft, keyCopy: ConnectionKeyCopy | undefined): Promise<string | undefined> => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        return;
+        return translate('shell.pages.openProjectFirst');
       }
-      await deleteProjectPage(page.path);
+      const created = await createPageTemplate(projectPath, draft, devStatus === 'on' ? devUrl : undefined, keyCopy);
+      if (!created.ok) {
+        return created.message;
+      }
       const result = await rescan(projectPath);
-      if (currentPage?.path === page.path) {
-        const next = result.pages[0] || undefined;
-        if (next) {
-          // Opening a page reports its own failures.
-          void selectPage(next);
-        } else {
-          setCurrentPage(undefined);
-          setPageState(undefined);
-        }
+      const page = result.pages.find((candidate) => candidate.path === created.value.pagePath);
+      if (page) {
+        // Opening a page reports its own failures.
+        void selectPage(page);
       }
-      showToast(`Deleted ${page.name}`, 'success');
+      showToast(translate('shell.pages.created', { name: draft.route }), 'success');
+      return undefined;
     },
-    [currentPage, rescan, selectPage, showToast, projectRef, setCurrentPage, setPageState],
+    [devStatus, devUrl, rescan, selectPage, showToast, projectRef, translate],
   );
-  return { createPage, deletePage };
+  return { createPage, createTemplate };
 }
 
 // Moving pages and creating folders.
@@ -227,37 +224,36 @@ export function usePageMoves(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef, scan } = coreState;
-  const { rescan, showToast } = lifecycle;
+  const { rescan, showToast, flushSave } = lifecycle;
   const { selectPage } = navigation;
 
-  // Moves/renames a page (drag between folders, inline rename). `to` is the
+  // Moves/renames a page (drag between folders, rename dialog). `to` is the
   // new path relative to src/pages including the extension.
   const movePageTo = useCallback(
     async (page: ScanPage, to: string) => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        return;
+        throw new Error(translate('shell.pages.openProjectToRename'));
       }
-      try {
-        const newPath = await moveProjectPage(projectPath, page.path, to);
-        const result = await rescan(projectPath);
-        if (pageStateRef.current.currentPage?.path === page.path) {
-          const np = result.pages.find((candidate) => candidate.path === newPath);
-          if (np) {
-            // Opening a page reports its own failures.
-            void selectPage(np);
-          }
+      await flushSave();
+      const newPath = await moveProjectPage(projectPath, page.path, to);
+      window.dispatchEvent(new Event('stacki:pages-renamed'));
+      const result = await rescan(projectPath);
+      if (pageStateRef.current.currentPage?.path === page.path) {
+        const np = result.pages.find((candidate) => candidate.path === newPath);
+        if (np) {
+          // Opening a page reports its own failures.
+          void selectPage(np);
         }
-      } catch (error: unknown) {
-        showToast(cleanError(error), 'error');
       }
     },
-    [rescan, selectPage, showToast, pageStateRef, projectRef],
+    [rescan, selectPage, pageStateRef, projectRef, flushSave, translate],
   );
 
-  // Creates an (empty) folder with a placeholder name; the panel opens an
-  // inline rename right after. Returns the created folder's name.
+  // Creates an (empty) folder with a placeholder name; the panel opens a
+  // rename dialog right after. Returns the created folder's name.
   const createPageFolder = useCallback(async () => {
     const existing = new Set(scan.pageFolders || []);
     let name = 'new-folder';
@@ -286,90 +282,35 @@ export function useRenamePageFolder(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef } = coreState;
-  const { rescan, showToast } = lifecycle;
+  const { rescan, flushSave } = lifecycle;
   const { selectPage } = navigation;
 
   const renamePageFolder = useCallback(
     async (from: string, to: string) => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        return;
+        throw new Error(translate('shell.pages.openProjectToRename'));
       }
-      try {
-        await renameProjectPageFolder(projectPath, from, to);
-        const result = await rescan(projectPath);
-        // Re-select the current page if it lived inside the renamed folder.
-        const open = pageStateRef.current.currentPage;
-        if (open && !result.pages.some((candidate) => candidate.path === open.path)) {
-          const newName = open.name.startsWith(from + '/')
-            ? to + open.name.slice(from.length)
-            : undefined;
-          const np = newName && result.pages.find((candidate) => candidate.name === newName);
-          if (np) {
-            // Opening a page reports its own failures.
-            void selectPage(np);
-          }
+      await flushSave();
+      await renameProjectPageFolder(projectPath, from, to);
+      window.dispatchEvent(new Event('stacki:pages-renamed'));
+      const result = await rescan(projectPath);
+      // Re-select the current page if it lived inside the renamed folder.
+      const open = pageStateRef.current.currentPage;
+      if (open && !result.pages.some((candidate) => candidate.path === open.path)) {
+        const newName = open.name.startsWith(from + '/') ? to + open.name.slice(from.length) : undefined;
+        const np = newName && result.pages.find((candidate) => candidate.name === newName);
+        if (np) {
+          // Opening a page reports its own failures.
+          void selectPage(np);
         }
-      } catch (error: unknown) {
-        showToast(cleanError(error), 'error');
       }
     },
-    [rescan, selectPage, showToast, pageStateRef, projectRef],
+    [rescan, selectPage, pageStateRef, projectRef, flushSave, translate],
   );
   return { renamePageFolder };
-}
-
-// Deleting a page folder.
-export function useDeletePageFolder(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-  navigation: ReturnType<typeof useNavigation>,
-) {
-  const { pageStateRef, projectRef, setCurrentPage, setPageState } = coreState;
-  const { rescan, showToast } = lifecycle;
-  const { selectPage } = navigation;
-
-  const deletePageFolder = useCallback(
-    async (directory: string, pageCount: number) => {
-      const inside = pageCount
-        ? `the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it and `
-        : '';
-      if (
-        !(await confirmDialog({
-          title: `Delete the folder “${directory}”?`,
-          body: `This removes ${inside}the folder from disk.`,
-          confirmLabel: 'Delete folder',
-          danger: true,
-        }))
-      ) {
-        return;
-      }
-      const projectPath = projectRef.current?.path;
-      if (!projectPath) {
-        return;
-      }
-      try {
-        await deleteProjectPageFolder(projectPath, directory);
-        const result = await rescan(projectPath);
-        const open = pageStateRef.current.currentPage;
-        if (open && !result.pages.some((candidate) => candidate.path === open.path)) {
-          const next = result.pages[0] || undefined;
-          if (next) {
-            // Opening a page reports its own failures.
-            void selectPage(next);
-          } else {
-            setCurrentPage(undefined);
-            setPageState(undefined);
-          }
-        }
-      } catch (error: unknown) {
-        showToast(cleanError(error), 'error');
-      }
-    },
-    [rescan, selectPage, showToast, pageStateRef, projectRef, setCurrentPage, setPageState],
-  );
-  return { deletePageFolder };
 }
 
 // The page tree, and binding to a collection.
@@ -378,79 +319,110 @@ export function useSelectionModel(
   coreState: ReturnType<typeof useCoreState>,
   history: ReturnType<typeof useHistory>,
 ) {
+  const translate = useTranslate();
   const { model } = shortcuts;
   const { devStatus, devUrl, sampleAskedRef, selectedId, setCollectionSamples } = coreState;
-  const { commitEdit } = history;
+  const { holdForNextEdit } = history;
 
   // ----------------------------------------------------------------
   // Selection helpers
   // ----------------------------------------------------------------
 
   const tree = useMemo(() => createTreeIndex(model?.nodes), [model?.nodes]);
-  const selectedAncestors = useMemo(
-    () => (selectedId ? tree.ancestors(selectedId) || [] : []),
-    [tree, selectedId],
-  );
+  const selectedAncestors = useMemo(() => (selectedId ? tree.ancestors(selectedId) || [] : []), [tree, selectedId]);
 
   // The frontmatter as one editable code block (imports + everything else,
   // matching how the file is serialized).
   const frontmatterCode = useMemo(() => (model ? writeFrontmatter(model) : ''), [model]);
 
   // One entry of a collection, asked for when someone opens it in the picker.
-  // The ref is what stops a row that has no answer from asking again forever.
-  const requestCollectionSample = (name: string): void => {
+  // The ref stops a row from asking again while its question is out; a read
+  // that found nothing is forgotten, so opening the row again asks again
+  // rather than leaving it reading forever.
+  //
+  // With `index`, the entry at that position — the picker's entry pager asking
+  // for `stats[2]` — filed under its own key (entrySampleKey) so it never
+  // stands in for the collection's representative entry.
+  const requestCollectionSample = (name: string, index?: number): void => {
     if (!name || !devUrl || devStatus !== 'on') {
       return;
     }
-    if (sampleAskedRef.current.has(name)) {
+    assert(index === undefined || Number.isSafeInteger(index), 'requestCollectionSample: index is an integer');
+    assert(index === undefined || index >= 0, 'requestCollectionSample: index is not negative');
+    const key = index === undefined ? name : entrySampleKey(name, index);
+    if (sampleAskedRef.current.has(key)) {
       return;
     }
-    sampleAskedRef.current.add(name);
-    readSampleEntry(devUrl, name)
-      .then((entry) => setCollectionSamples((previous) => ({ ...previous, [name]: entry })))
-      .catch(() => {});
+    sampleAskedRef.current.add(key);
+    const forget = (): void => {
+      sampleAskedRef.current.delete(key);
+    };
+    readSampleEntry(devUrl, name, undefined, index)
+      .then((entry) => {
+        if (entry === undefined) {
+          forget();
+          return;
+        }
+        setCollectionSamples((previous) => ({ ...previous, [key]: entry }));
+      })
+      .catch(forget);
   };
 
   // Binding to a collection this page doesn't read yet: the query that fetches
   // it is written here, and the binding then names it like any other value.
   // A query already targeting that collection is reused — one page asking the
-  // same content twice is a page doing the same work twice.
+  // same content twice is a page doing the same work twice. The query is held
+  // for the field's own edit (holdForNextEdit), so the two are one undo step.
   const ensureCollectionQuery = (collection: string): string => {
-    const fm = model?.extraFrontmatter || '';
-    const existing = queriesInScope(fm).get(collection);
-    if (existing) {
-      return existing;
+    const added = withCollectionQuery(model ?? { imports: [], extraFrontmatter: '' }, collection);
+    if (model !== undefined && added.model !== model) {
+      // Step 9: the frontmatter gesture — the import and the query line, as the
+      // slot of the block that differs.
+      holdForNextEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (shown) => withCollectionQuery(shown, collection).model));
     }
-    const name = autoQueryName(collection, namesInScope(fm, model?.imports));
+    return added.name;
+  };
+  // Binding to a data file's export this file does not import yet: the import
+  // is added (or joined to the module's existing one) and held for the field's
+  // edit, as a collection's query is, and the binding names what it reads as.
+  const ensureDataImport = (need: ImportNeed): string => {
+    const added = withDataImport(model ?? { imports: [], extraFrontmatter: '' }, need);
+    if (model !== undefined && added.model !== model) {
+      holdForNextEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (shown) => withDataImport(shown, need).model));
+    }
+    return added.name;
+  };
+  // A prop declared from the binding picker of an open component: held for
+  // the field's edit that binds it, so Create is one undo step, and answered
+  // with the name the field binds.
+  const createBoundProp = (declaration: PropDeclaration): Result<string, string> => {
     if (!model) {
-      return name;
+      return err(translate('shell.loop.openComponent'));
     }
-    // Step 9: the frontmatter gesture — the import and the query line, as the
-    // slot of the block that differs.
-    const queried = (pageModel: EditorModel): EditorModel => {
-      const reads = pageModel.imports.some(
-        (i) => i.name === 'getCollection' && i.path === 'astro:content',
-      );
-      const entry = {
-        name: 'getCollection',
-        imported: 'getCollection',
-        path: 'astro:content',
-        quote: "'",
-        named: true,
-      };
-      const existing = pageModel.extraFrontmatter || '';
-      const gap = existing && !existing.endsWith('\n') ? '\n' : '';
-      // No trailing newline: the printer ends the line, and one added here
-      // would be left behind as a blank line when the query is taken back.
-      const query = `const ${name} = await getCollection('${collection}'); // ${QUERY_MARK}`;
-      const imports = reads ? pageModel.imports : [...pageModel.imports, entry];
-      return { ...pageModel, imports, extraFrontmatter: `${existing}${gap}${query}` };
-    };
-    commitEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, queried));
-    return name;
+    const made = newPropGesture(model, declaration, translate);
+    if (!made.ok) {
+      return made;
+    }
+    holdForNextEdit(made.value.gesture);
+    return ok(made.value.local);
+  };
+  // An attributes prop whose last spread is being disconnected: its removal is
+  // held for the spread's edit, so Disconnect is one undo step.
+  const releaseRestProp = (local: string): void => {
+    const source = coreState.pageStateRef.current.pageState?.source;
+    if (model === undefined || source === undefined) {
+      return;
+    }
+    const released = releasedRestGesture(model, local, source.slice(model.bodyStart ?? 0));
+    if (released !== undefined) {
+      holdForNextEdit(released);
+    }
   };
   return {
+    createBoundProp,
+    releaseRestProp,
     ensureCollectionQuery,
+    ensureDataImport,
     frontmatterCode,
     requestCollectionSample,
     selectedAncestors,
@@ -465,10 +437,11 @@ export function useCreateFrom(
   selectionModel: ReturnType<typeof useSelectionModel>,
   nodeEdits: ReturnType<typeof useNodeEdits>,
 ) {
+  const translate = useTranslate();
   const { model } = shortcuts;
-  const { classesForRef, classesTick, selectedId, setSelectedClasses } = coreState;
+  const { classesForRef, classesTick, pageStateRef, projectRef, pseudoPick, selectedId, setSelectedClasses } = coreState;
   const { frontmatterCode, tree } = selectionModel;
-  const { propsNeededFor } = nodeEdits;
+  const { extractionFor } = nodeEdits;
 
   const selectedNode: EditorNode | (FrontmatterSubject & { readonly value: string }) | undefined =
     model && selectedId
@@ -480,36 +453,57 @@ export function useCreateFrom(
   // for the selected element, or why there's nothing to make a component from.
   const createFrom = useMemo<ComponentCreationSource>(() => {
     if (!model) {
-      return { kind: 'unavailable', reason: 'Open a page to make components from it.' };
+      return { kind: 'unavailable', reason: translate('shell.create.openPage') };
+    }
+    // A pseudo-element's selection names its element, whose markup would move.
+    const pseudo = selectedPseudo(selectedId, pseudoPick);
+    if (pseudo !== undefined) {
+      return { kind: 'unavailable', reason: translate('shell.create.pseudo', { pseudo }) };
     }
     // The frontmatter row is no element to make a component from.
-    const node = selectedId && selectedId !== 'frontmatter' ? tree.node(selectedId) : undefined;
+    const selectionId = structuralSelection(selectedId, pseudoPick);
+    const node = selectionId === undefined ? undefined : tree.node(selectionId);
     if (!node) {
-      return { kind: 'unavailable', reason: 'Select an element on the canvas first.' };
+      return { kind: 'unavailable', reason: translate('shell.create.selectElement') };
     }
     if (node.kind === 'text' || node.kind === 'expr') {
       return {
         kind: 'unavailable',
-        reason: 'Select the element around this, not the text itself.',
+        reason: translate('shell.create.selectAround'),
       };
     }
     if (node.id === 'layout') {
-      return { kind: 'unavailable', reason: 'A layout is already a component of its own.' };
+      return { kind: 'unavailable', reason: translate('shell.create.layout') };
     }
     if (node.kind !== 'element' && node.kind !== 'component') {
-      return { kind: 'unavailable', reason: 'Select an element on the canvas first.' };
+      return { kind: 'unavailable', reason: translate('shell.create.selectElement') };
     }
     // Its first class is the name it already goes by — `.project-card` is a
     // better guess at a component name than `Div`. The tag is the fallback.
     const first = namesIn(node.props?.['class'])[0] || namesIn(node.props?.['class:list'])[0] || '';
+    // Reading the file walks all its code, and selection changes far more often
+    // than the dialog opens, so it waits for the first plan and is kept for the rest.
+    let read: ExtractionRead | undefined;
     return {
       kind: 'ready',
+      // i18n-ignore: a component name used as an identifier, not interface text.
       name: toComponentName(first) || toComponentName(node.name) || 'Component',
       label: `<${node.name}>`,
-      // The page values it reads, which the new component can take as props.
-      props: propsNeededFor(model, node),
+      plan: (asProp) => {
+        read ??= extractionFor(model, node);
+        return planExtraction(read, asProp);
+      },
+      // Read when the dialog opens, not on every selection: it walks the project's files.
+      styles: () => {
+        const projectPath = projectRef.current?.path;
+        const pagePath = pageStateRef.current.currentPage?.path;
+        if (projectPath === undefined || pagePath === undefined) {
+          return Promise.resolve([]);
+        }
+        return loadMoveStyleCandidates({ projectPath, pagePath, model, node });
+      },
     };
-  }, [selectedId, tree, model, propsNeededFor]);
+  }, [pseudoPick, selectedId, tree, model, extractionFor, translate, projectRef, pageStateRef]);
 
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and
@@ -529,10 +523,7 @@ export function useCreateFrom(
     if (classesForRef.current === selectedId) {
       return undefined;
     }
-    const timer = setTimeout(
-      () => setSelectedClasses((previous) => (previous.length ? [] : previous)),
-      600,
-    );
+    const timer = setTimeout(() => setSelectedClasses((previous) => (previous.length ? [] : previous)), 600);
     return () => clearTimeout(timer);
   }, [selectedId, classesTick, classesForRef, setSelectedClasses]);
   return { createFrom, selectedNode };
@@ -562,9 +553,7 @@ export function useSelectedSchema(
     if (isMarkdownFormatRef.current) {
       // Read back out of the frontmatter text, not a cached field: editing
       // that text by hand has to move the picker too.
-      const match = (model?.extraFrontmatter || '').match(
-        /^[ \t]*layout[ \t]*:[ \t]*(.+?)[ \t]*$/m,
-      );
+      const match = (model?.extraFrontmatter || '').match(/^[ \t]*layout[ \t]*:[ \t]*(.+?)[ \t]*$/m);
       const base = match?.[1]
         ?.replace(/^['"]|['"]$/g, '')
         .split('/')
@@ -599,17 +588,34 @@ export function useSelectedSchema(
           components: insertables,
         })
       : undefined;
+  // The same file without a guess: the Style panel reads its markup for green chips,
+  // and two components of one name must not be confused (componentFileOf).
+  const selectedComponentFile =
+    selectedNode?.kind === 'component'
+      ? componentFileOf({
+          name: selectedNode.name,
+          project: project?.path,
+          file: currentPage?.path,
+          imports: model?.imports ?? [],
+          components: insertables,
+        })
+      : undefined;
   const selectedSchema =
     selectedId === 'layout' && isMarkdownFormatRef.current
       ? schemaFor(scan.layouts.find((layout) => layout.name === currentLayoutName))
       : selectedFields(selectedNode, selectedComponent);
-  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent };
+  // Props the component's loop reads its settings from, drawn with the loop's editors.
+  const listProps = useListProps(project?.path, selectedComponent?.path);
+  // The layout's own fields whatever is selected: the Page settings dialog edits them beside the canvas selection.
+  const layoutComponent =
+    layoutNode?.kind === 'component'
+      ? componentReference({ name: layoutNode.name, project: project?.path, file: currentPage?.path, imports: model?.imports ?? [], components: insertables })
+      : undefined;
+  const layoutSchema = layoutNode === undefined ? [] : selectedFields(layoutNode, layoutComponent);
+  return { currentLayoutName, layoutNode, layoutComponent, layoutSchema, selectedSchema, selectedComponent, selectedComponentFile, listProps };
 }
 
-function selectedFields(
-  node: ReturnType<typeof useCreateFrom>['selectedNode'],
-  component: ScanComponent | undefined,
-): readonly FieldDefinition[] {
+function selectedFields(node: ReturnType<typeof useCreateFrom>['selectedNode'], component: ScanComponent | undefined): readonly FieldDefinition[] {
   if (!node) {
     return [];
   }

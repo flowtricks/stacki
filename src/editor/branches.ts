@@ -20,10 +20,7 @@ export interface BranchTree {
   readonly children?: readonly this[] | undefined;
 }
 
-const branchNamed = <Node extends BranchTree>(
-  node: Node | undefined,
-  name: 'then' | 'else',
-): Node | undefined => {
+const branchNamed = <Node extends BranchTree>(node: Node | undefined, name: 'then' | 'else'): Node | undefined => {
   if (!node || node.kind !== 'cond') {
     return undefined;
   }

@@ -1,18 +1,14 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 import { readFile, rm, stat } from 'node:fs/promises';
+import { MEDIA_EXT } from '../assets/assetStateTypes';
 import path from 'node:path';
 import { safePath } from '../project/projectServer';
 import { record, string } from '../../shared/validation';
-import type { RepositoryFile } from '../github/github';
+import type { PublishedFile } from '../publishing/publishSource';
 import { SerialQueue } from '../../shared/serialQueue';
 import { CleanupStore, assetDigest, gitBlob, type AssetBaseline } from './cleanupStore';
 import { referencedAssets } from './assetReferences';
-import {
-  assetPath,
-  parseCandidate,
-  type CleanupCandidate,
-  type CleanupReport,
-  type StorageInventory,
-} from './cleanupTypes';
+import { assetPath, parseCandidate, type CleanupCandidate, type CleanupReport, type StorageInventory } from './cleanupTypes';
 
 export class StorageCleanup {
   readonly store: CleanupStore;
@@ -46,11 +42,7 @@ export class StorageCleanup {
       const current = await this.candidates(inventory, baseline);
       const selected = requested.map((item) => {
         const candidate = current.find(
-          (candidate) =>
-            candidate.file === item.file &&
-            candidate.version === item.version &&
-            candidate.digest === item.digest &&
-            candidate.kind === item.kind,
+          (candidate) => candidate.file === item.file && candidate.version === item.version && candidate.digest === item.digest && candidate.kind === item.kind,
         );
         if (!candidate) {
           throw new Error('An upload or its references changed. Scan again before cleanup.');
@@ -65,39 +57,23 @@ export class StorageCleanup {
       };
     });
   }
-  async afterPublish(files: readonly RepositoryFile[], sha: string) {
-    const published = new Map(
-      files
-        .filter((file) => file.path.startsWith('public/') && !file.deleted)
-        .map((file) => [
-          file.path,
-          gitBlob(Buffer.from(file.content, file.encoding === 'base64' ? 'base64' : 'utf8')),
-        ]),
-    );
+  async afterPublish(files: readonly PublishedFile[], sha: string) {
+    const published = new Map(files.filter((file) => MEDIA_EXT.test(file.path)).map((file) => [file.path, file.sha]));
     return this.coordinator.run(async () => {
       await this.store.rememberPublished(sha, published);
       const inventory = await this.store.inventory();
-      const candidates = await this.candidates(inventory, { sha, assets: published }, true);
+      const candidates = await this.candidates(inventory, { sha, assets: published }, 'published');
       return this.remove(candidates);
     });
   }
-  private async candidates(
-    inventory: StorageInventory,
-    baseline: AssetBaseline,
-    publishedOnly = false,
-  ) {
-    const uploads = inventory.entries.filter((entry) =>
-      /^assets\/public\/[\w -]+\.(png|jpe?g|gif|webp|avif|mp4|pdf)$/i.test(entry.key),
-    );
+  private async candidates(inventory: StorageInventory, baseline: AssetBaseline, mode: 'review' | 'published' = 'review') {
+    // Uploads support nested public and source assets, including fonts, SVGs and audio.
+    const uploads = inventory.entries.filter((entry) => entry.key.startsWith('assets/'));
+    const uploadPaths = uploads.map((entry) => assetPath(entry.key.slice('assets/'.length)));
     if (uploads.length > 1000) {
       throw new Error('Upload inventory exceeds cleanup limit');
     }
-    const references = publishedOnly
-      ? new Set<string>()
-      : await referencedAssets(
-          this.root,
-          uploads.map((entry) => entry.key.slice(7)),
-        );
+    const references = mode === 'published' ? new Set<string>() : await referencedAssets(this.root, uploadPaths);
     const candidates: CleanupCandidate[] = [];
     let total = 0;
     for (const entry of uploads) {
@@ -113,13 +89,8 @@ export class StorageCleanup {
         continue;
       }
       const published = baseline.assets.get(file);
-      const kind =
-        published === gitBlob(bytes)
-          ? 'published'
-          : !published && !references.has(file)
-            ? 'unreferenced'
-            : undefined;
-      if (kind && (!publishedOnly || kind === 'published')) {
+      const kind = published === gitBlob(bytes) ? 'published' : !published && !references.has(file) ? 'unreferenced' : undefined;
+      if (kind && (mode === 'review' || kind === 'published')) {
         candidates.push({
           file,
           size: entry.size,
@@ -148,7 +119,7 @@ export class StorageCleanup {
         return {
           removed,
           freedBytes,
-          warning: error instanceof Error ? error.message : 'Cleanup stopped; scan again',
+          warning: error instanceof Error ? error.message : studioTranslate('studio.storage.cleanupStopped'),
         };
       }
     }
@@ -158,25 +129,14 @@ export class StorageCleanup {
     if (!baseline.sha) {
       return;
     }
-    const current = string(
-      record(
-        JSON.parse(await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')),
-      )['sha'],
-      40,
-    );
+    const current = string(record(JSON.parse(await readFile(path.join(this.root, '.stacki/studio/state/github-base.json'), 'utf8')))['sha'], 40);
     if (baseline.sha !== current) {
       throw new Error('Published revision changed. Sync and scan again.');
     }
   }
 }
-function reportFor(
-  inventory: StorageInventory,
-  candidates: readonly CleanupCandidate[],
-): CleanupReport {
-  const sum = (prefix: string) =>
-    inventory.entries
-      .filter((entry) => entry.key.startsWith(prefix))
-      .reduce((total, entry) => total + entry.size, 0);
+function reportFor(inventory: StorageInventory, candidates: readonly CleanupCandidate[]): CleanupReport {
+  const sum = (prefix: string) => inventory.entries.filter((entry) => entry.key.startsWith(prefix)).reduce((total, entry) => total + entry.size, 0);
   const totalBytes = sum('');
   const assetBytes = sum('assets/');
   const draftBytes = sum('documents/');

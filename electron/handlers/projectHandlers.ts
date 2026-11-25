@@ -1,34 +1,38 @@
 // The project IPC: opening and creating projects (from a dialog, the Astro
-// template, a starter or a scaffold), and installing their dependencies.
+// template or a starter), and installing their dependencies.
 
 import { gitErrorDetail } from '../git/git';
 import { toRecord } from '../../shared/core/record';
 import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn } from 'child_process';
-import { scaffoldProject } from '../project/scaffold';
-import { createStarter } from '../project/starter';
-import { isWin, errorMessage } from '../lib/mainHelpers';
+import * as os from 'os';
+import { writeNewProjectDefaults } from '../project/newProjectDefaults';
+import { createStarter, newSiteDirectory, runCreateCommand, startSiteHistory, STARTERS } from '../project/starter';
+import { createShadcnStarter, inspectShadcnPreset } from '../project/shadcnStarter';
+import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
-import { isAstroProject, detectPackageManager } from '../project/projectFiles';
+import { isAstroProject } from '../project/projectFiles';
+import { detectPackageManager, installArguments } from '../project/packageManager';
+import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
+import { folderOpenChoice, siteFolderChoice } from '../project/folderOpen';
+import { checkAstroCopyTarget, createAstroCopy } from '../project/astroCopyWrite';
+import { ASTRO_COPY_LIMITS, type AstroCopyInstall, type AstroCopyReply, type SiteFolderChoice } from '../../shared/ipc/astroCopy';
+import { err, ok } from '../../shared/core/result';
 
-export function registerProjectHandlers(
-  host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>,
-): void {
+export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
-  registerProjectHasNodeModulesHandlers(host);
+  registerProjectCreateStarterHandlers(host);
+  registerAstroCopyHandlers(host);
 }
 
-function registerProjectOpenDialogHandlers({
-  ipcMain,
-  showOpenDialog,
-}: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
+function registerProjectOpenDialogHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
   ipcMain.handle('project:openDialog', async () => {
     const result = await showOpenDialog({
-      title: 'Open an Astro project',
+      title: translateMain('dialog.open.project.title'),
       properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths.length) {
@@ -39,57 +43,28 @@ function registerProjectOpenDialogHandlers({
     if (!isAstroProject(directory)) {
       return {
         canceled: false as const,
-        error:
-          'That folder does not look like an Astro project ' +
-          '(no astro dependency or astro.config found).',
-      };
-    }
-    return { canceled: false as const, projectPath: directory };
-  });
-
-  ipcMain.handle('project:newDialog', async () => {
-    const result = await showOpenDialog({
-      title: 'Choose an empty folder for the new project',
-      properties: ['openDirectory', 'createDirectory'],
-    });
-    if (result.canceled || !result.filePaths.length) {
-      return { canceled: true as const };
-    }
-    const directory = result.filePaths[0];
-    assert(directory !== undefined, 'Accepted directory dialog must have a path');
-    const entries = fs.readdirSync(directory).filter((name) => !name.startsWith('.'));
-    if (entries.length > 0) {
-      return {
-        canceled: false as const,
-        error: 'That folder is not empty. Choose or create an empty folder for the new project.',
+        error: 'That folder does not look like an Astro project ' + '(no astro dependency or astro.config found).',
       };
     }
     return { canceled: false as const, projectPath: directory };
   });
 }
 
-function registerProjectCreateAstroHandlers({
-  ipcMain,
-  send,
-  showOpenDialog,
-}: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
+function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   // Runs the real `npm create astro@latest`, answering the questions the CLI
   // would ask interactively with the choices collected in the app's wizard.
   // Output is streamed to the renderer so the user sees the same progress the
-  // terminal would show. The chosen folder is the cwd and "." the target, so
-  // create-astro never has to guess a name from a parent directory.
+  // terminal would show. The wizard names the site, so its folder is made here,
+  // empty, and create-astro runs in it with "." as the target rather than
+  // guessing a name.
   ipcMain.handle('project:createAstro', async (_event, options) => {
-    const {
-      dir: directory,
-      template = 'basics',
-      install = true,
-      git = true,
-      ai = false,
-    } = options || {};
-    if (!directory || !fs.existsSync(directory)) {
-      throw new Error('Choose a folder for the new project first.');
-    }
+    const { parentPath, name, template = 'basics', install = true, git = true, ai = false, packageManager = 'npm' } = options || {};
+    const directory = newSiteDirectory(parentPath, name);
     ensureToolPath(); // npm is a Node shim — same PATH problem as astro
+    if (install) {
+      await requirePackageManager(packageManager);
+    }
+    fs.mkdirSync(directory);
 
     const args = [
       'create',
@@ -98,23 +73,29 @@ function registerProjectCreateAstroHandlers({
       '--',
       '--template',
       template,
-      install ? '--install' : '--no-install',
-      git ? '--git' : '--no-git',
+      '--no-install', // Stacki installs, then makes the first commit (finishNewSite).
+      '--no-git',
       ...(ai ? [] : ['--no-ai']),
       '--skip-houston',
       '--yes', // accept defaults for anything not covered above
     ];
 
     send('create:log', `> npm ${args.join(' ')}\n\n`);
-    await runCreateAstro({ send }, directory, args);
-    return { ok: true as const, installed: install };
+    await runCreateAstroInNewFolder({ send }, directory, args);
+    await finishNewSite({ send }, directory, {
+      install,
+      manager: packageManager,
+      history: git,
+      label: 'Astro', // i18n-ignore: the framework's name.
+    });
+    return { ok: true as const, installed: install, projectPath: directory };
   });
 
   // A folder to put a new project IN, rather than the project's own folder: the
   // starter arrives as a directory of its own, named by the user.
   ipcMain.handle('project:parentDialog', async () => {
     const result = await showOpenDialog({
-      title: 'Choose where the site should go',
+      title: translateMain('dialog.open.siteTarget.title'),
       properties: ['openDirectory', 'createDirectory'],
     });
     if (result.canceled || !result.filePaths.length) {
@@ -122,126 +103,208 @@ function registerProjectCreateAstroHandlers({
     }
     return { canceled: false as const, parentPath: result.filePaths[0] };
   });
+}
 
+function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>): void {
+  let creatingShadcn = false;
+  ipcMain.handle('project:inspectShadcnPreset', (_event, { preset }) => {
+    ensureToolPath();
+    return inspectShadcnPreset(preset);
+  });
   // Starting from a starter. The scaffolder, the first commit and the package's
   // name are in ./starter.js; what is here is the install that follows and the
   // log the wizard reads.
-  ipcMain.handle(
-    'project:createStarter',
-    async (_event, { starter = 'lumos', parentPath, name }) => {
-      ensureToolPath(); // npm and git are both on the PATH the Dock does not have
-      const result = await createStarter({
-        starter,
-        parentPath,
-        name,
-        onLog: (text) => send('create:log', text),
-      });
-      send('create:log', '\n> installing dependencies\n');
-      await installDependencies({ send }, result.projectPath);
+  ipcMain.handle('project:createStarter', async (_event, request) => {
+    ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+    const { packageManager = 'npm' } = request;
+    if (request.starter === 'shadcn') {
+      // The welcome windows share create:log, so only one attempt can own this stream.
+      if (creatingShadcn) {
+        throw new Error('A shadcn site is already being created.');
+      }
+      creatingShadcn = true;
+      try {
+        send('progress', { message: 'Creating the shadcn site…' });
+        return { ok: true, ...(await createShadcnStarter(request, (text) => send('create:log', text))) };
+      } finally {
+        send('progress', PROGRESS_CLEARED);
+        creatingShadcn = false;
+      }
+    }
+    const { starter = 'lumos', parentPath, name } = request;
+    await requirePackageManager(packageManager);
+    const result = await createStarter({
+      starter,
+      parentPath,
+      name,
+      onLog: (text) => send('create:log', text),
+    });
+    const label = STARTERS[starter]?.label ?? starter;
+    await finishNewSite({ send }, result.projectPath, {
+      install: true,
+      manager: packageManager,
+      history: true,
+      label,
+    });
+    return result;
+  });
+}
+
+function registerAstroCopyHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
+  // The Welcome screen's "Open from folder": an Astro project opens, a plain website is offered an
+  // Astro copy (shared/ipc/astroCopy.ts), and anything else is said to be neither.
+  ipcMain.handle('project:openSiteDialog', async (): Promise<SiteFolderChoice> => {
+    const result = await showOpenDialog({
+      title: translateMain('dialog.open.project.title'),
+      properties: ['openDirectory'],
+    });
+    const directory = result.filePaths[0];
+    if (result.canceled || directory === undefined) {
+      return { kind: 'canceled' };
+    }
+    return siteFolderChoice(path.resolve(directory));
+  });
+  // A folder dropped on the window: the renderer names it from the drag, and main decides what is there
+  // (electron/project/folderOpen.ts) before it is opened, copied or refused like the dialog's choice.
+  ipcMain.handle('project:inspectFolder', (_event, candidate) => folderOpenChoice(candidate));
+  ipcMain.handle('project:checkAstroCopy', (_event, request) => checkAstroCopyTarget(normalizedRequest(request)));
+  // The copy, then the steps every new site gets: Stacki's defaults, the install and a first commit.
+  // A manager that is missing fails before any folder exists; a failed install keeps the finished copy
+  // (opening it installs again) and says so.
+  ipcMain.handle('project:createAstroCopy', async (_event, input): Promise<AstroCopyReply> => {
+    const request = normalizedRequest(input);
+    ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+    const manager = detectPackageManager(request.sourcePath);
+    try {
+      await requirePackageManager(manager);
+    } catch {
+      return err({ code: 'package-manager-missing', manager });
+    }
+    const onLog = (text: string): void => send('create:log', text);
+    const made = await createAstroCopy(request, onLog);
+    if (!made.ok) {
+      return made;
+    }
+    const { projectPath, plan } = made.value;
+    let install: AstroCopyInstall = { kind: 'done' };
+    try {
+      await finishNewSite({ send }, projectPath, { install: true, manager, history: true, label: path.basename(request.sourcePath) });
+    } catch (error: unknown) {
       send('progress', PROGRESS_CLEARED);
-      return result;
-    },
-  );
-
-  ipcMain.handle('project:scaffold', async (_event, { dir: directory, name }) => {
-    scaffoldProject(directory, name);
-    await installDependencies({ send }, directory);
-    return { ok: true as const };
+      install = { kind: 'failed', detail: error instanceof Error ? error.message : String(error) };
+    }
+    return ok({
+      projectPath,
+      pageCount: plan.pageCount,
+      assetCount: plan.assetCount,
+      keptAsFiles: plan.keptAsFiles.slice(0, ASTRO_COPY_LIMITS.reportPathsMax),
+      keptAsFilesCount: plan.keptAsFiles.length,
+      skippedCount: plan.skippedCount,
+      install,
+    });
   });
 }
 
-function registerProjectHasNodeModulesHandlers({
-  ipcMain,
-  send,
-}: Pick<MainHost, 'ipcMain' | 'send'>): void {
-  ipcMain.handle('project:hasNodeModules', async (_event, projectPath) => {
-    return fs.existsSync(path.join(projectPath, 'node_modules'));
-  });
-
-  ipcMain.handle('project:install', async (_event, projectPath) => {
-    await installDependencies({ send }, projectPath);
-    return { ok: true as const };
-  });
+// The parsers check a path is absolute and normalized in shape; the platform's own rules decide here.
+function normalizedRequest<Request extends { readonly sourcePath: string; readonly parentPath: string }>(request: Request): Request {
+  if (path.resolve(request.sourcePath) !== request.sourcePath) {
+    throw new Error('Astro copy: the original folder path is not normalized');
+  }
+  if (path.resolve(request.parentPath) !== request.parentPath) {
+    throw new Error('Astro copy: the location path is not normalized');
+  }
+  return request;
 }
 
-export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string) {
+export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string, pm: PackageManager = detectPackageManager(directory)) {
   ensureToolPath(); // npm/pnpm/yarn are Node shims — same PATH problem as astro
-  const pm = detectPackageManager(directory);
   send('progress', { message: `Installing dependencies (${pm} install)…` });
-  const args = pm === 'npm' ? ['install', '--no-audit', '--no-fund'] : ['install'];
   try {
-    await run(isWin ? `${pm}.cmd` : pm, args, directory, {
+    await run(isWin ? `${pm}.cmd` : pm, [...installArguments(pm)], directory, {
       timeout: 10 * 60 * 1000,
       shell: isWin,
     });
   } catch (error: unknown) {
     if (toRecord(error)?.['code'] === 'ENOENT') {
-      throw new Error(
-        `This project uses ${pm} (found its lockfile), but ${pm} is not installed. ` +
-          'Install it and try again.',
-      );
+      throw new Error(`This project uses ${pm}, but ${pm} is not installed. Install it and try again.`);
     }
     throw new Error(`${pm} install failed: ${gitErrorDetail(error).slice(-400)}`);
   }
+}
+
+// A new site is only started when its manager can install it, so a missing one fails before
+// any folder exists. On Windows a missing command fails without ENOENT, so any failure counts.
+async function requirePackageManager(manager: PackageManager): Promise<void> {
+  try {
+    await run(isWin ? `${manager}.cmd` : manager, ['--version'], os.homedir());
+  } catch {
+    throw new Error(`${packageManagerLabel(manager)} is not installed. Install it or choose npm.`);
+  }
+}
+
+// The install comes first, so the site's first commit includes the lockfile. The site gets
+// its history even when the install fails; the install error still reaches the wizard.
+async function finishNewSite(
+  { send }: Pick<MainHost, 'send'>,
+  directory: string,
+  options: {
+    readonly install: boolean;
+    readonly manager: PackageManager;
+    readonly history: boolean;
+    readonly label: string;
+  },
+): Promise<void> {
+  const onLog = (text: string): void => send('create:log', text);
+  // Before the first commit, so the site starts with its setting in its history.
+  try {
+    const defaults = writeNewProjectDefaults(directory);
+    if (!defaults.written) {
+      onLog(`\n(${defaults.reason})\n`);
+    }
+  } catch (error: unknown) {
+    onLog(`\n(could not write the new-site settings: ${error instanceof Error ? error.message : String(error)})\n`);
+  }
+  try {
+    if (options.install) {
+      // A starter's npm lockfile would sit beside the chosen manager's own and misname it.
+      if (options.manager !== 'npm') {
+        fs.rmSync(path.join(directory, 'package-lock.json'), { force: true });
+      }
+      onLog(`\n> installing dependencies with ${packageManagerLabel(options.manager)}\n`);
+      await installDependencies({ send }, directory, options.manager);
+    }
+  } finally {
+    if (options.history) {
+      await startSiteHistory(directory, options.label, onLog);
+    }
+  }
+  send('progress', PROGRESS_CLEARED);
 }
 
 // Clears the progress line: no message (src/ipc/appBridge.ts, onAppProgress). IPC is
 // a structured clone, which keeps the absent value.
 export const PROGRESS_CLEARED = { message: undefined } as const;
 
+// A run that wrote nothing leaves no folder behind, so Try again can reuse the
+// name. Anything it did write stays for the user to inspect; nothing is deleted
+// recursively.
+async function runCreateAstroInNewFolder({ send }: Pick<MainHost, 'send'>, directory: string, args: readonly string[]): Promise<void> {
+  try {
+    await runCreateAstro({ send }, directory, args);
+  } catch (error: unknown) {
+    if (fs.readdirSync(directory).length === 0) {
+      fs.rmdirSync(directory);
+    }
+    throw error;
+  }
+}
+
 // The create-astro run itself, its output streamed to the wizard's log. It
 // settles once the CLI exits and a package.json has landed in `directory`.
-function runCreateAstro(
-  { send }: Pick<MainHost, 'send'>,
-  directory: string,
-  args: readonly string[],
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let proc;
-    try {
-      proc = spawn(isWin ? 'npm.cmd' : 'npm', [...args], {
-        cwd: directory,
-        shell: isWin,
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', CI: '1' },
-      });
-    } catch (error: unknown) {
-      reject(new Error(`Could not run npm: ${errorMessage(error)}`));
-      return;
-    }
-
-    let tail = '';
-    const onOut = (chunk: Buffer) => {
-      // create-astro animates with cursor moves and line clears; strip the
-      // escape codes so the log pane reads as plain text.
-      const text = chunk
-        .toString()
-        .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
-        .replace(/\r/g, '\n');
-      tail = (tail + text).slice(-4000);
-      send('create:log', text);
-    };
-    proc.stdout.on('data', onOut);
-    proc.stderr.on('data', onOut);
-    proc.on('error', (error) => {
-      reject(
-        new Error(
-          toRecord(error)?.['code'] === 'ENOENT'
-            ? 'npm could not be found. Install Node.js (which includes npm) and try again.'
-            : `Could not run npm: ${errorMessage(error)}`,
-        ),
-      );
-    });
-    proc.on('exit', (code) => {
-      if (code === 0) {
-        // Sanity-check that a project actually landed.
-        if (!fs.existsSync(path.join(directory, 'package.json'))) {
-          reject(new Error(`create-astro finished but no package.json appeared.\n\n${tail}`));
-          return;
-        }
-        resolve();
-      } else {
-        reject(new Error(`create-astro exited with code ${code}.\n\n${tail}`));
-      }
-    });
-  });
+async function runCreateAstro({ send }: Pick<MainHost, 'send'>, directory: string, args: readonly string[]): Promise<void> {
+  const npm = isWin ? 'npm.cmd' : 'npm';
+  await runCreateCommand(npm, args, directory, (text) => send('create:log', text));
+  if (!fs.existsSync(path.join(directory, 'package.json'))) {
+    throw new Error('create-astro finished but no package.json appeared.');
+  }
 }

@@ -1,12 +1,93 @@
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
+import { mergeToolPaths, pathEnvironmentValue, setPathEnvironment } from '../lib/platform';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
+import type { PackageManager } from '../../shared/properties/packageManager';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { DescribedError } from '../../shared/properties/describedError';
+import { appToolsDirectory, checkAppWrangler, wranglerToolRoot } from './publishToolInstall';
+
+export function projectHasWrangler(root: string): boolean {
+  const resolver = createRequire(path.join(root, 'package.json'));
+  try {
+    // Resolution from the site also supports dependencies hoisted by a workspace package manager.
+    // Node caches resolved paths for the life of the process, so a Wrangler removed since the
+    // last lookup still resolves; only a manifest that exists now counts.
+    return existsSync(resolver.resolve('wrangler/package.json'));
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'MODULE_NOT_FOUND') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Whether a publishing CLI can run for this site: in the site, beside Desktop or Studio, or on
+ * PATH. Call after ensureToolPath(), so a GUI launch searches the person's shell PATH too.
+ */
+export function publishToolInstalled(root: string, executable: 'wrangler' | 'vercel'): boolean {
+  if (existsSync(path.join(root, 'node_modules', '.bin', executable))) {
+    return true;
+  }
+  if (installedPublishTool(root, executable) !== undefined) {
+    return true;
+  }
+  return pathTool(executable, pathEnvironmentValue(process.env)) !== undefined;
+}
+
+/**
+ * Whether Wrangler can run for this site without looking on PATH: the site's own copy, Stacki's pinned copy, or one
+ * shipped beside Desktop or Studio. Sign-in uses this so an unknown global version never stands in for the pinned one.
+ */
+export function wranglerAvailableWithoutPATH(root: string): boolean {
+  if (projectHasWrangler(root)) {
+    return true;
+  }
+  return installedPublishTool(root, 'wrangler') !== undefined;
+}
+
+/** Where a global install without sudo puts the Vercel CLI: npm's prefix under ~/.local. */
+export function vercelInstallPrefix(home: string): string {
+  assert(path.isAbsolute(home), 'The install prefix starts from an absolute home');
+  return path.join(home, '.local');
+}
+
+/** Adds the directory a fresh global install wrote to, so this process finds the CLI at once. */
+export function addPublishToolDirectory(home: string): void {
+  const directory = process.platform === 'win32' ? '' : path.join(vercelInstallPrefix(home), 'bin');
+  if (directory) {
+    setPathEnvironment(process.env, mergeToolPaths(pathEnvironmentValue(process.env), [directory]));
+  }
+  assert(directory === '' || pathEnvironmentValue(process.env).includes(directory), 'The install directory is on PATH');
+}
+
+function pathTool(executable: string, pathValue: string): string | undefined {
+  const names = process.platform === 'win32' ? [`${executable}.cmd`, `${executable}.exe`] : [executable];
+  const directories = pathValue.split(path.delimiter).filter((directory) => directory.length > 0);
+  assert(directories.length <= 4096, 'A PATH is bounded');
+  for (const directory of directories) {
+    for (const name of names) {
+      const candidate = path.join(directory, name);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+// A publish command, or a package manager installing a publishing tool.
+export interface ExecutableCommand extends Omit<PublishCommand, 'executable'> {
+  readonly executable: PublishCommand['executable'] | PackageManager;
+}
 
 export function resolvePublishExecutable(
   root: string,
-  command: PublishCommand,
+  command: ExecutableCommand,
 ): {
   readonly executable: string;
   readonly arguments: readonly string[];
@@ -43,7 +124,7 @@ export function resolvePublishExecutable(
       return { executable: 'node.exe', arguments: [publishEntry(directory), ...command.arguments] };
     }
   }
-  throw new Error(`Install ${command.executable} in this project's development dependencies.`);
+  throw new DescribedError(described('publish.command.installTool', { executable: command.executable }));
 }
 
 function publishEntry(directory: string): string {
@@ -70,17 +151,19 @@ function installedPublishTool(root: string, executable: string): string | undefi
   }
   // Desktop and Studio can share an installed CLI without downloading code during discovery.
   const resolver = createRequire(path.join(process.cwd(), 'package.json'));
-  const directories = [
-    root,
-    process.cwd(),
-    path.join(process.cwd(), 'studio'),
-    path.dirname(process.argv[1] ?? process.cwd()),
-  ];
+  // The site's own copy wins, then the pinned copy Stacki installed for itself (publishToolInstall.ts), then a copy
+  // shipped beside Desktop or Studio. Only a whole, pinned app copy counts; a damaged one is reinstalled instead.
+  const tools = executable === 'wrangler' && checkAppWrangler(appToolsDirectory()).kind === 'ready' ? [wranglerToolRoot(appToolsDirectory())] : [];
+  const directories = [root, ...tools, process.cwd(), path.join(process.cwd(), 'studio'), path.dirname(process.argv[1] ?? process.cwd())];
   for (const directory of directories) {
     let manifest: string;
     try {
       manifest = resolver.resolve(`${executable}/package.json`, { paths: [directory] });
     } catch {
+      continue;
+    }
+    // A cached resolution can outlive a removed package; look further instead.
+    if (!existsSync(manifest)) {
       continue;
     }
     return publishEntry(path.dirname(manifest));

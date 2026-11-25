@@ -1,8 +1,4 @@
-import {
-  parseRepositoryRequest,
-  parseRepositoryResult,
-  type RepositoryRequest,
-} from '../../../vendor/stacki/shared/ipc/publishRepository';
+import { parseRepositoryRequest, parseRepositoryResult, type RepositoryRequest } from '../../../vendor/stacki/shared/ipc/publishRepository';
 import { request } from '../project/projectClient';
 
 export async function publishingRepositories(_project: string, input: RepositoryRequest) {

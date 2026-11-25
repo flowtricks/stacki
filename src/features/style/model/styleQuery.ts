@@ -3,9 +3,11 @@
 // for style values; selector matching and edit identity keep the original path.
 import { findNode, getHost } from './host';
 
-export function textStyleContext(path: string): { readonly textParentPath?: string } {
+// `nodeId` is the node asked about: the selection, or the element the panel is reading
+// ahead of a switch (computedStyle.ts prefetchComputedStyles).
+export function textStyleContext(path: string, nodeId: string | undefined): { readonly textParentPath?: string } {
   const host = getHost();
-  const selected = host.selectedId ? findNode(host.nodes, host.selectedId) : undefined;
+  const selected = nodeId ? findNode(host.nodes, nodeId) : undefined;
   if (selected?.kind !== 'text') {
     return {};
   }

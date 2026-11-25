@@ -9,25 +9,16 @@
 // against the bytes the checksum names before it builds the intent, so a
 // renderer whose text is not of those bytes is refused, not trusted.
 //
-// Bounds (AGENTS.md §10): the text is at most `sourceBytesMax` bytes, the diff
-// spends at most the shared diff budget (past it the patch is the one region
-// between the common prefix and suffix — coarser, never wrong), a patch has at
-// most `splicesPerIntentMax` hunks, and its replacement bytes are at most
-// `intentPayloadBytesMax`: past that it fails with `resource-limit`, never
-// truncated.
+// No size limit (owner requirement): a text of any size the platform can hold
+// as a string patches. The diff spends at most the shared diff budget; past it
+// the patch is the regions between the blocks the coarse diff proves equal
+// (diff.ts) — coarser, never wrong. Only a text longer than the platform's
+// string fails, with `resource-limit`, and nothing is ever truncated.
 import { assert } from '../core/assert';
-import { DIFF_BUDGET, diffBytes, diffHunks, type Hunk } from './diff';
+import { DIFF_BUDGET, coarseHunks, diffBytes, diffHunks, type Hunk } from './diff';
 import { LIMITS } from '../core/limits';
 import { err, ok, type Result } from '../core/result';
-import {
-  decodeUtf8,
-  encodeUtf8,
-  toByteSpan,
-  toByteString,
-  utf8ByteLength,
-  type ByteSpan,
-  type ByteString,
-} from '../core/span';
+import { decodeUtf8, encodeUtf8, toByteSpan, toByteString, utf8ByteLength, type ByteSpan, type ByteString } from '../core/span';
 
 /** Replace the baseline bytes at `span`, which hold `expected`, with `text`. */
 export interface CodeHunk {
@@ -47,26 +38,19 @@ const CONTINUATION_BYTES_MAX = 3;
 
 /** The patch from `baseline` to `next`, as ascending, disjoint hunks of the
  * baseline on code-point boundaries. Empty when the texts are equal. */
-export function diffCodePatch(
-  baseline: string,
-  next: string,
-): Result<readonly CodeHunk[], 'resource-limit'> {
+export function diffCodePatch(baseline: string, next: string): Result<readonly CodeHunk[], 'resource-limit'> {
   // Measured in UTF-16 units first: every unit is at least one byte, and the
   // text travels to main as one IPC field, bounded in units.
   if (next.length > LIMITS.ipcFieldCharsMax) {
     return err('resource-limit');
   }
   if (utf8ByteLength(next) > LIMITS.sourceBytesMax) {
-    return err('resource-limit'); // Not a file this app writes, patched or whole.
+    return err('resource-limit'); // Longer than the platform's string: no file this app can hold.
   }
   const source = encodeUtf8(baseline);
   const target = encodeUtf8(next);
   const regions = changedRegions(source, target);
   const hunks = regions.map((region) => codeHunk(source, target, region));
-  if (codePatchBytes(hunks) > LIMITS.intentPayloadBytesMax) {
-    return err('resource-limit');
-  }
-  assert(hunks.length <= LIMITS.splicesPerIntentMax, 'A patch fits one intent');
   assert(applyCodePatch(baseline, hunks) === next, 'The patch turns the baseline into the text');
   return ok(hunks);
 }
@@ -102,11 +86,7 @@ export function applyCodePatch(baseline: string, hunks: readonly CodeHunk[]): st
  * (an outside edit mapped through, an earlier visual edit rebased). Changes
  * that touch or overlap cannot be ordered and are a `merge-conflict`: the
  * user decides, the app never picks a side. */
-export function mergeTyping(
-  base: string,
-  ours: string,
-  theirs: string,
-): Result<string, 'merge-conflict' | 'resource-limit'> {
+export function mergeTyping(base: string, ours: string, theirs: string): Result<string, 'merge-conflict' | 'resource-limit'> {
   if (ours === base || ours === theirs) {
     return ok(theirs);
   }
@@ -128,9 +108,7 @@ export function mergeTyping(
       }
     }
   }
-  const both = [...mine.value, ...other.value].sort(
-    (left, right) => left.span.start - right.span.start,
-  );
+  const both = [...mine.value, ...other.value].sort((left, right) => left.span.start - right.span.start);
   const merged = applyCodePatch(base, both);
   assert(merged !== base, 'Two changes merged are a change');
   return ok(merged);
@@ -145,8 +123,8 @@ interface Region {
 
 // The regions a minimum edit script changes, inside the part the common prefix
 // and suffix leave, widened to whole code points and joined across small
-// islands. Past the diff budget, or with more regions than one intent carries,
-// the whole middle is one region.
+// islands. Past the diff budget the regions are the gaps between the blocks the
+// coarse diff proves equal.
 function changedRegions(source: ByteString, target: ByteString): readonly Region[] {
   const middle = trimmedMiddle(source, target);
   if (middle === undefined) {
@@ -157,15 +135,9 @@ function changedRegions(source: ByteString, target: ByteString): readonly Region
     toByteString(target.subarray(middle.target.start, middle.target.end)),
     DIFF_BUDGET,
   );
-  if (inner.tag === 'too-costly') {
-    return [middle];
-  }
-  const shifted = diffHunks(inner.diff).map((hunk) => shiftHunk(hunk, middle));
-  const regions = joinRegions(shifted.map((hunk) => widenRegion(source, target, hunk)));
-  if (regions.length > LIMITS.splicesPerIntentMax) {
-    return [middle];
-  }
-  return regions;
+  const hunks = inner.tag === 'computed' ? diffHunks(inner.diff) : coarseHunks(inner.diff);
+  const shifted = hunks.map((hunk) => shiftHunk(hunk, middle));
+  return joinRegions(shifted.map((hunk) => widenRegion(source, target, hunk)));
 }
 
 function trimmedMiddle(source: ByteString, target: ByteString): Region | undefined {
@@ -178,10 +150,7 @@ function trimmedMiddle(source: ByteString, target: ByteString): Region | undefin
     return undefined; // Equal.
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    source[source.length - 1 - suffix] === target[target.length - 1 - suffix]
-  ) {
+  while (suffix < shorter - prefix && source[source.length - 1 - suffix] === target[target.length - 1 - suffix]) {
     suffix++;
   }
   const region = {
@@ -193,14 +162,8 @@ function trimmedMiddle(source: ByteString, target: ByteString): Region | undefin
 
 function shiftHunk(hunk: Hunk, middle: Region): Region {
   return {
-    source: toByteSpan(
-      hunk.source.start + middle.source.start,
-      hunk.source.end + middle.source.start,
-    ),
-    target: toByteSpan(
-      hunk.target.start + middle.target.start,
-      hunk.target.end + middle.target.start,
-    ),
+    source: toByteSpan(hunk.source.start + middle.source.start, hunk.source.end + middle.source.start),
+    target: toByteSpan(hunk.target.start + middle.target.start, hunk.target.end + middle.target.start),
   };
 }
 
@@ -265,9 +228,7 @@ function joinRegions(regions: readonly Region[]): readonly Region[] {
 }
 
 function codeHunk(source: ByteString, target: ByteString, region: Region): CodeHunk {
-  const expected = decodeUtf8(
-    toByteString(source.subarray(region.source.start, region.source.end)),
-  );
+  const expected = decodeUtf8(toByteString(source.subarray(region.source.start, region.source.end)));
   const text = decodeUtf8(toByteString(target.subarray(region.target.start, region.target.end)));
   assert(expected.ok, 'A widened region holds whole code points of the baseline');
   assert(text.ok, 'A widened region holds whole code points of the text');

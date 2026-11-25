@@ -24,6 +24,19 @@ const path = require('path');
 const { readAppSource, readSource, sourceBlock } = require('../../helpers/sourceText.js');
 const { repoPath } = require('../../helpers/sources.js');
 
+// The dialog's half of a plan: what the rows show, with the rest of the plan empty.
+const dialogPlan = (names, locked, asProp, notes = {}) => ({
+  values: names.map((name) => {
+    if (locked[name] !== undefined) {
+      return { kind: 'locked', name, reason: locked[name] };
+    }
+    return asProp.has(name) ? { kind: 'prop', name } : { kind: 'move', name, note: notes[name] };
+  }),
+  props: [],
+  moved: { imports: [], code: '' },
+  parent: { imports: [], extraFrontmatter: '' },
+});
+
 const failures = [];
 let checked = 0;
 const check = (what, condition, detail) => {
@@ -50,12 +63,7 @@ const check = (what, condition, detail) => {
   });
   const { toComponentName, componentNameError } = require(namesBundle);
 
-  const named = (input, want) =>
-    check(
-      `"${input}" is saved as ${want}`,
-      toComponentName(input) === want,
-      toComponentName(input),
-    );
+  const named = (input, want) => check(`"${input}" is saved as ${want}`, toComponentName(input) === want, toComponentName(input));
   named('Component name', 'ComponentName');
   named('project card', 'ProjectCard');
   named('Card', 'Card');
@@ -119,26 +127,10 @@ const check = (what, condition, detail) => {
     check(why, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
   };
 
-  reads(
-    elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'title' }]),
-    ['title'],
-    'an expression names a prop',
-  );
-  reads(
-    elementNode('a', { href: { type: 'expr', value: 'link' } }),
-    ['link'],
-    'and so does an expression prop',
-  );
-  reads(
-    elementNode('p', {}, [{ id: 't', kind: 'text', value: 'You have {count} of them' }]),
-    ['count'],
-    'and a hole in a text run',
-  );
-  reads(
-    elementNode('div', {}, [{ id: 'c', kind: 'cond', test: 'show', children: [] }]),
-    ['show'],
-    'and a condition',
-  );
+  reads(elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'title' }]), ['title'], 'an expression names a prop');
+  reads(elementNode('a', { href: { type: 'expr', value: 'link' } }), ['link'], 'and so does an expression prop');
+  reads(elementNode('p', {}, [{ id: 't', kind: 'text', value: 'You have {count} of them' }]), ['count'], 'and a hole in a text run');
+  reads(elementNode('div', {}, [{ id: 'c', kind: 'cond', test: 'show', children: [] }]), ['show'], 'and a condition');
   reads(
     elementNode('ul', {}, [
       {
@@ -180,47 +172,17 @@ const check = (what, condition, detail) => {
   );
   // The other way round: extracting from INSIDE a loop, the item is a value the
   // page has at that spot, and the instance can pass it straight back in.
-  reads(
-    elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]),
-    [],
-    'a name not in scope is not a prop',
-  );
+  reads(elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]), [], 'a name not in scope is not a prop');
   check(
     'an ancestor loop item is, since the instance sits inside that loop',
-    JSON.stringify(
-      propsForExtraction(elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]), [
-        ...scope,
-        'item',
-      ]),
-    ) === '["item"]',
-    JSON.stringify(
-      propsForExtraction(elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]), [
-        ...scope,
-        'item',
-      ]),
-    ),
+    JSON.stringify(propsForExtraction(elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]), [...scope, 'item'])) === '["item"]',
+    JSON.stringify(propsForExtraction(elementNode('li', {}, [{ id: 'x', kind: 'expr', value: 'item.name' }]), [...scope, 'item'])),
   );
 
-  reads(
-    elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'post.data.title' }]),
-    ['post'],
-    'a chain is one prop, its root',
-  );
-  reads(
-    elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'Math.max(1, 2)' }]),
-    [],
-    'a global is not a prop',
-  );
-  reads(
-    elementNode('h2', { class: { type: 'string', value: 'title' } }),
-    [],
-    'nor is a word that only looks like one',
-  );
-  reads(
-    elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: '"title"' }]),
-    [],
-    'nor one inside a string',
-  );
+  reads(elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'post.data.title' }]), ['post'], 'a chain is one prop, its root');
+  reads(elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: 'Math.max(1, 2)' }]), [], 'a global is not a prop');
+  reads(elementNode('h2', { class: { type: 'string', value: 'title' } }), [], 'nor is a word that only looks like one');
+  reads(elementNode('h2', {}, [{ id: 'e', kind: 'expr', value: '"title"' }]), [], 'nor one inside a string');
   reads(
     elementNode('div', {}, [
       { id: 'a', kind: 'expr', value: 'count' },
@@ -287,27 +249,11 @@ const check = (what, condition, detail) => {
     nodes: [card],
     imports,
   });
-  check(
-    'the file lands in src/components under its own name',
-    made.rel === 'src/components/ProjectCard.astro',
-    made.rel,
-  );
+  check('the file lands in src/components under its own name', made.rel === 'src/components/ProjectCard.astro', made.rel);
   check('the markup comes across', /<article class="project-card">/.test(made.text), made.text);
-  check(
-    'all of it',
-    /<h2>Title<\/h2>/.test(made.text) && /<Button label="Go"/.test(made.text),
-    made.text,
-  );
-  check(
-    'the import it needs comes with it',
-    /import Button from '\.\/Button\.astro'/.test(made.text),
-    made.text,
-  );
-  check(
-    're-aimed from the new file rather than copied from the page',
-    !/\.\.\/components\/Button/.test(made.text),
-    made.text,
-  );
+  check('all of it', /<h2>Title<\/h2>/.test(made.text) && /<Button label="Go"/.test(made.text), made.text);
+  check('the import it needs comes with it', /import Button from '\.\/Button\.astro'/.test(made.text), made.text);
+  check('re-aimed from the new file rather than copied from the page', !/\.\.\/components\/Button/.test(made.text), made.text);
   check("an import it doesn't use is left behind", !/Hero/.test(made.text), made.text);
 
   // Aliases and packages mean the same thing from anywhere — copied as written.
@@ -318,11 +264,7 @@ const check = (what, condition, detail) => {
     nodes: [{ id: 'x', kind: 'component', name: 'Icon', props: {}, children: undefined }],
     imports,
   });
-  check(
-    'an alias import is copied exactly as written',
-    /import Icon from '@\/components\/Icon\.astro'/.test(withAlias.text),
-    withAlias.text,
-  );
+  check('an alias import is copied exactly as written', /import Icon from '@\/components\/Icon\.astro'/.test(withAlias.text), withAlias.text);
 
   // A page in a subfolder: the relative path has further to travel.
   const deep = componentFile({
@@ -332,11 +274,7 @@ const check = (what, condition, detail) => {
     nodes: [{ id: 'y', kind: 'component', name: 'Button', props: {}, children: undefined }],
     imports: [{ name: 'Button', path: '../../components/Button.astro' }],
   });
-  check(
-    'a path written from a nested page still points at the same file',
-    /import Button from '\.\/Button\.astro'/.test(deep.text),
-    deep.text,
-  );
+  check('a path written from a nested page still points at the same file', /import Button from '\.\/Button\.astro'/.test(deep.text), deep.text);
 
   // The props it was told to take: a destructure off Astro.props, which is both
   // Astro's convention and what this app's own props panel reads back.
@@ -356,25 +294,14 @@ const check = (what, condition, detail) => {
     imports: [],
     props: ['title', 'items'],
   });
-  check(
-    'the component takes its props off Astro.props',
-    /const \{ title, items \} = Astro\.props;/.test(withProps.text),
-    withProps.text,
-  );
-  check(
-    'above the markup that reads them',
-    withProps.text.indexOf('Astro.props') < withProps.text.indexOf('<h2'),
-    withProps.text,
-  );
+  check('the component takes its props off Astro.props', /const \{ title, items \} = Astro\.props;/.test(withProps.text), withProps.text);
+  check('above the markup that reads them', withProps.text.indexOf('Astro.props') < withProps.text.indexOf('<h2'), withProps.text);
   check(
     'and the props panel can read them back',
     (() => {
       const { parsePropSchema } = require(repoPath('dist/electron/parse/astroParser.js'));
       const schema = parsePropSchema(withProps.text);
-      return (
-        schema.some((field) => field.name === 'title') &&
-        schema.some((field) => field.name === 'items')
-      );
+      return schema.some((field) => field.name === 'title') && schema.some((field) => field.name === 'items');
     })(),
     '',
   );
@@ -386,11 +313,7 @@ const check = (what, condition, detail) => {
     nodes: [{ id: 'd', kind: 'element', name: 'div', props: {}, children: [] }],
     props: ['ok', 'not a name', '', 'post.data'],
   });
-  check(
-    'only real names reach the destructure',
-    /const \{ ok \} = Astro\.props;/.test(junkProps.text),
-    junkProps.text,
-  );
+  check('only real names reach the destructure', /const \{ ok \} = Astro\.props;/.test(junkProps.text), junkProps.text);
 
   // Nothing to import → no empty frontmatter block on top of the file.
   const plain = componentFile({
@@ -418,16 +341,8 @@ const check = (what, condition, detail) => {
     () => componentFile({ projectPath: project, pagePath, name: 'card', nodes: [card] }),
     /capital/i,
   );
-  refuses(
-    'nor does a name with a space still in it',
-    () => componentFile({ projectPath: project, pagePath, name: 'Project Card', nodes: [card] }),
-    /capital/i,
-  );
-  refuses(
-    'and there has to be something to make it from',
-    () => componentFile({ projectPath: project, pagePath, name: 'Empty', nodes: [] }),
-    /nothing/i,
-  );
+  refuses('nor does a name with a space still in it', () => componentFile({ projectPath: project, pagePath, name: 'Project Card', nodes: [card] }), /capital/i);
+  refuses('and there has to be something to make it from', () => componentFile({ projectPath: project, pagePath, name: 'Empty', nodes: [] }), /nothing/i);
 
   write(made);
   refuses(
@@ -462,16 +377,8 @@ const check = (what, condition, detail) => {
   const root = reparsed.model.nodes.find((node) => node.kind === 'element');
   check('the written file parses back', !!root, JSON.stringify(reparsed.model.nodes));
   check('as the same element', root?.name === 'article', root?.name);
-  check(
-    'with its classes',
-    root?.props?.class?.value === 'project-card',
-    JSON.stringify(root?.props),
-  );
-  check(
-    'and its children',
-    (root?.children || []).length === 2,
-    JSON.stringify((root?.children || []).map((child) => child.name)),
-  );
+  check('with its classes', root?.props?.class?.value === 'project-card', JSON.stringify(root?.props));
+  check('and its children', (root?.children || []).length === 2, JSON.stringify((root?.children || []).map((child) => child.name)));
   check(
     'and the import is one the file itself declares',
     reparsed.model.imports.some((i) => i.name === 'Button'),
@@ -485,9 +392,7 @@ const check = (what, condition, detail) => {
   // same 23, found the same way, or the popup is missing something the count
   // promised and nothing says which of them is lying.
   {
-    const { componentUsage, countIn } = require(
-      repoPath('dist/electron/properties/componentUsage.js'),
-    );
+    const { componentUsage, countIn } = require(repoPath('dist/electron/properties/componentUsage.js'));
     const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-usage-'));
     const put = (rel, text) => {
       const abs = path.join(proj, rel);
@@ -503,10 +408,7 @@ const check = (what, condition, detail) => {
     // A component's own code talks about itself. Lumos's Card.astro warns
     // `'[lumos] <Card variant="…">'` three times in its frontmatter, and
     // counting the file's text as a whole read those as three more cards.
-    put(
-      'src/components/Talker.astro',
-      '---\nconsole.warn("[lib] <Section variant=\'a\'> needs a parent");\n---\n<Section />\n',
-    );
+    put('src/components/Talker.astro', '---\nconsole.warn("[lib] <Section variant=\'a\'> needs a parent");\n---\n<Section />\n');
     // Markdown pages render components too, and the palette counts them.
     put('src/pages/notes.md', '---\ntitle: Notes\n---\n\n<Section />\n');
     // A tag is a local binding, not a filename. Every page in a Lumos project
@@ -515,77 +417,35 @@ const check = (what, condition, detail) => {
     // reported 0 instances of a layout used on every page.
     put('tsconfig.json', '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }');
     put('src/layouts/BaseLayout.astro', '<html><slot /></html>\n');
-    put(
-      'src/pages/aliased.astro',
-      '---\nimport Layout from "@/layouts/BaseLayout.astro";\n---\n<Layout><p>hi</p></Layout>\n',
-    );
-    put(
-      'src/pages/relative.astro',
-      '---\nimport Shell from "../layouts/BaseLayout.astro";\n---\n<Shell />\n<Shell />\n',
-    );
+    put('src/pages/aliased.astro', '---\nimport Layout from "@/layouts/BaseLayout.astro";\n---\n<Layout><p>hi</p></Layout>\n');
+    put('src/pages/relative.astro', '---\nimport Shell from "../layouts/BaseLayout.astro";\n---\n<Shell />\n<Shell />\n');
     // And a file that means a DIFFERENT component by the same name.
-    put(
-      'src/pages/decoy-import.astro',
-      '---\nimport Section from "../components/other/Section.astro";\n---\n<Section />\n',
-    );
+    put('src/pages/decoy-import.astro', '---\nimport Section from "../components/other/Section.astro";\n---\n<Section />\n');
     put('src/components/other/Section.astro', '<div />\n');
     // Names that merely start the same are not this component.
     put('src/pages/decoys.astro', '<SectionList />\n<MySection />\n</Section>\n');
 
     const found = componentUsage({ projectPath: proj, name: 'Section', exclude: selfPath });
     const byRel = Object.fromEntries(found.files.map((file) => [file.rel, file]));
-    check(
-      'every file holding one is listed',
-      found.files.length === 5,
-      JSON.stringify(found.files.map((file) => file.rel)),
-    );
+    check('every file holding one is listed', found.files.length === 5, JSON.stringify(found.files.map((file) => file.rel)));
     check(
       'a name written in the frontmatter is code talking, not an instance',
       byRel['src/components/Talker.astro']?.count === 1,
       JSON.stringify(byRel['src/components/Talker.astro']),
     );
-    check(
-      'a markdown page counts — it renders components too',
-      byRel['src/pages/notes.md']?.count === 1,
-      JSON.stringify(byRel['src/pages/notes.md']),
-    );
-    check(
-      'with how many each holds',
-      byRel['src/pages/index.astro']?.count === 2,
-      JSON.stringify(byRel['src/pages/index.astro']),
-    );
+    check('a markdown page counts — it renders components too', byRel['src/pages/notes.md']?.count === 1, JSON.stringify(byRel['src/pages/notes.md']));
+    check('with how many each holds', byRel['src/pages/index.astro']?.count === 2, JSON.stringify(byRel['src/pages/index.astro']));
     check('the total is the number the palette shows', found.total === 8, String(found.total));
     check(
       'a page is known to be a page, a layout a layout',
-      byRel['src/pages/blog/post.astro']?.kind === 'page' &&
-        byRel['src/layouts/Base.astro']?.kind === 'layout',
+      byRel['src/pages/blog/post.astro']?.kind === 'page' && byRel['src/layouts/Base.astro']?.kind === 'layout',
       JSON.stringify(found.files),
     );
-    check(
-      'the busiest file leads',
-      found.files[0].rel === 'src/layouts/Base.astro',
-      found.files[0].rel,
-    );
-    check(
-      "a file with none of them isn't listed",
-      !byRel['src/components/Hero.astro'],
-      'Hero listed',
-    );
-    check(
-      'and neither is the component itself',
-      !byRel['src/components/Section.astro'],
-      'listed itself',
-    );
-    check(
-      'a longer name that starts the same is a different component',
-      !byRel['src/pages/decoys.astro'],
-      JSON.stringify(byRel['src/pages/decoys.astro']),
-    );
-    check(
-      'a closing tag is not an instance',
-      countIn('</Section>', 'Section') === 0,
-      String(countIn('</Section>', 'Section')),
-    );
+    check('the busiest file leads', found.files[0].rel === 'src/layouts/Base.astro', found.files[0].rel);
+    check("a file with none of them isn't listed", !byRel['src/components/Hero.astro'], 'Hero listed');
+    check('and neither is the component itself', !byRel['src/components/Section.astro'], 'listed itself');
+    check('a longer name that starts the same is a different component', !byRel['src/pages/decoys.astro'], JSON.stringify(byRel['src/pages/decoys.astro']));
+    check('a closing tag is not an instance', countIn('</Section>', 'Section') === 0, String(countIn('</Section>', 'Section')));
     check(
       'and neither is a mention up in the frontmatter',
       countIn('---\nconst a = "<Section />";\n---\n<Section />\n', 'Section') === 1,
@@ -595,16 +455,10 @@ const check = (what, condition, detail) => {
     // they cannot drift apart — which is the whole point of sharing it.
     check(
       'the palette counts with this same function',
-      /instancesIn\(text,\s*\{\s*file,\s*targetPath:\s*comp\.path/.test(
-        readSource('electron/handlers/projectScanHandlers.ts'),
-      ),
+      /instancesIn\(text,\s*\{\s*file,\s*targetPath:\s*comp\.path/.test(readSource('electron/handlers/projectScanHandlers.ts')),
       'project:scan counts instances its own way again',
     );
-    check(
-      'an unused component says so plainly',
-      componentUsage({ projectPath: proj, name: 'Hero' }).files.length === 0,
-      '',
-    );
+    check('an unused component says so plainly', componentUsage({ projectPath: proj, name: 'Hero' }).files.length === 0, '');
 
     // The layout every page uses under another name.
     const layout = componentUsage({
@@ -613,16 +467,8 @@ const check = (what, condition, detail) => {
       exclude: path.join(proj, 'src/layouts/BaseLayout.astro'),
     });
     const layoutBy = Object.fromEntries(layout.files.map((file) => [file.rel, file.count]));
-    check(
-      'a component imported under another name still counts',
-      layoutBy['src/pages/aliased.astro'] === 1,
-      JSON.stringify(layout.files),
-    );
-    check(
-      'however the import is written — alias or relative path',
-      layoutBy['src/pages/relative.astro'] === 2,
-      JSON.stringify(layout.files),
-    );
+    check('a component imported under another name still counts', layoutBy['src/pages/aliased.astro'] === 1, JSON.stringify(layout.files));
+    check('however the import is written — alias or relative path', layoutBy['src/pages/relative.astro'] === 2, JSON.stringify(layout.files));
     check('and the total is what the palette will show', layout.total === 3, String(layout.total));
     check(
       'a file that means a different component by that name is not counted',
@@ -679,7 +525,7 @@ const check = (what, condition, detail) => {
           ? {
               kind: 'ready',
               label: source.label || 'the selection',
-              props: source.props || [],
+              plan: (asProp) => dialogPlan(source.props || [], source.locked || {}, asProp, source.notes || {}),
               name: source.name,
             }
           : { kind: 'unavailable', reason: source.reason };
@@ -712,11 +558,7 @@ const check = (what, condition, detail) => {
     const makeButton = () => [...container.querySelectorAll('.panel-header button')].pop();
 
     await render({ reason: 'Select an element on the canvas first.' });
-    check(
-      'with nothing selected the button is dead',
-      makeButton()?.disabled === true,
-      String(makeButton()?.disabled),
-    );
+    check('with nothing selected the button is dead', makeButton()?.disabled === true, String(makeButton()?.disabled));
     // Its own tooltip, after the pointer rests on it — on the wrapper, since a
     // disabled button fires no pointer events and that's exactly when someone
     // needs telling why.
@@ -730,24 +572,15 @@ const check = (what, condition, detail) => {
     const tip = () => dom.window.document.querySelector('.rail-tooltip.below');
     check('nothing appears the instant it is hovered', !tip(), tip()?.textContent);
     await hover();
-    check(
-      'resting on it says what to do instead',
-      /select an element/i.test(tip()?.textContent || ''),
-      tip()?.textContent,
-    );
+    check('resting on it says what to do instead', /select an element/i.test(tip()?.textContent || ''), tip()?.textContent);
 
     await render({ name: 'ProjectCard', label: '<article>', props: [] });
-    check(
-      'with an element selected it is live',
-      makeButton()?.disabled === false,
-      String(makeButton()?.disabled),
-    );
+    check('with an element selected it is live', makeButton()?.disabled === false, String(makeButton()?.disabled));
     await hover();
     const createShortcut = process.platform === 'darwin' ? '⌘⇧A' : 'Ctrl+Shift+A';
     check(
       'and the tooltip names the shortcut that does the same thing',
-      /new component/i.test(tip()?.textContent || '') &&
-        (tip()?.textContent || '').includes(createShortcut),
+      /new component/i.test(tip()?.textContent || '') && (tip()?.textContent || '').includes(createShortcut),
       tip()?.textContent,
     );
     await act(async () => {
@@ -756,30 +589,16 @@ const check = (what, condition, detail) => {
     });
 
     const field = () => dom.window.document.querySelector('.modal input');
-    const createButton = () =>
-      [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) =>
-        /Create/.test(button.textContent),
-      );
+    const createButton = () => [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) => /Create/.test(button.textContent));
     check('the name is asked for', !!field(), 'no dialog');
-    check(
-      'prefilled with the name the element already goes by',
-      field()?.value === 'ProjectCard',
-      field()?.value,
-    );
+    check('prefilled with the name the element already goes by', field()?.value === 'ProjectCard', field()?.value);
     // …which is a name already taken, so it cannot be committed as it stands.
-    check(
-      'a name already in use blocks Create',
-      createButton()?.disabled === true,
-      String(createButton()?.disabled),
-    );
+    check('a name already in use blocks Create', createButton()?.disabled === true, String(createButton()?.disabled));
     check('and says so', /already/i.test(toastMessages()), toastMessages());
 
     const type = async (value) => {
       const element = field();
-      const setter = Object.getOwnPropertyDescriptor(
-        dom.window.HTMLInputElement.prototype,
-        'value',
-      ).set;
+      const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
       await act(async () => {
         setter.call(element, value);
         element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
@@ -788,132 +607,182 @@ const check = (what, condition, detail) => {
     };
 
     await type('Component name');
-    check(
-      'a typed name is left as typed while typing',
-      field()?.value === 'Component name',
-      field()?.value,
-    );
+    check('a typed name is left as typed while typing', field()?.value === 'Component name', field()?.value);
     check(
       'but the dialog shows what it will be saved as',
-      /ComponentName\.astro/.test(
-        dom.window.document.querySelector('.modal .hint-text')?.textContent || '',
-      ),
-      dom.window.document.querySelector('.modal .hint-text')?.textContent,
+      /ComponentName\.astro/.test(dom.window.document.querySelector('.modal .tip-anchor .info-hint-text')?.textContent || ''),
+      dom.window.document.querySelector('.modal .tip-anchor .info-hint-text')?.textContent,
     );
-    check(
-      'and it can be created',
-      createButton()?.disabled === false,
-      String(createButton()?.disabled),
-    );
+    check('and it can be created', createButton()?.disabled === false, String(createButton()?.disabled));
 
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check(
-      'creating passes the converted name',
-      created[0]?.name === 'ComponentName',
-      JSON.stringify(created),
-    );
+    check('creating passes the converted name', created[0]?.name === 'ComponentName', JSON.stringify(created));
     check('and the dialog closes', !dom.window.document.querySelector('.modal'), 'still open');
 
-    // ── The offer ───────────────────────────────────────────────────────────
-    // A piece that reads the page can take those values as props, and does
-    // unless you say otherwise.
+    // ── The choice ──────────────────────────────────────────────────────────
+    // A piece that reads the page takes that value's code with it unless you
+    // say otherwise: Move leads, and passing it in as a prop is the second option.
     created.length = 0;
     await render({ name: 'Card', label: '<article>', props: ['title', 'items'] });
     await act(async () => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    const offer = () => dom.window.document.querySelector('.modal .check-row');
-    check('the values it reads are offered as props', !!offer(), 'no offer');
+    const rows = () => [...dom.window.document.querySelectorAll('.modal .extract-value')];
+    const rowOf = (name) => rows().find((row) => row.querySelector('.extract-value-name')?.textContent === name);
+    check('each value it reads has a row', rows().length === 2, String(rows().length));
     check(
       'named, so you can see what it will take',
-      /title/.test(offer()?.textContent || '') && /items/.test(offer()?.textContent || ''),
-      offer()?.textContent,
+      !!rowOf('title') && !!rowOf('items'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
     );
-    check('taken by default', offer()?.querySelector('input')?.checked === true, 'unchecked');
+    const segment = (name, label) => [...(rowOf(name)?.querySelectorAll('[role="tab"]') || [])].find((tab) => tab.textContent === label);
+    check('Move is the default', segment('title', 'Move in')?.getAttribute('aria-selected') === 'true', rowOf('title')?.textContent);
+    check('no checkbox is left from before', !dom.window.document.querySelector('.modal input[type="checkbox"]'), 'a checkbox remains');
+    check('its name is highlighted code', !!rowOf('title')?.querySelector('code.code-inline'), rowOf('title')?.innerHTML);
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('so creating takes them', created[0]?.withProps === true, JSON.stringify(created));
+    check('so creating moves them', JSON.stringify(created[0]?.asProp) === '[]', JSON.stringify(created));
 
-    // Turned off, the markup moves as it is — the old behaviour, on purpose.
+    // Chosen, one value is passed in and the other still moves.
     created.length = 0;
     await act(async () => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     await act(async () => {
-      offer().querySelector('input').click();
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      segment('items', 'Pass as prop').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('and it shows as chosen', segment('items', 'Pass as prop')?.getAttribute('aria-selected') === 'true', rowOf('items')?.textContent);
+    check('the other value is untouched', segment('title', 'Move in')?.getAttribute('aria-selected') === 'true', rowOf('title')?.textContent);
+    await act(async () => {
+      createButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('which is passed through', JSON.stringify(created[0]?.asProp) === '["items"]', JSON.stringify(created));
+
+    // ── The layout ──────────────────────────────────────────────────────────
+    // One summary line, a bulk control, compact rows, the "also used here" sentence once
+    // as a tag (never a paragraph per row), and a list that scrolls on its own.
+    created.length = 0;
+    const noted = 'A copy stays on this page because it’s also used here.';
+    await render({ name: 'Card', label: '<article>', props: ['a', 'b', 'c'], notes: { a: noted, c: noted } });
+    await act(async () => {
+      makeButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    const modalText = () => dom.window.document.querySelector('.modal')?.textContent || '';
+    check('a one-line summary counts the values', /Reads 3 values/.test(modalText()), modalText());
+    check('no paragraph is repeated under each row', !dom.window.document.querySelector('.extract-value-note'), 'a per-row note remains');
+    check('the sentence is not drawn in the rows', !rows().some((row) => row.querySelector('.hint-text')), 'a row holds a paragraph');
+    check(
+      'rows that keep a copy carry a small tag',
+      rowOf('a')?.querySelector('.extract-value-tag')?.textContent.includes('Also used here') &&
+        !rowOf('b')?.querySelector('.extract-value-tag') &&
+        !!rowOf('c')?.querySelector('.extract-value-tag'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
+    );
+    check('the tag holds the full sentence for a tooltip', rowOf('a')?.querySelector('.info-hint-text')?.textContent === noted, rowOf('a')?.innerHTML);
+    check('a counts line says what moves and what is passed', /3 moving in, 0 passed as props/.test(modalText()), modalText());
+    const list = dom.window.document.querySelector('.extract-value-list');
+    check('the list is one scroll container of rows', !!list && list.querySelectorAll('.extract-value').length === 3, list?.innerHTML);
+    // Jsdom does no layout, so the guards against a clipped last row are the stylesheet's rules.
+    const css = readSource('src/app/styles.css');
+    const listRule = sourceBlock(css, css.indexOf('.extract-value-list {'));
+    check('the list scrolls inside a bounded height', /max-height:\s*\d+px/.test(listRule) && /overflow-y:\s*auto/.test(listRule), listRule);
+    check('with padding past the last row so it is never cut', /padding:\s*\d+px \d+px (1[0-9]|[2-9]\d)px/.test(listRule), listRule);
+    check('and rows snap so none stops half in view', /scroll-snap-type:\s*y/.test(listRule) && /scroll-snap-align:\s*start/.test(css), listRule);
+    check(
+      'the dialog is capped to the window with the footer outside the scroller',
+      /\.modal\.create-component \.modal-body\s*\{[^}]*overflow-y:\s*auto/.test(css) && !!dom.window.document.querySelector('.modal > .modal-footer'),
+      'no capped dialog',
+    );
+    check('the dialog never draws the primary button grey on hover', !/\.modal\.create-component[^{]*button\.primary:hover/.test(css), 'a hover rule');
+    const bulk = (label) => [...dom.window.document.querySelectorAll('.extract-bulk [role="tab"]')].find((tab) => tab.textContent === label);
+    check('a bulk control sits in the header', !!bulk('Move all') && !!bulk('Pass all as props'), modalText());
+    check('it starts on Move all', bulk('Move all')?.getAttribute('aria-selected') === 'true', modalText());
+    await act(async () => {
+      bulk('Pass all as props').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
     });
     check(
-      'and it can be turned off',
-      offer()?.querySelector('input')?.checked === false,
-      'still checked',
+      'Pass all sets every row at once',
+      ['a', 'b', 'c'].every((name) => segment(name, 'Pass as prop')?.getAttribute('aria-selected') === 'true'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
+    );
+    check('the counts follow', /0 moving in, 3 passed as props/.test(modalText()), modalText());
+    await act(async () => {
+      segment('b', 'Move in').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check(
+      'one row changed makes the bulk control read mixed',
+      !bulk('Move all')?.classList.contains('on') && !bulk('Pass all as props')?.classList.contains('on'),
+      modalText(),
     );
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('which is passed through', created[0]?.withProps === false, JSON.stringify(created));
+    check('the payload is the same as clicking each row', JSON.stringify(created[0]?.asProp) === '["a","c"]', JSON.stringify(created));
+
+    // A value that can't move has no choice to offer, and says why.
+    created.length = 0;
+    await render({ name: 'Card', label: '<article>', props: ['title', 'item'], locked: { item: 'It comes from the loop around this element.' } });
+    await act(async () => {
+      makeButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('a locked value has no choice', !rowOf('item')?.querySelector('[role="tab"]'), rowOf('item')?.innerHTML);
+    check('it says what happens', /Passed in as a prop/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
+    check('and why', /loop around this element/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
+    await act(async () => {
+      dom.window.document.querySelector('.modal-footer button').click();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
 
     // ── The shortcut ────────────────────────────────────────────────────────
     // ⌘⇧A brings this panel up and asks for the name in one press. It arrives
     // as a bumped number rather than a flag, so pressing it again after
     // cancelling asks again.
     await render({ name: 'Card', label: '<article>', props: [] });
-    check(
-      'nothing is open to start with',
-      !dom.window.document.querySelector('.modal'),
-      'a dialog was open',
-    );
+    check('nothing is open to start with', !dom.window.document.querySelector('.modal'), 'a dialog was open');
     request += 1;
     await render({ name: 'Card', label: '<article>', props: [] });
-    check(
-      'the shortcut asks for the name',
-      !!dom.window.document.querySelector('.modal'),
-      'no dialog',
-    );
+    check('the shortcut asks for the name', !!dom.window.document.querySelector('.modal'), 'no dialog');
     await act(async () => {
-      [...dom.window.document.querySelectorAll('.modal-footer button')]
-        .find((button) => /Cancel/.test(button.textContent))
-        .click();
+      [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) => /Cancel/.test(button.textContent)).click();
       await new Promise((resolve) => setTimeout(resolve, 5));
     });
     check('cancelling closes it', !dom.window.document.querySelector('.modal'), 'still open');
     request += 1;
     await render({ name: 'Card', label: '<article>', props: [] });
-    check(
-      'and pressing it again asks again',
-      !!dom.window.document.querySelector('.modal'),
-      'no dialog',
-    );
+    check('and pressing it again asks again', !!dom.window.document.querySelector('.modal'), 'no dialog');
     await act(async () => {
-      [...dom.window.document.querySelectorAll('.modal-footer button')]
-        .find((button) => /Cancel/.test(button.textContent))
-        .click();
+      [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) => /Cancel/.test(button.textContent)).click();
       await new Promise((resolve) => setTimeout(resolve, 5));
     });
     request += 1;
     await render({ reason: 'Select an element on the canvas first.' });
-    check(
-      'with nothing selected it asks nothing',
-      !dom.window.document.querySelector('.modal'),
-      'asked for a name with nothing to name',
-    );
+    check('with nothing selected it asks nothing', !dom.window.document.querySelector('.modal'), 'asked for a name with nothing to name');
 
     // The press itself is bound in the app, which this can only read.
     // The app shell and the modules it was split into (src/app).
     const appSource = readAppSource();
     // The whole `if` that tests for the key, body included, however it is wrapped.
-    const binding = sourceBlock(
-      appSource,
-      appSource.lastIndexOf('if (', appSource.indexOf("event.key.toLowerCase() === 'a'")),
-    );
+    const binding = sourceBlock(appSource, appSource.lastIndexOf('if (', appSource.indexOf("event.key.toLowerCase() === 'a'")));
     check('⌘⇧A is bound', /mod && event\.shiftKey[\s\S]*'a'/.test(binding), binding.slice(0, 120));
     check('to the Components panel', /setLeftTab\('components'\)/.test(binding), binding);
     check('and to the request this panel answers', /setCreateRequest/.test(binding), binding);
@@ -933,16 +802,11 @@ const check = (what, condition, detail) => {
       ],
     };
     await render({ reason: 'Select an element on the canvas first.' });
-    const countButton = () =>
-      [...container.querySelectorAll('.palette-instances')].find((button) =>
-        /2 instances/.test(button.textContent),
-      );
+    const countButton = () => [...container.querySelectorAll('.palette-instances')].find((button) => /2 instances/.test(button.textContent));
     check('the count is a control, not just text', !!countButton(), 'no button');
     check(
       'and a component nothing uses has nothing to open',
-      [...container.querySelectorAll('.palette-instances')].find((button) =>
-        /0 instances/.test(button.textContent),
-      )?.disabled === true,
+      [...container.querySelectorAll('.palette-instances')].find((button) => /0 instances/.test(button.textContent))?.disabled === true,
       'enabled with no instances',
     );
 
@@ -952,8 +816,7 @@ const check = (what, condition, detail) => {
     });
     const popup = () => dom.window.document.querySelector('.instances-popup');
     check('clicking it opens the list', !!popup(), 'no popup');
-    const rowText = () =>
-      [...popup().querySelectorAll('.instances-row')].map((row) => row.textContent.trim());
+    const rowText = () => [...popup().querySelectorAll('.instances-row')].map((row) => row.textContent.trim());
     check(
       'the instances on the open file come first, one row each',
       rowText()
@@ -963,8 +826,7 @@ const check = (what, condition, detail) => {
     );
     check(
       'then the other files, named and counted',
-      rowText().some((text) => /about/.test(text) && /4/.test(text)) &&
-        rowText().some((text) => /Hero/.test(text)),
+      rowText().some((text) => /about/.test(text) && /4/.test(text)) && rowText().some((text) => /Hero/.test(text)),
       rowText().join(' | '),
     );
     check(
@@ -975,16 +837,10 @@ const check = (what, condition, detail) => {
 
     // Each row is a way in.
     await act(async () => {
-      [...popup().querySelectorAll('.instances-row')]
-        .find((row) => /about/.test(row.textContent))
-        .click();
+      [...popup().querySelectorAll('.instances-row')].find((row) => /about/.test(row.textContent)).click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check(
-      'clicking a file opens it',
-      opened.join(',') === 'src/pages/about.astro',
-      opened.join(','),
-    );
+    check('clicking a file opens it', opened.join(',') === 'src/pages/about.astro', opened.join(','));
     check('and the popup gets out of the way', !popup(), 'still open');
 
     opened.length = 0;
@@ -996,11 +852,7 @@ const check = (what, condition, detail) => {
       popup().querySelectorAll('.instances-row')[0].click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check(
-      'clicking an instance on this page selects it',
-      opened.join(',') === 'node:n1',
-      opened.join(','),
-    );
+    check('clicking an instance on this page selects it', opened.join(',') === 'node:n1', opened.join(','));
 
     // ── Where the popup opens ───────────────────────────────────────────────
     // Against the row that was clicked. It used to be pushed up by a fixed
@@ -1065,11 +917,7 @@ const check = (what, condition, detail) => {
       dom.window.innerHeight = 0;
       dom.window.innerWidth = 0;
       const blind = await openAt({ left: 20, top: 700, bottom: 713 });
-      check(
-        'with no viewport to speak of it stays on its row',
-        blind.style.top === '719px',
-        blind.style.top,
-      );
+      check('with no viewport to speak of it stays on its row', blind.style.top === '719px', blind.style.top);
       await close();
       dom.window.innerHeight = 768;
       dom.window.innerWidth = 1200;
@@ -1084,16 +932,8 @@ const check = (what, condition, detail) => {
       countButton().click();
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    check(
-      'a failed look says it failed',
-      /couldn’t read the project/i.test(toastMessages()),
-      popup()?.textContent,
-    );
-    check(
-      'and never that the component is unused',
-      !/not used anywhere/i.test(popup()?.textContent || ''),
-      popup()?.textContent,
-    );
+    check('a failed look says it failed', /couldn’t read the project/i.test(toastMessages()), popup()?.textContent);
+    check('and never that the component is unused', !/not used anywhere/i.test(popup()?.textContent || ''), popup()?.textContent);
     await act(async () => {
       popup().querySelector('.instances-head button').click();
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -1107,11 +947,7 @@ const check = (what, condition, detail) => {
       countButton().click();
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    check(
-      'a component used nowhere says so',
-      /not used anywhere/i.test(popup()?.textContent || ''),
-      popup()?.textContent,
-    );
+    check('a component used nowhere says so', /not used anywhere/i.test(popup()?.textContent || ''), popup()?.textContent);
     await act(async () => {
       popup().querySelector('.instances-head button').click();
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -1124,15 +960,9 @@ const check = (what, condition, detail) => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check(
-      'markup that reads nothing is asked nothing',
-      !dom.window.document.querySelector('.modal .check-row'),
-      'offered props for markup with none',
-    );
+    check('markup that reads nothing is asked nothing', !dom.window.document.querySelector('.modal .extract-values'), 'offered a choice for markup with none');
     await act(async () => {
-      [...dom.window.document.querySelectorAll('.modal-footer button')]
-        .find((button) => /Cancel/.test(button.textContent))
-        .click();
+      [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) => /Cancel/.test(button.textContent)).click();
       await new Promise((resolve) => setTimeout(resolve, 5));
     });
 
@@ -1142,9 +972,7 @@ const check = (what, condition, detail) => {
   }
 
   if (failures.length) {
-    console.error(
-      `\ncomponent-create: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncomponent-create: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

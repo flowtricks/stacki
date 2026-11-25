@@ -4,11 +4,7 @@
 // the forms that must not count (comparisons, arrows, DOM writes, comments).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  countWholeFileWrites,
-  countTreeEdits,
-  countWrapperCalls,
-} from '#dist/scripts/gate/adapterSurface.js';
+import { countWholeFileWrites, countTreeEdits, countWrapperCalls } from '#dist/scripts/gate/adapterSurface.js';
 
 test('each rule of the written method counts one site', () => {
   const cases: readonly [string, number, number][] = [

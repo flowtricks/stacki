@@ -1,0 +1,266 @@
+/* The Page settings dialog. Sections are told apart by fills, never lines; long text clips with an ellipsis. */
+.modal.page-settings {
+  width: 460px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(640px, calc(100vh - 64px));
+}
+.page-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+.page-settings-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.page-settings-title,
+.page-settings-route {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-settings-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.page-settings-route {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.page-settings-actions {
+  display: flex;
+  gap: 2px;
+}
+.page-settings-tip {
+  display: inline-flex;
+}
+.page-settings-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+.page-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 16px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.page-settings-section {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+.page-settings-section h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.page-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.page-settings-field label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.page-settings-row {
+  display: flex;
+  gap: 6px;
+}
+.page-settings-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The action keeps its width; the field or dropdown beside it takes the rest and may shrink below its content
+   (a dropdown trigger is width: 100%, which as a flex basis would push the action out of the dialog). */
+.page-settings-row > .primary,
+.page-settings-row > .page-template-code-toggle {
+  flex: 0 0 auto;
+}
+
+/* Plain secondary text under the Folder dropdown, on the field's left edge: no fill, no padding. Its gap above is
+   the props-field label gap, the one step the card's rhythm already uses. */
+.page-settings-address {
+  margin-top: 5px;
+  max-width: 100%;
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-settings-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+.page-settings-reason {
+  color: var(--text-dim);
+}
+.page-settings-home {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.page-settings-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.page-settings-home-button {
+  align-self: flex-start;
+}
+.page-settings-home-button button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.page-settings-layout .panel-section {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.page-settings-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+.page-settings-confirm-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.page-settings-bullets {
+  margin: 0;
+  padding-inline-start: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.page-settings-review ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.page-settings-review li {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  min-width: 0;
+}
+.page-settings-review-place {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+.page-settings-review-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-family: var(--font-mono, monospace);
+}
+.page-settings-confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.page-settings-template-code {
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+/* Every editor in a section is sized by the section, never by its content: long prop names and values clip. */
+.page-settings-section > *,
+.page-settings-layout .panel-section,
+.page-settings-layout .panel-body {
+  min-width: 0;
+  max-width: 100%;
+}
+/* A prop name longer than the dialog is clipped at the section's edge instead of widening it. */
+.page-settings-layout .prop-label {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* The move's confirm, a popover beside the fields: the app's raised surface, filled, no border. */
+.page-settings-move {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  border-radius: 10px;
+  background: var(--panel-raised, #2a2a2a);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.page-settings-move-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  outline: none;
+  min-width: 0;
+}
+/* Both cards draw their fields as the Properties panel's props-field (label, 5px, control; 12px to the next group),
+   flush with the card's heading: the panel's own side margin would inset them from it. */
+.page-settings-section .props-field {
+  margin-inline-start: 0;
+  margin-inline-end: 0;
+}
+.page-settings-general {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.page-settings-general .props-field > input,
+.page-settings-general .props-field > .dd-trigger {
+  width: 100%;
+}
+/* The props panel's body scrolls in the side panel and keeps a gutter for its scrollbar; here the dialog's body is
+   the one scroller, so the props sit in the card at full width with no second gutter. */
+.page-settings-layout .panel-body {
+  overflow: visible;
+}

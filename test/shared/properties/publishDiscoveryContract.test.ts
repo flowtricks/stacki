@@ -2,10 +2,7 @@
 // Method: round-trip valid destinations, then corrupt identifiers, arrays, kinds and path fields.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  parseDiscoveryRequest,
-  parsePublishDiscovery,
-} from '#dist/shared/properties/publishDiscovery.js';
+import { parseDiscoveryRequest, parsePublishDiscovery } from '#dist/shared/properties/publishDiscovery.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 
 const ready = {
@@ -26,8 +23,9 @@ test('provider discovery round-trips through the shared IPC contract', () => {
     request,
   });
   assert.deepEqual(parsePublishDiscovery(ready), ready);
-  assert.deepEqual(parsePublishDiscovery({ kind: 'failed', message: 'Sign in first.' }), {
+  assert.deepEqual(parsePublishDiscovery({ kind: 'failed', reason: 'signed-out', message: 'Sign in first.' }), {
     kind: 'failed',
+    reason: 'signed-out',
     message: 'Sign in first.',
   });
   for (const input of [
@@ -64,7 +62,10 @@ test('discovery rejects malformed destinations and resource excess', () => {
         },
       ],
     },
-    { kind: 'failed', message: 123 },
+    { kind: 'failed', reason: 'signed-out', message: 123 },
+    // A failure must say why, so the panel can offer the matching fix.
+    { kind: 'failed', message: 'Sign in first.' },
+    { kind: 'failed', reason: 'offline', message: 'Sign in first.' },
   ]) {
     assert.throws(() => parsePublishDiscovery(input));
   }

@@ -27,10 +27,8 @@ export const noNull: RuleModule<MessageIds> = {
     docs: { description: '`undefined` is the only spelling of absence (AGENTS.md §6).' },
     messages: {
       nullLiteral:
-        'Use `undefined` for absence (AGENTS.md §6). Convert a platform null where it is ' +
-        'read (`?? undefined`) or compare it there with `=== null`.',
-      nullType:
-        'Types say absence with `undefined` (`T | undefined`), never `null` (AGENTS.md §6).',
+        'Use `undefined` for absence (AGENTS.md §6). Convert a platform null where it is ' + 'read (`?? undefined`) or compare it there with `=== null`.',
+      nullType: 'Types say absence with `undefined` (`T | undefined`), never `null` (AGENTS.md §6).',
     },
     schema: [],
   },

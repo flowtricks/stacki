@@ -1,0 +1,182 @@
+/* The sign-in choice: background fills only, no borders or dividers. */
+.studio-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.studio-auth-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.studio-auth-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #262626;
+  cursor: pointer;
+}
+.studio-auth-option:hover {
+  background: #2d2d2d;
+}
+.studio-auth-option[data-selected='true'] {
+  background: #20384d;
+}
+.studio-auth-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.studio-auth-option:has(input:focus-visible) {
+  outline: 2px solid #00a3ff;
+  outline-offset: 1px;
+}
+.studio-auth-option-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #333;
+  color: #e8e8e8;
+}
+.studio-auth-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.studio-auth-option-text strong {
+  font-size: 13px;
+  color: #f2f2f2;
+}
+.studio-auth-option-text span {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #aaa;
+}
+.studio-auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #222;
+}
+.studio-auth-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #c1c1c1;
+}
+.studio-auth-field input[type='text'] {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #333;
+  color: #f2f2f2;
+  font: inherit;
+  font-size: 13px;
+}
+.studio-auth-field[data-invalid='true'] input[type='text'] {
+  background: #4a2a2a;
+}
+.studio-auth-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #c1c1c1;
+}
+.studio-auth-notes h4 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  color: #e8e8e8;
+}
+.studio-auth-notes p {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.studio-auth-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.studio-auth-copy > :first-child {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #111;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+.studio-auth-copy button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* The sign-in row in Settings: the same fill, radius and inline padding as the status card above it, so both share
+   their left and right edges; the provider's mark on a tile, its name, then Change at the inline end. */
+.studio-auth-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding-block: 12px;
+  padding-inline: 16px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+/* The provider's logo sits straight on the row's fill, no tile, like the Studio mark above it; the box is 40px wide
+   so the provider name starts on the same line as "Stacki Studio" in the card. */
+.studio-auth-current-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 40px;
+  block-size: 24px;
+  color: var(--text);
+}
+.studio-auth-current-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.studio-auth-current-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.studio-auth-current > button {
+  flex-shrink: 0;
+  padding: 8px 14px;
+}
+
+/* The dialog can be taller than the window: the form scrolls, the header and buttons stay. */
+.studio-setup.studio-auth-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.studio-auth-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.studio-auth-content > p {
+  margin: 0 0 12px;
+}
+.studio-auth-dialog header {
+  padding-bottom: 8px;
+}
+.studio-auth-dialog footer {
+  justify-content: flex-end;
+}

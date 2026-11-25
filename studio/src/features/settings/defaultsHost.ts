@@ -1,9 +1,6 @@
-import { getEditorRole } from '../roles/roleStore';
-import {
-  parseDefaultsSource,
-  type DefaultsSnapshot,
-  type DefaultComponent,
-} from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { getStudioRole } from '../roles/roleStore';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { parseDefaultsSource, type DefaultsSnapshot, type DefaultComponent } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 import { loadProject } from '../project/projectClient';
 import { readMetadata, writeMetadata } from './metadataClient';
@@ -17,6 +14,7 @@ export const studioDefaultsHost = {
     const [project, stored] = await Promise.all([loadProject(), readMetadata('', 'components')]);
     const catalog: readonly DefaultComponent[] = project.components.map((component) => ({
       file: component.file,
+      ...(component.importPath === undefined ? {} : { importPath: component.importPath }),
       name: component.name,
       props: component.fields.map((field) => field.name),
       slots: component.slots,
@@ -32,8 +30,8 @@ export const studioDefaultsHost = {
     return { source: stored.source, config: parsed.value, catalog };
   },
   save: async (snapshot: DefaultsSnapshot): Promise<DefaultsSnapshot> => {
-    if (getEditorRole() === 'client') {
-      throw new Error('Component defaults are only editable in Designer mode.');
+    if (!can(getStudioRole(), 'component:edit')) {
+      throw new Error('Component defaults are only editable by a role that can edit components.');
     }
     const stored = await writeMetadata('', {
       kind: 'components',

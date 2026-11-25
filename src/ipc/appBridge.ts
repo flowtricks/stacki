@@ -1,41 +1,29 @@
-import {
-  parseAstroFileChanges,
-  type AstroFileChange,
-} from '../../shared/properties/astroFileChanges';
+import { sendPageEditWithRetry } from './saveRetry';
+import { parseAstroFileChanges, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
+import { parsePreviewHealth } from '../../shared/ipc/previewHealth';
 import type { Data } from '../../shared/core/boundary';
-import type {
-  IpcResults,
-  WireDataRecord,
-  WireInjectedRoute,
-  WireRouteParams,
-  WireUsageFile,
-} from '../../shared/ipc/ipcResults';
-import {
-  boolean,
-  count,
-  data,
-  dictionary,
-  list,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../shared/core/boundary';
+import type { IpcResults, WireDataRecord, WireInjectedRoute, WireRouteParams, WireUsageFile } from '../../shared/ipc/ipcResults';
+import { boolean, count, data, dictionary, digest, list, optional, pathText, record, text } from '../../shared/core/boundary';
+import type { Digest } from '../../shared/core/brand';
+import { COMPONENT_ACCESS_LIMITS } from '../../shared/properties/componentAccess';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
+import { parseScopeSamples } from '../../shared/page/previewScope';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
-import type { EditRequest } from '../../shared/engine/editRequest';
+import { parseClassUsageReply, type ClassUsageReply } from '../../shared/properties/classUsage';
 import {
-  parsePageEditResult,
-  type PageEditError,
-  type PageEdited,
-} from '../../shared/ipc/pageSave';
-import {
-  parsePreviewVerdict,
-  type PreviewRender,
-  type PreviewVerdict,
-} from '../../shared/page/previewToken';
+  parsePendingStyleMove,
+  parseStyleMoveResolution,
+  type PendingStyleMove,
+  type StyleMoveJournal,
+  type StyleMoveResolution,
+  type StyleMoveTarget,
+} from '../../shared/properties/styleMoveJournal';
+import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequest';
+import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
+import { parsePreviewVerdict, type PreviewRender, type PreviewVerdict } from '../../shared/page/previewToken';
 import type { Result } from '../../shared/core/result';
+import { parseOptionalMessageRef } from '../../shared/core/i18n/messageReference';
 
 export interface PageChangeEvent {
   readonly external: boolean;
@@ -56,13 +44,28 @@ export interface AppCollection {
   readonly count?: number;
 }
 
+interface CreateComponentImport {
+  readonly name?: string;
+  readonly path?: string;
+  readonly quote?: string;
+  readonly named?: boolean;
+  readonly imported?: string;
+  readonly typeOnly?: boolean;
+}
+
 interface CreateComponentInput {
   readonly projectPath: string;
   readonly pagePath: string;
   readonly name: string;
   readonly nodes: unknown;
-  readonly imports: readonly { readonly name?: string; readonly path?: string }[];
+  readonly imports: readonly CreateComponentImport[];
   readonly props: readonly string[];
+  /** Code moving out of the parent into the new file. */
+  readonly frontmatter: { readonly imports: readonly CreateComponentImport[]; readonly code: string };
+  /** Below the first component folder, `/`-separated; `''` is that folder itself. */
+  readonly folder: string;
+  /** The `<style>` node holding the CSS that moves in with the markup ("Move styles"), written after it; absent when none does. */
+  readonly style: unknown;
 }
 
 export function diagnoseProject(projectPath: string): Promise<IpcResults['dev:diagnose']> {
@@ -75,6 +78,16 @@ export function startProjectPreview(projectPath: string): Promise<IpcResults['de
   return window.avb.startDevServer(payload).then(parseDevStart);
 }
 
+export function stopProjectPreview(): Promise<IpcResults['dev:stop']> {
+  return window.avb.stopDevServer().then(parseOkResult);
+}
+
+/** Whether the page at `url` can be shown: the dev server's answer, judged in main (shared/ipc/previewHealth.ts). */
+export function inspectProjectPreview(url: string): Promise<IpcResults['dev:inspect']> {
+  const payload = parseIpcPayload('dev:inspect', url);
+  return window.avb.inspectDevPage(payload).then(parsePreviewHealth);
+}
+
 export function probeProjectPreview(url: string): Promise<IpcResults['dev:probe']> {
   const payload = parseIpcPayload('dev:probe', url);
   return window.avb.probeDevPage(payload).then(parseDevProbe);
@@ -83,11 +96,6 @@ export function probeProjectPreview(url: string): Promise<IpcResults['dev:probe'
 export function readProjectClasses(projectPath: string): Promise<readonly string[]> {
   const payload = parseIpcPayload('project:classes', projectPath);
   return window.avb.listProjectClasses(payload).then(list(text));
-}
-
-export function projectHasNodeModules(projectPath: string): Promise<boolean> {
-  const payload = parseIpcPayload('project:hasNodeModules', projectPath);
-  return window.avb.hasNodeModules(payload).then(boolean);
 }
 
 export function pendingProject(): Promise<string | undefined> {
@@ -110,11 +118,6 @@ export function addRecentProject(projectPath: string): Promise<void> {
   return window.avb.addRecent(payload).then((input) => void parseOkResult(input));
 }
 
-export function installProjectDependencies(projectPath: string): Promise<void> {
-  const payload = parseIpcPayload('project:install', projectPath);
-  return window.avb.installDeps(payload).then((input) => void parseOkResult(input));
-}
-
 export function watchProject(projectPath: string): Promise<boolean> {
   const payload = parseIpcPayload('watch:start', projectPath);
   return window.avb.watchProject(payload).then((input) => boolean(record(input)['ok']));
@@ -123,16 +126,24 @@ export function watchProject(projectPath: string): Promise<boolean> {
 /** A visual edit (step 6), stated against the checksum of the page shown. */
 export function editProjectPage(request: EditRequest): Promise<Result<PageEdited, PageEditError>> {
   const payload = parseIpcPayload('page:edit', request);
-  return window.avb.editPage(payload).then(parsePageEditResult);
+  return sendPageEditWithRetry(payload, {
+    send: (attempt) => window.avb.editPage(attempt).then(parsePageEditResult),
+  });
+}
+
+/** Several edits of one gesture, written at once: the page never holds one
+ * without the others. */
+export function editProjectPageBatch(request: EditBatchRequest): Promise<Result<PageEdited, PageEditError>> {
+  const payload = parseIpcPayload('page:editBatch', request);
+  return sendPageEditWithRetry(payload, {
+    send: (attempt) => window.avb.editPageBatch(attempt).then(parsePageEditResult),
+  });
 }
 
 /** The page `request` would leave, planned against `source` (the bytes at its
  * authoredChecksum) and never written: a page's unsaved gestures shown for
  * review. The reply has page:edit's shape. */
-export function previewProjectPageEdit(
-  request: EditRequest,
-  source: string,
-): Promise<Result<PageEdited, PageEditError>> {
+export function previewProjectPageEdit(request: EditRequest, source: string): Promise<Result<PageEdited, PageEditError>> {
   const payload = parseIpcPayload('page:previewEdit', { ...request, source });
   return window.avb.previewPageEdit(payload).then(parsePageEditResult);
 }
@@ -144,10 +155,7 @@ export function closeProject(nextProjectPath: string | undefined): Promise<void>
 
 /** Whether every file a canvas rendering came from still holds the bytes its
  * stamps name (step 7): main reads them from disk. */
-export function checkPreviewRender(
-  projectPath: string,
-  render: PreviewRender,
-): Promise<PreviewVerdict> {
+export function checkPreviewRender(projectPath: string, render: PreviewRender): Promise<PreviewVerdict> {
   const payload = parseIpcPayload('preview:check', { projectPath, render });
   return window.avb.checkPreview(payload).then(parsePreviewVerdict);
 }
@@ -157,24 +165,15 @@ export function stopProjectCommitPreview(projectPath: string): Promise<void> {
   return window.avb.previewStop(payload).then((input) => void parseOkResult(input));
 }
 
-export function copyEditorSelection(
-  projectPath: string,
-  keys: readonly string[],
-): Promise<boolean> {
+export function copyEditorSelection(projectPath: string, keys: readonly string[]): Promise<boolean> {
   const payload = parseIpcPayload('selection:copy', { projectPath, keys });
   return window.avb.copySelection(payload).then((input) => boolean(record(input)['ok']));
 }
 
-export function writeProjectFile(
-  area: 'src' | 'public',
-  projectPath: string,
-  rel: string,
-  value: string,
-): Promise<void> {
+export function writeProjectFile(area: 'src' | 'public', projectPath: string, rel: string, value: string): Promise<void> {
   const channel = area === 'src' ? 'src:writeText' : 'assets:writeText';
   const payload = parseIpcPayload(channel, { projectPath, rel, text: value });
-  const request =
-    area === 'src' ? window.avb.writeSourceText(payload) : window.avb.writeAssetText(payload);
+  const request = area === 'src' ? window.avb.writeSourceText(payload) : window.avb.writeAssetText(payload);
   return request.then((input) => void parseOkResult(input));
 }
 
@@ -204,42 +203,30 @@ export function runNativeEdit(command: 'copy' | 'paste' | 'redo' | 'undo'): void
   }
 }
 
-export function resolveProjectImport(
-  projectPath: string,
-  fromFile: string,
-  spec: string,
-): Promise<string | undefined> {
+export function resolveProjectImport(projectPath: string, fromFile: string, spec: string): Promise<string | undefined> {
   const payload = parseIpcPayload('project:resolveImport', { projectPath, fromFile, spec });
-  return window.avb
-    .resolveImport(payload)
-    .then((input) => optional(pathText)(record(input)['path']));
+  return window.avb.resolveImport(payload).then((input) => optional(pathText)(record(input)['path']));
 }
 
 export function readInjectedRoutes(projectPath: string): Promise<readonly WireInjectedRoute[]> {
   const payload = parseIpcPayload('project:injectedRoutes', { projectPath });
-  return window.avb
-    .injectedRoutes(payload)
-    .then((input) => list(parseInjectedRoute)(record(input)['routes']));
+  return window.avb.injectedRoutes(payload).then((input) => list(parseInjectedRoute)(record(input)['routes']));
 }
 
-export function readDynamicPaths(
-  projectPath: string,
-  pagePath: string,
-  devUrl: string,
-): Promise<IpcResults['page:dynamicPaths']> {
+export function readDynamicPaths(projectPath: string, pagePath: string, devUrl: string): Promise<IpcResults['page:dynamicPaths']> {
   const payload = parseIpcPayload('page:dynamicPaths', { projectPath, pagePath, devUrl });
   return window.avb.dynamicPaths(payload).then(parseDynamicPaths);
 }
 
 export function readContentCollections(projectPath: string): Promise<readonly AppCollection[]> {
   const payload = parseIpcPayload('content:collections', projectPath);
-  return window.avb
-    .contentCollections(payload)
-    .then((input) => list(parseAppCollection)(record(input)['collections']));
+  return window.avb.contentCollections(payload).then((input) => list(parseAppCollection)(record(input)['collections']));
 }
 
-export function readSampleEntry(devUrl: string, name: string, id?: string): Promise<Data> {
-  const raw = id === undefined ? { devUrl, name } : { devUrl, name, id };
+// One entry of a collection: the one `id` names, the one at `index` in the
+// collection's own order, or (neither) the first one a list would show.
+export function readSampleEntry(devUrl: string, name: string, id?: string, index?: number): Promise<Data> {
+  const raw = id === undefined ? (index === undefined ? { devUrl, name } : { devUrl, name, index }) : { devUrl, name, id };
   const payload = parseIpcPayload('content:sampleEntry', raw);
   return window.avb.sampleEntry(payload).then((input) => {
     const entry = record(input)['entry'];
@@ -248,11 +235,37 @@ export function readSampleEntry(devUrl: string, name: string, id?: string): Prom
   });
 }
 
-export function createProjectPage(
-  projectPath: string,
-  name: string,
-  layout: unknown,
-): Promise<string> {
+// What a page's call to one of its imports returns, as the dev server ran it.
+export function readSampleValue(request: {
+  readonly projectPath: string;
+  readonly devUrl: string;
+  readonly pagePath: string;
+  readonly spec: string;
+  readonly name: string;
+}): Promise<Data> {
+  const { spec, name, ...page } = request;
+  const payload = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec, name } });
+  return window.avb.sampleValue(payload).then((input) => {
+    const value = record(input)['value'];
+    return value === null ? undefined : data(value);
+  });
+}
+
+// What a page's frontmatter values held on its last render, by name — no
+// earlier than `sinceMs` when the dev server gets one in time. Empty when the
+// page has not rendered or the dev server cannot say.
+export function readScopeSamples(request: {
+  readonly projectPath: string;
+  readonly devUrl: string;
+  readonly pagePath: string;
+  readonly sinceMs: number;
+}): Promise<Readonly<Record<string, Data>>> {
+  const { sinceMs, ...page } = request;
+  const payload = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs } });
+  return window.avb.sampleValue(payload).then((input) => parseScopeSamples(record(input)['value']));
+}
+
+export function createProjectPage(projectPath: string, name: string, layout: unknown): Promise<string> {
   const payload = parseIpcPayload('page:create', { projectPath, name, layout });
   return window.avb.createPage(payload).then((input) => pathText(record(input)['pagePath']));
 }
@@ -267,23 +280,9 @@ export function createProjectPageFolder(projectPath: string, directory: string):
   return window.avb.createPageFolder(payload).then((input) => void parseOkResult(input));
 }
 
-export function renameProjectPageFolder(
-  projectPath: string,
-  from: string,
-  to: string,
-): Promise<void> {
+export function renameProjectPageFolder(projectPath: string, from: string, to: string): Promise<void> {
   const payload = parseIpcPayload('pagefolder:rename', { projectPath, from, to });
   return window.avb.renamePageFolder(payload).then((input) => void parseOkResult(input));
-}
-
-export function deleteProjectPageFolder(projectPath: string, directory: string): Promise<void> {
-  const payload = parseIpcPayload('pagefolder:delete', { projectPath, dir: directory });
-  return window.avb.deletePageFolder(payload).then((input) => void parseOkResult(input));
-}
-
-export function deleteProjectPage(path: string): Promise<void> {
-  const payload = parseIpcPayload('page:delete', path);
-  return window.avb.deletePage(payload).then((input) => void parseOkResult(input));
 }
 
 export function readProjectAsset(projectPath: string, rel: string): Promise<string> {
@@ -291,11 +290,7 @@ export function readProjectAsset(projectPath: string, rel: string): Promise<stri
   return window.avb.readAssetText(payload).then((input) => text(record(input)['text']));
 }
 
-export function findImportPath(
-  projectPath: string,
-  pagePath: string,
-  targetPath: string,
-): Promise<ImportPaths> {
+export function findImportPath(projectPath: string, pagePath: string, targetPath: string): Promise<ImportPaths> {
   const payload = parseIpcPayload('page:importPathFor', { projectPath, pagePath, targetPath });
   return window.avb.importPathFor(payload).then((input) => {
     const value = record(input);
@@ -306,11 +301,7 @@ export function findImportPath(
   });
 }
 
-export function rebaseProjectImport(
-  fromPagePath: string,
-  toPagePath: string | undefined,
-  spec: string,
-): Promise<IpcResults['page:rebaseImport']> {
+export function rebaseProjectImport(fromPagePath: string, toPagePath: string | undefined, spec: string): Promise<IpcResults['page:rebaseImport']> {
   const payload = parseIpcPayload('page:rebaseImport', {
     fromPagePath,
     toPagePath,
@@ -321,16 +312,16 @@ export function rebaseProjectImport(
   }));
 }
 
-export function createProjectComponent(
-  input: CreateComponentInput,
-): Promise<IpcResults['component:create']> {
+export function createProjectComponent(input: CreateComponentInput): Promise<IpcResults['component:create']> {
   const payload = parseIpcPayload('component:create', {
     projectPath: input.projectPath,
     pagePath: input.pagePath,
     name: input.name,
-    nodes: [data(input.nodes)],
+    nodes: input.style === undefined ? [data(input.nodes)] : [data(input.nodes), data(input.style)],
     imports: input.imports,
     props: input.props.map(data),
+    frontmatter: input.frontmatter,
+    folder: input.folder,
   });
   return window.avb.createComponent(payload).then((raw) => {
     const value = record(raw);
@@ -338,15 +329,44 @@ export function createProjectComponent(
       path: pathText(value['path']),
       rel: pathText(value['rel']),
       name: text(value['name']),
+      checksum: digest(value['checksum']),
+      folders: createdFoldersOf(value['folders']),
     };
   });
 }
 
-export function readComponentUsage(
-  projectPath: string,
-  name: string,
-  exclude: string,
-): Promise<IpcResults['component:usage']> {
+/** Undo of creating a component: delete its file while it holds the bytes it
+ *  was created with (`checksum`), or regardless when `force` (the person said so). */
+export function discardProjectComponent(input: {
+  readonly projectPath: string;
+  readonly path: string;
+  readonly checksum: Digest;
+  readonly force: boolean;
+  /** The folders its creation made, deepest last: each goes too once it is empty. */
+  readonly folders: readonly string[];
+}): Promise<IpcResults['component:discard']> {
+  const payload = parseIpcPayload('component:discard', input);
+  return window.avb.discardComponent(payload).then((raw) => ({ outcome: discardOutcome(record(raw)['outcome']) }));
+}
+
+// The folders a component's creation made, as main answered them: absolute paths, outermost first, at most one per level a
+// component path can have.
+function createdFoldersOf(input: unknown): readonly string[] {
+  const folders = list(pathText)(input);
+  if (folders.length > COMPONENT_ACCESS_LIMITS.pathDepthMax) {
+    throw new Error('A component creation made more folders than a component path has levels');
+  }
+  return folders;
+}
+
+function discardOutcome(input: unknown): IpcResults['component:discard']['outcome'] {
+  if (input === 'deleted' || input === 'edited' || input === 'missing') {
+    return input;
+  }
+  throw new Error('Unknown component discard outcome');
+}
+
+export function readComponentUsage(projectPath: string, name: string, exclude: string): Promise<IpcResults['component:usage']> {
   const payload = parseIpcPayload('component:usage', { projectPath, name, exclude });
   return window.avb.componentUsage(payload).then((input) => {
     const value = record(input);
@@ -357,10 +377,37 @@ export function readComponentUsage(
   });
 }
 
-export function previewProjectCommit(
-  projectPath: string,
-  reference: string,
-): Promise<IpcResults['preview:atCommit']> {
+/** Which files other than `pagePath` mention each of `classes` (shared/properties/classUsage.ts). */
+export function readClassUsage(projectPath: string, pagePath: string, classes: readonly string[]): Promise<ClassUsageReply> {
+  const payload = parseIpcPayload('component:classUsage', { projectPath, pagePath, classes });
+  return window.avb.componentClassUsage(payload).then(parseClassUsageReply);
+}
+
+/** Records a "Move styles" plan in main's journal, replacing the project's last one (shared/properties/styleMoveJournal.ts). */
+export async function recordStyleMove(projectPath: string, journal: StyleMoveJournal): Promise<void> {
+  const payload = parseIpcPayload('styleMove:record', { projectPath, journal });
+  parseOkResult(await window.avb.recordStyleMove(payload));
+}
+
+/** Clears the project's journal when it is still the move named `id`. */
+export async function clearStyleMove(projectPath: string, id: string): Promise<void> {
+  const payload = parseIpcPayload('styleMove:clear', { projectPath, id });
+  parseOkResult(await window.avb.clearStyleMove(payload));
+}
+
+/** A move left part way in this project, with where it stands on disk, or undefined. */
+export async function pendingStyleMove(projectPath: string): Promise<PendingStyleMove | undefined> {
+  const payload = parseIpcPayload('styleMove:pending', { projectPath });
+  return parsePendingStyleMove(await window.avb.pendingStyleMove(payload));
+}
+
+/** Finishes the journalled move, or puts every file back as before it; refused, writing nothing, when a file changed. */
+export async function resolveStyleMove(projectPath: string, id: string, target: StyleMoveTarget): Promise<StyleMoveResolution> {
+  const payload = parseIpcPayload('styleMove:resolve', { projectPath, id, target });
+  return parseStyleMoveResolution(await window.avb.resolveStyleMove(payload));
+}
+
+export function previewProjectCommit(projectPath: string, reference: string): Promise<IpcResults['preview:atCommit']> {
   const payload = parseIpcPayload('preview:atCommit', { projectPath, ref: reference });
   return window.avb.previewAtCommit(payload).then((input) => {
     const value = record(input);
@@ -372,29 +419,24 @@ export function previewProjectCommit(
   });
 }
 
-export function restoreProjectFile(
-  projectPath: string,
-  reference: string,
-  path: string,
-): Promise<IpcResults['git:restoreFile']> {
+export function restoreProjectFile(projectPath: string, reference: string, path: string): Promise<IpcResults['git:restoreFile']> {
   const payload = parseIpcPayload('git:restoreFile', { projectPath, ref: reference, path });
   return window.avb.gitRestoreFile(payload).then((input) => {
     const value = record(input);
     const ok = boolean(value['ok']);
     const missing = optional(boolean)(value['missing']);
     const message = optional(text)(value['message']);
+    const messageRef = parseOptionalMessageRef(value['messageRef']);
     return {
       ok,
       ...(missing === undefined ? {} : { missing }),
       ...(message === undefined ? {} : { message }),
+      ...(messageRef === undefined ? {} : { messageRef }),
     };
   });
 }
 
-export function restoreProjectVersion(
-  projectPath: string,
-  reference: string,
-): Promise<IpcResults['git:restoreProject']> {
+export function restoreProjectVersion(projectPath: string, reference: string): Promise<IpcResults['git:restoreProject']> {
   const payload = parseIpcPayload('git:restoreProject', { projectPath, ref: reference });
   return window.avb.gitRestoreProject(payload).then((input) => {
     const value = record(input);
@@ -430,8 +472,7 @@ export function onFilesChanged(callback: (event: FileChangeEvent) => void): () =
     const value = record(input);
     callback({
       files: list(pathText)(value['files']),
-      astroChanges:
-        value['astroChanges'] === undefined ? [] : parseAstroFileChanges(value['astroChanges']),
+      astroChanges: value['astroChanges'] === undefined ? [] : parseAstroFileChanges(value['astroChanges']),
     });
   });
 }
@@ -487,7 +528,8 @@ function parseProjectDialog(input: unknown): IpcResults['project:openDialog'] {
     return { canceled: false, projectPath: pathText(value['projectPath']) };
   }
   if (value['error'] !== undefined) {
-    return { canceled: false, error: text(value['error']) };
+    const errorRef = parseOptionalMessageRef(value['errorRef']);
+    return errorRef === undefined ? { canceled: false, error: text(value['error']) } : { canceled: false, error: text(value['error']), errorRef };
   }
   throw new Error('Project dialog result must contain a project path, error, or cancellation');
 }
@@ -539,9 +581,7 @@ function parseRouteParams(input: unknown): WireRouteParams {
   return dictionary(data)(input);
 }
 
-function parseDynamicProps(
-  input: unknown,
-): undefined | string | number | true | readonly Data[] | WireDataRecord {
+function parseDynamicProps(input: unknown): undefined | string | number | true | readonly Data[] | WireDataRecord {
   const value = data(input);
   if (value === null) {
     throw new Error('Dynamic route props have an invalid value');
@@ -555,7 +595,5 @@ function parseDynamicProps(
 function parseAppCollection(input: unknown): AppCollection {
   const value = record(input);
   const collectionCount = optional(count)(value['count']);
-  return collectionCount === undefined
-    ? { name: text(value['name']) }
-    : { name: text(value['name']), count: collectionCount };
+  return collectionCount === undefined ? { name: text(value['name']) } : { name: text(value['name']), count: collectionCount };
 }

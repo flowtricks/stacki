@@ -1,41 +1,54 @@
 import * as path from 'node:path';
 // Setup is scoped to the open project. Local bundles are selected in main,
 // never accepted as arbitrary paths from renderer input.
-import {
-  installStudio,
-  automaticStudio,
-  readStudioRelease,
-  studioStatus,
-  type StudioReleaseEnvironment,
-} from '../project/studioSetup';
+import { installStudio, automaticStudio, readStudioRelease, studioStatus, type StudioReleaseEnvironment } from '../project/studioSetup';
 import { errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 import type { StudioInstallResult } from '../../shared/ipc/studioSetup';
 import { createStudioProgress } from '../project/studioProgress';
+import { checkStudioUpgrade, restoreStudio, upgradeStudio } from '../project/studioUpgrade';
+import { writeStudioSignInFile } from '../project/studioAuthFile';
+import type { StudioAuthResult } from '../../shared/ipc/studioSetup';
 
 export function registerStudioHandlers(
   host: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'showOpenDialog' | 'send'>,
   environment: StudioReleaseEnvironment,
   desktopVersion: () => string,
 ): void {
-  host.ipcMain.handle('studio:status', (_event, project) =>
-    studioStatus(
-      path.dirname(host.assertInProject(path.join(project, 'studio'))),
-      desktopVersion(),
-    ),
+  host.ipcMain.handle('studio:status', (_event, project) => studioStatus(path.dirname(host.assertInProject(path.join(project, 'studio'))), desktopVersion()));
+  host.ipcMain.handle('studio:setAuth', async (_event, options): Promise<StudioAuthResult> => {
+    const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
+    try {
+      return await setStudioAuth(project, options.auth, desktopVersion());
+    } catch (error: unknown) {
+      return { kind: 'error', message: errorMessage(error) };
+    }
+  });
+  host.ipcMain.handle('studio:upgradeCheck', (_event, projectPath) =>
+    checkStudioUpgrade(path.dirname(host.assertInProject(path.join(projectPath, 'studio'))), desktopVersion()),
   );
+  host.ipcMain.handle('studio:restore', (_event, options) =>
+    restoreStudio(path.dirname(host.assertInProject(path.join(options.projectPath, 'studio'))), desktopVersion()),
+  );
+  host.ipcMain.handle('studio:upgrade', async (_event, options) => {
+    const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
+    const progress = createStudioProgress({ projectPath: options.projectPath, requestId: options.requestId }, (value) => host.send('studio:progress', value));
+    try {
+      return await upgradeStudio(project, desktopVersion(), progress.update);
+    } finally {
+      progress.close();
+    }
+  });
   host.ipcMain.handle('studio:install', async (_event, options): Promise<StudioInstallResult> => {
     const project = path.dirname(host.assertInProject(path.join(options.projectPath, 'studio')));
-    const progress = createStudioProgress(
-      { projectPath: options.projectPath, requestId: options.requestId },
-      (value) => host.send('studio:progress', value),
-    );
+    const progress = createStudioProgress({ projectPath: options.projectPath, requestId: options.requestId }, (value) => host.send('studio:progress', value));
     try {
       const status = await studioStatus(project, desktopVersion());
       if (status.kind !== 'missing') {
         return {
           kind: 'error',
-          message: 'Studio already exists. Setup does not replace existing files.',
+          message: translateMain('error.studio.exists'),
         };
       }
       progress.update({ kind: 'stage', stage: 'release' });
@@ -45,7 +58,7 @@ export function registerStudioHandlers(
       }
       return {
         kind: 'installed',
-        version: await installStudio(project, release, progress.update),
+        version: await installStudio(project, release, options.auth ?? { kind: 'github' }, progress.update),
       };
     } catch (error: unknown) {
       return { kind: 'error', message: errorMessage(error) };
@@ -55,19 +68,26 @@ export function registerStudioHandlers(
   });
 }
 
-async function selectRelease(
-  host: Pick<MainHost, 'showOpenDialog'>,
-  source: 'published' | 'file',
-  version: string,
-  environment: StudioReleaseEnvironment,
-) {
+async function setStudioAuth(project: string, auth: Parameters<typeof writeStudioSignInFile>[1], desktopVersion: string): Promise<StudioAuthResult> {
+  const status = await studioStatus(project, desktopVersion);
+  if (status.kind !== 'installed') {
+    return { kind: 'error', message: translateMain('error.studio.authNotInstalled') };
+  }
+  const written = await writeStudioSignInFile(path.join(project, 'studio'), auth, 'replace');
+  if (written.ok) {
+    return { kind: 'saved', signIn: written.value };
+  }
+  return { kind: 'error', message: translateMain('error.studio.authWrite') };
+}
+
+async function selectRelease(host: Pick<MainHost, 'showOpenDialog'>, source: 'published' | 'file', version: string, environment: StudioReleaseEnvironment) {
   if (source === 'published') {
     return automaticStudio(version, environment);
   }
   const selection = await host.showOpenDialog({
-    title: 'Choose a trusted Stacki Studio release bundle',
+    title: translateMain('dialog.open.studioRelease.title'),
     properties: ['openFile'],
-    filters: [{ name: 'Studio release', extensions: ['json'] }],
+    filters: [{ name: translateMain('dialog.open.studioRelease.filter'), extensions: ['json'] }],
   });
   const file = selection.filePaths[0];
   return selection.canceled || !file ? undefined : readStudioRelease(file);

@@ -9,6 +9,13 @@
 // which are easy to break by accident — the filter box narrowing the list, the
 // keyboard still landing on the right option once it has, and the classes the
 // colour hangs off.
+//
+// It then checks hover preview, which is opt-in: a dropdown previews only when
+// its caller asks (a component prop previewing live on the canvas). Without
+// that, hovering or arrowing moves the highlight and the field keeps showing the
+// committed value; Enter commits and Escape closes without a change. With a
+// preview handler, a hover calls it and Escape restores the committed value.
+// Each case renders the real component in jsdom and drives it with DOM events.
 
 const fs = require('fs');
 const path = require('path');
@@ -91,10 +98,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await render(ids);
   check('the trigger reads as a generated route', !!find('.dd-trigger.collection'));
   check('and carries a page glyph', !!find('.dd-trigger .dd-icon svg'));
-  check(
-    'showing the current entry',
-    /editorial-calendar-notes/.test(find('.dd-label')?.textContent || ''),
-  );
+  check('showing the current entry', /editorial-calendar-notes/.test(find('.dd-label')?.textContent || ''));
 
   await act(async () => {
     find('.dd-trigger').click();
@@ -102,30 +106,19 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   });
   check('the popup opens', !!find('.dd-popup'));
   check('purple carries into the list', !!find('.dd-popup.collection'));
-  check(
-    'every option has a glyph',
-    all('.dd-option .dd-icon svg').length === ids.length,
-    `${all('.dd-option .dd-icon svg').length}`,
-  );
+  check('every option has a glyph', all('.dd-option .dd-icon svg').length === ids.length, `${all('.dd-option .dd-icon svg').length}`);
   check('the current one is ticked', !!find('.dd-option.selected .dd-check svg'));
   check('the list has a filter box', !!find('.dd-search'));
 
   // Typing narrows it.
   await act(async () => {
     const input = find('.dd-search');
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(input, 'spring');
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await settle(20);
   });
-  check(
-    'the filter narrows the list',
-    all('.dd-option').length === 3,
-    `${all('.dd-option').length} shown`,
-  );
+  check('the filter narrows the list', all('.dd-option').length === 3, `${all('.dd-option').length} shown`);
   check(
     'to the options that match',
     all('.dd-option').every((node) => /spring/.test(node.textContent)),
@@ -134,9 +127,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   // And Enter picks what the filtered list is highlighting, not what the
   // unfiltered one would have.
   await act(async () => {
-    find('.dd-search').dispatchEvent(
-      new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-    );
+    find('.dd-search').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await settle(20);
   });
   check('Enter picks from the filtered list', picked === 2, `picked index ${picked}`);
@@ -157,10 +148,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   // capped and its full content height otherwise. The position calculation
   // must not feed that changing measurement back into the cap and render
   // forever when a real collection has hundreds of entries.
-  const scrollHeight = Object.getOwnPropertyDescriptor(
-    dom.window.HTMLElement.prototype,
-    'scrollHeight',
-  );
+  const scrollHeight = Object.getOwnPropertyDescriptor(dom.window.HTMLElement.prototype, 'scrollHeight');
   Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollHeight', {
     configurable: true,
     get() {
@@ -193,10 +181,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     all('.dd-option')[295].click();
     await settle(20);
   });
-  check(
-    'a large controlled picker switches entries',
-    find('.dd-label')?.textContent === 'sermon-295',
-  );
+  check('a large controlled picker switches entries', find('.dd-label')?.textContent === 'sermon-295');
   check('and closes after switching', !find('.dd-popup'));
   if (scrollHeight) {
     Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollHeight', scrollHeight);
@@ -208,8 +193,9 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- What a hover costs -------------------------------------------------------
   //
-  // Hovering an option applies it, so the canvas shows the variant you are
-  // pointing at. Applying is not free: the app writes the page, the dev server
+  // A dropdown that opts into preview by writing (`livePreview`, as a Settings
+  // panel prop does) applies the hovered option, so the canvas shows the variant
+  // you are pointing at. Applying is not free: the app writes the page, the dev server
   // renders it, the canvas fetches the rendering. On a big page that is most of
   // a second — so the one thing this must not do is ask for the same value
   // twice, which is exactly what picking the option you had just hovered did.
@@ -244,6 +230,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
           React.createElement(Dropdown, {
             value,
             options: OPTIONS,
+            livePreview: true,
             onChange: (value) => applied.push(value),
           }),
         );
@@ -254,8 +241,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       find('.dd-trigger').click();
       await settle(20);
     });
-    const option = (label) =>
-      all('.dd-option').find((option) => option.textContent.trim() === label);
+    const option = (label) => all('.dd-option').find((option) => option.textContent.trim() === label);
     // React synthesises mouseenter from a bubbling mouseover, so that is what
     // a pointer arriving on an option looks like from here.
     const hover = (label) =>
@@ -270,21 +256,13 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       });
 
     await hover('play');
-    check(
-      'hovering an option applies it, so the canvas can show it',
-      applied.join() === 'play',
-      applied.join(),
-    );
+    check('hovering an option applies it, so the canvas can show it', applied.join() === 'play', applied.join());
 
     await act(async () => {
       option('play')?.click();
       await settle(20);
     });
-    check(
-      'and picking the option you hovered does not ask for it again',
-      applied.join() === 'play',
-      applied.join(),
-    );
+    check('and picking the option you hovered does not ask for it again', applied.join() === 'play', applied.join());
     check('the popup closes on the pick', !find('.dd-popup'), 'still open');
 
     // A pick that was never hovered — the keyboard, or a click straight onto an
@@ -338,11 +316,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       }
       await settle(70);
     });
-    check(
-      'moving across options previews only the latest one within a frame',
-      applied.join() === 'play,pause,play,pause',
-      applied.join(),
-    );
+    check('moving across options previews only the latest one within a frame', applied.join() === 'play,pause,play,pause', applied.join());
     await act(async () => {
       body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
       await settle(20);
@@ -356,6 +330,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       return React.createElement(Dropdown, {
         value,
         options: OPTIONS,
+        livePreview: true,
         onChange: (next) => {
           previewChanges.push(next);
           setValue(next);
@@ -396,6 +371,91 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     check('outside click restores the committed option', find('.dd-label')?.textContent === 'main');
     check('outside click reverts once', previewChanges.join() === 'play,main,pause,main');
     await act(async () => root2.unmount());
+
+    // --- No preview unless asked ------------------------------------------------
+    //
+    // A dialog's dropdown (a media host, a layout) must not change its value, or
+    // the form below it, while the pointer crosses the menu.
+    const formChanges = [];
+    const root3 = createRoot(container);
+    function FormDropdown() {
+      const [value, setValue] = React.useState('main');
+      return React.createElement(Dropdown, {
+        value,
+        options: OPTIONS,
+        onChange: (next) => {
+          formChanges.push(next);
+          setValue(next);
+        },
+      });
+    }
+    const key = (name) =>
+      act(async () => {
+        find('.dd-trigger').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
+        await settle(20);
+      });
+    await act(async () => {
+      root3.render(React.createElement(FormDropdown));
+      await settle(20);
+    });
+    await act(async () => {
+      find('.dd-trigger').click();
+      await settle(20);
+    });
+    await hover('pause');
+    check('without a preview, a hover highlights the row', option('pause')?.classList.contains('highlight') === true);
+    check('without a preview, a hover leaves the shown value', find('.dd-label')?.textContent === 'main', find('.dd-label')?.textContent);
+    check('without a preview, a hover changes nothing', formChanges.length === 0, formChanges.join());
+    await key('ArrowUp');
+    check('arrowing moves the highlight', option('play')?.classList.contains('highlight') === true);
+    check('arrowing leaves the shown value', find('.dd-label')?.textContent === 'main', find('.dd-label')?.textContent);
+    check('arrowing changes nothing', formChanges.length === 0, formChanges.join());
+    await key('Escape');
+    check('Escape closes the menu', !find('.dd-popup'));
+    check('Escape keeps the committed value', find('.dd-label')?.textContent === 'main');
+    check('Escape changes nothing', formChanges.length === 0, formChanges.join());
+    await key('ArrowDown');
+    await key('ArrowDown');
+    check('arrowing in a reopened menu changes nothing', formChanges.length === 0, formChanges.join());
+    await key('Enter');
+    check('Enter commits the highlighted option', formChanges.join() === 'play', formChanges.join());
+    check('and the field shows it', find('.dd-label')?.textContent === 'play');
+    await act(async () => root3.unmount());
+
+    // --- A preview handler is called on hover -----------------------------------
+    const previews = [];
+    const committed = [];
+    let cancels = 0;
+    const root4 = createRoot(container);
+    await act(async () => {
+      root4.render(
+        React.createElement(Dropdown, {
+          value: 'main',
+          options: OPTIONS,
+          onPreview: (next) => previews.push(next),
+          onCancelPreview: () => {
+            cancels++;
+          },
+          onChange: (next) => committed.push(next),
+        }),
+      );
+      await settle(20);
+    });
+    await act(async () => {
+      find('.dd-trigger').click();
+      await settle(20);
+    });
+    await hover('pause');
+    check('a preview handler is called on hover', previews.join() === 'pause', previews.join());
+    check('a preview does not commit', committed.length === 0, committed.join());
+    check('the field still shows the committed value', find('.dd-label')?.textContent === 'main');
+    await key('ArrowUp');
+    check('arrowing previews too', previews.join() === 'pause,play', previews.join());
+    await key('Escape');
+    check('Escape restores the committed value', cancels === 1, `${cancels} cancels`);
+    check('Escape commits nothing', committed.length === 0, committed.join());
+    check('Escape closes the previewing menu', !find('.dd-popup'));
+    await act(async () => root4.unmount());
   }
 
   if (failures.length) {

@@ -8,23 +8,19 @@ import { resolveAssetImport, readAssetDimensions } from '../../ipc/assetBridge';
 import { MapEditor } from './propNodeEditors';
 import { assetImportOf } from './PropField';
 import { AttributesSection } from './propAttributes';
-import { ConditionField } from './propBindings';
+import { ConditionExpressionField } from './ConditionExpressionEditor';
+import SegmentedControl from '../../ui/SegmentedControl';
 import React, { useEffect, useRef, useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import ExprInput from '../../ui/ExprInput';
-import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import {
-  VariableTextSizeIcon,
-  CommentIcon,
-  CodeIcon,
-  BranchIcon,
-  CornerIcon,
-} from '../../ui/Icons';
-import {
-  type PropsPanelProps,
-  type NodePanelProps,
-  type SourceDimensionsOptions,
-} from './propsPanelTypes';
+import { scopeCompletions } from '../../editor/dataSuggest';
+import { CommentIcon, CodeIcon, CornerIcon } from '../../ui/Icons';
+import { type PropsPanelProps, type NodePanelProps, type SourceDimensionsOptions } from './propsPanelTypes';
+import ExprBindingField from './ExprBindingField';
+import { pureBindingPath } from '../../editor/bindingPath';
+import TextConnectField, { type TextConnectFieldProps } from './TextConnectField';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
@@ -38,8 +34,7 @@ import {
 // the prop. The label has nothing to activate, so it activates nothing.
 //
 // Attributes rows avoid labels; these keep the tag because styling depends on it.
-export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) =>
-  event.preventDefault();
+export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function panelDataContext(props: PropsPanelProps): SourceContext {
   return {
     frontmatter: props.loopContext?.frontmatter || '',
@@ -47,6 +42,7 @@ export function panelDataContext(props: PropsPanelProps): SourceContext {
     projectPath: props.projectPath,
     filePath: props.filePath,
     onSetFrontmatter: props.onSetFrontmatter,
+    onRenameVariable: props.onRenameVariable,
     onOpenSymbol: props.onOpenSymbol,
   };
 }
@@ -56,13 +52,8 @@ export function panelDataContext(props: PropsPanelProps): SourceContext {
 // the write is coalesced and the save debounced (see setComment), so a burst of
 // typing is still one save and one undo step. Clearing the field removes the
 // comment node.
-export function CommentField({
-  value,
-  onCommit,
-}: {
-  readonly value?: string | undefined;
-  readonly onCommit: (text: string) => void;
-}) {
+export function CommentField({ value, onCommit }: { readonly value?: string | undefined; readonly onCommit: (text: string) => void }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(value ?? '');
   // Re-sync when the model changes underneath (undo, external edit) — but not
   // while typing, or the caret would jump.
@@ -83,12 +74,12 @@ export function CommentField({
       <label onClick={noLabelActivation}>
         <span className="prop-label">
           <CommentIcon size={12} className="prop-label-icon" />
-          Comment
+          {translate('props.sources.comment')}
         </span>
       </label>
       <AutoTextarea
         minRows={1}
-        placeholder="Note above this element…"
+        placeholder={translate('props.sources.commentPlaceholder')}
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -107,106 +98,100 @@ export function CommentField({
 }
 
 export function EmptyPanel(props: PropsPanelProps) {
+  const translate = useTranslate();
   const {} = props;
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%' }}>
-      <div className="panel-header">
-        <h2>Settings</h2>
-      </div>
-      <div className="props-empty">Select a component to edit its props.</div>
+      <PanelHeader title={translate('props.sources.settings')} />
+      <div className="props-empty">{translate('props.sources.selectComponent')}</div>
     </div>
   );
 }
 export function FrontmatterPanel(props: NodePanelProps<'frontmatter'>) {
+  const translate = useTranslate();
   const { onOpenCode } = props;
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="props-title">
         <CodeIcon size={14} className="props-title-icon" />
-        Frontmatter
+        {translate('props.sources.frontmatter')}
       </div>
       <div className="props-field" style={{ marginTop: 4 }}>
         <button className="primary" style={{ width: '100%' }} onClick={onOpenCode}>
-          <CodeIcon size={13} /> Edit code
+          <CodeIcon size={13} /> {translate('props.sources.editCode')}
         </button>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          Imports, constants, and data for this page. Opens in a floating editor you can move and
-          resize while working with the canvas.
-        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>{translate('props.sources.frontmatterNote')}</div>
       </div>
     </div>
   );
 }
 export function ExprPanel(props: NodePanelProps<'expr'>) {
+  const translate = useTranslate();
   const { node, loopContext, bindContext, onSetText } = props;
   const scope = scopeCompletions(bindContext || loopContext || {});
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>Expression</h2>
-      </div>
-      <div className="props-field" style={{ marginTop: 8 }}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">Code</span>
-        </label>
-        <ExprInput
-          key={node.id}
-          value={node.value}
-          syncValue={node.value}
-          completions={scope}
-          onCommit={(next) => next !== node.value && onSetText(next)}
-        />
-      </div>
+      <PanelHeader title={translate('props.sources.expression')} />
+      {pureBindingPath(node.value) === undefined ? (
+        <div className="props-field" style={{ marginTop: 8 }}>
+          <label onClick={noLabelActivation}>
+            <span className="prop-label">{translate('props.sources.code')}</span>
+          </label>
+          <ExprInput key={node.id} value={node.value} syncValue={node.value} completions={scope} onCommit={(next) => next !== node.value && onSetText(next)} />
+        </div>
+      ) : (
+        <ExprBindingField key={node.id} nodeId={node.id} value={node.value} bindContext={bindContext || loopContext} onSetText={onSetText} />
+      )}
     </div>
   );
 }
 export function RawLinePanel(props: NodePanelProps<'raw-line'>) {
+  const translate = useTranslate();
   const { node, onSetText } = props;
 
   const isDoctype = /^<!doctype/i.test(node.value || '');
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>{isDoctype ? 'Doctype' : 'Source line'}</h2>
-      </div>
+      <PanelHeader title={isDoctype ? translate('props.sources.doctype') : translate('props.sources.sourceLine')} />
       <div className="props-field" style={{ marginTop: 8 }}>
         <label onClick={noLabelActivation}>
           <span className="prop-label">
             <CodeIcon size={12} className="prop-label-icon" />
-            Line
+            {translate('props.sources.line')}
           </span>
         </label>
-        <AutoTextarea
+        <ExprInput
           key={node.id}
-          minRows={1}
+          language="html"
+          multiline
+          ariaLabel={isDoctype ? translate('props.sources.doctype') : translate('props.sources.sourceLine')}
           value={node.value}
-          spellCheck={false}
-          style={{ fontFamily: 'var(--mono)' }}
-          onChange={(event) => onSetText(event.target.value)}
+          syncValue={node.value}
+          onChange={(next) => {
+            if (next !== node.value) {
+              onSetText(next);
+            }
+          }}
         />
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
-          {isDoctype
-            ? 'Written out verbatim at the top of the page. ' +
-              'Not an element — it has no tag or attributes.'
-            : 'Written out verbatim, exactly as typed.'}
+          {isDoctype ? translate('props.sources.doctypeNote') : translate('props.sources.lineNote')}
         </div>
       </div>
     </div>
   );
 }
 export function MapPanel(props: NodePanelProps<'map'>) {
+  const translate = useTranslate();
   const { node, loopContext, bindContext, onSetText } = props;
 
   const buildDataContext = () => panelDataContext(props);
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>Loop</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.loop')} />
       <MapEditor
         key={node.id}
         node={node}
@@ -214,60 +199,52 @@ export function MapPanel(props: NodePanelProps<'map'>) {
         bindContext={bindContext || loopContext}
         dataContext={buildDataContext()}
         onSetText={onSetText}
+        imports={props.frontmatterImports}
+        projectPath={props.projectPath}
+        onCommitHead={props.onCommitLoopHead}
+        onSetLoopSource={props.onSetLoopSource}
+        onEditLoopProperty={props.onEditLoopProperty}
       />
     </div>
   );
 }
 export function CondPanel(props: NodePanelProps<'cond'>) {
+  const translate = useTranslate();
   const { node, loopContext, bindContext, onSetText, onToggleElse } = props;
-  const scope = scopeCompletions(bindContext || loopContext || {});
-  const scopeNames = new Set(scope.map((completion) => completion.label.split('.')[0] ?? ''));
-  const chipsInScope = (text: string) => scopeChips(text, scopeNames);
-
   const hasElse = (node.children || []).length > 1;
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>Condition</h2>
+      <PanelHeader title={translate('props.sources.condition')} />
+      <ConditionExpressionField key={node.id} test={node.test} bindContext={bindContext || loopContext} onSetText={onSetText} />
+      {/* Otherwise: one switch, Nothing or an Else branch, so what the page shows when the test fails is a state, not a button to find. */}
+      <div className="props-field condition-otherwise">
+        <span className="prop-label">
+          <CornerIcon size={12} className="prop-label-icon" />
+          {translate('props.condition.otherwise')}
+        </span>
+        {onToggleElse && (
+          // The shared segmented control: equal fixed segments, a fill on hover, and its tooltip under the hovered one.
+          <SegmentedControl
+            className="condition-otherwise-switch"
+            ariaLabel={translate('props.condition.otherwise')}
+            value={hasElse ? 'branch' : 'none'}
+            options={[
+              { value: 'none', label: translate('props.sources.elseNone'), tooltip: translate('props.sources.elseNoneTip') },
+              { value: 'branch', label: translate('props.sources.elseBranch'), tooltip: translate('props.sources.elseBranchTip') },
+            ]}
+            onChange={(choice) => {
+              if ((choice === 'branch') !== hasElse) {
+                onToggleElse(choice === 'branch');
+              }
+            }}
+          />
+        )}
       </div>
-      <div className="props-field" style={{ marginTop: 8 }}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">
-            <BranchIcon size={12} className="prop-label-icon" />
-            Show when
-          </span>
-        </label>
-        <ConditionField
-          key={node.id}
-          test={node.test}
-          scope={scope}
-          chipsOf={chipsInScope}
-          bindContext={bindContext || loopContext}
-          onSetText={onSetText}
-        />
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          True renders <strong>then</strong>
-          {hasElse ? (
-            <>
-              , false renders <strong>else</strong>.
-            </>
-          ) : (
-            '; nothing renders otherwise.'
-          )}{' '}
-          Drop elements into either branch in the navigator.
-        </div>
-      </div>
-      {onToggleElse && (
-        <div className="props-field">
-          <button style={{ width: '100%' }} onClick={() => onToggleElse(!hasElse)}>
-            {hasElse ? 'Remove else branch' : 'Add else branch'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 export function BranchPanel(props: NodePanelProps<'branch'>) {
+  const translate = useTranslate();
   const { node } = props;
 
   const isElse = node.name === 'else';
@@ -275,49 +252,34 @@ export function BranchPanel(props: NodePanelProps<'branch'>) {
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="props-title">
         <CornerIcon size={14} className="props-title-icon" />
-        {isElse ? 'else' : 'then'}
+        {isElse ? translate('props.condition.otherwise') : 'then'}
       </div>
-      <div className="props-empty">
-        {isElse ? 'Rendered when the condition is false.' : 'Rendered when the condition is true.'}
-      </div>
+      <div className="props-empty">{isElse ? translate('props.sources.renderedFalse') : translate('props.sources.renderedTrue')}</div>
     </div>
   );
 }
 export function CommentPanel(props: NodePanelProps<'comment'>) {
+  const translate = useTranslate();
   const { node, onSetText } = props;
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>Comment</h2>
-      </div>
+      <PanelHeader title={translate('props.sources.comment')} />
       <div className="props-field" style={{ marginTop: 8 }}>
         <label onClick={noLabelActivation}>
           <span className="prop-label">
             <CommentIcon size={12} className="prop-label-icon" />
-            Comment
+            {translate('props.sources.comment')}
           </span>
         </label>
-        <AutoTextarea
-          minRows={3}
-          value={node.value}
-          onChange={(event) => onSetText(event.target.value)}
-        />
+        <AutoTextarea minRows={3} value={node.value} onChange={(event) => onSetText(event.target.value)} />
       </div>
     </div>
   );
 }
 export function RawPanel(props: NodePanelProps<'raw'>) {
-  const {
-    node,
-    loopContext,
-    bindContext,
-    onSetProp,
-    onSetProps,
-    onRenameProp,
-    onOpenCode,
-    projectPath,
-  } = props;
+  const translate = useTranslate();
+  const { node, loopContext, bindContext, onSetProp, onSetProps, onRenameProp, onOpenCode, projectPath } = props;
 
   const language = node.name === 'style' ? 'css' : 'javascript';
   const attrs = Object.keys(node.props || {});
@@ -344,44 +306,27 @@ export function RawPanel(props: NodePanelProps<'raw'>) {
       </div>
       <div className="props-field" style={{ marginTop: 4 }}>
         <button className="primary" style={{ width: '100%' }} onClick={onOpenCode}>
-          <CodeIcon size={13} /> Edit code
+          <CodeIcon size={13} /> {translate('props.sources.editCode')}
         </button>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>
-          Opens the {language} in a floating editor you can move and resize while working with the
-          canvas.
-        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 8, lineHeight: 1.5 }}>{translate('props.sources.rawNote', { language })}</div>
       </div>
     </div>
   );
 }
-export function TextPanel(props: NodePanelProps<'text'>) {
-  const { node, onSetText } = props;
+// Words, or the `{label}` they were connected to (TextConnectField.tsx): the
+// one field, so a text keeps its panel when it is connected and when it is not.
+export function TextPanel(props: Omit<PropsPanelProps, 'node'> & { readonly node: TextConnectFieldProps['node'] }) {
+  const translate = useTranslate();
+  const { node, onSetText, onSetTextPieces, bindContext, loopContext } = props;
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
-      <div className="panel-header">
-        <h2>Text</h2>
-      </div>
-      <div className="props-field" style={{ marginTop: 8 }}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">
-            <VariableTextSizeIcon size={12} className="prop-label-icon" />
-            Content
-          </span>
-        </label>
-        <AutoTextarea
-          minRows={3}
-          value={node.value}
-          onChange={(event) => onSetText(event.target.value)}
-        />
-      </div>
+      <PanelHeader title={translate('props.sources.text')} />
+      <TextConnectField node={node} bindContext={bindContext || loopContext} onSetText={(value) => onSetText(value)} onSetTextPieces={onSetTextPieces} />
     </div>
   );
 }
-export function sourceKind(
-  source: Attr | undefined,
-  imports: unknown,
-): 'svg' | 'public' | 'remote' | 'asset' | undefined {
+export function sourceKind(source: Attr | undefined, imports: unknown): 'svg' | 'public' | 'remote' | 'asset' | undefined {
   if (!source || source.type === 'bare') {
     return undefined;
   }
@@ -402,13 +347,7 @@ export function sourceKind(
   }
   return isSVG(binding.spec) ? 'svg' : 'asset';
 }
-export function useSourceDimensions({
-  source,
-  projectPath,
-  filePath,
-  imports,
-  setSourceDimensions,
-}: SourceDimensionsOptions) {
+export function useSourceDimensions({ source, projectPath, filePath, imports, setSourceDimensions }: SourceDimensionsOptions) {
   // Primitive dependencies also refresh dimensions when an import changes in place.
   const sourceType = source?.type;
   const sourceValue = source?.type === 'bare' ? undefined : source?.value;

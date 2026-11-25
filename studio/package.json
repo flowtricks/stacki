@@ -1,6 +1,6 @@
 {
   "name": "@stacki/studio",
-  "version": "0.1.66",
+  "version": "1.4.19",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -21,7 +21,8 @@
     "prebuild": "npm run assemble",
     "precheck": "npm run assemble",
     "pretest": "npm run assemble",
-    "release:bundle": "npm run build && tsx scripts/release.ts"
+    "release:bundle": "npm run build && tsx scripts/release.ts",
+    "release:demo": "npm run build && tsx scripts/buildDemoAssets.ts"
   },
   "dependencies": {
     "@astrojs/compiler": "^4.0.0",
@@ -39,6 +40,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@lezer/highlight": "^1.2.5",
+    "@sanity/icons": "5.2.1",
     "@uiw/react-codemirror": "^4.25.12",
     "codemirror": "^6.0.2",
     "json5": "^2.2.3",
@@ -66,6 +68,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "jiti": "^2.7.0",
+    "miniflare": "5.20261012.1-beta",
     "playwright": "^1.56.0",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",
@@ -81,6 +84,10 @@
     ".": {
       "types": "./src/server/integration.ts",
       "import": "./dist/integration.mjs"
+    },
+    "./bake": {
+      "types": "./src/features/bake/bakeSite.ts",
+      "import": "./dist/bake.mjs"
     }
   },
   "files": [

@@ -9,20 +9,8 @@ import { parseData } from '../app/mainValidation';
 import type { CmsFile } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-  findCollections,
-  replaceCollection,
-  readGeneral,
-  writeGeneral,
-  GENERAL,
-} from '../content/jsCollections';
-import {
-  defaultImports,
-  addImport,
-  importName,
-  importSpecFor,
-  withAssets,
-} from '../project/assetRefs';
+import { findCollections, replaceCollection, readGeneral, writeGeneral, GENERAL } from '../content/jsCollections';
+import { defaultImports, addImport, importName, importSpecFor, withAssets } from '../project/assetRefs';
 import { importersOf } from '../content/cmsRefs';
 import { toPosix, capture, readJson, parseDataList } from '../lib/mainHelpers';
 import { resolveImportPath } from '../properties/importPaths';
@@ -41,6 +29,9 @@ import {
   readCmsJson,
 } from './cmsFiles';
 import type { MainHost } from './mainHost';
+import { runSliced, type SlicedWork } from '../lib/slicedWork';
+import { readProjectFolders } from '../lib/projectFolders';
+import { cmsFilesFor, configOf, isAstroSource } from '../../shared/properties/projectFolders';
 
 export function registerCmsHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
   registerCmsListHandler(host);
@@ -51,53 +42,91 @@ export function registerCmsHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 's
 }
 
 function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
-  // Data modules under src/data may hold one record of settings rather than a
-  // repeating array. Source files elsewhere retain the stricter collection
-  // rule, so ordinary application constants do not become CMS entries.
-  ipcMain.handle('cms:list', async (_event, projectPath) => {
-    const root = path.join(projectPath, 'src');
-    const files: CmsFile[] = [];
-    if (!fs.existsSync(root)) {
-      return { files };
-    }
-    const checkDirectory = directoryBudget(root);
-    const walk = (directory: string, rel: string, depth: number): void => {
-      let entries = [];
-      try {
-        entries = fs.readdirSync(directory, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      checkDirectory(directory, entries.length);
-      assert(depth <= MAIN_LIMITS.directoryDepthMax, 'cms:list: the budget bounds depth');
-      for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-          continue;
-        }
-        const full = path.join(directory, entry.name);
-        const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) {
-          walk(full, entryRel, depth + 1);
-        } else if (/\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(entry.name)) {
-          if (!/\.d\.[cm]?ts$/i.test(entry.name)) {
-            files.push(
-              ...readCmsSource(full, entryRel, {
-                page: false,
-                includeGeneralOnly: cmsIncludesGeneral(entryRel),
-              }),
-            );
-          }
-        } else if (/\.astro$/i.test(entry.name)) {
-          files.push(...readCmsSource(full, entryRel, { page: true }));
-        } else if (/\.json$/i.test(entry.name) && !CMS_SKIP.test(entry.name)) {
-          files.push(readCmsJson(full, entryRel, rel, entry.name));
-        }
-      }
-    };
-    walk(root, '', 0);
-    files.sort((left, right) => left.rel.localeCompare(right.rel));
+  // Data modules and root constants files may hold one record of site settings.
+  // Other source files retain the stricter collection rule, so internal utility
+  // constants do not become CMS entries.
+  ipcMain.handle('cms:list', async (_event, projectPath) => runSliced(cmsListSliced(projectPath)));
+}
+
+// Written once for both drivers (lib/slicedWork.ts): every file is parsed, so a project with
+// thousands of data files is one long run that yields after each, never a cap on how many are read.
+function* cmsListSliced(projectPath: string): SlicedWork<{ readonly files: CmsFile[] }> {
+  const root = path.join(projectPath, 'src');
+  const files: CmsFile[] = [];
+  if (!fs.existsSync(root)) {
     return { files };
-  });
+  }
+  const checkDirectory = directoryBudget(root);
+  function* walk(directory: string, rel: string, depth: number, only: { readonly astroOnly: boolean } = { astroOnly: false }): SlicedWork<void> {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    checkDirectory(directory, entries.length);
+    assert(depth <= MAIN_LIMITS.directoryDepthMax, 'cms:list: the budget bounds depth');
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+        continue;
+      }
+      const full = path.join(directory, entry.name);
+      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        // src/assets holds files the site imports (images, Lottie JSON), not content.
+        if (entryRel !== 'assets') {
+          yield* walk(full, entryRel, depth + 1, only);
+        }
+      } else if (!only.astroOnly || isAstroSource(entry.name)) {
+        files.push(...cmsEntriesOf(full, entryRel, { includeGeneral: cmsIncludesGeneral(entryRel) }));
+        yield;
+      }
+    }
+  }
+  // The project may name its data files (.stacki/folders.json, `cms.files`):
+  // then exactly those are read, each with its single values, and nothing is
+  // detected. Without the key the walk below finds them, as it always has.
+  const folders = configOf(readProjectFolders(projectPath));
+  const chosen = cmsFilesFor(folders);
+  if (chosen === undefined) {
+    yield* walk(root, '', 0);
+  } else {
+    // Astro files are sources whatever the list says (the open one is always
+    // included), so the walk still finds every one of them; the list names only the
+    // other data files, and an Astro file it names (saved before that rule) is ignored.
+    yield* walk(root, '', 0, { astroOnly: true });
+    for (const file of chosen.filter((other) => !isAstroSource(other))) {
+      assert(file.startsWith('src/'), 'cms:list: a chosen data file is under src/');
+      const full = path.join(projectPath, ...file.split('/'));
+      if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+        files.push(...cmsEntriesOf(full, file.slice('src/'.length), { includeGeneral: true }));
+        yield;
+      }
+    }
+  }
+  files.sort((left, right) => left.rel.localeCompare(right.rel));
+  return { files };
+}
+
+// What one file under src/ adds to the CMS panel, by its type: a data module's
+// exported collections (and its single values when `includeGeneral`), a page's
+// frontmatter data, a JSON file. Anything else adds nothing.
+function cmsEntriesOf(full: string, entryRel: string, options: { readonly includeGeneral: boolean }): CmsFile[] {
+  const name = path.basename(full);
+  if (/\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(name)) {
+    if (/\.d\.[cm]?ts$/i.test(name)) {
+      return [];
+    }
+    return readCmsSource(full, entryRel, { page: false, includeGeneralOnly: options.includeGeneral });
+  }
+  if (/\.astro$/i.test(name)) {
+    return readCmsSource(full, entryRel, { page: true });
+  }
+  if (/\.json$/i.test(name) && !CMS_SKIP.test(name)) {
+    const directory = entryRel.includes('/') ? entryRel.slice(0, entryRel.lastIndexOf('/')) : '';
+    return [readCmsJson(full, entryRel, directory, name)];
+  }
+  return [];
 }
 
 function registerCmsReadHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
@@ -125,11 +154,7 @@ function registerCmsReadHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     }
     const col = findCollections(source, scan).find((candidate) => candidate.name === exportName);
     if (!col) {
-      throw new Error(
-        page
-          ? `${exportName} is no longer declared in src/${fileRel}.`
-          : `${exportName} is no longer exported from src/${fileRel}.`,
-      );
+      throw new Error(page ? `${exportName} is no longer declared in src/${fileRel}.` : `${exportName} is no longer exported from src/${fileRel}.`);
     }
     if (!col.data) {
       throw new Error(`${exportName} isn't plain data — ${col.reason}.`);
@@ -212,11 +237,7 @@ function registerCmsWriteHandler({ ipcMain, send }: Pick<MainHost, 'ipcMain' | '
       const scan = page ? PAGE_SCAN : undefined;
       const written =
         exportName === GENERAL
-          ? writeGeneral(
-              source,
-              data && typeof data === 'object' && !Array.isArray(data) ? data : {},
-              scan,
-            )
+          ? writeGeneral(source, data && typeof data === 'object' && !Array.isArray(data) ? data : {}, scan)
           : replaceCollection(source, exportName, parseDataList(data), scan);
       if (written === undefined) {
         throw new Error(`Couldn't write ${exportName} back into src/${fileRel}.`);
@@ -251,11 +272,7 @@ function registerCmsWriteHandler({ ipcMain, send }: Pick<MainHost, 'ipcMain' | '
   });
 }
 
-function registerCmsCreateHandlers({
-  ipcMain,
-  send,
-  shell,
-}: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
+function registerCmsCreateHandlers({ ipcMain, send, shell }: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
   // New collections land in src/data/, the conventional home for Astro content
   // that isn't a content collection.
   ipcMain.handle('cms:create', async (_event, { projectPath, name }) => {

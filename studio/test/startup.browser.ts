@@ -3,17 +3,14 @@ import { chromium, type Page } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const url = process.env['STUDIO_URL'] ?? 'http://localhost:4373/studio';
 try {
   await delayedStartup();
   await interruptedStartup();
-  console.log(
-    'Startup progress, elapsed-time feedback, aborting a stalled request, automatic reconnect, bounded failures and manual recovery passed.',
-  );
+  console.log('Startup progress, elapsed-time feedback, aborting a stalled request, automatic reconnect, bounded failures and manual recovery passed.');
 } finally {
   await browser.close();
 }
@@ -47,11 +44,7 @@ async function delayedStartup() {
     await editorReady(page);
     release();
     assert.equal(calls, 2);
-    assert.equal(
-      await page.getByRole('alert').count(),
-      0,
-      'Canceled request cannot report a stale error',
-    );
+    assert.equal(await page.getByRole('alert').count(), 0, 'Canceled request cannot report a stale error');
   } finally {
     release();
     await page.close();

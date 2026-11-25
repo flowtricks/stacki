@@ -1,6 +1,7 @@
 // Component schemas travel as arrays over IPC and as Maps in local symbol reads.
 // Parse the metadata the props panel consumes, including branch-specific defaults,
 // rather than carrying unknown shapes into control and visibility decisions.
+import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
 import { toArray, toRecord } from '../core/record';
 import { definedFields } from '../core/boundary';
@@ -23,9 +24,46 @@ export interface PropUnion {
   readonly names: readonly string[];
   readonly branches: readonly UnionBranch[];
 }
+/**
+ * One member of an object type, or of each item of a list of objects. Beyond
+ * its name and type it can carry what the type cannot say on its own: the
+ * `@format` word of a text member (`color`, `date`), the choices of an enum,
+ * and, for a nested list or object, its own members (`shape`, with
+ * `shapeIsList` for a list of them).
+ */
 export interface PropShapeField {
   readonly name: string;
   readonly type: string;
+  readonly format?: string;
+  readonly options?: readonly string[];
+  readonly shape?: readonly PropShapeField[];
+  readonly shapeIsList?: boolean;
+}
+// What a value only code can give is (see propModelSchema.ts schemaTypeOf): an object,
+// a function (an action) or a type no field can fill in (`any`, a promise).
+export const CODE_KINDS = ['object', 'function', 'opaque'] as const;
+export type CodeKind = (typeof CODE_KINDS)[number];
+/**
+ * What each item of a list prop is when its type says so (`widths: number[]`,
+ * `Array<string>`, `("a" | "b")[]`): the editor draws every item with that kind's control.
+ * Absent for a list of objects (its `shape` says) and for one whose type does not say.
+ */
+export const PROP_ITEM_KINDS = ['text', 'number', 'switch', 'choice'] as const;
+export type PropItemKind = (typeof PROP_ITEM_KINDS)[number];
+/**
+ * A default the component computes from its other props, as code an instance
+ * panel weighs for the values one instance sets (src/features/props/propRules.ts):
+ * the `named[variant]` of `label ?? named[variant]`, or a destructure default
+ * such as `variant === "play" ? "Play" : "Close"`. `locals` names the prop each
+ * destructured local holds (`{ variant: "variant", kind: "type" }`), and
+ * `tables` the frontmatter's `const` lookup tables the code indexes, each
+ * option's entry as code (`{ named: { play: 'pressed ? "Pause" : "Play"' } }`).
+ * Main reads it (electron/properties/variantDefaults.ts computedDefaultsOf).
+ */
+export interface ComputedDefault {
+  readonly code: string;
+  readonly locals: Readonly<Record<string, string>>;
+  readonly tables: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 export interface PropField {
   readonly name: string;
@@ -34,8 +72,18 @@ export interface PropField {
   readonly optional: boolean;
   readonly options?: readonly string[];
   readonly numeric?: boolean;
+  // Options of a mixed choice written as expressions (`flag={true}`), not strings.
+  readonly expressionOptions?: readonly string[];
+  readonly codeKind?: CodeKind;
+  // The declared type as written, one line, on props whose value is set in code.
+  readonly typeText?: string;
   readonly default?: PropDefault | undefined;
   readonly defaultExpr?: boolean;
+  // The default computed from other props, which an instance weighs for its own values.
+  readonly computedDefault?: ComputedDefault;
+  // The project file an expression default imports, for its thumbnail only:
+  // the default itself is still the expression.
+  readonly defaultAsset?: string;
   readonly hint?: string;
   readonly doc?: string;
   readonly min?: number;
@@ -45,8 +93,17 @@ export interface PropField {
   readonly maxExclusive?: boolean;
   readonly shape?: readonly PropShapeField[];
   readonly shapeIsList?: boolean;
+  // The kind of each item of a list prop whose items are plain values; a choice's words are `options`.
+  readonly itemKind?: PropItemKind;
   readonly unions?: readonly PropUnion[];
+  // The prop's `@deprecated` notice ('' for the bare tag); absent when it is not deprecated.
+  readonly deprecated?: string;
+  // 'unread' when the component never reads the prop (the "Not used" tag); absent when it does or cannot tell.
+  readonly usage?: PropFieldUsage;
 }
+/** Whether a component reads a prop, as the prop model states it (propModel.ts PROP_USAGES). */
+export const PROP_FIELD_USAGES = ['read', 'unread', 'unknown'] as const;
+export type PropFieldUsage = (typeof PROP_FIELD_USAGES)[number];
 export type PropSchema = ReadonlyMap<string, PropField>;
 
 export function parseField(input: unknown, where: string): PropField {
@@ -61,23 +118,21 @@ export function parseField(input: unknown, where: string): PropField {
     optional: schemaBoolean(value['optional'], `${where}.optional`),
     ...schemaOptionalMetadata(value, where),
     ...definedFields({
-      options: schemaOptional(value, 'options', where, (input, at) =>
-        schemaStrings(input, at, LIMITS.propOptionsMax),
-      ),
-      shape: schemaOptional(value, 'shape', where, schemaShape),
-      unions: schemaOptional(value, 'unions', where, (input, at) =>
-        schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at)),
-      ),
+      options: schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
+      expressionOptions: schemaOptional(value, 'expressionOptions', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
+      codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
+      itemKind: schemaOptional(value, 'itemKind', where, schemaItemKind),
+      usage: schemaOptional(value, 'usage', where, schemaUsage),
+      computedDefault: schemaOptional(value, 'computedDefault', where, schemaComputedDefault),
+      shape: schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, 1, shapeBudget())),
+      unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
   };
   // An explicit undefined default is part of the existing in-process protocol.
   return 'default' in value
     ? {
         ...field,
-        default:
-          value['default'] === undefined
-            ? undefined
-            : schemaDefault(value['default'], `${where}.default`),
+        default: value['default'] === undefined ? undefined : schemaDefault(value['default'], `${where}.default`),
       }
     : field;
 }
@@ -101,6 +156,7 @@ export function parsePropSchema(input: unknown): PropSchema {
     }
     out.set(key, field);
   }
+  assert(out.size === entries.size, 'parsePropSchema: every key becomes one field');
   return out;
 }
 
@@ -171,16 +227,13 @@ function schemaStrings(input: unknown, where: string, maximum: number): readonly
   if (values.some((value) => typeof value !== 'string')) {
     fail(where, 'expected string array');
   }
-  return values.map((value) => schemaText(value, where));
+  const strings = values.map((value) => schemaText(value, where));
+  assert(strings.length === values.length, 'schemaStrings: every value is kept');
+  return strings;
 }
 
 // Undefined metadata is omitted because absence has meaning to the field renderer.
-function schemaOptional<T>(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  where: string,
-  parse: (input: unknown, where: string) => T,
-): T | undefined {
+function schemaOptional<T>(record: Readonly<Record<string, unknown>>, key: string, where: string, parse: (input: unknown, where: string) => T): T | undefined {
   return record[key] === undefined ? undefined : parse(record[key], `${where}.${key}`);
 }
 function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where: string) {
@@ -194,47 +247,104 @@ function schemaOptionalMetadata(value: Readonly<Record<string, unknown>>, where:
     max: schemaOptional(value, 'max', where, schemaNumber),
     step: schemaOptional(value, 'step', where, schemaNumber),
     doc: schemaOptional(value, 'doc', where, schemaText),
+    defaultAsset: schemaOptional(value, 'defaultAsset', where, schemaText),
     hint: schemaOptional(value, 'hint', where, schemaText),
+    typeText: schemaOptional(value, 'typeText', where, schemaText),
+    deprecated: schemaOptional(value, 'deprecated', where, schemaText),
   });
 }
-function schemaShape(input: unknown, where: string): readonly PropShapeField[] {
+function schemaCodeKind(input: unknown, where: string): CodeKind {
+  const kind = CODE_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    fail(where, `expected one of ${CODE_KINDS.join(', ')}`);
+  }
+  return kind;
+}
+function schemaItemKind(input: unknown, where: string): PropItemKind {
+  const kind = PROP_ITEM_KINDS.find((candidate) => candidate === input);
+  if (kind === undefined) {
+    fail(where, `expected one of ${PROP_ITEM_KINDS.join(', ')}`);
+  }
+  return kind;
+}
+function schemaUsage(input: unknown, where: string): PropFieldUsage {
+  const usage = PROP_FIELD_USAGES.find((candidate) => candidate === input);
+  if (usage === undefined) {
+    fail(where, `expected one of ${PROP_FIELD_USAGES.join(', ')}`);
+  }
+  return usage;
+}
+// A computed default's code is non-empty; its locals and tables are bounded like a schema's props and options.
+function schemaComputedDefault(input: unknown, where: string): ComputedDefault {
+  const value = schemaRecord(input, where);
+  const code = schemaText(value['code'], `${where}.code`).trim();
+  if (code.length === 0) {
+    fail(`${where}.code`, 'expected non-empty string');
+  }
+  const locals = schemaDictionary(value['locals'], `${where}.locals`, schemaText);
+  const tablesRecord = schemaRecord(value['tables'] ?? {}, `${where}.tables`);
+  if (Object.keys(tablesRecord).length > LIMITS.propOptionsMax) {
+    fail(`${where}.tables`, `exceeds ${LIMITS.propOptionsMax} tables`);
+  }
+  const tables = schemaDictionary(tablesRecord, `${where}.tables`, (entries, at) => {
+    const record = schemaRecord(entries, at);
+    if (Object.keys(record).length > LIMITS.propOptionsMax) {
+      fail(at, `exceeds ${LIMITS.propOptionsMax} entries`);
+    }
+    return schemaDictionary(record, at, schemaText);
+  });
+  assert(Object.keys(locals).length <= LIMITS.propSchemaFieldsMax, 'schemaComputedDefault: locals are bounded');
+  return { code, locals, tables };
+}
+interface ShapeBudget {
+  readonly take: () => boolean;
+}
+function shapeBudget(): ShapeBudget {
+  let remaining = LIMITS.propSchemaFieldsMax;
+  return {
+    take: () => {
+      remaining -= 1;
+      return remaining >= 0;
+    },
+  };
+}
+// A nested shape is bounded in depth (LIMITS.listFieldDepthMax) and in how many members it holds in all.
+function schemaShape(input: unknown, where: string, depth: number, budget: ShapeBudget): readonly PropShapeField[] {
+  if (depth > LIMITS.listFieldDepthMax) {
+    fail(where, `shape nesting exceeds ${LIMITS.listFieldDepthMax}`);
+  }
   return schemaArray(input, where, LIMITS.propSchemaFieldsMax).map((item) => {
+    if (!budget.take()) {
+      fail(where, `shape exceeds ${LIMITS.propSchemaFieldsMax} members`);
+    }
     const value = schemaRecord(item, where);
+    const nested = schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, depth + 1, budget));
+    const options = schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax));
+    const format = schemaOptional(value, 'format', where, schemaText);
+    const isList = schemaOptional(value, 'shapeIsList', where, schemaBoolean);
     return {
       name: schemaText(value['name'], `${where}.name`),
       type: schemaText(value['type'], `${where}.type`),
+      ...definedFields({ format, options, shape: nested, shapeIsList: isList }),
     };
   });
 }
-function schemaDictionary<T>(
-  input: unknown,
-  where: string,
-  parse: (value: unknown, where: string) => T,
-): Readonly<Record<string, T>> {
+function schemaDictionary<T>(input: unknown, where: string, parse: (value: unknown, where: string) => T): Readonly<Record<string, T>> {
   const record = schemaRecord(input === undefined ? {} : input, where);
-  return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [
-      schemaText(key, where),
-      parse(value, `${where}.${key}`),
-    ]),
-  );
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [schemaText(key, where), parse(value, `${where}.${key}`)]));
 }
 function schemaUnion(input: unknown, where: string): PropUnion {
   const value = schemaRecord(input, where);
   return {
     names: schemaStrings(value['names'], `${where}.names`, LIMITS.propSchemaFieldsMax),
-    branches: schemaArray(value['branches'], `${where}.branches`, LIMITS.propOptionsMax).map(
-      (branch) => schemaBranch(branch, where),
-    ),
+    branches: schemaArray(value['branches'], `${where}.branches`, LIMITS.propOptionsMax).map((branch) => schemaBranch(branch, where)),
   };
 }
 function schemaBranch(input: unknown, where: string): UnionBranch {
   const value = schemaRecord(input, where);
   return {
     forbids: schemaStrings(value['forbids'], `${where}.forbids`, LIMITS.propSchemaFieldsMax),
-    pins: schemaDictionary(value['pins'], `${where}.pins`, (input, at) =>
-      schemaStrings(input, at, LIMITS.propOptionsMax),
-    ),
+    pins: schemaDictionary(value['pins'], `${where}.pins`, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
     defaults: schemaDictionary(value['defaults'], `${where}.defaults`, (input, at) =>
       typeof input === 'string' ? schemaText(input, at) : schemaNumber(input, at),
     ),

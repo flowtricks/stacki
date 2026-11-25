@@ -7,10 +7,12 @@ import {
   IPC_PAYLOADS,
   parseIpcPayload,
   CLIPBOARD_BYTES_MAX,
+  TERMINAL_DIMENSION_MAX,
   parseTerminalAck,
   parseTerminalInput,
 } from '#dist/shared/ipc/ipcPayloads.js';
 import { BOUNDARY_LIMITS, data, object, text, optional } from '#dist/shared/core/boundary.js';
+import { PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 import type { IpcContract } from '#dist/shared/ipc/ipcContract.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
@@ -18,27 +20,36 @@ const jsonNull: unknown = JSON.parse('null');
 
 const noPayload = new Set([
   'project:pending',
+  'microphone:openSettings',
+  'microphone:request',
+  'microphone:status',
+  'dictation:status',
   'native:copy',
   'native:paste',
   'native:undo',
   'native:redo',
   'settings:get',
+  'apps:hostVersion',
   'recents:list',
   'git:repositories',
   'project:openDialog',
-  'project:newDialog',
+  'project:openSiteDialog',
+  'project:takeOpenedFolders',
   'project:parentDialog',
   'dev:stop',
+  'update:read',
 ]);
 const pathPayload = new Set([
   'publish:state',
+  'publish:availability',
+  'publish:siteURL',
   'studio:status',
+  'studio:upgradeCheck',
   'project:close',
+  'project:inspectFolder',
   'recents:add',
   'recents:remove',
   'recents:refreshThumb',
-  'project:hasNodeModules',
-  'project:install',
   'project:scan',
   'project:classes',
   'watch:start',
@@ -51,6 +62,8 @@ const pathPayload = new Set([
   'style:listFiles',
   'style:listAstroStyles',
   'dev:diagnose',
+  'dev:inspect',
+  'dev:network',
   'git:info',
   'git:ghStatus',
   'git:init',
@@ -108,7 +121,10 @@ const fields = {
   model: { imports: [], nodes: [{ kind: 'text', id: 'one', value: 'Hello' }] },
   baseChecksum: 'a'.repeat(64),
   authoredChecksum: 'a'.repeat(64),
+  checksum: 'a'.repeat(64),
   token: '00000000-0000-4000-8000-000000000000',
+  // Dictation's model channels name the model by id only (shared/properties/voice/dictationModel.ts).
+  modelId: 'base',
   edit: {
     tag: 'remove-node',
     target: { path: [0], kind: 'element', span: { start: 0, end: 5 } },
@@ -140,13 +156,267 @@ const fields = {
   enabled: true,
 };
 
+const aiChat = { projectPath: '/site', chat: `c${'a'.repeat(24)}` };
 const metadataSamples: Readonly<Record<string, unknown>> = {
+  // The AI chat panel's channels (shared/ipc/aiChat.ts; their bad shapes are in aiChatContract.test.ts).
+  'ai:agents': { projectPath: '/site' },
+  'ai:installAgent': { projectPath: '/site', agent: 'claude' },
+  'ai:trust': { projectPath: '/site' },
+  'ai:prewarm': { projectPath: '/site', agent: 'claude', action: 'warm' },
+  'ai:chats': { projectPath: '/site' },
+  'ai:chatCreate': { projectPath: '/site', agent: 'codex' },
+  'ai:chatUpdate': { ...aiChat, title: 'Hero copy' },
+  'ai:chatDelete': aiChat,
+  'ai:chatRead': aiChat,
+  'ai:prompt': { ...aiChat, text: 'Tighten the hero copy', attachments: [] },
+  'ai:steer': { ...aiChat, text: 'Also fix the footer', attachments: [] },
+  'ai:compact': aiChat,
+  'ai:chatFork': aiChat,
+  'ai:chatMove': { ...aiChat, section: `s${'1'.repeat(16)}` },
+  'ai:sections': { projectPath: '/site', action: { kind: 'create', name: 'Launch' } },
+  'ai:diff': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro' },
+  'ai:mentions': { projectPath: '/site', query: 'ind', kinds: ['file', 'skill'] },
+  'ai:screenshot': { projectPath: '/site', rect: { x: 0, y: 0, width: 320, height: 200 } },
+  'ai:record': { projectPath: '/site', action: { kind: 'start', rect: { x: 0, y: 0, width: 320, height: 200 } } },
+  'ai:cancel': aiChat,
+  'ai:permission': { ...aiChat, request: 'p1', answer: { kind: 'cancel' } },
+  'ai:setOption': { ...aiChat, option: 'model', value: 'large' },
+  'ai:remember': { projectPath: '/site', agent: 'claude', action: { kind: 'reset' } },
+  'ai:setup': { projectPath: '/site', agent: 'claude', action: { kind: 'detect' } },
+  'ai:review': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro', action: { kind: 'keep' } },
+  'style:selectorUsage': { projectPath: '/site' },
+  'style:removeSelectors': {
+    projectPath: '/site',
+    ids: ['src/styles/site.css|0|0|0'],
+    files: [{ rel: 'src/styles/site.css', digest: 'a'.repeat(64) }],
+  },
+  'style:restoreSelectors': {
+    projectPath: '/site',
+    changes: [{ rel: 'src/styles/site.css', before: '.a {}', after: '' }],
+    to: 'before',
+  },
+  'cmsRemote:create': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'booklet',
+  },
+  'cmsRemote:delete': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    ids: ['abc'],
+  },
+  'cmsRemote:move': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    move: { collection: 'booklet', id: 'abc', after: 'def' },
+  },
+  'cmsRemote:collections': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+  },
+  'cmsRemote:documents': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'campus',
+  },
+  'cmsRemote:template': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    collection: 'campus',
+  },
+  'cmsRemote:document': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+  },
+  'cmsRemote:write': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    write: { id: 'abc', field: 'pastorName', value: 'Matt' },
+  },
+  'cmsRemote:references': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    types: ['campus'],
+  },
+  'cmsRemote:upload': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    kind: 'image',
+  },
+  'cmsRemote:linkPreview': { url: 'https://youtu.be/gQIJRzTjvCA' },
+  'pageTemplate:create': {
+    projectPath: '/site',
+    draft: { route: '/blog/[slug]', source: { kind: 'content-collection', collection: 'blog', origin: 'existing', slug: { kind: 'entry-id' } } },
+  },
+  'pageTemplate:plan': {
+    projectPath: '/site',
+    draft: { route: '/blog/[slug]', source: { kind: 'content-collection', collection: 'blog', origin: 'existing', slug: { kind: 'entry-id' } } },
+  },
+  'pageTemplate:sample': { projectPath: '/site', request: { kind: 'http-json', url: 'https://api.example.com/items', headers: [] } },
+  'project:setEnv': { projectPath: '/site', name: 'API_TOKEN', value: 'value' },
+  'emdash:project': { projectPath: '/site' },
+  'emdash:installPlan': { projectPath: '/site' },
+  'emdash:install': { projectPath: '/site', confirmedCommand: 'npm install emdash' },
+  'emdash:installCancel': { projectPath: '/site' },
+  'emdash:adminUrl': { projectPath: '/site' },
+  'secrets:list': { projectPath: '/site', file: '.env' },
+  'secrets:read': { projectPath: '/site', file: '.env', revision: 'a'.repeat(64), index: 0 },
+  'secrets:apply': { projectPath: '/site', file: '.env.local', revision: 'a'.repeat(64), change: { kind: 'remove', index: 0 } },
+  'secrets:ignore': { projectPath: '/site', file: '.env' },
+  'mcp:read': { projectPath: '/site' },
+  'mcp:readText': { projectPath: '/site' },
+  'mcp:reveal': { projectPath: '/site', revision: 'a'.repeat(64), name: 'Sanity' },
+  'mcp:apply': {
+    projectPath: '/site',
+    revision: 'a'.repeat(64),
+    change: { kind: 'add', name: 'Sanity', config: { transport: 'http', url: 'https://mcp.sanity.io', headers: [] } },
+  },
+  'mcp:saveText': { projectPath: '/site', revision: 'a'.repeat(64), text: '{}' },
+  'mcp:readCodex': { projectPath: '/site' },
+  'mcp:revealCodex': { projectPath: '/site', revision: 'a'.repeat(64), name: 'Sanity' },
+  'mcp:applyCodex': { projectPath: '/site', revision: 'a'.repeat(64), projectRevision: 'b'.repeat(64), change: { kind: 'put', name: 'Sanity' } },
+  'content:remoteRead': {
+    projectPath: '/site',
+    request: { operation: 'documents', collection: 'blog' },
+  },
+  'content:remoteEdit': {
+    projectPath: '/site',
+    request: { operation: 'createCollection', name: 'Blog posts' },
+  },
+  'cmsRemote:act': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+    action: 'publish',
+  },
+  'cmsRemote:history': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+  },
+  'cmsRemote:restore': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    id: 'abc',
+    revision: 'tx-123',
+  },
+  // Stacki Apps: install from a file or a GitHub release, then commit; update and remove by id.
+  'apps:list': { projectPath: '/site' },
+  'apps:pickFile': { projectPath: '/site' },
+  'apps:stageGitHub': { projectPath: '/site', source: { owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip', account: 'octocat' }, tag: 'v1.0.0' },
+  'apps:githubRepositories': { projectPath: '/site', account: 'octocat' },
+  'apps:githubReleases': { projectPath: '/site', source: { owner: 'octocat', repository: 'heat-map', asset: 'app.zip' } },
+  'apps:commit': { projectPath: '/site', token: 'a'.repeat(32) },
+  'apps:discard': { projectPath: '/site', token: 'a'.repeat(32) },
+  'apps:uninstall': { projectPath: '/site', id: 'heat-map' },
+  'apps:checkUpdates': { projectPath: '/site', force: true },
+  'apps:applyUpdate': { projectPath: '/site', id: 'heat-map' },
+  // Apps added as a folder: the folders that do not read as an app, and showing one.
+  'apps:folders': { projectPath: '/site' },
+  'apps:revealFolder': { projectPath: '/site', folder: 'My App' },
+  'apps:marketplace': { projectPath: '/site', refresh: true },
+  'apps:installMarketplace': { projectPath: '/site', id: 'heat-map', version: '1.1.0' },
+  'apps:setAutoUpdate': { projectPath: '/site', id: 'heat-map', autoUpdate: false },
+  'apps:repositoryVisibility': { projectPath: '/site', id: 'heat-map' },
+  // Sharing and publishing apps, and app settings.
+  'apps:scanSecrets': { projectPath: '/site', target: { kind: 'installed', id: 'heat-map' } },
+  'apps:repositoryStatus': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:makePublic': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:addLicense': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:share': {
+    projectPath: '/site',
+    share: { id: 'heat-map', account: 'octocat', owner: 'acme', ownerKind: 'organization', name: 'heat-map', visibility: 'private' },
+  },
+  'apps:switchSource': {
+    projectPath: '/site',
+    id: 'heat-map',
+    source: { kind: 'github', owner: 'acme', repository: 'heat-map', asset: 'heat-map.zip', account: 'octocat', tag: 'v1.0.0' },
+  },
+  'apps:checkMarketplace': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:submitMarketplace': { projectPath: '/site', submission: { owner: 'octocat', repository: 'heat-map', account: 'octocat', acceptedTerms: true } },
+  'apps:readSettings': { projectPath: '/site', id: 'heat-map' },
+  'apps:writeSettings': { projectPath: '/site', id: 'heat-map', values: { 'api-key': 'value' } },
+  // The pages and components an app's page index stamps in one batch.
+  'apps:fileStamps': { projectPath: '/site', rels: ['src/pages/index.astro', 'src/components/Card.astro'] },
+  // App storage and the person.
+  'apps:storageGet': { projectPath: '/site', id: 'heat-map', scope: 'project', key: 'pins/hero' },
+  'apps:storageSet': { projectPath: '/site', id: 'heat-map', scope: 'local', key: 'pins/hero', value: '{}', writer: 'desktop-0a1b' },
+  'apps:storageKeys': { projectPath: '/site', id: 'heat-map', scope: 'project' },
+  'apps:storageWatch': { projectPath: '/site' },
+  'apps:person': { projectPath: '/site' },
+  'apps:people': { projectPath: '/site' },
+  // A region of the editor window (window CSS pixels) the renderer measured for `canvas.snapshot`.
+  'apps:canvasSnapshot': { rect: { x: 10, y: 20, width: 300, height: 200 }, widthMax: 320 },
+  // Project files and sign-ins.
+  'apps:files': { projectPath: '/site', id: 'heat-map', operation: { kind: 'write', path: 'src/data/heat.json', content: '{}', encoding: 'utf8' } },
+  'apps:authConnect': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:authStatus': { projectPath: '/site', id: 'heat-map' },
+  'apps:authToken': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:authDisconnect': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:netFetch': { projectPath: '/site', id: 'heat-map', request: { url: 'https://api.example.test/v1/report', method: 'POST', body: '{}', auth: 'google' } },
+  'mediaHosting:connections': { projectPath: '/site' },
+  'mediaHosting:save': {
+    projectPath: '/site',
+    draft: {
+      kind: 'bunny',
+      label: 'CDN',
+      storageZone: 'site-zone',
+      region: 'de',
+      publicBaseUrl: 'https://site.b-cdn.net',
+      secret: { kind: 'accessKey', accessKey: 'zone-password' },
+    },
+  },
+  'mediaHosting:remove': { projectPath: '/site', id: '00000000-0000-4000-8000-000000000000' },
+  'mediaHosting:discover': { projectPath: '/site', key: { provider: 'r2', token: 'cf-token' } },
+  'mediaHosting:connectAccount': {
+    projectPath: '/site',
+    connect: { provider: 'bunny', apiKey: 'account-key', label: 'CDN', storageZone: 'site-zone', publicBaseUrl: 'https://site.b-cdn.net' },
+  },
+  'mediaHosting:list': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: '' },
+  'mediaHosting:pickUpload': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images' },
+  'mediaHosting:upload': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', filePaths: ['/tmp/a.png'] },
+  'mediaHosting:createFolder': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: '', name: 'images' },
+  'mediaHosting:rename': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    folder: 'images',
+    entry: 'file',
+    from: 'a.png',
+    to: 'b.png',
+  },
+  'mediaHosting:delete': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', entry: 'folder', name: 'old' },
+  'mediaHosting:reorder': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', order: ['b.png', 'a.png'] },
+  'mediaHosting:replace': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', name: 'a.png' },
+  'cmsConnections:list': { projectPath: '/site' },
+  'cmsConnections:save': {
+    projectPath: '/site',
+    draft: {
+      kind: 'sanity',
+      label: 'Site',
+      projectId: 'abc123',
+      dataset: 'production',
+      secret: 'sk',
+    },
+  },
+  'cmsConnections:remove': { projectPath: '/site', id: '00000000-0000-4000-8000-000000000000' },
+  'cmsConnections:check': { projectPath: '/site', request: { action: 'test', id: '00000000-0000-4000-8000-000000000000' } },
+  'cmsConnections:sanityLogin': {
+    projectPath: '/site',
+    request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
+  },
+  'publish:account': {
+    projectPath: '/site',
+    request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
+  },
+  'publish:workerSetup': { projectPath: '/site', worker: { accountId: 'account', project: 'my-site' } },
   'publish:repository': {
     projectPath: '/site',
     request: { action: 'list', account: 'owner' },
   },
   'project:metadata': { projectPath: '/site', kind: 'publish' },
   'project:writeMetadata': { projectPath: '/site', write: { kind: 'publish', source: '{}' } },
+  'project:pickFolder': { projectPath: '/site' },
   'project:createDefaultsCanvas': {
     projectPath: '/site',
     canvas: {
@@ -154,9 +424,104 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
       source: '<h1>Hello</h1>',
     },
   },
+  // A batch is two edits or more (page:edit carries one).
+  'page:editBatch': { pagePath: fields.pagePath, authoredChecksum: fields.authoredChecksum, edits: [fields.edit, fields.edit] },
   'project:removeDefaultsCanvas': {
     projectPath: '/site',
     file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
+  },
+  // Settings > Agents: a paired agent's fields, and a definition or a pair to move to the Trash.
+  'agents:list': { projectPath: '/site' },
+  'agents:save': {
+    projectPath: '/site',
+    fields: { name: 'code-reviewer', description: 'Reviews.', instructions: 'Read.', tools: ['Read'], claudeModel: 'sonnet' },
+    mode: 'create',
+    overwrite: [],
+  },
+  'agents:delete': { projectPath: '/site', target: { kind: 'file', path: '.claude/agents/reviewer.md' } },
+  // The Instructions panel: Markdown paths inside the project, and a folder for rules.
+  'instructions:create': { projectPath: '/site', file: '.claude/rules/testing.md', source: '# Testing\n' },
+  'instructions:createFolder': { projectPath: '/site', folder: '.claude/rules/frontend' },
+  'instructions:read': { projectPath: '/site', file: 'AGENTS.md' },
+  'instructions:write': { projectPath: '/site', file: 'AGENTS.md', source: '# B\n', base: '# A\n' },
+  // The history panel's author pictures: full commit hashes with their authors' emails.
+  'git:avatars': { projectPath: '/site', commits: [{ hash: 'a'.repeat(40), email: 'designer@example.com' }] },
+  // The Roles tab's member picker: the typed start of a GitHub username.
+  'github:searchUsers': { projectPath: '/site', query: 'octo-' },
+  // The Audits panel's rendered pass: a route of the loopback dev server.
+  'audit:render': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/about' },
+  'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
+  // The phone preview: the project and the mode its dev server restarts in (shared/ipc/devNetwork.ts).
+  'dev:setNetwork': { projectPath: '/site', mode: 'network' },
+  // The Astro copy of a plain website (shared/ipc/astroCopy.ts; its bad shapes are in astroCopyContract.test.ts).
+  'project:checkAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },
+  'project:readShadcnSettings': { projectPath: '/site' },
+  'project:changeShadcnSetting': { projectPath: '/site', setting: 'rtl', enabled: true },
+  'project:inspectShadcnPreset': { preset: 'b1QGlW' },
+  'project:createAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },
+  // The interface language mirrored to main: a shipped locale or "system".
+  'locale:set': { preference: 'de' },
+  // The update popup's two buttons.
+  'update:act': { action: 'install' },
+  // Breakpoint sync: the scan and usage name a breakpoint's old and new value; apply and restore carry the scan's own digests and journal.
+  'breakpointSync:scan': {
+    projectPath: '/site',
+    id: 'tablet',
+    old: { direction: 'down', value: 991, unit: 'px' },
+    next: { direction: 'down', value: 1000, unit: 'px' },
+  },
+  'breakpointSync:usage': { projectPath: '/site', breakpoints: [{ id: 'tablet', direction: 'down', value: 991, unit: 'px' }] },
+  'breakpointSync:apply': {
+    projectPath: '/site',
+    key: 'tablet',
+    files: [{ rel: 'src/styles/a.css', digest: 'd'.repeat(64), edits: [{ locator: 'media:0', start: 0, end: 5, before: '991px', after: '1000px' }] }],
+    unchecked: [{ file: 'src/styles/b.css', locator: 'media:1' }],
+  },
+  'component:duplicate': { projectPath: '/site', target: { kind: 'component', path: 'src/components/Button.astro' } },
+  'component:planRemove': { projectPath: '/site', target: { kind: 'component', path: 'src/components/Div.astro' } },
+  'component:remove': { projectPath: '/site', target: { kind: 'folder', path: 'src/components/ui' }, uses: 'remove' },
+  'component:restoreRemoved': { token: 'component-removal-1' },
+  'component:planRename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/forms/Button.astro' } },
+  'component:rename': { projectPath: '/site', request: { from: 'src/components/Button.astro', to: 'src/components/ContactButton.astro' } },
+  'component:revertRename': { token: 'component-rename-1', direction: 'undo' },
+  // Page settings: a step planned and applied by its kind, its undo, and a template page's settings read and changed.
+  'page:planSettings': { projectPath: '/site', request: { kind: 'home', page: 'about.astro' } },
+  'page:applySettings': { projectPath: '/site', request: { kind: 'rename', from: 'about.astro', to: 'company.astro' } },
+  'page:revertSettings': { token: 'page-settings-1', direction: 'redo' },
+  'page:planRemoveMany': { projectPath: '/site', request: { pages: ['about.astro', 'blog/post.md'], folders: ['old'] } },
+  'page:removeMany': { projectPath: '/site', request: { pages: ['about.astro'], folders: [] } },
+  'page:readTemplate': { projectPath: '/site', page: 'blog/[slug].astro' },
+  'page:retargetTemplate': {
+    projectPath: '/site',
+    page: 'blog/[slug].astro',
+    source: { kind: 'content-collection', collection: 'posts', origin: 'existing', slug: { kind: 'entry-id' } },
+  },
+  'component:previewPropertyRemoval': { projectPath: '/site', file: '/site/src/components/Button.astro', name: 'direction' },
+  'component:classUsage': { projectPath: '/site', pagePath: '/site/src/pages/index.astro', classes: ['card', 'card_title'] },
+  'styleMove:record': {
+    projectPath: '/site',
+    journal: {
+      version: 1,
+      id: 'move-1',
+      startedAt: 1,
+      component: 'Card',
+      files: [
+        { role: 'component', path: '/site/src/components/Card.astro', rel: 'src/components/Card.astro', after: 'card' },
+        { role: 'page', path: '/site/src/pages/index.astro', rel: 'src/pages/index.astro', before: 'page' },
+      ],
+    },
+  },
+  'styleMove:clear': { projectPath: '/site', id: 'move-1' },
+  'styleMove:pending': { projectPath: '/site' },
+  'styleMove:resolve': { projectPath: '/site', id: 'move-1', target: 'moved' },
+  'breakpointSync:restore': { projectPath: '/site', journalId: 'journal-1', direction: 'undo' },
+  'cms:editConstants': { projectPath: '/site', rel: 'consts.ts', edit: { kind: 'add', field: { name: 'SITE_TAGLINE', value: 'Hello' } } },
+  // A page's value: one import called (`call`), or its last render's values (`scope`).
+  'content:sampleValue': {
+    projectPath: '/site',
+    devUrl: 'http://localhost:4321',
+    pagePath: fields.pagePath,
+    source: { kind: 'scope', sinceMs: 0 },
   },
 };
 
@@ -166,13 +531,17 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
       metadataSamples[channel] ??
       (channel === 'assets:convert'
         ? { projectPath: '/site', rel: 'public/hero.png', format: 'webp' }
-        : channel === 'studio:install'
-          ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
-          : noPayload.has(channel)
-            ? undefined
-            : pathPayload.has(channel)
-              ? '/site'
-              : fields);
+        : channel === 'studio:setAuth'
+          ? { projectPath: '/site', auth: { kind: 'github' } }
+          : channel === 'studio:upgrade'
+            ? { projectPath: '/site', requestId: 'test-upgrade' }
+            : channel === 'studio:install'
+              ? { projectPath: '/site', source: 'published', requestId: 'test-install' }
+              : noPayload.has(channel)
+                ? undefined
+                : pathPayload.has(channel)
+                  ? '/site'
+                  : fields);
     assert.doesNotThrow(() => parse(sample));
     assert.throws(() => parse(Symbol('invalid')), /Expected/);
     if (!noPayload.has(channel)) {
@@ -180,6 +549,25 @@ for (const [channel, parse] of Object.entries(IPC_PAYLOADS)) {
     }
   });
 }
+
+test('taking back a created component names the file and the bytes it was created with', () => {
+  const request = { projectPath: '/site', path: '/site/src/components/Button.astro', checksum: 'c'.repeat(64) };
+  assert.deepEqual(parseIpcPayload('component:discard', request), request);
+  assert.equal(parseIpcPayload('component:discard', { ...request, force: true }).force, true);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, checksum: 'short' }), /Digest: expected 64 lowercase hex/);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, path: undefined }), /Expected/);
+  assert.throws(() => parseIpcPayload('component:discard', { ...request, force: 'yes' }), /Expected/);
+});
+
+test('a sample entry is asked for by id, by position, or as the first a list shows', () => {
+  const request = { devUrl: 'http://localhost:4321', name: 'stats' };
+  assert.deepEqual(parseIpcPayload('content:sampleEntry', request), request);
+  assert.equal(parseIpcPayload('content:sampleEntry', { ...request, index: 2 }).index, 2);
+  assert.equal(parseIpcPayload('content:sampleEntry', { ...request, index: 0 }).index, 0);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: -1 }), /Expected nonnegative integer/);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: 1.5 }), /Expected safe integer/);
+  assert.throws(() => parseIpcPayload('content:sampleEntry', { ...request, index: '2' }), /Expected number/);
+});
 
 test('content writes accept the storage locator used by ContentView', () => {
   const payload = parseIpcPayload('content:writeEntry', {
@@ -226,28 +614,15 @@ test('CSS group and row moves preserve both supported payload variants', () => {
 });
 
 test('IPC collection, string, integer, depth, and path bounds fail explicitly', () => {
-  assert.throws(
-    () => parseIpcPayload('project:scan', 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)),
-    /Path exceeds limit/,
-  );
+  assert.throws(() => parseIpcPayload('project:scan', 'x'.repeat(BOUNDARY_LIMITS.pathLengthMax + 1)), /Path exceeds limit/);
   assert.throws(() => parseIpcPayload('project:scan', '/site\0suffix'), /NUL/);
-  assert.throws(
-    () =>
-      parseIpcPayload('src:writeText', {
-        projectPath: '/site',
-        rel: 'file',
-        text: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1),
-      }),
-    /String exceeds limit/,
-  );
-  assert.throws(
-    () =>
-      parseIpcPayload('selection:copy', {
-        projectPath: '/site',
-        keys: Array.from({ length: BOUNDARY_LIMITS.itemsMax + 1 }, () => 'key'),
-      }),
-    /Array exceeds limit/,
-  );
+  // Text and item counts are bounded only by the platform: a longer string or array cannot be built, and Stacki has no product size limit.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(BOUNDARY_LIMITS.itemsMax, PLATFORM_LIMITS.arrayLengthMax);
+  const large = 'x'.repeat(4 * 1024 * 1024);
+  assert.equal(parseIpcPayload('src:writeText', { projectPath: '/site', rel: 'file', text: large }).text.length, large.length);
+  const keys = Array.from({ length: 100_000 }, () => 'key');
+  assert.equal(parseIpcPayload('selection:copy', { projectPath: '/site', keys }).keys.length, keys.length);
   for (const value of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(() => parseIpcPayload('git:log', { projectPath: '/site', limit: value }));
   }
@@ -286,7 +661,8 @@ void write;
 void ready;
 
 test('clipboard payloads accept bytes without truncation and reject invalid byte values', () => {
-  const image = new Uint8Array(BOUNDARY_LIMITS.itemsMax + 1);
+  // An image larger than a typical item list, still under the clipboard's own byte bound.
+  const image = new Uint8Array(1024 * 1024);
   image[0] = 255;
   const parsed = parseIpcPayload('terminal:clipboardImage', { bytes: image, mime: 'image/png' });
   assert.equal(parsed.bytes.length, image.length);
@@ -310,21 +686,14 @@ test('terminal send channels accept keystrokes and acks and refuse every malform
   assert.deepEqual(parseTerminalInput({ id: 't1', data: 'ls\r' }), { id: 't1', data: 'ls\r' });
   assert.deepEqual(parseTerminalAck({ id: 't1', count: 0 }), { id: 't1', count: 0 });
   assert.deepEqual(parseTerminalAck({ id: 't1', count: 4096 }), { id: 't1', count: 4096 });
-  const malformedInputs = [
-    undefined,
-    jsonNull,
-    'ls',
-    { id: 't' },
-    { data: 'x' },
-    { id: 1, data: 'x' },
-  ];
+  const malformedInputs = [undefined, jsonNull, 'ls', { id: 't' }, { data: 'x' }, { id: 1, data: 'x' }];
   for (const input of malformedInputs) {
     assert.throws(() => parseTerminalInput(input));
   }
-  assert.throws(
-    () => parseTerminalInput({ id: 't1', data: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) }),
-    /String exceeds limit/,
-  );
+  // Keystroke data is bounded only by the string, so a large paste is accepted whole.
+  assert.equal(BOUNDARY_LIMITS.textLengthMax, PLATFORM_LIMITS.stringUnitsMax);
+  const paste = 'x'.repeat(4 * 1024 * 1024);
+  assert.equal(parseTerminalInput({ id: 't1', data: paste }).data.length, paste.length);
   // A NaN, negative, fractional or unsafe count would poison the flow-control
   // total and leave a paused pty paused (or never pause it again).
   for (const count of [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, 2 ** 53, '10', undefined]) {
@@ -333,14 +702,8 @@ test('terminal send channels accept keystrokes and acks and refuse every malform
 });
 
 type Assignable<Source, Target> = [Source] extends [Target] ? true : false;
-const channelsStayDistinct: Assignable<
-  IpcContract['style:writeFile']['payload'],
-  IpcContract['page:edit']['payload']
-> = false;
-const terminalSuccessNeedsId: Assignable<
-  { readonly ok: true },
-  IpcContract['terminal:start']['result']
-> = false;
+const channelsStayDistinct: Assignable<IpcContract['style:writeFile']['payload'], IpcContract['page:edit']['payload']> = false;
+const terminalSuccessNeedsId: Assignable<{ readonly ok: true }, IpcContract['terminal:start']['result']> = false;
 void channelsStayDistinct;
 void terminalSuccessNeedsId;
 
@@ -349,11 +712,119 @@ test('desktop preferences reject unknown keys and nonboolean toggle values', () 
     setting: 'sound',
     enabled: false,
   });
-  for (const input of [
-    { setting: 'unknown', enabled: true },
-    { setting: 'sound', enabled: 'true' },
-    { setting: 'usageCountsEnabled' },
-  ]) {
+  for (const input of [{ setting: 'unknown', enabled: true }, { setting: 'sound', enabled: 'true' }, { setting: 'usageCountsEnabled' }]) {
     assert.throws(() => parseIpcPayload('settings:set', input));
   }
+});
+
+test('terminal startup and resize reject unmeasured or unrepresentable native grids', () => {
+  const payload = { id: 'terminal', cwd: '/site', cols: 92, rows: 18 };
+  for (const channel of ['terminal:start', 'terminal:resize'] as const) {
+    assert.equal(parseIpcPayload(channel, payload).cols, 92);
+    assert.equal(parseIpcPayload(channel, payload).rows, 18);
+    assert.equal(parseIpcPayload(channel, { ...payload, cols: 1 }).cols, 1);
+    assert.equal(parseIpcPayload(channel, { ...payload, rows: TERMINAL_DIMENSION_MAX }).rows, TERMINAL_DIMENSION_MAX);
+    for (const field of ['cols', 'rows'] as const) {
+      for (const value of [undefined, 0, -1, 1.5, NaN, Infinity, '80', TERMINAL_DIMENSION_MAX + 1]) {
+        assert.throws(() => parseIpcPayload(channel, { ...payload, [field]: value }));
+      }
+    }
+    assert.throws(() => parseIpcPayload(channel, { id: 'terminal', cwd: '/site' }));
+  }
+});
+
+test('a sampled value names its source: an import call or the render’s own scope', () => {
+  const page = { projectPath: '/site', devUrl: 'http://localhost:4321', pagePath: fields.pagePath };
+  const call = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec: '@/sanity/queries.ts', name: 'getPastors' } });
+  assert.deepEqual(call.source, { kind: 'call', spec: '@/sanity/queries.ts', name: 'getPastors' });
+  const scope = parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: 1_700_000_000_000 } });
+  assert.deepEqual(scope.source, { kind: 'scope', sinceMs: 1_700_000_000_000 });
+  // The old flat shape, an unknown kind, a missing field, and a time that is not a count all fail.
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, spec: '../data', name: 'getPastors' }), /Expected object/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'module' } }), /Unknown sample source/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec: '../data' } }), /Expected string/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: -1 } }), /nonnegative/);
+  assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: 1.5 } }), /safe integer/);
+});
+
+test('media hosting payloads refuse traversal, unknown entries, unbounded uploads and keys in the wrong place', () => {
+  const target = { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images' };
+  assert.throws(() => parseIpcPayload('mediaHosting:list', { ...target, folder: '../secrets' }), /reserved/);
+  assert.throws(() => parseIpcPayload('mediaHosting:list', { ...target, connectionId: 'abc' }), /connection id/);
+  assert.throws(() => parseIpcPayload('mediaHosting:rename', { ...target, entry: 'bucket', from: 'a', to: 'b' }), /entry kind/);
+  assert.throws(() => parseIpcPayload('mediaHosting:rename', { ...target, entry: 'file', from: 'a', to: 'x/y' }), /slash/);
+  assert.throws(() => parseIpcPayload('mediaHosting:upload', { ...target, filePaths: [] }), /files to upload/);
+  assert.throws(() => parseIpcPayload('mediaHosting:upload', { ...target, filePaths: Array.from({ length: 101 }, () => '/a') }), /files to upload/);
+  assert.throws(() => parseIpcPayload('mediaHosting:reorder', { ...target, order: ['a', 'a'] }), /once/);
+  assert.throws(
+    () =>
+      parseIpcPayload('mediaHosting:save', {
+        projectPath: '/site',
+        draft: { kind: 'r2', label: 'R', accountId: 'a'.repeat(32), bucket: 'media', publicBaseUrl: 'https://c.dev' },
+      }),
+    /Expected object/,
+  );
+  assert.throws(() => parseIpcPayload('assets:replace', { projectPath: '/site' }), /Expected string/);
+});
+
+test('the microphone channels take no payload: a renderer can never choose the address System Settings opens', () => {
+  for (const channel of ['microphone:status', 'microphone:request', 'microphone:openSettings'] as const) {
+    assert.equal(parseIpcPayload(channel, undefined), undefined, channel);
+    for (const supplied of [
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
+      'https://example.com',
+      { url: 'https://example.com' },
+      '',
+    ]) {
+      assert.throws(() => parseIpcPayload(channel, supplied), /Expected no payload/, `${channel} ${JSON.stringify(supplied)}`);
+    }
+  }
+});
+
+test('component operation payloads refuse paths that climb, other kinds, and names that are not components', () => {
+  const bad = (channel: 'component:duplicate' | 'component:planRemove' | 'component:remove', target: unknown) =>
+    assert.throws(() => parseIpcPayload(channel, { projectPath: '/site', target, uses: 'remove' }));
+  // The deletion mode is never defaulted: a missing or unknown one is refused at the boundary.
+  for (const uses of [undefined, 'delete', true]) {
+    assert.throws(() => parseIpcPayload('component:remove', { projectPath: '/site', target: { kind: 'component', path: 'src/components/A.astro' }, uses }));
+  }
+  for (const channel of ['component:duplicate', 'component:planRemove', 'component:remove'] as const) {
+    bad(channel, { kind: 'component', path: '../outside.astro' });
+    bad(channel, { kind: 'component', path: 'src/../x.astro' });
+    bad(channel, { kind: 'page', path: 'src/components/A.astro' });
+    bad(channel, 'src/components/A.astro');
+  }
+  const rename = (request: unknown) => assert.throws(() => parseIpcPayload('component:rename', { projectPath: '/site', request }));
+  // A dashed lower-case file name is a component name since d546e37e; a name in neither style is not.
+  assert.equal(
+    parseIpcPayload('component:rename', { projectPath: '/site', request: { from: 'src/components/A.astro', to: 'src/components/a.astro' } }).request.to,
+    'src/components/a.astro',
+  );
+  rename({ from: 'src/components/A.astro', to: 'src/components/a_b.astro' });
+  rename({ from: 'src/components/A.astro', to: 'src/components/A.tsx' });
+  rename({ from: 'src/components/A.astro', to: '../A.astro' });
+  rename({ from: 'src/components/A.astro', to: 'src/components/Fragment.astro' });
+  assert.throws(() => parseIpcPayload('component:revertRename', { token: 'x', direction: 'sideways' }));
+});
+
+test('page settings payloads refuse paths that leave the pages folder, unknown kinds and directions', () => {
+  const plan = (request: unknown) => parseIpcPayload('page:planSettings', { projectPath: '/site', request });
+  for (const request of [
+    { kind: 'home', page: '../secret.astro' },
+    { kind: 'home', page: 'about.exe' },
+    { kind: 'home', page: '/abs.astro' },
+    { kind: 'remove', page: 'a//b.astro' },
+    { kind: 'duplicate', page: 'a?b.astro' },
+    { kind: 'rename', from: 'about.astro', to: 'about.txt' },
+    { kind: 'rename', from: 'blog/[slug].astro', to: 'blog/[id].astro' },
+    { kind: 'swap', page: 'about.astro' },
+    { kind: 'home' },
+  ]) {
+    assert.throws(() => plan(request), JSON.stringify(request));
+  }
+  assert.throws(() => parseIpcPayload('page:revertSettings', { token: 'page-settings-1', direction: 'sideways' }));
+  assert.throws(() => parseIpcPayload('page:readTemplate', { projectPath: '/site', page: '../x.astro' }));
+  assert.throws(() =>
+    parseIpcPayload('page:retargetTemplate', { projectPath: '/site', page: 'blog/[slug].astro', source: { kind: 'content-collection', collection: 'posts' } }),
+  );
 });

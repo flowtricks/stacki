@@ -140,3 +140,19 @@ export function syncStamps(liveDocument: Document, serverDocument: Document): vo
     liveDocument.appendChild(liveDocument.createComment(data));
   }
 }
+
+// The dev server's error overlay (`vite-error-overlay`, a child of <body>) stays over a page the patch has just
+// brought up to date: it is client-added, so the patch leaves it, and the app then reloaded the whole canvas to
+// take it down (docs/canvas-recovery.md), replaying the page's intro for an edit that fixed nothing the page
+// needed reloaded for. A rendering the server just produced and the patch applied is the fix the overlay was
+// waiting for, so it goes with it. Returns whether one was removed.
+export function dismissErrorOverlay(body: HTMLElement): boolean {
+  let removed = false;
+  for (const child of Array.from(body.children)) {
+    if (child.localName === 'vite-error-overlay') {
+      child.remove();
+      removed = true;
+    }
+  }
+  return removed;
+}

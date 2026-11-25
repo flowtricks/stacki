@@ -1,15 +1,7 @@
 import { pathText, record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 
-export const STUDIO_INSTALL_STAGES = [
-  'release',
-  'files',
-  'dependencies',
-  'check',
-  'build',
-  'activate',
-  'complete',
-] as const;
+export const STUDIO_INSTALL_STAGES = ['release', 'files', 'dependencies', 'check', 'build', 'activate', 'complete'] as const;
 export type StudioInstallStage = (typeof STUDIO_INSTALL_STAGES)[number];
 // Keep snapshots small even when npm emits extensive dependency diagnostics.
 export const STUDIO_LOG_CHARS_MAX = 24_000;
@@ -19,9 +11,7 @@ export interface StudioInstallProgress {
   readonly stage: StudioInstallStage;
   readonly output: string;
 }
-export type StudioInstallUpdate =
-  | { readonly kind: 'stage'; readonly stage: StudioInstallStage }
-  | { readonly kind: 'output'; readonly text: string };
+export type StudioInstallUpdate = { readonly kind: 'stage'; readonly stage: StudioInstallStage } | { readonly kind: 'output'; readonly text: string };
 
 export function studioCompletedStages(stage: StudioInstallStage): number {
   const completed = STUDIO_INSTALL_STAGES.indexOf(stage);

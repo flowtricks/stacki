@@ -1,0 +1,323 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slug } from "@/utils/slug.ts";
+import Icon from "@/components/media/Icon.astro";
+import arrow from "@/assets/icons/arrow.svg";
+
+type SelectOption = string | { value: string; label: string };
+
+type Base = {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Field label. Defaults to the variant name. */
+  label?: string;
+  /** Initially selected value. */
+  value?: string;
+  /** Submitted name. Defaults to the label slug. */
+  name?: string;
+  /** Prompt shown before selection. Defaults to the variant prompt. */
+  placeholder?: string;
+  /** Require the field and mark its label. */
+  required?: boolean;
+  /** Visually hide the label. */
+  labelHidden?: boolean;
+};
+
+type Props = HTMLAttributes<"select"> &
+  Base &
+  (
+    | {
+        /** Option source. */
+        variant?: "list";
+        /** Options to show. Strings double as labels. */
+        options: SelectOption[];
+        from?: never;
+        to?: never;
+      }
+    | {
+        variant: "month" | "day" | "state";
+        options?: never;
+        from?: never;
+        to?: never;
+      }
+    | {
+        variant: "year";
+        options?: never;
+        /** First year. Defaults to 100 years before `to`.
+         *
+         * @int */
+        from?: number;
+        /** Last year. Defaults to the build year.
+         *
+         * @int */
+        to?: number;
+      }
+  );
+
+type AllProps = HTMLAttributes<"select"> &
+  Base & {
+    variant?: "list" | "month" | "day" | "year" | "state";
+    options?: SelectOption[];
+    from?: number;
+    to?: number;
+  };
+
+const {
+  render = true,
+  label,
+  value,
+  variant = "list",
+  options,
+  from,
+  to,
+  name,
+  placeholder,
+  required = false,
+  labelHidden = false,
+  class: className,
+  ...rest
+} = Astro.props as AllProps;
+
+const WORDING = {
+  list: { label: "Select", placeholder: "Select one…" },
+  month: { label: "Month", placeholder: "MM" },
+  day: { label: "Day", placeholder: "DD" },
+  state: { label: "State", placeholder: "Select one…" },
+  year: { label: "Year", placeholder: "YYYY" },
+};
+
+const STATES: SelectOption[] = [
+  { value: "AL", label: "Alabama" },
+  { value: "AK", label: "Alaska" },
+  { value: "AZ", label: "Arizona" },
+  { value: "AR", label: "Arkansas" },
+  { value: "CA", label: "California" },
+  { value: "CO", label: "Colorado" },
+  { value: "CT", label: "Connecticut" },
+  { value: "DE", label: "Delaware" },
+  { value: "FL", label: "Florida" },
+  { value: "GA", label: "Georgia" },
+  { value: "HI", label: "Hawaii" },
+  { value: "ID", label: "Idaho" },
+  { value: "IL", label: "Illinois" },
+  { value: "IN", label: "Indiana" },
+  { value: "IA", label: "Iowa" },
+  { value: "KS", label: "Kansas" },
+  { value: "KY", label: "Kentucky" },
+  { value: "LA", label: "Louisiana" },
+  { value: "ME", label: "Maine" },
+  { value: "MD", label: "Maryland" },
+  { value: "MA", label: "Massachusetts" },
+  { value: "MI", label: "Michigan" },
+  { value: "MN", label: "Minnesota" },
+  { value: "MS", label: "Mississippi" },
+  { value: "MO", label: "Missouri" },
+  { value: "MT", label: "Montana" },
+  { value: "NE", label: "Nebraska" },
+  { value: "NV", label: "Nevada" },
+  { value: "NH", label: "New Hampshire" },
+  { value: "NJ", label: "New Jersey" },
+  { value: "NM", label: "New Mexico" },
+  { value: "NY", label: "New York" },
+  { value: "NC", label: "North Carolina" },
+  { value: "ND", label: "North Dakota" },
+  { value: "OH", label: "Ohio" },
+  { value: "OK", label: "Oklahoma" },
+  { value: "OR", label: "Oregon" },
+  { value: "PA", label: "Pennsylvania" },
+  { value: "RI", label: "Rhode Island" },
+  { value: "SC", label: "South Carolina" },
+  { value: "SD", label: "South Dakota" },
+  { value: "TN", label: "Tennessee" },
+  { value: "TX", label: "Texas" },
+  { value: "UT", label: "Utah" },
+  { value: "VT", label: "Vermont" },
+  { value: "VA", label: "Virginia" },
+  { value: "WA", label: "Washington" },
+  { value: "WV", label: "West Virginia" },
+  { value: "WI", label: "Wisconsin" },
+  { value: "WY", label: "Wyoming" },
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const span = (start: number, end: number) =>
+  Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+const latest = to ?? new Date().getFullYear();
+const earliest = from ?? latest - 100;
+
+const choices: SelectOption[] =
+  variant === "state"
+    ? STATES
+    : variant === "month"
+      ? span(1, 12).map(pad)
+      : variant === "day"
+        ? span(1, 31).map(pad)
+        : variant === "year"
+          ? span(earliest, latest).reverse().map(String)
+          : (options ?? []);
+
+const entries = choices.map((choice) =>
+  typeof choice === "string" ? { value: choice, label: choice } : choice,
+);
+
+const wording = WORDING[variant];
+const text = label ?? wording.label;
+---
+
+{render && entries.length > 0 && (
+  <label class:list={["field", "form-select", className]}>
+    <span
+      class:list={["field-label text-style-main", labelHidden && "sr-only"]}
+    >
+      <span>{text}</span>
+      {required && (
+        <span class="field-star" aria-hidden="true">
+          *
+        </span>
+      )}
+    </span>
+
+    <span class="form-select_control">
+      <select
+        class="field-control form-select_field text-style-main"
+        name={name ?? slug(text)}
+        required={required || undefined}
+        {...rest}
+      >
+        <option value="" disabled selected={value === undefined} hidden>
+          {placeholder ?? wording.placeholder}
+        </option>
+        {entries.map((entry) => (
+          <option value={entry.value} selected={entry.value === value}>
+            {entry.label}
+          </option>
+        ))}
+      </select>
+      <Icon class="form-select_mark" src={arrow} variant="small" />
+    </span>
+  </label>
+)}
+
+<style is:global>
+  @layer components {
+    .form-select_control {
+      position: relative;
+      display: block;
+    }
+
+    .form-select_field {
+      appearance: none;
+      padding-inline-end: 3em;
+      &:has(option[value=""]:checked) {
+        color: var(--text-2);
+      }
+    }
+
+    .form-select_mark {
+      position: absolute;
+      inset-inline-end: 1em;
+      top: 50%;
+      translate: 0 -50%;
+      rotate: 90deg;
+      pointer-events: none;
+      color: var(--text-2);
+    }
+
+    /* The list the browser draws itself, where it will */
+    @supports (appearance: base-select) {
+      .form-select_field,
+      .form-select_field::picker(select) {
+        appearance: base-select;
+      }
+
+      .form-select_field::picker-icon {
+        display: none;
+      }
+
+      .form-select_field {
+        display: flex;
+        align-items: center;
+        &::before,
+        &::after {
+          content: none;
+        }
+      }
+
+      .form-select_mark {
+        transition: rotate var(--open-duration) var(--open-ease);
+      }
+
+      .form-select_field:open ~ .form-select_mark {
+        rotate: -90deg;
+      }
+
+      .form-select_field:open {
+        background-color: var(--background-3);
+        border-end-start-radius: 0;
+        border-end-end-radius: 0;
+      }
+
+      .form-select_field::picker(select) {
+        margin-block: 0;
+        padding: var(--space-1);
+        max-height: min(18rem, calc(100dvh - 6rem));
+        position-try-order: normal;
+        overscroll-behavior: contain;
+        background-color: var(--background-3);
+        border: 0;
+        border-radius: var(--radius-small);
+        border-start-start-radius: 0;
+        border-start-end-radius: 0;
+        opacity: 0;
+        scale: 0.98;
+        transition:
+          opacity var(--open-duration) var(--open-ease),
+          scale var(--open-duration) var(--open-ease),
+          overlay var(--open-duration) var(--open-ease) allow-discrete,
+          display var(--open-duration) var(--open-ease) allow-discrete;
+      }
+
+      .form-select_field:open::picker(select) {
+        opacity: 1;
+        scale: 1;
+      }
+
+      @starting-style {
+        .form-select_field:open::picker(select) {
+          opacity: 0;
+          scale: 0.98;
+        }
+      }
+
+      .form-select_field option {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1) var(--space-2);
+        font-size: var(--text-small);
+        line-height: var(--line-height-large);
+        color: var(--text);
+        background-color: transparent;
+        border-radius: var(--radius-small);
+        cursor: pointer;
+        transition: background-color var(--hover-duration) var(--hover-ease);
+        &:hover,
+        &:focus {
+          background-color: var(--background-2);
+          outline: 0;
+        }
+      }
+
+      .form-select_field option[hidden] {
+        display: none;
+      }
+
+      .form-select_field option::checkmark {
+        order: 1;
+        margin-inline-start: auto;
+        color: var(--text-2);
+      }
+    }
+  }
+</style>

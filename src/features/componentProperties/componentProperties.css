@@ -5,6 +5,7 @@
   gap: 12px;
   padding: 12px;
   overflow: auto;
+  scrollbar-gutter: stable;
   min-width: 0;
   height: 100%;
 }
@@ -51,7 +52,6 @@
   padding: 12px;
 }
 .property-editor {
-  border: 1px solid var(--border-strong);
   border-radius: 7px;
   padding: 12px;
   display: flex;
@@ -60,13 +60,25 @@
   background: var(--bg-panel-2);
 }
 .property-editor header {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
+/* The app's square icon button, whatever the mark inside it is. */
 .property-editor header button {
-  font-size: 18px;
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  /* No margin or offset: the mark sits in the box centre, nothing nudges it. */
+  margin: 0;
+  line-height: 0;
   background: transparent;
+}
+.property-editor header button:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 .property-editor fieldset {
   border: 0;
@@ -75,23 +87,42 @@
   gap: 12px;
   min-width: 0;
 }
-.property-editor label:not(.list-item-field) {
+/* Not a prop field's own label: that is a row of a chip and its `{}`, which a
+   column would stretch the chip across and drop the toggle under. In :where so
+   this keeps its specificity, and the flags' row below still overrides it. */
+.property-editor label:not(.list-item-field):not(:where(.props-field > label)) {
   display: flex;
   flex-direction: column;
   gap: 6px;
   color: var(--text-dim);
 }
-.property-editor input,
+/* Fields are fills, as everywhere else in the app: never an outline. */
+.property-editor input:not([type='checkbox']),
 .property-editor textarea {
-  border-color: var(--border-strong);
-}
-.property-editor textarea {
-  resize: vertical;
+  border-color: transparent;
+  background: var(--bg-input);
 }
 .property-readonly-fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* A read-only type or default: a field's fill and shape, holding code. */
+.property-readonly-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-readonly-code .code-block {
+  overflow: auto;
+  scrollbar-gutter: stable;
+  max-height: 120px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .property-editor-title {
   display: flex;
@@ -110,24 +141,11 @@
 }
 .property-conditions ul {
   margin: 6px 0 0;
-  padding-left: 16px;
-}
-.property-editor .property-code {
-  font-family: var(--mono);
-  line-height: 1.5;
-  font-size: 11px;
-}
-.property-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+  padding-inline-start: 16px;
 }
 .property-editor .property-flags label {
   flex-direction: row;
   align-items: center;
-}
-.property-flags input {
-  width: auto;
 }
 .property-options.props-field {
   margin: 0;
@@ -140,7 +158,11 @@
   /* Keep six rows visible while leaving the add button outside the scrolling region. */
   max-height: min(180px, 30vh);
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior-y: contain;
+}
+.property-settings-dialog .property-error {
+  font-size: 11px;
 }
 .property-actions {
   display: flex;
@@ -167,7 +189,7 @@
 .property-add {
   position: absolute;
   top: 8px;
-  right: 12px;
+  inset-inline-end: 12px;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -191,6 +213,30 @@
 .property-default:hover .prop-expr-toggle:not(.on) {
   color: var(--text-dim);
 }
+/* A setting that can be set by conditions has a prop field's + (PropertyFieldHead.tsx):
+   hidden until its field is hovered, then centred on the control's top-left corner,
+   6px under the title row as the fields' gap is, so the dot sits where a prop
+   field's does. Hovering the dot grows it into the +, which is the click. */
+.property-field-head {
+  position: relative;
+}
+.property-field-head > .bind-handle {
+  inset-inline-start: -6px;
+  bottom: -12px;
+}
+.property-field-head > .bind-handle:hover:not(:disabled),
+.property-field-head > .bind-handle.on {
+  inset-inline-start: -9px;
+  bottom: -15px;
+}
+.property-field:hover > .property-field-head > .bind-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Unset, the title sits as Kind's does, its {} 4px after the words; set, the blue fill keeps its padding. */
+.property-field-head > .prop-label:not(.set) {
+  padding-inline-end: 0;
+}
 .property-type .dd-trigger,
 .property-default .dd-trigger {
   width: 100%;
@@ -202,4 +248,160 @@
 .property-expression-binding > .expr-input {
   flex: 1;
   min-width: 0;
+}
+
+/* A prop nothing in the component reads: a muted warning at the row's end. */
+.property-unused {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--text-dim);
+}
+
+/* A kind's settings (a Number's range, a Switch's labels) side by side. */
+.property-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.property-settings-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+}
+.property-settings-row label {
+  min-width: 0;
+}
+.property-settings-row input {
+  min-width: 0;
+  width: 100%;
+}
+/* A setting that does not read back tints its fields: a fill, not a border; the reason is a toast. */
+.property-settings.is-invalid input,
+.property-editor input[aria-invalid='true'] {
+  background: rgba(255, 90, 90, 0.16);
+}
+
+/* A row's kind, after its name: muted, at the row's end. */
+.property-row-kind {
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The attributes prop: a chip for its name, rows for its defaults and connections. */
+.property-attributes-name,
+.property-attribute-defaults-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-dim);
+}
+/* The chip names a variable in code: isolated left to right. */
+.property-chip {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.property-attribute-defaults,
+.property-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-attribute-default {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.property-attribute-default input {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.property-connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  text-align: start;
+  color: var(--text);
+  background: var(--bg-input);
+  overflow-wrap: anywhere;
+}
+.property-connection:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.property-connection:disabled {
+  color: var(--text-dim);
+}
+/* A shared type's props, and what an edit of one reaches (PropertyShareNotice.tsx). */
+.property-shared-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.property-shared-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.property-shared-file,
+.property-share-file {
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  text-align: start;
+  cursor: pointer;
+}
+.property-share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--component-green-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.property-share-summary {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+}
+.property-share-files,
+.property-share-defaults {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-share ul,
+.property-rename-files {
+  margin: 2px 0 0;
+  padding-inline-start: 16px;
 }

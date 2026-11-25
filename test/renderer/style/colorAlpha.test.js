@@ -36,12 +36,7 @@ const SIZE = 240;
   const buildDirectory = repoPath('node_modules/.stacki-test');
   fs.mkdirSync(buildDirectory, { recursive: true });
   const entry = path.join(buildDirectory, 'color-alpha.entry.jsx');
-  fs.writeFileSync(
-    entry,
-    `export { default as ColorPicker } from ${JSON.stringify(
-      repoPath('src/features/style/components/ColorPicker.tsx'),
-    )};\n`,
-  );
+  fs.writeFileSync(entry, `export { default as ColorPicker } from ${JSON.stringify(repoPath('src/features/style/components/ColorPicker.tsx'))};\n`);
   const out = path.join(buildDirectory, 'color-alpha.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -134,11 +129,7 @@ const SIZE = 240;
   let root = await open('');
   await dragOn('.u-color-sb', 0.8, 0.3);
   check('a drag on an unset colour comes out visible', alphaOf(last()) === 1, last());
-  check(
-    'and picks the colour that was dragged to',
-    /^rgb/.test(last()) && !/, 0\)$/.test(last()),
-    last(),
-  );
+  check('and picks the colour that was dragged to', /^rgb/.test(last()) && !/, 0\)$/.test(last()), last());
   // A first colour has no notation to preserve, so it is written the way this
   // panel has always written one.
   check('a colour with nothing to follow is written as rgb()', /^rgba?\(/.test(last()), last());
@@ -157,11 +148,7 @@ const SIZE = 240;
   root = await open('');
   await dragOn('.u-color-alpha', 0.4);
   const chosen = alphaOf(last());
-  check(
-    'dragging the alpha bar sets the alpha it was dragged to',
-    chosen > 0.3 && chosen < 0.5,
-    last(),
-  );
+  check('dragging the alpha bar sets the alpha it was dragged to', chosen > 0.3 && chosen < 0.5, last());
   await dragOn('.u-color-sb', 0.2, 0.2);
   check('and a later drag keeps it', Math.abs(alphaOf(last()) - chosen) < 0.02, last());
   await act(async () => {
@@ -210,11 +197,7 @@ const SIZE = 240;
   // The property, not the attribute: React writes the value onto the DOM node,
   // and reading the attribute would answer null and pass whatever happened.
   const hexShown = dom.window.document.querySelector('.u-color-field-input')?.value;
-  check(
-    'and opens showing no opacity, not opaque black',
-    hexShown === '#00000000',
-    String(hexShown),
-  );
+  check('and opens showing no opacity, not opaque black', hexShown === '#00000000', String(hexShown));
   await act(async () => {
     root.unmount();
   });
@@ -239,10 +222,7 @@ const SIZE = 240;
   };
   const cycle = () => press('.u-color-mode.is-channel');
   const pressHex = () => press('.u-color-mode.is-hex');
-  const letters = () =>
-    [...dom.window.document.querySelectorAll('.u-color-mode.is-channel span')]
-      .map((span) => span.textContent)
-      .join('');
+  const letters = () => [...dom.window.document.querySelectorAll('.u-color-mode.is-channel span')].map((span) => span.textContent).join('');
   const hexOn = () => !!dom.window.document.querySelector('.u-color-mode.is-hex.is-on');
 
   // RGB → HEX → HSL, which are the three notations CSS can spell. (HSB was the
@@ -256,11 +236,7 @@ const SIZE = 240;
   await pressHex();
   check('the HEX button writes a hex value', /^#[0-9a-f]{6,8}$/i.test(last()), last());
   check('and lights', hexOn());
-  check(
-    'while the numbers, which are still R/G/B, say what they are',
-    letters() === 'RGB',
-    letters(),
-  );
+  check('while the numbers, which are still R/G/B, say what they are', letters() === 'RGB', letters());
   await cycle();
   check('the pill comes back to the notation its letters show', /^rgba?\(/.test(last()), last());
   check('with hex no longer lit', !hexOn());
@@ -274,11 +250,7 @@ const SIZE = 240;
   check('and keeps the colour it was', /^hsla?\(\s*0[,\s]/.test(last()), last());
   check('with the columns following', letters() === 'HSL' && !hexOn(), letters());
   await cycle();
-  check(
-    'and back to rgb() — two states, not three',
-    /^rgba?\(/.test(last()) && letters() === 'RGB',
-    last(),
-  );
+  check('and back to rgb() — two states, not three', /^rgba?\(/.test(last()) && letters() === 'RGB', last());
   // Hex from HSL keeps the H/S/L numbers on screen: the pill says what the
   // fields hold, and they still hold those.
   await cycle();
@@ -332,22 +304,11 @@ const SIZE = 240;
   const editor = readSourceFolder('src/features/style/EmbedEditor.tsx', 'src/features/style/embed');
   const setPropAt = editor.indexOf('const setProp: SetProp');
   check('the committed writer is where it is looked for', setPropAt >= 0);
-  check(
-    'a committed write is not converted on its way out',
-    !/hslaToRgba/.test(editor.slice(setPropAt, setPropAt + 700)),
-    'setProp still normalizes hsl away',
-  );
+  check('a committed write is not converted on its way out', !/hslaToRgba/.test(editor.slice(setPropAt, setPropAt + 700)), 'setProp still normalizes hsl away');
   const liveAt = editor.indexOf('const liveSetProp: LiveSetProp');
   check('and so is the live one', liveAt >= 0);
-  check(
-    'nor is a live one',
-    !/value = hslaToRgba/.test(editor.slice(liveAt, liveAt + 700)),
-    'liveSetProp still normalizes hsl away',
-  );
-  check(
-    'but a native write still is, where the API demands it',
-    /const nativeSetOrFallback[\s\S]{0,200}hslaToRgba/.test(editor),
-  );
+  check('nor is a live one', !/value = hslaToRgba/.test(editor.slice(liveAt, liveAt + 700)), 'liveSetProp still normalizes hsl away');
+  check('but a native write still is, where the API demands it', /const nativeSetOrFallback[\s\S]{0,200}hslaToRgba/.test(editor));
 
   // --- the hex field ------------------------------------------------------------
   const css = fs.readFileSync(repoPath('src/features/style/utilities.css'), 'utf8');
@@ -367,16 +328,10 @@ const SIZE = 240;
     .split('\n')
     .filter((line) => /^\s*(input|select|textarea):hover[^{]*\{/.test(line))
     .filter((line) => !line.includes('style-panel-host'));
-  check(
-    'and the app paints no hover over the panel it does not dress',
-    unscoped.length === 0,
-    unscoped.join(' | '),
-  );
+  check('and the app paints no hover over the panel it does not dress', unscoped.length === 0, unscoped.join(' | '));
 
   if (failures.length) {
-    console.error(
-      `\ncolor-alpha: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ncolor-alpha: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

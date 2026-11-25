@@ -53,27 +53,104 @@ test('the complete channel inventory matches real main and terminal registration
   const harness = fixture();
   context.after(harness.dispose);
   const terminal = fs.readFileSync(path.resolve('dist/electron/terminal/terminal.js'), 'utf8');
-  const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map(
-    (match) => match[1],
-  );
+  const terminalChannels = [...terminal.matchAll(/ipcMain\.handle\(['"]([^'"]+)['"]/g)].map((match) => match[1]);
   // Step 8 retired page:writeRaw; step 9 added page:previewEdit; step 10
   // retired page:write and page:serialize, the Markdown whole-model save.
-  // Publishing, shared project settings, defaults canvases, and history add scoped handlers.
-  assert.equal(harness.handlers.size, 132);
+  // Publishing and its availability check, project settings, canvases, and history are scoped.
+  // Account sign-in adds one project-scoped channel for start, status, and cancellation.
+  // Published-site discovery has its own channel so remote lookups cannot block local status.
+  // Git pull and its background incoming check each have a project-scoped channel.
+  // CMS connections add four (list, save, remove, Sanity login) and the connected-CMS
+  // panel twelve (collections, documents, one document, write, create, delete, move,
+  // references, upload, publish/discard/unpublish, history, restore).
+  // The binding picker samples a page's own import calls (content:sampleValue).
+  // Content collections in the CMS panel add two: their reads and their edits. A new
+  // item's template (its collection's fields, edited before it is created) adds one.
+  // The Selectors panel adds three: finding unused selectors, removing them, and
+  // restoring what a removal changed. A gesture's several edits are written as
+  // one (page:editBatch), so the dev server never renders the page between them.
+  // Undo of creating a component takes its file back (component:discard).
+  // Settings → Folders picks a project folder in the system dialog (project:pickFolder).
+  // The history panel's author pictures add one (git:avatars), answered in main so the
+  // GitHub credential never reaches the renderer.
+  // Project roles add one (roles:identity): the GitHub login roles resolve for.
+  // The Roles tab's member suggestions add one (github:searchUsers), answered in main so the
+  // GitHub credential never reaches the renderer.
+  // Stacki Apps add ten: list, the file pick, the GitHub stage, the account's repositories and a
+  // repository's releases (answered in main so the account's token never reaches the renderer),
+  // commit, discard, uninstall, the update check and applying an update.
+  // The official marketplace adds three: reading its index and installing an approved version
+  // (answered in main, which downloads and checks the digest), and each app's auto-update switch.
+  // Sharing and publishing apps add eight, answered in main so the publishing account's token never
+  // reaches the renderer: the secret scan, a repository's status, making it public, adding its MIT
+  // license, the share, switching an app to its release, the marketplace's check and the submission.
+  // App settings add two: reading and writing them, so secrets stay in main's vault.
+  // App storage and the person add six: a stored value's read, write and keys, watching the project's
+  // data folder, the person (main applies the privacy preference) and the host's version for app.info.
+  // An app's page index adds one (apps:fileStamps): the stamps it caches other pages' trees by.
+  // Apps added as a folder add two: the folders that do not read as an app, and showing one in the
+  // file manager.
+  // App project files and sign-ins add five: the file call (main checks each path and the role's
+  // code:edit), and connecting, reading, handing out and forgetting a sign-in, so tokens stay in main.
+  // Where an installed app lives adds one (apps:repositoryVisibility): its GitHub repository's
+  // visibility, read in main with the publishing account's token.
+  // Requests through the host add one (apps:netFetch): main calls an app's declared hosts for it,
+  // signed with its sign-in, so services without CORS work and the token stays in main.
+  // The people an app may mention add one (apps:people): role members and commit authors, read in
+  // main, which applies the privacy preference.
+  // An element's snapshot adds one (apps:canvasSnapshot): main photographs the region of the
+  // sender's own window the renderer measured, the one capture API the renderer lacks.
+  // The AI chat panel adds twenty-one (shared/ipc/aiChat.ts): agents and their install, trusting the
+  // project, the chat list and one chat's create, update, delete and read, a prompt, steering a running
+  // turn, compacting, forking, moving a chat and sectioning the list, one turn's file diff, @ mention
+  // candidates, stopping it, a permission answer, a setting, keeping or undoing one file’s change, and
+  // the guided setup.
+  // Settings adds secrets:* and mcp:* (project .env values and MCP servers) and the microphone adds three
+  // (microphone:status, :request and :openSettings), and the interface language is mirrored to main (locale:set); the AI panel adds a prewarm (ai:prewarm) and a remembered setting (ai:remember), and a CMS connection can be checked before it is saved (cmsConnections:check), 268 in all.
+  // Breakpoint sync adds four (breakpointSync:scan, :usage, :apply and :restore) and EmDash projects five (emdash:project,
+  // :installPlan, :install, :installCancel and :adminUrl), 277 in all.
+  // Preview health adds one (dev:inspect); the palette row menu adds three (component:duplicate, :remove and
+  // :restoreRemoved), renaming or moving a component three (component:planRename, :rename and :revertRename),
+  // and deleting a prop across the site one (component:previewPropertyRemoval), 285 in all.
+  // Deleting a component with its instances and imports adds its plan (component:planRemove), 286 in all.
+  // The Page settings dialog adds five (page:planSettings, :applySettings, :revertSettings, :readTemplate and
+  // :retargetTemplate), 291 in all.
+  // The Pages panel's Select mode adds two (page:planRemoveMany and page:removeMany), 298 in all.
+  // Create component's "Move styles" adds five: which files use each class (component:classUsage) and the move's
+  // journal (styleMove:record, :clear, :pending and :resolve), 296 in all.
+  // Changing an installed Studio's sign-in type adds one (studio:setAuth), 299 in all.
+  // The in-app update popup adds two (update:read, update:act), 301 in all.
+  // The Studio box's upgrade adds three (studio:upgradeCheck, studio:upgrade and studio:restore), 304 in all.
+  // Settings > Agents adds three (agents:list, :save and :delete, shared/ipc/projectAgentChannels.ts) and the AI
+  // composer's screenshot one (ai:screenshot: main captures the sender's own window, as apps:canvasSnapshot does), 308 in all.
+  // On-device dictation adds four (dictation:status, :download, :cancel and :remove; shared/properties/voice/dictationModel.ts), 312 in all.
+  // The composer's screen recording and the CMS constants add three more, 315 in all.
+  // The AI panel's auto-compact threshold adds two (ai:autoCompactGet and :autoCompactSet), 317 in all.
+  // The phone preview adds two (dev:network and dev:setNetwork; shared/ipc/devNetwork.ts), 319 in all.
+  // Settings > Dictation's "Show in Finder" adds one (dictation:reveal), 320 in all.
+  // "Open from folder" on a plain website adds three (project:openSiteDialog, :checkAstroCopy and :createAstroCopy;
+  // shared/ipc/astroCopy.ts), 323 in all.
+  // Publish's Add Worker setup adds one (publish:workerSetup), 324 in all.
+  // A folder from outside the app adds two (project:inspectFolder for a window drop, project:takeOpenedFolders for
+  // the icon and the command line; shared/ipc/folderOpen.ts), 326 in all.
+  // The shadcn wizard adds one (project:inspectShadcnPreset) so main can resolve a preset before site creation, 329 including the two shadcn project settings channels.
+  assert.equal(harness.handlers.size, 329);
   assert.equal(terminalChannels.length, 4);
-  assert.deepEqual(
-    [...Object.keys(IPC_PAYLOADS)].sort(),
-    [...harness.handlers.keys(), ...terminalChannels].sort(),
-  );
+  assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
   // its own parser before touching the payload.
-  const sendChannels = [...terminal.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map(
-    (match) => match[1],
-  );
+  const sendChannels = [...terminal.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map((match) => match[1]);
   assert.deepEqual(sendChannels, ['terminal:input', 'terminal:ack']);
   for (const channel of sendChannels) {
     assert.match(terminal, new RegExp(`parseSendPayload\\('${channel}'`), `${channel} is parsed`);
   }
+  // The AI panel's one acknowledgement is registered beside the terminal's, with its own parser.
+  const ai = fs.readFileSync(path.resolve('dist/electron/handlers/ai/aiHandlers.js'), 'utf8');
+  assert.deepEqual(
+    [...ai.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map((match) => match[1]),
+    ['ai:ack'],
+  );
+  assert.match(ai, /parseSendPayload\('ai:ack'/, 'ai:ack is parsed');
 });
 
 test('malformed writes fail before altering disk; valid writes still work', async (context) => {
@@ -94,10 +171,7 @@ test('malformed writes fail before altering disk; valid writes still work', asyn
     tag: 'code-patch',
     hunks: [{ span: { start: 4, end: 10 }, expected: 'Before', text: 'After' }],
   };
-  await assert.rejects(
-    harness.invoke('page:edit', { pagePath: file, authoredChecksum: 'nope', edit: patch }),
-    /Digest: expected 64 lowercase hex characters/,
-  );
+  await assert.rejects(harness.invoke('page:edit', { pagePath: file, authoredChecksum: 'nope', edit: patch }), /Digest: expected 64 lowercase hex characters/);
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Before</h1>\n');
   const baseChecksum = sha256('<h1>Before</h1>\n');
   const written = toRecord(
@@ -112,16 +186,10 @@ test('malformed writes fail before altering disk; valid writes still work', asyn
   const result = toRecord(await harness.invoke('page:read', file));
   assert.equal(result?.['editable'], true);
   assert.equal(result?.['source'], '<h1>After</h1>\n');
-  const parsed = toRecord(
-    await harness.invoke('page:parse', { pagePath: file, source: '<main>Draft</main>\n' }),
-  );
+  const parsed = toRecord(await harness.invoke('page:parse', { pagePath: file, source: '<main>Draft</main>\n' }));
   assert.equal(parsed?.['editable'], true);
   assert.equal(parsed?.['source'], '<main>Draft</main>\n');
-  assert.equal(
-    fs.readFileSync(file, 'utf8'),
-    '<h1>After</h1>\n',
-    'parsing a code draft has no disk side effect',
-  );
+  assert.equal(fs.readFileSync(file, 'utf8'), '<h1>After</h1>\n', 'parsing a code draft has no disk side effect');
 });
 
 test('the Markdown wire model keeps source metadata and rejects corrupted fields', () => {
@@ -139,12 +207,60 @@ test('the Markdown wire model keeps source metadata and rejects corrupted fields
   }
 });
 
+// A null as it reaches a boundary: out of a parsed file, never written in our own code.
+const NULL_FROM_JSON: unknown = JSON.parse('null');
+
 test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.deepEqual(parseSettings({ sound: true }), {
     sound: true,
     usageCountsEnabled: true,
     usageNoticeVersion: 0,
+    appsPersonHidden: false,
+    aiAskBeforeTrust: false,
+    aiTrackChanges: true,
+    aiReviewChanges: false,
+    codeChips: true,
+    localePreference: 'system',
   });
+  assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
+  assert.equal(parseSettings({ sound: true, aiAskBeforeTrust: true }).aiAskBeforeTrust, true);
+  assert.throws(() => parseSettings({ sound: true, aiAskBeforeTrust: 'yes' }), /boolean/);
+  // Change tracking is on unless the person turned it off; a file written before the setting existed keeps it on.
+  assert.equal(parseSettings({ sound: true }).aiTrackChanges, true);
+  assert.equal(parseSettings({ sound: true, aiTrackChanges: false }).aiTrackChanges, false);
+  assert.equal(parseSettings({ sound: true, aiTrackChanges: true }).aiTrackChanges, true);
+  // A damaged value falls back to its own default, and every other setting in the file is kept.
+  for (const bad of ['yes', 'false', 0, 1, {}]) {
+    const kept = parseSettings({ sound: false, aiTrackChanges: bad, aiReviewChanges: true });
+    assert.equal(kept.aiTrackChanges, true, JSON.stringify(bad));
+    assert.equal(kept.aiReviewChanges, true);
+    assert.equal(kept.sound, false);
+  }
+  // Changes apply without asking unless the person turned review on; a file written before the setting existed stays off.
+  assert.equal(parseSettings({ sound: true }).aiReviewChanges, false);
+  assert.equal(parseSettings({ sound: true, aiReviewChanges: true }).aiReviewChanges, true);
+  assert.equal(parseSettings({ sound: true, aiReviewChanges: false }).aiReviewChanges, false);
+  for (const bad of ['yes', 'true', 0, 1, {}]) {
+    assert.equal(parseSettings({ sound: true, aiReviewChanges: bad, codeChips: false }).aiReviewChanges, false, JSON.stringify(bad));
+    assert.equal(parseSettings({ sound: true, aiReviewChanges: bad, codeChips: false }).codeChips, false);
+  }
+  // CSS chips are on unless the person turned them off; a file written before the setting existed keeps them on.
+  assert.equal(parseSettings({ sound: true }).codeChips, true);
+  assert.equal(parseSettings({ sound: true, codeChips: false }).codeChips, false);
+  assert.equal(parseSettings({ sound: true, codeChips: true }).codeChips, true);
+  for (const bad of ['yes', 'false', 0, 1, {}]) {
+    assert.equal(parseSettings({ sound: true, codeChips: bad, aiTrackChanges: false }).codeChips, true, JSON.stringify(bad));
+    assert.equal(parseSettings({ sound: true, codeChips: bad, aiTrackChanges: false }).aiTrackChanges, false);
+  }
+  assert.equal(parseSettings({ sound: true, localePreference: 'xx-nope' }).localePreference, 'system');
+  // A setting this version no longer has (the removed breakpoint scrollbar choice) is ignored, never a reset.
+  for (const stored of ['off', 'laptop', 'desktop', '', 12, NULL_FROM_JSON, { kind: 'from' }]) {
+    const kept = parseSettings({ sound: false, codeChips: false, canvasScrollbar: stored });
+    assert.equal(kept.codeChips, false, JSON.stringify(stored));
+    assert.equal(Reflect.has(kept, 'canvasScrollbar'), false, 'not carried into the settings written back');
+  }
+  // Privacy and trust stay strict: a damaged value there still refuses the file (main then turns usage counts off).
+  assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
   assert.deepEqual(
     parseSettings({
@@ -158,19 +274,20 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       usageCountsEnabled: false,
       usageNoticeVersion: 1,
       usageLastAttemptDay: '2026-10-08',
+      appsPersonHidden: false,
+      aiAskBeforeTrust: false,
+      aiTrackChanges: true,
+      aiReviewChanges: false,
+      codeChips: true,
+      localePreference: 'system',
     },
   );
   assert.throws(() => parseSettings({ sound: false, usageCountsEnabled: 'no' }), /boolean/);
-  assert.throws(
-    () => parseSettings({ sound: false, usageLastAttemptDay: 'yesterday' }),
-    /usage day/,
-  );
+  assert.throws(() => parseSettings({ sound: false, usageLastAttemptDay: 'yesterday' }), /usage day/);
   const recent = { path: '/site', name: 'Site', openedAt: 1000 };
   assert.deepEqual(parseRecents([recent]), [recent]);
   assert.throws(() => parseRecents([{ ...recent, openedAt: -1 }]), /nonnegative/);
-  assert.deepEqual(parseAliases({ compilerOptions: { paths: { '@/*': ['src/*'] } } }), [
-    ['@/', ['src/']],
-  ]);
+  assert.deepEqual(parseAliases({ compilerOptions: { paths: { '@/*': ['src/*'] } } }), [['@/', ['src/']]]);
   assert.throws(() => parseAliases({ compilerOptions: { paths: { '@/*': [12] } } }), /string/);
   assert.deepEqual(parseAstroLock({ url: 'http://localhost:4321' }), {
     url: 'http://localhost:4321',
@@ -178,7 +295,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
   assert.throws(() => parseAstroLock({ url: [] }), /string/);
 });
 
-test('content validation replies keep their issues and refuse corrupt or oversized ones', () => {
+test('content validation replies keep their issues, refuse corrupt ones and accept any size', () => {
   const issue = { path: ['posts', 0, 'title'], message: 'Required', code: 'invalid_type' };
   assert.deepEqual(parseValidationResult({ issues: [issue] }), { issues: [issue] });
   assert.deepEqual(parseValidationResult({ issues: [], unchecked: true, error: 'no schema' }), {
@@ -194,12 +311,15 @@ test('content validation replies keep their issues and refuse corrupt or oversiz
     { issues: [{ ...issue, message: 3 }] },
     { issues: [{ path: [], message: 'm' }] },
     { issues: [], unchecked: 'yes' },
-    { issues: [], error: 'x'.repeat(LIMITS.ipcFieldCharsMax + 1) },
-    { issues: Array.from({ length: LIMITS.ipcItemsMax + 1 }, () => issue) },
   ];
   for (const input of bad) {
     assert.throws(() => parseValidationResult(input));
   }
+  // There is no size limit on a reply: a long message and a long list of issues are both accepted whole.
+  const longError = 'x'.repeat(4 * 1024 * 1024);
+  assert.deepEqual(parseValidationResult({ issues: [], error: longError }), { issues: [], error: longError });
+  const many = Array.from({ length: 200_000 }, () => issue);
+  assert.equal(parseValidationResult({ issues: many }).issues.length, many.length);
 });
 
 test('CMS discovers data modules outside a content glob', async (context) => {
@@ -209,20 +329,10 @@ test('CMS discovers data modules outside a content glob', async (context) => {
   fs.mkdirSync(path.join(harness.root, 'src/lib'), { recursive: true });
   fs.writeFileSync(
     path.join(harness.root, 'src/data/site.ts'),
-    [
-      'export const site = { title: "Stacki", launched: 2026 };',
-      'export const tagline = "Design in the browser";',
-      '',
-    ].join('\n'),
+    ['export const site = { title: "Stacki", launched: 2026 };', 'export const tagline = "Design in the browser";', ''].join('\n'),
   );
-  fs.writeFileSync(
-    path.join(harness.root, 'src/data/team.ts'),
-    'export const team = [{ name: "Ada", role: "Engineer" }];\n',
-  );
-  fs.writeFileSync(
-    path.join(harness.root, 'src/lib/constants.ts'),
-    'export const internalLabel = "Not CMS content";\n',
-  );
+  fs.writeFileSync(path.join(harness.root, 'src/data/team.ts'), 'export const team = [{ name: "Ada", role: "Engineer" }];\n');
+  fs.writeFileSync(path.join(harness.root, 'src/lib/constants.ts'), 'export const internalLabel = "Not CMS content";\n');
   fs.writeFileSync(path.join(harness.root, 'src/data/posts/first.md'), '# First\n');
 
   const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
@@ -250,14 +360,51 @@ test('CMS discovers data modules outside a content glob', async (context) => {
   assert.ok(!covered.files.includes('src/data/site.ts'));
 });
 
+test('CMS discovers root site constants and preserves unrelated source', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const source = [
+    '/** Site name. Keep this comment. */',
+    'export const SITE_NAME: string = "Original";',
+    'export const SITE_DESCRIPTION =',
+    '  "Site description";',
+    'export const SITE_URL = "https://example.com";',
+    'export const SITE_LOCALE = "en-US";',
+    'export const NOINDEX_ROUTES: string[] = ["/404"];',
+    'const privateSetting = "Private";',
+    '',
+  ].join('\r\n');
+  const file = path.join(harness.root, 'src/consts.ts');
+  fs.writeFileSync(file, source);
+  fs.writeFileSync(path.join(harness.root, 'src/constants.mjs'), 'export const title = "Site";');
+  fs.writeFileSync(path.join(harness.root, 'src/consts.d.ts'), 'export const title: string;');
+  fs.writeFileSync(path.join(harness.root, 'src/constants-helper.ts'), 'export const limit = 3;');
+  // An animation's JSON in src/assets is a file the site imports, not content.
+  fs.mkdirSync(path.join(harness.root, 'src/assets'));
+  fs.writeFileSync(path.join(harness.root, 'src/assets/animation.json'), '{"v":"5.5.8"}');
+  const listed = toArray(toRecord(await harness.invoke('cms:list', harness.root))?.['files']);
+  assert.ok(listed);
+  assert.deepEqual(listed.map((entry) => toRecord(entry)?.['rel']).sort(), ['constants.mjs#*general', 'consts.ts#*general']);
+  const payload = { projectPath: harness.root, rel: 'consts.ts#*general' };
+  const read = toRecord(await harness.invoke('cms:read', payload));
+  const data = toRecord(read?.['data']);
+  assert.ok(data);
+  // A list of text is one of the file's values, edited as a list field.
+  assert.deepEqual(data, {
+    SITE_NAME: 'Original',
+    SITE_DESCRIPTION: 'Site description',
+    SITE_URL: 'https://example.com',
+    SITE_LOCALE: 'en-US',
+    NOINDEX_ROUTES: ['/404'],
+  });
+  const saved = toRecord(await harness.invoke('cms:write', { ...payload, data: { ...data, SITE_NAME: 'Updated' } }));
+  assert.equal(saved?.['ok'], true);
+  assert.equal(fs.readFileSync(file, 'utf8'), source.replace('Original', 'Updated'));
+});
+
 test('dev-server parsers support current and legacy responses', () => {
-  assert.deepEqual(parseDynamicPaths({ entries: [{ slug: 'a' }] }).entries, [
-    { params: { slug: 'a' }, props: undefined },
-  ]);
-  assert.deepEqual(
-    parseDynamicPaths({ entries: [{ params: { slug: 'a' }, props: { n: 1 } }] }).entries,
-    [{ params: { slug: 'a' }, props: { n: 1 } }],
-  );
+  assert.deepEqual(parseDynamicPaths({ entries: [{ slug: 'a' }] }).entries, [{ params: { slug: 'a' }, props: undefined }]);
+  assert.deepEqual(parseDynamicPaths({ entries: [{ params: { slug: 'a' }, props: { n: 1 } }] }).entries, [{ params: { slug: 'a' }, props: { n: 1 } }]);
   assert.throws(() => parseDynamicPaths({ entries: [42] }), /object/);
   assert.throws(() => parseDynamicPaths({ entries: [], error: 42 }), /string/);
   assert.deepEqual(parseSampleEntry({ entry: jsonNull, error: 'offline' }), {
@@ -269,10 +416,7 @@ test('dev-server parsers support current and legacy responses', () => {
   assert.deepEqual(parseContentConfig({ collections: [{ name: 'broken', error: 'bad' }] }), {
     collections: [{ name: 'broken', error: 'bad' }],
   });
-  assert.throws(
-    () => parseContentConfig({ collections: [{ name: 'posts', crossFieldChecks: 'yes' }] }),
-    /boolean/,
-  );
+  assert.throws(() => parseContentConfig({ collections: [{ name: 'posts', crossFieldChecks: 'yes' }] }), /boolean/);
   const manifest = {
     collections: [
       {
@@ -286,11 +430,16 @@ test('dev-server parsers support current and legacy responses', () => {
   assert.equal(parseContentConfig(manifest).collections[0]?.name, 'posts');
 });
 
-test('directory budgets reject both deep and wide projects without partial results', () => {
+test('directory budgets refuse malformed counts and absurd depth, but never a wide project', () => {
   const budget = directoryBudget('/site');
   assert.throws(() => budget('/site', -1), /Directory entry count must be nonnegative/);
   assert.throws(() => budget('/site', 1.5), /Directory entry count must be an integer/);
-  assert.throws(() => directoryBudget('/site')('/site', MAIN_LIMITS.directoryEntriesMax), /limit/);
+  // There is no entry cap: a folder of any size, and any number of folders together, is accepted.
+  assert.doesNotThrow(() => directoryBudget('/site')('/site', 50_000_000));
+  const wide = directoryBudget('/site');
+  for (let folder = 0; folder < 1_000; folder += 1) {
+    wide(`/site/folder-${folder}`, 1_000_000);
+  }
   const deep = '/site/' + 'nested/'.repeat(MAIN_LIMITS.directoryDepthMax + 1);
   assert.throws(() => directoryBudget('/site')(deep, 0), /depth/);
 });
@@ -306,10 +455,7 @@ test('port search skips busy sockets and rejects invalid starts', async (context
   const port = await harness.call('findFreePort', address.port);
   assert.equal(typeof port, 'number');
   assert.notEqual(port, address.port);
-  await assert.rejects(
-    async () => harness.call('findFreePort', -1),
-    /Starting port must be positive/,
-  );
+  await assert.rejects(async () => harness.call('findFreePort', -1), /Starting port must be positive/);
 });
 
 test('Markdown array metadata and source-file size have explicit bounds', async (context) => {
@@ -323,7 +469,7 @@ test('Markdown array metadata and source-file size have explicit bounds', async 
   const file = path.join(harness.root, 'src/pages/large.astro');
   fs.writeFileSync(file, '');
   fs.truncateSync(file, LIMITS.sourceBytesMax + 1);
-  await assert.rejects(harness.invoke('page:read', file), /Source file exceeds 10 MB limit/);
+  await assert.rejects(harness.invoke('page:read', file), /platform string limit/);
 });
 
 test('an empty tsconfig alias map takes precedence over jsconfig', async (context) => {
@@ -331,10 +477,7 @@ test('an empty tsconfig alias map takes precedence over jsconfig', async (contex
   context.after(harness.dispose);
   const config = path.join(harness.root, 'tsconfig.json');
   fs.writeFileSync(config, '{"compilerOptions":{"paths":{}}}');
-  fs.writeFileSync(
-    path.join(harness.root, 'jsconfig.json'),
-    '{"compilerOptions":{"paths":{"@/*":["src/*"]}}}',
-  );
+  fs.writeFileSync(path.join(harness.root, 'jsconfig.json'), '{"compilerOptions":{"paths":{"@/*":["src/*"]}}}');
   fs.writeFileSync(path.join(harness.root, 'src/data/site.ts'), 'export const title = "Site";');
   await harness.invoke('project:scan', harness.root);
   const payload = {
@@ -375,6 +518,39 @@ test('Studio setup accepts the open project root and refuses outside projects', 
     }),
     { kind: 'error', message: 'Studio already exists. Setup does not replace existing files.' },
   );
+});
+
+test('changing the sign-in type edits only the sign-in variables and reports the new type', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  await harness.invoke('project:scan', harness.root);
+  const studio = path.join(harness.root, 'studio');
+  const config = path.join(studio, 'cloudflare/wrangler.jsonc');
+  const original = '{\n  // Keep me.\n  "name": "studio",\n  "vars": {\n    "STUDIO_ORIGIN": "https://studio.example.com",\n  },\n}\n';
+  const payload = (auth: unknown) => ({ projectPath: harness.root, auth });
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload({ kind: 'github' })), {
+    kind: 'error',
+    message: 'Studio is not installed in this project.',
+  });
+  fs.mkdirSync(path.join(studio, 'cloudflare'), { recursive: true });
+  fs.mkdirSync(path.join(studio, 'src/shared'), { recursive: true });
+  fs.writeFileSync(path.join(studio, 'package.json'), '{"name":"@stacki/studio"}');
+  fs.writeFileSync(path.join(studio, 'src/shared/release.json'), '{"version":"1.4.8"}');
+  fs.writeFileSync(config, original);
+  assert.equal(toRecord(await harness.invoke('studio:status', harness.root))?.['signIn'], 'github');
+  const google = { kind: 'google', clientId: 'abc.apps.googleusercontent.com', allowedDomains: [], allowedEmails: [], admin: 'google:me@example.com' };
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload(google)), { kind: 'saved', signIn: 'google' });
+  const written = fs.readFileSync(config, 'utf8');
+  assert.match(written, /\/\/ Keep me\./);
+  assert.match(written, /"AUTH_PROVIDER": "google"/);
+  assert.match(written, /"GOOGLE_CLIENT_ID": "abc\.apps\.googleusercontent\.com"/);
+  assert.match(written, /"AUTH_BOOTSTRAP_ADMIN": "google:me@example\.com"/);
+  assert.doesNotMatch(written, /_SECRET/);
+  assert.equal(toRecord(await harness.invoke('studio:status', harness.root))?.['signIn'], 'google');
+  assert.deepEqual(await harness.invoke('studio:setAuth', payload({ kind: 'github' })), { kind: 'saved', signIn: 'github' });
+  assert.equal(fs.readFileSync(config, 'utf8'), original, 'switching back to GitHub restores the file exactly');
+  await assert.rejects(harness.invoke('studio:setAuth', payload({ ...google, clientSecret: 'x' })));
+  await assert.rejects(harness.invoke('studio:setAuth', { projectPath: path.dirname(harness.root), auth: { kind: 'github' } }), /outside/);
 });
 
 test('popup preferences persist independently and reject invalid changes', async (context) => {

@@ -13,4 +13,39 @@ export const CmsView = lazyPanel(() => import('../features/cms/CmsView'));
 export const ContentView = lazyPanel(() => import('../features/content/ContentView'));
 export const VariablesPanel = lazyPanel(() => import('../features/variables/VariablesPanel'));
 export const VariablesView = lazyPanel(() => import('../features/variables/VariablesView'));
+export const SelectorsPanel = lazyPanel(() => import('../features/selectors/SelectorsPanel'));
 export const CodePanel = lazyPanel(() => import('../features/code/CodePanel'));
+export const InstructionsView = lazyPanel(() => import('./shell/InstructionsDocument'));
+export const AuditsPanel = lazyPanel(() => import('../features/audits/AuditsPanel'));
+// The Settings panel is composed in the app layer, because it draws sections of features that may not import each other.
+export const ProjectSettingsPanel = lazyPanel(() => import('./shell/DesktopSettings'));
+export const AiPanel = lazyPanel(() => import('../features/ai/AiPanel'));
+
+// Every lazy panel, in the order a session usually reaches them: the inspectors
+// first, the rarer editors last. Fixed in length, so a preload pass is bounded.
+const LAZY_PANELS = [
+  PropsPanel,
+  StylePanel,
+  VariablesPanel,
+  CmsPanel,
+  SelectorsPanel,
+  CodePanel,
+  CodeWindow,
+  VariablesView,
+  CmsView,
+  ContentView,
+  InstructionsView,
+  AuditsPanel,
+  ProjectSettingsPanel,
+  AiPanel,
+] as const;
+
+/**
+ * Fetches every lazy panel's chunk, one at a time so the fetches never crowd
+ * the page load, and so a panel opened later paints in its first frame.
+ */
+export async function preloadPanels(): Promise<void> {
+  for (const panel of LAZY_PANELS) {
+    await panel.preload();
+  }
+}

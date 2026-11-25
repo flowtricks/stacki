@@ -1,17 +1,18 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 // Coalesce durable snapshots without delaying collaboration or preview updates.
 // Every caller resolves only after a snapshot containing its edit is durable.
-export class BatchedWriter {
-  private latest: Uint8Array | undefined;
+export class BatchedWriter<T = Uint8Array> {
+  private latest: T | undefined;
   private waiting: { resolve: () => void; reject: (error: unknown) => void }[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
   private running: Promise<void> | undefined;
   constructor(
-    private readonly write: (bytes: Uint8Array) => Promise<void>,
+    private readonly write: (bytes: T) => Promise<void>,
     private readonly delay = 2000,
   ) {}
-  save(bytes: Uint8Array, immediately = false): Promise<void> {
+  save(bytes: T, immediately = false): Promise<void> {
     if (this.waiting.length >= 200) {
-      return Promise.reject(new Error('Draft save queue is full. Pause typing and retry.'));
+      return Promise.reject(new Error(studioTranslate('studio.draft.queueFull')));
     }
     this.latest = bytes;
     const result = new Promise<void>((resolve, reject) => {
@@ -37,13 +38,13 @@ export class BatchedWriter {
     this.timer = undefined;
     if (this.running) {
       await this.running;
-      if (this.latest) {
+      if (this.latest !== undefined) {
         await this.flush();
       }
       return;
     }
     const bytes = this.latest;
-    if (!bytes) {
+    if (bytes === undefined) {
       return;
     }
     const waiting = this.waiting;
@@ -63,7 +64,7 @@ export class BatchedWriter {
     );
     await this.running;
     this.running = undefined;
-    if (this.latest) {
+    if (this.latest !== undefined) {
       this.schedule();
     }
   }

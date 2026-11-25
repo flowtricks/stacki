@@ -1,18 +1,10 @@
+import { gitTransport } from '../../ipc/gitTransport';
 import type { IpcResults, WireFileKind, WireGitInfo } from '../../../shared/ipc/ipcResults';
-import type { Result } from '../../../shared/core/result';
 import type { Parser } from '../../../shared/core/boundary';
-import {
-  boolean,
-  count,
-  list,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, list, object, optional, pathText, record, text } from '../../../shared/core/boundary';
+import { parseOptionalMessageRef } from '../../../shared/core/i18n/messageReference';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import { cleanError } from '../../lib/cleanError';
+import { failureOf, type Failure } from '../../lib/cleanError';
 import { parseMergeResult } from './gitBridge';
 
 const repository = object({
@@ -24,6 +16,7 @@ const repository = object({
   head: optional(text),
   userEmail: optional(text),
   trunk: optional(text),
+  defaultBranch: optional(text),
   dirtyFiles: optional(list(pathText)),
   hasUpstream: optional(boolean),
 });
@@ -107,67 +100,67 @@ export function parseGitCheckout(input: unknown): IpcResults['git:checkout'] {
     parked: boolean(value['parked']),
   };
   const error = optional(text)(value['error']);
-  return error === undefined ? { ok: true, ...common } : { ok: true, ...common, error };
+  const errorRef = parseOptionalMessageRef(value['errorRef']);
+  if (error === undefined) {
+    return { ok: true, ...common };
+  }
+  return errorRef === undefined ? { ok: true, ...common, error } : { ok: true, ...common, error, errorRef };
 }
-async function gitRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function gitRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<{ readonly ok: true; readonly value: Value } | Failure> {
   let response: unknown;
   try {
     response = await invoke();
   } catch (error: unknown) {
-    return { ok: false, error: cleanError(error) };
+    return failureOf(error);
   }
   // Contract bugs remain loud; only transport failures use the operating channel.
   return { ok: true, value: parse(response) };
 }
 export function readGitInfo(projectPath: string) {
   const payload = parseIpcPayload('git:info', projectPath);
-  return gitRequest(parseGitInfo, () => window.avb.gitInfo(payload));
+  return gitRequest(parseGitInfo, () => gitTransport.gitInfo(payload));
 }
 export function readGitStatus(projectPath: string) {
   const payload = parseIpcPayload('git:status', { projectPath });
-  return gitRequest(parseGitStatus, () => window.avb.gitStatus(payload));
+  return gitRequest(parseGitStatus, () => gitTransport.gitStatus(payload));
 }
 export function commitGitChanges(projectPath: string, message: string, paths?: readonly string[]) {
   const input = paths === undefined ? { projectPath, message } : { projectPath, message, paths };
   const payload = parseIpcPayload('git:commit', input);
-  return gitRequest(parseGitCommit, () => window.avb.gitCommit(payload));
+  return gitRequest(parseGitCommit, () => gitTransport.gitCommit(payload));
 }
-export function createGitHubRepository(
-  projectPath: string,
-  repoName: string,
-  options: { readonly isPrivate: boolean },
-) {
+export function createGitHubRepository(projectPath: string, repoName: string, options: { readonly isPrivate: boolean }) {
   const payload = parseIpcPayload('git:publish', {
     projectPath,
     repoName,
     isPrivate: options.isPrivate,
   });
-  return gitRequest(parseGitPublish, () => window.avb.gitPublish(payload));
+  return gitRequest(parseGitPublish, () => gitTransport.gitPublish(payload));
 }
-export type CheckoutMode =
-  { readonly kind: 'switch' } | { readonly kind: 'create' } | { readonly kind: 'park' };
+export type CheckoutMode = { readonly kind: 'switch' } | { readonly kind: 'create' } | { readonly kind: 'park' };
 export function checkoutGitBranch(projectPath: string, branch: string, mode: CheckoutMode) {
   const input =
-    mode.kind === 'create'
-      ? { projectPath, branch, create: true }
-      : mode.kind === 'park'
-        ? { projectPath, branch, parkFirst: true }
-        : { projectPath, branch };
+    mode.kind === 'create' ? { projectPath, branch, create: true } : mode.kind === 'park' ? { projectPath, branch, parkFirst: true } : { projectPath, branch };
   const payload = parseIpcPayload('git:checkout', input);
-  return gitRequest(parseGitCheckout, () => window.avb.gitCheckout(payload));
+  return gitRequest(parseGitCheckout, () => gitTransport.gitCheckout(payload));
 }
 export function initializeGit(projectPath: string) {
   const payload = parseIpcPayload('git:init', projectPath);
-  return gitRequest(parseGitSuccess, () => window.avb.gitInit(payload));
+  return gitRequest(parseGitSuccess, () => gitTransport.gitInit(payload));
 }
 export function pushGitBranch(projectPath: string, branch: string) {
   const payload = parseIpcPayload('git:push', { projectPath, branch });
-  return gitRequest(parseGitSuccess, () => window.avb.gitPush(payload));
+  return gitRequest(parseGitSuccess, () => gitTransport.gitPush(payload));
+}
+export function readIncomingGitCommits(projectPath: string, branch: string) {
+  const payload = parseIpcPayload('git:incoming', { projectPath, branch });
+  return gitRequest(count, () => gitTransport.gitIncoming(payload));
+}
+export function pullGitBranch(projectPath: string, branch: string) {
+  const payload = parseIpcPayload('git:pull', { projectPath, branch });
+  return gitRequest(parseMergeResult, () => gitTransport.gitPull(payload));
 }
 export function resolveGitMerge(projectPath: string, branch: string, choices: unknown) {
   const payload = parseIpcPayload('git:resolveMerge', { projectPath, branch, choices });
-  return gitRequest(parseMergeResult, () => window.avb.gitResolveMerge(payload));
+  return gitRequest(parseMergeResult, () => gitTransport.gitResolveMerge(payload));
 }

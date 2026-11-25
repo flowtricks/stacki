@@ -1,9 +1,26 @@
+import './lib/compileCache';
 import { registerPublishHandlers } from './handlers/publishHandlers';
+import { registerCmsConnectionHandlers } from './handlers/cmsConnectionHandlers';
+import { CmsConnectionStore } from './content/cmsConnectionStore';
+import { MediaConnectionStore } from './content/media/mediaConnectionStore';
+import { registerMediaHostingHandlers } from './handlers/mediaHostingHandlers';
+import { APP_SCHEME, APP_SCHEME_PRIVILEGES, registerAppsHandlers, serveAppRequest } from './handlers/appsHandlers';
+import { desktopLocalStorageDirectory, registerAppDataHandlers } from './handlers/appDataHandlers';
+import { keepAppFramesHome } from './app/appFrameNavigation';
+import { SanityLogin } from './content/sanityLogin';
+import { cmsPreviewEnvironment } from './content/cmsPreviewEnvironment';
 import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandlers';
 import { registerImageConversionHandler } from './handlers/imageConversionHandler';
 import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
 import { listenForPreviewFailures } from './preview/previewFailure';
+import { attachWindowRecovery, type WindowRecovery } from './app/windowRecovery';
+import { installProcessGuards } from './app/processGuards';
+import type { CrashRecord } from './app/crashLog';
+import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
+import { registerDictationHandlers } from './handlers/dictationHandlers';
+import { MODEL_SCHEME, MODEL_SCHEME_PRIVILEGES, serveModelRequest } from './app/dictationProtocol';
+import { whisperRoot } from './app/dictationStore';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
 import { readSource } from './lib/mainLimits';
@@ -11,21 +28,11 @@ import { isAtomicTemporary } from './documents/atomicWrite';
 import { createNodeDocumentActors } from './documents/documentActors';
 import { documentHost, installDocumentHost } from './documents/documentWrites';
 import { isPathDescendant, sameFilesystemPath } from './lib/platform';
-import type {
-  BrowserWindow as Window,
-  MenuItemConstructorOptions,
-  MessageBoxOptions,
-  OpenDialogOptions,
-} from 'electron';
+import type { BrowserWindow as Window, MessageBoxOptions, OpenDialogOptions } from 'electron';
 import { toRecord } from '../shared/core/record';
 import { parseOptionalString, parseRecents, parseSettings } from './app/mainValidation';
 import type { AppSettings } from './app/mainValidation';
-import {
-  sendUsageCount,
-  shouldCountUsage,
-  usageDay,
-  USAGE_NOTICE_VERSION,
-} from './app/usageCounts';
+import { sendUsageCount, shouldCountUsage, usageDay, USAGE_NOTICE_VERSION } from './app/usageCounts';
 import type { RecentProject } from './lib/mainTypes';
 import {
   app,
@@ -39,15 +46,36 @@ import {
   net as enet,
   nativeImage,
   clipboard,
+  session,
+  safeStorage,
+  systemPreferences,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { pathToFileURL } from 'url';
 import { stopAllServices } from './content/contentConfig';
 import * as thumbs from './project/thumbs';
-import { openingBounds } from './app/windowBounds';
+import { HEIGHT_PX_MIN, WIDTH_PX_MIN, openingBounds } from './app/windowBounds';
+import { fitWindowState, type FittedWindowState } from './app/windowState';
+import { readWindowState, toWindowDisplay, trackWindowState } from './app/windowStateStore';
+import { createFirstFrameSignal, revealOnFirstFrame } from './app/windowReveal';
+import { createBootStore, type BootStore } from './boot/bootStore';
+import { registerBootChannels } from './boot/bootChannels';
+import { describeStartup, markStartup } from './app/startupTiming';
+import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
+import { buildApplicationMenuTemplate, type ReloadCommand } from './app/applicationMenu';
+import { routeReload } from './app/reloadRouting';
+import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
+import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
+import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
+import { resolveLocale } from '../shared/core/i18n/parseLocale';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
+import { watchInstructions } from './project/instructionsWatcher';
+import { registerInstructionHandlers } from './handlers/instructionHandlers';
+import { registerAgentHandlers } from './handlers/agentHandlers';
+import { registerSecretsHandlers } from './handlers/secretsHandlers';
+import { registerMcpHandlers } from './handlers/mcpHandlers';
 import { autoUpdater } from 'electron-updater';
 import { AutoUpdates } from './app/autoUpdate';
 import { isWin } from './lib/mainHelpers';
@@ -56,30 +84,74 @@ import { isAstroProject, hasDependencies } from './project/projectFiles';
 import { MEDIA_EXT } from './project/assetFiles';
 import { stopAllPreviews } from './preview/previewServers';
 import type { MainHost } from './handlers/mainHost';
-import { DevServers, registerDevServerHandlers } from './handlers/devServers';
+import { DevServers, registerDevServerHandlers, startProjectPreview } from './handlers/devServers';
 import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
+import { removeLegacyComponentShots } from './project/legacyComponentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
+import { registerCmsConstantHandlers } from './handlers/cmsConstantHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
+import { registerStyleMoveHandlers } from './handlers/styleMoveHandlers';
+import { StyleMoveJournals } from './content/styleMoveJournals';
+import { projectFoldersFor } from './lib/projectFolders';
 import { registerContentHandlers } from './handlers/contentHandlers';
 import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
+import { registerBreakpointSyncHandlers } from './handlers/breakpointSyncHandlers';
 import { registerGitHandlers } from './handlers/gitHandlers';
 import { registerPageHandlers } from './handlers/pageHandlers';
+import { allowLoopbackFraming } from './app/previewFraming';
+import { registerPageTemplateHandlers } from './handlers/pageTemplateHandlers';
 import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
+import { registerShadcnSettingsHandlers } from './handlers/shadcnSettingsHandlers';
 import { registerProjectScanHandlers } from './handlers/projectScanHandlers';
 import { registerStyleSourceHandlers } from './handlers/styleSourceHandlers';
+import { registerAppPageFilesHandlers } from './handlers/appPageFilesHandlers';
+import { registerSelectorHandlers } from './handlers/selectorHandlers';
+import { registerAuditHandlers } from './handlers/auditHandlers';
+import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
+import { attachmentThumbnail } from './handlers/ai/attachmentThumbnail';
+import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
+import { createFolderOpenQueue, folderOpenChoice, launchFolderArguments } from './project/folderOpen';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
+// Desktop does not enforce project roles (.stacki/roles.json): it previews them, and only Studio enforces
+// them (docs/contracts.md, "Project roles"). So no IPC gate refuses a write here.
+const githubIdentity = createGitHubIdentity();
 const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
 setToolPathHome(app.getPath('home'));
+
+// One Stacki per person, packaged: a second launch (a folder dropped on the program or a shortcut on
+// Windows and Linux, `stacki <folder>` in a terminal) hands its arguments to this one (`second-instance`
+// below) and quits. Development runs skip the lock, so a dev window and an installed Stacki can run side by
+// side; the arguments of the dev launch itself are still read.
+if (app.isPackaged && !app.requestSingleInstanceLock()) {
+  app.exit(0);
+}
 
 let mainWindow: Window | undefined = undefined;
 // The project's dev server and its home-page pictures: state of this process,
 // kept by the objects that own it (handlers/devServers.ts, thumbnails.ts).
-const devServers = new DevServers({ send });
+// CMS keys are encrypted by the operating system (cms/cmsConnectionStore.ts).
+const cmsConnections = new CmsConnectionStore(
+  {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+  },
+  () => app.getPath('userData'),
+);
+// Media hosting keys are kept the same way (content/media/mediaConnectionStore.ts).
+const mediaConnections = new MediaConnectionStore(
+  {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+  },
+  () => app.getPath('userData'),
+);
+const devServers = new DevServers({ send }, (projectRoot) => cmsPreviewEnvironment(cmsConnections, projectRoot));
 const thumbnails = new Thumbnails({
-  send,
   devServers,
   userDataPath: () => app.getPath('userData'),
 });
@@ -87,8 +159,12 @@ const autoUpdates = new AutoUpdates({
   app,
   autoUpdater,
   beforeInstall: () => devServers.stop(),
-  parentWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined),
-  showMessageBox,
+  send: (event) => send('update:state', event),
+});
+ipcMain.handle('update:read', () => autoUpdates.current());
+ipcMain.handle('update:act', (_event, { action }) => {
+  autoUpdates.act(action);
+  return { ok: true as const };
 });
 
 // --- Dev reload ------------------------------------------------------------
@@ -157,7 +233,24 @@ function assertInProject(filePath: string) {
 protocol.registerSchemesAsPrivileged([
   {
     scheme: ASSET_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    // corsEnabled lets the renderer's FontFace loads (CORS-checked, unlike
+    // <img>) reach this scheme; serveFile adds the allow-origin header.
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  {
+    // Stacki Apps: one origin per installed app (stacki-app://<id>/), served
+    // from the open project's .stacki/apps only. Each document arrives with a
+    // sandboxing content security policy (handlers/appsHandlers.ts). corsEnabled lets
+    // an app's opaque-origin frame fetch its own files (`fetch('config.json')`);
+    // serveAppRequest answers them with Access-Control-Allow-Origin: *.
+    scheme: APP_SCHEME,
+    privileges: APP_SCHEME_PRIVILEGES,
+  },
+  {
+    // Dictation's downloaded Whisper model, read by its worker (app/dictationProtocol.ts):
+    // the manifest's files of an installed model only, never any other path.
+    scheme: MODEL_SCHEME,
+    privileges: MODEL_SCHEME_PRIVILEGES,
   },
 ]);
 
@@ -181,6 +274,59 @@ function registerAssetProtocol() {
       return new Response(undefined, { status: 403 });
     }
     return serveFile(abs, request);
+  });
+}
+
+// Every window shares the default session, so one rule covers the app and its previews.
+function refusePrivatePermissions() {
+  const appUrl = appPageUrl();
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    if (permission === 'media') {
+      // Dictation's microphone: audio from Stacki's own page only (windowSecurity.isAllowedMedia).
+      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
+      callback(isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl, appUrl }));
+      return;
+    }
+    callback(!isPrivatePermission(permission));
+  });
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
+    if (permission === 'media') {
+      // A check names one kind at a time; 'unknown' is the system asking whether any device exists.
+      const mediaTypes = 'mediaType' in details && details.mediaType !== 'video' ? ['audio'] : undefined;
+      return isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl });
+    }
+    return !isPrivatePermission(permission);
+  });
+}
+
+// The page the main window shows: the dev server in development, the built file when packaged.
+function appPageUrl(): string {
+  return process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString();
+}
+
+// The microphone as the system sees it. In development the application is Electron itself,
+// listed under "Electron" in System Settings; installed, it is "Stacki" (app.getName()).
+function microphoneSystem(): MicrophoneSystem {
+  return {
+    platform: process.platform,
+    appName: app.isPackaged ? app.getName() : 'Electron', // i18n-ignore: the development host's real name.
+    mediaAccessStatus: () => systemPreferences.getMediaAccessStatus('microphone'),
+    askForAccess: () => systemPreferences.askForMediaAccess('microphone'),
+    openExternal: (url) => shell.openExternal(url),
+  };
+}
+
+// The preload hands Stacki's API to whatever page this window shows, so the
+// window never leaves Stacki's own page; web links open in the browser instead.
+function keepOnAppPage(window: Window, appUrl: string) {
+  window.webContents.on('will-navigate', (event) => {
+    if (isAppPage(event.url, appUrl)) {
+      return;
+    }
+    event.preventDefault();
+    if (isBrowserLink(event.url)) {
+      openExternalLink(event.url);
+    }
   });
 }
 
@@ -220,14 +366,37 @@ function setApplicationIcon() {
   }
 }
 
+// The saved window state fitted to the displays connected now, or undefined when there is none to use.
+function restoredWindow(): FittedWindowState | undefined {
+  const saved = readWindowState(app.getPath('userData'));
+  if (!saved.ok) {
+    return undefined;
+  }
+  try {
+    const displays = screen.getAllDisplays().map(toWindowDisplay);
+    if (displays.length === 0) {
+      return undefined;
+    }
+    return fitWindowState(saved.value, displays, toWindowDisplay(screen.getPrimaryDisplay()));
+  } catch {
+    // No displays to ask: open as on a first launch.
+    return undefined;
+  }
+}
+
+// The renderer's report that its real shell has painted (boot:first-frame), which is what shows the window.
+const firstFrame = createFirstFrameSignal();
+let bootStore: BootStore | undefined;
+
 function createWindow() {
-  // Opened filled: the display the pointer is on, minus what the OS keeps (see
-  // windowBounds.js). The display under the pointer rather than the primary
-  // one — on a laptop with a monitor beside it, the app should open where the
-  // person is looking.
+  // Where the last window was (its windowed size and place, maximized or full screen), fitted to the
+  // displays connected now (windowState.ts). Read before the window exists, so it is created at its final
+  // rectangle and never resizes in front of the person. With nothing saved (a first launch, a damaged
+  // file) it opens filled: the display the pointer is on, minus what the OS keeps (windowBounds.ts).
+  const restored = restoredWindow();
   let bounds;
   try {
-    bounds = openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
+    bounds = restored?.bounds ?? openingBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea);
   } catch {
     // No display to ask about (a headless run, an unusual session): a laptop
     // sized window is a fine thing to fall back to.
@@ -235,8 +404,14 @@ function createWindow() {
   }
   mainWindow = new BrowserWindow({
     ...bounds,
-    title: 'Stacki',
+    minWidth: WIDTH_PX_MIN,
+    minHeight: HEIGHT_PX_MIN,
+    ...(restored?.fullScreen === true ? { fullscreen: true } : {}),
+    title: 'Stacki', // i18n-ignore: the product name.
+    // The app's panel surface (--bg-panel), so the window is never white or another black before the page paints.
     backgroundColor: '#111111',
+    // Shown on its first painted frame (windowReveal.ts), which is the skeleton in index.html.
+    show: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : isWin ? 'hidden' : 'default',
     ...(isWin
       ? {
@@ -260,27 +435,51 @@ function createWindow() {
     },
   });
 
+  // Maximized is applied while the window is still hidden, so the first thing shown is the final size.
+  if (restored?.maximized === true && !restored.fullScreen) {
+    mainWindow.maximize();
+  }
+  trackWindowState(mainWindow, screen, app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) });
+  markStartup('windowCreated');
+  revealOnFirstFrame(mainWindow, firstFrame, () => markStartup('windowShown'));
+  mainWindow.webContents.once('did-start-loading', () => markStartup('rendererLoading'));
+  mainWindow.webContents.once('did-finish-load', () => {
+    markStartup('rendererLoaded');
+    console.debug(describeStartup());
+  });
   listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
+  keepPreviewsOnSite(mainWindow.webContents, openExternalLink);
+  keepAppFramesHome(mainWindow.webContents, openExternalLink);
 
-  // A renderer that does not load leaves an empty window; the log says why.
-  const loaded = process.env['VITE_DEV_SERVER_URL']
-    ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL'])
-    : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);
-  loaded.catch((error: unknown) => {
+  watchWindowHealth(mainWindow);
+  // A new page (a reload, leaving one project for another) is not listening yet: folders wait for its take.
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) {
+      folderQueue.hold();
+    }
+  });
+  mainWindow.webContents.on('render-process-gone', () => folderQueue.hold());
+  // A renderer that does not load leaves an empty window; the log says why, and the health watch above shows the recovery screen.
+  loadApp(mainWindow).catch((error: unknown) => {
     console.error('[window] the renderer did not load:', error);
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    openExternalLink(url);
+    if (isBrowserLink(url)) {
+      openExternalLink(url);
+    }
     return { action: 'deny' };
   });
+  keepOnAppPage(mainWindow, appPageUrl());
 
   // Somebody closed the window. Whatever was open is over: the next window is a
   // fresh start and belongs on the welcome screen, not back in the project this
   // one had. (A reload doesn't come through here, which is the difference the
   // reopen above is asking about.)
+  mainWindow.on('close', () => bootStore?.flush());
   mainWindow.on('closed', () => {
     openProjectRoot = undefined;
+    folderQueue.hold();
     stopWatchingProject();
     devServers.stop();
     stopAllServices();
@@ -288,6 +487,95 @@ function createWindow() {
     cleanupTerminals();
   });
 }
+
+// The app's own page, in `window`.
+function loadApp(window: Window): Promise<void> {
+  const devServerUrl = process.env['VITE_DEV_SERVER_URL'];
+  return devServerUrl ? window.loadURL(devServerUrl) : window.loadFile(RUNTIME_PATHS.rendererIndex);
+}
+
+// Errors from before the window exists, and ones that arrive while it is being made, wait here until the recovery
+// watch can keep them with the rest of the crash log (electron/app/windowRecovery.ts).
+const pendingCrashNotes: Array<Pick<CrashRecord, 'source' | 'reason' | 'detail'>> = [];
+let windowRecovery: WindowRecovery | undefined;
+
+function noteCrash(entry: Pick<CrashRecord, 'source' | 'reason' | 'detail'>): void {
+  if (windowRecovery) {
+    windowRecovery.note(entry);
+  } else if (pendingCrashNotes.length < 50) {
+    pendingCrashNotes.push(entry);
+  }
+}
+
+// A window that fails to load, loses its renderer or hangs is reloaded a bounded number of times and then replaced by the
+// recovery screen, never left black (electron/app/windowHealth.ts holds the decision, windowRecovery.ts the actions).
+function watchWindowHealth(window: Window): void {
+  const { webContents } = window;
+  const recovery = attachWindowRecovery({
+    contents: webContents,
+    directory: app.getPath('userData'),
+    homeDirectory: app.getPath('home'),
+    now: Date.now,
+    setTimer: (action, delayMs) => {
+      const handle = setTimeout(action, delayMs);
+      return { cancel: () => clearTimeout(handle) };
+    },
+    translate: () => translateMain,
+    locale: () => activeMainLocale(),
+    loadApp: () => loadApp(window),
+    // A window still waiting for its first frame would stay hidden behind the recovery page.
+    onRecoveryShown: firstFrame.fire,
+    openProject: () => {
+      void pickProjectFromRecovery(window);
+    },
+    copyText: (text) => {
+      clipboard.writeText(text).catch((error: unknown) => console.error('[recovery] could not copy the details:', error));
+    },
+    log: (message) => console.error(message),
+  });
+  windowRecovery = recovery;
+  for (const entry of pendingCrashNotes.splice(0)) {
+    recovery.note(entry);
+  }
+  webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    // A failed subframe is the preview's business (preview/previewFailure.ts), not the app window's.
+    if (isMainFrame) {
+      recovery.handle({ kind: 'load-failed', code, description, url });
+    }
+  });
+  webContents.on('render-process-gone', (_event, details) => recovery.handle({ kind: 'renderer-gone', reason: details.reason, exitCode: details.exitCode }));
+  webContents.on('unresponsive', () => recovery.handle({ kind: 'unresponsive' }));
+  webContents.on('responsive', () => recovery.handle({ kind: 'responsive' }));
+  // Before keepOnAppPage's own listener cancels every address that is not the app's page.
+  webContents.on('will-navigate', (event) => {
+    if (recovery.handleNavigation(event.url)) {
+      event.preventDefault();
+    }
+  });
+}
+
+// The recovery screen's "Open another project": the person picks a folder, and the window loads the app with it.
+async function pickProjectFromRecovery(window: Window): Promise<void> {
+  const picked = await dialog.showOpenDialog(window, { title: translateMain('dialog.open.project.title'), properties: ['openDirectory'] });
+  const directory = picked.filePaths[0];
+  if (picked.canceled || directory === undefined) {
+    return;
+  }
+  pendingProject = directory;
+  await loadApp(window);
+}
+
+// An error nobody caught goes to the crash log instead of a native box or nowhere (electron/app/processGuards.ts), and a
+// helper process that died (the GPU, a utility) is recorded as the window's health sees it.
+installProcessGuards({
+  onUncaughtException: (listener) => process.on('uncaughtException', listener),
+  onUnhandledRejection: (listener) => process.on('unhandledRejection', listener),
+  note: noteCrash,
+  log: (message) => console.error(message),
+});
+app.on('child-process-gone', (_event, details) => {
+  windowRecovery?.handle({ kind: 'child-gone', processType: details.type, reason: details.reason, exitCode: details.exitCode });
+});
 
 // Links open in the user's browser. There is no one to tell when the browser
 // cannot be started, so the failure goes to the log.
@@ -297,8 +585,21 @@ function openExternalLink(url: string) {
   });
 }
 
+ipcMain.handle('microphone:status', () => microphoneStatus(microphoneSystem()));
+ipcMain.handle('microphone:request', () => requestMicrophone(microphoneSystem()));
+// No payload: the address is fixed in shared/properties/microphone.ts, never a renderer's.
+ipcMain.handle('microphone:openSettings', async () => {
+  const system = microphoneSystem();
+  if (system.platform === 'darwin') {
+    await openMicrophoneSettings(system).catch((error: unknown) => {
+      console.error('[microphone] could not open System Settings:', error);
+    });
+  }
+  return { ok: true as const };
+});
+
 ipcMain.handle('shell:openExternal', async (_event, url) => {
-  if (/^https?:\/\//.test(url)) {
+  if (isBrowserLink(url)) {
     openExternalLink(url);
   }
   return { ok: true as const };
@@ -306,75 +607,64 @@ ipcMain.handle('shell:openExternal', async (_event, url) => {
 
 // Custom menu: on macOS the native menu consumes ⌘Z/⌘C/⌘V before the page
 // sees them, so Undo/Redo/Copy/Paste forward to the renderer, which decides
-// between app-level actions (nodes) and native ones (text fields).
+// between app-level actions (nodes) and native ones (text fields). The items
+// and their words are electron/app/applicationMenu.ts; this only supplies the actions.
 function buildMenu() {
-  const isMac = process.platform === 'darwin';
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
-    {
-      // Spelled out rather than `role: 'fileMenu'`, which takes no additions.
-      // What that role provides is one item — Close Window on macOS, Quit
-      // everywhere else — so the menu keeps exactly what it had, with the
-      // update check above it.
-      label: 'File',
-      submenu: [
-        {
-          label: 'Settings…',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => send('menu:settings'),
-        },
-        { type: 'separator' },
-        // Until now the only way out of a project was to close the app, and on
-        // macOS closing the app is not what people think it is: the window goes
-        // and the process stays, so coming back lands on the same project and
-        // there is nothing to press that says otherwise.
-        {
-          label: 'Open Project…',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => send('menu:openProject'),
-        },
-        {
-          label: 'Close Project',
-          accelerator: 'Shift+CmdOrCtrl+W',
-          click: () => send('menu:closeProject'),
-        },
-        { type: 'separator' },
-        { label: 'Check for Updates…', click: () => void autoUpdates.checkFromMenu() },
-        { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('menu:undo') },
-        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('menu:redo') },
-        { type: 'separator' },
-        { role: 'cut' },
-        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => send('menu:copy') },
-        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => send('menu:paste') },
-        { role: 'selectAll' },
-        { type: 'separator' },
-        {
-          label: 'Copy Selection',
-          accelerator: 'Shift+CmdOrCtrl+C',
-          click: () => send('menu:copySelection'),
-        },
-        { label: 'Insert Element…', accelerator: 'CmdOrCtrl+E', click: () => send('menu:insert') },
-      ],
-    },
-    // In dev ⌘R has to mean "restart the process". main.js, astroParser.js and
-    // the rest of this side are bound in at require time, so the stock reload
-    // repaints the renderer while silently going on running the old code —
-    // the failure mode is an edit that appears to do nothing. The plain window
-    // reload keeps its usual behaviour one item down. A packaged build has no
-    // supervisor to restart it and no source to pick up, so it keeps the stock
-    // menu.
-    buildViewMenu(),
-    { role: 'windowMenu' },
-  ];
+  const template = buildApplicationMenuTemplate({
+    isMac: process.platform === 'darwin',
+    isDev,
+    translate: translateMain,
+    send: (channel) => send(channel),
+    checkForUpdates: () => void autoUpdates.checkFromMenu(),
+    reload: (command) => runReload(command),
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+// ⌘R and ⇧⌘R refresh the site, the same function as the toolbar's refresh button (the renderer owns it), wherever focus is and
+// only while a project is open. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in dev, where the main side is
+// bound in at require time and a window reload would keep running old code, and a window reload in a packaged build.
+// electron/app/reloadRouting.ts holds the refresh decision.
+function runReload(command: ReloadCommand): void {
+  switch (command) {
+    case 'refreshSite': {
+      const action = routeReload({ previewOpen: openProjectRoot !== undefined });
+      if (action === 'refreshPreview') {
+        send('menu:refreshPreview');
+      }
+      return;
+    }
+    case 'reloadStacki':
+      if (isDev) {
+        relaunchApp();
+      } else {
+        mainWindow?.webContents.reload();
+      }
+      return;
+    default: {
+      const unreachable: never = command;
+      throw new Error(`Assertion failed: unknown reload command ${String(unreachable)}`);
+    }
+  }
+}
+
+// The language of the menu and native dialogs: the stored choice (mirrored from the renderer over `locale:set`) or, for
+// "System default", the operating system's languages. Loading is a dynamic import of two small files, never a reason to fail.
+async function refreshMainLocale(): Promise<void> {
+  const systemLanguages = typeof app.getPreferredSystemLanguages === 'function' ? app.getPreferredSystemLanguages() : [app.getLocale()];
+  setMainLocale(await loadMainLocale(resolveLocale(settings.localePreference, systemLanguages)));
+}
+
+ipcMain.handle('locale:set', async (_event, { preference }) => {
+  if (preference === settings.localePreference) {
+    return { saved: true };
+  }
+  settings = { ...settings, localePreference: preference };
+  const saved = writeSettings();
+  await refreshMainLocale();
+  buildMenu();
+  return { saved };
+});
 
 // A project the app has been asked to open in the window it is about to load —
 // set by `project:close` when somebody picks a different project, since letting
@@ -396,11 +686,11 @@ let pendingProject: string | undefined = undefined;
 //   - the whole process restarted ("Reload All Code"), and memory is gone —
 //     relaunchApp left the path in a file. Consumed on read, so a later cold
 //     start doesn't silently skip the welcome screen.
-ipcMain.handle('project:pending', () => {
-  const asked = pendingProject;
-  pendingProject = undefined;
-  if (asked && fs.existsSync(asked)) {
-    return asked;
+// The project the renderer will pick up, without consuming it: what the boot channel seeds the first render with and
+// what the early dev-server start works on. `project:pending` below is the consuming read.
+function peekPendingProject(): string | undefined {
+  if (pendingProject && fs.existsSync(pendingProject)) {
+    return pendingProject;
   }
   if (!isDev) {
     return undefined;
@@ -408,19 +698,25 @@ ipcMain.handle('project:pending', () => {
   if (openProjectRoot && fs.existsSync(openProjectRoot)) {
     return openProjectRoot;
   }
-  let reopenPath: string | undefined = undefined;
   try {
     const input: unknown = JSON.parse(readSource(reopenFile()));
-    reopenPath = parseOptionalString(toRecord(input)?.['path']) || undefined;
+    const reopenPath = parseOptionalString(toRecord(input)?.['path']) || undefined;
+    return reopenPath && fs.existsSync(reopenPath) ? reopenPath : undefined;
   } catch {
     return undefined;
   }
+}
+
+ipcMain.handle('project:pending', () => {
+  const found = peekPendingProject();
+  pendingProject = undefined;
   try {
+    // Consumed on read, so a later cold start doesn't silently skip the welcome screen.
     fs.rmSync(reopenFile(), { force: true });
   } catch {
     /* non-fatal */
   }
-  return reopenPath && fs.existsSync(reopenPath) ? reopenPath : undefined;
+  return found;
 });
 
 // Native clipboard actions on the focused element, requested by the renderer
@@ -445,18 +741,81 @@ ipcMain.handle('native:redo', () => {
   return { ok: true as const };
 });
 
+// How long after the window is on screen the first update check waits.
+const UPDATE_CHECK_DELAY_MS = 5_000;
+
+// Runs `task` once the main window is visible: now if it is, else on its first show.
+function afterWindowShown(task: () => void): void {
+  const window = mainWindow;
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isVisible()) {
+    setTimeout(task, 0);
+  } else {
+    window.once('show', () => setTimeout(task, 0));
+  }
+}
+
 // Electron resolves whenReady once; were it ever refused, there is no window
 // to report that to, so the log says it.
 app.whenReady().then(
-  () => {
+  async () => {
     // Before the menu, which draws the sound item's tick from it.
+    markStartup('appReady');
     settings = readSettings();
-    setApplicationIcon();
+    markStartup('settingsRead');
     registerAssetProtocol();
-    buildMenu();
+    protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
+    protocol.handle(MODEL_SCHEME, (request) => serveModelRequest(request.url, request.method, whisperRoot(app.getPath('userData'))));
+    refusePrivatePermissions();
+    // The canvas frames the project's own dev server; a site's own no-framing rule must not blank it (previewFraming.ts).
+    allowLoopbackFraming(session.defaultSession);
+    // The boot path before the window: the snapshot the first render is seeded with, and, for a project the window
+    // will open, its dev server, started now so the canvas is not waiting for the renderer to ask (docs/startup.md).
+    bootStore = createBootStore(app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) }, (projectPath) =>
+      fs.existsSync(projectPath),
+    );
+    registerBootChannels({
+      ipcMain: nativeIpcMain,
+      store: bootStore,
+      pendingProject: peekPendingProject,
+      isMainFrame: (event) => mainWindow !== undefined && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame,
+      onFirstFrame: firstFrame.fire,
+    });
+    const earlyProject = peekPendingProject();
+    if (earlyProject !== undefined) {
+      // Same containment the renderer's watch:start would set; the renderer's own call follows and replaces it.
+      noteProjectRoot(earlyProject);
+      startProjectPreview(devServers, thumbnails, earlyProject).catch((error: unknown) => {
+        console.warn('[startup] the early preview start failed; the renderer asks again:', error instanceof Error ? error.message : String(error));
+      });
+    }
+    // The window first: it starts the renderer loading while this process does the rest of its
+    // start (language, icon, menu), instead of the renderer waiting for all of it.
     createWindow();
-    autoUpdates.start();
-    void showUsageNotice();
+    await refreshMainLocale();
+    setApplicationIcon();
+    buildMenu();
+    markStartup('menuBuilt');
+    // Neither belongs to the first frame: the notice is a sheet on the window, which must be on screen
+    // first, and the update check is a network call that would compete with the renderer's load.
+    afterWindowShown(() => void showUsageNotice());
+    afterWindowShown(() => {
+      const timer = setTimeout(() => autoUpdates.start(), UPDATE_CHECK_DELAY_MS);
+      timer.unref();
+    });
+    // Version 1.0.22 kept photographs of components in userData; the palette now shows live frames.
+    removeLegacyComponentShots(app.getPath('userData')).then(
+      (removed) => {
+        if (removed !== undefined) {
+          console.info(
+            `[component-shots] removed the old photograph cache: ${removed.filesRemoved} files, ${removed.foldersRemoved} folders; ${removed.foldersKept} folders kept`,
+          );
+        }
+      },
+      (error: unknown) => console.warn('[component-shots] the old photograph cache was not removed:', error instanceof Error ? error.message : String(error)),
+    );
     app.on('browser-window-focus', () => {
       if (watcher) {
         noteUsageActivity();
@@ -465,6 +824,7 @@ app.whenReady().then(
     // Terminals open in the project the app has open — same reach as the asset
     // protocol, which is what `openProjectRoot` already scopes.
     registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
+    registerAiSendChannels(nativeIpcMain, aiServices.host);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
@@ -487,6 +847,7 @@ ipcMain.handle('project:close', async (_event, next) => {
   stopAllServices();
   stopAllPreviews();
   cleanupTerminals();
+  aiServices.stopAll();
   stopWatchingProject();
   // Nothing is open, so nothing is in reach: the asset protocol and the
   // terminals both scope themselves to this.
@@ -528,6 +889,8 @@ app.on('before-quit', () => stopAllServices());
 app.on('before-quit', () => stopAllPreviews());
 // A pty outlives the window that opened it unless it is killed.
 app.on('before-quit', () => cleanupTerminals());
+// An agent and the tools it started outlive the app unless they are stopped.
+app.on('before-quit', () => aiServices.stopAll());
 
 // ---------------------------------------------------------------------------
 // The renderer's window: what the main process tells it, and its dialogs
@@ -538,6 +901,62 @@ function send(channel: string, payload?: unknown) {
     mainWindow.webContents.send(channel, payload);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Folders from outside the app: the icon, the command line, a second launch (electron/project/folderOpen.ts)
+// ---------------------------------------------------------------------------
+
+const folderQueue = createFolderOpenQueue((folder) => {
+  send('project:folderOpened', folderOpenChoice(folder));
+  bringWindowForward();
+});
+
+function receiveFolder(folder: string): void {
+  const arrival = folderQueue.add(folder);
+  if (arrival === 'full') {
+    console.warn('[folder-open] too many folders are waiting for the window; this one was not opened:', folder);
+  }
+  if (arrival === 'delivered') {
+    return;
+  }
+  // Held for the page to take as it mounts. macOS keeps the app running with no window: make one for it.
+  if (app.isReady()) {
+    if (mainWindow === undefined || mainWindow.isDestroyed()) {
+      createWindow();
+    } else {
+      bringWindowForward();
+    }
+  }
+}
+
+function bringWindowForward(): void {
+  const window = mainWindow;
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
+}
+
+// A drop on the Dock icon, before the app is ready when the drop launched it. Default prevented, so macOS
+// knows the app took the folder.
+app.on('open-file', (event, filePath) => {
+  event.preventDefault();
+  receiveFolder(filePath);
+});
+app.on('second-instance', (_event, argv, workingDirectory) => {
+  bringWindowForward();
+  for (const folder of launchFolderArguments(argv, { skip: 1, workingDirectory })) {
+    receiveFolder(folder);
+  }
+});
+// This launch's own arguments: Electron and the app's folder lead them in development, the program alone packaged.
+for (const folder of launchFolderArguments(process.argv, { skip: process.defaultApp ? 2 : 1, workingDirectory: process.cwd() })) {
+  receiveFolder(folder);
+}
+ipcMain.handle('project:takeOpenedFolders', () => folderQueue.take().map((folder) => folderOpenChoice(folder)));
 
 function showMessageBox(parent: Window | undefined, options: MessageBoxOptions) {
   return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);
@@ -559,6 +978,15 @@ const SETTINGS_DEFAULTS: AppSettings = {
   sound: false,
   usageCountsEnabled: true,
   usageNoticeVersion: 0,
+  appsPersonHidden: false,
+  aiAskBeforeTrust: false,
+  // On: the change ledger's snapshots are what the AI panel's Changes cards are made of, and what people had before this setting.
+  aiTrackChanges: true,
+  // Off: an AI edit is applied the moment it is made and shows "Applied" with Undo; on, the person Keeps or Undoes each file.
+  aiReviewChanges: false,
+  // On: CSS in code editors shows variables, easings, shadows, gradients and clip-paths as chips that open their editors.
+  codeChips: true,
+  localePreference: LOCALE_PREFERENCE_DEFAULT,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
 let usageCountInFlight: AbortController | undefined;
@@ -578,6 +1006,12 @@ function readSettings() {
   }
 }
 
+/** The settings with the percentage set, or removed for the agent's default (an exact optional property is absent, never undefined). */
+function withAutoCompactPercent(current: AppSettings, percent: number | undefined): AppSettings {
+  const kept = Object.fromEntries(Object.entries(current).filter(([key]) => key !== 'aiAutoCompactPercent'));
+  return parseSettings(percent === undefined ? kept : { ...kept, aiAutoCompactPercent: percent });
+}
+
 function writeSettings(): boolean {
   try {
     fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2), 'utf8');
@@ -591,6 +1025,11 @@ function writeSettings(): boolean {
 const publicSettings = () => ({
   sound: settings.sound,
   usageCountsEnabled: settings.usageCountsEnabled,
+  appsPersonHidden: settings.appsPersonHidden,
+  aiAskBeforeTrust: settings.aiAskBeforeTrust,
+  aiTrackChanges: settings.aiTrackChanges,
+  aiReviewChanges: settings.aiReviewChanges,
+  codeChips: settings.codeChips,
 });
 ipcMain.handle('settings:get', publicSettings);
 ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
@@ -599,6 +1038,23 @@ ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
     settings = { ...settings, sound: enabled };
     saved = writeSettings();
     send('menu:sound', enabled);
+  } else if (setting === 'aiAskBeforeTrust') {
+    settings = { ...settings, aiAskBeforeTrust: enabled };
+    saved = writeSettings();
+  } else if (setting === 'aiTrackChanges') {
+    settings = { ...settings, aiTrackChanges: enabled };
+    saved = writeSettings();
+  } else if (setting === 'aiReviewChanges') {
+    settings = { ...settings, aiReviewChanges: enabled };
+    saved = writeSettings();
+  } else if (setting === 'codeChips') {
+    settings = { ...settings, codeChips: enabled };
+    saved = writeSettings();
+  } else if (setting === 'appsPersonHidden') {
+    settings = { ...settings, appsPersonHidden: enabled };
+    saved = writeSettings();
+    // Running apps hear what `person.get` answers now.
+    send('apps:personChanged', {});
   } else {
     saved = setUsageCountsEnabled(enabled);
   }
@@ -614,9 +1070,9 @@ function setUsageCountsEnabled(enabled: boolean): boolean {
   if (!saved) {
     void showMessageBox(mainWindow, {
       type: 'warning',
-      title: 'Privacy Setting Not Saved',
-      message: 'Stacki could not save your usage-count preference.',
-      detail: 'The change applies for this session. Check available disk space and try again.',
+      title: translateMain('dialog.privacy.notSaved.title'),
+      message: translateMain('dialog.privacy.notSaved.message'),
+      detail: translateMain('dialog.privacy.notSaved.detail'),
     });
   }
   if (enabled && watcher) {
@@ -662,15 +1118,11 @@ function noteUsageActivity(): void {
 function usageNoticeOptions(): MessageBoxOptions {
   return {
     type: 'info',
-    title: 'Anonymous Usage Counts',
-    message: 'Help us understand how many Stacki installations are active.',
-    detail:
-      'Stacki sends one count on days you open a project. It sends no project names, ' +
-      'file contents, device identifier, or activity history. Daily totals are kept ' +
-      'on Cloudflare for up to 366 days; its network sees the connection IP, but the ' +
-      'usage database does not store it. Turn this off any time in File → Settings.',
-    buttons: ['Continue'],
-    checkboxLabel: 'Turn off anonymous usage counts',
+    title: translateMain('dialog.usage.title'),
+    message: translateMain('dialog.usage.message'),
+    detail: translateMain('dialog.usage.detail'),
+    buttons: [translateMain('dialog.usage.continue')],
+    checkboxLabel: translateMain('dialog.usage.optOut'),
     checkboxChecked: !settings.usageCountsEnabled,
   };
 }
@@ -755,6 +1207,8 @@ ipcMain.handle('recents:add', async (_event, projectPath) => {
     openedAt: Date.now(),
   });
   writeRecents(list.slice(0, 12));
+  // The Dock menu's and the taskbar's recent list; picking one comes back as `open-file` on macOS.
+  app.addRecentDocument(projectPath);
   return { ok: true as const };
 });
 
@@ -770,6 +1224,8 @@ ipcMain.handle('recents:remove', async (_event, projectPath) => {
 // ---------------------------------------------------------------------------
 
 let watcher: ReturnType<typeof watchProject> | undefined;
+// The Instructions panel's own watcher: root and dot-folder Markdown the source watcher never sees.
+let instructionsWatcher: ReturnType<typeof watchInstructions> | undefined;
 
 // A compile error replaces the site with the dev server's own error screen, and
 // that screen carries no HMR client — so when the mistake is fixed, nothing in
@@ -797,8 +1253,11 @@ function notePageMayHaveChanged(external = false) {
 
 // The app changed a project file: its own text write (through the file's
 // actor), or a move, rename or delete. The canvas may need to hear of it.
-function noteAppWrite(): void {
+function noteAppWrite(file?: string): void {
   notePageMayHaveChanged();
+  if (file !== undefined) {
+    devServers.touch(file);
+  }
 }
 
 // The main process's document actors (plan §2 layer 2): from step 5 every
@@ -842,6 +1301,17 @@ ipcMain.handle('watch:start', async (_event, projectPath) => {
     scheduleThumb: (projectPath, delayMs) => thumbnails.schedule(projectPath, delayMs),
     mediaPattern: MEDIA_EXT,
   });
+  try {
+    instructionsWatcher = watchInstructions({
+      projectPath,
+      send,
+      isSelfWrite,
+      noteExternalChange: (changed) => documents.noteExternalChange(changed),
+    });
+  } catch (error: unknown) {
+    // Without it the panel still lists on open and on focus; the editor keeps working.
+    console.warn(`Instructions watcher unavailable: ${String(error)}`);
+  }
   noteUsageActivity();
   return { ok: true as const };
 });
@@ -849,35 +1319,13 @@ ipcMain.handle('watch:start', async (_event, projectPath) => {
 function stopWatchingProject() {
   watcher?.close();
   watcher = undefined;
+  instructionsWatcher?.close();
+  instructionsWatcher = undefined;
   clearTimeout(pageChangeTimer);
   pageChangeTimer = undefined;
   pageChangeExternal = false;
   thumbnails.stop();
   documents.clear();
-}
-
-function buildViewMenu(): MenuItemConstructorOptions {
-  return isDev
-    ? {
-        label: 'View',
-        submenu: [
-          { label: 'Reload All Code', accelerator: 'CmdOrCtrl+R', click: () => relaunchApp() },
-          {
-            label: 'Reload Window Only',
-            accelerator: 'Shift+CmdOrCtrl+R',
-            click: () => mainWindow?.webContents.reload(),
-          },
-          { type: 'separator' },
-          { role: 'toggleDevTools' },
-          { type: 'separator' },
-          { role: 'resetZoom' },
-          { role: 'zoomIn' },
-          { role: 'zoomOut' },
-          { type: 'separator' },
-          { role: 'togglefullscreen' },
-        ],
-      }
-    : { role: 'viewMenu' };
 }
 
 // ---------------------------------------------------------------------------
@@ -895,30 +1343,95 @@ const host: MainHost = {
   documents,
   noteAppWrite,
   noteProjectRoot,
+  openProject: () => openProjectRoot,
   readTrailingSlash: (projectPath) => devServers.readTrailingSlash(projectPath),
   send,
   shell,
   showOpenDialog,
 };
 registerAssetHandlers(host);
+// The AI chat panel: its agents start on a prompt, never at load.
+const aiServices = registerAiHandlers(host, {
+  userData: () => app.getPath('userData'),
+  version: () => app.getVersion(),
+  askBeforeTrust: () => settings.aiAskBeforeTrust,
+  trackChanges: () => settings.aiTrackChanges,
+  autoCompact: {
+    get: () => settings.aiAutoCompactPercent,
+    set: (percent) => {
+      settings = withAutoCompactPercent(settings, percent);
+      return writeSettings();
+    },
+  },
+  isForeground: () => mainWindow !== undefined && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized(),
+  thumbnail: attachmentThumbnail,
+});
+registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);
+registerCmsConstantHandlers(host);
 registerComponentHandlers(host);
-registerContentHandlers(host);
+registerStyleMoveHandlers(
+  host,
+  new StyleMoveJournals(
+    () => app.getPath('userData'),
+    (projectRoot) => projectFoldersFor(projectRoot, 'components'),
+  ),
+);
+registerContentHandlers(host, { restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl) });
 registerCssVariableHandlers(host);
+registerBreakpointSyncHandlers(host);
 registerGitHandlers(host);
 registerGitRepositoryHandlers(host);
 registerImageConversionHandler(host);
-registerPageHandlers(host);
+registerPageHandlers(host, { current: () => devServers.current(), restart: (projectPath) => devServers.restartForNewIntegration(projectPath) });
+registerPageTemplateHandlers(
+  host,
+  {
+    restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl),
+    restartForProjectEnv: (projectPath) => devServers.restartForProjectEnv(projectPath),
+  },
+  cmsConnections,
+);
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
+registerShadcnSettingsHandlers(host);
 registerProjectMetadataHandlers(host);
+registerInstructionHandlers(host);
+registerAgentHandlers(host);
+registerSecretsHandlers(host);
+registerMcpHandlers(host);
 registerPublishHandlers(host);
-registerStudioHandlers(
-  host,
-  app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() },
-  () => app.getVersion(),
-);
+registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
+registerMediaHostingHandlers(host, mediaConnections);
+// App settings' secrets are sealed by the operating system too, in a folder of
+// the user data, never in the project (electron/project/appSettingsStore.ts).
+registerAppsHandlers(host, {
+  build: app.isPackaged ? 'release' : 'development',
+  localStorageDirectory: (project) => desktopLocalStorageDirectory(app.getPath('userData'), project),
+  openBrowser: (url) => shell.openExternal(url),
+  version: () => app.getVersion(),
+  vault: {
+    directory: () => path.join(app.getPath('userData'), 'app-secrets'),
+    seal: {
+      refusal: () => (safeStorage.isEncryptionAvailable() ? undefined : 'This computer cannot encrypt secrets, so Stacki will not keep them.'),
+      seal: (value) => safeStorage.encryptString(value).toString('base64'),
+      open: (sealed) => safeStorage.decryptString(Buffer.from(sealed, 'base64')),
+    },
+  },
+});
+registerStudioHandlers(host, app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() }, () => app.getVersion());
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
+registerAppPageFilesHandlers(host);
+registerSelectorHandlers(host);
+registerRoleHandlers(host, githubIdentity);
+registerAppDataHandlers(host, {
+  userData: () => app.getPath('userData'),
+  identity: githubIdentity,
+  personHidden: () => settings.appsPersonHidden,
+  version: () => app.getVersion(),
+});
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });
+// Dictation's model lives in the app data folder, never in a project; the download runs only when the person agreed to it.
+registerDictationHandlers(host, { root: () => whisperRoot(app.getPath('userData')), fetch: (url, init) => fetch(url, init) });

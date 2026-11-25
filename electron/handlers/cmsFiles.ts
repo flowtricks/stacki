@@ -1,7 +1,8 @@
 // The files behind the CMS panel: collection folders, an entry's
 // frontmatter, its asset imports, and the panel's own field metadata.
 
-import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { readSource } from '../lib/mainLimits';
+import { translateMain } from '../lib/mainLocale';
 import { isPathWithin } from '../lib/platform';
 import { parseContentConfig } from '../app/mainValidation';
 import type { CmsFile } from '../lib/mainTypes';
@@ -52,9 +53,7 @@ export function frontmatterOf(source: string) {
 // the same form: `pages/index.astro#rotatingWords`.
 export function splitCmsRel(rel: string) {
   const at = String(rel || '').lastIndexOf('#');
-  return at === -1
-    ? { fileRel: String(rel || ''), exportName: undefined }
-    : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
+  return at === -1 ? { fileRel: String(rel || ''), exportName: undefined } : { fileRel: String(rel).slice(0, at), exportName: String(rel).slice(at + 1) };
 }
 
 // Refuses paths that escape src/.
@@ -111,16 +110,12 @@ export const collectionOf = async (projectPath: string, name: string) => {
   return { config, collection };
 };
 
-export function readCmsSource(
-  full: string,
-  entryRel: string,
-  options: { readonly page: boolean; readonly includeGeneralOnly?: boolean },
-): CmsFile[] {
+// A file's single values go by the file's own name: they are what the file is.
+const fileName = (rel: string): string => rel.slice(rel.lastIndexOf('/') + 1);
+
+export function readCmsSource(full: string, entryRel: string, options: { readonly page: boolean; readonly includeGeneralOnly?: boolean }): CmsFile[] {
   let source: string;
   try {
-    if (fs.statSync(full).size > MAIN_LIMITS.cmsFileBytesMax) {
-      return [];
-    }
     source = readSource(full);
   } catch {
     return [];
@@ -134,7 +129,7 @@ export function readCmsSource(
   }
   const scan = options.page ? PAGE_SCAN : undefined;
   const collections = findCollections(source, scan);
-  // Source files outside src/data still need an exported record list before
+  // Source files outside recognized settings locations need an exported record list before
   // they count as CMS content. Otherwise every constants module in the project
   // would appear as a content file merely because it exports a string.
   if (!options.page) {
@@ -151,9 +146,7 @@ export function readCmsSource(
     ...(options.page ? { fromPage: true } : {}),
   };
   const general = readGeneral(source, scan);
-  const files: CmsFile[] = general
-    ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: 'General', data: general }]
-    : [];
+  const files: CmsFile[] = general ? [{ ...metadata, rel: `${entryRel}#${GENERAL}`, name: fileName(entryRel), data: general }] : [];
   for (const collection of collections) {
     if (collection.data) {
       files.push({
@@ -172,14 +165,11 @@ export function readCmsJson(full: string, entryRel: string, rel: string, name: s
   try {
     const stat = fs.statSync(full);
     file = { ...file, size: stat.size };
-    if (stat.size > MAIN_LIMITS.cmsFileBytesMax) {
-      return { ...file, error: 'This file is too large to edit here (over 2 MB).' };
-    }
     return { ...file, data: parseData(readJson(full)) };
   } catch (error: unknown) {
     return {
       ...file,
-      error: `Not valid JSON — ${errorMessage(error).replace(/\s+in JSON.*$/, '')}`,
+      error: translateMain('error.cms.invalidJson', { detail: errorMessage(error).replace(/\s+in JSON.*$/, '') }),
     };
   }
 }

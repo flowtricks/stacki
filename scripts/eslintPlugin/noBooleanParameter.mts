@@ -7,14 +7,7 @@
 //   function name states what the value means.
 
 import type { TSESTree } from '@typescript-eslint/utils';
-import {
-  functionName,
-  isInlineCallback,
-  parameterAnnotation,
-  unionMembers,
-  type FunctionNode,
-  type RuleModule,
-} from './ast.mts';
+import { functionName, isInlineCallback, parameterAnnotation, unionMembers, type FunctionNode, type RuleModule } from './ast.mts';
 
 const SETTER_PREFIX = /^set[A-Z]/;
 
@@ -24,8 +17,7 @@ export const noBooleanParameter: RuleModule<'booleanParameter'> = {
     docs: { description: 'Boolean flags travel in a named options object (AGENTS.md §6).' },
     messages: {
       booleanParameter:
-        "Parameter '{{name}}' is a boolean flag; pass an options object " +
-        '({ readonly {{name}}?: boolean }) so the call site names it (AGENTS.md §6).',
+        "Parameter '{{name}}' is a boolean flag; pass an options object " + '({ readonly {{name}}?: boolean }) so the call site names it (AGENTS.md §6).',
     },
     schema: [],
   },

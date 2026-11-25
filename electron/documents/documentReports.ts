@@ -3,11 +3,7 @@
 // and the state and errors of a current read (documentActors.ts).
 
 import { type Digest } from '../../shared/core/brand';
-import {
-  type Planner,
-  type Projector,
-  type Reconciliation,
-} from '../../shared/engine/documentActor';
+import { type Planner, type PreflightGate, type Projector, type Reconciliation } from '../../shared/engine/documentActor';
 import { type Intent, type RejectionReason, type SourceEdit } from '../../shared/engine/intent';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { type ByteString } from '../../shared/core/span';
@@ -80,15 +76,14 @@ export interface BuiltEdit {
   readonly basis: 'authored' | 'current';
 }
 
-export type HostDisk = Pick<
-  NodeDocumentDisk,
-  'read' | 'lock' | 'unlock' | 'replace' | 'create' | 'canonical'
->;
+export type HostDisk = Pick<NodeDocumentDisk, 'read' | 'lock' | 'unlock' | 'replace' | 'create' | 'canonical'>;
 
 export interface DocumentActorsOptions {
   readonly disk: HostDisk;
   readonly projector: Projector;
   readonly planner: Planner;
+  /** Pre-flight (documentPreflight.ts): the app's host passes one; tests may leave it out. */
+  readonly preflight?: PreflightGate;
   readonly telemetry: DocumentTelemetry;
   /** `immediate` in the app: each submission is stepped to its outcome at
    * once. `deferred` leaves it queued until `drain` — tests use it to fill a

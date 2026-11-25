@@ -8,12 +8,16 @@ COPY vendor ./vendor
 COPY scripts ./scripts
 COPY tsconfig.json ./
 RUN npm run build
+# Source maps are for a browser's debugger; the Worker serves the browser bundle, not this container.
+RUN find dist -name '*.map' -delete
 
 FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/studio
 COPY package*.json ./
-RUN npm ci --cache /opt/npm-cache --no-audit --no-fund && chown -R node:node /opt/studio /opt/npm-cache
+# Only what dist/container.mjs and dist/integration.mjs import at run time (dependencies, not the
+# build and test tools): a smaller image is a shorter pull on a host that has not run it yet.
+RUN npm ci --omit=dev --cache /opt/npm-cache --no-audit --no-fund && chown -R node:node /opt/studio /opt/npm-cache
 COPY .studio-image/site /opt/site
 RUN if [ -f /opt/site/package-lock.json ]; then cd /opt/site && npm ci --cache /opt/npm-cache --no-audit --no-fund; fi && chown -R node:node /opt/site /opt/npm-cache
 COPY src ./src
@@ -25,6 +29,8 @@ RUN mkdir /workspace && chown node:node /workspace
 USER node
 EXPOSE 4350
 ENV ASTRO_TELEMETRY_DISABLED=1
+ENV VERCEL_TELEMETRY_DISABLED=1
+ENV WRANGLER_SEND_METRICS=false
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV PATH="/opt/studio/node_modules/.bin:${PATH}"
 CMD ["node", "dist/container.mjs"]

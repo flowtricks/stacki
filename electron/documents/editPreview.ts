@@ -17,8 +17,11 @@ import { planIntent } from '../../shared/engine/planner';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { ByteString } from '../../shared/core/span';
 import { applySplices, inverseEdits } from '../../shared/engine/splice';
+import { candidateOf } from '../../shared/engine/documentActor';
+import { rebaseIntent, type CommitRecord } from '../../shared/engine/rebase';
+import type { Snapshot } from '../../shared/page/snapshot';
 import { NODE_PROJECTOR } from './documentDisk';
-import { buildEditIntent } from './editRequests';
+import { buildEdit, buildEditIntent } from './editRequests';
 
 export interface EditPreviewed {
   readonly bytes: ByteString;
@@ -31,12 +34,7 @@ export interface EditPreviewed {
 /** The bytes `edit` would leave, planned against `bytes` as the file at
  * `authoredChecksum`. A rejection is the planner's own, as `page:edit` would
  * have answered it over unchanged bytes. */
-export function previewEdit(
-  file: string,
-  bytes: ByteString,
-  authoredChecksum: Digest,
-  edit: Edit,
-): Result<EditPreviewed, RejectionReason> {
+export function previewEdit(file: string, bytes: ByteString, authoredChecksum: Digest, edit: Edit): Result<EditPreviewed, RejectionReason> {
   const path = toFilePath(file);
   const snapshot = NODE_PROJECTOR.snapshot(path, bytes);
   // The renderer states each request against the reply before it, whose bytes
@@ -58,4 +56,54 @@ export function previewEdit(
   const unchanged = checksum === authoredChecksum;
   assert(splices.length > 0 || unchanged, 'No splices leave the bytes as they were');
   return ok({ bytes: after, checksum, inverse: inverseEdits(splices) });
+}
+
+/** The bytes a batch of edits leaves, planned one after another in memory
+ * against `bytes` as the file at `authoredChecksum`, so the batch can be
+ * written once (page:editBatch). Two writes of one gesture let the dev server
+ * render the page between them: a loop that reads `teamEntries` before the
+ * declaration of `teamEntries` lands. Each edit is built and rebased exactly
+ * as the actor would build and rebase it after the ones before it had been
+ * committed, and its candidate is checked as a write would check it, so a
+ * batch accepts nothing its edits would be refused alone. The first refusal
+ * refuses the batch; nothing is written. */
+export function previewEdits(
+  file: string,
+  bytes: ByteString,
+  authoredChecksum: Digest,
+  edits: readonly Edit[],
+): Result<{ readonly bytes: ByteString; readonly checksum: Digest }, RejectionReason> {
+  assert(edits.length > 0, 'A batch holds at least one edit');
+  const path = toFilePath(file);
+  const authored = NODE_PROJECTOR.snapshot(path, bytes);
+  // The handler reads these bytes from the actor at that checksum.
+  assert(authored.checksum === authoredChecksum, 'A batch names the bytes it is planned on');
+  let current: Snapshot = authored;
+  const chain: CommitRecord[] = [];
+  for (let index = 0; index < edits.length; index++) {
+    const edit = edits[index];
+    assert(edit !== undefined, 'Batch index is in bounds');
+    const built = buildEdit(edit, { authored, current, history: chain.length === 0 ? 'unchanged' : 'own-commits' });
+    if (!built.ok) {
+      return built;
+    }
+    const basis = built.value.basis === 'current' ? current : authored;
+    const stated = toIntent({ id: toIntentId(`batch-${index}`), file: path, authoredChecksum: basis.checksum, ...built.value.draft });
+    const intent = basis === current ? ok(stated) : rebaseIntent(stated, chain, current);
+    if (!intent.ok) {
+      return intent;
+    }
+    const planned = planIntent({ authored: current, current }, intent.value);
+    if (!planned.ok) {
+      return planned;
+    }
+    const candidate = candidateOf(path, current, planned.value, NODE_PROJECTOR);
+    if (!candidate.ok) {
+      return err(candidate.error.reason);
+    }
+    chain.push({ from: current.checksum, to: candidate.value.checksum, splices: planned.value.splices, relocation: planned.value.relocation });
+    current = candidate.value;
+  }
+  assert(chain.length === edits.length, 'Every edit of a batch was planned');
+  return ok({ bytes: current.bytes, checksum: current.checksum });
 }

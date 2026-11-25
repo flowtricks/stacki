@@ -1,9 +1,11 @@
 import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
-import postcss from 'postcss';
 import { writeProjectText } from './variableWorkspace';
 import { assert } from '../../shared/core/assert';
-import type { Declaration, Rule as PostcssRule } from 'postcss';
+import { findRule, sectionAt, styleWriteProblem } from './cssVarRegions';
+import type { Declaration } from 'postcss';
+import { described, type Described, type MessageKey, type MessageRef } from '../../shared/properties/i18n/messageRef';
+import type { MessageParams } from '../../shared/core/i18n/catalog';
 
 // Reading a project's CSS custom properties as something an editor can show.
 //
@@ -29,6 +31,33 @@ import type { Declaration, Rule as PostcssRule } from 'postcss';
 // property, one column per thing — which is both shorter and the way the
 // author was thinking when they wrote it.
 
+// A refused edit speaks twice: the English `error` it always carried, and an `errorRef` the panel translates into the person's
+// language. This process has no per-user locale, so it names the sentence and the panel words it.
+interface Refusal {
+  readonly error: string;
+  readonly errorRef: MessageRef;
+}
+
+function refusal(key: MessageKey, params?: MessageParams): Refusal {
+  const sentence = described(key, params);
+  return { error: sentence.message, errorRef: sentence.messageRef };
+}
+
+function problemRefusal(problem: Described): { readonly error: string; readonly errorRef?: MessageRef | undefined } {
+  return { error: problem.message, errorRef: problem.messageRef };
+}
+
+// Every edit lands through here. The file is written only when the edit stayed
+// inside its `<style>` block: a value holding `</style>` would otherwise end the
+// block early and turn the rest of the CSS into page markup.
+function commit(abs: string, { file, text, next }: { readonly file: string; readonly text: string; readonly next: string }): Described | undefined {
+  const problem = styleWriteProblem(file, text, next);
+  if (problem === undefined) {
+    writeProjectText(abs, next);
+  }
+  return problem;
+}
+
 interface SetValuePayload {
   readonly file: string;
   readonly valueStart: number;
@@ -45,16 +74,15 @@ interface SetValuePayload {
 function setVariable(
   projectPath: string,
   { file, valueStart, valueEnd, expect, value }: SetValuePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+): { ok: boolean; stale?: boolean; error?: string; errorRef?: MessageRef | undefined } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   const current = text.slice(valueStart, valueEnd);
   if (expect !== undefined && current !== expect) {
-    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+    return { ok: false, stale: true, ...refusal('variables.error.changedSincePanelRead') };
   }
-  const next = text.slice(0, valueStart) + value + text.slice(valueEnd);
-  writeProjectText(abs, next);
-  return { ok: true };
+  const problem = commit(abs, { file, text, next: text.slice(0, valueStart) + value + text.slice(valueEnd) });
+  return problem === undefined ? { ok: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 interface SectionRangePayload {
@@ -76,26 +104,26 @@ interface SectionRangePayload {
 function setSectionTitle(
   projectPath: string,
   { file, start, end, expect, title }: SectionRangePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+): { ok: boolean; stale?: boolean; error?: string; errorRef?: MessageRef | undefined } {
   const next = String(title ?? '').trim();
   if (!next) {
-    return { ok: false, error: 'A heading needs a name.' };
+    return { ok: false, ...refusal('variables.error.headingNeedsName') };
   }
   // The words live inside a comment, and `*/` would end it early — the rest of
   // the rule would become the comment's text and the variables under it would
   // stop existing.
   if (next.includes('*/')) {
-    return { ok: false, error: 'A heading cannot contain "*/".' };
+    return { ok: false, ...refusal('variables.error.headingCannotContainCommentEnd') };
   }
 
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   const current = text.slice(start, end);
   if (expect !== undefined && current !== expect) {
-    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+    return { ok: false, stale: true, ...refusal('variables.error.changedSincePanelRead') };
   }
-  writeProjectText(abs, text.slice(0, start) + next + text.slice(end));
-  return { ok: true };
+  const problem = commit(abs, { file, text, next: text.slice(0, start) + next + text.slice(end) });
+  return problem === undefined ? { ok: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 /**
@@ -113,16 +141,16 @@ function setSectionTitle(
 function removeSection(
   projectPath: string,
   { file, start, end, expect }: SectionRangePayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+): { ok: boolean; stale?: boolean; error?: string; errorRef?: MessageRef | undefined } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   if (expect !== undefined && text.slice(start, end) !== expect) {
-    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+    return { ok: false, stale: true, ...refusal('variables.error.changedSincePanelRead') };
   }
   const open = text.lastIndexOf('/*', start);
   const close = text.indexOf('*/', end);
   if (open === -1 || close === -1) {
-    return { ok: false, error: 'That heading is no longer a comment.' };
+    return { ok: false, ...refusal('variables.error.headingNotComment') };
   }
   let from = open;
   let to = close + 2;
@@ -136,8 +164,8 @@ function removeSection(
     from = lineStart;
     to = lineEnd === -1 ? text.length : lineEnd + 1;
   }
-  writeProjectText(abs, text.slice(0, from) + text.slice(to));
-  return { ok: true };
+  const problem = commit(abs, { file, text, next: text.slice(0, from) + text.slice(to) });
+  return problem === undefined ? { ok: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 interface MoveHeadingPayload {
@@ -164,16 +192,16 @@ interface MoveHeadingPayload {
 function moveHeading(
   projectPath: string,
   { file, selector, start, end, expect, before }: MoveHeadingPayload,
-): { ok: boolean; stale?: boolean; error?: string } {
+): { ok: boolean; stale?: boolean; error?: string; errorRef?: MessageRef | undefined } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
   if (expect !== undefined && text.slice(start, end) !== expect) {
-    return { ok: false, stale: true, error: 'This file changed since the panel read it.' };
+    return { ok: false, stale: true, ...refusal('variables.error.changedSincePanelRead') };
   }
   const open = text.lastIndexOf('/*', start);
   const close = text.indexOf('*/', end);
   if (open === -1 || close === -1) {
-    return { ok: false, error: 'That heading is no longer a comment.' };
+    return { ok: false, ...refusal('variables.error.headingNotComment') };
   }
 
   const comment = text.slice(open, close + 2);
@@ -181,26 +209,18 @@ function moveHeading(
   let to = close + 2;
   const lineStart = text.lastIndexOf('\n', from - 1) + 1;
   const lineEnd = text.indexOf('\n', to);
-  if (
-    !text.slice(lineStart, from).trim() &&
-    !text.slice(to, lineEnd === -1 ? text.length : lineEnd).trim()
-  ) {
+  if (!text.slice(lineStart, from).trim() && !text.slice(to, lineEnd === -1 ? text.length : lineEnd).trim()) {
     from = lineStart;
     to = lineEnd === -1 ? text.length : lineEnd + 1;
   }
   const cut = text.slice(0, from) + text.slice(to);
 
-  const root = postcss.parse(cut);
-  const matches: PostcssRule[] = [];
-  root.walkRules((candidate) => {
-    if (candidate.selector === selector) {
-      matches.push(candidate);
-    }
-  });
-  const rule = matches[0];
-  if (!rule) {
-    return { ok: false, error: `${selector} is no longer in ${file}.` };
+  // Cutting the comment leaves the block count alone, so its position still names it.
+  const found = findRule(cut, { file, selector, declares: before, section: sectionAt(file, text, start) });
+  if (!found.ok) {
+    return found;
   }
+  const { rule } = found;
 
   const decls = (rule.nodes || []).filter((node) => node.type === 'decl');
   const anchorDecl = before ? decls.find((declaration) => declaration.prop === before) : undefined;
@@ -222,8 +242,8 @@ function moveHeading(
     }
   }
   const indent = cut.slice(cut.lastIndexOf('\n', at - 1) + 1, at).match(/^\s*/)?.[0] || '  ';
-  writeProjectText(abs, `${cut.slice(0, at)}${indent}${comment}\n${cut.slice(at)}`);
-  return { ok: true };
+  const problem = commit(abs, { file, text, next: `${cut.slice(0, at)}${indent}${comment}\n${cut.slice(at)}` });
+  return problem === undefined ? { ok: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 interface AddSectionPayload {
@@ -248,13 +268,13 @@ interface AddSectionPayload {
 function addSection(
   projectPath: string,
   { file, selector, title, before, at }: AddSectionPayload,
-): { ok: boolean; error?: string; stale?: boolean; title?: string } {
+): { ok: boolean; error?: string; errorRef?: MessageRef | undefined; stale?: boolean; title?: string } {
   const next = String(title ?? '').trim();
   if (!next) {
-    return { ok: false, error: 'A heading needs a name.' };
+    return { ok: false, ...refusal('variables.error.headingNeedsName') };
   }
   if (next.includes('*/')) {
-    return { ok: false, error: 'A heading cannot contain "*/".' };
+    return { ok: false, ...refusal('variables.error.headingCannotContainCommentEnd') };
   }
 
   const abs = path.resolve(projectPath, file);
@@ -262,37 +282,48 @@ function addSection(
 
   let offset = at;
   if (typeof offset !== 'number') {
-    const matches: PostcssRule[] = [];
-    const root = postcss.parse(text);
-    root.walkRules((candidate) => {
-      if (candidate.selector === selector) {
-        matches.push(candidate);
-      }
-    });
-    const rule = matches[0];
-    if (!rule) {
-      return { ok: false, error: `${selector} is no longer in ${file}.` };
+    const found = findRule(text, { file, selector, declares: before });
+    if (!found.ok) {
+      return found;
     }
-    const decls = (rule.nodes || []).filter((node) => node.type === 'decl');
-    const anchorDecl =
-      (before && decls.find((declaration) => declaration.prop === before)) ||
-      decls[decls.length - 1] ||
-      undefined;
+    const decls = (found.rule.nodes || []).filter((node) => node.type === 'decl');
+    const anchorDecl = (before && decls.find((declaration) => declaration.prop === before)) || decls[decls.length - 1] || undefined;
     if (!anchorDecl) {
-      return { ok: false, error: `${selector} has nothing to head.` };
+      return { ok: false, ...refusal('variables.error.nothingToHead', { selector }) };
     }
     offset = anchorDecl.source?.start?.offset ?? 0;
   }
-  const sane = offset > text.length ? text.length : offset < 0 ? 0 : offset;
+  const sane = outsideComment(text, offset > text.length ? text.length : offset < 0 ? 0 : offset);
   if (sane < 0 || sane > text.length) {
-    return { ok: false, error: 'That place is no longer in the file.' };
+    return { ok: false, ...refusal('variables.error.placeGone') };
   }
 
   const lineStart = text.lastIndexOf('\n', sane - 1) + 1;
   const indent = text.slice(lineStart, sane).match(/^\s*/)?.[0] ?? '';
   const heading = `${indent}/* ${next} */\n`;
-  writeProjectText(abs, `${text.slice(0, lineStart)}${heading}${text.slice(lineStart)}`);
-  return { ok: true, title: next };
+  const problem = commit(abs, { file, text, next: `${text.slice(0, lineStart)}${heading}${text.slice(lineStart)}` });
+  return problem === undefined ? { ok: true, title: next } : { ok: false, ...problemRefusal(problem) };
+}
+
+// An offset that names a heading's words, moved out to the `/*` that opens it.
+//
+// A heading's offset is where its title starts, and a docblock's title is on
+// its second line (`/*`, then ` * The brand purple.`). Something written "on the
+// line holding that offset" would land inside the comment, under the `/*`, and
+// become part of it. The comment's own first line is the line meant.
+function outsideComment(text: string, offset: number): number {
+  assert(offset >= 0, 'outsideComment: the offset is in the file');
+  assert(offset <= text.length, 'outsideComment: the offset is in the file');
+  const open = text.lastIndexOf('/*', offset);
+  if (open === -1) {
+    return offset;
+  }
+  const close = text.indexOf('*/', open + 2);
+  if (close === -1) {
+    return offset;
+  }
+  // Inside when the comment closes at or after the offset.
+  return close + 2 > offset ? open : offset;
 }
 
 interface MoveVariablePayload {
@@ -335,33 +366,23 @@ function lineSpan(text: string, node: SourcedNode): { from: number; to: number }
 function moveVariable(
   projectPath: string,
   { file, selector, name, target, at: landAt }: MoveVariablePayload,
-): { ok: boolean; error?: string; changed?: boolean } {
+): { ok: boolean; error?: string; errorRef?: MessageRef | undefined; changed?: boolean } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
-  const root = postcss.parse(text);
-
-  const matches: PostcssRule[] = [];
-  root.walkRules((candidate) => {
-    if (candidate.selector === selector) {
-      matches.push(candidate);
-    }
-  });
-  const rule = matches[0];
-  if (!rule) {
-    return { ok: false, error: `${selector} is no longer in ${file}.` };
+  const found = findRule(text, { file, selector, declares: name });
+  if (!found.ok) {
+    return found;
   }
+  const { rule } = found;
 
-  const declOf = (prop: string): Declaration | undefined =>
-    (rule.nodes || []).find(
-      (node): node is Declaration => node.type === 'decl' && node.prop === prop,
-    );
+  const declOf = (prop: string): Declaration | undefined => (rule.nodes || []).find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
   const moved = declOf(name);
   if (!moved) {
-    return { ok: false, error: `${name} is no longer declared there.` };
+    return { ok: false, ...refusal('variables.error.notDeclared', { name }) };
   }
   const before = target ? declOf(target) : undefined;
   if (target && !before) {
-    return { ok: false, error: `${target} is no longer declared there.` };
+    return { ok: false, ...refusal('variables.error.notDeclared', { name: target }) };
   }
 
   const span = lineSpan(text, moved);
@@ -375,7 +396,7 @@ function moveVariable(
   const lastDecl = allDecls[allDecls.length - 1] ?? moved;
   const at =
     typeof landAt === 'number'
-      ? text.lastIndexOf('\n', Math.max(0, Math.min(landAt, text.length)) - 1) + 1
+      ? text.lastIndexOf('\n', outsideComment(text, Math.max(0, Math.min(landAt, text.length))) - 1) + 1
       : before
         ? lineSpan(text, before).from
         : lineSpan(text, lastDecl).to;
@@ -387,8 +408,8 @@ function moveVariable(
   if (next === text) {
     return { ok: true, changed: false };
   }
-  writeProjectText(abs, next);
-  return { ok: true, changed: true };
+  const problem = commit(abs, { file, text, next });
+  return problem === undefined ? { ok: true, changed: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 interface MoveSectionPayload {
@@ -408,43 +429,32 @@ interface MoveSectionPayload {
 function moveSection(
   projectPath: string,
   { file, selector, names, target }: MoveSectionPayload,
-): { ok: boolean; error?: string; changed?: boolean } {
+): { ok: boolean; error?: string; errorRef?: MessageRef | undefined; changed?: boolean } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
-  const root = postcss.parse(text);
-
-  const matches: PostcssRule[] = [];
-  root.walkRules((candidate) => {
-    if (candidate.selector === selector) {
-      matches.push(candidate);
-    }
-  });
-  const rule = matches[0];
-  if (!rule) {
-    return { ok: false, error: `${selector} is no longer in ${file}.` };
+  const found = findRule(text, { file, selector, declares: names[0] });
+  if (!found.ok) {
+    return found;
   }
+  const { rule } = found;
 
   const nodes = rule.nodes || [];
-  const declOf = (prop: string): Declaration | undefined =>
-    nodes.find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
+  const declOf = (prop: string): Declaration | undefined => nodes.find((node): node is Declaration => node.type === 'decl' && node.prop === prop);
 
-  const decls = names
-    .map(declOf)
-    .filter((declaration): declaration is Declaration => declaration !== undefined);
+  const decls = names.map(declOf).filter((declaration): declaration is Declaration => declaration !== undefined);
   const firstDecl = decls[0];
   if (!firstDecl) {
-    return { ok: false, error: 'Those variables are no longer declared there.' };
+    return { ok: false, ...refusal('variables.error.variablesNotDeclared') };
   }
 
   const spans = decls.map((declaration) => lineSpan(text, declaration));
   const firstSpan = spans[0];
   if (!firstSpan) {
-    return { ok: false, error: 'Those variables are no longer declared there.' };
+    return { ok: false, ...refusal('variables.error.variablesNotDeclared') };
   }
   // The comment above the first one is the group's name — it goes too.
   const firstAt = nodes.indexOf(firstDecl);
-  const heading =
-    firstAt > 0 && nodes[firstAt - 1]?.type === 'comment' ? nodes[firstAt - 1] : undefined;
+  const heading = firstAt > 0 && nodes[firstAt - 1]?.type === 'comment' ? nodes[firstAt - 1] : undefined;
   if (heading?.type === 'comment') {
     spans.unshift(lineSpan(text, heading));
   }
@@ -461,15 +471,13 @@ function moveSection(
 
   const landing = target ? declOf(target) : undefined;
   if (target && !landing) {
-    return { ok: false, error: `${target} is no longer declared there.` };
+    return { ok: false, ...refusal('variables.error.notDeclared', { name: target }) };
   }
   // In front of the target group's own heading, if it has one.
   const landingAt = landing ? nodes.indexOf(landing) : -1;
   const landingHeading = landingAt > 0 ? nodes[landingAt - 1] : undefined;
   const lastDecl = decls[decls.length - 1] ?? firstDecl;
-  const at = landing
-    ? lineSpan(text, landingHeading?.type === 'comment' ? landingHeading : landing).from
-    : lineSpan(text, lastDecl).to;
+  const at = landing ? lineSpan(text, landingHeading?.type === 'comment' ? landingHeading : landing).from : lineSpan(text, lastDecl).to;
   // At the end of the rule there is nothing to separate from below, so the
   // group keeps its gap above instead of leaving one before the closing brace.
   if (!landing) {
@@ -482,28 +490,20 @@ function moveSection(
   if (next === text) {
     return { ok: true, changed: false };
   }
-  writeProjectText(abs, next);
-  return { ok: true, changed: true };
+  const problem = commit(abs, { file, text, next });
+  return problem === undefined ? { ok: true, changed: true } : { ok: false, ...problemRefusal(problem) };
 }
 
 // The text with every span cut out and `block` inserted at `at`, an offset into the text as it
 // was before the cut.
-function cutAndInsert(
-  text: string,
-  spans: readonly { readonly from: number; readonly to: number }[],
-  block: string,
-  at: number,
-): string {
+function cutAndInsert(text: string, spans: readonly { readonly from: number; readonly to: number }[], block: string, at: number): string {
   // Cut from the bottom up so the offsets above stay valid, then insert at the
   // target corrected for everything removed before it.
   let out = text;
   for (const span of [...spans].reverse()) {
     out = out.slice(0, span.from) + out.slice(span.to);
   }
-  const removedBefore = spans.reduce(
-    (sum, span) => (span.to <= at ? sum + (span.to - span.from) : sum),
-    0,
-  );
+  const removedBefore = spans.reduce((sum, span) => (span.to <= at ? sum + (span.to - span.from) : sum), 0);
   const insertAt = at - removedBefore;
   // The spans cut before `at` all end at or before it, so they never sum past it.
   assert(insertAt >= 0, 'cutAndInsert: the insertion point is not before the text');
@@ -527,31 +527,21 @@ interface AddVariablePayload {
 function addVariable(
   projectPath: string,
   { file, selector, name, value = 'unset', after }: AddVariablePayload,
-): { ok: boolean; error?: string; name?: string } {
+): { ok: boolean; error?: string; errorRef?: MessageRef | undefined; name?: string } {
   const abs = path.resolve(projectPath, file);
   const text = fs.readFileSync(abs, 'utf8');
-  const root = postcss.parse(text);
-
-  const matches: PostcssRule[] = [];
-  root.walkRules((candidate) => {
-    if (candidate.selector === selector) {
-      matches.push(candidate);
-    }
-  });
-  const rule = matches[0];
-  if (!rule) {
-    return { ok: false, error: `${selector} is no longer in ${file}.` };
+  const found = findRule(text, { file, selector, declares: after });
+  if (!found.ok) {
+    return found;
   }
+  const { rule } = found;
 
   const decls = (rule.nodes || []).filter((node) => node.type === 'decl');
   if (decls.some((declaration) => declaration.prop === name)) {
-    return { ok: false, error: `${name} is already declared in ${selector}.` };
+    return { ok: false, ...refusal('variables.error.alreadyDeclared', { name, selector }) };
   }
 
-  const previous =
-    (after && decls.find((declaration) => declaration.prop === after)) ||
-    decls[decls.length - 1] ||
-    undefined;
+  const previous = (after && decls.find((declaration) => declaration.prop === after)) || decls[decls.length - 1] || undefined;
   const indentOf = (node: Declaration): string => {
     const start = node.source?.start?.offset ?? 0;
     return text.slice(text.lastIndexOf('\n', start - 1) + 1, start);
@@ -569,23 +559,14 @@ function addVariable(
     at = text.indexOf('{', openOffset) + 2;
   }
 
-  writeProjectText(abs, text.slice(0, at) + line + text.slice(at));
-  return { ok: true, name };
+  const problem = commit(abs, { file, text, next: text.slice(0, at) + line + text.slice(at) });
+  return problem === undefined ? { ok: true, name } : { ok: false, ...problemRefusal(problem) };
 }
 
-export {
-  setSectionTitle,
-  removeSection,
-  addSection,
-  moveHeading,
-  setVariable,
-  moveVariable,
-  moveSection,
-  addVariable,
-};
+export { setSectionTitle, removeSection, addSection, moveHeading, setVariable, moveVariable, moveSection, addVariable };
 // The reading, grouping, model and renaming halves live beside this file; their
 // public names are still answered here, where every caller imports them from.
 export { readDeclarations, findStylesheets } from './cssVarRead';
 export { findFamilies, groupRules, labelForRule } from './cssVarGroups';
-export { readVariables } from './cssVarModel';
+export { readVariables, readVariablesSliced } from './cssVarModel';
 export { renameVariables } from './cssVarRename';

@@ -1,0 +1,12 @@
+---
+interface Props {
+  bordered?: boolean;
+}
+const { bordered = false } = Astro.props;
+const hasFooter = Astro.slots.has('footer');
+---
+<section class:list={['slots-named', { bordered }]}>
+  <header><slot name="header" /></header>
+  <slot />
+  {hasFooter && <footer><slot name="footer" /></footer>}
+</section>

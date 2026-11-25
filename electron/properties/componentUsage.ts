@@ -15,7 +15,9 @@ import path from 'path';
 import { aliasMap, boundNames, resolveSpec } from '../content/cmsRefs';
 import type { Alias } from '../content/cmsRefs';
 import { MAIN_LIMITS } from '../lib/mainLimits';
-import { sameFilesystemPath } from '../lib/platform';
+import { comparablePath, sameFilesystemPath } from '../lib/platform';
+import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
 
@@ -36,10 +38,7 @@ function astroFiles(directory: string): string[] {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
         walk(full, depth + 1);
-      } else if (
-        entry.name.endsWith('.astro') ||
-        (current.includes(`${path.sep}pages`) && /\.mdx?$/i.test(entry.name))
-      ) {
+      } else if (entry.name.endsWith('.astro') || (current.includes(`${path.sep}pages`) && /\.mdx?$/i.test(entry.name))) {
         out.push(full);
       }
     }
@@ -123,6 +122,60 @@ interface InstanceArgs {
   readonly targetPath?: string | undefined;
   readonly name: string;
   readonly aliases?: readonly Alias[];
+  readonly counts?: InstanceCounts;
+}
+
+type InstanceCounts = (target: Pick<InstanceArgs, 'targetPath' | 'name'>) => number;
+
+/** Scan markup and imports once; all component queries then use bounded maps. */
+export function instanceCounts(source: unknown, file: string, aliases: readonly Alias[]): InstanceCounts {
+  const text = String(source ?? '');
+  assert(text.length <= LIMITS.sourceBytesMax, 'Usage source stays within the reader limit');
+  const names = instanceTagCounts(templateOf(text));
+  const imports = importsOf(text, file, aliases);
+  const targets = new Map<string, number>();
+  const bound = new Set<string>();
+  for (const item of imports) {
+    let count = 0;
+    for (const name of item.names) {
+      bound.add(name);
+      count += names.get(name) ?? 0;
+    }
+    const candidates = new Set([...item.candidates].map((candidate) => comparablePath(candidate)));
+    for (const key of candidates) {
+      targets.set(key, (targets.get(key) ?? 0) + count);
+    }
+  }
+  // Every binding and target comes from one import statement of this file, so the file's own text
+  // bounds both: a file importing any number of components counts them all.
+  assert(bound.size <= text.length, 'Usage bindings come from the source text');
+  return ({ targetPath, name }) => {
+    if (targetPath) {
+      const count = targets.get(comparablePath(targetPath));
+      if (count !== undefined) {
+        return count;
+      }
+      if (bound.has(name)) {
+        return 0;
+      }
+    }
+    return names.get(name) ?? 0;
+  };
+}
+
+function instanceTagCounts(template: string): ReadonlyMap<string, number> {
+  assert(template.length <= LIMITS.sourceBytesMax, 'Usage template stays within the reader limit');
+  const counts = new Map<string, number>();
+  // This is the same tag grammar as countIn, including its frontmatter exclusion.
+  // Iteration is bounded by the source length, and so is the number of distinct names.
+  for (const match of template.matchAll(/<([A-Za-z][A-Za-z0-9]*)(?=[\s/>])/g)) {
+    const name = match[1];
+    if (name !== undefined) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  assert(counts.size <= template.length, 'Usage tag names come from the template text');
+  return counts;
 }
 
 /**
@@ -131,30 +184,8 @@ interface InstanceArgs {
  * component's own name: markdown pages and auto-import integrations render
  * components they never name in an import.
  */
-function instancesIn(
-  source: unknown,
-  { file, targetPath, name, aliases = [] }: InstanceArgs,
-): number {
-  const target = targetPath ? path.resolve(targetPath) : undefined;
-  if (target) {
-    const imports = importsOf(source, file, aliases);
-    const local: string[] = [];
-    for (const imp of imports) {
-      if ([...imp.candidates].some((candidate) => sameFilesystemPath(candidate, target))) {
-        local.push(...imp.names);
-      }
-    }
-    if (local.length) {
-      return local.reduce((total, alias) => total + countIn(source, alias), 0);
-    }
-    // The name is taken by something else here. `import Section from
-    // './ui/Section.astro'` in a file that doesn't use OURS means every
-    // `<Section>` on the page belongs to that one, not to this component.
-    if (imports.some((imp) => imp.names.includes(name))) {
-      return 0;
-    }
-  }
-  return countIn(source, name);
+function instancesIn(source: unknown, { file, targetPath, name, aliases = [], counts }: InstanceArgs): number {
+  return (counts ?? instanceCounts(source, file, aliases))({ targetPath, name });
 }
 
 export interface UsageFile {
@@ -173,15 +204,10 @@ export interface UsageFile {
  * The component's own file is left out: a file is not one of its own users, and
  * a recursive component would otherwise list itself above everything else.
  */
-function componentUsage({
-  projectPath,
-  name,
-  exclude,
-}: {
-  readonly projectPath: string;
-  readonly name: string;
-  readonly exclude?: string;
-}): { files: UsageFile[]; total: number } {
+function componentUsage({ projectPath, name, exclude }: { readonly projectPath: string; readonly name: string; readonly exclude?: string }): {
+  files: UsageFile[];
+  total: number;
+} {
   const sourceFolder = path.join(projectPath, 'src');
   const skip = exclude ? path.resolve(exclude) : undefined;
   // `exclude` is the component's own file, which is also the file every other

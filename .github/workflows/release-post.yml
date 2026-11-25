@@ -1,0 +1,169 @@
+name: Release post
+
+# The chain after release.yml, started by its completion. Every decision is made
+# by scripts/release/releasePost.mts and rerunPolicy.mts; this file orders the
+# stages. On success: publish create-stacki (dispatched, never called as a
+# reusable workflow, because npm trusted publishing checks the top-level
+# workflow file), wait for npm, deploy stacki.build, verify. On failure: one
+# rerun of the failed jobs if, and only if, every failure is a known
+# infrastructure flake on the first attempt; otherwise stop with the next step.
+# A manual dispatch with a Release run id takes the same path.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: The Release (release.yml) run id to continue from
+        type: string
+        required: true
+
+# One chain at a time. A rerun hands its green run back through a dispatch; the
+# group makes the newer of two pending chains the one that runs.
+concurrency:
+  group: release-post
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      outcome: ${{ steps.resolve.outputs.outcome }}
+      version: ${{ steps.resolve.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      attempt: ${{ steps.resolve.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - id: resolve
+        run: node --experimental-strip-types scripts/release/releasePost.mts --stage=resolve --run-id="$RUN_ID"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.release_run_id }}
+
+  publish-npm:
+    needs: resolve
+    if: needs.resolve.outputs.outcome == 'publish'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --experimental-strip-types scripts/release/releasePost.mts --stage=publish-npm --version="$VERSION" --sha="$SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+
+  # Registry lag is normal: 30-second retries for up to 30 minutes, the same
+  # version and tarball throughout (docs/create-stacki.md).
+  wait-npm:
+    needs: [resolve, publish-npm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # verifyRelease parses YAML with the `yaml` package; the install scripts build the app, which this needs not.
+      - run: npm ci --ignore-scripts
+      - run: node --experimental-strip-types scripts/release/verifyRelease.mts "$VERSION" --only=npm --wait-minutes=30
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+
+  # After npm shows the version, so the site's demo bakes the new package. A
+  # missing RELEASE_DISPATCH_TOKEN is a warning, never a failed release.
+  deploy-site:
+    needs: [resolve, wait-npm]
+    runs-on: ubuntu-latest
+    outputs:
+      verify_groups: ${{ steps.deploy.outputs.verify_groups }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - id: deploy
+        run: node --experimental-strip-types scripts/release/releasePost.mts --stage=deploy-site --version="$VERSION"
+        env:
+          # The site deploy runs here, after wait-npm, so stacki.build bakes the new package. GH_TOKEN
+          # is the token release.yml always used for this dispatch; RELEASE_DISPATCH_TOKEN wins if set.
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN || secrets.GH_TOKEN || github.token }}
+          RELEASE_DISPATCH_TOKEN_PRESENT: ${{ secrets.RELEASE_DISPATCH_TOKEN != '' || secrets.GH_TOKEN != '' }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+
+  verify:
+    needs: [resolve, deploy-site]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci --ignore-scripts
+      - run: node --experimental-strip-types scripts/release/verifyRelease.mts "$VERSION" --only="$GROUPS" --wait-minutes=10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          GROUPS: ${{ needs.deploy-site.outputs.verify_groups }}
+
+  summary:
+    needs: [resolve, publish-npm, wait-npm, deploy-site, verify]
+    if: ${{ !cancelled() && needs.resolve.outputs.outcome == 'publish' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --experimental-strip-types scripts/release/releasePost.mts --stage=summary --version="$VERSION" --results="$RESULTS"
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          RESULTS: publish-npm:${{ needs.publish-npm.result }},wait-npm:${{ needs.wait-npm.result }},deploy-site:${{ needs.deploy-site.result }},verify:${{ needs.verify.result }}
+
+  # The failure path. Never a code change, never a retag, at most one rerun.
+  rerun-policy:
+    needs: resolve
+    if: needs.resolve.outputs.outcome == 'rerun-policy'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --experimental-strip-types scripts/release/releasePost.mts --stage=rerun --run-id="$RUN_ID" --attempt="$ATTEMPT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ needs.resolve.outputs.run_id }}
+          ATTEMPT: ${{ needs.resolve.outputs.attempt }}

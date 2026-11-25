@@ -1,13 +1,10 @@
 // What is in scope in a page's frontmatter: marked queries, the names a
 // binding can use, and the chips a code field draws (dataSuggest.ts).
 
-import {
-  parseDeclarations,
-  type ImportLike,
-  parseDestructures,
-  looksCallable,
-  collectionCallIn,
-} from './dataSource';
+import { parseDeclarations, type ImportLike, parseDestructures, looksCallable, collectionCallIn } from './dataSource';
+import type { ImportedValue } from './importedValues';
+import type { TreeNode } from './dataSample';
+import type { LoopCopy } from './loopSelection';
 
 // Numbered names tried for a collection's entries before settling on `…X`: a
 // page reads a handful of collections, never dozens under one name.
@@ -27,10 +24,7 @@ export interface MarkedQuery {
 /** Those queries, as {name, start, end} spans in the frontmatter text. */
 export function markedQueries(frontmatter: string | undefined): MarkedQuery[] {
   const out: MarkedQuery[] = [];
-  const re = new RegExp(
-    `^[ \\t]*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^\\n]*?//\\s*${QUERY_MARK}[ \\t]*$`,
-    'gm',
-  );
+  const re = new RegExp(`^[ \\t]*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^\\n]*?//\\s*${QUERY_MARK}[ \\t]*$`, 'gm');
   let match;
   while ((match = re.exec(frontmatter ?? '')) !== null) {
     const name = match[1];
@@ -84,10 +78,7 @@ export function queriesInScope(frontmatter: string | undefined): Map<string, str
 }
 
 /** Every name the frontmatter already binds — what an auto-named query must avoid. */
-export function namesInScope(
-  frontmatter: string | undefined,
-  imports: readonly ImportLike[] | undefined,
-): Set<string> {
+export function namesInScope(frontmatter: string | undefined, imports: readonly ImportLike[] | undefined): Set<string> {
   const taken = new Set<string>();
   for (const [name] of parseDeclarations(frontmatter ?? '')) {
     taken.add(name);
@@ -108,17 +99,85 @@ export interface DataContext {
   readonly imports?: readonly ImportLike[];
   readonly ancestorHeads?: readonly string[];
   readonly propsSample?: unknown;
+  /**
+   * The component is being edited from one instance of it on a page, and
+   * these are the props that instance passes (resolved or not). A prop it
+   * does not pass reads its default there, or nothing: the picker says so
+   * rather than naming the prop's type.
+   */
+  readonly propsInstance?: { readonly passed: readonly string[] };
   readonly propsSchema?: readonly SchemaField[];
   readonly collectionSamples?: Record<string, unknown>;
   readonly collections?: readonly { readonly name: string; readonly count?: number }[];
   readonly itemIndex?: Record<string, number>;
+  /**
+   * The copy of the selected node the canvas named. The loop items the picker
+   * reads follow it, except where `itemIndex` (the pager) says otherwise.
+   */
+  readonly selectedCopy?: LoopCopy | undefined;
+  /**
+   * The item of each loop in `ancestorHeads` (same order) the canvas says the
+   * selected node is in, read from the passes the preview marks; undefined
+   * where a loop marked none or could not say. It outranks `selectedCopy`.
+   */
+  readonly selectedItems?: readonly (number | undefined)[] | undefined;
+  /**
+   * What a value the file computes by calling an import returned, sampled by
+   * the dev server — `campusPastors` for `await getCampusPastors()`. Keyed by
+   * the value's name.
+   */
+  readonly valueSamples?: Record<string, unknown>;
+  /**
+   * What the file's imports hold, read from the modules they name without
+   * running them (importedValues.ts) — `APP_VERSION` for
+   * `import { APP_VERSION } from "@/consts.ts"`. Keyed by the local name; an
+   * import with no entry is one whose value could not be read.
+   */
+  readonly importedValues?: Readonly<Record<string, ImportedValue>>;
+  /** How a value the file computes reads a collection (collectionReader.ts), when the app can tell. */
+  readonly collectionReader?: CollectionReader;
+  /**
+   * The project's data file exports the file does not import yet, as roots
+   * that carry the import a pick writes (projectDataSources.ts). Listed last,
+   * after the project's collections.
+   */
+  readonly projectSources?: readonly TreeNode[];
+  /** The data file exports the file already imports, by local name (`NAV` -> `src/consts.ts`). */
+  readonly projectModules?: Readonly<Record<string, string>>;
+}
+
+/**
+ * The loop reader's answers the data tree uses, passed in so the tree's own
+ * module stays free of the JavaScript parser.
+ */
+export interface CollectionReader {
+  /** The collection `name` lists, and where its items keep their fields. */
+  readonly listOf: (
+    name: string,
+    frontmatter: string,
+    imports: readonly ImportLike[],
+  ) => { readonly collection: string; readonly itemPath: readonly string[] } | undefined;
+  /** The keys of an object literal, or undefined when `value` is not one. */
+  readonly keysOf: (value: string) => readonly string[] | undefined;
+}
+
+/** A member of a prop's object (or of each item of its list); nested members carry their own. */
+export interface ShapeMember {
+  readonly name: string;
+  readonly type?: string;
+  readonly format?: string;
+  readonly options?: readonly string[];
+  readonly shape?: readonly ShapeMember[];
+  readonly shapeIsList?: boolean;
 }
 
 export interface SchemaField {
   readonly name: string;
   readonly type?: string;
+  /** The values a choice prop (`type: 'enum'`) takes, as its schema lists them. */
+  readonly options?: readonly string[];
   readonly default?: unknown;
-  readonly shape?: readonly { readonly name: string; readonly type?: string }[];
+  readonly shape?: readonly ShapeMember[];
   readonly shapeIsList?: boolean;
 }
 
@@ -149,10 +208,10 @@ export function isTypeSyntaxIdentifier(source: string, from: number, root: strin
  *
  * Strings are skipped: `"content"` is a word, not the prop of that name.
  */
-export function scopeChips(
-  text: unknown,
-  names: Iterable<string> | Set<string> | undefined,
-): ScopeChip[] {
+// One more step of a value: `.name`, `[0]`, or `["name"]`.
+const CHIP_STEP = /^(?:\.[A-Za-z_$][\w$]*|\[\d+\]|\["(?:[^"\\]|\\.)*"\])/;
+
+export function scopeChips(text: unknown, names: Iterable<string> | Set<string> | undefined): ScopeChip[] {
   const source = String(text ?? '');
   const inScope = names instanceof Set ? names : new Set(names ?? []);
   if (!inScope.size) {
@@ -181,11 +240,9 @@ export function scopeChips(
     while (j < source.length && /[\w$]/.test(source.charAt(j))) {
       j += 1;
     }
-    while (source.charAt(j) === '.' && /[A-Za-z_$]/.test(source.charAt(j + 1))) {
-      j += 1;
-      while (j < source.length && /[\w$]/.test(source.charAt(j))) {
-        j += 1;
-      }
+    // `["campus-name"]` and `[0]` are steps of the same value too.
+    for (let step = CHIP_STEP.exec(source.slice(j)); step !== null; step = CHIP_STEP.exec(source.slice(j))) {
+      j += step[0].length;
     }
     let path = source.slice(i, j);
     let end = j;
@@ -203,7 +260,7 @@ export function scopeChips(
     // Not a property of something else — the `data` in `post.data` is part of
     // that chip, not one of its own.
     const before = source.slice(0, i).trimEnd();
-    const root = path.split('.')[0] ?? '';
+    const root = path.split(/[.[]/)[0] ?? '';
     if (!before.endsWith('.') && inScope.has(root) && !isTypeSyntaxIdentifier(source, i, root)) {
       out.push({ from: i, to: end, path });
     }
@@ -220,9 +277,7 @@ export function scopeChips(
  */
 export function autoQueryName(collection: string, taken: ReadonlySet<string> = new Set()): string {
   const camel = String(collection)
-    .replace(/[^A-Za-z0-9]+(.)?/g, (_whole: string, letter?: string) =>
-      letter ? letter.toUpperCase() : '',
-    )
+    .replace(/[^A-Za-z0-9]+(.)?/g, (_whole: string, letter?: string) => (letter ? letter.toUpperCase() : ''))
     .replace(/^[0-9]+/, '');
   const base = `${camel || 'collection'}Entries`;
   if (!taken.has(base)) {
@@ -234,6 +289,71 @@ export function autoQueryName(collection: string, taken: ReadonlySet<string> = n
     }
   }
   return `${base}X`;
+}
+
+/** A frontmatter value the file gets by calling one of its imports, with no arguments. */
+export interface ImportedCall {
+  /** The value's name: `campusPastors`. */
+  readonly name: string;
+  /** The imported function: `getCampusPastors`. */
+  readonly exportName: string;
+  /** Where it is imported from, as the file writes it: `@/sanity/queries.ts`. */
+  readonly spec: string;
+}
+
+// `await getCampusPastors()` exactly: one imported name, called with nothing.
+// Anything with arguments depends on values the app cannot supply, so it is
+// left as an unknown value rather than run with the wrong ones.
+const IMPORTED_CALL = /^await\s+([A-Za-z_$][\w$]*)\s*\(\s*\)\s*;?$/;
+
+/**
+ * The values this file computes by calling an import — what the app asks the
+ * dev server to sample, since only it can run the project's code.
+ */
+export function importedCallsInScope(frontmatter: string | undefined, imports: readonly ImportLike[]): ImportedCall[] {
+  const calls: ImportedCall[] = [];
+  for (const [name, value] of parseDeclarations(frontmatter ?? '')) {
+    const exportName = IMPORTED_CALL.exec(value.trim())?.[1];
+    const spec = imports.find((entry) => entry.name !== undefined && entry.name === exportName)?.path;
+    if (exportName !== undefined && spec !== undefined) {
+      calls.push({ name, exportName, spec });
+    }
+  }
+  return calls;
+}
+
+/** A frontmatter value the file reads from Sanity by document type. */
+export interface SanityFetch {
+  /** The value's name: `campusEntries`. */
+  readonly name: string;
+  /** The document type its query reads: `campus`. */
+  readonly type: string;
+}
+
+// `await sanityClient.fetch('*[_type == "campus"] { … }')`, as the loop
+// settings write it, possibly wrapped to be sorted or sliced after the fetch:
+// `(await sanityClient.fetch(…)).sort(…)`. The query's own filters and
+// projection are not read; the type is what names its documents' fields.
+const SANITY_FETCH = /^\(?\s*await\s+([A-Za-z_$][\w$]*)\.fetch\(\s*(['"`])\*\[\s*_type\s*==\s*(['"])([A-Za-z_][\w.-]*)\3/;
+
+/**
+ * The values this file reads from Sanity with the `sanity:client` import. The
+ * dev server cannot sample them (its value route calls exports with no
+ * arguments), so the app samples one document of the type through the CMS
+ * connection: a loop over the value then offers its item's fields to bind.
+ */
+export function sanityFetchesInScope(frontmatter: string | undefined, imports: readonly ImportLike[]): SanityFetch[] {
+  const clients = new Set(imports.filter((entry) => entry.path === 'sanity:client' && entry.name !== undefined).map((entry) => entry.name));
+  const fetches: SanityFetch[] = [];
+  for (const [name, value] of parseDeclarations(frontmatter ?? '')) {
+    const match = SANITY_FETCH.exec(value.trim());
+    const client = match?.[1];
+    const type = match?.[4];
+    if (client !== undefined && type !== undefined && clients.has(client)) {
+      fetches.push({ name, type });
+    }
+  }
+  return fetches;
 }
 
 /** Which collections this file reads by name — what the app fetches a sample entry for. */

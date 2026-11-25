@@ -1,17 +1,18 @@
 import type { ChatImage } from './chatContracts';
+import { studioTranslate } from './studioWords';
 
 export async function prepareImages(files: readonly File[]): Promise<readonly ChatImage[]> {
   if (files.length > 4) {
-    throw new Error('Attach up to four images per message.');
+    throw new Error(studioTranslate()('ai.studio.attachLimit', { count: 4 }));
   }
   return Promise.all(files.map(prepareImage));
 }
 async function prepareImage(file: File): Promise<ChatImage> {
   if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-    throw new Error('Choose PNG, JPEG, WebP, or GIF images.');
+    throw new Error(studioTranslate()('ai.image.type'));
   }
   if (file.size > 20_000_000) {
-    throw new Error('Each image must be smaller than 20 MB.');
+    throw new Error(studioTranslate()('ai.image.size'));
   }
   const bitmap = await createImageBitmap(file);
   try {
@@ -21,7 +22,7 @@ async function prepareImage(file: File): Promise<ChatImage> {
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext('2d');
     if (!context) {
-      throw new Error('Could not prepare this image.');
+      throw new Error(studioTranslate()('ai.image.prepare'));
     }
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -32,7 +33,7 @@ async function prepareImage(file: File): Promise<ChatImage> {
         return { id: crypto.randomUUID(), name: file.name.slice(0, 200), url };
       }
     }
-    throw new Error('This image is too detailed. Crop it or choose a smaller image.');
+    throw new Error(studioTranslate()('ai.image.detailed'));
   } finally {
     bitmap.close();
   }

@@ -12,12 +12,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import type {
-  ComponentProperties,
-  PropertyChange,
-  PropertyOptionRename,
-} from '../../shared/properties/propertyEditing';
+import type { PropertyRemovalPreview } from '../../shared/properties/propertyRemoval';
+import type { ComponentProperties, PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
+import { inFile, refusal, withLead, type PropertyError } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
@@ -25,6 +24,9 @@ import { digestOf } from '../documents/atomicWrite';
 import type { DocumentActors, WriteReport } from '../documents/documentActors';
 import { editPropertyDefinition, readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { planSharedPropertyChange, withSharedProperties } from './sharedProperties';
+import { planVariantRuleChanges } from './variantRulePlan';
+import { planPropertyRemoval as planSitePropertyRemoval, removalChanges } from './propertyRemoval';
 
 interface PropertyLocation {
   readonly projectPath: string;
@@ -94,14 +96,10 @@ export class PropertyUndoStore {
 
 /** Apply a recorded inverse batch; the batch undoing it is recorded in turn
  * (Redo), and its token returned. */
-export function revertComponentProperties(
-  token: string,
-  store: PropertyUndoStore,
-  writer: PropertyWriter,
-): Result<{ readonly undo: string }> {
+export function revertComponentProperties(token: string, store: PropertyUndoStore, writer: PropertyWriter): Result<{ readonly undo: string }> {
   const changes = store.take(token);
   if (changes === undefined) {
-    return err({ code: 'expired', message: 'This property change can no longer be undone.' });
+    return err(refusal('expired', 'props.edit.expired'));
   }
   const committed = commitPropertyChanges(changes, writer);
   if (!committed.ok) {
@@ -113,7 +111,7 @@ export function revertComponentProperties(
 /** Why a batch write failed, before the rollback decides what to report. */
 interface WriteFailure {
   readonly code: 'conflict' | 'filesystem' | 'write-race';
-  readonly message: string;
+  readonly error: PropertyError;
 }
 
 export function loadComponentProperties(location: PropertyLocation): Result<ComponentProperties> {
@@ -125,13 +123,24 @@ export function loadComponentProperties(location: PropertyLocation): Result<Comp
   if (!source.ok) {
     return source;
   }
-  return ok(readComponentProperties(source.value));
+  return withSharedProperties(target.value, readComponentProperties(source.value));
 }
 
-export function updateComponentProperties(
-  request: PropertyEditRequest,
-  writer: PropertyWriter,
-): Result<ComponentProperties> {
+/** What deleting `name` would do across the site, read from disk, for the confirmation; nothing is written. */
+export function previewComponentPropertyRemoval(location: PropertyLocation, name: string): Result<PropertyRemovalPreview> {
+  const target = validateLocation(location);
+  if (!target.ok) {
+    return target;
+  }
+  const source = readBoundedSource(target.value.file);
+  if (!source.ok) {
+    return source;
+  }
+  const plan = planSitePropertyRemoval({ ...target.value, source: source.value }, name);
+  return plan.ok ? ok(plan.value.preview) : plan;
+}
+
+export function updateComponentProperties(request: PropertyEditRequest, writer: PropertyWriter): Result<ComponentProperties> {
   const target = validateLocation(request);
   if (!target.ok) {
     return target;
@@ -141,16 +150,9 @@ export function updateComponentProperties(
     return source;
   }
   if (source.value !== request.source) {
-    return err({
-      code: 'conflict',
-      message: 'This component changed on disk. Reload before saving.',
-    });
+    return err(refusal('conflict', 'props.edit.conflict'));
   }
-  const changed = editPropertyDefinition(source.value, request.change);
-  if (!changed.ok) {
-    return changed;
-  }
-  const plan = planPropertyChanges({ ...request, ...target.value }, changed.value);
+  const plan = planComponentPropertyChanges({ ...request, ...target.value }, source.value);
   if (!plan.ok) {
     return plan;
   }
@@ -161,7 +163,21 @@ export function updateComponentProperties(
   writer.onCommitted?.(plan.value);
   const updated = plan.value.find((entry) => sameFilesystemPath(entry.file, target.value.file));
   assert(updated !== undefined, 'Property transaction includes the component');
-  return ok(readComponentProperties(updated.after));
+  return withSharedProperties(target.value, readComponentProperties(updated.after));
+}
+
+// A prop a shared type declares writes that type's file and its users
+// (sharedProperties.ts); every other change is the component's own.
+function planComponentPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
+  const shared = planSharedPropertyChange(request, source, request.change);
+  if (shared !== undefined) {
+    return shared;
+  }
+  const changed = editPropertyDefinition(source, request.change);
+  if (!changed.ok) {
+    return changed;
+  }
+  return planPropertyChanges(request, changed.value);
 }
 
 function validateLocation(location: PropertyLocation): Result<PropertyLocation> {
@@ -175,21 +191,18 @@ function validateLocation(location: PropertyLocation): Result<PropertyLocation> 
   }
   const relative = path.relative(root, file);
   if (relative.startsWith('..') || path.isAbsolute(relative) || !file.endsWith('.astro')) {
-    return err({
-      code: 'path',
-      message: 'Select an Astro component inside this project’s src folder.',
-    });
+    return err(refusal('path', 'props.edit.badPath'));
   }
   return ok({ projectPath: path.dirname(root), file });
 }
-function planPropertyChanges(
-  request: PropertyEditRequest,
-  source: string,
-): Result<readonly FileChange[]> {
+function planPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
   const change = request.change;
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
     return planPropertyRemoval(request, first, change.name);
+  }
+  if (change.kind === 'variantRules') {
+    return planVariantRuleChanges(request, first, change.edit);
   }
   const propertyRename = propertyRenameForChange(change);
   const optionRenames = change.kind === 'save' ? (change.optionRenames ?? []) : [];
@@ -197,10 +210,7 @@ function planPropertyChanges(
     return ok([first]);
   }
   if (change.kind !== 'save' || !change.originalName) {
-    return err({
-      code: 'option',
-      message: 'Only an existing property can rename options.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsExisting'));
   }
   const valid = validateOptionRenames(request.source, source, change, optionRenames);
   if (!valid.ok) {
@@ -216,19 +226,9 @@ function planPropertyChanges(
     const own = sameFilesystemPath(file, request.file);
     const original = own ? source : consumer.source;
     const owner = own ? 'definition' : 'consumer';
-    const changed = planConsumerChange(
-      original,
-      names,
-      change,
-      propertyRename,
-      optionRenames,
-      owner,
-    );
+    const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
-      return err({
-        code: changed.error.code,
-        message: `${path.relative(request.projectPath, file)}: ${changed.error.message}`,
-      });
+      return err(inFile(path.relative(request.projectPath, file), changed.error));
     }
     if (own || changed.value !== original) {
       changes.push({
@@ -245,15 +245,11 @@ function planPropertyChanges(
   return ok(changes);
 }
 
-function propertyRenameForChange(
-  change: PropertyChange,
-): { readonly from: string; readonly to: string } | undefined {
+function propertyRenameForChange(change: PropertyChange): { readonly from: string; readonly to: string } | undefined {
   if (change.kind !== 'save' || !change.originalName) {
     return undefined;
   }
-  return change.originalName === change.property.name
-    ? undefined
-    : { from: change.originalName, to: change.property.name };
+  return change.originalName === change.property.name ? undefined : { from: change.originalName, to: change.property.name };
 }
 
 function planConsumerChange(
@@ -264,9 +260,7 @@ function planConsumerChange(
   optionRenames: readonly PropertyOptionRename[],
   owner: 'definition' | 'consumer',
 ): Result<string> {
-  const renamed = propertyRename
-    ? renameComponentReferences(source, names, propertyRename, owner)
-    : ok(source);
+  const renamed = propertyRename ? renameComponentReferences(source, names, propertyRename, owner) : ok(source);
   if (!renamed.ok || optionRenames.length === 0) {
     return renamed;
   }
@@ -282,40 +276,24 @@ function validateOptionRenames(
   if (renames.length === 0) {
     return ok(undefined);
   }
-  const before = readComponentProperties(beforeSource).properties.find(
-    (property) => property.name === change.originalName,
-  );
-  const after = readComponentProperties(afterSource).properties.find(
-    (property) => property.name === change.property.name,
-  );
+  const before = readComponentProperties(beforeSource).properties.find((property) => property.name === change.originalName);
+  const after = readComponentProperties(afterSource).properties.find((property) => property.name === change.property.name);
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
-    return err({
-      code: 'option',
-      message: 'Option renames require an editable literal union.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsUnion'));
   }
   for (const rename of renames) {
     if (!beforeOptions.includes(rename.from) || !afterOptions.includes(rename.to)) {
-      return err({
-        code: 'option',
-        message: 'An option rename does not match the saved union.',
-      });
+      return err(refusal('option', 'props.edit.optionMismatch'));
     }
   }
   return ok(undefined);
 }
 
-function commitPropertyChanges(
-  changes: readonly FileChange[],
-  writer: PropertyWriter,
-): Result<void> {
+function commitPropertyChanges(changes: readonly FileChange[], writer: PropertyWriter): Result<void> {
   assert(changes.length <= PROPERTY_LIMITS.filesMax, 'Property transaction is bounded');
-  assert(
-    new Set(changes.map((change) => change.file)).size === changes.length,
-    'Property transaction writes each file once',
-  );
+  assert(new Set(changes.map((change) => change.file)).size === changes.length, 'Property transaction writes each file once');
   const leased = writer.documents.withLeases(changes, (ordered) => commitLeased(ordered, writer));
   if (!leased.ok) {
     return err({ code: 'filesystem', message: leased.error });
@@ -331,10 +309,7 @@ function commitLeased(changes: readonly FileChange[], writer: PropertyWriter): R
       return err({ code: 'filesystem', message: current.error.message });
     }
     if (current.value.checksum !== digestOf(change.before)) {
-      return err({
-        code: 'conflict',
-        message: `${change.file} changed during the rename. Try again.`,
-      });
+      return err(refusal('conflict', 'props.edit.changedDuringRename', { file: change.file }));
     }
   }
   const written: FileChange[] = [];
@@ -358,11 +333,12 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
     case 'rejected':
       switch (report.reason) {
         case 'region-externally-modified':
-          return { code: 'conflict', message: `${file} changed during the rename.` };
+          return { code: 'conflict', error: refusal('conflict', 'props.edit.changedWhileRenaming', { file }) };
         case 'write-race':
+          // The document actors' own text (free-form, English) is shown as received; without it, our sentence names the file.
           return {
             code: 'write-race',
-            message: report.message || `${file} was changed by another writer during the save`,
+            error: report.message ? { code: 'write-race', message: report.message } : refusal('write-race', 'props.edit.raced', { file }),
           };
         case 'anchor-moved':
         case 'anchor-ambiguous':
@@ -371,14 +347,24 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
         case 'resource-limit':
         case 'write-failed':
         case 'merge-conflict':
-          return { code: 'filesystem', message: report.message || `Could not save ${file}` };
+        case 'invalid-placement':
+        case 'would-break-page':
+          return {
+            code: 'filesystem',
+            error: report.message ? { code: 'filesystem', message: report.message } : refusal('filesystem', 'props.edit.couldNotSave', { file }),
+          };
         default: {
           const exhaustive: never = report.reason;
           return exhaustive;
         }
       }
     case 'uncertain':
-      return { code: 'filesystem', message: `${file} may not have been saved. ${report.message}` };
+      return {
+        code: 'filesystem',
+        error: report.message
+          ? refusal('filesystem', 'props.edit.uncertain', { file, detail: report.message })
+          : refusal('filesystem', 'props.edit.uncertainBare', { file }),
+      };
     case 'backpressured':
       throw new Error('Assertion failed: a leased actor holds no other intent to push back with');
     default: {
@@ -392,11 +378,7 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
 // still holds exactly the bytes this batch wrote — the restore is an intent
 // witnessed by their checksum. A file somebody changed since is theirs now;
 // restoring it would destroy their edit, so it is named instead.
-function rollbackPropertyChanges(
-  written: readonly FileChange[],
-  cause: WriteFailure,
-  writer: PropertyWriter,
-): Result<never> {
+function rollbackPropertyChanges(written: readonly FileChange[], cause: WriteFailure, writer: PropertyWriter): Result<never> {
   assert(written.length <= PROPERTY_LIMITS.filesMax, 'Rollback is bounded by the batch');
   const failed: string[] = [];
   const changed: string[] = [];
@@ -409,22 +391,19 @@ function rollbackPropertyChanges(
     }
   }
   if (failed.length > 0 || changed.length > 0) {
-    const parts = [
-      failed.length > 0 ? `recovery failed for: ${failed.join(', ')}` : '',
-      changed.length > 0 ? `changed by another program, left as is: ${changed.join(', ')}` : '',
-    ].filter((part) => part !== '');
-    return err({
-      code: 'rollback',
-      message: `Save failed and ${parts.join('; ')}. ${cause.message}`,
-    });
+    // Each combination is one whole sentence, so a language can order its clauses its own way.
+    const lead =
+      changed.length === 0
+        ? described('props.edit.rollbackFailed', { failed: failed.join(', ') })
+        : failed.length === 0
+          ? described('props.edit.rollbackChanged', { changed: changed.join(', ') })
+          : described('props.edit.rollbackBoth', { failed: failed.join(', '), changed: changed.join(', ') });
+    return err(withLead(lead, { ...cause.error, code: 'rollback' }));
   }
-  return err({ code: cause.code, message: `Save failed; changes restored. ${cause.message}` });
+  return err(withLead(described('props.edit.restored'), cause.error));
 }
 
-function restorePropertyFile(
-  change: FileChange,
-  writer: PropertyWriter,
-): 'restored' | 'changed' | 'failed' {
+function restorePropertyFile(change: FileChange, writer: PropertyWriter): 'restored' | 'changed' | 'failed' {
   writer.noteWrite(change.file);
   const report = writer.documents.writeText(change.file, change.before, digestOf(change.after));
   switch (report.tag) {
@@ -442,33 +421,20 @@ function restorePropertyFile(
   }
 }
 
-function planPropertyRemoval(
-  request: PropertyEditRequest,
-  change: FileChange,
-  name: string,
-): Result<readonly FileChange[]> {
-  const consumers = readPropertyConsumers(request);
-  if (!consumers.ok) {
-    return consumers;
+// The component without the prop, and every instance without the value that passes it (propertyRemoval.ts).
+function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
+  const plan = planSitePropertyRemoval(request, name);
+  if (!plan.ok) {
+    return plan;
   }
-  for (const consumer of consumers.value) {
-    const result = renameComponentReferences(
-      consumer.source,
-      consumer.names,
-      { from: name, to: '_stackiDeletedProperty' },
-      'consumer',
-    );
-    if (!result.ok) {
-      return result;
-    }
-    if (result.value !== consumer.source) {
-      return err({
-        code: 'in-use',
-        message:
-          `${consumer.file} still passes ${name}. ` +
-          'Remove that instance value before deleting the prop.',
-      });
-    }
+  const changes = removalChanges(plan.value);
+  if (!changes.ok) {
+    return changes;
   }
-  return ok([change]);
+  const component = changes.value.find((entry) => sameFilesystemPath(entry.file, request.file));
+  assert(component !== undefined, 'A removal writes the component');
+  // The definition edit already took the declarations out; the site plan may only take more out (a self-instance's value).
+  assert(component.before === change.before, 'The removal plans from the source the edit was checked against');
+  assert(component.after.length <= change.after.length, 'Removing instance values only takes text out of the component');
+  return changes;
 }

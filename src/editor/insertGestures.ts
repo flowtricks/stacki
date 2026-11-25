@@ -8,27 +8,20 @@ import type { EditorModel, EditorNode } from './pageView';
 import type { Edit } from '../../shared/engine/editRequest';
 import { LIMITS } from '../../shared/core/limits';
 import type { EditGesture } from './pageEdits';
+import { labelsNode } from '../../shared/page/leadingNote';
+import { nodeId as toNodeId } from './pageView';
 
 export type Urgency = boolean | 'live';
 
 /** A copy of the model with one node replaced; every list on the path to it
  * is new, every other node shared. Unchanged when no node has the id. */
-export function withNode(
-  model: EditorModel,
-  nodeId: string,
-  update: (node: EditorNode) => EditorNode,
-): EditorModel {
+export function withNode(model: EditorModel, nodeId: string, update: (node: EditorNode) => EditorNode): EditorModel {
   const nodes = replacedIn(model.nodes, nodeId, 0, update);
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
 // Recursion bounded by the tree's depth bound, asserted.
-export function replacedIn(
-  list: readonly EditorNode[],
-  nodeId: string,
-  depth: number,
-  update: (node: EditorNode) => EditorNode,
-): readonly EditorNode[] {
+export function replacedIn(list: readonly EditorNode[], nodeId: string, depth: number, update: (node: EditorNode) => EditorNode): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, node] of list.entries()) {
     if (node.id === nodeId) {
@@ -61,12 +54,7 @@ export type Placement = 'before' | 'after' | 'first-child' | 'last-child';
  * position (before it, or after the last one), or inside an empty parent;
  * main prints it at its indentation. On a page whose body is empty there is
  * nothing to stand beside: it is the body's first node (`append-body`). */
-export function insertGesture(
-  model: EditorModel,
-  node: EditorNode,
-  place: InsertPlace | undefined,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function insertGesture(model: EditorModel, node: EditorNode, place: InsertPlace | undefined, options: { readonly urgency: Urgency }): EditGesture {
   const beside = besidePlace(model, place);
   return {
     coalesceKey: undefined,
@@ -93,12 +81,12 @@ export function insertGesture(
 }
 
 /** A copy of a node right after it: the request copies the node's own bytes
- * (plan §3.4: never a reprint), the effect its clone with new ids. */
-export function duplicateGesture(
-  nodeId: string,
-  clone: EditorNode,
-  options: { readonly urgency: Urgency },
-): EditGesture {
+ * (plan §3.4: never a reprint), and main copies its label with them
+ * (shared/page/leadingNote.ts); the effect is its clone with new ids, a copy
+ * of the label above it. */
+export function duplicateGesture(nodeId: string, clone: EditorNode, options: { readonly urgency: Urgency }): EditGesture {
+  assert(clone.id !== nodeId, 'A duplicate has its own id');
+  assert(clone.kind.length > 0, 'A duplicate has a kind');
   return {
     coalesceKey: undefined,
     urgency: options.urgency,
@@ -111,17 +99,45 @@ export function duplicateGesture(
       const content = { tag: 'copy' as const, source: target };
       return [{ tag: 'insert-node', target, placement: 'after', content }];
     },
-    apply: (current) => withInsertedAfter(current, nodeId, clone),
+    apply: (current) => {
+      const label = labelAbove(current, nodeId);
+      if (label === undefined) {
+        return withInsertedAfter(current, nodeId, clone);
+      }
+      // A node the gesture creates takes a random handle (nodeFactory.ts, newId).
+      const note: EditorNode = { ...label, id: toNodeId(`g${crypto.randomUUID().replace(/-/g, '')}`) };
+      return withInsertedAfter(withInsertedAfter(current, nodeId, note), note.id, clone);
+    },
   };
 }
 
-/** Remove nodes, in the order given (a note before the node it annotates).
- * What the removal leaves unused in the frontmatter is its own gesture,
+/** The comment that labels a node in the model, by the Navigator's rule
+ * (shared/page/leadingNote.ts): what main moves, removes and copies with it. */
+export function labelAbove(model: EditorModel, nodeId: string): EditorNode | undefined {
+  const pending: (readonly EditorNode[])[] = [model.nodes];
+  for (let visited = 0; visited < pending.length; visited++) {
+    assert(visited < LIMITS.treeNodesMax, 'A model stays inside its node bound');
+    const list = pending[visited];
+    assert(list !== undefined, 'The visit index lies inside the list');
+    for (const [index, node] of list.entries()) {
+      if (node.id === nodeId) {
+        const previous = list[index - 1];
+        return previous !== undefined && labelsNode(previous.kind, node.kind) ? previous : undefined;
+      }
+      if (Array.isArray(node.children)) {
+        pending.push(node.children);
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Remove nodes, in the order given. Main removes each node's label with it
+ * (shared/engine/planTree.ts, removalRange), so the effect drops the labels too;
+ * a label is never requested on its own, or the comment above it would become
+ * the next label and go as well. What the removal leaves unused in the frontmatter is its own gesture,
  * sequenced after this one (App.tsx, removeNode). */
-export function removalGesture(
-  nodeIds: readonly string[],
-  options: { readonly urgency: Urgency },
-): EditGesture {
+export function removalGesture(nodeIds: readonly string[], options: { readonly urgency: Urgency }): EditGesture {
   return {
     coalesceKey: undefined,
     urgency: options.urgency,
@@ -137,7 +153,10 @@ export function removalGesture(
       }
       return edits;
     },
-    apply: (model) => withoutNodes(model, nodeIds),
+    apply: (model) => {
+      const labels = nodeIds.map((id) => labelAbove(model, id)?.id).filter((id) => id !== undefined);
+      return withoutNodes(model, [...nodeIds, ...labels]);
+    },
   };
 }
 
@@ -148,11 +167,7 @@ export function withoutNodes(model: EditorModel, nodeIds: readonly string[]): Ed
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
-export function filteredList(
-  list: readonly EditorNode[],
-  gone: ReadonlySet<string>,
-  depth: number,
-): readonly EditorNode[] {
+export function filteredList(list: readonly EditorNode[], gone: ReadonlySet<string>, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   let changed = false;
   const next: EditorNode[] = [];
@@ -178,11 +193,7 @@ export function filteredList(
 /** The model with `node` inserted where `place` says — the legacy
  * insertIntoModel's rule, without editing a model in place: no place, or a
  * parent that is gone, means the end of the page. */
-export function withInserted(
-  model: EditorModel,
-  node: EditorNode,
-  place: InsertPlace | undefined,
-): EditorModel {
+export function withInserted(model: EditorModel, node: EditorNode, place: InsertPlace | undefined): EditorModel {
   const parentId = place?.parentId;
   if (parentId === undefined || !containsNode(model.nodes, parentId)) {
     const index = place === undefined || parentId !== undefined ? model.nodes.length : place.index;
@@ -195,21 +206,12 @@ export function withInserted(
   });
 }
 
-export function withInsertedAfter(
-  model: EditorModel,
-  anchorId: string,
-  node: EditorNode,
-): EditorModel {
+export function withInsertedAfter(model: EditorModel, anchorId: string, node: EditorNode): EditorModel {
   const nodes = afterIn(model.nodes, anchorId, node, 0);
   return nodes === model.nodes ? model : { ...model, nodes };
 }
 
-export function afterIn(
-  list: readonly EditorNode[],
-  anchorId: string,
-  node: EditorNode,
-  depth: number,
-): readonly EditorNode[] {
+export function afterIn(list: readonly EditorNode[], anchorId: string, node: EditorNode, depth: number): readonly EditorNode[] {
   assert(depth <= LIMITS.treeDepthMax, 'A model is no deeper than its bound');
   for (const [index, candidate] of list.entries()) {
     if (candidate.id === anchorId) {
@@ -241,11 +243,7 @@ export function withChildren(node: EditorNode, children: readonly EditorNode[]):
   return copy;
 }
 
-export function spliced(
-  list: readonly EditorNode[],
-  index: number,
-  node: EditorNode,
-): readonly EditorNode[] {
+export function spliced(list: readonly EditorNode[], index: number, node: EditorNode): readonly EditorNode[] {
   return [...list.slice(0, index), node, ...list.slice(index)];
 }
 
@@ -276,10 +274,7 @@ export function besidePlace(
   const parentId = place?.parentId;
   const parent = parentId === undefined ? undefined : findNode(model.nodes, parentId);
   const list = parent === undefined ? model.nodes : (parent.children ?? []);
-  const index =
-    parent === undefined && parentId !== undefined
-      ? list.length
-      : Math.min(place?.index ?? list.length, list.length);
+  const index = parent === undefined && parentId !== undefined ? list.length : Math.min(place?.index ?? list.length, list.length);
   // A loop body and a conditional branch are code-owned lists. Their child
   // nodes cannot safely serve as sibling anchors, because they are repeated
   // source nodes or sit inside a JavaScript expression. Address the list's

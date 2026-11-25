@@ -1,23 +1,31 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 // How a resolved property is shown: the section block, the provenance
 // popover, a resolved row with its label and value, and the display and
 // vertical-align rows (EmbedEditor.tsx).
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
 import { useRef } from 'react';
 import Popup from '../../../ui/Popup';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import FieldLabel from '../components/FieldLabel';
 import { PropTip, ProvenanceLabel } from '../components/CssPropertyTip';
-import Select, { type SelectOption } from '../components/Select';
+import type { SelectOption } from '../components/Select';
+import { KeywordVariableField, VariableSelect, variableIn } from '../KeywordConnect';
 import DisplayControl, { DISPLAY_VALUES } from '../DisplayControl';
 import { useAnchoredPosition } from '../components/provenancePosition';
 export { useAnchoredPosition } from '../components/provenancePosition';
 import { useHighlight } from '../model/computedStyle';
 import ProvenanceList from '../ProvenanceList';
-import VariableConnect from '../VariableConnect';
 import { type ResolvedProp } from '../model/resolved';
 import { splitTopLevelSpaces } from '../model/background';
 import { type LiveSetProp } from './EditorBasics';
 import { ValueField } from './AddProperty';
+import { keepImportant } from '../model/styleDisplay';
+import ImportantMark from '../components/ImportantMark';
 
 // A collapsible section header (Webflow's chevron + label) wrapping a group of
 // controls. Visibility is owned by the card so Shift-click can apply one
@@ -37,17 +45,13 @@ export function SectionBlock({
   readonly onToggle: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <div className={`embed-editor_section-block ${open ? '' : 'is-collapsed'}`}>
       {/* A row (not one big button) so an optional action can sit next to the chevron
           without nesting a button inside a button. */}
       <div className="embed-editor_section-header">
-        <button
-          type="button"
-          className="embed-editor_section-toggle"
-          aria-expanded={open}
-          onClick={onToggle}
-        >
+        <button type="button" className="embed-editor_section-toggle" aria-expanded={open} onClick={onToggle}>
           <span className="embed-editor_section-title">{label}</span>
         </button>
         {headerAction}
@@ -61,31 +65,18 @@ export function SectionBlock({
           <span
             className={`embed-editor_section-dot ${mark === 'own' ? 'is-own' : ''}`}
             role="img"
-            aria-label={
-              mark === 'own'
-                ? `${label} has styles on this selector`
-                : `${label} has styles from another selector`
-            }
-            title={mark === 'own' ? 'Set on this selector' : 'Set on another selector'}
+            aria-label={translate(mark === 'own' ? 'styleModel.embed.row.hasOwnStyles' : 'styleModel.embed.row.hasOtherStyles', { label })}
+            title={translate(mark === 'own' ? 'styleModel.embed.row.setOnThis' : 'styleModel.embed.row.setOnOther')}
           />
         ) : undefined}
         <button
           type="button"
           className="embed-editor_section-chevron-btn"
           aria-expanded={open}
-          aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`}
+          aria-label={translate(open ? 'styleModel.embed.row.collapse' : 'styleModel.embed.row.expand', { label })}
           onClick={onToggle}
         >
-          <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-            <path
-              d="M4.2 6.2 8 10l3.8-3.8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <ChevronDownGlyph className="embed-editor_section-chevron" />
         </button>
       </div>
       {open ? <div className="embed-editor_section-body">{children}</div> : undefined}
@@ -112,6 +103,7 @@ export function ProvenancePopover({
   onAnchorReclick: (prop: string) => void;
   onSelectSelector: (selectorText: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   const headerLabel = prop;
   const position = useAnchoredPosition(ref, anchor);
@@ -123,17 +115,12 @@ export function ProvenancePopover({
       ref={ref}
       className="embed-editor_provenance"
       role="dialog"
-      label={`Selectors setting ${headerLabel}`}
+      label={translate('styleModel.embed.row.selectorsSetting', { property: headerLabel })}
       style={{ left: position.left, top: position.top }}
     >
       <div className="embed-editor_provenance-head">
         <code>{headerLabel}</code>
-        <button
-          type="button"
-          className="embed-editor_icon-btn"
-          onClick={onClose}
-          aria-label="Close"
-        >
+        <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label={translate('ui.close')}>
           ✕
         </button>
       </div>
@@ -175,45 +162,27 @@ export function ResolvedRow({
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
   const isSelected = resolved.source === 'selected';
-  const display =
-    isSelected && resolved.selectedValue
-      ? resolved.selectedValue
-      : { value: resolved.winner.value, important: resolved.winner.important };
+  const display = isSelected && resolved.selectedValue ? resolved.selectedValue : { value: resolved.winner.value, important: resolved.winner.important };
   const isDisplay = prop === 'display';
 
   return (
     <div className={`embed-editor_decl ${isDisplay ? 'is-control' : ''}`}>
-      <ResolvedRowLabel
-        prop={prop}
-        resolved={resolved}
-        busy={busy}
-        clearProp={clearProp}
-        onProvenance={onProvenance}
-        onSelectSelector={onSelectSelector}
-      />
+      <ResolvedRowLabel prop={prop} resolved={resolved} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
       {isDisplay ? (
-        <DisplayControl
+        <DisplayControl value={display.value} important={display.important} busy={busy} onCommit={(value, important) => setProp(prop, value, important)} />
+      ) : (
+        <ValueField
+          prop={prop}
           value={display.value}
           important={display.important}
           busy={busy}
           onCommit={(value, important) => setProp(prop, value, important)}
+          onLiveCommit={(value, important) => liveSetProp(prop, value, important)}
+          onPick={(binding) => {
+            const kept = keepImportant(binding, display);
+            setProp(prop, kept.value, kept.important);
+          }}
         />
-      ) : (
-        <VariableConnect
-          ariaLabel={`Connect ${prop} to a variable`}
-          disabled={busy}
-          prop={prop}
-          onPick={(binding) => setProp(prop, binding, false)}
-        >
-          <ValueField
-            value={display.value}
-            important={display.important}
-            busy={busy}
-            dataProp={prop}
-            onCommit={(value, important) => setProp(prop, value, important)}
-            onLiveCommit={(value, important) => liveSetProp(prop, value, important)}
-          />
-        </VariableConnect>
       )}
     </div>
   );
@@ -236,13 +205,14 @@ export function ResolvedRowLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (resolved.source !== 'selected') {
     return (
       <button
         type="button"
         className="embed-editor_prop-label embed-editor_prop-orange"
         disabled={busy}
-        title={`Set by ${resolved.winner.selectorText} — click to see all selectors`}
+        title={translate('styleModel.embed.row.setBy', { selector: resolved.winner.selectorText })}
         onClick={(event) => onProvenance(prop, event.currentTarget.getBoundingClientRect())}
       >
         {prop}
@@ -255,8 +225,8 @@ export function ResolvedRowLabel({
       active
       disabled={busy}
       onReset={() => clearProp(prop)}
-      resetLabel="Remove property"
-      {...(resolved.overridden ? { title: `Overridden by ${resolved.winner.selectorText}` } : {})}
+      resetLabel={translate('styleModel.embed.row.removeProperty')}
+      {...(resolved.overridden ? { title: translate('styleModel.embed.row.overriddenBy', { selector: resolved.winner.selectorText }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={resolved.contributors}
@@ -296,15 +266,10 @@ export function SizeRowLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (!resolved) {
     return (
-      <FieldLabel
-        className="embed-editor_size-label"
-        active={false}
-        disabled={busy}
-        onReset={() => {}}
-        tooltip={<PropTip props={[prop]} />}
-      >
+      <FieldLabel className="embed-editor_size-label" active={false} disabled={busy} onReset={() => {}} tooltip={<PropTip props={[prop]} />}>
         {label}
       </FieldLabel>
     );
@@ -319,9 +284,9 @@ export function SizeRowLabel({
       active
       disabled={busy}
       onReset={() => clearProp(prop)}
-      resetLabel="Remove property"
+      resetLabel={translate('styleModel.embed.row.removeProperty')}
       tooltip={<PropTip props={[prop]} />}
-      {...(overridden ? { title: `Overridden by ${resolved.winner.selectorText}` } : {})}
+      {...(overridden ? { title: translate('styleModel.embed.row.overriddenBy', { selector: resolved.winner.selectorText }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={resolved.contributors}
@@ -358,6 +323,7 @@ export function DisplayRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const isSelected = resolved?.source === 'selected';
   // Nothing declared → what the page renders as, held steady while it is asked
   // rather than guessed at (see useHighlight).
@@ -370,7 +336,7 @@ export function DisplayRow({
   return (
     <div className="embed-editor_size-row">
       <SizeRowLabel
-        label="Display"
+        label={translate('styleModel.embed.row.display')}
         prop="display"
         resolved={resolved}
         busy={busy}
@@ -379,12 +345,7 @@ export function DisplayRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <DisplayControl
-        value={current.value}
-        important={current.important}
-        busy={busy}
-        onCommit={(value, important) => setProp('display', value, important)}
-      />
+      <DisplayControl value={current.value} important={current.important} busy={busy} onCommit={(value, important) => setProp('display', value, important)} />
     </div>
   );
 }
@@ -392,26 +353,30 @@ export function DisplayRow({
 // Align Y = `vertical-align`. It only affects inline-level / table-cell boxes, so
 // the whole row dims (but stays editable) when Display isn't one of those. Values
 // mirror Webflow's dropdown.
+// The labels stay English here (search, logs); VALIGN_LABEL_KEYS gives what the Select shows.
 export const VALIGN_OPTIONS: readonly SelectOption<string>[] = [
-  { value: 'baseline', label: 'Baseline' },
-  { value: 'sub', label: 'Sub' },
-  { value: 'super', label: 'Super' },
-  { value: 'top', label: 'Top' },
-  { value: 'text-top', label: 'Text top' },
-  { value: 'middle', label: 'Middle' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'text-bottom', label: 'Text bottom' },
+  { value: 'baseline', label: 'Baseline' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'sub', label: 'Sub' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'super', label: 'Super' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'top', label: 'Top' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'text-top', label: 'Text top' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'middle', label: 'Middle' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'bottom', label: 'Bottom' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
+  { value: 'text-bottom', label: 'Text bottom' }, // i18n-ignore: English next to VALIGN_LABEL_KEYS.
 ];
+export const VALIGN_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  baseline: 'styleModel.embed.row.valign.baseline',
+  sub: 'styleModel.embed.row.valign.sub',
+  super: 'styleModel.embed.row.valign.super',
+  top: 'styleModel.embed.row.valign.top',
+  'text-top': 'styleModel.embed.row.valign.textTop',
+  middle: 'styleModel.embed.row.valign.middle',
+  bottom: 'styleModel.embed.row.valign.bottom',
+  'text-bottom': 'styleModel.embed.row.valign.textBottom',
+};
 export const VALIGN_VALUES = new Set(VALIGN_OPTIONS.map((option) => option.value));
 // Display values for which `vertical-align` actually applies (else the row dims).
-export const VALIGN_DISPLAYS = new Set([
-  'inline',
-  'inline-block',
-  'inline-flex',
-  'inline-grid',
-  'inline-table',
-  'table-cell',
-]);
+export const VALIGN_DISPLAYS = new Set(['inline', 'inline-block', 'inline-flex', 'inline-grid', 'inline-table', 'table-cell']);
 
 export function VerticalAlignRow({
   resolved,
@@ -431,31 +396,30 @@ export function VerticalAlignRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const prop = 'vertical-align';
   const isSelected = resolved?.source === 'selected';
-  const effective = resolved
-    ? isSelected && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner
-    : undefined;
+  const effective = resolved ? (isSelected && resolved.selectedValue ? resolved.selectedValue : resolved.winner) : undefined;
   const raw = effective ? effective.value.trim() : '';
   const matched = VALIGN_VALUES.has(raw.toLowerCase()) ? raw.toLowerCase() : undefined;
 
   // Surface a pre-existing non-preset value (e.g. a length) as a trailing option so
   // the trigger reflects it instead of silently snapping back to Baseline.
-  const options: SelectOption<string>[] =
-    matched === undefined && raw
-      ? [...VALIGN_OPTIONS, { value: raw, label: raw }]
-      : [...VALIGN_OPTIONS];
-  const pick = (value: string) => setProp(prop, value, false);
+  const shownOptions = VALIGN_OPTIONS.map((option) => {
+    const key = VALIGN_LABEL_KEYS[option.value];
+    return key === undefined ? option : { ...option, label: translate(key) };
+  });
+  // A variable is drawn as its chip in the trigger, never listed as raw text.
+  const variable = variableIn(raw) !== undefined;
+  const options: SelectOption<string>[] = matched === undefined && raw && !variable ? [...shownOptions, { value: raw, label: raw }] : [...shownOptions];
+  // No custom field: a flagged value is marked, and a pick keeps the flag.
+  const important = effective?.important ?? false;
+  const pick = (value: string) => setProp(prop, value, important);
 
   return (
-    <div
-      className={`embed-editor_size-row ${dimmed ? 'is-inactive' : ''}`}
-      title={dimmed ? 'Align Y applies when Display is inline or table-cell' : undefined}
-    >
+    <div className={`embed-editor_size-row ${dimmed ? 'is-inactive' : ''}`} title={dimmed ? translate('styleModel.embed.row.alignYApplies') : undefined}>
       <SizeRowLabel
-        label="Align Y"
+        label={translate('styleModel.embed.row.alignY')}
         prop={prop}
         resolved={resolved}
         busy={busy}
@@ -464,45 +428,43 @@ export function VerticalAlignRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select
-        value={matched ?? (raw || 'baseline')}
-        options={options}
-        onChange={pick}
-        ariaLabel="Align Y"
-        disabled={busy}
-      />
+      <ImportantMark important={important}>
+        <VariableSelect
+          prop={prop}
+          rawValue={raw}
+          onVariable={pick}
+          customInput={
+            variable ? (
+              <KeywordVariableField
+                prop={prop}
+                value={raw}
+                busy={busy}
+                ariaLabel={translate('styleModel.embed.row.alignY')}
+                onCommit={pick}
+                onClear={() => clearProp(prop)}
+              />
+            ) : undefined
+          }
+          value={matched ?? (raw || 'baseline')}
+          options={options}
+          onChange={pick}
+          ariaLabel={translate('styleModel.embed.row.alignY')}
+          disabled={busy}
+        />
+      </ImportantMark>
     </div>
   );
 }
 
-// The effective (winner, else selected) value of a resolved prop, lowercased.
-// Whether a value is one the property will actually accept (via CSS.supports).
-// Gates LIVE writes so a half-typed / invalid value is never pushed at Webflow's
-// native style API (which errors and gets stuck). var()/custom props pass; fails
-// open only when CSS.supports is unavailable.
-export function isSupportedCssValue(prop: string, value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return false;
-  }
-  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') {
-    return true;
-  }
-  try {
-    return CSS.supports(prop, trimmed);
-  } catch {
-    return false;
-  }
-}
+// Whether a value is one the property will accept: model/supportedCssValue.ts, kept importable from here.
+export { isSupportedCssValue } from '../model/supportedCssValue';
 
+// The effective (winner, else selected) value of a resolved prop, lowercased.
 export function effectiveValue(resolved: ResolvedProp | undefined): string {
   if (!resolved) {
     return '';
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue.value
-      : resolved.winner.value;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value;
   return effective.trim().toLowerCase();
 }
 
@@ -514,10 +476,7 @@ export function rawEffective(resolved: ResolvedProp | undefined): {
   if (!resolved) {
     return { value: '', important: false };
   }
-  const effective =
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue
-      : resolved.winner;
+  const effective = resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue : resolved.winner;
   return { value: effective.value, important: effective.important };
 }
 
@@ -573,13 +532,7 @@ export const LAYOUT_CONTROL_PROPS = new Set([
 // Properties that can only apply as raw CSS — Webflow exposes no Designer API to
 // populate its native Transitions UI, so `transition` (and its longhands) always
 // write to the embed (custom code) rather than the native class.
-export const EMBED_ONLY_PROPS = new Set([
-  'transition',
-  'transition-property',
-  'transition-duration',
-  'transition-timing-function',
-  'transition-delay',
-]);
+export const EMBED_ONLY_PROPS = new Set(['transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay']);
 // Effects props owned by dedicated controls in EffectsSection — kept out of the
 // generic fall-through rows (like TYPOGRAPHY_CONTROL_PROPS).
 export const EFFECTS_CONTROL_PROPS = new Set([

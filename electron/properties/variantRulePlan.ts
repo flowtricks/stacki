@@ -1,0 +1,182 @@
+// The files a variant rule edit writes besides the component (variantRuleEdits.ts):
+// renaming an option renames it where instances pass it (`<Button variant="main">`),
+// in the same batch, so one undo puts both back; removing an option or a prop
+// that an instance still passes is refused, naming the file, as removing a prop
+// is (propertyPlan.ts). Every other edit is the component's alone.
+import path from 'node:path';
+import { assert } from '../../shared/core/assert';
+import { err, ok, type Result } from '../../shared/core/result';
+import { inFile, refusal } from '../../shared/properties/propertyErrors';
+import type { VariantRuleEdit } from '../../shared/properties/variantRules';
+import { toPosix } from '../lib/mainHelpers';
+import { sameFilesystemPath } from '../lib/platform';
+import { readPropertyConsumers } from './propertyConsumers';
+import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { instancesPassing } from './variantInstances';
+import { readVariantGroups } from './variantRuleModel';
+
+interface VariantPlanRequest {
+  readonly projectPath: string;
+  readonly file: string;
+}
+interface VariantFileChange {
+  readonly file: string;
+  readonly before: string;
+  readonly after: string;
+}
+
+// An option no instance can pass: what a removed option is renamed to, to see who passes it.
+const REMOVED_OPTION = JSON.stringify('\u0000stacki-removed-option');
+const REMOVED_PROPERTY = '_stackiDeletedProperty';
+
+/** The batch `edit` writes: the component's own change first, then the instances it renames. */
+export function planVariantRuleChanges(request: VariantPlanRequest, component: VariantFileChange, edit: VariantRuleEdit): Result<readonly VariantFileChange[]> {
+  assert(sameFilesystemPath(component.file, request.file), 'planVariantRuleChanges: the batch starts with the component');
+  switch (edit.kind) {
+    case 'renameOption':
+      return planInstanceRenames(request, component, edit.controller, edit.from, edit.to);
+    case 'removeOption':
+      return passedOption(request, component, edit.controller, edit.value);
+    case 'removeProp':
+      return passedProp(request, component, edit.prop);
+    case 'setRule':
+      return edit.state === 'forbidden' ? forbiddenPassed(request, component, edit.prop) : ok([component]);
+    case 'attachProp':
+    case 'switchController':
+    case 'setVisibility':
+      return forbiddenPassed(request, component, edit.prop);
+    case 'addOption':
+    case 'moveOption':
+    case 'setFallback':
+    case 'addProp':
+    case 'detachProp':
+    case 'setRuleType':
+    case 'setRuleDescription':
+    case 'setRuleDescriptions':
+    case 'setDefaultTable':
+      return ok([component]);
+    default: {
+      const exhaustive: never = edit;
+      return exhaustive;
+    }
+  }
+}
+
+function planInstanceRenames(
+  request: VariantPlanRequest,
+  component: VariantFileChange,
+  controller: string,
+  from: string,
+  to: string,
+): Result<readonly VariantFileChange[]> {
+  const consumers = readPropertyConsumers(request);
+  if (!consumers.ok) {
+    return consumers;
+  }
+  const changes: VariantFileChange[] = [];
+  const renames = [{ from: JSON.stringify(from), to: JSON.stringify(to) }];
+  for (const consumer of consumers.value) {
+    const own = sameFilesystemPath(consumer.file, request.file);
+    // The component's own file may place itself; its instances are renamed in the edited text.
+    const original = own ? component.after : consumer.source;
+    const renamed = renameComponentOptionValues(original, consumer.names, controller, renames);
+    if (!renamed.ok) {
+      return err(inFile(projectLabel(request.projectPath, consumer.file), renamed.error));
+    }
+    if (own) {
+      changes.unshift({ ...component, after: renamed.value });
+    } else if (renamed.value !== original) {
+      changes.push({ file: consumer.file, before: original, after: renamed.value });
+    }
+  }
+  assert(changes.length >= 1, 'planInstanceRenames: the batch holds the component');
+  assert(sameFilesystemPath(changes[0]?.file ?? '', request.file), 'planInstanceRenames: the component comes first');
+  return ok(changes);
+}
+
+// A removed option an instance still passes: the first file that does.
+function passedOption(request: VariantPlanRequest, component: VariantFileChange, controller: string, value: string): Result<readonly VariantFileChange[]> {
+  const consumers = readPropertyConsumers(request);
+  if (!consumers.ok) {
+    return consumers;
+  }
+  for (const consumer of consumers.value) {
+    const source = sameFilesystemPath(consumer.file, request.file) ? component.after : consumer.source;
+    const probed = renameComponentOptionValues(source, consumer.names, controller, [{ from: JSON.stringify(value), to: REMOVED_OPTION }]);
+    if (!probed.ok) {
+      return err(inFile(projectLabel(request.projectPath, consumer.file), probed.error));
+    }
+    if (probed.value !== source) {
+      const file = projectLabel(request.projectPath, consumer.file);
+      return err(refusal('in-use', 'componentProps.variants.optionPassed', { file, value, name: controller }));
+    }
+  }
+  return ok([component]);
+}
+
+// A removed prop an instance still passes: refused as removing a prop is.
+function passedProp(request: VariantPlanRequest, component: VariantFileChange, prop: string): Result<readonly VariantFileChange[]> {
+  const consumers = readPropertyConsumers(request);
+  if (!consumers.ok) {
+    return consumers;
+  }
+  for (const consumer of consumers.value) {
+    if (!sameFilesystemPath(consumer.file, request.file)) {
+      const probed = renameComponentReferences(consumer.source, consumer.names, { from: prop, to: REMOVED_PROPERTY }, 'consumer');
+      if (!probed.ok) {
+        return err(inFile(projectLabel(request.projectPath, consumer.file), probed.error));
+      }
+      if (probed.value !== consumer.source) {
+        return err(refusal('in-use', 'props.edit.stillPasses', { file: projectLabel(request.projectPath, consumer.file), name: prop }));
+      }
+    }
+  }
+  return ok([component]);
+}
+
+// An edit that forbids `prop` for some options is refused while an instance
+// passes it with one of them (or with none, where the fallback forbids it),
+// naming the file: TypeScript would reject that instance, and the designer
+// should change it first. An instance whose option is code is not judged.
+function forbiddenPassed(request: VariantPlanRequest, component: VariantFileChange, prop: string): Result<readonly VariantFileChange[]> {
+  const groups = readVariantGroups(component.after).filter((group) => group.editing.kind !== 'candidate' && group.props.includes(prop));
+  const forbidding = groups.flatMap((group) => {
+    const index = group.props.indexOf(prop);
+    const forbidden = group.options.filter((option) => option.rules[index]?.state === 'forbidden');
+    const fallback = group.options.find((option) => option.fallback);
+    return forbidden.length === 0 ? [] : [{ controller: group.controller, forbidden: forbidden.map((option) => option.value), fallback: fallback?.value }];
+  });
+  if (forbidding.length === 0) {
+    return ok([component]);
+  }
+  const consumers = readPropertyConsumers(request);
+  if (!consumers.ok) {
+    return consumers;
+  }
+  for (const consumer of consumers.value) {
+    const source = sameFilesystemPath(consumer.file, request.file) ? component.after : consumer.source;
+    const instances = instancesPassing(source, consumer.names, prop);
+    if (!instances.ok) {
+      return err(inFile(projectLabel(request.projectPath, consumer.file), instances.error));
+    }
+    for (const instance of instances.value) {
+      for (const rule of forbidding) {
+        const passed = instance.attributes.get(rule.controller);
+        const value = passed === undefined ? rule.fallback : passed.kind === 'literal' ? passed.value : undefined;
+        if (value !== undefined && rule.forbidden.includes(value)) {
+          const file = projectLabel(request.projectPath, consumer.file);
+          return err(refusal('in-use', 'componentProps.variants.forbiddenPassed', { file, name: prop, controller: rule.controller, value }));
+        }
+      }
+    }
+  }
+  return ok([component]);
+}
+
+/** A consumer's path as a refusal names it: relative to the project, with `/` on every platform, as the app shows paths everywhere. */
+function projectLabel(projectPath: string, file: string): string {
+  assert(projectPath.length > 0, 'projectLabel: a refusal names a file relative to a project');
+  const label = toPosix(path.relative(projectPath, file));
+  assert(label.length > 0, 'projectLabel: a consumer is a file inside the project, not the project itself');
+  return label;
+}

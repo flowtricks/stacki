@@ -1,19 +1,17 @@
-// Universal apps carry both prebuilds unchanged. Validate the narrow lipo
-// exception so an Intel-only terminal cannot silently ship to Apple Silicon.
+// Each Mac package must carry working terminal binaries for its own CPU.
+// Checking the target, rather than the build host, also covers cross-packaging.
 import assert = require('node:assert/strict');
 import fs = require('node:fs');
 import path = require('node:path');
 
-export function verifyMacNativeBindings(directory: string): void {
-  // Four known binaries bound this check regardless of other package contents.
-  for (const architecture of ['x64', 'arm64'] as const) {
-    const cpuType = architecture === 'x64' ? 0x01000007 : 0x0100000c;
-    for (const name of ['pty.node', 'spawn-helper'] as const) {
-      const file = path.join(directory, 'prebuilds', `darwin-${architecture}`, name);
-      verifyMacNativeHeader(file, cpuType);
-      if (name === 'spawn-helper') {
-        assert.equal(fs.statSync(file).mode & 0o111, 0o111, 'Mac spawn-helper must be executable');
-      }
+export function verifyMacNativeBindings(directory: string, architecture: 'arm64' | 'x64'): void {
+  const cpuType = architecture === 'x64' ? 0x01000007 : 0x0100000c;
+  // Two known binaries bound this check regardless of other package contents.
+  for (const name of ['pty.node', 'spawn-helper'] as const) {
+    const file = path.join(directory, 'prebuilds', `darwin-${architecture}`, name);
+    verifyMacNativeHeader(file, cpuType);
+    if (name === 'spawn-helper') {
+      assert.equal(fs.statSync(file).mode & 0o111, 0o111, 'Mac spawn-helper must be executable');
     }
   }
 }

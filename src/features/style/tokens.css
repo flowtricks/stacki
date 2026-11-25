@@ -37,6 +37,13 @@
   /* Popover/menu surface. Aliased to `raised` so the ramp has one fewer near-duplicate
      grey (it was #363636, a hair off raised's #3b3b3b). */
   --color-bg-surface-overlay: var(--color-bg-surface-raised);
+  /* Attribute-selector chips in the element tooltip ([data-x], [style="…"]) only: a saturated purple
+     with white text, as the blue class chip beside them is a saturated blue with white text. White on
+     the fill is 5.5:1 at rest. The fill cannot also reach 3:1 against the grey tooltip, since that needs a
+     fill so bright that white text falls to about 3.7:1; it stands off the tooltip as far as the blue
+     chip does. Other purple chips (spacing, variables) keep their own colours. */
+  --color-attribute-chip-bg: #6c4fe0;
+  --color-attribute-chip-text: #ffffff;
   --color-bg-hover: rgba(255, 255, 255, 0.05);
   --color-bg-active: rgba(255, 255, 255, 0.08);
 
@@ -66,11 +73,14 @@
   --color-border-strong: rgba(255, 255, 255, 0.16);
   --color-border-focus: var(--color-selection-bg); /* blue focus outline for inputs/controls */
 
-  /* Text (high → low emphasis) */
+  /* Text (high → low emphasis). Secondary and tertiary clear WCAG AA (4.5:1) up
+   * to the overlay surface, where menus and pickers list their values: #707070
+   * was 2.3:1 there. Disabled text is exempt from AA but still clears 3:1 on
+   * the page. Pinned by test/renderer/app/textContrast.test.js. */
   --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #707070;
-  --color-text-disabled: #4a4a4a;
+  --color-text-secondary: #c2c2c2;
+  --color-text-tertiary: #a6a6a6;
+  --color-text-disabled: #707070;
   --color-text-inverse: #1c1c1c;
 
   /* Semantic */
@@ -92,12 +102,24 @@
   --color-class-tag-bg: #016bcd;
   --color-tag-bg: #b53a9a;
   --color-component-tag: #79e09c;
-  --color-component-tag-bg: rgba(37, 157, 77, 0.25);
-  --color-component-tag-bg-hover: rgba(37, 157, 77, 0.4);
+  --color-component-tag-bg: rgba(37, 157, 77, 0.4);
+  --color-component-tag-bg-hover: rgba(37, 157, 77, 0.55);
   --color-component-tag-bg-active: #16783c;
+  /* The fill of a chip styled only in another query. The chip keeps its full-strength text and says
+     "not here" through a darker fill; it used to be the whole chip at half opacity, which washed the text
+     out to about 4:1 in blue and 2:1 in grey. Each is the family's resting fill, one step darker. */
+  --color-class-tag-bg-dimmed: #001e39;
+  --color-component-tag-bg-dimmed: rgba(37, 157, 77, 0.2);
   --color-selector-context-bg: var(--color-bg-surface);
   --color-selector-context-bg-hover: var(--color-bg-surface-raised);
-  --color-selector-context-bg-active: var(--color-bg-surface-high);
+  --color-selector-context-bg-active: #636363; /* Clearly brighter than hover (#3b3b3b), so the selected grey chip stands out. */
+  --color-selector-context-bg-dimmed: var(--color-bg-page);
+  /* The "Inline styles" chip (InlineStyleChip.tsx): a muted amber, apart from every
+     selector family, because the style attribute is not a selector and outranks them. */
+  --color-inline-tag: #f6d38a;
+  --color-inline-tag-bg: rgba(196, 140, 32, 0.28);
+  --color-inline-tag-bg-hover: rgba(196, 140, 32, 0.42);
+  --color-inline-tag-bg-active: #9b6b14;
   /* Provenance label — a property set through another selector (Embed Editor). */
   --color-prop-orange: #ffbc86;
   --color-prop-orange-bg: rgba(223, 100, 12, 0.2);
@@ -105,8 +127,7 @@
 
   /* ──────────────────────────── Typography ──────────────────────────── */
 
-  --font-family-sans:
-    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --font-family-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   --font-size-2xs: 10px;
@@ -218,4 +239,11 @@
   --z-overlay: 100;
   --z-modal: 1000;
   --z-tooltip: 10000;
+
+  /* Style-panel layering, lowest to highest. Controls and the variable-connect dot sit in
+     one stacking context (the wrappers that hold them create none), so their z-indexes
+     compete directly and a closed field must never outrank the dot that overlaps it. */
+  --z-style-field: var(--z-raised);
+  --z-style-connect: calc(var(--z-raised) + 10);
+  --z-style-popover: calc(var(--z-modal) + 1);
 }

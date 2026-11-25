@@ -1,6 +1,7 @@
 import { useDefaultsKeyboard } from '../../../vendor/stacki/src/features/componentDefaults/useDefaultsKeyboard';
 import { canvasNodeAt } from '../../../vendor/stacki/src/features/componentDefaults/defaultsCanvasModel';
-import { getEditorRole } from '../roles/roleStore';
+import { getStudioRole } from '../roles/roleStore';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { pathFor } from '../project/previewSelection';
 import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useEffect, useRef } from 'react';
@@ -66,10 +67,7 @@ export function useStudioDefaultsCanvas(props: EditorProps, model: ReturnType<ty
       selected.current = session.file;
     }
   }, [canvas.state, props.file, model]);
-  const rootId =
-    canvas.state.kind === 'idle'
-      ? undefined
-      : canvasNodeAt(model.nodes, canvas.state.session.targetPath)?.id;
+  const rootId = canvas.state.kind === 'idle' ? undefined : canvasNodeAt(model.nodes, canvas.state.session.targetPath)?.id;
   useDefaultsKeyboard(canvas, { selected: model.selected, root: rootId });
   const { subscribeOutside } = model.preview;
   useEffect(() => subscribeOutside(() => void canvas.run('done')), [canvas, subscribeOutside]);
@@ -80,13 +78,8 @@ export function useStudioDefaultsCanvas(props: EditorProps, model: ReturnType<ty
   };
 }
 
-async function startForNode(
-  props: EditorProps,
-  model: ReturnType<typeof useEditor>,
-  canvas: ReturnType<typeof useDefaultsCanvas>,
-  id: string,
-) {
-  if (getEditorRole() === 'client' || !model.document) {
+async function startForNode(props: EditorProps, model: ReturnType<typeof useEditor>, canvas: ReturnType<typeof useDefaultsCanvas>, id: string) {
+  if (!can(getStudioRole(), 'component:edit') || !model.document) {
     return;
   }
   await model.document.whenSaved();
@@ -98,11 +91,7 @@ async function startForNode(
   await canvas.start({ file: props.file, source, model: parsed.model, path: pathFor(id) });
 }
 
-async function readDefaultsCanvas(
-  file: string,
-  document: ReturnType<typeof useEditor>['document'],
-  expectedFile: string,
-) {
+async function readDefaultsCanvas(file: string, document: ReturnType<typeof useEditor>['document'], expectedFile: string) {
   if (!document || file !== expectedFile) {
     throw new Error('Return to the defaults canvas before saving.');
   }

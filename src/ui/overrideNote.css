@@ -1,0 +1,21 @@
+/* "via <App>" beside a picker's button (OverrideNote.tsx): quiet, on its own fill. */
+.override-note {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 11px;
+  line-height: 16px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The data picker while an app answers it (src/features/props/bindOverride.tsx). */
+.dp-override {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}

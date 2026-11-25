@@ -59,8 +59,7 @@ function print(value: unknown, depth = 0): string {
 }
 
 const BARE_KEY = /^[A-Za-z0-9_-]+$/;
-const printKey = (key: string | number): string =>
-  BARE_KEY.test(String(key)) ? String(key) : JSON.stringify(String(key));
+const printKey = (key: string | number): string => (BARE_KEY.test(String(key)) ? String(key) : JSON.stringify(String(key)));
 
 // Splits a table header into its path, respecting quoted segments.
 function headerPath(header: string): string[] {
@@ -224,9 +223,7 @@ function patchInline(source: string, key: string | number, value: unknown): stri
       return undefined;
     }
     const body = source.slice(1, close).trim();
-    const inner = body
-      ? `${body}, ${printKey(key)} = ${print(value)}`
-      : `${printKey(key)} = ${print(value)}`;
+    const inner = body ? `${body}, ${printKey(key)} = ${print(value)}` : `${printKey(key)} = ${print(value)}`;
     return `{ ${inner} }`;
   }
   const at = match.index ?? 0; // defined by construction: the match was found in source
@@ -243,10 +240,7 @@ function patchInline(source: string, key: string | number, value: unknown): stri
 
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const samePath = (
-  left: readonly (string | number)[],
-  right: readonly (string | number)[],
-): boolean =>
+const samePath = (left: readonly (string | number)[], right: readonly (string | number)[]): boolean =>
   left.length === right.length && left.every((seg, i) => String(seg) === String(right[i]));
 
 export interface Edit {
@@ -267,17 +261,14 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
     // underneath it carries the same first segment.
     if (rename !== undefined) {
       const from = path.map(String);
-      out = out.replace(
-        /^([ \t]*)\[(\[?)([^\]]+)(\]?)\]/gm,
-        (line, indent: string, open: string, header: string, close: string) => {
-          const segments = headerPath(header);
-          if (segments.length < from.length || from.some((seg, i) => segments[i] !== seg)) {
-            return line;
-          }
-          const next = [...from.slice(0, -1), rename, ...segments.slice(from.length)];
-          return `${indent}[${open}${next.map(printKey).join('.')}${close}]`;
-        },
-      );
+      out = out.replace(/^([ \t]*)\[(\[?)([^\]]+)(\]?)\]/gm, (line, indent: string, open: string, header: string, close: string) => {
+        const segments = headerPath(header);
+        if (segments.length < from.length || from.some((seg, i) => segments[i] !== seg)) {
+          return line;
+        }
+        const next = [...from.slice(0, -1), rename, ...segments.slice(from.length)];
+        return `${indent}[${open}${next.map(printKey).join('.')}${close}]`;
+      });
       continue;
     }
     const entries = index(out);
@@ -324,8 +315,7 @@ function applyEdits(text: string, edits: readonly Edit[]): string {
     const siblings = entries.filter((entry) => samePath(entry.path.slice(0, -1), tablePath));
     const last = siblings[siblings.length - 1];
     if (last) {
-      const indent =
-        out.slice(out.lastIndexOf('\n', last.lineStart - 1) + 1).match(/^[ \t]*/)?.[0] ?? '';
+      const indent = out.slice(out.lastIndexOf('\n', last.lineStart - 1) + 1).match(/^[ \t]*/)?.[0] ?? '';
       const at = last.lineEnd;
       out = `${out.slice(0, at)}\n${indent}${printKey(key)} = ${print(value)}${out.slice(at)}`;
     } else {

@@ -1,0 +1,9 @@
+---
+import type { CardProps } from '../types';
+type Props = CardProps;
+const { title, body = 'Body text', tone = 'info', href } = Astro.props;
+---
+<article class={`imported-types tone-${tone}`}>
+  <h3>{href ? <a href={href}>{title}</a> : title}</h3>
+  <p>{body}</p>
+</article>

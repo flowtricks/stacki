@@ -1,0 +1,162 @@
+/* Segmented control (SegmentedControl.tsx): moved from the Style panel's utilities so the
+   Properties panel's icon choices (a prop's Visibility) draw with the same control. Its values
+   come from src/features/style/tokens.css, which the renderer loads at boot (src/main.tsx). */
+
+/* ──────────────────────────── Segmented tab control ──────────────────────────── */
+/* Sliding-indicator tabs (SegmentedControl.tsx). Fills its container; the grid
+   columns + indicator size/position are set inline from the option count. */
+
+/* --seg-pad / --seg-gap drive both the CSS padding/gap AND the indicator's inline
+   width/offset math (SegmentedControl.tsx), so variants can resize by overriding
+   these two vars and the indicator stays aligned. */
+.u-segmented {
+  --seg-pad: var(--space-2);
+  --seg-gap: var(--space-1);
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--seg-gap);
+  width: 100%;
+  padding: var(--seg-pad);
+  border-radius: var(--radius-input);
+  /* Recessed track (`inset`, matching the app's dark input fields) so the lifted
+     active indicator (`surface`, matching buttons/tags) reads with clear contrast. */
+  background: var(--color-bg-inset);
+}
+/* 'hug' variant: the track shrinks to fit its segments (no full-width stretch),
+   each segment sizes to its own content, and the indicator (measured in
+   SegmentedControl.tsx) animates to the active one's width. */
+.u-segmented.is-hug {
+  width: fit-content;
+  justify-content: flex-start;
+}
+
+/* Indicator geometry (transform + width) is set inline from the active button's
+   measured rect, so it fits equal-width and content-width segments alike. */
+.u-segmented-indicator {
+  position: absolute;
+  z-index: 0;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: 0; /* physical: translateX from offsetLeft */
+  width: 0;
+  border-radius: var(--radius-sm);
+  /* Active segment = a lifted control pill. Surface-aware like the dropdown button
+     and slider fill: --color-bg-surface normally, one step up on a surface. */
+  background: var(--surface-control);
+  pointer-events: none;
+}
+.u-segmented-indicator.is-animated {
+  transition:
+    transform var(--transition-normal),
+    width var(--transition-normal);
+}
+
+.u-segmented-button {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--size-control-md);
+  /* Center content both axes so icon labels (border-style line spans, the ✕, the
+     background type/tile SVGs) sit centered — not just text via text-align. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-tight);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+.u-segmented.is-hug .u-segmented-button {
+  flex: 0 0 auto;
+}
+/* Hover lifts the text only: the chosen segment is drawn by the indicator
+   behind these buttons, so a background here would paint over it — and the
+   app's blanket `button:hover` (src/app/styles.css) does exactly that unless this
+   states otherwise. */
+.u-segmented-button:hover:not(:disabled) {
+  background: none;
+  color: var(--color-text-primary);
+}
+/* Light text/icon on the grey active pill. */
+.u-segmented-button.is-selected {
+  color: var(--color-text-primary);
+}
+.u-segmented-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
+}
+
+/* Disabled: dim the whole control but keep the current value legible; block
+   clicks and the hover color-shift so it reads as informational, not actionable. */
+.u-segmented.is-disabled {
+  opacity: 0.5;
+}
+.u-segmented.is-disabled .u-segmented-button {
+  cursor: not-allowed;
+}
+.u-segmented.is-disabled .u-segmented-button:not(.is-selected):hover {
+  color: var(--color-text-tertiary);
+}
+
+/* Center icon-only segments (e.g. grid/list toggle). */
+.u-segmented-button svg {
+  display: block;
+  margin: 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+/* The body-portaled hover tip (HoverTooltip). Visual only. */
+.u-segmented-popup {
+  z-index: var(--z-tooltip);
+  width: max-content;
+  max-width: min(300px, 88vw);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface-overlay);
+  color: var(--color-text-secondary);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  pointer-events: none;
+}
+.u-segmented-popup strong {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+.u-segmented-popup-arrow {
+  position: absolute;
+  border: 6px solid transparent;
+}
+
+/* Popup: fixed position set inline from the segment's rect (portaled to <body>, so
+   no ancestor `overflow: hidden` can clip it). The arrow (`--tip-arrow-left`, offset
+   from the tooltip's left edge) points at the segment center and flips sides when the
+   tooltip is placed below. */
+.u-segmented-popup {
+  position: fixed;
+}
+.u-segmented-popup-arrow {
+  left: var(--tip-arrow-left, 50%); /* physical: arrow offset measured on screen */
+  transform: translateX(-50%);
+}
+.u-segmented-popup.is-above .u-segmented-popup-arrow {
+  top: 100%;
+  border-top-color: var(--color-bg-surface-overlay);
+}
+.u-segmented-popup.is-below .u-segmented-popup-arrow {
+  bottom: 100%;
+  border-bottom-color: var(--color-bg-surface-overlay);
+}

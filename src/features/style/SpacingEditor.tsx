@@ -1,38 +1,37 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { more as centralMore } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 // The popover that edits one side of the spacing box: its draft, its live and
 // committed writes, the reset button, focus on open, arrow-key steps, and
 // closing on a press outside unless it lands in a popup of its own
 // (SpacingBox.tsx).
 
+const MoreGlyph = centralIcon(centralMore, 12);
+
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import { isNonNegative } from './model/cssProperties';
-import { hasOwnedPopup, inOwnedPopup } from './model/popupLayer';
+import { hasOwnedPopup, inOwnedPopup } from '../../ui/popupOwnership';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
+import { settleCaretAfterChips } from './TokenField';
 import { type ResolvedProp } from './model/resolved';
 import { useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-  displayOf,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side, displayOf } from './spacingTypes';
 import { affectedSides, siblingProps } from './SpacingFill';
 import { withImportant } from './spacingValue';
 import { humanLabel } from './SpacingLabel';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useStyleHint } from './model/computedStyle';
 
 // The editor shown inside the popover: a live text input (number + unit, with the
 // same arrow-step / !important handling as before). Commits + closes on blur.
 export function SpacingEditor(props: SpacingEditorProps) {
   const { prop, placeholder, read, onSelectSelector, onClose } = props;
+  const translate = useTranslate();
   const editor = useSpacingEditor(props);
   const computed = useStyleHint(read(prop) === undefined ? prop : '');
   return (
@@ -66,14 +65,15 @@ export function SpacingEditor(props: SpacingEditorProps) {
     >
       <div className="embed-editor_spacing-popover-row">
         <span className="embed-editor_spacing-popover-label" {...editor.scrub.label}>
-          {humanLabel(prop)}
+          {humanLabel(prop, translate)}
         </span>
         <VariableConnect
           code
           {...(isNonNegative(prop) ? { stepMin: 0 } : {})}
-          ariaLabel={`Connect ${humanLabel(prop)} to a variable`}
+          ariaLabel={translate('style.spacingEditor.connect', { name: humanLabel(prop, translate) })}
           disabled={false}
           prop={prop}
+          canvasProperty={prop}
           onPick={editor.pick}
         >
           <input
@@ -118,11 +118,15 @@ export type SpacingEditorProps = {
   /** Fired when the popover closes because its OWN side's label was pressed —
    *  lets the parent suppress that label's click from re-opening it (toggle). */
   onSameLabelPress: () => void;
+  /** Hands the parent this editor's commit (undefined once it is gone): a new opening writes
+   *  the draft of one still playing its close motion before replacing it. */
+  registerCommit: (commit: (() => void) | undefined) => void;
 };
 
 // Reused Reset item — mousedown-preventDefault keeps input focus so the
 // blur→commit path doesn't fire before the click clears the value.
 export function SpacingResetButton({ onReset }: { onReset: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
@@ -133,35 +137,22 @@ export function SpacingResetButton({ onReset }: { onReset: () => void }) {
         onReset();
       }}
     >
-      <svg className="u-field-label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M5.2 5.2H2.2V2.2" />
-        <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-      </svg>
-      <span>Reset</span>
-      <span className="u-field-label-menu-shortcut">Option + click</span>
+      <MoreGlyph className="u-field-label-menu-icon" />
+      <span>{translate('ui.reset')}</span>
+      <span className="u-field-label-menu-shortcut">{translate('style.spacingEditor.optionClick')}</span>
     </button>
   );
 }
 
 // The editor's state and handlers: the draft (seeded once, when the popover
 // opens), live writes while typing, and the single commit when it closes.
-export function useSpacingEditor({
-  prop,
-  side,
-  read,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onClose,
-}: SpacingEditorProps) {
+export function useSpacingEditor({ prop, side, read, setProp, clearProp, liveSetProp, onClose, registerCommit }: SpacingEditorProps) {
   const external = spacingExternal(read(prop));
   const { draft, draftRef, setDraftValue } = useEditorDraft(external);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   useEditorFocus(rootRef, inputRef);
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) =>
-    liveSetProp(prop, value, important),
-  );
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) => liveSetProp(prop, value, important));
   const commit = useSpacingCommit({ prop, side, external, draftRef, setProp, clearProp });
   // Commit the latest draft and close — once, so blur + outside-click can't
   // double-fire.
@@ -176,6 +167,7 @@ export function useSpacingEditor({
     commit.abandon();
     onClose();
   };
+  useRegisteredCommit({ commit, cancelLive }, registerCommit);
   // A scrub only moves the draft: this popover's authoritative write happens when it
   // closes (see `close`), which is also what typing in it does.
   const scrub = useScrub({
@@ -198,6 +190,26 @@ export function useSpacingEditor({
     onClose,
   });
   return { draft, rootRef, inputRef, scrub, close, abandon, ...handlers };
+}
+
+// Hands the parent a commit that writes the draft without closing anything: the popover it
+// belongs to is being replaced. `commit.close` runs once, so the close motion finishing (or a
+// blur) after it writes nothing twice. Taken back when the editor unmounts.
+function useRegisteredCommit(
+  editor: { readonly commit: ReturnType<typeof useSpacingCommit>; readonly cancelLive: () => void },
+  registerCommit: SpacingEditorProps['registerCommit'],
+): void {
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  useEffect(() => {
+    const commitDraft = (): void => {
+      if (editorRef.current.commit.close()) {
+        editorRef.current.cancelLive();
+      }
+    };
+    registerCommit(commitDraft);
+    return () => registerCommit(undefined);
+  }, [registerCommit]);
 }
 
 // The editor's event handlers, over the state `useSpacingEditor` owns.
@@ -228,8 +240,15 @@ export function spacingEditorHandlers({
 }) {
   return {
     keyDownCapture: (event: ReactKeyboardEvent) => {
-      if (commit.recordKey(event) === 'abandon') {
+      const recorded = commit.recordKey(event);
+      if (recorded === 'abandon') {
         abandon();
+      } else if (recorded === 'commit' && event.target instanceof HTMLElement && event.target.isContentEditable) {
+        // The token editor would hand its focus straight back after Enter, like every panel field. This
+        // editor is done with Enter: leaving (the blur) is what closes it, so it leaves before the field answers.
+        event.preventDefault();
+        event.stopPropagation();
+        event.target.blur();
       }
     },
     keyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -266,7 +285,11 @@ export function spacingEditorHandlers({
       // commits whenever the draft differs from what the popover opened with,
       // and the pick is already written by the setProp below.
       commit.rebase(binding);
-      setProp(prop, binding, false);
+      // The field's text carries its `!important` (insertBinding.ts keeps it
+      // around a pick), so the flag is split off here rather than written into
+      // the value.
+      const parsed = parseImportant(binding);
+      setProp(prop, parsed.value, parsed.important);
     },
     blur: () => closeUnlessInPopup(rootRef, close),
     reset: () => {
@@ -284,10 +307,7 @@ export function spacingEditorHandlers({
 // the editor. Closing there took the popup down with it before anything could
 // be chosen. Checked a tick later because during a blur the focus has left one
 // element and not yet reached the next.
-export function closeUnlessInPopup(
-  rootRef: React.RefObject<HTMLDivElement>,
-  close: () => void,
-): void {
+export function closeUnlessInPopup(rootRef: React.RefObject<HTMLDivElement>, close: () => void): void {
   window.setTimeout(() => {
     if (hasOwnedPopup(rootRef.current ?? undefined)) {
       return;
@@ -373,11 +393,7 @@ export function useSpacingCommit({
     rebase: (value: string) => {
       originalRef.current = value;
     },
-    recordKey: (event: {
-      key: string;
-      shiftKey: boolean;
-      altKey: boolean;
-    }): 'commit' | 'abandon' | 'none' => {
+    recordKey: (event: { key: string; shiftKey: boolean; altKey: boolean }): 'commit' | 'abandon' | 'none' => {
       if (event.key === 'Enter') {
         commitRequested.current = true;
         commitProps.current = siblingProps(prop, side, affectedSides(side, event));
@@ -396,14 +412,16 @@ export function useSpacingCommit({
 // Opened to be typed in: focus the field it actually shows. With a variable in the
 // value that is the rich editor, and focusing the <input> hidden behind it left the
 // popup looking focused while the caret was nowhere.
-export function useEditorFocus(
-  rootRef: React.RefObject<HTMLDivElement>,
-  inputRef: React.RefObject<HTMLInputElement>,
-): void {
+export function useEditorFocus(rootRef: React.RefObject<HTMLDivElement>, inputRef: React.RefObject<HTMLInputElement>): void {
   useEffect(() => {
     const rich = rootRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
     if (rich) {
       rich.focus();
+      // A lone variable opens with the caret behind its chip, so one Backspace takes it off;
+      // selecting the whole value drew a fat bar over the chip with the caret nowhere.
+      if (settleCaretAfterChips(rich)) {
+        return;
+      }
       const range = document.createRange();
       range.selectNodeContents(rich);
       const selection = window.getSelection();
@@ -420,10 +438,7 @@ export function useEditorFocus(
 // the input. Padding stops at 0; a margin or an inset is free to go negative,
 // which is the whole point of pulling something out of its box. Returns the
 // stepped text, if any.
-export function stepSpacingKey(
-  event: ReactKeyboardEvent<HTMLInputElement>,
-  prop: string,
-): string | undefined {
+export function stepSpacingKey(event: ReactKeyboardEvent<HTMLInputElement>, prop: string): string | undefined {
   const stepped = handleArrowStep(event, isNonNegative(prop) ? 0 : undefined);
   if (!stepped) {
     return undefined;

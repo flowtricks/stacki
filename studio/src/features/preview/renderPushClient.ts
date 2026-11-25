@@ -14,8 +14,7 @@ export function receiveRenderPush(hot: PreviewHot) {
   let path = location.pathname + location.search;
   let ready = false;
   let renderRevision = 0;
-  const announce = () =>
-    document.dispatchEvent(new CustomEvent('studio:render-push', { detail: ready }));
+  const announce = () => document.dispatchEvent(new CustomEvent('studio:render-push', { detail: ready }));
   document.addEventListener('avb:preview-route', () => {
     renderRevision++;
     ready = false;
@@ -28,6 +27,12 @@ export function receiveRenderPush(hot: PreviewHot) {
     if (matchesPage(data, path)) {
       ready = true;
       announce();
+    }
+  });
+  hot.on('studio:render-pending', (data) => {
+    if (matchesPage(data, path)) {
+      renderRevision++;
+      document.dispatchEvent(new Event('studio:render-pending'));
     }
   });
   hot.on('studio:render', (data) => {

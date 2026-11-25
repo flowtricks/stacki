@@ -1,14 +1,7 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSharedVars } from './VariableConnect';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-} from './spacingTypes';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side } from './spacingTypes';
 import { SpacingLabel } from './SpacingLabel';
 import { SpacingEditor } from './SpacingEditor';
 export { SpacingEditor } from './SpacingEditor';
@@ -17,14 +10,7 @@ export { SpacingLabel } from './SpacingLabel';
 
 export { FRAMES, type FrameKey, SpacingFill } from './SpacingFill';
 
-export {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Read,
-  type SelectSelector,
-  type Side,
-} from './spacingTypes';
+export { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectSelector, type Side } from './spacingTypes';
 
 // ── Orchestration hook: drag-mirroring + which side's popover is open ─────────
 
@@ -53,14 +39,21 @@ export function useSpacingBox(
   const { vars: variables } = useSharedVars({ active: !!options?.variableLabels });
   // The props the in-flight drag is writing and their shared live value, so every
   // matching label mirrors the drag in real time (only one drag runs at a time).
-  const [liveDrag, setLiveDrag] = useState<{ props: string[]; value: string } | undefined>(
-    undefined,
-  );
+  const [liveDrag, setLiveDrag] = useState<{ props: string[]; value: string } | undefined>(undefined);
   const onLive = (dragProps: string[], value: string) => setLiveDrag({ props: dragProps, value });
   const onLiveEnd = () => setLiveDrag(undefined);
 
-  // The side whose editor popover is open (undefined = closed).
-  const [editing, setEditing] = useState<{ prop: string; side: Side } | undefined>(undefined);
+  // The side whose editor popover is open (undefined = closed), and which opening it is.
+  // Each opening mounts its own popover: a press that lands while the last one is still
+  // playing its close motion opened nothing before (the same popover finished closing over
+  // it), so a quick third press on a label left the editor shut and the presses out of step.
+  const [editing, setEditing] = useState<{ prop: string; side: Side; opening: number } | undefined>(undefined);
+  const openingRef = useRef(0);
+  // The open (or closing) editor's commit, so a new opening first writes what it holds.
+  const commitOpenRef = useRef<(() => void) | undefined>(undefined);
+  const registerCommit = useCallback((commit: (() => void) | undefined) => {
+    commitOpenRef.current = commit;
+  }, []);
   // When the open popover is closed by pressing its own label, the label's click
   // must NOT re-open it — this holds that prop so onEdit skips the reopen once.
   const suppressReopen = useRef<string | undefined>(undefined);
@@ -70,7 +63,9 @@ export function useSpacingBox(
       return;
     }
     suppressReopen.current = undefined;
-    setEditing({ prop, side });
+    commitOpenRef.current?.();
+    openingRef.current += 1;
+    setEditing({ prop, side, opening: openingRef.current });
   };
 
   const label = (prop: string, side: Side) => (
@@ -95,7 +90,7 @@ export function useSpacingBox(
 
   const editor = editing ? (
     <SpacingEditor
-      key={editing.prop}
+      key={`${editing.prop}:${editing.opening}`}
       prop={editing.prop}
       side={editing.side}
       placeholder={emptyLabel}
@@ -108,6 +103,7 @@ export function useSpacingBox(
       onSameLabelPress={() => {
         suppressReopen.current = editing.prop;
       }}
+      registerCommit={registerCommit}
     />
   ) : undefined;
 

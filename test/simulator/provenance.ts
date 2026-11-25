@@ -9,12 +9,7 @@
 // counter per run, and every writer below keeps an existing origin at most once.
 import { assert } from '#dist/shared/core/assert.js';
 import type { Splice } from '#dist/shared/engine/planner.js';
-import {
-  toByteSpan,
-  toByteString,
-  type ByteSpan,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { toByteSpan, toByteString, type ByteSpan, type ByteString } from '#dist/shared/core/span.js';
 import { orderedSplices } from '#dist/shared/engine/splice.js';
 
 /** One origin per byte of one version of a file. */
@@ -46,11 +41,7 @@ export function insertOrigins(origins: Origins, at: number, inserted: Origins): 
 /** The actor applied `splices`. Bytes outside them keep their origins; inside,
  * the bytes a replacement shares with its witness at either end keep theirs —
  * a code save that appends to the file keeps the file — and the rest are new. */
-export function spliceOrigins(
-  origins: Origins,
-  splices: readonly Splice[],
-  source: OriginSource,
-): Origins {
+export function spliceOrigins(origins: Origins, splices: readonly Splice[], source: OriginSource): Origins {
   const result: number[] = [];
   let cursor = 0;
   for (const splice of orderedSplices(splices)) {
@@ -76,12 +67,7 @@ export function spliceOrigins(
  * them beside other blocks, and the blank lines around them are rewritten).
  * A splice whose bytes do not match in length falls back to new origins, as
  * every splice does when the counts differ. */
-export function restoreOrigins(
-  origins: Origins,
-  splices: readonly Splice[],
-  restored: readonly Origins[],
-  source: OriginSource,
-): Origins {
+export function restoreOrigins(origins: Origins, splices: readonly Splice[], restored: readonly Origins[], source: OriginSource): Origins {
   const ordered = orderedSplices(splices);
   if (ordered.length !== restored.length) {
     return spliceOrigins(origins, splices, source);
@@ -118,11 +104,7 @@ const ALIGN_CELLS_MAX = 4_000_000;
  * order (a longest common subsequence), keep their origins in their new
  * place; the rest of the insertion and whatever the removal writes are new.
  * Each origin still appears at most once: the removed bytes are gone. */
-export function moveOrigins(
-  origins: Origins,
-  splices: readonly Splice[],
-  source: OriginSource,
-): Origins {
+export function moveOrigins(origins: Origins, splices: readonly Splice[], source: OriginSource): Origins {
   const ordered = orderedSplices(splices);
   const [first, second] = ordered;
   assert(ordered.length === 2, 'A move is an insertion and a removal');
@@ -131,11 +113,7 @@ export function moveOrigins(
   const removal = first.expectedBytes.length >= second.expectedBytes.length ? first : second;
   const insertion = removal === first ? second : first;
   const removed = origins.slice(removal.range.start, removal.range.end);
-  const relocated = alignedOrigins(
-    { bytes: removal.expectedBytes, origins: removed },
-    insertion.replacementBytes,
-    source,
-  );
+  const relocated = alignedOrigins({ bytes: removal.expectedBytes, origins: removed }, insertion.replacementBytes, source);
   const result: number[] = [];
   let cursor = 0;
   for (const splice of ordered) {
@@ -158,11 +136,7 @@ export function moveOrigins(
 // cores between them are aligned. The alignment is the heaviest common
 // subsequence, content bytes weighing more than separator bytes, so
 // "\r\n\r\nNew." moved to "New.\r\n\r\n" keeps the origins of "New.".
-function alignedOrigins(
-  from: { readonly bytes: ByteString; readonly origins: Origins },
-  target: ByteString,
-  source: OriginSource,
-): number[] {
+function alignedOrigins(from: { readonly bytes: ByteString; readonly origins: Origins }, target: ByteString, source: OriginSource): number[] {
   const fromCore = coreOf(from.bytes);
   const targetCore = coreOf(target);
   const inner = alignedCore(
@@ -193,11 +167,7 @@ function coreOf(bytes: ByteString): ByteSpan {
   return toByteSpan(start, end);
 }
 
-function alignedCore(
-  from: { readonly bytes: ByteString; readonly origins: Origins },
-  target: ByteString,
-  source: OriginSource,
-): number[] {
+function alignedCore(from: { readonly bytes: ByteString; readonly origins: Origins }, target: ByteString, source: OriginSource): number[] {
   const rows = from.bytes.length + 1;
   const columns = target.length + 1;
   if (rows * columns > ALIGN_CELLS_MAX) {
@@ -210,8 +180,7 @@ function alignedCore(
     for (let j = target.length - 1; j >= 0; j--) {
       const skip = Math.max(at(i + 1, j), at(i, j + 1));
       const byte = from.bytes[i];
-      const take =
-        byte !== undefined && byte === target[j] ? alignWeight(byte) + at(i + 1, j + 1) : -1;
+      const take = byte !== undefined && byte === target[j] ? alignWeight(byte) + at(i + 1, j + 1) : -1;
       best[i * columns + j] = Math.max(skip, take);
     }
   }
@@ -255,12 +224,7 @@ function alignWeight(byte: number): number {
 
 /** A formatter flipped every line ending: CRLF to LF drops each CR, LF to
  * CRLF adds a new CR before each LF. The LF bytes keep their origins. */
-export function lineEndingOrigins(
-  bytes: ByteString,
-  origins: Origins,
-  direction: 'to-lf' | 'to-crlf',
-  source: OriginSource,
-): Origins {
+export function lineEndingOrigins(bytes: ByteString, origins: Origins, direction: 'to-lf' | 'to-crlf', source: OriginSource): Origins {
   assert(bytes.length === origins.length, 'Origins describe these bytes');
   const result: number[] = [];
   for (let index = 0; index < bytes.length; index++) {
@@ -283,11 +247,7 @@ export function lineEndingOrigins(
 
 /** Where `span` of the authored version sits in the current one, when every
  * one of its bytes survived, in order and contiguous; undefined otherwise. */
-export function survivingSpan(
-  authored: Origins,
-  span: ByteSpan,
-  current: Origins,
-): ByteSpan | undefined {
+export function survivingSpan(authored: Origins, span: ByteSpan, current: Origins): ByteSpan | undefined {
   assert(span.start < span.end, 'Only non-empty spans are followed');
   assert(span.end <= authored.length, 'The span lies inside the authored version');
   const first = authored[span.start];

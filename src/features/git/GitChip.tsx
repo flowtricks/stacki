@@ -1,34 +1,28 @@
+import type { GitIncomingState } from './useGitIncoming';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { IpcResults, WireGitInfo } from '../../../shared/ipc/ipcResults';
-import type { Result } from '../../../shared/core/result';
 import { assert } from '../../../shared/core/assert';
-import { cleanError } from '../../lib/cleanError';
+import { cleanErrorKeepingReference, type Failure } from '../../lib/cleanError';
+import { translateErrorText, translateFailure, translateReference } from '../../lib/i18n/translateErrorText';
+import { withReferencedMessage } from '../../../shared/core/i18n/referencedMessage';
 import { deleteBranchAction, mergeBranchAction, tidyUp } from './gitActions';
-import {
-  checkoutGitBranch,
-  commitGitChanges,
-  initializeGit,
-  pushGitBranch,
-  readGitStatus,
-  resolveGitMerge,
-} from './gitChipBridge';
+import { checkoutGitBranch, commitGitChanges, initializeGit, pullGitBranch, readGitStatus, resolveGitMerge } from './gitChipBridge';
 import { BranchIcon } from '../../ui/Icons';
+import { SkeletonRows } from '../../ui/Skeleton';
 import type { Conflict, ConflictChoices } from './gitConflictModel';
-import GitChipView, { openGitRemote } from './GitChipView';
+import GitChipView from './GitChipView';
+import { buildCommitSubject } from './commitType';
+import { commitTypeConvention, useCommitType, type CommitTypeControl } from './CommitTypePicker';
+import type { CommitConvention } from './commitType';
 import MergeConflictModal from './MergeConflictModal';
-import PublishModal from './PublishModal';
-import type { PublishRequest } from './PublishModal';
-import { publishGitProject } from './gitPublishWorkflow';
 import SwitchBranchModal from './SwitchBranchModal';
 
 type ToastKind = 'error' | 'success' | 'info';
 type ShowToast = (message: string, kind: ToastKind) => void;
 type ActionWork = () => Promise<void>;
-type RunAction = (
-  work: ActionWork,
-  successMessage: string | undefined,
-  label?: string,
-) => Promise<boolean>;
+type RunAction = (work: ActionWork, successMessage: string | undefined, label?: string) => Promise<boolean>;
 
 interface GitProject {
   readonly path: string;
@@ -42,15 +36,17 @@ interface GitChipProps {
   readonly project: GitProject;
   readonly showToast: ShowToast;
   readonly flushSave: () => Promise<unknown>;
+  readonly incoming?: GitIncomingState;
   readonly onWorktreeChanged?: (() => Promise<unknown>) | undefined;
+  readonly withBranchChange?: <Value>(work: () => Promise<Value>) => Promise<Value>;
 }
 
 interface RepositoryProps extends GitChipProps {
+  readonly translate: Translator;
   readonly info: WireGitInfo;
   readonly runAction: RunAction;
   readonly busy: string | undefined;
   readonly error: string | undefined;
-  readonly setBusy: React.Dispatch<React.SetStateAction<string | undefined>>;
   readonly setError: React.Dispatch<React.SetStateAction<string | undefined>>;
 }
 
@@ -60,10 +56,11 @@ interface SwitchTarget {
   readonly files: readonly string[];
 }
 
-async function gitValue<Value>(pending: Promise<Result<Value, string>>): Promise<Value> {
+async function gitValue<Value>(pending: Promise<{ readonly ok: true; readonly value: Value } | Failure>): Promise<Value> {
   const result = await pending;
   if (!result.ok) {
-    throw new Error(result.error);
+    // The reference rides in the message so `runAction` can show our own sentences in the person's language.
+    throw new Error(withReferencedMessage(result.error, result.errorRef));
   }
   return result.value;
 }
@@ -74,18 +71,20 @@ function useActionRunner({
   onWorktreeChanged,
   showToast,
   externalBusy,
+  translate,
 }: {
   readonly flushSave: () => Promise<unknown>;
   readonly refresh: () => Promise<unknown>;
   readonly onWorktreeChanged: (() => Promise<unknown>) | undefined;
   readonly showToast: ShowToast;
   readonly externalBusy: string | undefined;
+  readonly translate: Translator;
 }) {
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const pending = useRef(false);
   const runAction = useCallback<RunAction>(
-    async (work, successMessage, label = 'Working…') => {
+    async (work, successMessage, label = translate('git.busy.working')) => {
       if (pending.current || externalBusy) {
         return false;
       }
@@ -103,7 +102,7 @@ function useActionRunner({
         }
         return true;
       } catch (caught: unknown) {
-        const message = cleanError(caught);
+        const message = translateErrorText(cleanErrorKeepingReference(caught), translate);
         setError(message);
         showToast(message, 'error');
         return false;
@@ -112,12 +111,13 @@ function useActionRunner({
         setBusy(undefined);
       }
     },
-    [externalBusy, flushSave, onWorktreeChanged, refresh, showToast],
+    [externalBusy, flushSave, onWorktreeChanged, refresh, showToast, translate],
   );
-  return { busy, error, setBusy, setError, runAction } as const;
+  return { busy, error, setError, runAction } as const;
 }
 
 export default function GitChip(props: GitChipProps) {
+  const translate = useTranslate();
   const { info, refresh } = props;
   const action = useActionRunner({
     flushSave: props.flushSave,
@@ -125,32 +125,23 @@ export default function GitChip(props: GitChipProps) {
     onWorktreeChanged: props.onWorktreeChanged,
     showToast: props.showToast,
     externalBusy: props.busy,
+    translate,
   });
   if (!info) {
-    return (
-      <p className="history-note" role="status">
-        Reading repository…
-      </p>
-    );
+    return <SkeletonRows count={1} />;
   }
   if (!info.isRepo) {
-    return (
-      <InitializeGitChip
-        projectPath={props.project.path}
-        busy={action.busy ?? props.busy}
-        runAction={action.runAction}
-      />
-    );
+    return <InitializeGitChip projectPath={props.project.path} busy={action.busy ?? props.busy} runAction={action.runAction} translate={translate} />;
   }
   return (
     <RepositoryGitChip
       {...props}
+      translate={translate}
       info={info}
       refresh={refresh}
       runAction={action.runAction}
       busy={action.busy ?? props.busy}
       error={action.error}
-      setBusy={action.setBusy}
       setError={action.setError}
     />
   );
@@ -160,24 +151,26 @@ function InitializeGitChip({
   projectPath,
   busy,
   runAction,
+  translate,
 }: {
   readonly projectPath: string;
   readonly busy: string | undefined;
   readonly runAction: RunAction;
+  readonly translate: Translator;
 }) {
   const initialize = (): void => {
     void runAction(
       async () => {
         await gitValue(initializeGit(projectPath));
       },
-      'Initialized git repository',
-      'Initializing…',
+      translate('git.chip.initialized'),
+      translate('git.busy.initializing'),
     );
   };
   return (
     <button className="primary git-initialize" disabled={busy !== undefined} onClick={initialize}>
       {busy ? <span className="mini-spinner" /> : <BranchIcon size={12} />}
-      {busy ?? 'Initialize Git'}
+      {busy ?? translate('git.chip.initialize')}
     </button>
   );
 }
@@ -185,8 +178,10 @@ function InitializeGitChip({
 function RepositoryGitChip(props: RepositoryProps) {
   const state = useRepositoryState();
   useChangedFiles(props, state);
-  const actions = useRepositoryActions(props, state);
-  const commit = useCommitAction(props, state);
+  const commitType = useCommitType(props.project);
+  const actions = useRepositoryActions(props, state, commitType);
+  const commit = useCommitAction(props, state, commitType);
+  const subject = commitType.state.kind === 'ready' ? buildCommitSubject(state.commitMessage, commitType.state.convention, COMMIT_MESSAGE_FALLBACK) : undefined;
   return (
     <>
       <GitChipView
@@ -194,6 +189,8 @@ function RepositoryGitChip(props: RepositoryProps) {
         busy={props.busy}
         error={props.error}
         commitMessage={state.commitMessage}
+        commitType={commitType}
+        commitSubject={subject}
         newBranch={state.newBranch}
         picking={state.picking}
         picked={state.picked}
@@ -209,31 +206,43 @@ function RepositoryGitChip(props: RepositoryProps) {
         onRefreshFiles={() => state.setSelectionRevision((value) => value + 1)}
         onPick={state.setPicked}
         onCommit={commit}
-        onOpenRemote={openGitRemote}
-        onPush={actions.push}
-        onPublish={() => {
-          state.setShowPublish(true);
-        }}
+        onPull={() => pullFromGitHub(props, state)}
+        incoming={props.incoming ?? { kind: 'checking' }}
       />
       <GitModals
         {...props}
         switchTo={state.switchTo}
         conflict={state.conflict}
-        showPublish={state.showPublish}
         setSwitchTo={state.setSwitchTo}
         setConflict={state.setConflict}
-        setShowPublish={state.setShowPublish}
         parkThenSwitch={actions.parkThenSwitch}
         commitThenSwitch={actions.commitThenSwitch}
+        switchConvention={commitTypeConvention(commitType)}
       />
     </>
+  );
+}
+
+function pullFromGitHub(props: RepositoryProps, state: ActionState): void {
+  void props.runAction(
+    async () => {
+      const result = await gitValue(pullGitBranch(props.project.path, props.info.branch));
+      if ('conflicted' in result) {
+        state.setConflict({ ...result, deleteAfter: false });
+      } else if ('dirty' in result) {
+        props.showToast(props.translate('git.pull.dirty'), 'error');
+      } else {
+        props.showToast(props.translate(result.changed ? 'git.pull.done' : 'git.pull.upToDate'), 'success');
+      }
+    },
+    undefined,
+    props.translate('git.busy.pulling'),
   );
 }
 
 function useRepositoryState() {
   const [commitMessage, setCommitMessage] = useState('');
   const [newBranch, setNewBranch] = useState('');
-  const [showPublish, setShowPublish] = useState(false);
   const [switchTo, setSwitchTo] = useState<SwitchTarget | undefined>(undefined);
   const [conflict, setConflict] = useState<PendingConflict | undefined>(undefined);
   // The files picked for a partial commit; undefined until the picker loads them.
@@ -244,7 +253,6 @@ function useRepositoryState() {
   return {
     commitMessage,
     newBranch,
-    showPublish,
     switchTo,
     conflict,
     changed,
@@ -254,7 +262,6 @@ function useRepositoryState() {
     setSelectionRevision,
     setCommitMessage,
     setNewBranch,
-    setShowPublish,
     setSwitchTo,
     setConflict,
     setChanged,
@@ -272,7 +279,7 @@ interface ChangedState {
 
 function useChangedFiles(props: RepositoryProps, state: ChangedState): void {
   const { picking, selectionRevision, setChanged, setPicked } = state;
-  const { info, project, setError } = props;
+  const { info, project, setError, translate } = props;
   useEffect(() => {
     if (!picking) {
       return;
@@ -284,7 +291,7 @@ function useChangedFiles(props: RepositoryProps, state: ChangedState): void {
         return;
       }
       if (!result.ok) {
-        setError(result.error);
+        setError(translateFailure(result, translate));
         setChanged([]);
         setPicked([]);
         return;
@@ -297,7 +304,7 @@ function useChangedFiles(props: RepositoryProps, state: ChangedState): void {
     return () => {
       active = false;
     };
-  }, [info, setError, selectionRevision, project.path, picking, setChanged, setPicked]);
+  }, [info, setError, selectionRevision, project.path, picking, setChanged, setPicked, translate]);
 }
 
 interface ActionState {
@@ -306,12 +313,12 @@ interface ActionState {
   readonly setNewBranch: React.Dispatch<React.SetStateAction<string>>;
 }
 
-function useRepositoryActions(props: RepositoryProps, state: ActionState) {
+function useRepositoryActions(props: RepositoryProps, state: ActionState, commitType: CommitTypeControl) {
   const requestSwitch = (branch: string): void => {
     if (branch === props.info.branch) {
       return;
     }
-    void props.runAction(() => switchBranch(props, state, branch), undefined, 'Switching…');
+    void props.runAction(() => switchBranch(props, state, branch), undefined, props.translate('git.busy.switching'));
   };
   const mergeBranch = (branch: string): void => {
     void mergeBranchAction({
@@ -321,6 +328,7 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
       trunk: props.info.trunk,
       run: (work, label) => void props.runAction(work, undefined, label),
       showToast: props.showToast,
+      translate: props.translate,
       onConflict: (next) => {
         state.setConflict(next);
       },
@@ -333,6 +341,7 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
       parked: props.info.parked.includes(branch),
       run: (work, label) => void props.runAction(work, undefined, label),
       showToast: props.showToast,
+      translate: props.translate,
     });
   };
   return {
@@ -340,54 +349,43 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
     mergeBranch,
     deleteBranch,
     createBranch: (branch: string) => createNamedBranch(props, state, branch),
-    push: () => pushBranch(props),
     parkThenSwitch: (branch: string) => parkAndSwitch(props, branch),
-    commitThenSwitch: (branch: string, message: string) => commitAndSwitch(props, branch, message),
+    commitThenSwitch: (branch: string, message: string) =>
+      commitAndSwitch(props, branch, buildCommitSubject(message, commitTypeConvention(commitType), message)),
   } as const;
 }
 
-async function switchBranch(
-  props: RepositoryProps,
-  state: ActionState,
-  branch: string,
-): Promise<void> {
-  const result = await gitValue(checkoutGitBranch(props.project.path, branch, { kind: 'switch' }));
+async function switchBranch(props: RepositoryProps, state: ActionState, branch: string): Promise<void> {
+  const result = await checkoutBranch(props, branch, { kind: 'switch' });
   if (!result.ok) {
     state.setSwitchTo({ branch, files: result.files });
     return;
   }
   if (result.error) {
-    props.showToast(result.error, 'error');
+    props.showToast(translateReference(result.error, result.errorRef, props.translate), 'error');
   } else if (result.restored) {
-    props.showToast(`Picked your changes back up on ${branch}`, 'success');
-  } else if (props.info.dirty) {
-    props.showToast(`On ${branch} — your changes came with you`, 'success');
+    props.showToast(props.translate('git.chip.pickedUp', { branch }), 'success');
+  } else if (result.parked) {
+    props.showToast(props.translate('git.chip.waiting', { branch, from: result.from }), 'success');
   } else {
-    props.showToast(`Switched to ${branch}`, 'success');
+    props.showToast(props.translate('git.chip.switched', { branch }), 'success');
   }
+}
+
+function checkoutBranch(props: RepositoryProps, branch: string, mode: Parameters<typeof checkoutGitBranch>[2]) {
+  const work = () => gitValue(checkoutGitBranch(props.project.path, branch, mode));
+  return props.withBranchChange ? props.withBranchChange(work) : work();
 }
 
 function createNamedBranch(props: RepositoryProps, state: ActionState, branch: string): void {
   state.setNewBranch('');
   void props.runAction(
     async () => {
-      const result = await gitValue(
-        checkoutGitBranch(props.project.path, branch, { kind: 'create' }),
-      );
+      const result = await checkoutBranch(props, branch, { kind: 'create' });
       assert(result.ok, 'Creating a branch cannot return a blocked checkout');
     },
-    `Created branch ${branch}`,
-    'Creating branch…',
-  );
-}
-
-function pushBranch(props: RepositoryProps): void {
-  void props.runAction(
-    async () => {
-      await gitValue(pushGitBranch(props.project.path, props.info.branch));
-    },
-    `Pushed ${props.info.branch} to origin`,
-    'Pushing…',
+    props.translate('git.chip.created', { branch }),
+    props.translate('git.busy.creating'),
   );
 }
 
@@ -395,37 +393,29 @@ async function parkAndSwitch(props: RepositoryProps, branch: string): Promise<bo
   const from = props.info.branch;
   return props.runAction(
     async () => {
-      const result = await gitValue(
-        checkoutGitBranch(props.project.path, branch, { kind: 'park' }),
-      );
+      const result = await checkoutBranch(props, branch, { kind: 'park' });
       assert(result.ok, 'Parking before checkout cannot return a blocked checkout');
       if (result.error) {
-        props.showToast(result.error, 'error');
+        props.showToast(translateReference(result.error, result.errorRef, props.translate), 'error');
       } else if (result.restored) {
-        props.showToast(`Picked your changes back up on ${branch}`, 'success');
+        props.showToast(props.translate('git.chip.pickedUp', { branch }), 'success');
       }
     },
-    `On ${branch} — your changes are waiting on ${from}`,
-    'Switching…',
+    props.translate('git.chip.waiting', { branch, from }),
+    props.translate('git.busy.switching'),
   );
 }
 
-function commitAndSwitch(
-  props: RepositoryProps,
-  branch: string,
-  message: string,
-): Promise<boolean> {
+function commitAndSwitch(props: RepositoryProps, branch: string, message: string): Promise<boolean> {
   const from = props.info.branch;
   return props.runAction(
     async () => {
       await gitValue(commitGitChanges(props.project.path, message));
-      const result = await gitValue(
-        checkoutGitBranch(props.project.path, branch, { kind: 'switch' }),
-      );
+      const result = await checkoutBranch(props, branch, { kind: 'switch' });
       assert(result.ok, 'Committed work must permit the requested checkout');
     },
-    `Committed to ${from}, now on ${branch}`,
-    'Committing…',
+    props.translate('git.chip.committedSwitched', { from, branch }),
+    props.translate('git.busy.committing'),
   );
 }
 
@@ -439,9 +429,17 @@ interface CommitState {
   readonly setPicking: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-function useCommitAction(props: RepositoryProps, state: CommitState): () => void {
+// What a commit says when the message is left empty. A picked type still
+// applies to it, so `feat` with no message commits `feat: Update from Stacki`.
+const COMMIT_MESSAGE_FALLBACK = 'Update from Stacki';
+
+function useCommitAction(props: RepositoryProps, state: CommitState, commitType: CommitTypeControl): () => void {
   return () => {
-    const message = state.commitMessage.trim() || 'Update from Stacki';
+    if (commitType.state.kind === 'invalid') {
+      // The scope field already says what is wrong; Commit is disabled until it is fixed.
+      return;
+    }
+    const message = buildCommitSubject(state.commitMessage, commitType.state.convention, COMMIT_MESSAGE_FALLBACK);
     // Explicit selections stay explicit even when they include every visible file;
     // files arriving after selection must not be silently added to the commit.
     const paths = state.picking ? state.picked : undefined;
@@ -453,12 +451,13 @@ function useCommitAction(props: RepositoryProps, state: CommitState): () => void
         async () => {
           await gitValue(commitGitChanges(props.project.path, message, paths));
         },
-        paths ? `Saved ${paths.length} file${paths.length === 1 ? '' : 's'}` : 'Changes committed',
-        'Committing…',
+        paths ? props.translate('git.chip.savedFiles', { count: paths.length }) : props.translate('git.chip.committed'),
+        props.translate('git.busy.committing'),
       )
       .then((done) => {
         if (done) {
           state.setCommitMessage('');
+          commitType.resetForNextCommit();
           state.setPicked(undefined);
           state.setPicking(false);
         }
@@ -469,12 +468,11 @@ function useCommitAction(props: RepositoryProps, state: CommitState): () => void
 interface ModalProps extends RepositoryProps {
   readonly switchTo: SwitchTarget | undefined;
   readonly conflict: PendingConflict | undefined;
-  readonly showPublish: boolean;
   readonly setSwitchTo: React.Dispatch<React.SetStateAction<SwitchTarget | undefined>>;
   readonly setConflict: React.Dispatch<React.SetStateAction<PendingConflict | undefined>>;
-  readonly setShowPublish: React.Dispatch<React.SetStateAction<boolean>>;
   readonly parkThenSwitch: (branch: string) => Promise<boolean>;
   readonly commitThenSwitch: (branch: string, message: string) => Promise<boolean>;
+  readonly switchConvention: CommitConvention;
 }
 
 function GitModals(props: ModalProps) {
@@ -482,18 +480,13 @@ function GitModals(props: ModalProps) {
     <>
       {props.conflict && <ConflictModal {...props} conflict={props.conflict} />}
       {props.switchTo && <CheckoutModal {...props} switchTo={props.switchTo} />}
-      {props.showPublish && <GitPublishModal {...props} />}
     </>
   );
 }
 
 function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict }) {
   const resolve = async (choices: ConflictChoices): Promise<void> => {
-    const done = await props.runAction(
-      () => resolveConflict(props, choices),
-      undefined,
-      'Merging…',
-    );
+    const done = await props.runAction(() => resolveConflict(props, choices), undefined, props.translate('git.busy.merging'));
     if (done) {
       props.setConflict(undefined);
     }
@@ -501,6 +494,8 @@ function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict 
   return (
     <MergeConflictModal
       conflict={props.conflict}
+      branches={props.info.branches}
+      trunk={props.info.trunk ?? 'main'}
       busy={props.busy}
       onCancel={() => props.setConflict(undefined)}
       onResolve={(choices) => {
@@ -511,13 +506,8 @@ function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict 
   );
 }
 
-async function resolveConflict(
-  props: ModalProps & { readonly conflict: PendingConflict },
-  choices: ConflictChoices,
-): Promise<void> {
-  const result = await gitValue(
-    resolveGitMerge(props.project.path, props.conflict.branch, choices),
-  );
+async function resolveConflict(props: ModalProps & { readonly conflict: PendingConflict }, choices: ConflictChoices): Promise<void> {
+  const result = await gitValue(resolveGitMerge(props.project.path, props.conflict.branch, choices));
   assert(result.ok, 'Merge resolution must complete');
   assert(result.into !== undefined, 'Merge resolution requires a target branch');
   if (props.conflict.deleteAfter) {
@@ -527,9 +517,10 @@ async function resolveConflict(
       into: result.into,
       changed: true,
       showToast: props.showToast,
+      translate: props.translate,
     });
   } else {
-    props.showToast(`Merged ${props.conflict.branch} into ${result.into}`, 'success');
+    props.showToast(props.translate('git.action.merge.done', { branch: props.conflict.branch, into: result.into }), 'success');
   }
 }
 
@@ -540,6 +531,7 @@ function CheckoutModal(props: ModalProps & { readonly switchTo: SwitchTarget }) 
       to={props.switchTo.branch}
       files={props.switchTo.files}
       busy={props.busy}
+      convention={props.switchConvention}
       onCancel={() => props.setSwitchTo(undefined)}
       onLeaveHere={() => {
         // runAction reports its own failures and resolves false; it never rejects.
@@ -556,39 +548,6 @@ function CheckoutModal(props: ModalProps & { readonly switchTo: SwitchTarget }) 
             props.setSwitchTo(undefined);
           }
         });
-      }}
-    />
-  );
-}
-
-function GitPublishModal(props: ModalProps) {
-  const publish = async (request: PublishRequest): Promise<Result<string | undefined, string>> => {
-    props.setBusy('Publishing…');
-    try {
-      try {
-        await props.flushSave();
-      } catch (caught: unknown) {
-        return { ok: false, error: cleanError(caught) };
-      }
-      const result = await publishGitProject(props.project.path, request);
-      if (result.ok) {
-        await props.refresh();
-      }
-      return result;
-    } finally {
-      props.setBusy(undefined);
-    }
-  };
-  return (
-    <PublishModal
-      projectPath={props.project.path}
-      defaultName={props.project.name}
-      branch={props.info.branch}
-      onClose={() => props.setShowPublish(false)}
-      onPublish={publish}
-      openExternal={(url) => {
-        // Opening a link is best effort, as everywhere else in the app.
-        void window.avb.openExternal(url);
       }}
     />
   );

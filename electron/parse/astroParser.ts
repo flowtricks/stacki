@@ -20,16 +20,16 @@ import type { FrontmatterModel, ImportMember } from '../../shared/page/frontmatt
 import { assertTreeInvariants } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import type { ParserNode, ParsedPage, SourceLocation } from './astroParserTypes';
+import type { ParserNode, ParserPageModel, ParsedPage, SourceLocation } from './astroParserTypes';
 import { assignPathIds, parseAttrs, serializeAttrs, required } from './astroAttrs';
+import { readFence } from './astroFence';
 import { parseState, resetParseBail } from './astroParseState';
-import { numberRules } from './astroPropTypes';
 import { serializeNode, serializeNodes } from './astroSerialize';
 import { parseTemplate } from './astroTemplate';
-import { serializeNodeMarked } from './astroSerializeMarked';
+import { serializeNodesMarked, type MarkedSource } from './astroSerializeMarked';
 import { resolveChunks, chunkImportMarks, markChunkHtml } from './astroChunks';
 import { parsePropSchema } from './astroPropSchema';
-import { parseSlots, rootTag, defaultSlotInline, parseExtendsTag } from './astroComponentApi';
+import { parseSlots, rootTag, rootComponent, defaultSlotInline, parseExtendsTag } from './astroComponentApi';
 import type { PreviewStamp } from '../../shared/page/previewToken';
 
 export {
@@ -46,7 +46,7 @@ export {
   parseSlots,
   defaultSlotInline,
   rootTag,
-  numberRules,
+  rootComponent,
   parseAttrs,
   serializeAttrs,
 };
@@ -66,21 +66,26 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   if (typeof source !== 'string' || source.length > LIMITS.ipcFieldCharsMax) {
     return {
       editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
       reason: 'Page source is invalid or exceeds the size limit.',
       bail: undefined,
     };
   }
-  // Try the empty block first.
-  // Otherwise `---\n---\n--- prose` consumes the real close as code and
-  // mistakes the start of the prose for a second closing fence.
   // A leading byte-order mark is an encoding signal, not content (plan §3.2):
-  // the fences are matched past it, and offsets still count it so they index
-  // the file as read. No write touches it: an edit is splices of other bytes.
-  const bom = source.startsWith('\uFEFF') ? 1 : 0;
-  const fm = source.slice(bom).match(/^---\r?\n(?:---|([\s\S]*?\r?\n)---)\r?\n?/);
-  const frontmatter = fm ? fm[1] || '' : '';
-  const hadFrontmatter = !!fm;
-  const bodyStart = bom + (fm ? fm[0].length : 0);
+  // the fence is read past it, and offsets still count it so they index the
+  // file as read. No write touches it: an edit is splices of other bytes.
+  const fence = readFence(source);
+  if (fence.kind === 'unreadable') {
+    return {
+      editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
+      reason: `Page contains markup the visual editor cannot represent. Found ${fence.what}.`,
+      bail: { what: fence.what, near: fence.near },
+    };
+  }
+  const frontmatter = fence.kind === 'fence' ? fence.code : '';
+  const hadFrontmatter = fence.kind === 'fence';
+  const bodyStart = fence.kind === 'fence' ? fence.length : source.startsWith('\uFEFF') ? 1 : 0;
   const body = source.slice(bodyStart);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
 
@@ -88,11 +93,7 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   const { imports } = frontmatterModel;
 
   resetParseBail();
-  const {
-    nodes: topNodes,
-    clean,
-    trailingBlank,
-  } = parseTemplate(body, options.locs ? bodyStart : undefined);
+  const { nodes: topNodes, clean, trailingBlank } = parseTemplate(body, options.locs ? bodyStart : undefined);
   // A newline at the very start of the body is a blank line, because the
   // frontmatter's closing --- already ended its own line. Everywhere else a
   // leading newline is just the break after the tag before it, which is why
@@ -119,18 +120,15 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
     }
     return {
       editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
       reason: `Page contains markup the visual editor cannot represent.${where}`,
-      bail: parseState.lastBail
-        ? { what: parseState.lastBail.what, near: parseState.lastBail.near }
-        : undefined,
+      bail: parseState.lastBail ? { what: parseState.lastBail.what, near: parseState.lastBail.near } : undefined,
     };
   }
 
   // Type-only specifiers name types, not values, so nothing on the page can be
   // one of them — they must not count as "this component is imported".
-  const importsByName = Object.fromEntries(
-    imports.filter((i) => !i.typeOnly).map((i) => [i.name, i]),
-  );
+  const importsByName = Object.fromEntries(imports.filter((i) => !i.typeOnly).map((i) => [i.name, i]));
 
   // Layout detection: a single top-level component wrapping the whole page,
   // or — when siblings live outside it — exactly one top-level component
@@ -151,35 +149,51 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   // boundary): a tree that violates this never leaves the parser.
   assertTreeInvariants(topNodes);
 
-  return {
-    editable: true,
-    model: {
-      ...frontmatterModel,
-      hadFrontmatter,
-      trailingBlank,
-      eol,
-      nodes: topNodes,
-      // Only when offsets were asked for: it describes the file on disk, and
-      // the live model is edited out from under it.
-      ...(options.locs ? { bodyStart } : {}),
-    },
+  const model: ParserPageModel = {
+    ...frontmatterModel,
+    hadFrontmatter,
+    trailingBlank,
+    eol,
+    nodes: topNodes,
+    // Only when offsets were asked for: it describes the file on disk, and
+    // the live model is edited out from under it.
+    ...(options.locs ? { bodyStart } : {}),
   };
+  // A model the writers would refuse (a value or a list past the serializer's
+  // bounds) is a page the editor cannot save or preview, so it is reported
+  // here, as code, rather than throwing at the first write.
+  const refusal = writerRefusal(model);
+  if (refusal !== undefined) {
+    return {
+      editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
+      reason: `Page contains markup the visual editor cannot represent. Found ${refusal}.`,
+      bail: { what: refusal, near: '' },
+    };
+  }
+  return { editable: true, model };
+}
+
+// The bound the page writers enforce, named as the page's own problem.
+function writerRefusal(model: ParserPageModel): string | undefined {
+  try {
+    parseSerializePage(model);
+    return undefined;
+  } catch (failure: unknown) {
+    return `a part of the page past the editor's limits (${failure instanceof Error ? failure.message : String(failure)})`;
+  }
 }
 
 // A shared source-aware writer keeps the preview, file and code editor in
 // agreement. The surrounding page writer supplies the last line break.
-function serializeFrontmatter(
-  model: FrontmatterModel,
-  lines: string[],
-  specFor?: (imp: ImportMember) => string,
-): void {
+function serializeFrontmatter(model: FrontmatterModel, lines: string[], specFor?: (imp: ImportMember) => string): void {
   const text = writeFrontmatter(model, specFor);
   if (text) {
     lines.push(text.replace(/\r?\n$/, ''));
   }
 }
 
-function serializePage(input: unknown): string {
+function serializePage(input: unknown, unit?: string): string {
   const model = parseSerializePage(input);
   // A file that never had a frontmatter block does not acquire one. Writing
   // `---` twice at the top of a component that had none is a change to every
@@ -192,7 +206,7 @@ function serializePage(input: unknown): string {
   }
 
   for (const node of model.nodes) {
-    serializeNode(node, '', lines, 0);
+    serializeNode(node, '', lines, 0, unit);
   }
   // Blank lines the file ended on.
   for (let i = 0; i < (model.trailingBlank || 0); i++) {
@@ -222,11 +236,7 @@ function serializePage(input: unknown): string {
 // with the page’s. A page marks as "0.1"; src/components/Card.astro marks as
 // "src/components/Card.astro|0.1", and the app asks for that namespace while
 // that component is the file being edited.
-function serializePageMarked(
-  input: unknown,
-  prefix = '',
-  stamp: PreviewStamp | undefined = undefined,
-): string {
+function serializePageMarked(input: unknown, prefix = '', stamp: PreviewStamp | undefined = undefined, source: MarkedSource = undefined): string {
   const model = parseSerializePage(input);
   const marks = chunkImportMarks(model);
   const lines = ['---'];
@@ -241,15 +251,10 @@ function serializePageMarked(
   // The file's own roots: what a caller sees of this file is whatever these
   // put on the page, so they are where a caller's name for this instance
   // belongs (see `atRoot`).
-  model.nodes.forEach((node, i) =>
-    serializeNodeMarked(node, '', lines, {
-      path: `${prefix}${i}`,
-      inSlot: false,
-      atRoot: true,
-      depth: 0,
-      stamp,
-    }),
-  );
+  const roots = serializeNodesMarked(model.nodes, { pathOf: (i) => `${prefix}${i}`, atRoot: true, stamp, source });
+  if (roots !== '') {
+    lines.push(roots);
+  }
   return lines.join('\n') + '\n';
 }
 
@@ -294,9 +299,7 @@ function locateSelection(absPath: string, indexPath: string): SourceLocation | u
     return bare;
   }
   if (indexPath === 'frontmatter') {
-    return parsed.model.bodyStart
-      ? { file: absPath, startLine: 1, endLine: lineOf(source, parsed.model.bodyStart - 1) }
-      : bare;
+    return parsed.model.bodyStart ? { file: absPath, startLine: 1, endLine: lineOf(source, parsed.model.bodyStart - 1) } : bare;
   }
   resolveChunks(parsed.model, absPath, { locs: true });
 
@@ -359,11 +362,7 @@ function locateSelection(absPath: string, indexPath: string): SourceLocation | u
 }
 
 // The template parse bounded the tree's depth before this runs.
-function parsePageMarkDynamic(
-  list: readonly ParserNode[],
-  importsByName: Readonly<Record<string, ImportMember>>,
-  depth: number,
-): void {
+function parsePageMarkDynamic(list: readonly ParserNode[], importsByName: Readonly<Record<string, ImportMember>>, depth: number): void {
   assert(depth <= LIMITS.treeDepthMax, 'parsePageMarkDynamic: depth limit');
   for (const node of list) {
     if (node.kind === 'component' && node.name !== 'Fragment') {
@@ -384,10 +383,7 @@ function parsePageMarkDynamic(
   }
 }
 
-function parsePageLayout(
-  topNodes: readonly ParserNode[],
-  importsByName: Readonly<Record<string, ImportMember>>,
-): void {
+function parsePageLayout(topNodes: readonly ParserNode[], importsByName: Readonly<Record<string, ImportMember>>): void {
   const significant = topNodes.filter((node) => node.kind !== 'comment');
   let wrapper: ParserNode | undefined;
   const significantFirst = significant[0];
@@ -402,10 +398,7 @@ function parsePageLayout(
     wrapper = significantFirst;
   } else if (significant.length > 1) {
     const layoutish = significant.filter(
-      (node) =>
-        node.kind === 'component' &&
-        node.children !== undefined &&
-        /layout/i.test(importsByName[node.name]?.path || ''),
+      (node) => node.kind === 'component' && node.children !== undefined && /layout/i.test(importsByName[node.name]?.path || ''),
     );
     if (layoutish.length === 1) {
       wrapper = layoutish[0];

@@ -1,0 +1,7 @@
+---
+import StringUnion from './StringUnion.astro';
+import type { ComponentProps } from 'astro/types';
+type Props = ComponentProps<typeof StringUnion> & { wrapperClass?: string };
+const { wrapperClass = 'pass-through', ...buttonProps } = Astro.props;
+---
+<div class={wrapperClass}><StringUnion {...buttonProps} /></div>

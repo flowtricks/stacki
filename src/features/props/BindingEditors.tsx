@@ -1,4 +1,6 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { dataPickerPosition } from './dataPickerPosition';
 import Popup from '../../ui/Popup';
 // The fields and editors a bound prop is edited with: the source button, an
 // expression or condition, the bind handle and the data picker, and the code
@@ -14,18 +16,21 @@ import type { PickerNode } from './DataPicker';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
-import {
-  dataTree,
-  findDeclaration,
-  findImportOf,
-  scopeChips,
-  scopeCompletions,
-} from '../../editor/dataSuggest';
-import { resolvePick } from '../../editor/bindings';
+import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
+import { resolvePick, type PickNeed } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
+import { sourceFileLabel, type SourceFileLabel } from './sourceFileLabel';
+import { statementRename, type StatementRename } from '../../../shared/engine/variableRename';
+import { FIELD_UNFOCUSED, fieldFocusOf, fieldOfHandle, type FieldFocus } from './fieldFocus';
 import DataPicker from './DataPicker';
+import { BindOverrideWaiting, pickerPaths, useBindOverride } from './bindOverride';
+import NewPropForm from './NewPropForm';
+// The "New … property" row is drawn here, so its styles load with it.
+import './loopSettings.css';
+import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
+import { CLASS_LIST_REFUSAL_KEYS, CLASS_LIST_SEED, type ClassListOffer } from './classListProp';
 import ExprInput from '../../ui/ExprInput';
-import { CodeIcon, CloseIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
+import { BranchIcon, CodeIcon, CloseIcon, ElementComponentIcon, FileIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
   type FieldPosition,
   type SourceContext,
@@ -60,12 +65,13 @@ export function symbolTarget(name: string, dataContext: SourceContext | undefine
   return undefined;
 }
 
-export function SourceEditButton({
-  name,
-  dataContext,
-  anchorRef,
-  className = 'attr-asset-toggle',
-}: SourceEditButtonProps) {
+// The popup is a row's width, so a narrow panel keeps it inside the panel; it
+// measures about this tall with a few lines of code in it.
+const SOURCE_EDITOR_WIDTH_PX_MIN = 260;
+const SOURCE_EDITOR_HEIGHT_PX_MAX = 240;
+
+export function SourceEditButton({ name, dataContext, anchorRef, className = 'attr-asset-toggle' }: SourceEditButtonProps) {
+  const translate = useTranslate();
   const [position, setPosition] = useState<FieldPosition | undefined>(undefined);
   const target = symbolTarget(name, dataContext);
   const allowCode = useCodeAccess();
@@ -79,19 +85,16 @@ export function SourceEditButton({
       return;
     }
     const rect = anchorRef?.current?.getBoundingClientRect();
-    const width = Math.max(rect?.width ?? 240, 260);
-    setPosition({
-      top: Math.min((rect?.bottom ?? 200) + 6, Math.max(60, window.innerHeight - 240)),
-      left: Math.min(rect?.left ?? 0, window.innerWidth - width - 12),
-      width,
-    });
+    setPosition(
+      dataPickerPosition(rect ?? { left: 0, bottom: 200, width: 0 }, { heightPxMax: SOURCE_EDITOR_HEIGHT_PX_MAX, widthPxMin: SOURCE_EDITOR_WIDTH_PX_MIN }),
+    );
   };
 
   return (
     <>
       <button
         className={`${className} ${position ? 'on' : ''}`}
-        title={target === 'file' ? `Open where ${name} is defined` : `Edit ${name}`}
+        title={target === 'file' ? translate('props.binding.openDefinition', { name }) : translate('props.binding.edit', { name })}
         onClick={() => (position ? setPosition(undefined) : open())}
       >
         <PencilIcon size={12} />
@@ -102,6 +105,8 @@ export function SourceEditButton({
           name={name}
           code={dataContext?.frontmatter || ''}
           onChangeCode={dataContext?.onSetFrontmatter}
+          onRename={dataContext?.onRenameVariable}
+          filePath={dataContext?.filePath}
           onClose={() => setPosition(undefined)}
         />
       )}
@@ -124,38 +129,28 @@ export function ExprValueField({ value, placeholder, dataContext, onChange }: Ex
         // if the value itself were the word.
         placeholder={placeholder || ''}
         onChange={(draft) => onChange({ type: 'expr', value: draft })}
-        onCommit={(committed) =>
-          committed !== value && onChange({ type: 'expr', value: committed }, true)
-        }
+        onCommit={(committed) => committed !== value && onChange({ type: 'expr', value: committed }, true)}
       />
       <SourceEditButton name={name} dataContext={dataContext} anchorRef={wrapRef} />
     </div>
   );
 }
 
-export function ConditionField({
-  test,
-  scope,
-  chipsOf,
-  bindContext,
-  onSetText,
-}: ConditionFieldProps) {
+export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }: ConditionFieldProps) {
+  const translate = useTranslate();
   const [pick, setPick] = useState<ChipPick | undefined>(undefined); // {chip, pos}
   const apiRef = useRef<ExprInputAPI | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const open = (chip: TemplateHole | undefined) => {
+  const open = (chip: TemplateHole | undefined, focus: FieldFocus) => {
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) {
       return;
     }
     setPick({
       chip: chip || undefined,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
+      pos: dataPickerPosition(rect),
+      focus,
     });
   };
 
@@ -165,33 +160,39 @@ export function ConditionField({
         <ExprInput
           value={test}
           syncValue={test}
-          placeholder="e.g. logo.src"
+          placeholder={translate('props.binding.exampleCondition')}
           completions={scope}
           apiRef={apiRef}
           // The values a condition names, drawn as the same purple chips the rest
           // of the panel shows data in — and pressing one opens the list to swap
           // it, rather than retyping a name inside a boolean.
           chipsOf={chipsOf}
-          onChipClick={(chip) => open(chip)}
-          onCommit={(committed) =>
-            committed.trim() && committed !== test && onSetText(committed.trim())
-          }
+          onChipClick={(chip) => open(chip, FIELD_UNFOCUSED)}
+          onCommit={(committed) => committed.trim() && committed !== test && onSetText(committed.trim())}
         />
         {/* And the way a new one gets in: the same purple dot every bindable field
-            has, inserting at the caret. */}
-        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(undefined) : open(undefined))} />
+            has — at the caret while the test is being typed, as the whole test otherwise. */}
+        <BindHandle active={!!pick} onOpen={(_host, focus) => (pick ? setPick(undefined) : open(undefined, focus))} />
       </div>
       {pick ? (
         <FieldDataPicker
           pos={pick.pos}
           bindContext={bindContext}
           current={pick.chip?.path ?? undefined}
+          // i18n-ignore: the label seeds a prop name (visible), written as code.
+          seed={pick.chip === undefined ? { fit: 'boolean', label: 'Visible', value: '' } : undefined}
+          onBindNew={(path) => {
+            setPick(undefined);
+            onSetText(path);
+          }}
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
-            const next = chip
-              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
-              : apiRef.current?.insert(path);
+            if (chip === undefined && pick.focus.kind === 'unfocused') {
+              onSetText(path);
+              return;
+            }
+            const next = chip ? apiRef.current?.replaceRange(chip.from, chip.to, path) : apiRef.current?.insert(path);
             if (next !== undefined) {
               onSetText(next);
             }
@@ -203,30 +204,22 @@ export function ConditionField({
   );
 }
 
-export function ExpressionBindingField({
-  value,
-  placeholder,
-  bindContext,
-  onChange,
-}: ExpressionBindingFieldProps) {
+export function ExpressionBindingField({ value, placeholder, bindContext, onChange }: ExpressionBindingFieldProps) {
   const [pick, setPick] = useState<ChipPick | undefined>(undefined);
   const apiRef = useRef<ExprInputAPI | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
   const scope = scopeCompletions(bindContext || {});
   const scopeNames = new Set(scope.map((item) => item.label.split('.')[0] ?? ''));
   const chipsOf = (text: string) => scopeChips(text, scopeNames);
-  const open = (chip: TemplateHole | undefined): void => {
+  const open = (chip: TemplateHole | undefined, focus: FieldFocus): void => {
     const rectangle = wrapRef.current?.getBoundingClientRect();
     if (!rectangle) {
       return;
     }
     setPick({
       chip,
-      pos: {
-        left: rectangle.left,
-        top: Math.min(rectangle.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rectangle.width, 240),
-      },
+      pos: dataPickerPosition(rectangle),
+      focus,
     });
   };
   return (
@@ -241,10 +234,10 @@ export function ExpressionBindingField({
           completions={scope}
           apiRef={apiRef}
           chipsOf={chipsOf}
-          onChipClick={open}
+          onChipClick={(chip) => open(chip, FIELD_UNFOCUSED)}
           onChange={onChange}
         />
-        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(undefined) : open(undefined))} />
+        <BindHandle active={!!pick} onOpen={(_host, focus) => (pick ? setPick(undefined) : open(undefined, focus))} />
       </div>
       {pick ? (
         <FieldDataPicker
@@ -256,8 +249,11 @@ export function ExpressionBindingField({
             setPick(undefined);
             if (chip) {
               apiRef.current?.replaceRange(chip.from, chip.to, path);
-            } else {
+            } else if (pick.focus.kind === 'focused') {
               apiRef.current?.insert(path);
+            } else {
+              // The dot pressed outside the field connects the whole of it.
+              onChange(path);
             }
           }}
           onClose={() => setPick(undefined)}
@@ -268,6 +264,12 @@ export function ExpressionBindingField({
 }
 
 export function BindHandle({ active, onOpen }: BindHandleProps) {
+  const translate = useTranslate();
+  // Read on pointerdown, before the press moves focus anywhere: whether the
+  // caret was in this field decides whether a pick replaces the field or lands
+  // at the caret (fieldFocus.ts). A click with no pointerdown before it — the
+  // keyboard — finds the field as it is then.
+  const focusRef = useRef<FieldFocus | undefined>(undefined);
   if (!useCodeAccess()) {
     return undefined;
   }
@@ -275,9 +277,19 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
     <button
       type="button"
       className={`bind-handle${active ? ' on' : ''}`}
-      title="Insert data — a component prop, a CMS field"
-      aria-label="Insert data"
-      onClick={(event) => onOpen(event.currentTarget.closest('.props-field') ?? undefined)}
+      title={translate('props.binding.insertDataTitle')}
+      aria-label={translate('props.binding.insertData')}
+      onPointerDown={(event) => {
+        focusRef.current = fieldFocusOf(fieldOfHandle(event.currentTarget), event.currentTarget.ownerDocument.activeElement ?? undefined);
+      }}
+      // The field keeps focus and its caret while the dot is pressed, as a chip's
+      // own press does; the picker takes focus once it opens.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        const focus = focusRef.current ?? fieldFocusOf(fieldOfHandle(event.currentTarget), event.currentTarget.ownerDocument.activeElement ?? undefined);
+        focusRef.current = undefined;
+        onOpen(event.currentTarget.closest('.props-field') ?? undefined, focus);
+      }}
     >
       <span className="bind-dot" />
       <PlusIcon size={10} className="bind-plus" />
@@ -290,36 +302,144 @@ export function FieldDataPicker({
   bindContext,
   current,
   tree,
-  sourceInspection,
-  onEditSource,
+  seed,
   onPick,
+  onBindNew,
   onWrite,
+  onConditional,
+  rows,
+  classList,
   onClose,
 }: FieldDataPickerProps) {
-  const pick = (path: string, query: PickerNode['query'] | undefined) =>
-    onPick(resolvePick(path, query ?? undefined, bindContext ?? undefined));
-
+  // In a component, the field's own props come first and a new one can be
+  // made for it; on a page there is no component to give a prop to, and the
+  // picker is as it always was.
+  const host = bindContext?.newProp;
+  const offer = host !== undefined && seed !== undefined ? { host, seed } : undefined;
+  // An imported image picked for a field that takes a URL is read by its `.src`.
+  const pick = (path: string, need: PickNeed | undefined) => {
+    const image = offer?.host.imageProps?.get(path);
+    const bound = image === undefined ? path : boundPath(path, image, offer?.seed.reference);
+    onPick(resolvePick(bound, need, bindContext ?? undefined));
+  };
+  const [creating, setCreating] = useState(false);
+  // The class list row opens the same form, for a prop the element's classes are rewritten to read.
+  const classOffer = host !== undefined && classList !== undefined ? { host, classList } : undefined;
+  const [creatingClassList, setCreatingClassList] = useState(false);
+  const fullTree: readonly PickerNode[] = tree || dataTree(bindContext || {});
+  // A running app that answers `cms.bind` is asked first; its path is picked as a row click would be.
+  const override = useBindOverride({
+    ask: () => ({ purpose: 'field', current: current ?? undefined, paths: pickerPaths(fullTree) }),
+    onPicked: (path) => pick(path, undefined),
+    onCancel: onClose,
+  });
+  if (override.kind === 'waiting') {
+    return (
+      <Popup
+        mode="popover"
+        portal={false}
+        onClose={onClose}
+        className="dd-popup bind-menu"
+        style={{ left: position.left, top: position.top, width: position.width }}
+      >
+        <BindOverrideWaiting owner={override.owner} onStacki={override.useStacki} />
+      </Popup>
+    );
+  }
   return (
     <Popup
       mode="popover"
       portal={false}
       onClose={onClose}
-      className={`dd-popup bind-menu${sourceInspection ? ' loop-source-menu' : ''}`}
+      // The settings form has no inset of its own: the pop-up gives it one, as the loop Source pop-up does (.bind-menu.is-form).
+      className={(offer !== undefined && creating) || (classOffer !== undefined && creatingClassList) ? 'dd-popup bind-menu is-form' : 'dd-popup bind-menu'}
       style={{ left: position.left, top: position.top, width: position.width }}
     >
-      <DataPicker
-        tree={tree || dataTree(bindContext || {})}
-        sourceInspection={sourceInspection}
-        onEditSource={onEditSource}
-        current={current ?? undefined}
-        entries={bindContext?.entryNav ?? undefined}
-        {...definedFields({ onStepItem: bindContext?.onStepItem })}
-        onPick={pick}
-        onExpand={(node) => node.query && bindContext?.onNeedSample?.(node.query.collection)}
-        {...definedFields({ onWrite })}
-        footer={!!onWrite}
-      />
+      {classOffer !== undefined && creatingClassList ? (
+        <NewPropForm
+          host={classOffer.host}
+          seed={CLASS_LIST_SEED}
+          onCancel={() => setCreatingClassList(false)}
+          onCreated={(path) => classOffer.classList.onCreated(path)}
+        />
+      ) : offer !== undefined && creating ? (
+        <NewPropForm
+          host={offer.host}
+          seed={offer.seed}
+          onCancel={() => setCreating(false)}
+          onCreated={(path, declaration) => (onBindNew === undefined ? onPick(path) : onBindNew(path, declaration))}
+        />
+      ) : (
+        <DataPicker
+          tree={offer === undefined ? fullTree : fittingTree(fullTree, offer.seed.fit, offer.host.imageProps)}
+          current={current ?? undefined}
+          entries={bindContext?.entryNav ?? undefined}
+          {...definedFields({ onStepItem: bindContext?.onStepItem })}
+          onPick={pick}
+          onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
+          origin={bindContext?.origin}
+          {...definedFields({ onWrite })}
+          footer={!!onWrite}
+          lead={
+            offer === undefined && onConditional === undefined && classOffer === undefined ? undefined : (
+              <>
+                {offer !== undefined && <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
+                {classOffer !== undefined && <ClassListRow offer={classOffer.classList} onOpen={() => setCreatingClassList(true)} />}
+                {onConditional !== undefined && <ConditionalRow onOpen={onConditional} />}
+              </>
+            )
+          }
+          rows={rows ?? 'data'}
+          propSettings={host?.propSettings}
+        />
+      )}
     </Popup>
+  );
+}
+
+// "New Text property": the top row of a component's picker. An attributes
+// list can take one rest binding, so a component that has one says so here
+// and connects to it below instead.
+function NewPropRow({ host, seed, onOpen }: { readonly host: NewPropHost; readonly seed: NewPropSeed; readonly onOpen: () => void }) {
+  const translate = useTranslate();
+  const blocked = seed.fit === 'attributes' && host.restLocal !== undefined;
+  return (
+    <>
+      <button type="button" className="dp-new-prop" disabled={blocked} onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+        <PlusIcon size={11} />
+        {translate('props.binding.newProperty', { kind: newPropTitle(seed.fit, translate) })}
+      </button>
+      {blocked && <div className="dp-new-prop-reason">{translate('props.attributesBinding.passesOnce', { local: host.restLocal ?? '' })}</div>}
+    </>
+  );
+}
+
+// "New Class list property": under the new property, for an element's
+// classes. A shape the rewrite cannot read safely says why and makes nothing.
+function ClassListRow({ offer, onOpen }: { readonly offer: ClassListOffer; readonly onOpen: () => void }) {
+  const translate = useTranslate();
+  const refusal = offer.refusal;
+  return (
+    <>
+      <button type="button" className="dp-new-prop" disabled={refusal !== undefined} onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+        <PlusIcon size={11} />
+        {translate('props.binding.newProperty', { kind: translate('props.newProp.title.classList') })}
+      </button>
+      {refusal !== undefined && <div className="dp-new-prop-reason">{translate(CLASS_LIST_REFUSAL_KEYS[refusal])}</div>}
+    </>
+  );
+}
+
+// "Create conditional": under the new property, in a component only, for a
+// field whose value can be one of several depending on the component's props.
+// A prop's own settings (Visibility, Default value, Tooltip) offer it alone.
+function ConditionalRow({ onOpen }: { readonly onOpen: () => void }) {
+  const translate = useTranslate();
+  return (
+    <button type="button" className="dp-new-prop" onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+      <BranchIcon size={11} />
+      {translate('props.binding.createConditional')}
+    </button>
   );
 }
 
@@ -333,13 +453,11 @@ export function useValueCodeEditor(onClose: () => void) {
     if (!rect) {
       return;
     }
+    // Opened from a chip in the code, which the pick repoints: there is no dot here.
     setPick({
       chip: chip || undefined,
-      pos: {
-        left: rect.left,
-        top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-        width: Math.max(rect.width, 240),
-      },
+      pos: dataPickerPosition(rect),
+      focus: FIELD_UNFOCUSED,
     });
   };
   return { ref, apiRef, pick, setPick, open };
@@ -347,10 +465,7 @@ export function useValueCodeEditor(onClose: () => void) {
 export function useValueCodeEditorDismiss(ref: RefObject<HTMLElement>, onClose: () => void) {
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
-      if (
-        ref.current &&
-        !(event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
+      if (ref.current && !(event.target instanceof window.Node && ref.current.contains(event.target))) {
         onClose();
       }
     };
@@ -370,16 +485,7 @@ export function useValueCodeEditorDismiss(ref: RefObject<HTMLElement>, onClose: 
 export function ValueCodeEditor(props: ValueCodeEditorProps) {
   return useCodeAccess() ? <EditableValueCodeEditor {...props} /> : undefined;
 }
-function EditableValueCodeEditor({
-  pos: position,
-  name,
-  value,
-  scope,
-  chipsOf,
-  bindContext,
-  onChange,
-  onClose,
-}: ValueCodeEditorProps) {
+function EditableValueCodeEditor({ pos: position, name, value, scope, chipsOf, bindContext, onChange, onClose }: ValueCodeEditorProps) {
   const { ref, apiRef, pick, setPick, open } = useValueCodeEditor(onClose);
 
   return (
@@ -418,9 +524,7 @@ function EditableValueCodeEditor({
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
-            const next = chip
-              ? apiRef.current?.replaceRange(chip.from, chip.to, path)
-              : apiRef.current?.insert(path);
+            const next = chip ? apiRef.current?.replaceRange(chip.from, chip.to, path) : apiRef.current?.insert(path);
             if (next !== undefined) {
               onChange(next);
             }
@@ -441,7 +545,7 @@ function EditableVarSourceEditor(props: VarSourceEditorProps) {
   return <VarSourceEditorView state={state} />;
 }
 export function useVarSourceEditor(props: VarSourceEditorProps) {
-  const { code, name, onChangeCode } = props;
+  const { code, name, onChangeCode, onRename } = props;
   const ref = useRef<HTMLDivElement>(null);
   assert(code.length <= LIMITS.ipcFieldCharsMax, 'Source editor: source limit exceeded');
   const codeRef = useRef(code);
@@ -452,6 +556,9 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
   // takes to type one, and going red at every keystroke would be nagging about
   // a mistake that hasn't been made yet.
   const [error, setError] = useState('');
+  // Why a new name was refused. Beside the code rather than in a toast: the text
+  // parses, so it is the name to correct, and it has to stay up while that happens.
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const rangeRef = useRef<{ readonly start: number; readonly end: number } | undefined>(undefined);
 
   const apply = (text: string) => {
@@ -485,7 +592,21 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
       return false;
     }
     setError('');
-    if (text !== (findDeclaration(codeRef.current, name)?.statement ?? '')) {
+    const current = findDeclaration(codeRef.current, name)?.statement;
+    // A new name is a rename of everything reading this one: written as a change
+    // to this line alone, each of those reads would crash the page.
+    const change: StatementRename = onRename === undefined || current === undefined ? { kind: 'same' } : statementRename(name, current, text);
+    if (change.kind === 'mixed') {
+      setRefusal('Rename the variable on its own, then change the rest of the line.');
+      return false;
+    }
+    if (change.kind === 'rename') {
+      const refused = onRename?.({ from: name, to: change.to });
+      setRefusal(refused);
+      return refused === undefined;
+    }
+    setRefusal(undefined);
+    if (text !== (current ?? '')) {
       apply(text);
     }
     return true;
@@ -503,16 +624,13 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
   // writes come back identical, so typing isn't fought.
   const external = findDeclaration(code, name)?.statement;
 
-  return { ...props, ref, draft, setDraft, error, setError, commit, draftRef, external };
+  return { ...props, ref, draft, setDraft, error, setError, refusal, setRefusal, commit, draftRef, external };
 }
 export type SourceEditorState = ReturnType<typeof useVarSourceEditor>;
 export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: SourceEditorState) {
   useEffect(() => {
     const onDown = (event: PointerEvent) => {
-      if (
-        !ref.current ||
-        (event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
+      if (!ref.current || (event.target instanceof window.Node && ref.current.contains(event.target))) {
         return;
       }
       // A press outside commits, the way leaving any field does — and if that
@@ -537,18 +655,7 @@ export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: So
   });
 }
 export function VarSourceEditorView({ state }: { readonly state: SourceEditorState }) {
-  const {
-    ref,
-    pos: position,
-    onClose,
-    name,
-    draft,
-    external,
-    error,
-    setDraft,
-    setError,
-    commit,
-  } = state;
+  const { ref, pos: position, onClose, name, filePath, draft, external, error, refusal, setDraft, setError, setRefusal, commit } = state;
   return (
     <div
       ref={ref}
@@ -563,16 +670,17 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         }
       }}
     >
-      <SourceEditorHeader name={name} onClose={onClose} />
+      <SourceEditorHeader name={name} file={sourceFileLabel(filePath)} onClose={onClose} />
       <ExprInput
         multiline
         autoFocus
         className="var-src-code"
         value={draft}
         syncValue={external ?? draft}
-        invalid={!!error}
+        invalid={!!error || refusal !== undefined}
         onChange={(text) => {
           setDraft(text);
+          setRefusal(undefined);
           // Only once it has already gone red: then it is a correction being
           // watched for, not a running commentary on an unfinished line.
           if (error) {
@@ -582,6 +690,7 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         onCommit={commit}
       />
       {error ? <ErrorToast message={error} /> : undefined}
+      <ErrorToast message={refusal} />
     </div>
   );
 }
@@ -590,19 +699,24 @@ export function eventElement(target: unknown): Element | undefined {
   return target instanceof window.Element ? target : undefined;
 }
 
-export function SourceEditorHeader({
-  name,
-  onClose,
-}: {
-  readonly name: string;
-  readonly onClose: () => void;
-}) {
+export function SourceEditorHeader(props: { readonly name: string; readonly file?: SourceFileLabel | undefined; readonly onClose: () => void }) {
+  const translate = useTranslate();
+  const { name, file, onClose } = props;
   return (
     <div className="var-src-head">
       <CodeIcon size={12} />
       <span className="var-src-name">{name}</span>
+      {file !== undefined && (
+        <span
+          className={`var-src-file ${file.kind}`}
+          title={file.kind === 'page' ? translate('props.binding.inPage', { name: file.name }) : translate('props.binding.inComponent', { name: file.name })}
+        >
+          {file.kind === 'page' ? <FileIcon size={11} /> : <ElementComponentIcon size={11} />}
+          <span className="var-src-file-name">{file.name}</span>
+        </span>
+      )}
       <span style={{ flex: 1 }} />
-      <button className="ghost" title="Close" onClick={onClose}>
+      <button className="ghost" title={translate('ui.close')} onClick={onClose}>
         <CloseIcon size={12} />
       </button>
     </div>

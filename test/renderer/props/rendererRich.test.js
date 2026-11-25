@@ -3,9 +3,7 @@
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
 const loadRenderer = require('../../helpers/rendererModule');
-const { domToNodes, nodesToHtml, isInlineOnly } = loadRenderer(
-  'src/features/props/richContentModel.ts',
-);
+const { domToNodes, nodesToHtml, isInlineOnly } = loadRenderer('src/features/props/richContentModel.ts');
 const dom = new JSDOM('<!doctype html><div id="host"></div>');
 const host = dom.window.document.getElementById('host');
 host.innerHTML = 'Hello <b title="drop">world</b><div>{post.title}</div><br>';
@@ -33,15 +31,17 @@ assert.equal(
   false,
 );
 const text = { kind: 'text', value: '' };
-assert.throws(() => nodesToHtml(Array(20001).fill(text)), /node limit exceeded/);
+// No size limit: more nodes than the old cap are written, not refused.
+assert.equal(nodesToHtml(Array(20001).fill(text)), '');
 const cyclic = { kind: 'element', name: 'span', children: [] };
 cyclic.children.push(cyclic);
 assert.throws(() => isInlineOnly([cyclic]), /depth limit exceeded/);
 assert.throws(() => nodesToHtml([cyclic]), /depth limit exceeded/);
 host.textContent = '{a}'.repeat(20001);
-assert.throws(() => domToNodes(host), /expression limit exceeded/);
+// No size limit: text with more expressions than the old cap, and a text run longer than it, read whole.
+assert.ok(domToNodes(host).length >= 20001, 'every expression of a long text is read');
 host.textContent = 'x'.repeat(1000001);
-assert.throws(() => domToNodes(host), /text limit exceeded/);
+assert.deepEqual(domToNodes(host), [{ kind: 'text', value: 'x'.repeat(1000001) }]);
 host.textContent = '';
 let parent = host;
 for (let depth = 0; depth < 66; depth++) {
@@ -86,3 +86,27 @@ assert.deepEqual(domToNodes(host), [{ kind: 'text', value: 'a &amp; b' }]);
 
 dom.window.close();
 console.log('renderer-rich: inline round trips, invalid shapes, and traversal limits passed');
+
+// Pasted code is text, braces and all: read as bindings, `{ apiKey: "…" }`
+// wrote an expression into the page that did not compile. A literal run reads
+// back as text, and text holding braces is drawn as a literal run again, so
+// the next edit does not turn its braces into bindings. Typing `{name}` still binds.
+{
+  const { plainPasteHTML } = loadRenderer('src/features/props/RichContent.tsx');
+  host.innerHTML = `Install: ${plainPasteHTML('import { Pidgin } from "@pidgin/sdk";\nnew Pidgin({ apiKey: "x" });')}`;
+  const pasted = domToNodes(host);
+  assert.ok(
+    pasted.every((node) => node.kind !== 'expr'),
+    JSON.stringify(pasted),
+  );
+  assert.deepEqual(
+    pasted.map((node) => (node.kind === 'text' ? node.value : node.name)),
+    ['Install: ', 'import { Pidgin } from "@pidgin/sdk";', 'br', 'new Pidgin({ apiKey: "x" });'],
+  );
+  // Redrawn and read again, the braces are still text.
+  host.innerHTML = nodesToHtml(pasted);
+  assert.deepEqual(domToNodes(host), pasted);
+  host.innerHTML = 'Hi {post.title}';
+  assert.deepEqual(domToNodes(host)[1], { kind: 'expr', value: '{post.title}' }, 'a typed binding still binds');
+  assert.equal(plainPasteHTML(''), '');
+}

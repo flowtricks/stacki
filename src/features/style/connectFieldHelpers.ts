@@ -2,22 +2,18 @@
 // placeholder, the variable a binding names, and setting the field's value or
 // ref the way React expects (VariableConnect.tsx).
 
-import { isValidElement } from 'react';
+import { createContext, isValidElement, useContext, useEffect, useRef } from 'react';
 import type { ReactElement, ReactNode, Ref, RefCallback } from 'react';
 
 // Read the current value out of the wrapped <input> child, so callers don't have to
 // thread it through — children IS the input element, and its `value` is the field draft.
 export function childValue(children: ReactNode): string {
-  return isValidElement<{ value?: unknown }>(children) && typeof children.props.value === 'string'
-    ? children.props.value
-    : '';
+  return isValidElement<{ value?: unknown }>(children) && typeof children.props.value === 'string' ? children.props.value : '';
 }
 // The wrapped input's placeholder ("Auto", "0", …). The rich field replaces that
 // input on screen, so it has to show the same hint when the value is empty.
 export function childPlaceholder(children: ReactNode): string {
-  const placeholder = isValidElement<{ placeholder?: unknown }>(children)
-    ? children.props.placeholder
-    : undefined;
+  const placeholder = isValidElement<{ placeholder?: unknown }>(children) ? children.props.placeholder : undefined;
   return typeof placeholder === 'string' ? placeholder : '';
 }
 
@@ -87,4 +83,78 @@ export function updateChildRef(child: ReactElement<ChildFieldProps>, element: Fi
       throw new Error('Child field ref could not be updated');
     }
   }
+}
+
+/**
+ * Shows a value for a property (or a few) on the canvas only, or with `undefined` takes that showing away.
+ * The shape is liveSetProp's, so a dropdown's hover-scrub swaps one for the other. It is every hover
+ * preview's one way onto the page (a picker row, a dropdown option): never a write, a history entry, a
+ * dirty flag, an autosave or a git snapshot, so nothing about the project changes while a person only
+ * looks (useEditorWrites' previewProp).
+ */
+export type PreviewProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
+
+// Outside a style card (the audits, the variables sheet) there is nothing on the canvas to preview on:
+// the control shows the preview and nothing else does.
+export const previewNowhere: PreviewProp = () => undefined;
+
+/** The style card's canvas-only preview, for the controls inside it (StyleCard provides it). */
+export const PreviewPropContext = createContext<PreviewProp>(previewNowhere);
+
+/** The canvas-only preview a dropdown's hover-scrub calls in place of liveSetProp. */
+export function useHoverPreview(): PreviewProp {
+  return useContext(PreviewPropContext);
+}
+
+/** A field's canvas preview: shows the picker's previewed text for the field's property, and takes it back. */
+export interface FieldPreview {
+  readonly show: (text: string) => void;
+  /** Idempotent: with nothing shown, nothing is sent. */
+  readonly takeBack: () => void;
+  /** A pick: the preview is now the write's to settle (useEditorWrites' setProp), not this field's to take back. */
+  readonly handOver: () => void;
+}
+
+/**
+ * The canvas preview of the field whose whole value is `prop` (undefined: a field that is one part of a
+ * value, such as a shadow's offset, shows the preview in itself alone, since the text is not the
+ * property's value). What it put up is remembered, so it is always taken back: by the picker's restore,
+ * and by the field going away with it still up (a selection or project change). A pick hands it over:
+ * its write settles the preview (useEditorWrites' setProp), so nothing here takes it back after.
+ */
+export function useFieldPreview(prop: string | undefined): FieldPreview {
+  const previewProp = useContext(PreviewPropContext);
+  // The property a preview is up for, or undefined when none is.
+  const shownRef = useRef<string | undefined>(undefined);
+  const latest = useRef({ previewProp, prop });
+  latest.current = { previewProp, prop };
+  const takeBack = (): void => {
+    const shown = shownRef.current;
+    if (shown === undefined) {
+      return;
+    }
+    shownRef.current = undefined;
+    latest.current.previewProp(shown, undefined, false);
+  };
+  const takeBackRef = useRef(takeBack);
+  takeBackRef.current = takeBack;
+  useEffect(() => () => takeBackRef.current(), []);
+  return {
+    show: (text) => {
+      const target = latest.current.prop;
+      if (target === undefined) {
+        return;
+      }
+      // The field's property changed under a preview (it should not): the old one comes down first.
+      if (shownRef.current !== undefined && shownRef.current !== target) {
+        takeBack();
+      }
+      shownRef.current = target;
+      latest.current.previewProp(target, text, false);
+    },
+    takeBack,
+    handOver: () => {
+      shownRef.current = undefined;
+    },
+  };
 }

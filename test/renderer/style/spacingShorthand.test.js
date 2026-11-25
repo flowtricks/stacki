@@ -77,8 +77,7 @@ async function resolve(css, activeSelector = '.card', context = '') {
 }
 
 // What the four sides of `box` resolve to, clockwise from the top.
-const sidesOf = (resolved, box = 'padding') =>
-  SIDES.map((side) => resolved.props.get(`${box}-${side}`)?.winner.value);
+const sidesOf = (resolved, box = 'padding') => SIDES.map((side) => resolved.props.get(`${box}-${side}`)?.winner.value);
 
 // The padding declarations written directly on `rule`, in source order.
 const paddingOf = (rule) =>
@@ -98,8 +97,7 @@ function edited(source, edits) {
 const eachSide = (values) => SIDES.map((side, index) => [`padding-${side}`, values[index]]);
 
 // Four ungrouped sides holding `value`, in the order the compact form writes them.
-const eachSideOrdered = (value) =>
-  ['top', 'bottom', 'right', 'left'].map((side) => [`padding-${side}`, value, false]);
+const eachSideOrdered = (value) => ['top', 'bottom', 'right', 'left'].map((side) => [`padding-${side}`, value, false]);
 
 test('a shorthand of one to four values fills the four sides, as CSS expands it', async () => {
   const cases = [
@@ -107,10 +105,7 @@ test('a shorthand of one to four values fills the four sides, as CSS expands it'
     ['1px 2px', ['1px', '2px', '1px', '2px']],
     ['1px 2px 3px', ['1px', '2px', '3px', '2px']],
     ['1px 2px 3px 4px', ['1px', '2px', '3px', '4px']],
-    [
-      'var(--space-3, 6px) calc(1rem + 2px)',
-      ['var(--space-3, 6px)', 'calc(1rem + 2px)', 'var(--space-3, 6px)', 'calc(1rem + 2px)'],
-    ],
+    ['var(--space-3, 6px) calc(1rem + 2px)', ['var(--space-3, 6px)', 'calc(1rem + 2px)', 'var(--space-3, 6px)', 'calc(1rem + 2px)']],
   ];
   for (const [value, expected] of cases) {
     assert.deepEqual(sidesOf(await resolve(`.card { padding: ${value} }`)), expected, value);
@@ -183,19 +178,13 @@ test('a side set through a shorthand is edited and cleared in the shorthand’s 
 });
 
 test('values the box cannot read side by side set no side', async () => {
-  for (const css of [
-    '.card { padding: 1px 2px 3px 4px 5px }',
-    '.card { padding-inline: 1px 2px 3px }',
-  ]) {
-    assert.deepEqual(
-      sidesOf(await resolve(css)),
-      [undefined, undefined, undefined, undefined],
-      css,
-    );
+  for (const css of ['.card { padding: 1px 2px 3px 4px 5px }', '.card { padding-inline: 1px 2px 3px }']) {
+    assert.deepEqual(sidesOf(await resolve(css)), [undefined, undefined, undefined, undefined], css);
   }
   assert.equal(model.spacingSides('padding', '').size, 0, 'an empty value');
   assert.equal(model.spacingSides('padding-top', '1px 2px').size, 0, 'two parts on one side');
-  assert.equal(model.spacingSides('margin-inline', '1px').size, 0, 'a property the box skips');
+  assert.equal(model.spacingSides('margin-inline', '1px 2px 3px').size, 0, 'too many parts for an axis');
+  assert.equal(model.spacingSides('margin-collapse', '1px').size, 0, 'a property the box skips');
   assert.equal(model.spacingSides('border-width', '1px 2px').size, 0, 'another box shorthand');
   assert.deepEqual(
     [...model.spacingSides('padding-block', '1rem 3rem')],
@@ -209,38 +198,11 @@ test('values the box cannot read side by side set no side', async () => {
 test('a padding edit rewrites the rule’s padding in its shortest form', () => {
   const cases = [
     [['3rem', '3rem', '3rem', '3rem'], [['padding', '3rem', false]]],
-    [
-      ['1rem', '2rem', '1rem', '2rem'],
-      [
-        ['padding-block', '1rem', false],
-        ['padding-inline', '2rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '3rem', '2rem'],
-      [
-        ['padding-top', '1rem', false],
-        ['padding-bottom', '3rem', false],
-        ['padding-inline', '2rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '1rem', '4rem'],
-      [
-        ['padding-block', '1rem', false],
-        ['padding-right', '2rem', false],
-        ['padding-left', '4rem', false],
-      ],
-    ],
-    [
-      ['1rem', '2rem', '3rem', '4rem'],
-      [
-        ['padding-top', '1rem', false],
-        ['padding-bottom', '3rem', false],
-        ['padding-right', '2rem', false],
-        ['padding-left', '4rem', false],
-      ],
-    ],
+    // Every side set: one `padding`, in the fewest values that say it.
+    [['1rem', '2rem', '1rem', '2rem'], [['padding', '1rem 2rem', false]]],
+    [['1rem', '2rem', '3rem', '2rem'], [['padding', '1rem 2rem 3rem', false]]],
+    [['1rem', '2rem', '1rem', '4rem'], [['padding', '1rem 2rem 1rem 4rem', false]]],
+    [['1rem', '2rem', '3rem', '4rem'], [['padding', '1rem 2rem 3rem 4rem', false]]],
   ];
   for (const [values, expected] of cases) {
     const rule = edited('color: red; padding: 2rem;', eachSide(values));
@@ -249,22 +211,12 @@ test('a padding edit rewrites the rule’s padding in its shortest form', () => 
 });
 
 test('one side dragged off a shorthand keeps the three others, and no more', () => {
-  assert.deepEqual(paddingOf(edited('padding: 2rem;', [['padding-left', '3rem']])), [
-    ['padding-block', '2rem', false],
-    ['padding-right', '2rem', false],
-    ['padding-left', '3rem', false],
-  ]);
+  assert.deepEqual(paddingOf(edited('padding: 2rem;', [['padding-left', '3rem']])), [['padding', '2rem 2rem 2rem 3rem', false]]);
   // Only what the rule declares is compacted: no side is invented from elsewhere.
-  assert.deepEqual(paddingOf(edited('', [['padding-left', '2rem']])), [
-    ['padding-left', '2rem', false],
-  ]);
+  assert.deepEqual(paddingOf(edited('', [['padding-left', '2rem']])), [['padding-left', '2rem', false]]);
   // A longhand written before the shorthand lost to it; the edit must win.
   const reordered = edited('padding-top: 9rem; padding: 2rem;', [['padding-top', '1rem']]);
-  assert.deepEqual(paddingOf(reordered), [
-    ['padding-top', '1rem', false],
-    ['padding-bottom', '2rem', false],
-    ['padding-inline', '2rem', false],
-  ]);
+  assert.deepEqual(paddingOf(reordered), [['padding', '1rem 2rem 2rem', false]]);
   // Editing the shorthand itself replaces the sides that overrode it.
   const whole = edited('padding: 2rem; padding-top: 9rem;', [['padding', '3rem']]);
   assert.deepEqual(paddingOf(whole), [['padding', '3rem', false]]);
@@ -312,10 +264,7 @@ test('a var() that may hold several lengths is kept whole until every side is se
 test('compacting touches nothing but the rule’s own padding', () => {
   const source = 'color: red; padding: 2rem; /* keep */ & .child { padding: 7rem; }';
   const rule = edited(source, eachSide(['3rem', '3rem', '3rem', '3rem']));
-  assert.equal(
-    rule.toString(),
-    '.card { color: red; padding: 3rem; /* keep */ & .child { padding: 7rem; } }',
-  );
+  assert.equal(rule.toString(), '.card { color: red; padding: 3rem; /* keep */ & .child { padding: 7rem; } }');
 });
 
 test('clearing a side splits the shorthand that grouped it', () => {
@@ -325,10 +274,7 @@ test('clearing a side splits the shorthand that grouped it', () => {
     ['padding-bottom', '2rem', true],
     ['padding-inline', '2rem', true],
   ]);
-  assert.equal(
-    model.clearPaddingSides(rule, ['padding-left', 'padding-right', 'padding-bottom']),
-    true,
-  );
+  assert.equal(model.clearPaddingSides(rule, ['padding-left', 'padding-right', 'padding-bottom']), true);
   assert.deepEqual(paddingOf(rule), []);
   assert.equal(model.clearPaddingSides(rule, ['padding-top']), false, 'nothing left to clear');
 });
@@ -367,9 +313,57 @@ test('the padding writer refuses a property that is not padding', () => {
     assert.equal(model.isPaddingProperty(prop), false, prop);
   }
   const rule = postcss.parse('.card { margin: 0 }').first;
-  assert.throws(
-    () => model.setPaddingDeclaration(rule, 'margin', { value: '1rem', important: false }),
-    { message: 'Assertion failed: setPaddingDeclaration: the property is a padding property' },
-  );
+  assert.throws(() => model.setPaddingDeclaration(rule, 'margin', { value: '1rem', important: false }), {
+    message: 'Assertion failed: setPaddingDeclaration: the property is a padding property',
+  });
   assert.equal(rule.toString(), '.card { margin: 0 }', 'and writes nothing');
 });
+
+// A padding side the rule has no declaration of yet joins its padding
+// shorthand: `padding: 0.2em` with a left and right set is one
+// `padding: 0.2em 0.59em`, not two longhands written after it.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const root = postcss.parse('code {\n  border-width: 1px;\n  padding: 0.2em;\n  border-radius: 4px;\n}');
+  const rule = root.first;
+  addDeclaration({ node: rule }, 'padding-left', { value: '0.59em', important: false });
+  addDeclaration({ node: rule }, 'padding-right', { value: '0.59em', important: false });
+  assert.equal(root.toString(), 'code {\n  border-width: 1px;\n  padding: 0.2em 0.59em;\n  border-radius: 4px;\n}');
+}
+// A new declaration fills the blank line before the closing brace instead of
+// landing above it; one blank line is taken, and only at the block's end.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const add = (css, prop) => {
+    const root = postcss.parse(css);
+    addDeclaration({ node: root.last }, prop, { value: '1rem', important: false });
+    return root.toString();
+  };
+  const before = '.a {\n  top: 0;\n}\n';
+  assert.equal(add(`${before}.section {\n  \n}`, 'color'), `${before}.section {\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  \n}`, 'padding-left'), `${before}.section {\n  padding-left: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  top: 0;\n\n}`, 'color'), `${before}.section {\n  top: 0;\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  top: 0;\n}`, 'color'), `${before}.section {\n  top: 0;\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n\n\n}`, 'color'), `${before}.section {\n  color: 1rem;\n\n}`);
+}
+
+// A CSS-wide keyword stands alone: grouped beside other sides it would make a
+// declaration the browser drops, taking all four paddings with it.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const add = (css, prop, value) => {
+    const root = postcss.parse(css);
+    addDeclaration({ node: root.first }, prop, { value, important: false });
+    return root.toString();
+  };
+  assert.equal(
+    add('.a {\n  padding: inherit;\n}', 'padding-left', '5px'),
+    '.a {\n  padding-block: inherit;\n  padding-right: inherit;\n  padding-left: 5px;\n}',
+  );
+  assert.equal(add('.a {\n  padding: 1rem;\n}', 'padding-top', 'unset'), '.a {\n  padding-top: unset;\n  padding-bottom: 1rem;\n  padding-inline: 1rem;\n}');
+  // Four sides that agree on the keyword are still one declaration.
+  assert.equal(add('.a {\n  padding-block: unset;\n}', 'padding-inline', 'unset'), '.a {\n  padding: unset;\n}');
+}

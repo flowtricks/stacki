@@ -1,0 +1,83 @@
+// The pure rules of message chrome: when a message is long enough to fold behind "Show more", which
+// user message may be edited or sent again, and how a timestamp reads. Messages.tsx only draws
+// what this module decides.
+import type { Formatters } from '../../../../shared/core/i18n/format';
+
+export const MESSAGE_LIMITS = {
+  /** A message with more lines than this folds. */
+  clampLines: 40,
+  /** A message with more characters than this folds. */
+  clampChars: 4_000,
+} as const satisfies Record<string, number>;
+
+/** Whether a message is long enough to fold. */
+export function exceedsClamp(text: string): boolean {
+  if (text.length > MESSAGE_LIMITS.clampChars) {
+    return true;
+  }
+  // Counting breaks stops at the bound, so a message of a million empty lines costs no more than one of forty-one.
+  let lines = 1;
+  for (let index = text.indexOf('\n'); index >= 0; index = text.indexOf('\n', index + 1)) {
+    lines += 1;
+    if (lines > MESSAGE_LIMITS.clampLines) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The id of the last user message in a transcript, the only one that may be edited or sent again:
+ * resending an older one would branch the conversation, which the agent's session cannot do.
+ */
+export function lastUserMessageId(items: readonly { readonly kind: string; readonly id: number }[]): number | undefined {
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (item?.kind === 'user') {
+      return item.id;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The id of the agent reply the person may answer with a button: the last message of the conversation,
+ * and only once the agent is done. An older reply's options are a question that was already answered
+ * (or moved past), so they stay text.
+ */
+export function answerableMessageId(
+  items: readonly { readonly kind: string; readonly id: number; readonly role?: string; readonly parent?: string | undefined }[],
+  { running }: { readonly running: boolean },
+): number | undefined {
+  if (running) {
+    return undefined;
+  }
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (item?.kind === 'user') {
+      return undefined;
+    }
+    // A subagent's report is not the agent's reply: only the agent's own words can be answered.
+    if (item?.kind === 'text' && item.role === 'agent' && item.parent === undefined) {
+      return item.id;
+    }
+  }
+  return undefined;
+}
+
+/** "2:14 PM" in the person's locale; undefined for a message with no time (stored before timestamps) or a time that is not a date. */
+export function timeLabel(at: number | undefined, formatDate: Formatters['formatDate']): string | undefined {
+  if (at === undefined || !Number.isFinite(at) || at <= 0) {
+    return undefined;
+  }
+  const date = new Date(at);
+  return Number.isNaN(date.getTime()) ? undefined : formatDate(date, { hour: 'numeric', minute: '2-digit' });
+}
+
+/** The full date and time, for the hover title of a timestamp. */
+export function fullTimeLabel(at: number | undefined, formatDate: Formatters['formatDate']): string | undefined {
+  if (timeLabel(at, formatDate) === undefined || at === undefined) {
+    return undefined;
+  }
+  return formatDate(at, { dateStyle: 'medium', timeStyle: 'medium' });
+}

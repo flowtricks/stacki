@@ -15,8 +15,7 @@ import { checkStudio, studioAffected } from './studioChecks.mts';
 import { POLICY_LIMITS } from './limits.mts';
 import { formatViolations, isExempt, normalizePath, scanPaths } from './scan.mts';
 
-export type CheckOutcome =
-  { readonly kind: 'pass' } | { readonly kind: 'fail'; readonly report: string };
+export type CheckOutcome = { readonly kind: 'pass' } | { readonly kind: 'fail'; readonly report: string };
 
 // How Prettier treats the files: rewrite them in place (an agent's own edit,
 // where formatting is deterministic and a round trip is waste), or only check
@@ -40,11 +39,7 @@ export function repositoryRoot(): string {
   return path.resolve(import.meta.dirname, '..', '..');
 }
 
-export function checkFiles(
-  root: string,
-  candidates: readonly string[],
-  options: { readonly format: FormatMode },
-): CheckOutcome {
+export function checkFiles(root: string, candidates: readonly string[], options: { readonly format: FormatMode }): CheckOutcome {
   const files = relevantFiles(root, candidates);
   const sections: string[] = [];
   // Batches bound each child's command line and memory; every file is checked.
@@ -119,19 +114,9 @@ export function runTypeCheck(root: string): ChildResult {
   const cache = path.join(root, 'node_modules', '.cache', 'tsc');
   for (const project of TYPE_PROJECTS) {
     const cacheName = project.replaceAll('/', '-').replace('.json', '.tsbuildinfo');
-    const result = runChild(
-      process.execPath,
-      [
-        compiler,
-        '--project',
-        project,
-        '--noEmit',
-        '--incremental',
-        '--tsBuildInfoFile',
-        path.join(cache, cacheName),
-      ],
-      { cwd: root },
-    );
+    const result = runChild(process.execPath, [compiler, '--project', project, '--noEmit', '--incremental', '--tsBuildInfoFile', path.join(cache, cacheName)], {
+      cwd: root,
+    });
     if (result.status !== 0) {
       return result;
     }
@@ -146,17 +131,11 @@ export function runSourcePathCheck(root: string): ChildResult {
 export function runEslint(root: string, files: readonly string[]): ChildResult {
   assert(files.length <= POLICY_LIMITS.filesPerCheckMax, 'runEslint: file limit exceeded');
   const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
-  const cache = path.join(root, 'node_modules', '.cache', 'eslint') + path.sep;
-  const argumentsList = [
-    eslint,
-    '--cache',
-    '--cache-location',
-    cache,
-    '--max-warnings',
-    '0',
-    '--no-warn-ignored',
-    ...files,
-  ];
+  // No --cache: ESLint keys a cached result on the linted file and the config only, but the type-aware rules also read the types of every file it
+  // imports. A changed dependency therefore left a stale "unsafe argument" verdict that no re-run could clear.
+  // The heap is the full gate's (the eslint check in scripts/gate/runTests.ts): type-aware lint of the whole tree, as check:local runs it,
+  // passes Node's default heap of about 4 GB and is aborted. The two stay equal; the gate compiles to CommonJS and cannot import this module.
+  const argumentsList = ['--max-old-space-size=6144', eslint, '--no-cache', '--max-warnings', '0', '--no-warn-ignored', ...files];
   return runChild(process.execPath, argumentsList, { cwd: root });
 }
 

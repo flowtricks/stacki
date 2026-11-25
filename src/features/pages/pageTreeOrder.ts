@@ -11,16 +11,10 @@ export type PageTreeEntry =
       readonly node: PageTreeNode;
     };
 
-export function orderedPageTree(
-  tree: PageTreeNode,
-  relative: string,
-  order: PageOrder,
-): readonly PageTreeEntry[] {
+export function orderedPageTree(tree: PageTreeNode, relative: string, order: PageOrder): readonly PageTreeEntry[] {
   const pages = [...tree.pages].sort((left, right) => comparePageNames(left.base, right.base));
   const pageEntry = (page: PageTreePage): PageTreeEntry => ({ kind: 'page', key: page.name, page });
-  const folders = [...tree.directories.entries()].sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
+  const folders = [...tree.directories.entries()].sort(([left], [right]) => left.localeCompare(right));
   const defaults: readonly PageTreeEntry[] = [
     ...pages.filter((page) => leadsFolders(page.base)).map(pageEntry),
     ...folders.map(([name, node]): PageTreeEntry => ({
@@ -33,8 +27,5 @@ export function orderedPageTree(
   ];
   const rank = new Map(order.entries.map((key, index) => [key, index]));
   // Stable sorting retains the default order for newly discovered files and folders.
-  return [...defaults].sort(
-    (left, right) =>
-      (rank.get(left.key) ?? order.entries.length) - (rank.get(right.key) ?? order.entries.length),
-  );
+  return [...defaults].sort((left, right) => (rank.get(left.key) ?? order.entries.length) - (rank.get(right.key) ?? order.entries.length));
 }

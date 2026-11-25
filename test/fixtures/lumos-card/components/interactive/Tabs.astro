@@ -1,0 +1,461 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import Button from "@/components/Button.astro";
+import { slotContent } from "@/utils/slots.ts";
+
+type Props = HTMLAttributes<"div"> & {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** Tab layout. */
+  variant?: "horizontal" | "side";
+  /** Panel playback. */
+  playback?: "manual" | "auto";
+  /** Show all panels in design mode. */
+  preview?: boolean;
+};
+
+const {
+  render = true,
+  variant = "horizontal",
+  playback = "manual",
+  preview = false,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const auto = playback === "auto";
+
+const links = await slotContent(Astro.slots, "links");
+const panels = await slotContent(Astro.slots);
+---
+
+{render && links && panels && (
+  <div
+    class:list={[
+      "tabs_wrap",
+      variant !== "horizontal" && variant,
+      auto && "auto",
+      preview && "preview",
+      className,
+    ]}
+    {...rest}
+  >
+    <div class="tabs_bar">
+      <div
+        class="tabs_links"
+        role="tablist"
+        aria-orientation={variant === "side" ? "vertical" : "horizontal"}
+      >
+        <Fragment set:html={links} />
+      </div>
+    </div>
+
+    <div class="tabs_panels">
+      <Fragment set:html={panels} />
+    </div>
+
+    {auto && (
+      <div class="tabs_controls">
+        <div class="tabs_steps">
+          <Button
+            variant="arrow"
+            emphasis="secondary"
+            direction="back"
+            label="Previous tab"
+            data-step="-1"
+          />
+          <Button
+            variant="arrow"
+            emphasis="secondary"
+            label="Next tab"
+            data-step="1"
+          />
+        </div>
+        <Button
+          variant="play"
+          emphasis="secondary"
+          label="Pause automatic rotation"
+          pressed
+          data-toggle
+        />
+      </div>
+    )}
+  </div>
+)}
+
+{}
+<noscript>
+  <style>
+    .tabs_bar,
+    .tabs_controls {
+      display: none;
+    }
+    .tabs_wrap {
+      grid-template-columns: none;
+    }
+    .tabs_panels {
+      gap: var(--space-6);
+      overflow: visible;
+    }
+    .tabs_panels > * {
+      grid-area: auto;
+      opacity: 1;
+      visibility: visible;
+      translate: none;
+    }
+  </style>
+</noscript>
+
+<script>
+  const INTERVAL = 6000;
+  const SLIDE = 500;
+
+  for (const tabs of document.querySelectorAll<HTMLElement>(".tabs_wrap")) {
+    const links = [...tabs.querySelectorAll<HTMLButtonElement>(".tabs_link")];
+    const panelList = tabs.querySelector<HTMLElement>(".tabs_panels");
+    const panels = [...(panelList?.children ?? [])] as HTMLElement[];
+    if (links.length === 0 || links.length !== panels.length) continue;
+
+    const uid = Math.random().toString(36).slice(2, 8);
+    const auto = tabs.classList.contains("auto");
+    const toggle = tabs.querySelector<HTMLButtonElement>("[data-toggle]");
+    const bar = tabs.querySelector<HTMLElement>(".tabs_links");
+
+    const keepInView = (link: HTMLElement) => {
+      if (!bar) return;
+      const list = bar.getBoundingClientRect();
+      const box = link.getBoundingClientRect();
+      if (box.left < list.left) bar.scrollBy({ left: box.left - list.left });
+      else if (box.right > list.right)
+        bar.scrollBy({ left: box.right - list.right });
+    };
+
+    let current = 0;
+    let timer: number | undefined;
+    let paused = false;
+
+    const key = tabs.id || "tab";
+    const slugs = links.map((link) =>
+      (link.textContent ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, ""),
+    );
+
+    const remember = (index: number) => {
+      const url = new URL(location.href);
+      url.searchParams.set(key, slugs[index]);
+      history.replaceState(history.state, "", url);
+    };
+
+    links.forEach((link, i) => {
+      link.id = `tab-${uid}-${i}`;
+      link.setAttribute("role", "tab");
+      link.setAttribute("aria-controls", `panel-${uid}-${i}`);
+      panels[i].id = `panel-${uid}-${i}`;
+      panels[i].setAttribute("role", "tabpanel");
+      panels[i].setAttribute("aria-labelledby", link.id);
+      panels[i].tabIndex = 0;
+    });
+
+    const restart = () => {
+      window.clearTimeout(timer);
+      if (!auto || paused) return;
+      tabs.classList.remove("running");
+      void tabs.offsetWidth;
+      tabs.classList.add("running");
+      timer = window.setTimeout(
+        () => show(current + 1, false, false),
+        INTERVAL,
+      );
+    };
+
+    const show = (next: number, focus = false, share = true) => {
+      const index = (next + links.length) % links.length;
+      if (index !== current) {
+        tabs.style.setProperty("--_dir", next > current ? "1" : "-1");
+        tabs.dataset.moved = "";
+        const leaving = panels[current];
+        leaving.classList.add("is-leaving");
+        window.setTimeout(
+          () => leaving.classList.remove("is-leaving"),
+          SLIDE + 50,
+        );
+      }
+
+      links.forEach((link, i) => {
+        link.classList.toggle("is-active", i === index);
+        link.setAttribute("aria-selected", String(i === index));
+        link.tabIndex = i === index ? 0 : -1;
+      });
+      panels.forEach((panel, i) =>
+        panel.classList.toggle("is-active", i === index),
+      );
+
+      current = index;
+      if (share) remember(index);
+      if (focus) links[index].focus();
+      keepInView(links[index]);
+      restart();
+    };
+
+    links.forEach((link, i) => {
+      link.addEventListener("click", () => show(i));
+      link.addEventListener("keydown", (event) => {
+        const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+        const back = event.key === "ArrowLeft" || event.key === "ArrowUp";
+        if (!forward && !back) return;
+        event.preventDefault();
+        show(current + (forward ? 1 : -1), true);
+      });
+    });
+
+    for (const step of tabs.querySelectorAll<HTMLButtonElement>(
+      "[data-step]",
+    )) {
+      step.addEventListener("click", () =>
+        show(current + Number(step.dataset.step)),
+      );
+    }
+
+    const setPaused = (value: boolean) => {
+      paused = value;
+      tabs.classList.toggle("is-paused", value);
+      toggle?.setAttribute("aria-pressed", String(!value));
+      toggle?.setAttribute(
+        "aria-label",
+        value ? "Start automatic rotation" : "Pause automatic rotation",
+      );
+      restart();
+    };
+
+    tabs.classList.add("is-ready");
+
+    const wanted = slugs.indexOf(
+      new URLSearchParams(location.search).get(key) ?? "",
+    );
+    show(wanted === -1 ? 0 : wanted, false, false);
+    if (wanted !== -1) tabs.scrollIntoView({ block: "nearest" });
+
+    if (!auto) continue;
+
+    toggle?.addEventListener("click", () => {
+      holds.asked = false;
+      setPaused(!paused);
+    });
+
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const holds = {
+      motion: motion.matches,
+      focus: false,
+      offscreen: false,
+      asked: wanted !== -1,
+    };
+    const settle = () => setPaused(Object.values(holds).some(Boolean));
+
+    motion.addEventListener("change", (event) => {
+      holds.motion = event.matches;
+      settle();
+    });
+    tabs.addEventListener("focusin", () => {
+      holds.focus = true;
+      settle();
+    });
+    tabs.addEventListener("focusout", (event) => {
+      if (tabs.contains(event.relatedTarget as Node)) return;
+      holds.focus = false;
+      settle();
+    });
+    new IntersectionObserver((entries) => {
+      holds.offscreen = !entries[0].isIntersecting;
+      settle();
+    }).observe(tabs);
+
+    settle();
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .tabs_wrap {
+      --_dir: 1;
+      --_interval: 6s;
+      --_slide: 500ms;
+      display: grid;
+      gap: var(--space-6);
+      width: 100%;
+
+      &.side {
+        @media (width >= 48rem) {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+          align-items: start;
+        }
+      }
+    }
+
+    .tabs_bar {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .tabs_links {
+      display: flex;
+      min-width: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      .tabs_wrap.side & {
+        flex-direction: column;
+        gap: var(--space-2);
+        overflow-x: visible;
+      }
+    }
+
+    .tabs_link {
+      flex: 1;
+      min-width: 8rem;
+      padding-block: var(--space-3);
+      background: none;
+      border-bottom: var(--border-width) solid var(--border);
+      color: color-mix(in lab, currentcolor 60%, transparent);
+      text-align: center;
+      transition:
+        color var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease);
+      &.is-active {
+        border-bottom-color: var(--text);
+        color: var(--text);
+      }
+      @media (hover: hover) {
+        &:hover {
+          color: var(--text);
+        }
+      }
+      .tabs_wrap.side & {
+        flex: none;
+        min-width: 0;
+        padding: var(--space-3) var(--space-5);
+        border: var(--border-width) solid var(--border);
+        border-radius: var(--radius-round);
+        text-align: start;
+        &.is-active {
+          background-color: var(--text);
+          color: var(--background);
+        }
+      }
+    }
+
+    .tabs_wrap.auto:not(.side) {
+      & .tabs_link.is-active {
+        position: relative;
+        &::after {
+          content: "";
+          position: absolute;
+          inset-inline: 0;
+          bottom: calc(var(--border-width) * -1);
+          height: var(--border-width);
+          background-color: var(--text);
+          transform-origin: left;
+          scale: 0 1;
+        }
+      }
+      &.running:not(.is-paused) .tabs_link.is-active {
+        border-bottom-color: var(--border);
+        &::after {
+          animation: tabs-progress var(--_interval) linear forwards;
+        }
+      }
+    }
+
+    @keyframes tabs-progress {
+      from {
+        scale: 0 1;
+      }
+      to {
+        scale: 1 1;
+      }
+    }
+
+    .tabs_panels {
+      display: grid;
+      min-width: 0;
+      overflow: clip;
+    }
+
+    .tabs_panels > * {
+      grid-area: 1 / 1;
+      min-width: 0;
+      opacity: 0;
+      visibility: hidden;
+      transition:
+        opacity var(--open-duration) var(--open-ease),
+        visibility var(--open-duration) var(--open-ease);
+      .tabs_wrap:not(.is-ready) &:first-child,
+      &.is-active {
+        opacity: 1;
+        visibility: visible;
+      }
+    }
+
+    /* Design mode lays the panels out one after another, the same way the
+       `noscript` fallback above does, so every one can be edited. The bar
+       stays put so the links can be edited too. */
+    .stacki-designer .tabs_wrap.preview .tabs_panels {
+      gap: var(--space-6);
+      overflow: visible;
+    }
+
+    .stacki-designer .tabs_wrap.preview .tabs_panels > * {
+      grid-area: auto;
+      opacity: 1;
+      visibility: visible;
+      translate: none;
+      animation: none;
+    }
+
+    .tabs_wrap.auto[data-moved] .tabs_panels > * {
+      &.is-active {
+        animation: tabs-in var(--_slide) var(--open-ease) both;
+      }
+      &.is-leaving {
+        visibility: visible;
+        animation: tabs-out var(--_slide) var(--open-ease) both;
+      }
+    }
+
+    @keyframes tabs-in {
+      from {
+        translate: calc(var(--_dir) * 100%) 0;
+        opacity: 0;
+      }
+      to {
+        translate: 0 0;
+        opacity: 1;
+      }
+    }
+
+    @keyframes tabs-out {
+      from {
+        translate: 0 0;
+        opacity: 1;
+      }
+      to {
+        translate: calc(var(--_dir) * -100%) 0;
+        opacity: 0;
+      }
+    }
+
+    .tabs_controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .tabs_steps {
+      display: flex;
+      gap: var(--space-2);
+    }
+  }
+</style>

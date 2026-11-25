@@ -3,7 +3,7 @@
   position: fixed;
   z-index: 11000;
   bottom: 20px;
-  left: 50%;
+  left: 50%; /* physical: centered with translateX(-50%) */
   width: min(390px, calc(100vw - 32px));
   transform: translateX(-50%);
   pointer-events: none;
@@ -29,6 +29,7 @@
   transition: none;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
 }
 .toast-slot {
@@ -37,8 +38,7 @@
   align-items: flex-start;
   bottom: 0;
   width: 100%;
-  transform: translateY(calc(var(--toast-index) * -10px))
-    scale(calc(1 - var(--toast-index) * 0.045));
+  transform: translateY(calc(var(--toast-index) * -10px)) scale(calc(1 - var(--toast-index) * 0.045));
   transform-origin: center top;
   transition: transform 220ms ease;
 }
@@ -60,7 +60,7 @@
 .toast-more {
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 100%;
   height: 30px;
   border: 1px solid var(--border-strong, var(--border));
@@ -82,7 +82,8 @@
   width: 100%;
   min-height: 58px;
   box-sizing: border-box;
-  padding: 16px 12px 16px 16px;
+  padding-block: 16px;
+  padding-inline: 16px 12px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 12px;
   background: var(--bg-panel, #232323);
@@ -122,19 +123,25 @@
   white-space: pre-wrap;
   max-height: min(160px, 30vh);
   overflow: auto;
+  scrollbar-gutter: stable;
 }
+/* The icon says the kind: white for information, green for success,
+   orange for a warning, red for an error. */
 .toast-icon {
   display: grid;
   place-items: center;
   flex: 0 0 20px;
   height: 20px;
-  color: var(--text-dim);
+  color: var(--text);
 }
 .toast.success .toast-icon {
-  color: var(--green, #8cd4ab);
+  color: var(--green);
+}
+.toast.warning .toast-icon {
+  color: var(--orange);
 }
 .toast.error .toast-icon {
-  color: var(--red, #f28b82);
+  color: var(--red);
 }
 .toast-stack .toast-close {
   display: grid;
@@ -178,9 +185,10 @@
 
 .toast-recovery {
   display: inline-block;
-  margin: 6px 8px 0 0;
+  margin-block: 6px 0;
+  margin-inline: 0 8px;
   color: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
 .toast-message {
@@ -188,4 +196,5 @@
   overflow-wrap: anywhere;
   max-height: 50vh;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }

@@ -4,27 +4,17 @@ import { peerPath, type Peer } from './presence';
 import { otherPresenceUsers } from './presenceUsers';
 import type { Session } from '../auth/useSession';
 import type { usePreview } from '../preview/usePreview';
+import { useStudioAppAnchors } from '../apps/StudioApps';
 export interface FollowTarget extends Peer {
   readonly request: number;
 }
-export function useCollaborators(
-  document: SharedDocument | undefined,
-  page: string,
-  preview: ReturnType<typeof usePreview>,
-  session: Session | undefined,
-) {
+export function useCollaborators(document: SharedDocument | undefined, page: string, preview: ReturnType<typeof usePreview>, session: Session | undefined) {
   const { subscribeLoad } = preview;
-  const others = session
-    ? otherPresenceUsers(
-        document?.peers ?? [],
-        document?.selfId ?? '',
-        session.kind === 'github' ? session.id : undefined,
-      )
-    : [];
-  const peers = others
-    .filter((peer) => peer.page === page && /^(layout|n\d+(\.\d+)*)$/.test(peer.selection))
-    .slice(0, 30);
-  const paths = JSON.stringify(peers.map(peerPath));
+  const others = session ? otherPresenceUsers(document?.peers ?? [], document?.selfId ?? '', session.kind === 'github' ? session.id : undefined) : [];
+  const peers = others.filter((peer) => peer.page === page && /^(layout|n\d+(\.\d+)*)$/.test(peer.selection)).slice(0, 30);
+  // App overlays anchor to elements the frame must measure too; the frame keeps 30 paths at most.
+  const appAnchors = useStudioAppAnchors(page);
+  const paths = JSON.stringify([...peers.map(peerPath), ...appAnchors].slice(0, 30));
   const send = useRef(preview.send);
   send.current = preview.send;
   useEffect(() => {

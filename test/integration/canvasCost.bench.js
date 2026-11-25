@@ -117,28 +117,17 @@ function operations(window) {
   };
   const deep = () => document.querySelectorAll('.card_link');
   return [
-    [
-      'attribute on an unmarked element',
-      (sample) => document.getElementById('other').setAttribute('data-n', sample),
-    ],
+    ['attribute on an unmarked element', (sample) => document.getElementById('other').setAttribute('data-n', sample)],
     ['class on a marked element', (sample) => deep()[sample % 50].classList.toggle('is-open')],
-    [
-      'inline style on a marked element',
-      (sample) => (deep()[sample % 50].style.transform = `translateX(${sample}px)`),
-    ],
-    [
-      'style-panel probe (compute a colour)',
-      (sample) => post({ type: 'avb:query', id: sample, compute: [`rgb(${sample}, 0, 0)`] }),
-    ],
+    ['inline style on a marked element', (sample) => (deep()[sample % 50].style.transform = `translateX(${sample}px)`)],
+    ['style-panel probe (compute a colour)', (sample) => post({ type: 'avb:query', id: sample, compute: [`rgb(${sample}, 0, 0)`] })],
     ['set-vh', (sample) => post({ type: 'avb:set-vh', px: 700 + sample })],
     [
       'hover (pointer moves to a node)',
       (sample) => {
         const target = deep()[sample % 200];
         window.__pointed = target;
-        target.dispatchEvent(
-          new window.MouseEvent('mousemove', { bubbles: true, clientX: 20, clientY: 20 }),
-        );
+        target.dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: 20, clientY: 20 }));
       },
     ],
     [
@@ -222,16 +211,11 @@ async function benchSize(elements) {
 
 async function main() {
   const marks = (elements) => `${elements} marked`;
-  console.log(
-    'Canvas script cost per operation, jsdom; p50 of ' +
-      `${SAMPLES} samples after ${WARM_UPS} warm-ups, counts are means per operation.`,
-  );
+  console.log('Canvas script cost per operation, jsdom; p50 of ' + `${SAMPLES} samples after ${WARM_UPS} warm-ups, counts are means per operation.`);
   for (const elements of SIZES) {
     const rows = await benchSize(elements);
     console.log(`\n${marks(elements)}`);
-    console.log(
-      'operation                              sync ms  cpu ms  qsa    walks  computed  messages',
-    );
+    console.log('operation                              sync ms  cpu ms  qsa    walks  computed  messages');
     for (const row of rows) {
       console.log(
         `${row.label.padEnd(39)}${row.sync.toFixed(1).padStart(7)}` +

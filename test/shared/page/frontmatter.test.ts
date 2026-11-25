@@ -1,15 +1,11 @@
 // Goal: import source slots are a checked part of the IPC page model.
 // Methodology: parse real frontmatter, retain every preservation field, and
-// reject missing fields, invalid offsets, flags, and oversized collections.
+// reject missing fields, invalid offsets and flags; large collections are accepted.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFrontmatter } from '#dist/shared/page/frontmatterSource.js';
-import {
-  parseImportSlots,
-  parseImportSlot,
-  parseImportMember,
-} from '#dist/shared/page/frontmatter.js';
-import { LIMITS } from '#dist/shared/core/limits.js';
+import { parseImportSlots, parseImportSlot, parseImportMember } from '#dist/shared/page/frontmatter.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -61,26 +57,14 @@ test('slot and member fields reject malformed values', () => {
   }
 });
 
-test('slot arrays and source fields enforce their stated bounds', () => {
+test('slot arrays and source fields are bounded by the platform and source offsets', () => {
   assert.throws(() => parseImportSlots({}), /expected array/);
-  assert.throws(
-    () => parseImportSlots(Array.from({ length: LIMITS.importsMax + 1 }, () => slot)),
-    /exceeds limit/,
-  );
-  assert.throws(
-    () =>
-      parseImportSlot({
-        ...slot,
-        members: Array.from({ length: LIMITS.importsMax + 1 }, () => member),
-      }),
-    /exceeds limit/,
-  );
-  assert.throws(
-    () => parseImportSlot({ ...slot, source: 'x'.repeat(LIMITS.nodeValueCharsMax + 1) }),
-    /exceeds limit/,
-  );
-  assert.throws(
-    () => parseImportSlot({ ...slot, offset: LIMITS.ipcFieldCharsMax + 1 }),
-    /outside source bounds/,
-  );
+  // Imports, members and source text are bounded only by the platform: a longer array or string cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.importsMax, PLATFORM_LIMITS.arrayLengthMax);
+  assert.equal(LIMITS.nodeValueCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  assert.equal(parseImportSlots(Array.from({ length: 10_000 }, () => slot)).length, 10_000);
+  assert.equal(parseImportSlot({ ...slot, members: Array.from({ length: 10_000 }, () => member) }).members.length, 10_000);
+  const source = 'x'.repeat(1024 * 1024);
+  assert.equal(parseImportSlot({ ...slot, source }).source, source);
+  assert.throws(() => parseImportSlot({ ...slot, offset: LIMITS.ipcFieldCharsMax + 1 }), /outside source bounds/);
 });

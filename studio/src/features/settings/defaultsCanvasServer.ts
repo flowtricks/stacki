@@ -1,10 +1,7 @@
 import { readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import {
-  parseCanvasCreate,
-  parseCanvasFile,
-} from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import { parseCanvasCreate, parseCanvasFile } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { preparePath, safePath } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
 

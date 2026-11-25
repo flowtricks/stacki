@@ -4,13 +4,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { ReactNode } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { handleArrowStep } from './model/numberStep';
 import { panelSpan } from './model/panelBox';
 import { parseTrackSize, trackKind, type TrackSize } from './model/gridTemplate';
-import { WarnIcon } from './GridSettingsKit';
+import TipAnchor from '../../ui/TipAnchor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { commitInPlace } from './model/commitStyleInPlace';
 
 // Webflow's grid track glyphs: a GEAR for minmax/custom, an "A" for auto/content, and
 // a double-arrow for everything else (fr / lengths). The arrow points along the axis
@@ -54,23 +57,13 @@ export function TrackIcon({ track, axis }: { track: string; axis: 'column' | 'ro
   const kind = trackKind(track);
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path
-        opacity="0.4"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={axis === 'column' ? FAINT_COL : FAINT_ROW}
-        fill="currentColor"
-      />
+      <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={axis === 'column' ? FAINT_COL : FAINT_ROW} fill="currentColor" />
       {kind === 'minmax' ? (
         <path fillRule="evenodd" clipRule="evenodd" d={GEAR_PATH} fill="currentColor" />
       ) : kind === 'auto' || kind === 'content' ? (
         <path fillRule="evenodd" clipRule="evenodd" d={AUTO_PATH} fill="currentColor" />
       ) : (
-        <path
-          d={ARROW_PATH}
-          fill="currentColor"
-          transform={axis === 'column' ? 'rotate(90 8 8)' : undefined}
-        />
+        <path d={ARROW_PATH} fill="currentColor" transform={axis === 'column' ? 'rotate(90 8 8)' : undefined} />
       )}
     </svg>
   );
@@ -90,6 +83,7 @@ export function TrackInput({
   busy: boolean;
   onCommit: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -112,7 +106,7 @@ export function TrackInput({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.trackEditor.connect', { name: ariaLabel })}
       disabled={busy}
       className="is-fill"
       prop="grid-template-columns"
@@ -146,12 +140,12 @@ export function TrackInput({
   );
 }
 
-// Enter blurs (which commits); ↑/↓ step the number under the caret (unit preserved) in
+// Enter commits and keeps the focus; ↑/↓ step the number under the caret (unit preserved) in
 // place. Returns the stepped text to apply immediately, or undefined.
 export function stepTrackInput(event: React.KeyboardEvent<HTMLInputElement>): string | undefined {
   const input = event.currentTarget;
   if (event.key === 'Enter') {
-    input.blur();
+    commitInPlace(input);
     return undefined;
   }
   const stepped = handleArrowStep(event);
@@ -164,9 +158,9 @@ export function stepTrackInput(event: React.KeyboardEvent<HTMLInputElement>): st
   return stepped.text;
 }
 
-export const SIZING_OPTIONS: ReadonlyArray<SegmentedOption<'default' | 'minmax'>> = [
-  { value: 'default', label: 'Default' },
-  { value: 'minmax', label: 'Min/Max' },
+export const sizingOptions = (translate: Translator): ReadonlyArray<SegmentedOption<'default' | 'minmax'>> => [
+  { value: 'default', label: translate('style.trackEditor.sizingDefault') },
+  { value: 'minmax', label: translate('style.trackEditor.sizingMinMax') },
 ];
 
 export type AutoFit = { on: boolean; can: boolean; onToggle: (on: boolean) => void };
@@ -196,17 +190,8 @@ export function switchedSize(track: string, mode: 'default' | 'minmax'): TrackSi
 
 // The per-track editor: Default (a single size) or Min/Max (a minmax pair). Track lists
 // (not the auto sections) also get the Auto-fit toggle + its constraint warning.
-export function TrackSizeEditor({
-  track,
-  busy,
-  autoFit,
-  onChange,
-}: {
-  track: string;
-  busy: boolean;
-  autoFit?: AutoFit;
-  onChange: (size: TrackSize) => void;
-}) {
+export function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: string; busy: boolean; autoFit?: AutoFit; onChange: (size: TrackSize) => void }) {
+  const translate = useTranslate();
   const size = parseTrackSize(track);
   const switchMode = (mode: 'default' | 'minmax') => {
     if (mode !== size.mode) {
@@ -216,12 +201,12 @@ export function TrackSizeEditor({
   return (
     <div className="embed-editor_grid-track-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Sizing</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.sizing')}</span>
         <SegmentedControl
           value={size.mode}
-          options={SIZING_OPTIONS}
+          options={sizingOptions(translate)}
           onChange={switchMode}
-          ariaLabel="Track sizing"
+          ariaLabel={translate('style.trackEditor.trackSizing')}
           disabled={busy}
         />
       </div>
@@ -232,23 +217,16 @@ export function TrackSizeEditor({
 }
 
 // Default: one Size field; Min/Max: the two bounds.
-export function TrackSizeFields({
-  size,
-  busy,
-  onChange,
-}: {
-  size: TrackSize;
-  busy: boolean;
-  onChange: (size: TrackSize) => void;
-}) {
+export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; busy: boolean; onChange: (size: TrackSize) => void }) {
+  const translate = useTranslate();
   if (size.mode === 'default') {
     return (
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.size')}</span>
         <TrackInput
           value={size.value}
           placeholder="1fr"
-          ariaLabel="Track size"
+          ariaLabel={translate('style.trackEditor.trackSize')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'default', value: next || 'auto' })}
         />
@@ -258,21 +236,21 @@ export function TrackSizeFields({
   return (
     <>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Min</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.min')}</span>
         <TrackInput
           value={size.min}
           placeholder="auto"
-          ariaLabel="Track min"
+          ariaLabel={translate('style.trackEditor.trackMin')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'minmax', min: next || 'auto', max: size.max })}
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Max</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.max')}</span>
         <TrackInput
           value={size.max}
           placeholder="1fr"
-          ariaLabel="Track max"
+          ariaLabel={translate('style.trackEditor.trackMax')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'minmax', min: size.min, max: next || '1fr' })}
         />
@@ -282,8 +260,9 @@ export function TrackSizeFields({
 }
 
 export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boolean }) {
+  const translate = useTranslate();
   return (
-    <>
+    <TipAnchor text={!autoFit.can && !autoFit.on ? translate('style.trackEditor.autoFitWarning') : undefined}>
       <label className="embed-editor_grad-check embed-editor_grid-autofit">
         <input
           type="checkbox"
@@ -291,20 +270,9 @@ export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boole
           disabled={busy || (!autoFit.can && !autoFit.on)}
           onChange={(event) => autoFit.onToggle(event.target.checked)}
         />
-        <span>Auto-fit</span>
+        <span>{translate('style.trackEditor.autoFit')}</span>
       </label>
-      {!autoFit.can && !autoFit.on ? (
-        <div className="embed-editor_grid-warning">
-          <span className="embed-editor_grid-warning-icon">
-            <WarnIcon />
-          </span>
-          <span>
-            Auto-fit can’t be enabled when there are auto, flexible (FR), minmax(auto, fr),
-            minmax(auto, auto), or other auto-fit columns or rows.
-          </span>
-        </div>
-      ) : undefined}
-    </>
+    </TipAnchor>
   );
 }
 
@@ -318,15 +286,7 @@ export interface PopoverPosition {
 // accordion — portaled over the modal, positioned below the clicked row (flips above
 // when there isn't room), with a caret pointing at it. Closes on outside click /
 // Escape / scroll.
-export function TrackPopover({
-  anchorElement,
-  onClose,
-  children,
-}: {
-  anchorElement: HTMLElement;
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function TrackPopover({ anchorElement, onClose, children }: { anchorElement: HTMLElement; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<PopoverPosition | undefined>(undefined);
   // The panel's span, read at mount so the first layout (which measures this
@@ -356,11 +316,7 @@ export function TrackPopover({
         visibility: position === undefined ? 'hidden' : 'visible',
       }}
     >
-      <span
-        className="embed-editor_grid-popover-caret"
-        style={{ left: position?.caretLeft ?? 16 }}
-        aria-hidden="true"
-      />
+      <span className="embed-editor_grid-popover-caret" style={{ left: position?.caretLeft ?? 16 }} aria-hidden="true" />
       {children}
     </Popup>
   );
@@ -368,20 +324,13 @@ export function TrackPopover({
 
 // Below the anchor when the popover fits there, else above it; the caret points at
 // the anchor's middle.
-export function popoverPosition(
-  anchorElement: HTMLElement,
-  height: number,
-  span: { left: number; width: number },
-): PopoverPosition {
+export function popoverPosition(anchorElement: HTMLElement, height: number, span: { left: number; width: number }): PopoverPosition {
   const anchor = anchorElement.getBoundingClientRect();
   const gap = 8;
   const below = anchor.bottom + gap + height <= window.innerHeight;
   const top = below ? anchor.bottom + gap : Math.max(gap, anchor.top - gap - height);
   // The caret is absolutely positioned inside the popover, so its x is local
   // to the popover's left edge — not the window's.
-  const caretLeft = Math.min(
-    Math.max(anchor.left + anchor.width / 2 - span.left, 16),
-    span.width - 16,
-  );
+  const caretLeft = Math.min(Math.max(anchor.left + anchor.width / 2 - span.left, 16), span.width - 16);
   return { top, caretLeft, below };
 }

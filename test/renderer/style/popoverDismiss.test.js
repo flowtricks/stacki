@@ -10,6 +10,9 @@
 //
 // Pressing the row the editor belongs to is the exception: that press is meant
 // for the row, whose own handler toggles the editor shut.
+//
+// A scroll closes it only when the row it sits on moved on screen; a scroll that
+// moves nothing (scroll anchoring, another panel) leaves it open.
 
 const fs = require('fs');
 const path = require('path');
@@ -33,8 +36,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await esbuild.build({
     stdin: {
       contents:
-        `export { default as LayerPopover } from './src/features/style/LayerPopover';` +
-        `export { registerPopupLayer } from './src/features/style/model/popupLayer';`,
+        `export { default as LayerPopover } from './src/features/style/LayerPopover';` + `export { registerPopupLayer } from './src/ui/popupOwnership';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -126,9 +128,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     await act(async () => {
       element.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
       await settle(0);
-      element.dispatchEvent(
-        new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }),
-      );
+      element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
       await settle(0);
     });
   };
@@ -140,22 +140,14 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   pressed.length = 0;
   await pressAndClick(events);
   check('pressing a control outside closes the editor', closes === 1, `${closes} closes`);
-  check(
-    'and does not also press that control',
-    pressed.length === 0,
-    `pressed: ${pressed.join(', ')}`,
-  );
+  check('and does not also press that control', pressed.length === 0, `pressed: ${pressed.join(', ')}`);
 
   // --- the next press is a normal one ------------------------------------------
   // Dismissing swallows ONE click. The press after it belongs to whatever it
   // lands on, or nothing would work after closing a popover.
   pressed.length = 0;
   await pressAndClick(events);
-  check(
-    'the press after that presses the control',
-    pressed.join(',') === 'events',
-    pressed.join(','),
-  );
+  check('the press after that presses the control', pressed.join(',') === 'events', pressed.join(','));
 
   // --- the row the editor belongs to -------------------------------------------
   // Its own click handler is what toggles the editor shut, so that press has to
@@ -164,11 +156,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await open();
   pressed.length = 0;
   await pressAndClick(row);
-  check(
-    'pressing the row it belongs to reaches the row',
-    pressed.join(',') === 'row',
-    pressed.join(','),
-  );
+  check('pressing the row it belongs to reaches the row', pressed.join(',') === 'row', pressed.join(','));
 
   // --- a press inside changes nothing ------------------------------------------
   closes = 0;
@@ -197,11 +185,23 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   unregisterPicker();
   picker.remove();
 
+  // A scroll that leaves the row where it was (scroll anchoring after the panel's data
+  // lands, another panel scrolling) is no reason to close: nothing it sits on moved.
+  await act(async () => {
+    events.dispatchEvent(new dom.window.Event('scroll'));
+    await settle(0);
+  });
+  check('a scroll that moves nothing leaves the editor open', closes === 0, `${closes} closes`);
+
+  // A person scrolling the panel carries the row away from the editor: that closes it.
+  const rowBox = row.getBoundingClientRect();
+  row.getBoundingClientRect = () => ({ ...rowBox, top: rowBox.top - 40, bottom: rowBox.bottom - 40, y: rowBox.y - 40 });
   await act(async () => {
     events.dispatchEvent(new dom.window.Event('scroll'));
     await settle(0);
   });
   check('scrolling outside still closes the editor', closes === 1, `${closes} closes`);
+  delete row.getBoundingClientRect;
 
   // --- a press that never becomes a click --------------------------------------
   // Dragging away from a press, or a context menu: the swallow must not be left
@@ -217,16 +217,10 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     events.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
     await settle(0);
   });
-  check(
-    'a press with no click does not swallow a later one',
-    pressed.join(',') === 'events',
-    `pressed: ${pressed.join(', ')}`,
-  );
+  check('a press with no click does not swallow a later one', pressed.join(',') === 'events', `pressed: ${pressed.join(', ')}`);
 
   if (failures.length) {
-    console.error(
-      `\npopover-dismiss: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\npopover-dismiss: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

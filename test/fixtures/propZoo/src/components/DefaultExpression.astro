@@ -1,0 +1,10 @@
+---
+interface Props {
+  year?: number;
+  items?: string[];
+  config?: { dense: boolean };
+  stamp?: string;
+}
+const { year = new Date().getFullYear(), items = [], config = { dense: false }, stamp = `built-${Date.now()}` } = Astro.props;
+---
+<footer class="default-expression" data-dense={config.dense} data-stamp={stamp}>© {year} — {items.join(', ')}</footer>

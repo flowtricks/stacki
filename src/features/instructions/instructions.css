@@ -1,0 +1,116 @@
+/* The Instructions create forms and the reading view (its sections and rows are the Settings panel's: src/ui/panelSection.css). Rows and blocks are set apart by
+   background fills, as across the app; none draws a border. */
+
+.instructions-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.instructions-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block: 2px 6px;
+  margin-inline: 8px 0;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--bg-panel-2, var(--bg-hover));
+}
+.instructions-form input,
+.instructions-form textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.instructions-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* The reading view covers the canvas as a CMS entry does (.cms-view, .cms-detail). */
+.instructions-view-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.instructions-status-error {
+  color: var(--red);
+}
+.instructions-conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+.instructions-conflict-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.instructions-source .cm-editor {
+  min-height: 60vh;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+/* GitHub tables and task lists inside the rich text editor. */
+.instructions-rich table {
+  border-collapse: separate;
+  border-spacing: 1px;
+  background: var(--bg-hover);
+  border-radius: var(--radius);
+}
+.instructions-rich th,
+.instructions-rich td {
+  padding: 4px 8px;
+  background: var(--bg);
+  text-align: start;
+}
+.instructions-rich th {
+  background: var(--bg-panel);
+  font-weight: 600;
+}
+.instructions-rich .align-center {
+  text-align: center;
+}
+.instructions-rich .align-right {
+  text-align: end;
+}
+.instructions-rich li.task {
+  position: relative;
+  padding-inline-start: 22px;
+  list-style: none;
+}
+.instructions-rich li.task::before {
+  content: '';
+  position: absolute;
+  top: 0.3em;
+  inset-inline-start: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--bg-input);
+  cursor: pointer;
+}
+.instructions-rich li.task.done::before {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+.instructions-rich li.task.done {
+  color: var(--text-dim);
+}

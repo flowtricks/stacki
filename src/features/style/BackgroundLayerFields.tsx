@@ -1,34 +1,25 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { close as centralClose } from '../../ui/central/centralGeometry';
 // The fields one background layer is edited with: its longhands, type, size,
 // position, tiling, image and colour, and the icons they show
 // (BackgroundSection.tsx).
 
 import { useEffect, useId, useState } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import useScrub from './components/useScrub';
-import {
-  colorOverlayImage,
-  colorOverlayOf,
-  serializeLayers,
-  splitTopLevelSpaces,
-  type BgLayer,
-  type LayerKind,
-} from './model/background';
+import { colorOverlayImage, colorOverlayOf, serializeLayers, splitTopLevelSpaces, type BgLayer, type LayerKind } from './model/background';
 import VariableConnect from './VariableConnect';
-import { requestAsset } from '../../ui/assetPick';
+import { chooseAsset } from '../../ui/assetPick';
+import { OverrideNote } from '../../ui/OverrideNote';
 import { assetValueFor } from '../../ui/assetPath';
 import { sourceCandidates } from '../../ui/AssetThumb';
 import { getHost } from './model/host';
 import ColorSwatch from './components/ColorSwatch';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { useExternalDraft } from './model/fieldHooks';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type WriteOptions,
-  replaceLayer,
-  stepInPlace,
-} from './BackgroundKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { type SetProp, type ClearProp, type LiveSetProp, type WriteOptions, replaceLayer, stepInPlace } from './BackgroundKit';
 
 // ─────────────────────────── Layer editor ───────────────────────────
 
@@ -46,6 +37,7 @@ export function LayerLonghandField({
   label: string;
   placeholder: string;
 }) {
+  const translate = useTranslate();
   const { layers, index, busy, setProp } = fieldProps;
   const { draft, setDraft, focused } = useExternalDraft(layers[index]?.[field] ?? '');
 
@@ -70,9 +62,10 @@ export function LayerLonghandField({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${label} to a variable`}
+      ariaLabel={translate('style.backgroundLayerFields.connect', { name: label })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => setProp(prop, binding, false)}
     >
       <input
@@ -107,12 +100,7 @@ export function LayerLonghandField({
 
 // Write one longhand's whole comma list: live writes skip an empty list; a committed
 // empty list clears the property.
-export function writeLayerList(
-  prop: string,
-  list: string,
-  options: WriteOptions,
-  writers: Pick<LayerFieldProps, 'setProp' | 'clearProp' | 'liveSetProp'>,
-) {
+export function writeLayerList(prop: string, list: string, options: WriteOptions, writers: Pick<LayerFieldProps, 'setProp' | 'clearProp' | 'liveSetProp'>) {
   if (options.live) {
     if (list) {
       writers.liveSetProp(prop, list, false);
@@ -126,9 +114,7 @@ export function writeLayerList(
   }
 }
 
-export const BACKGROUND_IMAGE_ICON_FIRST_PATH =
-  'M6 7C6.55228 7 7 6.55228 7 6C7 5.44772 6.55228 5 6 5C5.44772 5 5 5.44772 5 6' +
-  'C5 6.55228 5.44772 7 6 7Z';
+export const BACKGROUND_IMAGE_ICON_FIRST_PATH = 'M6 7C6.55228 7 7 6.55228 7 6C7 5.44772 6.55228 5 6 5C5.44772 5 5 5.44772 5 6' + 'C5 6.55228 5.44772 7 6 7Z';
 export const BACKGROUND_IMAGE_ICON_SECOND_PATH =
   'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
   'C2.44772 14 2 13.5523 2 13V3ZM13 3L3 3V12.2929L8 7.29289L13 12.2929V3ZM8 8.70711' +
@@ -140,18 +126,12 @@ export function BgImageIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={BACKGROUND_IMAGE_ICON_FIRST_PATH} fill="currentColor" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={BACKGROUND_IMAGE_ICON_SECOND_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={BACKGROUND_IMAGE_ICON_SECOND_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const BACKGROUND_LINEAR_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgLinearIcon() {
   const id = useId();
@@ -168,8 +148,7 @@ export function BgLinearIcon() {
   );
 }
 export const BACKGROUND_RADIAL_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgRadialIcon() {
   const id = useId();
@@ -177,14 +156,7 @@ export function BgRadialIcon() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={BACKGROUND_RADIAL_ICON_PATH} fill={`url(#${id})`} />
       <defs>
-        <radialGradient
-          id={id}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(8 8) rotate(90) scale(6)"
-        >
+        <radialGradient id={id} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 8) rotate(90) scale(6)">
           <stop stopColor="currentColor" stopOpacity="0" />
           <stop offset="0.166246" stopColor="currentColor" stopOpacity="0" />
           <stop offset="1" stopColor="currentColor" />
@@ -194,8 +166,7 @@ export function BgRadialIcon() {
   );
 }
 export const BACKGROUND_COLOR_ICON_PATH =
-  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' +
-  'C2.44772 14 2 13.5523 2 13V3Z';
+  'M2 3C2 2.44772 2.44772 2 3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3' + 'C2.44772 14 2 13.5523 2 13V3Z';
 
 export function BgColorIcon() {
   return (
@@ -205,22 +176,35 @@ export function BgColorIcon() {
   );
 }
 
-export const TYPE_OPTIONS: ReadonlyArray<SegmentedOption<LayerKind>> = [
-  { value: 'image', label: <BgImageIcon />, ariaLabel: 'Image', tooltip: 'Image' },
+export const typeOptions = (translate: Translator): ReadonlyArray<SegmentedOption<LayerKind>> => [
+  {
+    value: 'image',
+    label: <BgImageIcon />,
+    ariaLabel: translate('style.backgroundLayerFields.typeImage'),
+    tooltip: translate('style.backgroundLayerFields.typeImage'),
+  },
   {
     value: 'linear',
     label: <BgLinearIcon />,
-    ariaLabel: 'Linear gradient',
-    tooltip: 'Linear gradient',
+    ariaLabel: translate('style.backgroundLayerFields.typeLinear'),
+    tooltip: translate('style.backgroundLayerFields.typeLinear'),
   },
   {
     value: 'radial',
     label: <BgRadialIcon />,
-    ariaLabel: 'Radial gradient',
-    tooltip: 'Radial gradient',
+    ariaLabel: translate('style.backgroundLayerFields.typeRadial'),
+    tooltip: translate('style.backgroundLayerFields.typeRadial'),
   },
-  { value: 'color', label: <BgColorIcon />, ariaLabel: 'Color overlay', tooltip: 'Color overlay' },
+  {
+    value: 'color',
+    label: <BgColorIcon />,
+    ariaLabel: translate('style.backgroundLayerFields.typeColor'),
+    tooltip: translate('style.backgroundLayerFields.typeColor'),
+  },
 ];
+
+const AUTO_KEYWORD = 'Auto'; // i18n-ignore: the CSS keyword `auto`, shown as the empty value.
+const OVERLAY_PLACEHOLDER = 'rgba(0, 0, 0, 0.5)'; // i18n-ignore: CSS color example.
 
 export type LayerFieldProps = {
   layers: BgLayer[];
@@ -235,6 +219,7 @@ export type LayerFieldProps = {
 // longhand (Size's width/height, Position's left/top). The parent maps the part back
 // into the full comma list; this just owns the field's local text + arrow-stepping.
 export function BgPartInput({
+  prop,
   value,
   placeholder,
   label,
@@ -243,6 +228,8 @@ export function BgPartInput({
   onLive,
   onCommit,
 }: {
+  /** The longhand this is one part of: the variable picker offers what fits it. */
+  prop: string;
   value: string;
   placeholder: string;
   label: string;
@@ -263,34 +250,47 @@ export function BgPartInput({
     onInput: (text) => onLive(text.trim()),
     onCommit: commitScrub,
   });
+  const translate = useTranslate();
+  // One part of a value, so the picker's preview shows in the field alone (no canvasProperty).
   return (
-    <input
-      {...scrub.input}
-      className={`u-input embed-editor_size-input ${disabled ? 'is-inactive' : ''}`}
-      value={draft}
-      placeholder={placeholder}
-      aria-label={label}
-      disabled={busy || disabled}
-      spellCheck={false}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        onLive(event.target.value.trim());
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      disabled={busy || disabled === true}
+      ariaLabel={translate('styleModel.shared.connectVariable', { label })}
+      onPick={(binding) => {
+        setDraft(binding);
+        onCommit(binding);
       }}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        onCommit(draft.trim());
-      }}
-      onKeyDown={(event) => {
-        const stepped = stepInPlace(event);
-        if (stepped !== undefined) {
-          setDraft(stepped);
-          onLive(stepped.trim());
-        }
-      }}
-    />
+    >
+      <input
+        {...scrub.input}
+        className={`u-input embed-editor_size-input ${disabled ? 'is-inactive' : ''}`}
+        value={draft}
+        placeholder={placeholder}
+        aria-label={label}
+        disabled={busy || disabled}
+        spellCheck={false}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          onLive(event.target.value.trim());
+        }}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          onCommit(draft.trim());
+        }}
+        onKeyDown={(event) => {
+          const stepped = stepInPlace(event);
+          if (stepped !== undefined) {
+            setDraft(stepped);
+            onLive(stepped.trim());
+          }
+        }}
+      />
+    </VariableConnect>
   );
 }
 
@@ -321,19 +321,13 @@ export function serializeSize(mode: SizeMode, width: string, height: string): st
   }
   return `${widthPart || 'auto'} ${heightPart || 'auto'}`;
 }
-export const SIZE_MODE_OPTIONS: ReadonlyArray<SegmentedOption<SizeMode>> = [
-  { value: 'custom', label: 'Custom' },
-  { value: 'cover', label: 'Cover' },
-  { value: 'contain', label: 'Contain' },
+export const sizeModeOptions = (translate: Translator): ReadonlyArray<SegmentedOption<SizeMode>> => [
+  { value: 'custom', label: translate('style.backgroundLayerFields.sizeCustom') },
+  { value: 'cover', label: translate('style.backgroundLayerFields.sizeCover') },
+  { value: 'contain', label: translate('style.backgroundLayerFields.sizeContain') },
 ];
-export function LayerSizeField({
-  layers,
-  index,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-}: LayerFieldProps) {
+export function LayerSizeField({ layers, index, busy, setProp, clearProp, liveSetProp }: LayerFieldProps) {
+  const translate = useTranslate();
   const parsed = parseSize(layers[index]?.size ?? '');
   const writeSize = (value: string, options: WriteOptions) => {
     const list = serializeLayers(replaceLayer(layers, index, { size: value })).size;
@@ -345,46 +339,38 @@ export function LayerSizeField({
   return (
     <div className="embed-editor_bg-stack">
       <SegmentedControl
-        options={SIZE_MODE_OPTIONS}
+        options={sizeModeOptions(translate)}
         value={parsed.mode}
-        onChange={(mode) =>
-          writeSize(serializeSize(mode, parsed.width, parsed.height), { live: false })
-        }
-        ariaLabel="Background size"
+        onChange={(mode) => writeSize(serializeSize(mode, parsed.width, parsed.height), { live: false })}
+        ariaLabel={translate('style.backgroundLayerFields.backgroundSize')}
         disabled={busy}
       />
       <div className="embed-editor_bg-pair">
         <label className="embed-editor_bg-pair-field">
           <BgPartInput
+            prop="background-size"
             value={parsed.width}
-            placeholder="Auto"
-            label="Width"
+            placeholder={AUTO_KEYWORD}
+            label={translate('style.backgroundLayerFields.width')}
             busy={busy}
             disabled={!isCustom}
-            onLive={(next) =>
-              writeSize(serializeSize('custom', next, parsed.height), { live: true })
-            }
-            onCommit={(next) =>
-              writeSize(serializeSize('custom', next, parsed.height), { live: false })
-            }
+            onLive={(next) => writeSize(serializeSize('custom', next, parsed.height), { live: true })}
+            onCommit={(next) => writeSize(serializeSize('custom', next, parsed.height), { live: false })}
           />
-          <span className="embed-editor_bg-pair-cap">Width</span>
+          <span className="embed-editor_bg-pair-cap">{translate('style.backgroundLayerFields.width')}</span>
         </label>
         <label className="embed-editor_bg-pair-field">
           <BgPartInput
+            prop="background-size"
             value={parsed.height}
-            placeholder="Auto"
-            label="Height"
+            placeholder={AUTO_KEYWORD}
+            label={translate('style.backgroundLayerFields.height')}
             busy={busy}
             disabled={!isCustom}
-            onLive={(next) =>
-              writeSize(serializeSize('custom', parsed.width, next), { live: true })
-            }
-            onCommit={(next) =>
-              writeSize(serializeSize('custom', parsed.width, next), { live: false })
-            }
+            onLive={(next) => writeSize(serializeSize('custom', parsed.width, next), { live: true })}
+            onCommit={(next) => writeSize(serializeSize('custom', parsed.width, next), { live: false })}
           />
-          <span className="embed-editor_bg-pair-cap">Height</span>
+          <span className="embed-editor_bg-pair-cap">{translate('style.backgroundLayerFields.height')}</span>
         </label>
       </div>
     </div>
@@ -394,14 +380,7 @@ export function LayerSizeField({
 // Position: a 3×3 preset grid + Left/Top offsets.
 export function axisIndex(token: string): number {
   const normalized = token.trim().toLowerCase();
-  if (
-    normalized === '' ||
-    normalized === 'left' ||
-    normalized === 'top' ||
-    normalized === '0' ||
-    normalized === '0%' ||
-    normalized === '0px'
-  ) {
+  if (normalized === '' || normalized === 'left' || normalized === 'top' || normalized === '0' || normalized === '0%' || normalized === '0px') {
     return 0;
   }
   if (normalized === 'center' || normalized === '50%') {
@@ -413,14 +392,8 @@ export function axisIndex(token: string): number {
   return -1;
 }
 export const AXIS_PERCENTS = ['0%', '50%', '100%'];
-export function LayerPositionField({
-  layers,
-  index,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-}: LayerFieldProps) {
+export function LayerPositionField({ layers, index, busy, setProp, clearProp, liveSetProp }: LayerFieldProps) {
+  const translate = useTranslate();
   const parts = splitTopLevelSpaces((layers[index]?.position ?? '').trim());
   const x = parts[0] ?? '';
   const y = parts[1] ?? '';
@@ -434,22 +407,24 @@ export function LayerPositionField({
       <PositionPresets x={x} y={y} busy={busy} writePosition={writePosition} />
       <div className="embed-editor_bg-posfields">
         <label className="embed-editor_bg-posfield">
-          <span className="embed-editor_bg-posfield-cap">Left</span>
+          <span className="embed-editor_bg-posfield-cap">{translate('style.backgroundLayerFields.left')}</span>
           <BgPartInput
+            prop="background-position"
             value={x}
             placeholder="0px"
-            label="Left"
+            label={translate('style.backgroundLayerFields.left')}
             busy={busy}
             onLive={(next) => writePosition(offset(next, y), { live: true })}
             onCommit={(next) => writePosition(next || y ? offset(next, y) : '', { live: false })}
           />
         </label>
         <label className="embed-editor_bg-posfield">
-          <span className="embed-editor_bg-posfield-cap">Top</span>
+          <span className="embed-editor_bg-posfield-cap">{translate('style.backgroundLayerFields.top')}</span>
           <BgPartInput
+            prop="background-position"
             value={y}
             placeholder="0px"
-            label="Top"
+            label={translate('style.backgroundLayerFields.top')}
             busy={busy}
             onLive={(next) => writePosition(offset(x, next), { live: true })}
             onCommit={(next) => writePosition(x || next ? offset(x, next) : '', { live: false })}
@@ -472,24 +447,30 @@ export function PositionPresets({
   busy: boolean;
   writePosition: (value: string, options: WriteOptions) => void;
 }) {
+  const translate = useTranslate();
+  const columnLabels = [
+    translate('style.backgroundLayerFields.cellLeft'),
+    translate('style.backgroundLayerFields.cellCenter'),
+    translate('style.backgroundLayerFields.cellRight'),
+  ];
+  const rowLabels = [
+    translate('style.backgroundLayerFields.cellTop'),
+    translate('style.backgroundLayerFields.cellMiddle'),
+    translate('style.backgroundLayerFields.cellBottom'),
+  ];
   const activeCol = axisIndex(x);
   const activeRow = axisIndex(y);
   return (
-    <div className="embed-editor_bg-posgrid" role="group" aria-label="Position preset">
+    <div className="embed-editor_bg-posgrid" role="group" aria-label={translate('style.backgroundLayerFields.positionPreset')}>
       {[0, 1, 2].flatMap((row) =>
         [0, 1, 2].map((col) => (
           <button
             key={`${row}-${col}`}
             type="button"
-            className={
-              'embed-editor_bg-poscell ' +
-              (activeCol === col && activeRow === row ? 'is-active' : '')
-            }
+            className={'embed-editor_bg-poscell ' + (activeCol === col && activeRow === row ? 'is-active' : '')}
             disabled={busy}
-            aria-label={`${['Left', 'Center', 'Right'][col]} ${['top', 'center', 'bottom'][row]}`}
-            onClick={() =>
-              writePosition(`${AXIS_PERCENTS[col]} ${AXIS_PERCENTS[row]}`, { live: false })
-            }
+            aria-label={translate('style.backgroundLayerFields.positionCell', { horizontal: columnLabels[col] ?? '', vertical: rowLabels[row] ?? '' })}
+            onClick={() => writePosition(`${AXIS_PERCENTS[col]} ${AXIS_PERCENTS[row]}`, { live: false })}
           />
         )),
       )}
@@ -520,23 +501,33 @@ export const TileYIcon = () => (
     <rect x="5.5" y="11" width="5" height="4" rx="1" />
   </svg>
 );
-export const TileNoneIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-  </svg>
-);
-export const TILE_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
-  { value: 'repeat', label: <TileAllIcon />, ariaLabel: 'Tile', tooltip: 'Tile' },
-  { value: 'repeat-x', label: <TileXIcon />, ariaLabel: 'Tile horizontally', tooltip: 'Tile X' },
-  { value: 'repeat-y', label: <TileYIcon />, ariaLabel: 'Tile vertically', tooltip: 'Tile Y' },
-  { value: 'no-repeat', label: <TileNoneIcon />, ariaLabel: 'No tile', tooltip: 'None' },
+export const TileNoneIcon = centralIcon(centralClose);
+export const tileOptions = (translate: Translator): ReadonlyArray<SegmentedOption<string>> => [
+  { value: 'repeat', label: <TileAllIcon />, ariaLabel: translate('style.backgroundLayerFields.tile'), tooltip: translate('style.backgroundLayerFields.tile') },
+  {
+    value: 'repeat-x',
+    label: <TileXIcon />,
+    ariaLabel: translate('style.backgroundLayerFields.tileHorizontally'),
+    tooltip: translate('style.backgroundLayerFields.tileX'),
+  },
+  {
+    value: 'repeat-y',
+    label: <TileYIcon />,
+    ariaLabel: translate('style.backgroundLayerFields.tileVertically'),
+    tooltip: translate('style.backgroundLayerFields.tileY'),
+  },
+  {
+    value: 'no-repeat',
+    label: <TileNoneIcon />,
+    ariaLabel: translate('style.backgroundLayerFields.noTile'),
+    tooltip: translate('style.backgroundLayerFields.tileNone'),
+  },
 ];
-export const FIXED_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
-  { value: 'fixed', label: 'Fixed' },
-  { value: 'scroll', label: 'Not fixed' },
+export const fixedOptions = (translate: Translator): ReadonlyArray<SegmentedOption<string>> => [
+  { value: 'fixed', label: translate('style.backgroundLayerFields.fixed') },
+  { value: 'scroll', label: translate('style.backgroundLayerFields.notFixed') },
 ];
 
-// Image: thumbnail + name + dimensions + Choose image (asset picker).
 export function imageUrlOf(image: string): string | undefined {
   const match = image.match(/url\(\s*['"]?([^'")]+?)['"]?\s*\)/i);
   return match?.[1];
@@ -576,15 +567,7 @@ export function assetSourceCandidates(url: string | undefined): string[] {
 }
 
 // An <img> that works through a list of sources until one loads.
-export function FallbackImg({
-  srcs,
-  alt = '',
-  onLoad,
-}: {
-  srcs: string[];
-  alt?: string;
-  onLoad?: (size: { w: number; h: number }) => void;
-}) {
+export function FallbackImg({ srcs, alt = '', onLoad }: { srcs: string[]; alt?: string; onLoad?: (size: { w: number; h: number }) => void }) {
   const [sourceIndex, setSourceIndex] = useState(0);
   // A new list starts again from its first source.
   const sourcesKey = srcs.join('|');
@@ -599,9 +582,7 @@ export function FallbackImg({
       src={srcs[sourceIndex]}
       alt={alt}
       draggable={false}
-      onLoad={(event) =>
-        onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })
-      }
+      onLoad={(event) => onLoad?.({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
       onError={() => setSourceIndex((previous) => previous + 1)}
     />
   );
@@ -618,6 +599,7 @@ export function LayerImageField({
   busy: boolean;
   applyLayers: (layers: BgLayer[]) => void;
 }) {
+  const translate = useTranslate();
   const image = layers[index]?.image ?? '';
   const url = imageUrlOf(image);
   const name = url ? (url.split('?')[0] ?? '').split(/[\\/]/).pop() || url : '';
@@ -637,7 +619,7 @@ export function LayerImageField({
         </span>
         <div className="embed-editor_bg-image-meta">
           <span className="embed-editor_bg-image-name" title={url ?? ''}>
-            {name || 'No image'}
+            {name || translate('style.backgroundLayerFields.noImage')}
           </span>
           {dims ? <span className="embed-editor_bg-image-dim">{dims}</span> : undefined}
         </div>
@@ -652,16 +634,21 @@ export function LayerImageField({
         type="button"
         className="u-button is-small embed-editor_bg-choose"
         disabled={busy}
-        onClick={() =>
-          requestAsset({
-            mediaKind: 'image',
-            current: url ?? '',
-            onPick: (pickedRel: string) => pick(assetValueFor(pickedRel)),
-          })
+        // Alt-click skips any app that answers picks (docs/apps.md, "Overrides").
+        onClick={(event) =>
+          void chooseAsset(
+            {
+              mediaKind: 'image',
+              current: url ?? '',
+              onPick: (pickedRel: string) => pick(assetValueFor(pickedRel)),
+            },
+            { bypass: event.altKey, target: undefined },
+          )
         }
       >
-        {url ? 'Replace image…' : 'Choose image…'}
+        {url ? translate('style.backgroundLayerFields.replaceImage') : translate('style.backgroundLayerFields.chooseImage')}
       </button>
+      <OverrideNote point="assets.pick" />
     </div>
   );
 }
@@ -680,12 +667,10 @@ export function LayerColorField({
   setProp: SetProp;
   liveSetProp: LiveSetProp;
 }) {
-  const { draft, setDraft, focused } = useExternalDraft(
-    colorOverlayOf(layers[index]?.image ?? '') ?? '',
-  );
+  const translate = useTranslate();
+  const { draft, setDraft, focused } = useExternalDraft(colorOverlayOf(layers[index]?.image ?? '') ?? '');
 
-  const listFor = (color: string): string =>
-    serializeLayers(replaceLayer(layers, index, { image: colorOverlayImage(color) })).image;
+  const listFor = (color: string): string => serializeLayers(replaceLayer(layers, index, { image: colorOverlayImage(color) })).image;
   // An empty colour writes the overlay's default tint.
   const write = (color: string, options: WriteOptions) => {
     const value = listFor(color.trim() || 'rgba(0, 0, 0, 0.5)');
@@ -701,29 +686,24 @@ export function LayerColorField({
       <ColorSwatch
         value={draft}
         busy={busy}
-        ariaLabel="Overlay color"
+        ariaLabel={translate('style.backgroundLayerFields.overlayColor')}
         onChange={(color, live) => {
           setDraft(color);
           write(color, { live });
         }}
       />
       <VariableConnect
-        ariaLabel="Connect overlay color to a variable"
+        ariaLabel={translate('style.backgroundLayerFields.connectOverlayColor')}
         disabled={busy}
         className="is-fill"
         prop="background-color"
+        canvasProperty="background-color"
         onPick={(binding) => {
           setDraft(binding);
           setProp('background-image', listFor(binding), false);
         }}
       >
-        <OverlayColorInput
-          draft={draft}
-          busy={busy}
-          focusedRef={focused}
-          setDraft={setDraft}
-          write={write}
-        />
+        <OverlayColorInput draft={draft} busy={busy} focusedRef={focused} setDraft={setDraft} write={write} />
       </VariableConnect>
     </div>
   );
@@ -744,30 +724,43 @@ export function OverlayColorInput({
   setDraft: (draft: string) => void;
   write: (color: string, options: WriteOptions) => void;
 }) {
+  const translate = useTranslate();
+  // Wrapped like every other field: a colour variable reads as the purple chip.
   return (
-    <input
-      className="u-input embed-editor_size-input"
-      value={draft}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        write(draft, { live: true });
-      }}
-      onFocus={() => {
-        focusedRef.current = true;
-      }}
-      onBlur={() => {
-        focusedRef.current = false;
-        write(draft, { live: false });
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop="color"
       disabled={busy}
-      spellCheck={false}
-      placeholder="rgba(0, 0, 0, 0.5)"
-      aria-label="Overlay color"
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: translate('style.backgroundLayerFields.overlayColor') })}
+      onPick={(binding) => {
+        setDraft(binding);
+        write(binding, { live: false });
+      }}
+    >
+      <input
+        className="u-input embed-editor_size-input"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          write(draft, { live: true });
+        }}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          write(draft, { live: false });
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder={OVERLAY_PLACEHOLDER}
+        aria-label={translate('style.backgroundLayerFields.overlayColor')}
+      />
+    </VariableConnect>
   );
 }

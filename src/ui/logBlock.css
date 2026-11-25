@@ -1,0 +1,19 @@
+/* A program's output, shown as text (src/ui/LogBlock.tsx). A background, no border. */
+.log-block {
+  margin: 0;
+  /* A program's output reads left to right in every language: a right-to-left interface never mirrors it. */
+  direction: ltr;
+  padding: 10px 12px;
+  max-height: 14rem;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

@@ -1,0 +1,15 @@
+{
+ "message": "Authentication Passed",
+ "exp": 1794571425,
+ "token": "<jwt>",
+ "user": {
+  "id": 1,
+  "name": null,
+  "updatedAt": null,
+  "createdAt": "2026-11-13T12:01:26.027Z",
+  "enableAPIKey": true,
+  "email": "admin@example.test",
+  "collection": "users",
+  "_strategy": "local-jwt"
+ }
+}

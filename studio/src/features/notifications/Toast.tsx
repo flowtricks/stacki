@@ -26,11 +26,7 @@ export function Toast({
       }
       action={(notice) =>
         notice.action ? (
-          <button
-            type="button"
-            className="studio-toast-action"
-            onClick={() => performAction(notice)}
-          >
+          <button type="button" className="studio-toast-action" onClick={() => performAction(notice)}>
             {notice.action.label}
           </button>
         ) : undefined

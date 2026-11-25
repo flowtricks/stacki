@@ -1,4 +1,5 @@
 import { useLiveNumericStyles } from '../preview/useLiveNumericStyles';
+import { useComponentExit } from './useComponentExit';
 import { useLiveText } from '../preview/useLiveText';
 import { insertTargetFor } from '../../../vendor/stacki/src/editor/insertTarget';
 import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
@@ -11,12 +12,15 @@ import { componentAt, componentEntry } from './componentEntry';
 import type { ComponentFocus, OpenFile } from './editorNavigation';
 import { dropTarget } from '../navigator/dropTarget';
 import type { DropLocation } from '../../../vendor/stacki/src/features/structure/structureModel';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { CanvasMove } from '../../../vendor/stacki/shared/page/canvasMove';
+import { planCanvasClone, planCanvasInsert } from '../../../vendor/stacki/shared/page/canvasInsert';
+import { pathFor } from './previewSelection';
 import type { Project } from './projectClient';
 import { useDocument } from '../collaboration/useDocument';
 import type { Session } from '../auth/useSession';
 import { usePreview } from '../preview/usePreview';
-import { relativeImport } from '../source/imports';
+import { componentImport } from '../source/imports';
 import { flatten, parsePage, type TreeAction } from '../source/source';
 export function useEditor(
   project: Project,
@@ -32,30 +36,26 @@ export function useEditor(
   canvasKeys = true,
   focus?: ComponentFocus,
 ) {
-  const document = useDocument(file, active);
-  const documentError = document?.error;
-  useEffect(() => {
-    if (documentError) {
-      report(documentError);
-    }
-  }, [documentError, report]);
+  const document = useDocument(file, active, project.workspaceId);
+  useDocumentError(document?.error, report);
   usePauseReadiness(document?.status === 'Saved', setCanPause);
-  const parsed = useParsed(file, document?.text.toString() ?? '');
+  const source = document?.text.toString() ?? '';
+  const parsed = useParsed(file, source);
   const nodes = parsed?.editable ? parsed.model.nodes : [];
   const enter = componentEntry({ project, file, parsed, document, open, focus, report });
   const collection = /\.(json|md|mdx)$/.test(file) && !file.startsWith('src/pages/');
   const preview = usePreview(
     previewFile,
     (id, occurrence) => {
-      select(id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence);
+      selection.selectFromCanvas(id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence);
       onCanvasSelect();
     },
     report,
     active,
-    (id, occurrence) =>
-      enter('', id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence),
+    (id, occurrence) => enter('', id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence),
   );
-  useLiveText(file, nodes, preview);
+  useLiveText(file, source, nodes, preview);
+  useComponentExit(file, previewFile, document, preview, open, report);
   useLiveNumericStyles(file, parsed, project, preview);
   useCursorPresence(document, previewFile, preview, session);
   const selection = useEditorSelection(file, previewFile, nodes, document, preview, focus);
@@ -65,8 +65,42 @@ export function useEditor(
   const component = componentAt(project, file, parsed, selected);
   const collaborators = useCollaborators(document, previewFile, preview, session);
   useFollow(followTarget, document?.ready ?? false, preview, select);
+  // A delete or a duplicate shows on the canvas at once (electron/preload/framePendingDelete.ts and
+  // framePendingInsert.ts); the server's rendering confirms it, and a refused action takes it back.
+  // Each names the source it was planned over (base), so a rendering from before it keeps it shown.
   function action(value: TreeAction) {
+    const base = document?.sourceStamp();
+    if (value.kind === 'delete') {
+      preview.send({ type: 'avb:hide-pending', path: pathFor(value.node), base });
+    } else if (value.kind === 'duplicate') {
+      const insert = planCanvasClone(nodes, value.node, pathFor);
+      if (insert !== undefined) {
+        preview.send({ type: 'avb:optimistic-insert', insert, base });
+      }
+    }
     void document?.action(value).catch(report);
+  }
+  const revertMove = useCanvasMoveRevert(preview.send);
+  // A reorder shows on the canvas at once (electron/preload/frameMove.ts); the page the
+  // server renders confirms it, and an action that is not sent or is refused takes it back.
+  function move(value: TreeAction, canvasMove: CanvasMove | undefined) {
+    if (canvasMove !== undefined) {
+      preview.send({ type: 'avb:optimistic-move', move: canvasMove, base: document?.sourceStamp() });
+    }
+    const pending = document?.action(value) ?? Promise.resolve(false);
+    void pending.then(
+      (sent) => {
+        if (!sent && canvasMove !== undefined) {
+          revertMove();
+        }
+      },
+      (error: unknown) => {
+        if (canvasMove !== undefined) {
+          revertMove();
+        }
+        report(error);
+      },
+    );
   }
   return {
     codeWindow,
@@ -82,11 +116,34 @@ export function useEditor(
     select,
     restoreSelection: selection.restore,
     action,
+    move,
     openComponent: enter,
     insert: (componentFile: string, location?: DropLocation) =>
-      insertComponent(project, file, parsed, selected, action, componentFile, location),
+      insertComponent(project, file, { parsed, selected, send: preview.send, base: document?.sourceStamp() }, action, componentFile, location),
     editable: !!parsed?.editable,
   };
+}
+// The canvas takes a shown reorder back when the server refuses the action
+// (useDocument.ts says so with `studio:action-refused`).
+function useCanvasMoveRevert(send: (message: unknown) => void): () => void {
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const refused = () => {
+      sendRef.current({ type: 'avb:move-revert' });
+      sendRef.current({ type: 'avb:insert-revert' });
+    };
+    window.addEventListener('studio:action-refused', refused);
+    return () => window.removeEventListener('studio:action-refused', refused);
+  }, []);
+  return () => sendRef.current({ type: 'avb:move-revert' });
+}
+function useDocumentError(error: string | undefined, report: (error: unknown) => void) {
+  useEffect(() => {
+    if (error) {
+      report(error);
+    }
+  }, [error, report]);
 }
 function usePauseReadiness(saved: boolean, setCanPause: ((safe: boolean) => void) | undefined) {
   useEffect(() => setCanPause?.(saved), [saved, setCanPause]);
@@ -94,39 +151,36 @@ function usePauseReadiness(saved: boolean, setCanPause: ((safe: boolean) => void
 function insertComponent(
   project: Project,
   file: string,
-  parsed: ReturnType<typeof parsePage> | undefined,
-  selected: string,
+  context: {
+    readonly parsed: ReturnType<typeof parsePage> | undefined;
+    readonly selected: string;
+    readonly send: (message: unknown) => void;
+    readonly base: string | undefined;
+  },
   action: (value: TreeAction) => void,
   componentFile: string,
   location?: DropLocation,
 ) {
-  const component = project.components.find(
-    (item) => item.file === componentFile || item.name === componentFile,
-  );
+  const { parsed, selected, send } = context;
+  const component = project.components.find((item) => item.file === componentFile || item.name === componentFile);
   if (!component || !parsed?.editable) {
     return;
   }
+  const place = location ?? insertTargetFor(parsePageModel(parsed.model), selected, { type: 'component', name: component.name }, project.components);
+  // A labelled block stands in on the canvas until the component renders (framePendingInsert.ts).
+  const standIn = planCanvasInsert(parsed.model.nodes, place, { kind: 'component', name: component.name, props: {} }, pathFor);
+  if (standIn !== undefined) {
+    send({ type: 'avb:optimistic-insert', insert: standIn, base: context.base });
+  }
   action({
     kind: 'insert',
-    ...dropTarget(
-      parsed.model.nodes,
-      location ??
-        insertTargetFor(
-          parsePageModel(parsed.model),
-          selected,
-          { type: 'component', name: component.name },
-          project.components,
-        ),
-    ),
+    ...dropTarget(parsed.model.nodes, place),
     name: component.name,
-    importPath: relativeImport(file, component.file),
+    importPath: componentImport(file, component),
     paired: component.slots.includes('default') && component.slotText === true,
   });
 }
 
 function useParsed(file: string, source: string) {
-  return useMemo(
-    () => (file.endsWith('.astro') ? parsePage(source, { locs: true }) : undefined),
-    [file, source],
-  );
+  return useMemo(() => (file.endsWith('.astro') ? parsePage(source, { locs: true }) : undefined), [file, source]);
 }

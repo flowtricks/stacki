@@ -19,7 +19,8 @@
 // Typing went somewhere the user could not watch.
 //
 // jsdom cannot answer this: it has no layout, no label forwarding, and no real
-// focus-on-press. So it is asked of a real browser, with real mouse events.
+// focus-on-press. So it is asked of a real browser, with real mouse events. Each step
+// waits, bounded, on the state it reads next (test/helpers/waitFor.js), not a fixed sleep.
 
 const fs = require('fs');
 const path = require('path');
@@ -43,9 +44,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'field-focus: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]',
-    );
+    console.log('field-focus: skipped  [needs a Chromium — see test/renderer/style/computedColor.test.js]');
     return;
   }
 
@@ -100,7 +99,15 @@ const check = (what, condition, detail) => {
   // which only exists in the CSS.
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),
-    ['src/app/styles.css', 'src/features/style/utilities.css', 'src/features/style/embedEditor.css']
+    [
+      // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
+      'src/app/styles.css',
+      'src/features/style/utilities.css',
+      'src/features/style/embedEditor.css',
+    ]
       .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n'),
   );
@@ -118,16 +125,24 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
-     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 520, height: 1700 });
        await win.loadFile(path.join(__dirname, 'index.html'));
-       await sleep(800);
+       const js = (code) => win.webContents.executeJavaScript(code);
+       // Bounded waits on what the next step reads (test/helpers/waitFor.js), not fixed sleeps.
+       const popupShown = (wanted) =>
+         pollUntil({
+           what: 'the transform settings ' + wanted,
+           read: () => js("document.querySelector('.embed-editor_tsettings') ? (" + MOTION_SETTLED_EXPRESSION + " ? 'open' : 'moving') : 'closed'"),
+           until: (state) => state === wanted,
+         });
+       await pollUntil({ what: 'the panel drawn', read: () => js("document.querySelector('button[aria-label=\\"Transform settings\\"]') !== null"), until: (drawn) => drawn });
        // Open the transform settings popup.
        await win.webContents.executeJavaScript(
          "document.querySelector('button[aria-label=\\"Transform settings\\"]').click(); null",
        );
-       await sleep(400);
+       await popupShown('open');
 
        const out = { fields: [] };
        // Which fields to press, by the label their input carries. The popup is
@@ -147,7 +162,7 @@ const check = (what, condition, detail) => {
              if (!document.querySelector('.embed-editor_tsettings'))
                document.querySelector('button[aria-label="Transform settings"]').click();
              return null; })()\`);
-           await sleep(350);
+           await popupShown('open');
          }
          if (!POPUP.includes(label)) {
            await win.webContents.executeJavaScript(\`(() => {
@@ -155,7 +170,7 @@ const check = (what, condition, detail) => {
                document.querySelector('button[aria-label="Transform settings"]').click();
              return null;
            })()\`);
-           await sleep(350);
+           await popupShown('closed');
            await win.webContents.executeJavaScript(\`(() => {
              const input = document.querySelector(
                'input[aria-label=' + JSON.stringify(\${JSON.stringify(label)}) + ']');
@@ -165,8 +180,17 @@ const check = (what, condition, detail) => {
              return null;
            })()\`);
            // Windows delivers the scroll and the resulting popup dismissal
-           // on the next frame, so measure after the layout has settled.
-           await sleep(150);
+           // on the next frame, so measure once the field holds still between two polls.
+           let topLast = Number.NaN;
+           await pollUntil({
+             what: 'the field to hold still after scrolling',
+             read: () => js(\`(() => { const input = document.querySelector('input[aria-label=' + JSON.stringify(\${JSON.stringify(label)}) + ']'); const editor = input?.closest('.embed-editor_varconnect')?.querySelector('.embed-editor_varconnect-editor'); return editor ? editor.getBoundingClientRect().top : -1; })()\`),
+             until: (top) => {
+               const still = top === topLast;
+               topLast = top;
+               return still;
+             },
+           });
          }
          const t = await win.webContents.executeJavaScript(\`(() => {
            const input = document.querySelector(
@@ -193,7 +217,8 @@ const check = (what, condition, detail) => {
            { type:'mouseDown', x:t.x, y:t.y, button:'left', clickCount:1 });
          win.webContents.sendInputEvent(
            { type:'mouseUp',   x:t.x, y:t.y, button:'left', clickCount:1 });
-         await sleep(250);
+         // The press moves focus; wait for it to land somewhere (the check says where).
+         await pollUntil({ what: 'focus to land after the press', read: () => js('document.activeElement !== null && document.activeElement !== document.body'), until: (landed) => landed });
          const after = await win.webContents.executeJavaScript(\`(() => {
            const a = document.activeElement;
            const hit = document.elementFromPoint(\${t.x}, \${t.y});
@@ -266,11 +291,7 @@ const check = (what, condition, detail) => {
       );
     }
     // The cause, kept out directly: a <label> forwards the press to the input.
-    check(
-      'no field is wrapped in a label',
-      out.labelWrapped === 0,
-      `${out.labelWrapped} still are`,
-    );
+    check('no field is wrapped in a label', out.labelWrapped === 0, `${out.labelWrapped} still are`);
   }
 
   if (failures.length) {

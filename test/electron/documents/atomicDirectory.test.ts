@@ -6,10 +6,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
-import {
-  atomicDirectoryOf,
-  prepareAtomicDirectory,
-} from '#dist/electron/documents/atomicDirectory.js';
+import { atomicDirectoryOf, prepareAtomicDirectory } from '#dist/electron/documents/atomicDirectory.js';
+import { NodeDocumentDisk } from '#dist/electron/documents/documentDisk.js';
+import { toFilePath } from '#dist/shared/core/brand.js';
 import { replaceFileAtomic } from '#dist/electron/documents/atomicWrite.js';
 
 function fixture(context: TestContext): string {
@@ -35,6 +34,7 @@ test('save staging survives successful saves without accumulating temporary file
 test('a file occupying the staging path refuses the save without changing it', (context) => {
   const file = fixture(context);
   const directory = atomicDirectoryOf(file);
+  fs.mkdirSync(path.dirname(directory));
   fs.writeFileSync(directory, 'foreign');
   assert.equal(replaceFileAtomic(file, Buffer.from('after')).ok, false);
   assert.equal(fs.readFileSync(file, 'utf8'), 'before');
@@ -45,11 +45,8 @@ test('a staging link cannot redirect temporary files elsewhere', (context) => {
   const file = fixture(context);
   const target = path.join(path.dirname(file), 'foreign');
   fs.mkdirSync(target);
-  fs.symlinkSync(
-    target,
-    atomicDirectoryOf(file),
-    process.platform === 'win32' ? 'junction' : 'dir',
-  );
+  fs.mkdirSync(path.dirname(atomicDirectoryOf(file)));
+  fs.symlinkSync(target, atomicDirectoryOf(file), process.platform === 'win32' ? 'junction' : 'dir');
   assert.equal(replaceFileAtomic(file, Buffer.from('after')).ok, false);
   assert.equal(fs.readFileSync(file, 'utf8'), 'before');
   assert.deepEqual(fs.readdirSync(target), []);
@@ -81,4 +78,54 @@ test('a permission failure preparing staging is returned as a filesystem failure
   assert.equal(result.error.code, 'filesystem');
   assert.match(result.error.message, /EACCES/);
   assert.equal(fs.readFileSync(file, 'utf8'), 'before');
+});
+
+test('nested pages, components and metadata share project staging', (context) => {
+  const file = fixture(context);
+  const root = path.dirname(file);
+  fs.writeFileSync(path.join(root, 'package.json'), '{}');
+  for (const relative of ['src/pages/blog/index.astro', 'src/components/Card.astro', '.stacki/components.json']) {
+    const target = path.join(root, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, 'before');
+    assert.ok(replaceFileAtomic(target, Buffer.from('after')).ok);
+    assert.equal(atomicDirectoryOf(target), path.join(root, '.stacki', 'io'));
+    assert.equal(fs.existsSync(path.join(path.dirname(target), '.stacki-io')), false);
+    assert.equal(fs.readFileSync(target, 'utf8'), 'after');
+  }
+  assert.deepEqual(fs.readdirSync(path.join(root, 'src/pages/blog')), ['index.astro']);
+  assert.deepEqual(fs.readdirSync(path.join(root, '.stacki/io')), []);
+});
+
+test('a linked metadata directory cannot redirect staging', (context) => {
+  const file = fixture(context);
+  const target = path.join(path.dirname(file), 'foreign');
+  fs.mkdirSync(target);
+  fs.symlinkSync(target, path.join(path.dirname(file), '.stacki'), process.platform === 'win32' ? 'junction' : 'dir');
+  assert.equal(replaceFileAtomic(file, Buffer.from('after')).ok, false);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'before');
+  assert.deepEqual(fs.readdirSync(target), []);
+});
+
+test('shared staging distinguishes equal filenames and coordinates aliases', (context) => {
+  const file = fixture(context);
+  const root = path.dirname(file);
+  fs.writeFileSync(path.join(root, 'package.json'), '{}');
+  const disk = new NodeDocumentDisk();
+  const other = toFilePath(path.join(root, 'nested', 'page.astro'));
+  fs.mkdirSync(path.dirname(other));
+  fs.writeFileSync(other, 'before');
+  const first = disk.lock(toFilePath(file));
+  assert.ok(first.ok);
+  const second = disk.lock(other);
+  assert.ok(second.ok, 'different directories have independent locks');
+  const alias = path.join(root, 'alias.astro');
+  fs.symlinkSync(file, alias);
+  const repeated = disk.lock(toFilePath(alias));
+  assert.ok(!repeated.ok);
+  assert.equal(repeated.error.code, 'held');
+  assert.equal(fs.readdirSync(atomicDirectoryOf(file)).length, 2);
+  assert.ok(disk.unlock(first.value).ok);
+  assert.ok(disk.unlock(second.value).ok);
+  assert.deepEqual(fs.readdirSync(atomicDirectoryOf(file)), []);
 });

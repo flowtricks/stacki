@@ -8,11 +8,8 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createAstroFileMonitor } from '#dist/electron/project/astroFileMonitor.js';
 import { watchProject } from '#dist/electron/project/projectWatcher.js';
-import { record } from '#dist/shared/core/boundary.js';
-import {
-  parseAstroFileChanges,
-  type AstroFileChange,
-} from '#dist/shared/properties/astroFileChanges.js';
+import { list, pathText, record } from '#dist/shared/core/boundary.js';
+import { parseAstroFileChanges, type AstroFileChange } from '#dist/shared/properties/astroFileChanges.js';
 
 test('Baseline, add, atomic save, directory rename, delete, and close', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-astro-notices-'));
@@ -98,6 +95,66 @@ test('Desktop watcher reports additions and removals once', async (context) => {
     ],
   );
 });
+
+test('Desktop watcher reconciles empty page folders without Astro files', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-folder-notices-'));
+  fs.mkdirSync(path.join(root, 'src/pages'), { recursive: true });
+  const notifications: unknown[] = [];
+  let watcherReady = false;
+  const watcher = watchProject({
+    projectPath: root,
+    isSelfWrite: () => false,
+    noteExternalChange: () => {},
+    notePageMayHaveChanged: () => {},
+    scheduleThumb: () => {},
+    mediaPattern: /\.png$/,
+    send: (channel, value) => {
+      if (channel === 'css:changed') {
+        watcherReady = true;
+      }
+      if (channel === 'fs:changed') {
+        notifications.push(value);
+      }
+    },
+  });
+  context.after(() => {
+    watcher.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  await waitForWatcher(root, () => watcherReady);
+  const folder = path.join(root, 'src/pages/empty');
+  fs.mkdirSync(folder);
+  await waitForFolderNotification(notifications, folder);
+  notifications.length = 0;
+  fs.rmdirSync(folder);
+  await waitForFolderNotification(notifications, folder);
+});
+
+async function waitForWatcher(root: string, ready: () => boolean): Promise<void> {
+  // FSEvents starts asynchronously. Observe a real event before testing directory routing.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (ready()) {
+      return;
+    }
+    // Leave time for the notification debounce between readiness probes.
+    if (attempt % 5 === 0) {
+      fs.writeFileSync(path.join(root, 'src/watch-ready.css'), `/* ${attempt} */`);
+    }
+    await delay(100);
+  }
+  assert.fail('Expected the filesystem watcher to become ready within three seconds');
+}
+
+async function waitForFolderNotification(notifications: readonly unknown[], folder: string): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    // FSEvents may also report parent directories; wait for the specific folder's event.
+    if (notifications.some((value) => list(pathText)(record(value)['files']).includes(folder))) {
+      return;
+    }
+    await delay(100);
+  }
+  assert.fail(`Expected a notification for ${folder} within three seconds`);
+}
 
 async function waitForChanges(changes: readonly AstroFileChange[], count: number): Promise<void> {
   // FSEvents delivery can lag while the full suite saturates the machine.

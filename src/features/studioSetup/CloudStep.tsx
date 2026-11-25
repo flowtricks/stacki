@@ -1,4 +1,6 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
+import TipAnchor from '../../ui/TipAnchor';
 import { useState } from 'react';
 import type { StudioStatus } from '../../../shared/ipc/studioSetup';
 import { openExternalURL } from '../../ipc/appBridge';
@@ -7,89 +9,71 @@ import { studioSetupPrompt } from './setupPrompt';
 import { useCopyText } from './useCopyText';
 
 export default function CloudStep({ status }: { readonly status: StudioStatus | undefined }) {
+  const translate = useTranslate();
   return (
     <div className="studio-step-layout">
       <div className="studio-step-intro">
-        <h3>Bring Studio online</h3>
-        <p>Give your team a shared editor they can access in a browser.</p>
+        <h3>{translate('studioSetup.cloud.title')}</h3>
+        <p>{translate('studioSetup.cloud.intro')}</p>
       </div>
       <section aria-labelledby="studio-accounts-title">
         <h4 id="studio-accounts-title" className="studio-section-label">
-          You’ll need
+          {translate('studioSetup.cloud.need')}
         </h4>
         <div className="studio-account-grid">
           <div className="studio-account-card">
+            {/* i18n-ignore: brand name. */}
             <strong>GitHub</strong>
-            <p>Your website’s repository</p>
+            <p>{translate('studioSetup.cloud.githubNote')}</p>
           </div>
           <div className="studio-account-card">
+            {/* i18n-ignore: brand name. */}
             <strong>Cloudflare</strong>
-            <p>Hosts Studio · Workers Paid plan</p>
+            <p>{translate('studioSetup.cloud.cloudflareNote')}</p>
           </div>
         </div>
       </section>
       {status ? (
         <AgentHandoff
-          text={studioSetupPrompt(
-            status.kind === 'installed' ? status.version : status.desktopVersion,
-            { installed: status.kind === 'installed' },
-          )}
+          text={studioSetupPrompt(status.kind === 'installed' ? status.version : status.desktopVersion, { installed: status.kind === 'installed' })}
         />
       ) : (
-        <p role="status">Checking Studio before preparing your instructions…</p>
+        <p role="status">{translate('studioSetup.cloud.checking')}</p>
       )}
     </div>
   );
 }
 
 function AgentHandoff({ text }: { readonly text: string }) {
+  const translate = useTranslate();
   const clipboard = useCopyText(text);
   return (
     <>
       <section className="studio-agent-card" aria-labelledby="studio-agent-title">
-        <h4 id="studio-agent-title">Let your agent handle setup</h4>
-        <p>Paste these instructions into your coding agent, in this project.</p>
-        <button
-          className="primary studio-copy-action"
-          disabled={clipboard.status === 'copying'}
-          onClick={() => void clipboard.copy()}
-        >
-          {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-          {clipboard.status === 'copied' ? 'Instructions copied' : 'Copy setup instructions'}
-        </button>
-        <p className="studio-setup-note">
-          Your agent guides account connection and deployment approval.
-        </p>
+        <h4 id="studio-agent-title">{translate('studioSetup.cloud.agentTitle')}</h4>
+        <p>{translate('studioSetup.cloud.agentIntro')}</p>
+        <TipAnchor text={translate('studioSetup.cloud.agentNote')}>
+          <button className="primary studio-copy-action" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
+            {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+            {clipboard.status === 'copied' ? translate('studioSetup.cloud.copiedInstructions') : translate('studioSetup.cloud.copyInstructions')}
+          </button>
+        </TipAnchor>
         {clipboard.status === 'copied' && (
           <span className="studio-command-status" role="status">
-            Setup instructions copied.
+            {translate('studioSetup.cloud.copiedStatus')}
           </span>
         )}
-        {clipboard.status === 'failed' && (
-          <ErrorToast message="Could not copy. Copy the instructions manually." />
-        )}
+        {clipboard.status === 'failed' && <ErrorToast message={translate('studioSetup.cloud.copyFailed')} />}
       </section>
       <details className="studio-setup-details" open={clipboard.status === 'failed' || undefined}>
-        <summary>View instructions &amp; guides</summary>
+        <summary>{translate('studioSetup.cloud.details')}</summary>
         <div className="studio-setup-details-content">
-          <textarea
-            aria-label="Agent setup prompt"
-            readOnly
-            value={text}
-            rows={7}
-            onFocus={(event) => event.currentTarget.select()}
-          />
+          <textarea aria-label={translate('studioSetup.cloud.promptLabel')} readOnly value={text} rows={7} onFocus={(event) => event.currentTarget.select()} />
           <div className="studio-setup-actions">
+            <DocumentationLink url="https://developers.cloudflare.com/containers/get-started/" label={translate('studioSetup.cloud.cloudflareGuide')} />
             <DocumentationLink
-              url="https://developers.cloudflare.com/containers/get-started/"
-              label="Cloudflare guide"
-            />
-            <DocumentationLink
-              url={
-                'https://docs.github.com/en/apps/creating-github-apps/' +
-                'registering-a-github-app/registering-a-github-app'
-              }
-              label="GitHub App guide"
+              url={'https://docs.github.com/en/apps/creating-github-apps/' + 'registering-a-github-app/registering-a-github-app'}
+              label={translate('studioSetup.cloud.githubGuide')}
             />
           </div>
         </div>
@@ -99,11 +83,12 @@ function AgentHandoff({ text }: { readonly text: string }) {
 }
 
 function DocumentationLink({ url, label }: { readonly url: string; readonly label: string }) {
+  const translate = useTranslate();
   const [error, setError] = useState('');
   return (
     <>
       <button onClick={() => void openExternalURL(url).catch(() => setError(url))}>{label}</button>
-      {error && <ErrorToast message={`Could not open the browser. Open this address: ${error}`} />}
+      {error && <ErrorToast message={translate('studioSetup.cloud.openFailed', { url: error })} />}
     </>
   );
 }

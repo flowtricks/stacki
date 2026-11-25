@@ -20,7 +20,6 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { parsePageDiskRead, parsePageEditResult } = require('#dist/shared/ipc/pageSave.js');
 const { applyCodePatch } = require('#dist/shared/engine/codePatch.js');
-const { LIMITS } = require('#dist/shared/core/limits.js');
 const { repoPath } = require('../../helpers/sources.js');
 
 const buildDirectory = repoPath('node_modules/.stacki-test/code-edits');
@@ -176,9 +175,7 @@ test('sendCode: the patch from the baseline, and every outcome', async () => {
   assert.equal(applyCodePatch(base, request.edit.hunks), typed, 'the hunks are the typing');
   assert.deepEqual(fake.store.codeBaseline('/p'), known(2, 'reply', typed));
   // Refused over changed bytes: the notice, relative to the authored bytes.
-  fake = harness({ checksum: sum(1), source: base, typedFrom: base }, [
-    rejected('merge-conflict', 3),
-  ]);
+  fake = harness({ checksum: sum(1), source: base, typedFrom: base }, [rejected('merge-conflict', 3)]);
   outcome = await save(fake, typed);
   assert.deepEqual(outcome, {
     tag: 'refused',
@@ -211,11 +208,7 @@ test('sendCode merges typing into a save that came back holding more', async () 
   assert.equal(outcome.tag, 'applied');
   const [request] = fake.sent;
   assert.equal(request.authoredChecksum, sum(2));
-  assert.equal(
-    applyCodePatch(reply, request.edit.hunks),
-    '<h1>Heading</h1>\n<p>Body</p>\n<footer>Fin</footer>\n',
-    'the outside edit stays',
-  );
+  assert.equal(applyCodePatch(reply, request.edit.hunks), '<h1>Heading</h1>\n<p>Body</p>\n<footer>Fin</footer>\n', 'the outside edit stays');
   // Typing on the merged word cannot be ordered against it: nothing is sent.
   const clash = harness({ checksum: sum(2), source: reply, typedFrom: sent });
   const refused = await save(clash, sent.replace('End', 'Done'), sum(2), sum(1));
@@ -243,11 +236,12 @@ test('sendCode over the disk: read first, and asked again if it moved', async ()
   assert.equal(applyCodePatch('disk text', still.sent[0].edit.hunks), 'mine');
 });
 
-test('sendCode refuses text past the bound before sending; a no-op save reads', async () => {
-  const fake = harness({ checksum: sum(1), source: 'x', typedFrom: 'x' });
-  const outcome = await save(fake, 'y'.repeat(LIMITS.sourceBytesMax + 1));
-  assert.deepEqual(outcome, { tag: 'failed', message: 'The change exceeds a size limit.' });
-  assert.equal(fake.sent.length, 0, 'never truncated, never sent');
+test('sendCode sends text of any size whole; a no-op save reads', async () => {
+  const fake = harness({ checksum: sum(1), source: 'x', typedFrom: 'x' }, [applied(2, 'reply')]);
+  // No size limit (owner requirement): 5 MB, generated here, past the old source bound, is sent whole and never cut.
+  const big = 'y'.repeat(5 * 1024 * 1024);
+  assert.equal((await save(fake, big)).tag, 'applied');
+  assert.equal(fake.sent.length, 1, 'sent, not refused for its size');
   // Typed back to the baseline: nothing to send; the disk read settles it.
   const same = harness({ checksum: sum(7), source: 'disk text', typedFrom: 'disk text' });
   assert.equal((await save(same, 'disk text', sum(7))).tag, 'applied');

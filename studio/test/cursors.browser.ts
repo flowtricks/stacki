@@ -1,10 +1,11 @@
+// Goal: verify collaborative cursors and chat from the account menu and keyboard.
+// Method: use two live browser sessions to check messages, focus and frame replacement.
 import { chromium, type Page, type FrameLocator } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const firstContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -104,6 +105,7 @@ try {
   await first.clock.resume();
   await mkdir('test-results', { recursive: true });
   await second.screenshot({ path: 'test-results/cursors.png' });
+  await first.getByLabel('Stacki account menu', { exact: true }).click();
   await first.getByRole('button', { name: 'Cursor chat', exact: true }).click();
   await input.waitFor({ state: 'visible' });
   assert.equal(await input.inputValue(), 'Can we try a larger heading?');
@@ -147,9 +149,7 @@ try {
   await firstContext.close();
   await remote.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Live cursors, matching colors, persistent pointer chat, frame replacement, Backspace erasure, source preservation, and disconnect passed.',
-  );
+  console.log('Live cursors, matching colors, persistent pointer chat, frame replacement, Backspace erasure, source preservation, and disconnect passed.');
 } catch (error) {
   await mkdir('test-results', { recursive: true });
   await first.screenshot({ path: 'test-results/cursors-failure-first.png' }).catch(() => {});
@@ -170,6 +170,7 @@ async function replacePreviewFrame(page: Page) {
   await page.getByTitle('Desktop — 1', { exact: true }).click();
   const preview = page.frameLocator('iframe[title="Site preview"]');
   await preview.locator('#studio-live-cursors').waitFor({ state: 'attached' });
+  await page.getByLabel('Stacki account menu', { exact: true }).click();
   await page.getByRole('button', { name: 'Cursor chat', exact: true }).click();
   const input = preview.getByRole('textbox', { name: 'Cursor message' });
   await input.waitFor({ state: 'visible' });
@@ -205,10 +206,7 @@ async function checkMessageWrapping(page: Page, preview: FrameLocator) {
     const submitted = await bubble.boundingBox();
     assert.ok(submitted);
     for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-      assert.ok(
-        Math.abs(editing[dimension] - submitted[dimension]) < 1,
-        `Same ${dimension} before and after submission`,
-      );
+      assert.ok(Math.abs(editing[dimension] - submitted[dimension]) < 1, `Same ${dimension} before and after submission`);
     }
     await page.keyboard.press('/');
     await input.waitFor();

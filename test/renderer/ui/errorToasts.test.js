@@ -42,14 +42,7 @@ test('errors are toasts only, including within modal forms and during recovery',
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const {
-    ErrorToast,
-    reportErrorToast,
-    useErrorToasts,
-    useToastStack,
-    ToastStack,
-    Popup,
-  } = require(outfile);
+  const { ErrorToast, reportErrorToast, useErrorToasts, useToastStack, ToastStack, Popup } = require(outfile);
   const root = createRoot(document.getElementById('root'));
   let attempts = 0;
   let closes = 0;

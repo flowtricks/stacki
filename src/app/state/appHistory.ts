@@ -3,54 +3,42 @@
 // the code source, outside edits and file events, and composing navigation
 // (App.tsx).
 
+import { useTranslate, useTranslateRef } from '../../lib/i18n/useTranslate';
+import { messageRef } from '../../../shared/properties/i18n/messageRef';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useGitIncoming } from '../../features/git/useGitIncoming';
 import { revertComponentProperties } from '../../features/componentProperties/propertiesBridge';
+import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parsePageSource as parseSourcePage, readPage } from '../../ipc/bridge';
 import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
 import { createCoalescedRun } from '../../lib/coalescedRun';
-import { type EditGesture, type EditsRecord } from '../../editor/pageEdits';
-import {
-  saveStateAccepted,
-  saveStateBase,
-  saveStateEdited,
-  saveStateRefused,
-} from '../../editor/saveState';
+import { editStepPlacement } from '../model/editSteps';
+import { type AppliedEdit, type EditGesture, type EditsRecord } from '../../editor/pageEdits';
+import { sequence } from '../../editor/editGestures';
+import { saveStateAccepted, saveStateBase, saveStateEdited, saveStateNeedsWrite, saveStateRefused } from '../../editor/saveState';
 import type { Digest } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { sourceNodeAtOffset } from '../../features/code/codePanelModel';
-import { type EditsEntry, type HistoryEntry, type UndoCommand } from '../appTypes';
-import {
-  findEditorNodeById as findNodeById,
-  toEditorPageState,
-  carriedParse,
-  type EditorPageState,
-} from '../../editor/pageState';
+import { type EditsEntry, type HistoryEntry, type StepFiles, type UndoCommand } from '../appTypes';
+import { stepWithFiles, type PageStep } from '../model/componentCreation';
+import { findEditorNodeById as findNodeById, toEditorPageState, carriedParse, type EditorPageState } from '../../editor/pageState';
 import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { showModelChangeOnCanvas } from '../../editor/canvasEditShow';
+import { VARIANT_MESSAGE_TYPES } from '../../../shared/page/variantOverride';
 import { onWindowReturn } from '../../lib/windowReturn';
-import { reviewedSource, saveDelay } from '../model/nodeFactory';
+import { reviewedSource, nextSave } from '../model/nodeFactory';
 import { effective } from '../model/pageGestures';
 import { revertedSteps, reloadChangedPage } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
-import {
-  useLifecycle,
-  useSelectPage,
-  useProjectMenu,
-  useGoToUrl,
-  useReload,
-  useOpenComponent,
-  useCommitPreview,
-  useGitInfo,
-} from './appNavigation';
+import { useLifecycle, useSelectPage, useProjectMenu, useGoToUrl, useReload, useOpenComponent, useCommitPreview, useGitInfo } from './appNavigation';
 
 // Opening files, pages and components.
-export function useNavigation(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useNavigation(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const selectPageScope = useSelectPage(lifecycle, coreState);
   const projectMenu = useProjectMenu(coreState, lifecycle, selectPageScope);
   const goToUrlScope = useGoToUrl(selectPageScope, coreState, lifecycle);
@@ -58,6 +46,7 @@ export function useNavigation(
   const openComponentScope = useOpenComponent(coreState, lifecycle);
   const commitPreview = useCommitPreview(coreState, lifecycle);
   const gitInfoScope = useGitInfo(coreState, lifecycle);
+  const gitIncoming = useGitIncoming(coreState.project?.path, coreState.gitInfo);
   return {
     ...selectPageScope,
     ...projectMenu,
@@ -66,24 +55,25 @@ export function useNavigation(
     ...openComponentScope,
     ...commitPreview,
     ...gitInfoScope,
+    gitIncoming,
   };
 }
 
 // Recording undo steps.
-export function useHistoryPush(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef } = coreState;
   const { historyRef } = lifecycle;
 
   // The undo step of an edit of the open page (step 9: undo is inverse
   // splices only): its record collects each applied write's inverse.
   // Consecutive edits with the same coalesceKey within 800 ms share one step
-  // (typing bursts, dropdown hover-scrubs); structural edits (no key) always
-  // get their own.
+  // (typing bursts, dropdown hover-scrubs; editStepPlacement in editSteps.ts);
+  // structural edits (no key) always get their own. A step that made files
+  // beside its page writes carries them (StepFiles, appTypes.ts), and is never
+  // folded into another.
   const pushEditHistory = useCallback(
-    (coalesceKey: string | undefined): EditsRecord => {
+    (coalesceKey: string | undefined, files: StepFiles | undefined = undefined): EditsRecord => {
+      assert(files === undefined || coalesceKey === undefined, 'A step that made files is a step of its own');
       const record: EditsRecord = { outcome: { tag: 'applied', applied: [] } };
       if (!pageStateRef.current.pageState) {
         record.outcome = { tag: 'dropped' };
@@ -92,17 +82,15 @@ export function useHistoryPush(
       const history = historyRef.current;
       const now = Date.now();
       const previous = history.past[history.past.length - 1];
-      const coalesce =
-        coalesceKey !== undefined &&
-        coalesceKey === history.lastKey &&
-        now - history.lastPush < 800;
+      const placement = editStepPlacement(history, coalesceKey, files, now);
       history.future = [];
       history.lastKey = coalesceKey;
       history.lastPush = now;
-      if (coalesce && previous?.kind === 'edits') {
+      if (placement === 'continue') {
+        assert(previous?.kind === 'edits', 'An edit continues a page edit step');
         return previous.record;
       }
-      history.past.push({ kind: 'edits', record });
+      history.past.push(files === undefined ? { kind: 'edits', record } : { kind: 'edits', record, files });
       if (history.past.length > LIMITS.undoEntriesMax) {
         history.past.shift();
       }
@@ -132,6 +120,7 @@ export function useHistoryPush(
         previous.redo = cmd.redo;
         if (cmd.label !== undefined) {
           previous.label = cmd.label;
+          previous.labelRef = cmd.labelRef;
         }
       } else {
         history.past.push({ kind: 'cmd', ...cmd });
@@ -145,20 +134,16 @@ export function useHistoryPush(
     },
     [historyRef],
   );
-  const pushCommandRef = useRef<((command: Omit<UndoCommand, 'kind'>) => void) | undefined>(
-    undefined,
-  );
+  const pushCommandRef = useRef<((command: Omit<UndoCommand, 'kind'>) => void) | undefined>(undefined);
   pushCommandRef.current = pushCommand;
   return { pushCommand, pushEditHistory };
 }
 
 // Undoing a component property batch.
-export function usePropertyUndo(
-  navigation: ReturnType<typeof useNavigation>,
-  historyPush: ReturnType<typeof useHistoryPush>,
-) {
+export function usePropertyUndo(navigation: ReturnType<typeof useNavigation>, historyPush: ReturnType<typeof useHistoryPush>) {
   const { completePropertySave } = navigation;
   const { pushCommand } = historyPush;
+  const translate = useTranslate();
 
   // Step 6: a property batch's undo is its inverse batch, held by main under a
   // token; applying one returns the token of the batch that redoes it. A file
@@ -169,26 +154,24 @@ export function usePropertyUndo(
       const step = async (): Promise<void> => {
         const reverted = await revertComponentProperties(next);
         if (!reverted.ok) {
-          throw new Error(reverted.error.message);
+          throw new Error(propertyErrorTextFor(reverted.error, translate));
         }
         next = reverted.value.undo;
         // As after the edit itself: the panel, the page and the scan re-read.
         await completePropertySave();
       };
-      pushCommand({ label: 'the property change', undo: step, redo: step });
+      pushCommand({ label: translate('shell.history.propertyChange'), labelRef: messageRef('shell.history.propertyChange'), undo: step, redo: step });
     },
-    [pushCommand, completePropertySave],
+    [pushCommand, completePropertySave, translate],
   );
   return { recordPropertyUndo };
 }
 
 // Installing the parse of typed code.
-export function useTypedParse(
-  coreState: ReturnType<typeof useCoreState>,
-  lifecycle: ReturnType<typeof useLifecycle>,
-) {
+export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef, setPageState, setSelectedId, typedSourceRef } = coreState;
   const { showToast } = lifecycle;
+  const translate = useTranslate();
 
   // The typed text's parse: a model to show when it parses, the parse-error
   // panel when it does not (plan §3.6). Installed only over the same text: the
@@ -202,7 +185,7 @@ export function useTypedParse(
       } catch (error: unknown) {
         if (typedSourceRef.current === source) {
           typedSourceRef.current = undefined;
-          showToast(`Couldn’t update code: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.history.codeUpdateFailed', { message: cleanError(error) }), 'error');
         }
         return;
       }
@@ -233,8 +216,7 @@ export function useTypedParse(
         return { editable: true, model, source, parsedFrom: source, save: current.save, origin };
       };
       if (carried.editable) {
-        const inFrontmatter =
-          carried.model.bodyStart !== undefined && position < carried.model.bodyStart;
+        const inFrontmatter = carried.model.bodyStart !== undefined && position < carried.model.bodyStart;
         const selected = sourceNodeAtOffset(carried.model.nodes, position);
         setSelectedId(inFrontmatter ? 'frontmatter' : (selected?.id ?? undefined));
       } else {
@@ -242,11 +224,9 @@ export function useTypedParse(
       }
       // The save state is whatever is current when this lands: a conflicted
       // page stays conflicted, and a save that landed meanwhile keeps its base.
-      setPageState((current) =>
-        current && current.source === source ? installed(current) : current,
-      );
+      setPageState((current) => (current && current.source === source ? installed(current) : current));
     },
-    [showToast, pageStateRef, setPageState, setSelectedId, typedSourceRef],
+    [showToast, pageStateRef, setPageState, setSelectedId, typedSourceRef, translate],
   );
 
   const scheduleSaveRef = useRef<((urgency?: boolean | 'live') => void) | undefined>(undefined);
@@ -259,25 +239,23 @@ export function useTypedParse(
 }
 
 // Undoing or redoing one step of page edits.
-export function useStepEdits(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { autosave, editDrafts, historyRef, showToast } = lifecycle;
-  const { pageStateRef, setPageState, setSelectedId } = coreState;
+  const { canvasPathForRef, pageStateRef, setPageState, setSelectedId } = coreState;
+  const translate = useTranslate();
 
   // Undo or redo one gesture sent as edit requests (step 6): its inverses go
   // out as reverts, newest first, each against the checksum it came back with,
   // so an outside edit since is mapped through or refused — never reverted.
   // What was undone becomes the step in the other direction; a refusal stops
-  // there, keeps what is left where it was, and says why (plan §7).
+  // there, keeps what is left where it was, and says why (plan §7). Files the
+  // step made (a component created from the selection) step with it, after
+  // the page on undo and before it on redo (componentCreation.ts).
   const stepEdits = useCallback(
     async (entry: EditsEntry, direction: 'undo' | 'redo') => {
       const history = historyRef.current;
-      const back = (next: EditsEntry) =>
-        (direction === 'undo' ? history.past : history.future).push(next);
-      const forth = (next: HistoryEntry) =>
-        (direction === 'undo' ? history.future : history.past).push(next);
+      const back = (next: EditsEntry) => (direction === 'undo' ? history.past : history.future).push(next);
+      const forth = (next: HistoryEntry) => (direction === 'undo' ? history.future : history.past).push(next);
       try {
         await autosave(); // Its own writes' answers first.
       } catch {
@@ -292,40 +270,72 @@ export function useStepEdits(
       if (outcome.tag !== 'applied' || !editDrafts.empty(path) || state.save.tag !== 'clean') {
         // Edits that have not reached disk (refused, or failing) come first:
         // an inverse names the bytes its write left, and the page is not there.
+        // Declined, not failed: the step waits until the page is saved.
         back(entry);
-        showToast(`Couldn’t ${direction}: this page has edits that are not saved yet.`, 'error');
+        showToast(translate(direction === 'undo' ? 'shell.history.unsavedUndo' : 'shell.history.unsavedRedo'), 'warning');
         return;
       }
-      const startOrigin = state.editable ? state.origin : undefined;
-      const reverted = await revertedSteps(path, outcome.applied, startOrigin);
-      if (reverted.refusal !== undefined) {
-        showToast(`Couldn’t ${direction}: ${reverted.refusal}`, 'error');
-      }
-      const { done, written, origin } = reverted;
-      const left = outcome.applied.slice(0, outcome.applied.length - done.length);
-      if (left.length > 0) {
-        back({ kind: 'edits', record: { outcome: { tag: 'applied', applied: left } } });
-      }
-      if (written === undefined) {
-        return;
-      }
-      forth({ kind: 'edits', record: { outcome: { tag: 'applied', applied: done } } });
-      const reply = written;
-      const shown =
-        origin === undefined
-          ? toEditorPageState(carriedParse(state, reply))
-          : toEditorPageState({ ...reply, editable: true, model: origin.model });
-      // Installed only over the state the undo started from: a newer edit
-      // made meanwhile keeps its model, and main rebases it past the revert.
-      setPageState((current) => (current === state ? shown : current));
-      if (shown.editable) {
-        const model = shown.model;
-        const named = (id: string) => id === 'layout' || id === 'frontmatter';
-        const gone = (id: string) => !named(id) && !findNodeById(model.nodes, id);
-        setSelectedId((id) => (id && gone(id) ? undefined : id));
+      // Both halves of a partly reverted step keep the files: their calls are
+      // idempotent, so whichever half is stepped last does the file's work.
+      const files = entry.files;
+      const entryOf = (applied: readonly AppliedEdit[]): EditsEntry =>
+        files === undefined
+          ? { kind: 'edits', record: { outcome: { tag: 'applied', applied } } }
+          : { kind: 'edits', record: { outcome: { tag: 'applied', applied } }, files };
+      const revert = async (): Promise<PageStep> => {
+        const startOrigin = state.editable ? state.origin : undefined;
+        const reverted = await revertedSteps(path, outcome.applied, startOrigin, translate);
+        if (reverted.refusal !== undefined) {
+          showToast(
+            translate(direction === 'undo' ? 'shell.history.undoFailed' : 'shell.history.redoFailed', { message: reverted.refusal.message }),
+            reverted.refusal.kind,
+          );
+        }
+        const { done, written, origin } = reverted;
+        const left = outcome.applied.slice(0, outcome.applied.length - done.length);
+        if (left.length > 0) {
+          back(entryOf(left));
+        }
+        if (written === undefined) {
+          return 'none';
+        }
+        forth(entryOf(done));
+        const reply = written;
+        const shown =
+          origin === undefined ? toEditorPageState(carriedParse(state, reply)) : toEditorPageState({ ...reply, editable: true, model: origin.model });
+        // Installed only over the state the undo started from: a newer edit
+        // made meanwhile keeps its model, and main rebases it past the revert.
+        setPageState((current) => (current === state ? shown : current));
+        if (shown.editable && state.editable) {
+          // The step's result is on the canvas in this frame, not after the render.
+          showModelChangeOnCanvas(state.model, shown.model, { structure: 'show' }, (id) => canvasPathForRef.current(id));
+        }
+        if (shown.editable) {
+          const model = shown.model;
+          const named = (id: string) => id === 'layout' || id === 'frontmatter';
+          const gone = (id: string) => !named(id) && !findNodeById(model.nodes, id);
+          setSelectedId((id) => (id && gone(id) ? undefined : id));
+        }
+        return left.length === 0 ? 'whole' : 'part';
+      };
+      const stepped = await stepWithFiles(direction, files, revert);
+      switch (stepped.tag) {
+        case 'stepped':
+          return;
+        case 'refused':
+          back(entry); // Nothing changed: the step waits where it was.
+          showToast(translate(direction === 'undo' ? 'shell.history.undoFailed' : 'shell.history.redoFailed', { message: stepped.message }), 'error');
+          return;
+        case 'files-failed':
+          showToast(translate('shell.history.filesFailed', { message: stepped.message }), 'error');
+          return;
+        default: {
+          const exhaustive: never = stepped;
+          return exhaustive;
+        }
       }
     },
-    [autosave, editDrafts, showToast, historyRef, pageStateRef, setPageState, setSelectedId],
+    [autosave, editDrafts, showToast, historyRef, canvasPathForRef, pageStateRef, setPageState, setSelectedId, translate],
   );
   return { stepEdits };
 }
@@ -341,11 +351,16 @@ export function useUndoRedo(
   const { setHistoryTick } = typedParse;
   const { historyRef, showToast } = lifecycle;
   const { stepEdits } = stepEditsScope;
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
 
   const undo = useCallback(async () => {
     if (propertySave.saving.current) {
       return;
     }
+    // A pick's preview is held on the canvas for its write (morphVariant.ts); this
+    // step changes what the page says, so the held rendering must not outlast it.
+    tellCanvas({ type: VARIANT_MESSAGE_TYPES.cancel });
     setHistoryTick((count) => count + 1);
     const history = historyRef.current;
     history.lastKey = undefined;
@@ -359,20 +374,33 @@ export function useUndoRedo(
       try {
         await entry.undo();
       } catch (error: unknown) {
+        const name = commandName(entry, translateRef);
         showToast(
-          `Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`,
+          name
+            ? translate('shell.history.undoFailedNamed', { label: name, message: cleanError(error) })
+            : translate('shell.history.undoFailed', { message: cleanError(error) }),
           'error',
         );
       }
+      setHistoryTick((count) => count + 1); // See below: the undo has landed.
       return;
     }
     await stepEdits(entry, 'undo');
-  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
+    noteNamedStep(entry, 'undo', translate, showToast);
+    // Again now that the undo has landed. The tick above is read at once by the
+    // Style panel, which re-read the CSS before the undo had changed it and kept
+    // showing the old value (a background's Type, its layer row) until its next
+    // poll. This one is read with the restored page in hand.
+    setHistoryTick((count) => count + 1);
+  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick, translate, translateRef]);
 
   const redo = useCallback(async () => {
     if (propertySave.saving.current) {
       return;
     }
+    // A pick's preview is held on the canvas for its write (morphVariant.ts); this
+    // step changes what the page says, so the held rendering must not outlast it.
+    tellCanvas({ type: VARIANT_MESSAGE_TYPES.cancel });
     setHistoryTick((count) => count + 1);
     const history = historyRef.current;
     history.lastKey = undefined;
@@ -386,16 +414,44 @@ export function useUndoRedo(
       try {
         await entry.redo();
       } catch (error: unknown) {
+        const name = commandName(entry, translateRef);
         showToast(
-          `Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`,
+          name
+            ? translate('shell.history.redoFailedNamed', { label: name, message: cleanError(error) })
+            : translate('shell.history.redoFailed', { message: cleanError(error) }),
           'error',
         );
       }
+      setHistoryTick((count) => count + 1); // See below: the redo has landed.
       return;
     }
     await stepEdits(entry, 'redo');
-  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
+    noteNamedStep(entry, 'redo', translate, showToast);
+    // Again now that the redo has landed. The tick above is read at once by the
+    // Style panel, which re-read the CSS before the redo had changed it and kept
+    // showing the old value (a background's Type, its layer row) until its next
+    // poll. This one is read with the restored page in hand.
+    setHistoryTick((count) => count + 1);
+  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick, translate, translateRef]);
   return { redo, undo };
+}
+
+// The name of a recorded command, worded in the language in force now: its reference when it has one, else the text it was recorded with.
+function commandName(entry: UndoCommand, translateRef: ReturnType<typeof useTranslateRef>): string | undefined {
+  if (entry.labelRef !== undefined) {
+    return translateRef(entry.labelRef);
+  }
+  return entry.label;
+}
+
+// A step an app named (docs/apps.md, "Undo labels") says which one went, as
+// History would: the app's own words, not "an attribute edit".
+function noteNamedStep(entry: EditsEntry, direction: 'undo' | 'redo', translate: Translator, showToast: (message: string, kind: 'info') => void): void {
+  if (entry.label === undefined) {
+    return;
+  }
+  assert(entry.label.length > 0, 'A step label has words');
+  showToast(translate(direction === 'undo' ? 'shell.history.undid' : 'shell.history.redid', { label: entry.label }), 'info');
 }
 
 // Scheduling saves, and reviewing a conflict in code.
@@ -407,6 +463,7 @@ export function useScheduleSave(
 ) {
   const { pageStateRef, saveTimer, setLeftTab, setPageState } = coreState;
   const { autosave, editDrafts, showToast } = lifecycle;
+  const translate = useTranslate();
   const { scheduleSaveRef } = typedParse;
   const { pushEditHistory } = historyPush;
 
@@ -415,24 +472,32 @@ export function useScheduleSave(
   // per character. The timeout-0 for immediate saves lets React commit the
   // state update first so flushSave sees the new model.
   //
-  // 'live' is the third case: a style-panel scrub or mid-typing write, which
-  // arrives already debounced (100 ms at the field) and is watched on the
-  // canvas as it happens. Making it wait out the typing pause too put nearly
-  // half a second between the drag and the result. It still coalesces, just
-  // over the gap between two ticks rather than the gap between two words.
+  // 'live' is the third case: a style-panel scrub or drag, or a mid-typing
+  // write, watched on the canvas as it happens. A drag arrives once per
+  // animation frame, so 'live' is a throttle, not a debounce: it never pushes
+  // back a save already due (nextSave). As a debounce, each frame reset the
+  // timer and a steady drag saved nothing until the pointer rested.
   const scheduleSave = useCallback(
     (immediate: boolean | 'live' = false) => {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(
-        () => {
-          autosave().catch((error: unknown) =>
-            showToast(`Save failed: ${cleanError(error)}`, 'error'),
-          );
-        },
-        saveDelay({ urgency: immediate }),
-      );
+      const nowMs = Date.now();
+      const plan = nextSave({ urgency: immediate, pending: saveTimer.current, nowMs });
+      if (plan.tag === 'keep') {
+        return;
+      }
+      clearTimeout(saveTimer.current?.handle);
+      const handle = setTimeout(() => {
+        // Nothing is pending once this runs: the next request starts a timer
+        // of its own rather than keeping one that has already fired.
+        saveTimer.current = undefined;
+        autosave().catch((error: unknown) => {
+          if (pageStateRef.current.pageState?.save.tag !== 'failed') {
+            showToast(translate('shell.save.failed', { message: cleanError(error) }), 'error');
+          }
+        });
+      }, plan.delayMs);
+      saveTimer.current = { handle, dueMs: nowMs + plan.delayMs };
     },
-    [autosave, showToast, saveTimer],
+    [autosave, showToast, saveTimer, pageStateRef, translate],
   );
   scheduleSaveRef.current = scheduleSave;
 
@@ -452,12 +517,12 @@ export function useScheduleSave(
       try {
         const shown = await reviewedSource(open.path, state, editDrafts.entries(open.path));
         if (shown.tag === 'failed') {
-          showToast(`Couldn’t show your version: ${shown.message}`, 'error');
+          showToast(translate('shell.history.showVersionFailed', { message: shown.message }), 'error');
           return;
         }
         source = shown.source;
       } catch (error: unknown) {
-        showToast(`Couldn’t show your version: ${cleanError(error)}`, 'error');
+        showToast(translate('shell.history.showVersionFailed', { message: cleanError(error) }), 'error');
         return;
       }
       const latest = pageStateRef.current.pageState;
@@ -465,13 +530,11 @@ export function useScheduleSave(
         const record = pushEditHistory('code-source');
         const typed = { save: latest.save, source, origin: latest.origin };
         editDrafts.typeCode(open.path, typed, record);
-        setPageState((current) =>
-          current?.editable && current.model === state.model ? { ...current, source } : current,
-        );
+        setPageState((current) => (current?.editable && current.model === state.model ? { ...current, source } : current));
       }
     }
     setLeftTab('code');
-  }, [editDrafts, pushEditHistory, showToast, pageStateRef, setLeftTab, setPageState]);
+  }, [editDrafts, pushEditHistory, showToast, pageStateRef, setLeftTab, setPageState, translate]);
   return { reviewConflictInCode, scheduleSave };
 }
 
@@ -483,7 +546,8 @@ export function useCommitEdit(
   historyPush: ReturnType<typeof useHistoryPush>,
 ) {
   const { editDrafts, setConflictReason, showToast } = lifecycle;
-  const { pageStateRef, propertySave, setPageState, typedCodeUnparsed } = coreState;
+  const translate = useTranslate();
+  const { canvasPathForRef, pageStateRef, propertySave, setPageState, typedCodeUnparsed } = coreState;
   const { scheduleSave } = scheduleSaveScope;
   const { pushEditHistory } = historyPush;
 
@@ -495,11 +559,7 @@ export function useCommitEdit(
     if (path) {
       editDrafts.acceptDisk(path);
     } // typed code now patches the disk's text
-    setPageState((current) =>
-      current?.save.tag === 'conflicted'
-        ? { ...current, save: saveStateAccepted(current.save) }
-        : current,
-    );
+    setPageState((current) => (current?.save.tag === 'conflicted' ? { ...current, save: saveStateAccepted(current.save) } : current));
     scheduleSave(true);
   }, [scheduleSave, editDrafts, pageStateRef, setConflictReason, setPageState]);
 
@@ -510,8 +570,17 @@ export function useCommitEdit(
   // cannot state still queues: pageEdits derives a minimal node rewrite from
   // the gesture's model effect. Past the queue's bound a gesture is refused,
   // never queued (plan §8).
+  // A gesture held for the next one, so the two are one undo step: a prop
+  // declared from the binding picker and the field's edit that binds it
+  // (holdForNextEdit). The field's edit is made by the field itself, as any
+  // pick is, so the declaration waits for it rather than knowing its shape.
+  const heldRef = useRef<EditGesture | undefined>(undefined);
   const commitEdit = useCallback(
-    (gesture: EditGesture): boolean => {
+    (next: EditGesture, step: { readonly files?: StepFiles } = {}): boolean => {
+      const held = heldRef.current;
+      heldRef.current = undefined;
+      const gesture = held === undefined ? next : sequence(held, next);
+      assert(held === undefined || step.files === undefined, 'A held declaration joins a page edit, not a step that made files');
       if (propertySave.saving.current) {
         return false;
       }
@@ -526,36 +595,41 @@ export function useCommitEdit(
       const origin = state.origin;
       if (editDrafts.empty(path) && origin === undefined) {
         // Typed code has not established source references for visual edits yet.
-        showToast('Wait for the current code change to finish saving, then try again.', 'info');
+        showToast(translate('shell.history.waitForSave'), 'info');
         return false;
       }
       if (editDrafts.entries(path).length >= LIMITS.intentsPendingMax) {
-        showToast('Too many edits are waiting to be saved — try again in a moment.', 'error');
+        showToast(translate('shell.history.tooManyEdits'), 'error');
         return false;
       }
-      const record = pushEditHistory(gesture.coalesceKey);
+      const record = pushEditHistory(gesture.coalesceKey, step.files);
       const queued = editDrafts.addGesture(path, gesture, record);
       assert(queued === 'queued', 'A gesture inside the bound is queued');
-      setPageState((current) =>
-        current?.editable
-          ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) }
-          : current,
-      );
+      setPageState((current) => (current?.editable ? { ...current, model: gesture.apply(current.model), save: saveStateEdited(current.save) } : current));
       scheduleSave(gesture.urgency);
+      // The canvas shows what the edit does to nodes it already has (attributes, words, a tag, an element
+      // that is updating) in this frame; an added or removed node is shown by the action that made it.
+      showModelChangeOnCanvas(state.model, gesture.apply(state.model), { structure: 'leave' }, (id) => canvasPathForRef.current(id));
       return true;
     },
-    [
-      scheduleSave,
-      pushEditHistory,
-      propertySave.saving,
-      editDrafts,
-      typedCodeUnparsed,
-      showToast,
-      pageStateRef,
-      setPageState,
-    ],
+    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, canvasPathForRef, pageStateRef, setPageState, translate],
   );
-  return { commitEdit, keepLocalVersion };
+  // The held gesture goes in with the next edit; a field that made none
+  // (the pick was refused) leaves it to go in alone once the click is done,
+  // so a declared prop is never lost and never joins an unrelated edit.
+  const commitRef = useRef(commitEdit);
+  commitRef.current = commitEdit;
+  const holdForNextEdit = useCallback((gesture: EditGesture): void => {
+    assert(heldRef.current === undefined, 'One gesture is held at a time');
+    heldRef.current = gesture;
+    window.setTimeout(() => {
+      if (heldRef.current === gesture) {
+        heldRef.current = undefined;
+        commitRef.current(gesture);
+      }
+    }, 0);
+  }, []);
+  return { commitEdit, holdForNextEdit, keepLocalVersion };
 }
 
 // Typed code.
@@ -592,30 +666,17 @@ export function useCodeSource(
       typedSourceRef.current = source;
       // The origin stays: typed text is no bytes on disk, and the code save's
       // reply moves the origin on.
-      setPageState((current) =>
-        current ? { ...current, source, save: saveStateEdited(current.save) } : current,
-      );
+      setPageState((current) => (current ? { ...current, source, save: saveStateEdited(current.save) } : current));
       scheduleSave('live');
       return parseTypedCode(open.path, source, position);
     },
-    [
-      pushEditHistory,
-      scheduleSave,
-      editDrafts,
-      parseTypedCode,
-      pageStateRef,
-      setPageState,
-      typedSourceRef,
-    ],
+    [pushEditHistory, scheduleSave, editDrafts, parseTypedCode, pageStateRef, setPageState, typedSourceRef],
   );
   return { changeCodeSource };
 }
 
 // An edit made outside the app to a page with unsaved edits.
-export function useOutsideEdit(
-  lifecycle: ReturnType<typeof useLifecycle>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useOutsideEdit(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { editDrafts, pageSaverRef, setConflictReason } = lifecycle;
   const { pageStateRef, setPageState } = coreState;
 
@@ -632,7 +693,7 @@ export function useOutsideEdit(
       const saver = pageSaverRef.current;
       const before = pageStateRef.current.pageState;
       assert(saver !== undefined, 'The page saver exists before any file event');
-      if (!before || before.save.tag !== 'dirty' || saver.writing()) {
+      if (!before || !saveStateNeedsWrite(before.save) || saver.writing()) {
         return;
       }
       // Unsaved edits that are all requests map through an outside change or
@@ -651,7 +712,7 @@ export function useOutsideEdit(
         return; // gone or unreadable: the next save reports it
       }
       const latest = pageStateRef.current;
-      if (latest.currentPage?.path !== pagePath || latest.pageState?.save.tag !== 'dirty') {
+      if (latest.currentPage?.path !== pagePath || !latest.pageState || !saveStateNeedsWrite(latest.pageState.save)) {
         return;
       }
       // A save that started or finished during the read moved the base, and its
@@ -662,9 +723,7 @@ export function useOutsideEdit(
       }
       setConflictReason(undefined);
       setPageState((current) =>
-        current?.save.tag === 'dirty'
-          ? { ...current, save: saveStateRefused(current.save, base, diskChecksum) }
-          : current,
+        current && saveStateNeedsWrite(current.save) ? { ...current, save: saveStateRefused(current.save, base, diskChecksum) } : current,
       );
     },
     [editDrafts, pageSaverRef, pageStateRef, setConflictReason, setPageState],
@@ -712,15 +771,15 @@ export function useFileEvents(
       if (closed || !page || page.kind === 'route') {
         return;
       }
+      // Current page deleted externally.
+      if (!scanContainsFile(scanResult, page.path)) {
+        clearDeletedOpenPage({ pageLoadRef, setCurrentPage, setPageState, setSelectedId });
+        return;
+      }
       // Chunk .html files feed the open page's Fragment subtrees — treat a
       // change to any of them like a change to the page itself.
       const chunk = [...files].some((file) => file.toLowerCase().endsWith('.html'));
       if (!files.has(page.path) && !chunk && files.size > 0) {
-        return;
-      }
-      // Current page deleted externally.
-      if (!scanContainsFile(scanResult, page.path)) {
-        clearDeletedOpenPage({ pageLoadRef, setCurrentPage, setPageState, setSelectedId });
         return;
       }
       if (!state || (files.size === 0 && state.save.tag !== 'clean')) {
@@ -729,30 +788,14 @@ export function useFileEvents(
       const reload = { pageStateRef, surfaceOutsideEdit, setPageState, dropPageHistory };
       await reloadChangedPage(reload, { path: page.path, state, chunk }, () => closed);
     });
-    const off = onFilesChanged(({ files }) =>
-      queueExternalFiles(files, pendingFiles, reconcile.request),
-    );
-    const offFocus = watchExternalFilesOnReturn(
-      { projectRef, pageStateRef },
-      pendingFiles,
-      reconcile.request,
-    );
+    const off = onFilesChanged(({ files }) => queueExternalFiles(files, pendingFiles, reconcile.request));
+    const offFocus = watchExternalFilesOnReturn({ projectRef, pageStateRef }, pendingFiles, reconcile.request);
     return () => {
       closed = true;
       off();
       offFocus();
     };
-  }, [
-    rescan,
-    surfaceOutsideEdit,
-    dropPageHistory,
-    pageLoadRef,
-    pageStateRef,
-    projectRef,
-    setCurrentPage,
-    setPageState,
-    setSelectedId,
-  ]);
+  }, [rescan, surfaceOutsideEdit, dropPageHistory, pageLoadRef, pageStateRef, projectRef, setCurrentPage, setPageState, setSelectedId]);
 }
 
 function watchExternalFilesOnReturn(
@@ -769,17 +812,14 @@ function watchExternalFilesOnReturn(
     const snapshot = state.pageStateRef.current;
     if (snapshot.pageState?.save.tag === 'clean' && snapshot.currentPage?.path) {
       pendingFiles.add(snapshot.currentPage.path);
-      void request();
     }
+    // Listings must reconcile even when no page is open or the current page has unsaved edits.
+    void request();
     tellCanvas({ type: 'avb:patch-now' });
   });
 }
 
-function queueExternalFiles(
-  files: readonly string[],
-  pendingFiles: Set<string>,
-  request: () => Promise<void>,
-): void {
+function queueExternalFiles(files: readonly string[], pendingFiles: Set<string>, request: () => Promise<void>): void {
   for (const file of files) {
     pendingFiles.add(file);
   }
@@ -788,8 +828,7 @@ function queueExternalFiles(
 }
 
 function clearDeletedOpenPage(
-  context: Pick<ReturnType<typeof useLifecycle>, 'pageLoadRef'> &
-    Pick<ReturnType<typeof useCoreState>, 'setCurrentPage' | 'setPageState' | 'setSelectedId'>,
+  context: Pick<ReturnType<typeof useLifecycle>, 'pageLoadRef'> & Pick<ReturnType<typeof useCoreState>, 'setCurrentPage' | 'setPageState' | 'setSelectedId'>,
 ): void {
   context.pageLoadRef.current = {};
   context.setCurrentPage(undefined);

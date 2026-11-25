@@ -1,43 +1,44 @@
+// Goal: publish metadata accepts only bounded regular files and trusted connection shapes.
+// Method: exercise valid records and each malformed field without contacting GitHub.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changedPublishFiles } from '../src/features/github/changedPublishFiles';
-import { gitBlob } from '../src/features/storage/cleanupStore';
-import type { RepositoryFile } from '../src/features/github/github';
+import { parsePublishTreeFile } from '../src/features/publishing/publishSource';
+import { parsePublishConnection } from '../src/shared/publishConnection';
 
-const page: RepositoryFile = { path: 'src/pages/index.astro', content: '<h1>Original</h1>' };
-const image: RepositoryFile = {
-  path: 'public/photo.png',
-  content: Buffer.from([0, 128, 255]).toString('base64'),
-  encoding: 'base64',
-};
-const tree = {
-  truncated: false,
-  tree: [page, image].map((file) => ({
-    path: file.path,
-    type: 'blob',
-    mode: '100644',
-    sha: gitBlob(Buffer.from(file.content, file.encoding === 'base64' ? 'base64' : 'utf8')),
-  })),
-};
-test('publishing uploads only changed source or binary files and skips identical snapshots', () => {
-  assert.deepEqual(changedPublishFiles([page, image], tree), []);
-  const updated = { ...page, content: '<h1>Edited</h1>' };
-  assert.deepEqual(changedPublishFiles([updated, image], tree), [updated]);
-  const binary = { ...image, content: Buffer.from([0, 129, 255]).toString('base64') };
-  assert.deepEqual(changedPublishFiles([page, binary], tree), [binary]);
-  const added = { path: 'src/pages/new.astro', content: '<h1>New</h1>' };
-  const removed = { ...image, deleted: true };
-  assert.deepEqual(changedPublishFiles([page, added, removed], tree), [added, removed]);
+const hash = 'a'.repeat(40);
+test('tree entries reject links, invalid identifiers, oversized files and unsafe paths', () => {
+  assert.deepEqual(parsePublishTreeFile(`100644 blob ${hash} 0\tpublic/a.png`), {
+    ok: true,
+    value: { path: 'public/a.png', sha: hash, size: 0, mode: '100644' },
+  });
+  assert.equal(parsePublishTreeFile(`100755 blob ${hash} 1\tsrc/a.ts`).ok, true);
+  for (const record of [
+    `120000 blob ${hash} 1\tpublic/a.png`,
+    `160000 commit ${hash} -\tsrc/module`,
+    `100644 blob bad 0\ta`,
+    `100644 blob ${hash} 104857601\ta`,
+    `100644 blob ${hash} 1\t../escape`,
+    `100644 blob ${hash} 1\t/absolute`,
+    `100644 blob ${hash} 1\t.git/config`,
+    `100644 blob ${hash} 1\ta\\b`,
+  ]) {
+    assert.equal(parsePublishTreeFile(record).ok, false, record);
+  }
 });
-test('publish change detection rejects incomplete trees, duplicate paths, and linked files', () => {
-  assert.throws(() => changedPublishFiles([page], { ...tree, truncated: true }), /incomplete/);
-  assert.throws(() => changedPublishFiles([page, page], tree), /Duplicate/);
-  assert.throws(
-    () =>
-      changedPublishFiles([page], {
-        ...tree,
-        tree: [{ ...tree.tree[0], mode: '120000' }],
-      }),
-    /link or submodule/,
-  );
+test('connection parser rejects injected credentials, destinations and branch options', () => {
+  const good = { repository: 'owner/site', branch: 'main', token: 'test-token' };
+  assert.equal(parsePublishConnection(good).ok, true);
+  for (const value of [
+    null,
+    {},
+    { ...good, token: 'x\nheader' },
+    { ...good, repository: 'https://evil.test' },
+    { ...good, repository: '../site' },
+    { ...good, branch: '--upload-pack=evil' },
+    { ...good, branch: 'a/../b' },
+    { ...good, branch: 'refs/a.lock' },
+    { ...good, token: 'x'.repeat(501) },
+  ]) {
+    assert.equal(parsePublishConnection(value).ok, false);
+  }
 });

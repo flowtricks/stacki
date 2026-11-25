@@ -1,0 +1,11 @@
+---
+interface Props {
+  // The title, required.
+  title: string, // trailing comment with a comma separator
+  /* A block comment. */ subtitle?: string;
+  count?: number /* no semicolon */
+  mode?: 'a' | 'b'; // inline: 'c' | 'd'
+}
+const { title, subtitle = 'a; b', count = 1, mode = 'a' } = Astro.props;
+---
+<p class="comments-in-type" data-mode={mode}>{title} {subtitle} {count}</p>

@@ -67,9 +67,7 @@ test('component usage popup ignores replies after close and from older opens', a
     });
   await clickCount();
   await act(async () => {
-    document
-      .querySelector('.instances-head button')
-      .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    document.querySelector('.instances-head button').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     requests[0].resolve({ files: [] });
     await Promise.resolve();
   });

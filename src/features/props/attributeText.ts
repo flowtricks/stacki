@@ -5,6 +5,8 @@
 import type { Attr } from '../../../shared/page/pageNode';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
+import { isReferencePath } from '../../editor/conditionalValue';
 
 export interface AttributePair {
   readonly name: string;
@@ -16,14 +18,45 @@ export interface ObjectEntry {
 }
 
 export const decodeAttr = (attribute: Attr | undefined) =>
-  attribute === undefined || attribute.type === 'bare'
-    ? ''
-    : attribute.type === 'expr'
-      ? `{${attribute.value}}`
-      : String(attribute.value);
+  attribute === undefined || attribute.type === 'bare' ? '' : attribute.type === 'expr' ? `{${attribute.value}}` : String(attribute.value);
 
-export const attributeDisplayName = (name: string, value: Attr | undefined): string =>
-  value?.type === 'spread' ? `{...${value.value}}` : name;
+/**
+ * What a typed Name says about a spread: not one (`none`), a spread of a name
+ * in scope (`{...rest}`, `{...Astro.props}`, or `...rest`, which means the
+ * same), or a spread of something else, which is refused with why.
+ */
+export type SpreadName = { readonly kind: 'none' } | { readonly kind: 'spread'; readonly path: string } | ({ readonly kind: 'invalid' } & Described);
+
+// `{...rest}`, `...rest`, and the forms on the way to them as they are typed (`{...rest`).
+const SPREAD_NAME = /^\{?\s*\.\.\.\s*([^{}]*?)\s*\}?$/;
+
+export function spreadOfName(text: string): SpreadName {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('...')) {
+    return { kind: 'none' };
+  }
+  if (trimmed.length > LIMITS.attrCharsMax) {
+    return { kind: 'invalid', ...described('props.attributeText.spreadTooLong') };
+  }
+  const match = SPREAD_NAME.exec(trimmed);
+  const path = match?.[1] ?? '';
+  if (path === '') {
+    return { kind: 'invalid', ...described('props.attributeText.spreadEmpty') };
+  }
+  if (!isReferencePath(path)) {
+    return { kind: 'invalid', ...described('props.attributeText.spreadNotName') };
+  }
+  return { kind: 'spread', path };
+}
+
+/** What the Name box keeps of a keystroke: an attribute name's characters, or a spread's while one is typed. */
+export function typedAttributeName(text: string): string {
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith('{') || trimmed.startsWith('.')) {
+    return text.replace(/[^\w$.{}]/g, '');
+  }
+  return text.replace(/[^\w@:.-]/g, '');
+}
 
 export const encodeAttr = (text: string): Attr => {
   if (text === '') {
@@ -36,8 +69,7 @@ export const encodeAttr = (text: string): Attr => {
   return { type: 'string', value: text };
 };
 
-export const ATTR_PASTE_RE =
-  /([\w@:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{(?:[^{}]|\{[^{}]*\})*\})|([^\s]+)))?/g;
+export const ATTR_PASTE_RE = /([\w@:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\{(?:[^{}]|\{[^{}]*\})*\})|([^\s]+)))?/g;
 
 export function parseAttrPaste(text: string): readonly AttributePair[] {
   if (text.length > LIMITS.attrCharsMax) {
@@ -77,8 +109,7 @@ export function parseObjectLiteral(input: unknown): readonly ObjectEntry[] | und
   }
   const entries = [];
   const re = new RegExp(
-    /\s*(?:"([^"]*)"|'([^']*)'|([\w$@:.-]+))\s*:\s*/.source +
-      /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^,]+?)\s*(?:,|$)/.source,
+    /\s*(?:"([^"]*)"|'([^']*)'|([\w$@:.-]+))\s*:\s*/.source + /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[^,]+?)\s*(?:,|$)/.source,
     'y',
   );
   let position = 0;

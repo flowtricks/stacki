@@ -6,6 +6,7 @@
 // stays editable as raw text (the caller falls back), so this never has to be
 // exhaustive — just faithful for the shapes Webflow emits.
 
+import { assert } from '../../../../shared/core/assert';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type GradientType = 'linear' | 'radial' | 'conic';
@@ -44,15 +45,9 @@ export type GradientPatch =
 export type GradientStopPatch = Pick<GradientStop, 'color'> | Pick<GradientStop, 'pos'>;
 
 const GRADIENT_RE = /^(repeating-)?(linear|radial|conic)-gradient\s*\(([\s\S]*)\)\s*$/i;
-const RADIAL_SIZE_KW = new Set([
-  'closest-side',
-  'closest-corner',
-  'farthest-side',
-  'farthest-corner',
-]);
+const RADIAL_SIZE_KW = new Set(['closest-side', 'closest-corner', 'farthest-side', 'farthest-corner']);
 const isAngle = (token: string) => /^-?[\d.]+(deg|grad|rad|turn)$/i.test(token.trim());
-const isLength = (token: string) =>
-  /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token.trim());
+const isLength = (token: string) => /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token.trim());
 const POSITION_KEYWORDS: Record<string, string> = {
   left: '0%',
   right: '100%',
@@ -112,22 +107,14 @@ function isPrelude(type: GradientType, part: string): boolean {
   // one stop, which is not a gradient, and the whole thing came back
   // unparseable: `radial-gradient(red 0%, blue 100%)` — ordinary, valid CSS —
   // could not be read by the editor at all.
-  if (
-    normalized.startsWith('circle') ||
-    normalized.startsWith('ellipse') ||
-    normalized.includes(' at ') ||
-    normalized.startsWith('at ')
-  ) {
+  if (normalized.startsWith('circle') || normalized.startsWith('ellipse') || normalized.includes(' at ') || normalized.startsWith('at ')) {
     return true;
   }
   if (RADIAL_SIZE_KW.has(normalized)) {
     return true;
   }
   const tokens = splitTopLevelSpaces(normalized);
-  return (
-    tokens.length > 0 &&
-    tokens.every((token) => RADIAL_SIZE_KW.has(token.toLowerCase()) || isLength(token))
-  );
+  return tokens.length > 0 && tokens.every((token) => RADIAL_SIZE_KW.has(token.toLowerCase()) || isLength(token));
 }
 
 export function parseGradient(image: string): Gradient | undefined {
@@ -152,6 +139,28 @@ export function parseGradient(image: string): Gradient | undefined {
     return undefined;
   } // not a usable gradient
   return { ...blankGradientOf(type), repeating: !!match[1], ...geometry, stops };
+}
+
+/**
+ * Whether the visual editor can show and write `gradient` as it is. Each stop
+ * must be one colour and at most one plain length, and the geometry plain
+ * values: a stop like `transparent var(--divider-size)` (a position the parser
+ * cannot read as one) or `red 10% 20%` (two positions) was read as a colour
+ * named by the whole text, so the editor showed it wrongly and rewrote it
+ * wrongly. Those are edited as code instead.
+ */
+export function gradientFitsEditor(gradient: Gradient): boolean {
+  assert(gradient.stops.length >= 2, 'gradientFitsEditor: a gradient has two stops');
+  for (const stop of gradient.stops) {
+    if (splitTopLevelSpaces(stop.color).length !== 1) {
+      return false;
+    }
+    if (stop.pos !== '' && !isLength(stop.pos)) {
+      return false;
+    }
+  }
+  const geometry = [gradient.angle, gradient.shape, gradient.size, gradient.from, gradient.posX, gradient.posY];
+  return geometry.every((value) => !value.includes('('));
 }
 
 type Geometry = Partial<Pick<Gradient, 'angle' | 'shape' | 'size' | 'from' | 'posX' | 'posY'>>;
@@ -231,17 +240,8 @@ export function blankGradientOf(type: GradientType): Gradient {
 
 export function serializeGradient(gradient: Gradient): string {
   const functionName = `${gradient.repeating ? 'repeating-' : ''}${gradient.type}-gradient`;
-  const prelude =
-    gradient.type === 'linear'
-      ? gradient.angle.trim()
-      : gradient.type === 'radial'
-        ? radialPrelude(gradient)
-        : conicPrelude(gradient);
-  const stops = gradient.stops
-    .map((stop) =>
-      stop.pos.trim() ? `${stop.color.trim()} ${stop.pos.trim()}` : stop.color.trim(),
-    )
-    .join(', ');
+  const prelude = gradient.type === 'linear' ? gradient.angle.trim() : gradient.type === 'radial' ? radialPrelude(gradient) : conicPrelude(gradient);
+  const stops = gradient.stops.map((stop) => (stop.pos.trim() ? `${stop.color.trim()} ${stop.pos.trim()}` : stop.color.trim())).join(', ');
   return `${functionName}(${prelude ? `${prelude}, ` : ''}${stops})`;
 }
 
@@ -257,14 +257,80 @@ export function stopsBarCss(stops: GradientStop[]): string {
   return `linear-gradient(90deg, ${parts.join(', ')})`;
 }
 
-/** A stop's numeric position (0–100), inferring evenly-spaced when unset. */
+/** A stop's numeric position (0–100), inferring evenly-spaced when unset. A
+ * position the number cannot be read from (`.%`) is treated as unset, so the
+ * handle stays on the bar instead of taking a `NaN` left offset. */
 export function stopPercent(stops: GradientStop[], i: number): number {
   const raw = stops[i]?.pos.trim();
   const match = raw ? /^(-?[\d.]+)%$/.exec(raw) : undefined;
-  if (match) {
-    return Math.max(0, Math.min(100, parseFloat(match[1] ?? '')));
+  const amount = match ? parseFloat(match[1] ?? '') : Number.NaN;
+  if (Number.isFinite(amount)) {
+    return Math.max(0, Math.min(100, amount));
   }
   return stops.length > 1 ? (i / (stops.length - 1)) * 100 : 0;
+}
+
+/** The decimal places a position the editor computes keeps. Two places are finer
+ * than a pointer can drag, and a value rounded to them inside 0–100 is always
+ * written in plain notation: `1e-8%`, from `100 - 99.99999999`, is not. */
+const PERCENT_DECIMALS = 2;
+const PERCENT_SCALE = 10 ** PERCENT_DECIMALS;
+
+/** A percentage the editor computed (a drag, an inserted or a reversed stop), held
+ * to the bar: 0–100, rounded to PERCENT_DECIMALS. A drag far past either end of the
+ * bar is the end. The value must be a number: a non-finite one is a broken
+ * computation (a bar with no width), which the caller handles before it gets here. */
+export function clampedPercent(value: number): number {
+  assert(Number.isFinite(value), 'clampedPercent: a position is a finite number');
+  const rounded = Math.round(Math.max(0, Math.min(100, value)) * PERCENT_SCALE) / PERCENT_SCALE;
+  // `+ 0` turns -0 into 0, so a drag past the start never writes `-0%`.
+  const percent = rounded + 0;
+  assert(percent >= 0, 'clampedPercent: a position is at least 0');
+  assert(percent <= 100, 'clampedPercent: a position is at most 100');
+  return percent;
+}
+
+/** A computed position as the text a stop holds: `42%`, `33.33%`, never `NaN%`. */
+export function formatPercent(value: number): string {
+  const text = `${clampedPercent(value)}%`;
+  assert(PLAIN_PERCENT_RE.test(text), 'formatPercent: a position is written in plain notation');
+  return text;
+}
+
+const PLAIN_PERCENT_RE = /^\d{1,3}(\.\d+)?%$/;
+
+/** `gradient` with the stop at `index` moved to `percent` (clamped to the bar). The
+ * written gradient reads back with the stop where it was put, checked here: the
+ * serializer's output is the value the page will parse again. */
+export function withStopAt(gradient: Gradient, index: number, percent: number): Gradient {
+  assert(Number.isSafeInteger(index), 'withStopAt: a stop index is an integer');
+  assert(index >= 0, 'withStopAt: a stop index is at least 0');
+  assert(index < gradient.stops.length, 'withStopAt: the stop exists');
+  const position = formatPercent(percent);
+  const next = { ...gradient, stops: gradient.stops.map((stop, other) => (other === index ? { ...stop, pos: position } : stop)) };
+  // A stop whose colour is being typed (empty for a moment) does not read back as a
+  // stop at all; a gradient whose every stop reads back holds this one where it was put.
+  const reread = parseGradient(serializeGradient(next));
+  if (reread?.stops.length === next.stops.length) {
+    assert(reread.stops[index]?.pos === position, 'withStopAt: the written stop reads back at its position');
+  }
+  return next;
+}
+
+/** Whether a stop position typed into the editor can be written: empty (auto), a
+ * plain length in ordinary notation, or a CSS function such as `var()`, which the
+ * page resolves. A half-typed or overflowing number (`.`, `-`, `1e999`) is not
+ * written: it would leave the page invalid CSS, and the field keeps it to finish. */
+export function stopPositionWritable(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return true;
+  }
+  if (/^[a-z-]+\(/i.test(trimmed)) {
+    return true;
+  }
+  const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|%|em|rem|vw|vh|vmin|vmax|ch)?$/i.exec(trimmed);
+  return match !== null && Number.isFinite(parseFloat(match[1] ?? ''));
 }
 
 // ── Angle in degrees (for the dial) ────────────────────────────────────────────
@@ -290,19 +356,10 @@ export function angleToDegrees(angle: string): number {
   }
   const match = normalized.match(/^(-?[\d.]+)(deg|grad|rad|turn)$/);
   if (match) {
-    const amount = parseFloat(match[1] ?? '');
-    switch (match[2]) {
-      case 'turn':
-        return amount * 360;
-      case 'grad':
-        return amount * 0.9;
-      case 'rad':
-        return (amount * 180) / Math.PI;
-      case 'deg':
-        return amount;
-      case undefined:
-        return amount;
-    }
+    const degrees = matchedDegrees(parseFloat(match[1] ?? ''), match[2]);
+    // A number that does not read (`.deg`) or overflows (four hundred digits of
+    // turns) is no direction: the CSS default, never `NaNdeg`.
+    return Number.isFinite(degrees) ? degrees : 180;
   }
   if (normalized.startsWith('to ')) {
     const sides = normalized.slice(3).trim().split(/\s+/).filter(Boolean).sort().join(' ');
@@ -311,9 +368,34 @@ export function angleToDegrees(angle: string): number {
   return 180;
 }
 
-/** Degrees → a normalized `<n>deg` string (0–359). */
+function matchedDegrees(amount: number, unit: string | undefined): number {
+  switch (unit) {
+    case 'turn':
+      return amount * 360;
+    case 'grad':
+      return amount * 0.9;
+    case 'rad':
+      return (amount * 180) / Math.PI;
+    case 'deg':
+    case undefined:
+      return amount;
+    default:
+      return Number.NaN; // The pattern names every unit; anything else reads as no number.
+  }
+}
+
+/** Degrees → a normalized `<n>deg` string (0–359). A dial turned past a full turn
+ * either way wraps. Past 2^53 a float has no whole-degree resolution left, so the
+ * angle is the default down rather than whatever the remainder happens to be. */
 export function degreesToAngle(deg: number): string {
-  return `${((Math.round(deg) % 360) + 360) % 360}deg`;
+  assert(Number.isFinite(deg), 'degreesToAngle: an angle is a finite number');
+  const whole = Number.isSafeInteger(Math.round(deg)) ? Math.round(deg) : 180;
+  // `+ 0` turns -0 into 0, so a dial turned to exactly -360 writes `0deg`.
+  const normalized = (((whole % 360) + 360) % 360) + 0;
+  assert(Number.isSafeInteger(normalized), 'degreesToAngle: a whole number of degrees');
+  assert(normalized >= 0, 'degreesToAngle: at least 0');
+  assert(normalized < 360, 'degreesToAngle: less than one turn');
+  return `${normalized}deg`;
 }
 
 // ── Colour interpolation (inserting a stop between two others) ──────────────────
@@ -415,11 +497,7 @@ export function colorAt(stops: GradientStop[], percent: number): string {
     }
     if (percent >= leftPercent && percent <= rightPercent) {
       const span = rightPercent - leftPercent;
-      return mixColors(
-        leftStop.color,
-        rightStop.color,
-        span === 0 ? 0 : (percent - leftPercent) / span,
-      );
+      return mixColors(leftStop.color, rightStop.color, span === 0 ? 0 : (percent - leftPercent) / span);
     }
   }
   return lastStop.color;

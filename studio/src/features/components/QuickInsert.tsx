@@ -1,26 +1,25 @@
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
-import { useEffect, useState } from 'react';
-import InsertSearch, {
-  type InsertItem,
-} from '../../../vendor/stacki/src/features/palette/InsertSearch';
-import { insertTargetFor } from '../../../vendor/stacki/src/editor/insertTarget';
-import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
+import { useCallback, useEffect, useState } from 'react';
+import InsertSearch, { type InsertItem } from '../../../vendor/stacki/src/features/palette/InsertSearch';
+import { useInsertAppsSource, type InsertAppsNotify } from '../../../vendor/stacki/src/app/shell/insertApps';
+import { useStudioRole } from '../roles/useEditorRole';
 import type { useEditor } from '../project/useEditor';
 import type { Project } from '../project/projectClient';
-import { parsePage, type TreeAction } from '../source/source';
-import { relativeImport } from '../source/imports';
-import { parseInsertContent } from '../source/insertContent';
-import { dropTarget } from '../navigator/dropTarget';
+import { resolvePreviewURL } from './ComponentsPanel';
+import { planQuickInsert } from './quickInsertPlan';
 
 export function QuickInsert({
   model,
   project,
   enabled,
+  browseApps,
   report,
 }: {
   readonly model: ReturnType<typeof useEditor>;
   readonly project: Project;
   readonly enabled: boolean;
+  /** Switches the rail to the Apps panel, for the palette's Apps tab. */
+  readonly browseApps: () => void;
   readonly report: (error: unknown) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -31,66 +30,92 @@ export function QuickInsert({
     return null;
   }
   return (
-    <InsertSearch
-      components={project.components.map((component) => ({
-        name: component.name,
-        path: component.file,
-        folder: component.file
-          .replace(/^src\/(components|layouts)\//, '')
-          .split('/')
-          .slice(0, -1)
-          .join('/'),
-        isLayout: component.file.startsWith('src/layouts/'),
-      }))}
+    <QuickInsertSearch
+      model={model}
+      project={project}
       allowSlot={!isCanvasPage(document.file)}
-      onInsert={(item) => {
-        setOpen(false);
-        void insertChoice(model, project, item).catch(report);
-      }}
-      onClose={() => setOpen(false)}
+      browseApps={browseApps}
+      report={report}
+      close={() => setOpen(false)}
     />
   );
 }
 
-async function insertChoice(
-  model: ReturnType<typeof useEditor>,
-  project: Project,
-  item: InsertItem,
-) {
+// The open palette, mounted only while it shows, so the installed apps are read when it opens
+// (Studio's apps client, through the shared insertApps.ts), as Desktop's palette reads them.
+function QuickInsertSearch({
+  model,
+  project,
+  allowSlot,
+  browseApps,
+  report,
+  close,
+}: {
+  readonly model: ReturnType<typeof useEditor>;
+  readonly project: Project;
+  readonly allowSlot: boolean;
+  readonly browseApps: () => void;
+  readonly report: (error: unknown) => void;
+  readonly close: () => void;
+}) {
+  const role = useStudioRole();
+  // Studio tells the person things through its report channel: a message, or an error for a failure.
+  const notify = useCallback<InsertAppsNotify>((message, kind) => report(kind === 'error' ? new Error(message) : message), [report]);
+  const apps = useInsertAppsSource({ projectPath: project.name, role, browse: browseApps, notify });
+  return (
+    <InsertSearch
+      projectKey={project.workspaceId ?? project.name}
+      components={project.components.map((component) => ({
+        name: component.name,
+        file: component.file,
+        path: component.file,
+        folder:
+          component.folder ??
+          component.file
+            .replace(/^src\/(components|layouts)\//, '')
+            .split('/')
+            .slice(0, -1)
+            .join('/'),
+        isLayout: component.isLayout === true,
+      }))}
+      allowSlot={allowSlot}
+      devUrl={location.origin}
+      resolvePreviewURL={resolvePreviewURL}
+      trailingSlash="ignore"
+      apps={apps}
+      onInsert={(item) => {
+        close();
+        void insertChoice(model, project, item).catch(report);
+      }}
+      onClose={close}
+    />
+  );
+}
+
+// The pick shows on the canvas before the write, as Desktop's palette does (quickInsertPlan.ts), and
+// the stand-in is taken away when the write is not sent or is refused (useEditor.ts).
+async function insertChoice(model: ReturnType<typeof useEditor>, project: Project, item: InsertItem) {
   const document = model.document;
   if (!document?.ready) {
     return;
   }
-  const parsed = parsePage(document.text.toString(), { locs: true });
-  if (!parsed.editable) {
+  const plan = planQuickInsert({ source: document.text.toString(), file: document.file, selected: model.selected, components: project.components, item });
+  if (plan === undefined) {
     return;
   }
-  const location = insertTargetFor(
-    parsePageModel(parsed.model),
-    model.selected,
-    item,
-    project.components,
-  );
-  const target = dropTarget(parsed.model.nodes, location);
-  let action: TreeAction;
-  if (item.type === 'component') {
-    const component =
-      project.components.find((component) => component.file === item.path) ??
-      project.components.find((component) => component.name === item.name);
-    if (!component) {
-      return;
-    }
-    action = {
-      kind: 'insert',
-      ...target,
-      name: component.name,
-      importPath: relativeImport(document.file, component.file),
-      paired: component.slots.includes('default') && component.slotText === true,
-    };
-  } else {
-    action = { kind: 'insert-content', ...target, content: parseInsertContent(item) };
+  const { action, standIn } = plan;
+  if (standIn !== undefined) {
+    model.preview.send({ type: 'avb:optimistic-insert', insert: standIn, base: document.sourceStamp() });
   }
-  await document.action(action);
+  const sent = await document.action(action).catch((error: unknown) => {
+    if (standIn !== undefined) {
+      model.preview.send({ type: 'avb:insert-revert' });
+    }
+    throw error;
+  });
+  if (!sent && standIn !== undefined) {
+    model.preview.send({ type: 'avb:insert-revert' });
+  }
 }
 
 function useInsertShortcut(enabled: boolean, open: () => void) {

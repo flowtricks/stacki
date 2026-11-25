@@ -5,10 +5,7 @@ import path from 'node:path';
 import { record, string } from '../src/shared/validation';
 
 const root = process.env['STUDIO_FIXTURE_ROOT'];
-assert.ok(
-  root && root.includes('/.studio/'),
-  'Use an isolated Studio fixture, never website source',
-);
+assert.ok(root && root.includes('/.studio/'), 'Use an isolated Studio fixture, never website source');
 const url = process.env['STUDIO_URL'] ?? 'http://127.0.0.1:4360/studio';
 assert.equal(new URL(url).hostname, '127.0.0.1');
 const componentFile = path.join(root, 'src/components/VariantProbe.astro');
@@ -36,8 +33,7 @@ const {variant = 'plain'} = Astro.props;
 );
 await writeFile(pageFile, source, { flag: 'wx' });
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -80,10 +76,7 @@ try {
     .filter({ hasText: /^list$/ })
     .hover();
   await canvas.locator('section').first().locator('ul li').nth(1).waitFor();
-  assert.equal(
-    await canvas.locator('section').first().locator('strong').textContent(),
-    'Keep this slot',
-  );
+  assert.equal(await canvas.locator('section').first().locator('strong').textContent(), 'Keep this slot');
   assert.equal(await canvas.locator('section').nth(1).getAttribute('data-probe'), 'plain');
   assert.equal(await other.locator('ul').count(), 0, 'Other editors never see speculative HTML');
   assert.equal(await readSource(), source, 'Hover must never write the shared draft');
@@ -116,9 +109,7 @@ try {
   await other.locator('table').waitFor();
   assert.ok((await readSource()).includes('variant="table"'));
   assert.deepEqual(errors, []);
-  console.log(
-    `HTML variants: cached table in ${elapsed}ms, slots/siblings preserved, draft untouched on hover/cancel, commit shared.`,
-  );
+  console.log(`HTML variants: cached table in ${elapsed}ms, slots/siblings preserved, draft untouched on hover/cancel, commit shared.`);
 } finally {
   await browser.close();
   await rm(pageFile);
@@ -132,8 +123,6 @@ async function openPage(target: Page) {
   await target.getByRole('button', { name: 'Expand all', exact: true }).click();
 }
 async function readSource() {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=src/pages/variant-check.astro', url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=src/pages/variant-check.astro', url).href);
   return string(record(await response.json())['source']);
 }

@@ -12,6 +12,10 @@ interface Statement {
 interface NeededImport {
   readonly name: string;
   readonly path: string;
+  /** How it binds, kept with it: a named import written as a default one reads another export. */
+  readonly imported?: string | undefined;
+  readonly named?: boolean | undefined;
+  readonly typeOnly?: boolean | undefined;
 }
 interface FrontmatterRequest {
   readonly names?: Iterable<string> | undefined;
@@ -259,8 +263,7 @@ function namesUsedByPage(model: FrontmatterPage): Set<string> {
 // A declaration that is safe to consider removing. Exported ones are the page's
 // interface to Astro — `getStaticPaths`, `prerender` — and belong to nobody
 // here. A destructure is not matched by the reader at all.
-const EXPORTED_RE = (name: string): RegExp =>
-  new RegExp(`(^|\\n)[ \\t]*export\\s+(const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b`);
+const EXPORTED_RE = (name: string): RegExp => new RegExp(`(^|\\n)[ \\t]*export\\s+(const|let|var)\\s+${name.replace(/\$/g, '\\$')}\\b`);
 
 /**
  * The top-level declarations in a page's frontmatter that nothing on the page
@@ -328,7 +331,10 @@ export function withoutDeclarations(code: unknown, names: readonly string[]): st
       continue;
     }
     const before = out.slice(0, found.start);
-    const after = out.slice(found.end);
+    // A comment that ends the statement's line is the statement's own: the
+    // `// stacki:query` mark Stacki writes, or a note on what it holds. Left
+    // behind, it reads as a stray line, and the mark as a query to look for.
+    const after = out.slice(found.end).replace(/^[ \t]*\/\/[^\n]*/, '');
     // The line the statement sat on goes with it, rather than leaving a blank
     // one where it was.
     out = before.replace(/[ \t]*$/, '') + after.replace(/^[ \t]*\r?\n/, '');
@@ -344,12 +350,7 @@ export function withoutDeclarations(code: unknown, names: readonly string[]): st
  * `has` says what the page being pasted into already has — a name it already
  * knows is its own, and is left alone rather than overwritten.
  */
-export function neededFrontmatter({
-  names,
-  frontmatter,
-  imports,
-  has,
-}: FrontmatterRequest): NeededFrontmatter {
+export function neededFrontmatter({ names, frontmatter, imports, has }: FrontmatterRequest): NeededFrontmatter {
   const known = has || (() => false);
   const code = String(frontmatter || '');
   const declared = parseDeclarations(code);
@@ -371,7 +372,13 @@ export function neededFrontmatter({
     const imported = (imports || []).find((i) => i.name === name) || findImportOf(code, name);
     if (imported) {
       const path = 'path' in imported ? imported.path : imported.spec;
-      wantedImports.push({ name, path });
+      wantedImports.push({
+        name,
+        path,
+        ...(imported.imported === undefined ? {} : { imported: imported.imported }),
+        ...(imported.named === undefined ? {} : { named: imported.named }),
+        ...('typeOnly' in imported && imported.typeOnly !== undefined ? { typeOnly: imported.typeOnly } : {}),
+      });
       continue;
     }
     if (!declared.has(name)) {
@@ -394,10 +401,7 @@ export function neededFrontmatter({
 }
 
 /** The frontmatter with those statements added at the end. */
-export function withStatements(
-  code: unknown,
-  statements: readonly Statement[] | undefined,
-): string {
+export function withStatements(code: unknown, statements: readonly Statement[] | undefined): string {
   const lines = (statements || []).map((entry) => entry.statement).filter(Boolean);
   if (!lines.length) {
     return String(code || '');

@@ -1,0 +1,35 @@
+/* Settings → New style locations: per scope, a location dropdown and one code block holding the whole new tag, on a filled surface (never a border),
+   red-tinted with one word when what is typed cannot be saved. */
+.style-tags-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.style-tags-editor {
+  position: relative;
+  min-height: 96px;
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 12px;
+  background: var(--bg-hover);
+}
+.style-tags-editor[data-readonly] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.style-tags-editor[data-invalid] {
+  background: color-mix(in srgb, var(--red) 14%, var(--bg-hover));
+}
+
+/* The location row: the label keeps its words on one line and the dropdown takes the rest, so a long
+   stylesheet path is cut with an ellipsis inside the dropdown instead of squeezing the label. */
+.style-tags-cards .app-settings-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.style-tags-cards .app-settings-row-label {
+  white-space: nowrap;
+}
+.style-tags-cards .app-settings-row-control .dd-trigger {
+  max-width: 100%;
+}

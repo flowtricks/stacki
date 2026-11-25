@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { VariableCell } from './variablesBridge';
-import { VARIABLES_LIMITS } from './variablesBridge';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import type { VariableCell } from '../../ipc/variablesBridge';
+import { VARIABLES_LIMITS } from '../../ipc/variablesBridge';
 import { assert } from '../../../shared/core/assert';
 import ColorSwatch from '../style/components/ColorSwatch';
 import VariableConnect, { connectCustomField } from '../style/VariableConnect';
 import EasingEditor, { MiniCurve } from '../style/EasingEditor';
 import { easingToBezier, isEasing } from '../style/model/transition';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import FluidBadge from './FluidBadge';
+import { VariablePreviewContext } from './liveVariableEdits';
 import CustomValue, { doesNotFit, isLong, withBinding } from '../style/CustomValueEditor';
 
 type CellValue = VariableCell & {
@@ -52,7 +54,33 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
   assert(value.length <= VARIABLES_LIMITS.fileCharsMax, 'Variable cell: value limit exceeded');
   assert(cell.name.length <= VARIABLES_LIMITS.fileCharsMax, 'Variable cell: name limit exceeded');
 
-  useEffect(() => setDraft(undefined), [cell?.value, cell?.valueStart]);
+  // A reread that brings the value the field holds ends the draft. One that does
+  // not is either our own earlier write landing while the field has moved on (a
+  // held arrow key), or someone else's edit: the field keeps what is being typed.
+  useEffect(() => setDraft((current) => (current === cell.value ? undefined : current)), [cell.value, cell.valueStart]);
+
+  // Each draft straight to the canvas, and its end when it is abandoned. A draft
+  // that ends because it was written is released by the save instead, once the
+  // page has caught up (liveVariableEdits.ts).
+  const preview = useContext(VariablePreviewContext);
+  const previewed = useRef<string | undefined>(undefined);
+  const cellRef = useRef(cell);
+  cellRef.current = cell;
+  useEffect(() => {
+    if (draft === previewed.current) {
+      return;
+    }
+    previewed.current = draft;
+    preview?.(cellRef.current, draft);
+  }, [draft, preview]);
+  useEffect(
+    () => () => {
+      if (previewed.current !== undefined) {
+        preview?.(cellRef.current, undefined);
+      }
+    },
+    [preview],
+  );
 
   // Every keystroke goes up as well as into the field: another row's badge may
   // be about this value.
@@ -64,12 +92,19 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
     return () => onDraft?.(cell.name, undefined);
   }, [cell?.name, draft, onDraft]);
 
+  // The draft stays on screen until its write lands: cleared first, the field
+  // showed the old value for the length of the write and the reread.
   const write = async (next: string) => {
-    setDraft(undefined);
     if (next === cell.value) {
+      setDraft(undefined);
       return;
     }
-    await onSave(cell, next);
+    try {
+      await onSave(cell, next);
+    } finally {
+      // Unless the field has moved on since: that draft is newer than this write.
+      setDraft((current) => (current === next ? undefined : current));
+    }
   };
   const commit = (next = value): void => {
     void write(next).catch(reportSaveFailure);
@@ -104,14 +139,17 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
   // references (which is most long values) never saw the press at all when this
   // was bound to the input. It is bound to the cell instead.
   //
-  // Two things keep their own press wherever they are: the colour box and the
-  // connect dot, which do not edit the value at all. A chip keeps its own only
+  // Three things keep their own press wherever they are: the colour box, the
+  // curve button and the connect dot, which do not edit the value as text. The
+  // curve button was missing here, so on a curve too long for its column (any
+  // `cubic-bezier()` past LONG_VALUE characters, which is most real ones) the
+  // press opened the custom-value box on top of the curve editor instead of
+  // the editor alone. A chip keeps its own only
   // while the value FITS — in a cell showing half an expression the chip is
   // most of what there is to click, and swapping a variable you cannot see the
   // rest of is not what that press means. It opens the value instead, where the
   // chip is there to click at full size.
-  const alwaysOwn = (target: EventTarget) =>
-    target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch');
+  const alwaysOwn = (target: EventTarget) => target instanceof Element && !!target.closest('.embed-editor_varconnect-dot, .u-color-swatch, .var-ease');
 
   const openCustom = (node: Element) => setCustom(node.getBoundingClientRect());
 
@@ -139,6 +177,8 @@ function PopulatedCell(props: PopulatedCellProps) {
 }
 function CellView({ state }: { readonly state: CellState }) {
   const { cell, fluidOf, custom, value, alwaysOwn, openCustom } = state;
+  // The arrow key last pressed in the cell, read when it is released.
+  const arrowDown = useRef<React.KeyboardEvent | undefined>(undefined);
   return (
     <div
       className="var-cell"
@@ -160,7 +200,29 @@ function CellView({ state }: { readonly state: CellState }) {
         event.stopPropagation();
         openCustom(event.currentTarget);
       }}
+      // A held arrow nudges the draft, and the canvas follows each step live;
+      // letting go is the moment the value is written, while the caret stays.
+      // An arrow the variable chooser took (it stops the key on its way down) moved
+      // the marked row, not the value: the draft is a half-typed `var(--sp`, and
+      // writing it on the key's release put that into the file.
+      onKeyUpCapture={(event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+          return;
+        }
+        const pressed = arrowDown.current;
+        arrowDown.current = undefined;
+        if (pressed?.isPropagationStopped() === true) {
+          return;
+        }
+        if (state.draft !== undefined && state.draft !== cell.value) {
+          state.commit(state.draft);
+        }
+      }}
       onKeyDownCapture={(event) => {
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          // Read on release: the chooser below decides whether it takes this key.
+          arrowDown.current = event;
+        }
         // The same shortcut, wherever the caret is — the token editor holds it
         // as often as the input does.
         if (event.key !== '=' || custom) {
@@ -190,6 +252,7 @@ function CellFluidBadge({ report }: { readonly report: FluidReport }) {
   return <FluidBadge {...(report ? { fluid: report } : {})} />;
 }
 function CellCurveButton({ state }: { readonly state: CellState }) {
+  const translate = useTranslate();
   const { cell, setCurve, value } = state;
   return (
     <>
@@ -197,24 +260,19 @@ function CellCurveButton({ state }: { readonly state: CellState }) {
         <button
           type="button"
           className="var-ease"
-          title={`Edit the curve for ${cell.name}`}
-          aria-label={`Edit the curve for ${cell.name}`}
+          title={translate('variables.cell.editCurve', { name: cell.name })}
+          aria-label={translate('variables.cell.editCurve', { name: cell.name })}
           // The editor belongs over the sheet it was opened from, not over the
           // panel beside it — so it is handed the sheet's own box. Read at the
           // press rather than held in state: the sheet is resizable.
           onClick={(event) => {
-            const sheet =
-              event.currentTarget.closest('.vars-view') || event.currentTarget.closest('.cms-view');
+            const sheet = event.currentTarget.closest('.vars-view') || event.currentTarget.closest('.cms-view');
             const box = sheet?.getBoundingClientRect();
             // Always framed, even when the sheet measures nothing (a mid-layout
             // read): the window is the fallback, never the style panel's box —
             // the shared backdrop is pinned to that panel, and a popup opened
             // from here has nothing to do with it.
-            setCurve(
-              box?.width
-                ? { left: box.left, width: box.width }
-                : { left: 0, width: typeof window === 'undefined' ? 0 : window.innerWidth },
-            );
+            setCurve(box?.width ? { left: box.left, width: box.width } : { left: 0, width: typeof window === 'undefined' ? 0 : window.innerWidth });
           }}
         >
           {/* The value's own curve, at glyph size — the same drawing the
@@ -249,6 +307,7 @@ function CellCurveEditor({ state }: { readonly state: CellState }) {
 }
 
 function CellColor({ state }: { readonly state: CellState }) {
+  const translate = useTranslate();
   const { cell, setDraft, value, commit, isColor } = state;
   return (
     <>
@@ -267,7 +326,7 @@ function CellColor({ state }: { readonly state: CellState }) {
           // paints anywhere, and a reference that leads outside this file is
           // answered by the page.
           value={cell.color || cell.resolved || value}
-          ariaLabel={`Choose the colour for ${cell.name}`}
+          ariaLabel={translate('variables.cell.chooseColor', { name: cell.name })}
           // Dragging in the picker fires live updates; only the settled value
           // is written, or a drag would be a hundred edits to the file.
           onChange={(color, live) => {

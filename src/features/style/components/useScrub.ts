@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { assert } from '../../../../shared/core/assert';
 import type { MutableRefObject, PointerEvent as ReactPointerEvent } from 'react';
 import { caretAtX } from '../model/caretAtX';
 import { findScrubTarget, hasScrubTarget, scrubNumber, stepModeOf } from '../model/numberStep';
 import type { NumberRun, StepMode } from '../model/numberStep';
+import { startTouchClaim, useTouchClaimGuard, type TouchClaim } from '../../../ui/touchClaim';
 
 // Drag-to-change on a CSS value, on two surfaces:
 //
@@ -19,6 +21,10 @@ import type { NumberRun, StepMode } from '../model/numberStep';
 // animation frame (free), but the CSS write is throttled, because each one is a real
 // postcss edit and a high-Hz mouse emits moves far faster than they can drain. The final
 // value always commits on release, so nothing is lost to the throttle.
+//
+// On touch the label sits in a panel that scrolls, so a press there is only a candidate
+// (ui/touchClaim.ts): a horizontal drag or a held press makes it a scrub, and a vertical
+// swipe lets it go so the panel scrolls without the value changing.
 
 const DEAD_ZONE = 3; // px of travel before a press counts as a drag rather than a click
 const PX_PER_STEP = 1;
@@ -38,6 +44,8 @@ type Drag = {
   raf: number | undefined;
   lastWriteAt: number;
   text: string;
+  /** Whether the press is the scrub's yet; a mouse press always is. */
+  claim: TouchClaim;
 };
 
 export type ScrubHandlers = {
@@ -77,6 +85,7 @@ export default function useScrub(options: ScrubOptions): {
   // the value through a ref rather than closing over a stale render's copies.
   const latest = useRef(options);
   latest.current = options;
+  useTouchClaimGuard();
   const drag = useRef<Drag | undefined>(undefined);
   const { frame, finish } = useDragFrames(drag, latest);
   const { onPointerMove, onPointerUp } = useDragMoves(drag, frame, finish);
@@ -133,6 +142,7 @@ function useDragFrames(dragRef: DragRef, latest: LatestOptions) {
       return;
     }
     dragRef.current = undefined;
+    state.claim.end();
     if (state.raf !== undefined) {
       cancelAnimationFrame(state.raf);
     }
@@ -163,6 +173,17 @@ function useDragMoves(dragRef: DragRef, frame: () => void, finish: () => void) {
       if (!state || event.pointerId !== state.pointerId) {
         return;
       }
+      const claim = state.claim.move(event);
+      if (claim === 'released') {
+        // A vertical swipe: the panel's scroll, not a scrub. `moved` is still false, so
+        // finishing writes nothing and leaves the click alone.
+        assert(!state.moved, 'useScrub: a released touch never scrubbed');
+        finish();
+        return;
+      }
+      if (claim === 'pending') {
+        return;
+      }
       state.latestX = event.clientX;
       state.mode = stepModeOf(event);
       if (!state.moved) {
@@ -178,7 +199,7 @@ function useDragMoves(dragRef: DragRef, frame: () => void, finish: () => void) {
         state.raf = requestAnimationFrame(frame);
       }
     },
-    [dragRef, frame],
+    [dragRef, finish, frame],
   );
 
   const onPointerUp = useCallback(
@@ -206,13 +227,7 @@ function useDragMoves(dragRef: DragRef, frame: () => void, finish: () => void) {
 // Hover state for the ew-resize affordance. `armed` is what the cursor reflects: over a
 // label it's enough to be hovering a value with a number in it; over an input you also
 // have to be holding the modifier that would start the scrub.
-function useScrubHover({
-  disabled,
-  value,
-}: {
-  readonly disabled: boolean;
-  readonly value: string;
-}) {
+function useScrubHover({ disabled, value }: { readonly disabled: boolean; readonly value: string }) {
   const hoverElement = useRef<HTMLElement | undefined>(undefined);
   const hoverSurface = useRef<Surface>('input');
   const [hovering, setHovering] = useState(false);
@@ -224,14 +239,8 @@ function useScrubHover({
     setModifierHeld(event.altKey || event.shiftKey);
     setHovering(true);
   }, []);
-  const onInputPointerEnter = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => enter('input', event),
-    [enter],
-  );
-  const onLabelPointerEnter = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => enter('label', event),
-    [enter],
-  );
+  const onInputPointerEnter = useCallback((event: ReactPointerEvent<HTMLElement>) => enter('input', event), [enter]);
+  const onLabelPointerEnter = useCallback((event: ReactPointerEvent<HTMLElement>) => enter('label', event), [enter]);
   const onPointerLeave = useCallback(() => {
     hoverElement.current = undefined;
     setHovering(false);
@@ -259,8 +268,7 @@ function useScrubHover({
     if (!element || !hovering) {
       return;
     }
-    const armed =
-      !disabled && hasScrubTarget(value) && (hoverSurface.current === 'label' || modifierHeld);
+    const armed = !disabled && hasScrubTarget(value) && (hoverSurface.current === 'label' || modifierHeld);
     element.style.cursor = armed ? 'ew-resize' : '';
     return () => {
       element.style.cursor = '';
@@ -291,6 +299,7 @@ function useScrubPresses(dragRef: DragRef, latest: LatestOptions) {
         raf: undefined,
         lastWriteAt: performance.now(),
         text: base,
+        claim: startTouchClaim(event, { axis: 'x' }),
       };
     },
     [dragRef],

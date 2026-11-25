@@ -1,16 +1,6 @@
 // Content schemas are supplied by a project-owned dev server. Parse every used
 // field and bound both depth and total work before constructing form controls.
-import {
-  BOUNDARY_LIMITS,
-  boolean,
-  count,
-  data,
-  dictionary,
-  list,
-  object,
-  optional,
-  text,
-} from '../../../shared/core/boundary';
+import { BOUNDARY_LIMITS, boolean, count, data, dictionary, list, object, optional, text } from '../../../shared/core/boundary';
 import type { ContentSchema } from './contentSchemaTypes';
 
 const finite = (input: unknown): number => {
@@ -62,9 +52,7 @@ export function parseContentSchema(input: unknown): ContentSchema {
       items: optional(child),
       anyOf: optional(list(child)),
       oneOf: optional(list(child)),
-      additionalProperties: optional((node): ContentSchema | boolean =>
-        typeof node === 'boolean' ? node : child(node),
-      ),
+      additionalProperties: optional((node): ContentSchema | boolean => (typeof node === 'boolean' ? node : child(node))),
     })(value);
     return { ...parseMetadata(value), ...structure };
   };

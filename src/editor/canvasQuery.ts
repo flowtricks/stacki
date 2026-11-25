@@ -10,6 +10,10 @@ interface QueryMessage {
   readonly compute: readonly string[];
   readonly props: readonly string[];
   readonly textParentPath?: string;
+  readonly pageMetadata?: boolean;
+  readonly pageText?: boolean;
+  readonly winning?: readonly string[];
+  readonly scoped?: boolean;
 }
 interface PendingQuery {
   readonly resolve: (answer: CanvasAnswer | undefined) => void;
@@ -65,6 +69,12 @@ export function hasCanvas(): boolean {
   return !!frame;
 }
 
+/** Ask the canvas to send its page reports again (rendered nodes, states,
+ *  classes), after the app dropped the ones it held. */
+export function requestCanvasReports(): boolean {
+  return tellCanvas({ type: 'avb:resend-reports' });
+}
+
 /** Say something to the canvas that needs no answer. */
 export function tellCanvas(message: unknown): boolean {
   try {
@@ -84,7 +94,15 @@ export function queryCanvas(
   selectors: readonly string[] = [],
   compute: readonly string[] = [],
   props: readonly string[] = [],
-  context: { readonly textParentPath?: string } = {},
+  context: {
+    readonly textParentPath?: string;
+    readonly pageMetadata?: boolean;
+    readonly pageText?: boolean;
+    /** Custom properties whose winning declaration is wanted, traced up the element's parents. */
+    readonly winning?: readonly string[];
+    /** Also report the custom properties declared in scope of the element (its rules' and its parents'). */
+    readonly scoped?: boolean;
+  } = {},
 ): Promise<CanvasAnswer | undefined> {
   if (!frame || typeof path !== 'string') {
     return Promise.resolve(undefined);
@@ -94,11 +112,8 @@ export function queryCanvas(
   }
   assert(Number.isSafeInteger(nextId), 'Canvas query ID must remain a safe integer');
   assert(path.length <= LIMITS.attrCharsMax, 'Canvas query path exceeds limit');
-  assert(
-    (context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax,
-    'Canvas text parent path exceeds limit',
-  );
-  for (const values of [selectors, compute, props]) {
+  assert((context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax, 'Canvas text parent path exceeds limit');
+  for (const values of [selectors, compute, props, context.winning ?? []]) {
     assert(values.length <= LIMITS.scanEntriesMax, 'Canvas query list exceeds limit');
     for (const value of values) {
       assert(value.length <= LIMITS.attrCharsMax, 'Canvas query value exceeds limit');
@@ -152,6 +167,23 @@ export function onCanvasReady(listener: () => void): () => void {
   };
 }
 
+const renderedListeners = new Set<() => void>();
+
+/** Hears every rendering the canvas announces: a patch from the server, or a stand-in shown ahead of one. */
+export function onCanvasRendered(listener: () => void): () => void {
+  renderedListeners.add(listener);
+  return () => {
+    renderedListeners.delete(listener);
+  };
+}
+
+/** PreviewPane says the canvas announced a rendering; what the page's selectors match may have changed. */
+export function noteCanvasRendered(): void {
+  for (const listener of renderedListeners) {
+    listener();
+  }
+}
+
 // PreviewPane hands replies over; it already owns the message listener and
 // knows which frame they came from.
 export function receiveCanvasReply(input: unknown): void {
@@ -184,6 +216,12 @@ export function receiveCanvasReply(input: unknown): void {
           computedProps: data.computedProps || {},
           authoredProps: data.authoredProps || {},
           inheritedSources: data.inheritedSources || {},
+          authoredOrigins: data.authoredOrigins || {},
+          winning: data.winning || {},
+          scoped: data.scoped || {},
+          ...(data.pageImage === undefined ? {} : { pageImage: data.pageImage }),
+          ...(data.pageType === undefined ? {} : { pageType: data.pageType }),
+          ...(data.pageText === undefined ? {} : { pageText: data.pageText }),
         }
       : undefined,
   );

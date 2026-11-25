@@ -34,9 +34,7 @@ export interface NodeRef {
 
 /** What goes in: new nodes main prints, or a copy of a node's own bytes (a
  * duplicate is its source, never a reprint). */
-export type InsertContent =
-  | { readonly tag: 'nodes'; readonly nodes: readonly PageNode[] }
-  | { readonly tag: 'copy'; readonly source: NodeRef };
+export type InsertContent = { readonly tag: 'nodes'; readonly nodes: readonly PageNode[] } | { readonly tag: 'copy'; readonly source: NodeRef };
 
 export type Edit =
   | {
@@ -92,6 +90,10 @@ export type Edit =
       readonly last: NodeRef;
       readonly name: string;
     }
+  /** A bare text run given a tag of its own (Convert to): `<name>` written
+   * tight around the run's words, on their line, so only that run is wrapped
+   * and no whitespace is added to the text around it. */
+  | { readonly tag: 'wrap-text'; readonly target: NodeRef; readonly name: string }
   /** Step 9: a tag taken away, its children left where they are (a layout
    * removed from a page). */
   | { readonly tag: 'unwrap-node'; readonly target: NodeRef }
@@ -123,6 +125,21 @@ export interface EditRequest {
   readonly edit: Edit;
 }
 
+/** Several edits of one gesture, written as one (page:editBatch). Sent one at
+ * a time they were separate writes, and the dev server could render the page
+ * between them: a loop reading a query its declaration had not reached yet. */
+export interface EditBatchRequest {
+  readonly pagePath: string;
+  /** The checksum of the bytes every edit's references were read from. */
+  readonly authoredChecksum: Digest;
+  readonly edits: readonly Edit[];
+}
+
+/** A gesture composes a handful of edits (a loop, its query, its imports);
+ * sixteen leaves room for every composition the editor makes, and a batch is
+ * planned in memory edit by edit, so its length bounds that work. */
+export const EDIT_BATCH_EDITS_MAX = 16;
+
 const ATTRIBUTE_NAME_RE = /^[\w@:.-]+$/;
 const IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
 const STYLE_PROPERTY_RE = /^(?:--[\w-]+|-?[a-z][a-z-]*)$/;
@@ -139,6 +156,33 @@ export function parseEditRequest(input: unknown): EditRequest {
   };
 }
 
+export function parseEditBatchRequest(input: unknown): EditBatchRequest {
+  const record = toRecord(input);
+  if (record === undefined) {
+    throw new Error('Expected an edit batch request object');
+  }
+  const edits = toArray(record['edits']);
+  if (edits === undefined) {
+    throw new Error('EditBatch.edits: expected array');
+  }
+  // One edit is page:edit's; a batch exists to write several at once.
+  if (edits.length < 2) {
+    throw new Error('EditBatch.edits: expected at least two edits');
+  }
+  if (edits.length > EDIT_BATCH_EDITS_MAX) {
+    throw new Error('EditBatch.edits: exceeds limit');
+  }
+  const parsed = edits.map(parseEdit);
+  // Paired with the bound above: what crosses the wire is what was counted.
+  assert(parsed.length === edits.length, 'Every batched edit is parsed');
+  assert(parsed.length <= EDIT_BATCH_EDITS_MAX, 'A parsed batch stays inside its bound');
+  return {
+    pagePath: pathText(record['pagePath']),
+    authoredChecksum: digest(record['authoredChecksum']),
+    edits: parsed,
+  };
+}
+
 export function parseEdit(input: unknown): Edit {
   const record = requireRecord(input, 'Edit');
   const tag = record['tag'];
@@ -151,6 +195,7 @@ export function parseEdit(input: unknown): Edit {
     case 'remove-node':
     case 'move-node':
     case 'wrap-nodes':
+    case 'wrap-text':
     case 'unwrap-node':
     case 'replace-node':
       return parseStructureEdit(record, tag);
@@ -182,10 +227,7 @@ export function parseEdit(input: unknown): Edit {
 }
 
 // The edits that change one attribute or declaration of the target tag.
-function parseAttributeEdit(
-  record: Record<string, unknown>,
-  tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style',
-): Edit {
+function parseAttributeEdit(record: Record<string, unknown>, tag: 'set-attribute' | 'remove-attribute' | 'set-inline-style'): Edit {
   // Paired with parseEdit's dispatch: the record is the edit it was routed as.
   assert(record['tag'] === tag, 'parseAttributeEdit: record tag matches its dispatch');
   const target = parseNodeRef(record['target'], 'Edit.target');
@@ -216,7 +258,7 @@ function parseAttributeEdit(
 // The edits that add, remove, move or replace whole nodes around the target.
 function parseStructureEdit(
   record: Record<string, unknown>,
-  tag: 'insert-node' | 'remove-node' | 'move-node' | 'wrap-nodes' | 'unwrap-node' | 'replace-node',
+  tag: 'insert-node' | 'remove-node' | 'move-node' | 'wrap-nodes' | 'wrap-text' | 'unwrap-node' | 'replace-node',
 ): Edit {
   // Paired with parseEdit's dispatch: the record is the edit it was routed as.
   assert(record['tag'] === tag, 'parseStructureEdit: record tag matches its dispatch');
@@ -246,6 +288,8 @@ function parseStructureEdit(
         last: parseNodeRef(record['last'], 'Edit.last'),
         name: tagName(record['name'], 'Edit.name'),
       };
+    case 'wrap-text':
+      return { tag, target, name: tagName(record['name'], 'Edit.name') };
     case 'replace-node':
       // One counter bounds the node like one page tree.
       return { tag, target, node: parsePageNode(record['node'], 'Edit.node', 0, { nodes: 0 }) };
@@ -311,9 +355,7 @@ function parseContent(input: unknown): InsertContent {
     const context = { nodes: 0 };
     return {
       tag,
-      nodes: nodes.map((node, index) =>
-        parsePageNode(node, `Edit.content.nodes[${index}]`, 0, context),
-      ),
+      nodes: nodes.map((node, index) => parsePageNode(node, `Edit.content.nodes[${index}]`, 0, context)),
     };
   }
   throw new Error(`Edit.content.tag: unknown value ${JSON.stringify(tag)}`);
@@ -343,14 +385,11 @@ function parseHunks(input: unknown): readonly SourceEdit[] {
   if (hunks === undefined) {
     throw new Error('Edit.hunks: expected array');
   }
-  if (hunks.length > LIMITS.splicesPerIntentMax) {
-    throw new Error(`Edit.hunks: exceeds ${LIMITS.splicesPerIntentMax} items`);
-  }
   return hunks.map((hunk, index) => {
     const record = requireRecord(hunk, `Edit.hunks[${index}]`);
     return {
       span: parseByteSpan(record['span'], `Edit.hunks[${index}].span`),
-      text: boundedText(record['text'], `Edit.hunks[${index}].text`, LIMITS.intentPayloadBytesMax),
+      text: requireString(record['text'], `Edit.hunks[${index}].text`),
     };
   });
 }
@@ -367,16 +406,13 @@ function parseCodeHunks(input: unknown): readonly CodeHunk[] {
   if (hunks.length === 0) {
     throw new Error('Edit.hunks: a code patch has at least one hunk');
   }
-  if (hunks.length > LIMITS.splicesPerIntentMax) {
-    throw new Error(`Edit.hunks: exceeds ${LIMITS.splicesPerIntentMax} items`);
-  }
   const parsed = hunks.map((hunk, index) => {
     const where = `Edit.hunks[${index}]`;
     const record = requireRecord(hunk, where);
     return {
       span: parseByteSpan(record['span'], `${where}.span`),
-      expected: boundedText(record['expected'], `${where}.expected`, LIMITS.intentPayloadBytesMax),
-      text: boundedText(record['text'], `${where}.text`, LIMITS.intentPayloadBytesMax),
+      expected: requireString(record['expected'], `${where}.expected`),
+      text: requireString(record['text'], `${where}.text`),
     };
   });
   if (!spansAscending(parsed.map((hunk) => hunk.span))) {
@@ -451,6 +487,14 @@ function identifier(input: unknown, where: string): string {
     throw new Error(`${where}: expected an identifier`);
   }
   return name;
+}
+
+// A payload string may be as long as a whole file: the string type is its only bound.
+function requireString(input: unknown, where: string): string {
+  if (typeof input !== 'string') {
+    throw new Error(`${where}: expected string`);
+  }
+  return input;
 }
 
 function boundedText(input: unknown, where: string, charsMax: number): string {

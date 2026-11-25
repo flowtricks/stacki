@@ -1,8 +1,5 @@
 import { request } from '../project/projectClient';
-import {
-  parseMetadataFile,
-  type MetadataKind,
-} from '../../../vendor/stacki/shared/properties/projectMetadata';
+import { parseMetadataFile, type MetadataKind } from '../../../vendor/stacki/shared/properties/projectMetadata';
 
 export async function readMetadata(_project: string, kind: MetadataKind) {
   return parseMetadataFile(await request(`/studio/api/metadata?kind=${kind}`));
@@ -25,10 +22,7 @@ export async function removeDefaultsCanvas(_project: string, file: string): Prom
     body: JSON.stringify({ file }),
   });
 }
-export async function writeMetadata(
-  _project: string,
-  input: { readonly kind: MetadataKind; readonly source: string; readonly base?: string },
-) {
+export async function writeMetadata(_project: string, input: { readonly kind: MetadataKind; readonly source: string; readonly base?: string }) {
   return parseMetadataFile(
     await request('/studio/api/metadata', {
       method: 'POST',

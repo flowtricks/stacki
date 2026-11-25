@@ -48,43 +48,15 @@ const check = (what, condition, detail) => {
   const DAY = 24 * HOUR;
 
   // --- Saying when ---------------------------------------------------------
-  check(
-    'seconds ago is "just now"',
-    relativeTime(ago(10 * 1000), now) === 'just now',
-    relativeTime(ago(10 * 1000), now),
-  );
-  check(
-    'one minute is singular',
-    relativeTime(ago(MIN), now) === '1 minute ago',
-    relativeTime(ago(MIN), now),
-  );
-  check(
-    'several minutes are plural',
-    relativeTime(ago(20 * MIN), now) === '20 minutes ago',
-    relativeTime(ago(20 * MIN), now),
-  );
+  check('seconds ago is "just now"', relativeTime(ago(10 * 1000), now) === 'just now', relativeTime(ago(10 * 1000), now));
+  check('one minute is singular', relativeTime(ago(MIN), now) === '1 minute ago', relativeTime(ago(MIN), now));
+  check('several minutes are plural', relativeTime(ago(20 * MIN), now) === '20 minutes ago', relativeTime(ago(20 * MIN), now));
   // The singular is the one that gets missed, and "1 hours ago" is the kind of
   // thing that makes a careful interface look careless.
-  check(
-    'one hour is singular',
-    relativeTime(ago(HOUR), now) === '1 hour ago',
-    relativeTime(ago(HOUR), now),
-  );
-  check(
-    'several hours are plural',
-    relativeTime(ago(5 * HOUR), now) === '5 hours ago',
-    relativeTime(ago(5 * HOUR), now),
-  );
-  check(
-    'a day back is "yesterday"',
-    relativeTime(ago(DAY), now) === 'yesterday',
-    relativeTime(ago(DAY), now),
-  );
-  check(
-    'a few days back counts days',
-    relativeTime(ago(3 * DAY), now) === '3 days ago',
-    relativeTime(ago(3 * DAY), now),
-  );
+  check('one hour is singular', relativeTime(ago(HOUR), now) === '1 hour ago', relativeTime(ago(HOUR), now));
+  check('several hours are plural', relativeTime(ago(5 * HOUR), now) === '5 hours ago', relativeTime(ago(5 * HOUR), now));
+  check('a day back is "yesterday"', relativeTime(ago(DAY), now) === 'yesterday', relativeTime(ago(DAY), now));
+  check('a few days back counts days', relativeTime(ago(3 * DAY), now) === '3 days ago', relativeTime(ago(3 * DAY), now));
   // Past a week "17 days ago" stops being something anyone can place, and a
   // date starts being one.
   check(
@@ -92,16 +64,8 @@ const check = (what, condition, detail) => {
     /\w/.test(relativeTime(ago(30 * DAY), now)) && !/ago/.test(relativeTime(ago(30 * DAY), now)),
     relativeTime(ago(30 * DAY), now),
   );
-  check(
-    'a date from another year says the year',
-    /2024/.test(relativeTime('2024-03-04T10:00:00Z', now)),
-    relativeTime('2024-03-04T10:00:00Z', now),
-  );
-  check(
-    'an unparseable date says nothing rather than "Invalid Date"',
-    relativeTime('not a date', now) === '',
-    relativeTime('not a date', now),
-  );
+  check('a date from another year says the year', /2024/.test(relativeTime('2024-03-04T10:00:00Z', now)), relativeTime('2024-03-04T10:00:00Z', now));
+  check('an unparseable date says nothing rather than "Invalid Date"', relativeTime('not a date', now) === '', relativeTime('not a date', now));
 
   // --- Day headings --------------------------------------------------------
   // Grouped by calendar day, not by elapsed hours: something committed at
@@ -109,16 +73,8 @@ const check = (what, condition, detail) => {
   // hours apart they are.
   check('today is Today', dayGroup(ago(2 * HOUR), now) === 'Today', dayGroup(ago(2 * HOUR), now));
   check('yesterday is Yesterday', dayGroup(ago(DAY), now) === 'Yesterday', dayGroup(ago(DAY), now));
-  check(
-    'older days say how many',
-    dayGroup(ago(3 * DAY), now) === '3 days ago',
-    dayGroup(ago(3 * DAY), now),
-  );
-  check(
-    'past a week it is a date',
-    !/ago|Today|Yesterday/.test(dayGroup(ago(20 * DAY), now)),
-    dayGroup(ago(20 * DAY), now),
-  );
+  check('older days say how many', dayGroup(ago(3 * DAY), now) === '3 days ago', dayGroup(ago(3 * DAY), now));
+  check('past a week it is a date', !/ago|Today|Yesterday/.test(dayGroup(ago(20 * DAY), now)), dayGroup(ago(20 * DAY), now));
   check('an unparseable date groups as nothing', dayGroup('nonsense', now) === '');
 
   // --- Saying what changed -------------------------------------------------
@@ -126,11 +82,7 @@ const check = (what, condition, detail) => {
   check('nothing changed says so', summarize([]) === 'No files changed', summarize([]));
   check('a missing list does not crash', summarize(undefined) === 'No files changed');
   check('one file is named', summarize([entry('Home')]) === 'Home', summarize([entry('Home')]));
-  check(
-    'two are both named',
-    summarize([entry('Home'), entry('About')]) === 'Home and About',
-    summarize([entry('Home'), entry('About')]),
-  );
+  check('two are both named', summarize([entry('Home'), entry('About')]) === 'Home and About', summarize([entry('Home'), entry('About')]));
   // Three or more: name the first and count the rest. The line is for
   // recognising a commit at a glance, not for listing it.
   check(
@@ -147,24 +99,18 @@ const check = (what, condition, detail) => {
   );
   check(
     'four distinct names count three',
-    summarize([entry('Home'), entry('About'), entry('Contact'), entry('Blog')]) ===
-      'Home and 3 other pages',
+    summarize([entry('Home'), entry('About'), entry('Contact'), entry('Blog')]) === 'Home and 3 other pages',
     summarize([entry('Home'), entry('About'), entry('Contact'), entry('Blog')]),
   );
   // All pages reads as pages; anything else and "files" is the honest word.
   check(
     'a mixed commit says files, not pages',
-    summarize([entry('Home'), entry('Card', 'component'), entry('styles.css', 'style')]) ===
-      'Home and 2 other files',
+    summarize([entry('Home'), entry('Card', 'component'), entry('styles.css', 'style')]) === 'Home and 2 other files',
     summarize([entry('Home'), entry('Card', 'component'), entry('styles.css', 'style')]),
   );
   // Astro writes a page and its layout in one go often enough that a commit
   // naming the same thing twice would look like a bug in the panel.
-  check(
-    'the same label twice is counted once',
-    summarize([entry('Home'), entry('Home')]) === 'Home',
-    summarize([entry('Home'), entry('Home')]),
-  );
+  check('the same label twice is counted once', summarize([entry('Home'), entry('Home')]) === 'Home', summarize([entry('Home'), entry('Home')]));
 
   if (failures.length) {
     console.error(`history-panel: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

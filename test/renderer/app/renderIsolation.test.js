@@ -67,8 +67,6 @@ test('the busiest updates re-render only their readers', async (context) => {
   const repeated = await rendersDuring(app, () => __panels.PreviewPane.onRenderedPaths([...paths]));
   assert.deepEqual(repeated, {}, 'an unchanged report re-renders nothing');
 
-  const changed = await rendersDuring(app, () =>
-    __panels.PreviewPane.onRenderedPaths([...paths, '0.1']),
-  );
+  const changed = await rendersDuring(app, () => __panels.PreviewPane.onRenderedPaths([...paths, '0.1']));
   assert.ok(changed['StructurePanel'] > 0, 'a changed report still reaches the navigator');
 });

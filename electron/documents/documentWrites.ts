@@ -1,3 +1,4 @@
+import { digestOf } from './atomicWrite';
 // The one document host of the main process, and the entry points every module
 // uses to write project text (plan §3.3, §5.2: one writer per file). main.ts
 // installs the host at startup with its telemetry log and the note that the app
@@ -12,6 +13,7 @@
 import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { createNodeDocumentActors, type DocumentActors, type WriteReport } from './documentActors';
+import { translateMain } from '../lib/mainLocale';
 
 interface DocumentHost {
   readonly documents: DocumentActors;
@@ -42,10 +44,10 @@ export function documentHost(): DocumentHost {
  * diff from the file as it is now, witnessed by those bytes (never the whole
  * file); a missing file is created, and anything but `applied` throws like the
  * `fs.writeFileSync` it replaces did. */
-export function writeProjectText(file: string, text: string): Digest {
+export function writeProjectText(file: string, text: string, expectedSource?: string): Digest {
   const host = documentHost();
   host.noteWrite(file);
-  const report = host.documents.writeCurrent(file, text);
+  const report = expectedSource === undefined ? host.documents.writeCurrent(file, text) : host.documents.writeText(file, text, digestOf(expectedSource));
   if (report.tag === 'applied') {
     return report.checksum;
   }
@@ -64,17 +66,14 @@ export function createProjectText(file: string, text: string): Digest {
 }
 
 /** A user-facing sentence for a write that did not apply. */
-export function describeWriteReport(
-  file: string,
-  report: Exclude<WriteReport, { readonly tag: 'applied' }>,
-): string {
+export function describeWriteReport(file: string, report: Exclude<WriteReport, { readonly tag: 'applied' }>): string {
   switch (report.tag) {
     case 'rejected':
-      return report.message === '' ? `Could not save ${file} (${report.reason}).` : report.message;
+      return report.message === '' ? translateMain('error.documents.saveRejected', { file, reason: report.reason }) : report.message;
     case 'uncertain':
-      return `${file} may not have been saved: ${report.message}`;
+      return translateMain('error.documents.saveUncertain', { file, reason: report.message });
     case 'backpressured':
-      return `${file} has too many saves waiting; the edit was kept, save again.`;
+      return translateMain('error.documents.savesWaiting', { file });
     default: {
       const exhaustive: never = report;
       return exhaustive;

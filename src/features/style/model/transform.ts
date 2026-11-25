@@ -5,6 +5,8 @@
 
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 import { assert } from '../../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 
 export type TransformType = 'move' | 'scale' | 'rotate' | 'skew';
 /** One transform layer: a type + its per-axis values (skew ignores z). */
@@ -12,12 +14,7 @@ export type Transform = { type: TransformType; x: string; y: string; z: string }
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4); a retype
 // replaces the whole layer.
-export type TransformPatch =
-  | Transform
-  | Pick<Transform, 'x'>
-  | Pick<Transform, 'y'>
-  | Pick<Transform, 'z'>
-  | Pick<Transform, 'x' | 'y'>;
+export type TransformPatch = Transform | Pick<Transform, 'x'> | Pick<Transform, 'y'> | Pick<Transform, 'z'> | Pick<Transform, 'x' | 'y'>;
 
 /** The identity (no-op) value for a type's axis — also the blank default. */
 // A move is a length, and this project's lengths are rem: type sizes, spacing
@@ -31,11 +28,12 @@ export const IDENTITY: Record<TransformType, string> = {
   rotate: '0deg',
   skew: '0deg',
 };
-const LABEL: Record<TransformType, string> = {
-  move: 'Move',
-  scale: 'Scale',
-  rotate: 'Rotate',
-  skew: 'Skew',
+/** The message for each type's name; the panel's type switch and the collapsed row both show it. */
+export const TRANSFORM_TYPE_LABEL_KEY: Record<TransformType, MessageKey> = {
+  move: 'styleModel.transform.type.move',
+  scale: 'styleModel.transform.type.scale',
+  rotate: 'styleModel.transform.type.rotate',
+  skew: 'styleModel.transform.type.skew',
 };
 
 /** Whether a type exposes a Z axis (skew is 2D only). */
@@ -46,8 +44,7 @@ export const hasZ = (type: TransformType): boolean => type !== 'skew';
 // whole function — so drop it wherever an argument is read.
 const cleanAxis = (text: string): string => text.replace(/^(-?\d*\.?\d+)\s*none$/i, '$1');
 
-const functionName = (call: string): string =>
-  call.slice(0, call.indexOf('(')).trim().toLowerCase();
+const functionName = (call: string): string => call.slice(0, call.indexOf('(')).trim().toLowerCase();
 const functionArguments = (call: string): string[] => {
   const open = call.indexOf('(');
   const close = call.lastIndexOf(')');
@@ -136,10 +133,7 @@ function scaleLayer(name: string, args: readonly string[]): Transform {
 
 // Fold a consecutive run of rotateX/Y/Z (how we serialize) into one layer, starting at
 // `start`; `next` is the index of the first function the run did not consume.
-function rotateRun(
-  calls: readonly string[],
-  start: number,
-): { readonly transform: Transform; readonly next: number } {
+function rotateRun(calls: readonly string[], start: number): { readonly transform: Transform; readonly next: number } {
   const transform: Transform = { type: 'rotate', x: '0deg', y: '0deg', z: '0deg' };
   let i = start;
   while (i < calls.length && functionName(calls[i] ?? '').startsWith('rotate')) {
@@ -209,10 +203,8 @@ export function retypeTransform(type: TransformType): Transform {
 }
 
 /** A short label for a collapsed row ("Move: 0px, 0px, 0px"). */
-export function transformLabel(transform: Transform): string {
-  const axes = hasZ(transform.type)
-    ? [transform.x, transform.y, transform.z]
-    : [transform.x, transform.y];
+export function transformLabel(transform: Transform, translate: Translator = ENGLISH_TRANSLATE): string {
+  const axes = hasZ(transform.type) ? [transform.x, transform.y, transform.z] : [transform.x, transform.y];
   const shown = axes.map((axis) => axis.trim() || IDENTITY[transform.type]);
-  return `${LABEL[transform.type]}: ${shown.join(', ')}`;
+  return `${translate(TRANSFORM_TYPE_LABEL_KEY[transform.type])}: ${shown.join(', ')}`;
 }

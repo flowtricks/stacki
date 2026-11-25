@@ -4,9 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stacki</title>
+    <!--
+      Nothing is drawn here but the app's own surface colour: no splash, spinner or skeleton (docs/startup.md).
+      The window is created hidden and main shows it when the renderer reports that its real shell has painted
+      (src/app/startupMarks.ts), so this page is never seen on its own; the colour only has to be right for the
+      frame before React's first commit, and for a reload. #111111 is --bg-panel in src/app/styles.css and the
+      BrowserWindow's backgroundColor (electron/main.ts); a test holds the three in step.
+    -->
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        background: #111111;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      performance.mark('stacki:html-parsed');
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

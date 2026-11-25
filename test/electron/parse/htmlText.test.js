@@ -34,12 +34,7 @@ const { decodeEntities, encodeText } = require('#dist/shared/page/htmlText.js');
 const { parsePage, serializePage } = require('#dist/electron/parse/astroParser.js');
 
 // ── Reading ─────────────────────────────────────────────────────────────────
-const reads = (raw, want) =>
-  check(
-    `${raw} reads as ${JSON.stringify(want)}`,
-    decodeEntities(raw) === want,
-    JSON.stringify(decodeEntities(raw)),
-  );
+const reads = (raw, want) => check(`${raw} reads as ${JSON.stringify(want)}`, decodeEntities(raw) === want, JSON.stringify(decodeEntities(raw)));
 reads('&copy;', '©');
 reads('&#160;', ' ');
 reads('&#xA9;', '©');
@@ -56,12 +51,7 @@ reads('plain words', 'plain words');
 reads('a & b', 'a & b'); // a bare ampersand is not an entity
 
 // ── Writing ─────────────────────────────────────────────────────────────────
-const writes = (chars, want) =>
-  check(
-    `${JSON.stringify(chars)} writes as ${want}`,
-    encodeText(chars) === want,
-    JSON.stringify(encodeText(chars)),
-  );
+const writes = (chars, want) => check(`${JSON.stringify(chars)} writes as ${want}`, encodeText(chars) === want, JSON.stringify(encodeText(chars)));
 writes('a & b', 'a &amp; b');
 writes('a < b', 'a &lt; b');
 writes('a > b', 'a &gt; b');
@@ -71,32 +61,18 @@ writes('x y', 'x&#160;y');
 // a file that says `©` everywhere else would be the editor imposing its habits.
 writes('© 2026', '© 2026');
 writes('Let’s go', 'Let’s go');
-check(
-  'and what is written reads back as what it was',
-  decodeEntities(encodeText('a & b < c')) === 'a & b < c',
-);
+check('and what is written reads back as what it was', decodeEntities(encodeText('a & b < c')) === 'a & b < c');
 
 // ── Through a page ──────────────────────────────────────────────────────────
 const page = (body) => `---\nconst SITE_NAME = "Remarkable";\n---\n${body}\n`;
 const FOOTER = page('<p class="footer_copyright">&copy;<span>2026</span>&#160;{SITE_NAME}</p>');
 const parsed = parsePage(FOOTER);
 const kids = parsed.model.nodes[0].children;
-check(
-  'the copyright sign is a copyright sign',
-  kids[0]?.value === '©',
-  JSON.stringify(kids.map((child) => child.value)),
-);
-check(
-  'and the hard space is a space',
-  kids[2]?.value === ' ',
-  JSON.stringify(kids.map((child) => child.value)),
-);
+check('the copyright sign is a copyright sign', kids[0]?.value === '©', JSON.stringify(kids.map((child) => child.value)));
+check('and the hard space is a space', kids[2]?.value === ' ', JSON.stringify(kids.map((child) => child.value)));
 
 // Nothing was edited, so nothing about the file changes.
-check(
-  'an untouched page is written back exactly',
-  serializePage(parsePage(FOOTER).model) === FOOTER,
-);
+check('an untouched page is written back exactly', serializePage(parsePage(FOOTER).model) === FOOTER);
 for (const body of [
   '<p>&copy;&#160;{SITE_NAME}</p>',
   '<p>Let&rsquo;s create the remarkable</p>',
@@ -104,10 +80,7 @@ for (const body of [
   '<p>a &amp; b</p>',
   '<p>plain words</p>',
 ]) {
-  check(
-    `and so is ${JSON.stringify(body.slice(0, 34))}`,
-    serializePage(parsePage(page(body)).model) === page(body),
-  );
+  check(`and so is ${JSON.stringify(body.slice(0, 34))}`, serializePage(parsePage(page(body)).model) === page(body));
 }
 
 // Edited, the characters are what there is — and the ampersand somebody typed

@@ -2,6 +2,7 @@
 // and its raw editable form, handles and drag targets, the shape() model,
 // snap guides, highlights and the editor's option types (ClipPath.tsx).
 
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import type { BreakpointId } from './webflowDesigner';
 
 export type Point = { x: number; y: number };
@@ -47,14 +48,7 @@ export type RawClipPathShape = {
   editable?: RawEditableClipPath;
 };
 export type NoneShape = { kind: 'none' };
-export type ClipShape =
-  | NoneShape
-  | PolygonShape
-  | CircleShape
-  | EllipseShape
-  | InsetShape
-  | ShapeFunctionShape
-  | RawClipPathShape;
+export type ClipShape = NoneShape | PolygonShape | CircleShape | EllipseShape | InsetShape | ShapeFunctionShape | RawClipPathShape;
 export type InsetSide = 'top' | 'right' | 'bottom' | 'left';
 export type InsetSideMode = 'single' | 'opposite' | 'all';
 export type InsetRadiusMode = 'single' | 'all' | 'opposite';
@@ -130,10 +124,7 @@ export type SvgLoopPair = {
 };
 export type SvgLoopPoint = { targetLoopIndex: number; targetIndex: number; distance: number };
 export type SvgClipPathOutline = { points: Point[]; loops: Point[][] };
-export type SvgShapeCommand =
-  | { kind: 'line'; to: Point }
-  | { kind: 'curve'; to: Point; control1: Point; control2?: Point }
-  | { kind: 'close' };
+export type SvgShapeCommand = { kind: 'line'; to: Point } | { kind: 'curve'; to: Point; control1: Point; control2?: Point } | { kind: 'close' };
 export type SvgShapeSubpath = { start: Point; commands: SvgShapeCommand[] };
 export type ShapeFitMode = 'stretch' | 'contain';
 export type ShapeScaleOptions = {
@@ -170,9 +161,7 @@ export type ShapeContainModel = {
 };
 export type ShapeCssPoint = { x: string; y: string };
 export type ShapeCssCommand =
-  | { kind: 'line'; to: ShapeCssPoint }
-  | { kind: 'curve'; to: ShapeCssPoint; control1: ShapeCssPoint; control2?: ShapeCssPoint }
-  | { kind: 'close' };
+  { kind: 'line'; to: ShapeCssPoint } | { kind: 'curve'; to: ShapeCssPoint; control1: ShapeCssPoint; control2?: ShapeCssPoint } | { kind: 'close' };
 export type ShapeCssSubpath = { start: ShapeCssPoint; commands: ShapeCssCommand[] };
 export type ClipPathStyleOrigin = 'none' | 'current' | 'inherited';
 export type SelectionReadOptions = {
@@ -192,5 +181,7 @@ export type PastedShapeSvgCache = {
   stretch: ShapeFunctionShape;
   contain: ShapeFunctionShape;
 };
-export type ShortcutHelpItem = { keys: string; description: string };
-export type ShortcutHelpGroup = { title: string; items: ShortcutHelpItem[] };
+// A shortcut's keys: a plain chord (`Cmd/Ctrl + Z`: key names are not translated) or a message when the chord holds words (`drag/arrow keys`).
+export type ShortcutKeys = { readonly literal: string } | { readonly message: MessageKey };
+export type ShortcutHelpItem = { readonly keys: ShortcutKeys; readonly descriptionKey: MessageKey };
+export type ShortcutHelpGroup = { readonly titleKey: MessageKey; readonly items: readonly ShortcutHelpItem[] };

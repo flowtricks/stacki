@@ -1,16 +1,10 @@
 import type { SchemaOperations } from './CmsSettings';
 import type { DeclaredTypes } from './cmsTypes';
-import {
-  applyToItems,
-  fieldsAt,
-  putKey,
-  labelize,
-  renameKey,
-  dropKey,
-  orderKeys,
-} from './cmsSchema';
+import { applyToItems, fieldsAt, objectsAt, putKey, seedEntry, labelize, renameKey, dropKey, orderKeys } from './cmsSchema';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 interface OperationOptions {
   readonly items: readonly unknown[];
@@ -18,6 +12,8 @@ interface OperationOptions {
   readonly commit: (items: readonly unknown[]) => void;
   readonly saveDeclared: (declared: DeclaredTypes) => Promise<void>;
   readonly report: (message: string) => void;
+  /** Words the messages in the person's language; English when absent. */
+  readonly translate?: Translator | undefined;
 }
 // Schema changes rebuild every affected item and the matching declaration paths.
 // Both APIs are readonly; only newly constructed arrays and objects are changed.
@@ -35,6 +31,12 @@ export function createCmsSchemaOperations(options: OperationOptions): SchemaOper
         return;
       }
       void saveDeclared({ ...declared, [[...path, key].join('.')]: type });
+      const parent = path.slice(0, -1);
+      const holder = path.at(-1);
+      if (holder !== undefined && objectsAt(items, path).length === 0) {
+        commit(applyToItems(items, parent, seedEntry(holder, key, type)));
+        return;
+      }
       commit(applyToItems(items, path, putKey(key, type)));
     },
     onRenameField: (path, from, to) => {
@@ -42,7 +44,7 @@ export function createCmsSchemaOperations(options: OperationOptions): SchemaOper
         return false;
       }
       if (fieldsAt(items, path).some((field) => field.key === to)) {
-        report(`This level already has a “${labelize(to)}” field.`);
+        report((options.translate ?? ENGLISH_TRANSLATE)('cms.operations.fieldExists', { name: labelize(to) }));
         return false;
       }
       const fromPath = [...path, from].join('.');
@@ -50,12 +52,7 @@ export function createCmsSchemaOperations(options: OperationOptions): SchemaOper
       if (entries.some(([key]) => key === fromPath || key.startsWith(fromPath + '.'))) {
         void saveDeclared(
           Object.fromEntries(
-            entries.map(([key, type]) => [
-              key === fromPath || key.startsWith(fromPath + '.')
-                ? toPath + key.slice(fromPath.length)
-                : key,
-              type,
-            ]),
+            entries.map(([key, type]) => [key === fromPath || key.startsWith(fromPath + '.') ? toPath + key.slice(fromPath.length) : key, type]),
           ),
         );
       }

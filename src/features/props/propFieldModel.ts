@@ -3,21 +3,35 @@
 // placeholder (PropField.tsx).
 
 import { PropValuePolicyContext } from './propValuePolicy';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
+import type { PageText } from '../../../shared/properties/pageText';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { RichContext } from './RichContent';
-import type { SourceContext, ValueChange, FieldPosition, InsertAPI } from './propBindings';
+import type { ClassListOffer } from './classListProp';
+import type { SourceContext, ValueChange, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import type { AssetDimensions } from '../../ui/AssetThumb';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AltPick, PickedAsset } from '../../ui/AssetField';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { findImportOf } from '../../editor/dataSuggest';
-import { arrayItems } from './arrayValue';
+import { isHrefName, isMediaName } from '../../editor/fieldNames';
+import { arrayItems, objectFields } from './arrayValue';
+import { optionAttr } from './propKinds';
+import { decideNormalField, planReset, type ResetPlan } from './normalFieldDecision';
+import { reportBindingRemoved } from './codeCleared';
+import { deprecationOf, readPropDocumentation } from '../../editor/propDocumentation';
 import LinkField from './LinkField';
+import { plainTextOf, textValue } from './propLiteral';
 
 export interface AssetContext {
+  readonly layoutText?: PageText | undefined;
+  readonly layoutImage?: string | undefined;
+  readonly layoutType?: string | undefined;
   readonly projectPath?: string | undefined;
   readonly filePath?: string | undefined;
   readonly nodeName?: string | undefined;
@@ -27,6 +41,13 @@ export interface AssetContext {
   readonly onPickAsset?: ((name: string, picked: PickedAsset) => void) | false | undefined;
   readonly onPickDimensions?: ((name: string, dimensions: AssetDimensions) => void) | undefined;
   readonly onSrcDimensions?: ((dimensions: AssetDimensions) => void) | undefined;
+  /** The element the fields edit, which an app answering an asset pick is told. */
+  readonly nodeId?: string | undefined;
+  /**
+   * Writes a pick into the field `name` and the element's alt text as one edit (one undo
+   * step), when an app's image picker answers with alt text and the element has an alt.
+   */
+  readonly onPickWithAlt?: ((name: string, pick: AltPick, alt: string) => void) | undefined;
 }
 export interface AssetBinding {
   readonly ident: string;
@@ -49,30 +70,19 @@ export interface PropFieldProps {
   readonly assetContext?: AssetContext | undefined;
   readonly linkContext?: ComponentProps<typeof LinkField>['context'] | undefined;
   readonly dataContext?: SourceContext | undefined;
+  /** The element's class field offers "New Class list property" in its picker (classListProp.ts). */
+  readonly classList?: ClassListOffer | undefined;
   readonly onChange: ValueChange;
-}
-export interface ResetMenuProps {
-  readonly position: FieldPosition;
-  readonly onReset: () => void;
-  readonly onUnbind?: (() => void) | undefined;
-  readonly unbindLabel: string;
-  readonly onClose: () => void;
 }
 export function attrText(value: Attr | undefined): string | undefined {
   return value?.type === 'bare' ? undefined : value?.value;
 }
 
-export function isHrefName(name: string) {
-  const words = String(name)
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return words[words.length - 1] === 'href';
-}
+// What a name says a field holds lives in one place, shared with the new
+// property form and a list's item editor (fieldNames.ts).
+export { isHrefName, isMediaName, MEDIA_WORDS, mediaWord } from '../../editor/fieldNames';
 
-export const MEDIA_IMPORT_RE =
-  /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
+export const MEDIA_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|mp4|webm|mov|m4v|ogg|mp3|wav)(\?.*)?$/i;
 
 export function assetImportOf(expr: unknown, frontmatter: unknown) {
   const match = String(expr ?? '')
@@ -88,52 +98,22 @@ export function assetImportOf(expr: unknown, frontmatter: unknown) {
   return { ident: match[1] ?? '', spec: imported.spec };
 }
 
-export const MEDIA_WORDS = new Set([
-  'src',
-  'image',
-  'poster',
-  'icon',
-  'logo',
-  'avatar',
-  'thumb',
-  'thumbnail',
-  'photo',
-  'banner',
-  'cover',
-  'video',
-  'audio',
-]);
-
-export function mediaWord(name: string) {
-  const words = String(name || '')
-    .replace(/[-_]+/g, ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .trim()
-    .split(/\s+/);
-  return words[words.length - 1] || '';
-}
-
-export function isMediaName(name: string) {
-  return MEDIA_WORDS.has(mediaWord(name));
-}
-
-export function boundsHint(field: FieldDefinition) {
+export function boundsHint(field: FieldDefinition, translate: Translator = ENGLISH_TRANSLATE) {
   const { min, max, step, minExclusive, maxExclusive } = field;
   const parts = [];
   if (min !== undefined && max !== undefined) {
     parts.push(`${minExclusive ? '>' : ''}${min}–${maxExclusive ? '<' : ''}${max}`);
   } else if (min !== undefined) {
-    parts.push(minExclusive ? `greater than ${min}` : `${min} or more`);
+    parts.push(minExclusive ? translate('props.bounds.greaterThan', { min }) : translate('props.bounds.orMore', { min }));
   } else if (max !== undefined) {
-    parts.push(maxExclusive ? `less than ${max}` : `${max} or less`);
+    parts.push(maxExclusive ? translate('props.bounds.lessThan', { max }) : translate('props.bounds.orLess', { max }));
   }
   if (step === 1) {
-    parts.push('whole numbers');
+    parts.push(translate('props.bounds.wholeNumbers'));
   } else if (step !== undefined) {
-    parts.push(`steps of ${step}`);
+    parts.push(translate('props.bounds.steps', { step }));
   }
-  return parts.length ? `Accepts ${parts.join(', ')}` : undefined;
+  return parts.length ? translate('props.bounds.accepts', { parts: parts.join(', ') }) : undefined;
 }
 
 export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
@@ -153,23 +133,21 @@ export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
   // A list of plain items is a list, and the list control writes exactly that.
   // Anything else an array prop can hold — a name, a spread, an object per item
   // — is a program, and the code editor is the only field that can show one.
+  // An object of simple fields is the same: the object control writes it.
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return objectFields(source) === undefined;
+  }
   if (field.type === 'code') {
-    return arrayItems(source) === undefined;
+    return arrayItems(source, 0, 'bindable') === undefined;
   }
   return true;
 }
 
 export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undefined {
   const source = String(raw ?? '').trim();
-  const quoted = source.match(/^(['"])((?:[^\\]|\\.)*)\1$/);
-  if (quoted) {
-    if (field.type === 'boolean' || field.type === 'number') {
-      return undefined;
-    }
-    const text = (quoted[2] ?? '').replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1');
-    return field.type === 'enum' && !(field.options || []).includes(text)
-      ? undefined
-      : { type: 'string', value: text };
+  const text = plainTextOf(source);
+  if (text !== undefined) {
+    return textValue(field, text);
   }
   if (field.type === 'boolean') {
     return /^(true|false)$/.test(source) ? { type: 'expr', value: source } : undefined;
@@ -178,49 +156,87 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
     return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(source) ? { type: 'expr', value: source } : undefined;
   }
   if (field.type === 'enum') {
-    return (field.options || []).includes(source)
-      ? { type: field.numeric ? 'expr' : 'string', value: source }
-      : undefined;
+    return (field.options || []).includes(source) ? optionAttr(field, source) : undefined;
+  }
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return objectFields(source) ? { type: 'expr', value: source } : undefined;
   }
   // An array of plain items survives the trip: the list can show it, so going
   // back to the control keeps the value rather than dropping the prop.
-  if (field.type === 'code' && arrayItems(source)) {
+  if (field.type === 'code' && arrayItems(source, 0, 'bindable')) {
     return { type: 'expr', value: source };
   }
   return undefined;
 }
 
-export function controlWord(field: FieldDefinition) {
+// A stable id for `controlLabel` (which says it in the language on screen).
+export function controlKind(field: FieldDefinition) {
   if (field.type === 'boolean') {
     return 'toggle';
+  }
+  if (field.type === 'code' && field.codeKind === 'object') {
+    return 'fields';
   }
   if (field.type === 'code') {
     return 'list';
   }
   if (field.type === 'enum' && field.options?.length) {
-    return 'options list';
+    return 'optionsList';
   }
   if (field.type === 'style') {
-    return 'CSS editor';
+    return 'cssEditor';
   }
   if (isMediaName(field.name)) {
-    return 'asset picker';
+    return 'assetPicker';
   }
   if (isHrefName(field.name)) {
-    return 'link settings';
+    return 'linkSettings';
   }
-  return 'normal field';
+  return 'normal';
 }
+/** "Use the toggle", "Use the CSS editor"…: the way back from an expression to the field's own control, in the language `translate` speaks. */
+export function controlLabel(field: FieldDefinition, translate: Translator = ENGLISH_TRANSLATE): string {
+  const word = controlKind(field);
+  switch (word) {
+    case 'toggle':
+      return translate('props.control.toggle');
+    case 'fields':
+      return translate('props.control.fields');
+    case 'list':
+      return translate('props.control.list');
+    case 'optionsList':
+      return translate('props.control.optionsList');
+    case 'cssEditor':
+      return translate('props.control.cssEditor');
+    case 'assetPicker':
+      return translate('props.control.assetPicker');
+    case 'linkSettings':
+      return translate('props.control.linkSettings');
+    case 'normal':
+      return translate('props.control.normal');
+    default: {
+      const exhaustive: never = word;
+      return exhaustive;
+    }
+  }
+}
+
+/** Whether the {} toggle cannot leave this expression: a required prop with no valid empty value to write. */
+export function normalFieldBlocked(input: { readonly field: FieldDefinition; readonly value: Attr | undefined; readonly required: boolean }): boolean {
+  const { field, value, required } = input;
+  return value?.type === 'expr' && decideNormalField({ field, source: value.value, required }).kind === 'blocked';
+}
+
 export function usePropField(props: PropFieldProps) {
   const state = usePropFieldModel(props);
   return { ...state, ...propFieldActions(state) };
 }
 export function usePropFieldModel(props: PropFieldProps) {
+  const translate = useTranslate();
   const policy = useContext(PropValuePolicyContext);
-  const field =
-    policy === 'defaults' && props.field.type !== 'boolean'
-      ? { ...props.field, default: undefined, hint: '' }
-      : props.field;
+  // Choice controls show the effective fallback while isSet tracks authored values.
+  const showsFallback = ['boolean', 'enum'].includes(props.field.type);
+  const field = policy === 'defaults' && !showsFallback ? { ...props.field, default: undefined, hint: '' } : props.field;
   const {
     branchDefault,
     value,
@@ -231,35 +247,51 @@ export function usePropFieldModel(props: PropFieldProps) {
     dataContext,
   } = props;
   const placeholderFor = (target: FieldDefinition) =>
-    policy === 'defaults' ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
+    policy === 'defaults' && !showsFallback ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
-  const lastGoodRef = useRef('');
   const [custom, setCustom] = useState(false);
-  const [insertAt, setInsertAt] = useState<FieldPosition | undefined>(undefined);
+  const [insertAt, setInsertAt] = useState<FieldPickerAt | undefined>(undefined);
   // A ref prop: BindField fills it with its caret API while it is mounted.
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
-  useEffect(() => setCustom(false), [nodeKey, name]);
-  const bindable = type !== 'attrs' && name !== 'slot';
+  useEffect(() => {
+    setCustom(false);
+  }, [nodeKey, name]);
+  // An action is set in code only; there is nothing a binding could give it.
+  const bindable = type !== 'attrs' && name !== 'slot' && field.codeKind !== 'function';
   const valueText = attrText(value) ?? '';
   const assetBinding = assetImportOf(valueText, dataContext?.imports);
-  const shownAsAsset =
-    value?.type === 'expr' && assetBinding && assetContext?.projectPath && assetContext?.filePath;
+  const shownAsAsset = value?.type === 'expr' && assetBinding && assetContext?.projectPath && assetContext?.filePath;
   const showExpr = bindable && (custom || (isBoundValue(field, value) && !shownAsAsset));
   const reason =
-    !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) ||
-    !assetContext?.srcKind
+    !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) || !assetContext?.srcKind
       ? undefined
       : assetContext.srcKind === 'svg'
-        ? 'SVG sources are passed through unoptimized, so this has no effect.'
+        ? translate('props.field.svgNoEffect')
         : assetContext.srcKind === 'public'
-          ? 'Files in public/ are served as-is — import from src/assets to optimize.'
+          ? translate('props.field.publicAsIs')
           : undefined;
   assert(valueText.length <= LIMITS.attrCharsMax, 'PropField: value limit exceeded');
   assert((field.options?.length ?? 0) <= LIMITS.propOptionsMax, 'PropField: option limit exceeded');
   const isExpr = value?.type === 'expr' || (type === 'code' && value?.type !== 'string');
-  const isMediaAttr = isMediaName(name);
+  // An Image prop (its default imports a file, `image = placeholder`) is
+  // media whatever it is called; otherwise its name says so.
+  // A `@format` that names a kind decides it; the name only speaks when no format does.
+  const format = readPropDocumentation(field.doc).format;
+  const isMediaAttr =
+    format === undefined ? isMediaName(name) || field.defaultAsset !== undefined : MEDIA_FORMATS.has(format) || field.defaultAsset !== undefined;
+  // Required and its note are an instance's concern: a defaults recipe or a
+  // CMS entry states its own obligations (remoteCms.css marks those).
+  const required = policy === 'instance' && isRequiredField(props.field, branchDefault);
+  const missingRequired = required && !isSet && !spreadsProps(assetContext?.siblingProps);
+  const deprecated = fieldDeprecation(props.field);
+  const normalBlockedText = normalFieldBlocked({ field, value, required }) ? translate('props.control.normalRequired') : undefined;
+  // Reset removes the attribute; for a required prop that leaves the component without what it needs.
+  const resetPlan: ResetPlan = planReset({ field, value, required: required && !spreadsProps(assetContext?.siblingProps) });
+  const resetRefusal =
+    resetPlan.kind !== 'disabled' ? undefined : translate(resetPlan.reason === 'already-default' ? 'props.control.resetAlready' : 'props.control.resetNoEmpty');
+  const isColor = isColorField(props.field);
   return {
     ...props,
     field,
@@ -268,7 +300,6 @@ export function usePropFieldModel(props: PropFieldProps) {
     isSet,
     menuPosition,
     setMenuPosition,
-    lastGoodRef,
     custom,
     setCustom,
     insertAt,
@@ -280,21 +311,119 @@ export function usePropFieldModel(props: PropFieldProps) {
     shownAsAsset,
     showExpr,
     reason,
+    translate,
     placeholderFor,
     isExpr,
     isMediaAttr,
+    required,
+    missingRequired,
+    deprecated,
+    normalBlockedText,
+    resetPlan,
+    resetRefusal,
+    isColor,
   };
 }
+
+/**
+ * A prop the component cannot do without: declared without `?` and with no
+ * default, neither its own nor its variant's. A destructure default makes the
+ * runtime fine, so it is not flagged (docs/plans/prop-controls.md §7.1).
+ * Element attributes leave `optional` unset and are never required.
+ */
+export function isRequiredField(field: FieldDefinition, branchDefault: string | number | undefined): boolean {
+  if (field.optional !== false) {
+    return false;
+  }
+  if (field.default !== undefined) {
+    return false;
+  }
+  if (field.defaultExpr === true) {
+    return false;
+  }
+  return branchDefault === undefined;
+}
+
+// A spread (`{...rest}`) on the instance may well carry any prop, so a missing
+// one is not reported as missing.
+function spreadsProps(siblings: PropValues | undefined): boolean {
+  const values = Object.values(siblings ?? {});
+  assert(values.length <= LIMITS.attrsPerNodeMax, 'spreadsProps: attribute limit exceeded');
+  return values.some((sibling) => sibling?.type === 'spread');
+}
+
+/**
+ * A prop's `@deprecated` text ('' for the bare tag), or undefined. The schema
+ * states it when the prop model read it; a schema from elsewhere (a CMS, an
+ * older scan) still has the tag in its doc comment.
+ */
+export function fieldDeprecation(field: FieldDefinition): string | undefined {
+  return field.deprecated ?? deprecationOf(field.doc);
+}
+
+// The `@format` words of a field that holds a file from the project: an image, a video, any other file.
+const MEDIA_FORMATS: ReadonlySet<string> = new Set(['image', 'video', 'file']);
+
+// A literal colour: hex, a colour function, or a CSS variable (a token).
+const COLOR_HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const COLOR_FUNCTION = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^()]*\)$/i;
+const COLOR_VARIABLE = /^var\(--[\w-]+(?:\s*,[^()]*)?\)$/;
+const COLOR_NAME = /(?:^|[a-z])colou?r$/i;
+
+/** Whether text is a CSS colour a swatch can be painted with, or a token that names one. */
+export function isColorText(text: string): boolean {
+  const value = text.trim();
+  assert(value.length <= LIMITS.attrCharsMax, 'isColorText: value limit exceeded');
+  return COLOR_HEX.test(value) || COLOR_FUNCTION.test(value) || COLOR_VARIABLE.test(value);
+}
+
+/**
+ * A text prop that holds a colour: typed so by its Kind (`@format color`), or
+ * named for one (`color`, `accentColour`) with a colour for its default. The
+ * name alone is not enough — `color="primary"` is a word, not a colour.
+ */
+export function isColorField(field: FieldDefinition): boolean {
+  if (field.type !== 'string' && field.type !== 'other') {
+    return false;
+  }
+  if (readPropDocumentation(field.doc).format === 'color') {
+    return true;
+  }
+  if (!COLOR_NAME.test(field.name)) {
+    return false;
+  }
+  return typeof field.default === 'string' && isColorText(field.default);
+}
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
-  const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
+  const { translate, setMenuPosition, onChange, setCustom, value, field, isSet, showExpr, required, resetPlan } = state;
   const reset = () => {
     setMenuPosition(undefined);
-    onChange(undefined, true);
+    // Overridden values reset; a required prop gets its valid empty value instead of losing its attribute.
+    if (resetPlan.kind === 'disabled') {
+      return;
+    }
+    onChange(resetPlan.kind === 'write' ? resetPlan.value : undefined, true);
   };
   const fromCustom = () => {
+    setMenuPosition(undefined);
+    if (value?.type !== 'expr') {
+      setCustom(false);
+      return;
+    }
+    // One click: a literal becomes the plain value, anything else gives way to
+    // the control's empty value, and an Undo notice brings the code back.
+    const decision = decideNormalField({ field, source: value.value, required });
+    if (decision.kind === 'blocked') {
+      return;
+    }
+    const code = value;
     setCustom(false);
-    if (value?.type === 'expr') {
-      onChange(valueFromExpr(field, value.value), true);
+    onChange(decision.value, true);
+    if (decision.kind === 'replace') {
+      reportBindingRemoved(translate, () => {
+        setCustom(true);
+        onChange(code, true);
+      });
     }
   };
   const onLabelClick = (event: React.MouseEvent<HTMLSpanElement>) => {
@@ -310,7 +439,15 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
     const rect = event.currentTarget.getBoundingClientRect();
     setMenuPosition({ left: rect.left, top: rect.bottom + 4 });
   };
-  return { reset, fromCustom, onLabelClick };
+  // The label's context menu is the same menu, opened where the click was.
+  const onLabelContextMenu = (event: React.MouseEvent<HTMLSpanElement>) => {
+    if (!isSet && !showExpr) {
+      return;
+    }
+    event.preventDefault();
+    setMenuPosition({ left: event.clientX, top: event.clientY });
+  };
+  return { reset, fromCustom, onLabelClick, onLabelContextMenu };
 }
 export type PropState = ReturnType<typeof usePropField>;
 export type PropControlState = PropState & {
@@ -318,11 +455,14 @@ export type PropControlState = PropState & {
   readonly pill: React.ReactNode;
   readonly menu: React.ReactNode;
 };
-export function propFieldPlaceholder(
-  field: FieldDefinition,
-  assetContext: AssetContext | undefined,
-  branchDefault: string | number | undefined,
-): string {
+export function propFieldPlaceholder(field: FieldDefinition, assetContext: AssetContext | undefined, branchDefault: string | number | undefined): string {
+  // Rendered layout metadata resolves delegated and CMS defaults that source hints cannot.
+  if (field.name === 'title' || field.name === 'description') {
+    const rendered = assetContext?.layoutText?.[field.name];
+    if (rendered !== undefined) {
+      return rendered;
+    }
+  }
   const siblingNumber = (propName: string) => {
     const sibling = assetContext?.siblingProps?.[propName];
     if (!sibling) {
@@ -332,6 +472,12 @@ export function propFieldPlaceholder(
     return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   };
 
+  // A default computed from other props is this instance's answer (branchDefault,
+  // propRules.ts), never its code: `variant === "play" ? "Play" : "Close"` is not
+  // a label. When only the site could tell, nothing is shown rather than a guess.
+  if (field.computedDefault !== undefined) {
+    return branchDefault === undefined ? '' : String(branchDefault);
+  }
   if (field.default !== undefined) {
     return String(field.default);
   }
@@ -395,4 +541,87 @@ export function numberControlBounds(field: FieldDefinition) {
     return Math.round(clamped * 1e6) / 1e6;
   };
   return { bounded, allows, clamp };
+}
+
+// A complete number literal as a person types one; "-", "." and "1e" are on
+// the way to one and are not it yet.
+const NUMBER_LITERAL = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+
+/**
+ * What a keystroke in a number field does. A bounded field writes only a
+ * complete number it accepts; anything else (a partial "-", an out-of-range
+ * 1.1, a step the field does not take) is held in the field as a draft and
+ * settled on commit, so the source never holds a value the component rejects.
+ * An unbounded field writes what is typed, as it always has.
+ */
+export type NumberTyped = { readonly kind: 'clear' } | { readonly kind: 'write'; readonly text: string } | { readonly kind: 'hold'; readonly text: string };
+export function numberTyped(field: FieldDefinition, text: string): NumberTyped {
+  assert(text.length <= LIMITS.attrCharsMax, 'numberTyped: typed text is bounded');
+  if (text === '') {
+    return { kind: 'clear' };
+  }
+  const { bounded, allows } = numberControlBounds(field);
+  if (!bounded) {
+    return { kind: 'write', text };
+  }
+  const trimmed = text.trim();
+  if (NUMBER_LITERAL.test(trimmed)) {
+    if (allows(Number(trimmed))) {
+      return { kind: 'write', text: trimmed };
+    }
+    return { kind: 'hold', text };
+  }
+  return { kind: 'hold', text };
+}
+
+/**
+ * The text a held draft commits as (blur or Enter): the number clamped into
+ * what the field accepts, or undefined when the draft is no number at all and
+ * the field goes back to the value its source holds.
+ */
+export function numberCommitted(field: FieldDefinition, draft: string): string | undefined {
+  assert(draft.length <= LIMITS.attrCharsMax, 'numberCommitted: the draft is bounded');
+  const parsed = Number.parseFloat(draft);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const { bounded, allows, clamp } = numberControlBounds(field);
+  const next = bounded ? clamp(parsed) : parsed;
+  assert(!bounded || allows(next), 'numberCommitted: a clamped value is one the field accepts');
+  return String(next);
+}
+
+/**
+ * One step from `base`: the field's own `@step` (else 1), ×10 with Shift and
+ * ÷10 with Option when the field has no grain of its own; then clamped, so a
+ * step can never leave the range the component accepts.
+ */
+export function numberStepped(field: FieldDefinition, base: number, direction: 1 | -1, mods: { readonly shiftKey: boolean; readonly altKey: boolean }): string {
+  assert(Number.isFinite(base), 'numberStepped: steps from a number');
+  const grain = field.step;
+  const unit = grain ?? 1;
+  let size = unit;
+  if (mods.shiftKey) {
+    size = unit * 10;
+  } else if (mods.altKey) {
+    size = grain === undefined ? 0.1 : grain;
+  }
+  // Round away float noise (38.1 + 0.1 = 38.199999…) before clamping.
+  const next = Math.round((base + direction * size) * 1e6) / 1e6;
+  const { bounded, allows, clamp } = numberControlBounds(field);
+  const stepped = bounded ? clamp(next) : next;
+  assert(!bounded || allows(stepped), 'numberStepped: a step lands inside the range');
+  return String(stepped);
+}
+
+/** A colour as the six-digit hex the platform picker takes, or undefined when it is not a hex colour. */
+export function hexOfColor(text: string): string | undefined {
+  const match = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(text.trim()) ?? undefined;
+  const digits = match?.[1];
+  if (digits === undefined) {
+    return undefined;
+  }
+  const full = digits.length <= 4 ? [...digits.slice(0, 3)].map((digit) => digit + digit).join('') : digits.slice(0, 6);
+  assert(full.length === 6, 'hexOfColor: six digits');
+  return `#${full.toLowerCase()}`;
 }

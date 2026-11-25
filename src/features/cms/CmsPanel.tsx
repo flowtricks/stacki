@@ -1,21 +1,23 @@
+import { usePanelData, type PanelData } from '../../lib/usePanelData';
+import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection } from './cmsSchema';
-import type { CmsPanelContent, CmsPanelContentCollection, CmsPanelFile } from './cmsPanelBridge';
-import { collectionHasContent, collectionOf, labelize } from './cmsSchema';
-import { createCmsCollection, readCmsFiles, readContentCollections } from './cmsPanelBridge';
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CmsIcon,
-  CollectionIcon,
-  FolderDefaultIcon,
-  GearIcon,
-  HideIcon,
-  PlusIcon,
-} from '../../ui/Icons';
-
-const CONTENT_KEY = '\u0000content';
+import type { CmsPanelContent, CmsPanelFile } from './cmsPanelBridge';
+import { collectionHasContent, collectionOf } from './cmsSchema';
+import { createCmsCollection } from './cmsPanelBridge';
+import { cmsCache, keptCmsConnections, readCmsCatalog } from './cmsCatalog';
+import { assert } from '../../../shared/core/assert';
+import { ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
+import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
+import type { CmsConnection } from '../../../shared/properties/cmsConnections';
+import { ASTRO_CONTENT_ID, ASTRO_CONTENT_SOURCE, type CmsSource } from '../../../shared/properties/astroContent';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { RemoteCmsBrowser } from './RemoteCmsBrowser';
+import { prefetchConnection } from './remoteCmsCache';
+import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
+import { PanelHeader } from '../../ui/PanelHeader';
 
 interface CmsPanelProps {
   readonly project: { readonly path: string };
@@ -25,8 +27,28 @@ interface CmsPanelProps {
   readonly refreshKey: string | number;
   readonly onSelect: (rel: string | undefined) => void;
   readonly onSelectContent: (name: string | undefined) => void;
+  /** The connected-CMS document open in the main view, if any. A host with no
+   *  connected CMS (Studio, for now) leaves both out. */
+  readonly selectedRemote?: RemoteCmsSelection | undefined;
+  readonly onSelectRemote?: ((selection: RemoteCmsSelection | undefined) => void) | undefined;
   readonly onOpenSettings: (rel: string) => void;
+  /** Where a host without an app Settings window (Studio) adds a connection. */
+  readonly onConnect?: (() => void) | undefined;
   readonly showToast: (message: string, kind: 'error') => void;
+  /**
+   * Opens a data file's settings (its variables, and adding one) in the main
+   * view, as a collection's gear opens its settings. A host that leaves it out
+   * (Studio, for now) shows no gear on file rows.
+   */
+  readonly onOpenFileSettings?: ((file: CmsFileSettingsTarget) => void) | undefined;
+  /** The person moved to another place in the list (a group, a CMS, back): open file settings close. */
+  readonly onNavigate?: (() => void) | undefined;
+}
+
+/** The data file whose settings open: `consts.ts`, `pages/about.astro`, under src/. */
+export interface CmsFileSettingsTarget {
+  readonly fileRel: string;
+  readonly label: string;
 }
 
 interface CollectionGroup {
@@ -40,6 +62,7 @@ interface CollectionGroup {
 }
 
 interface CmsPanelData {
+  readonly state: PanelData<unknown>;
   readonly files: readonly CmsPanelFile[];
   readonly content: CmsPanelContent;
   readonly refresh: () => Promise<void>;
@@ -56,110 +79,111 @@ export default function CmsPanel(props: CmsPanelProps) {
 }
 
 function ProjectCmsPanel(props: CmsPanelProps) {
-  const { files, content, refresh } = useCmsPanelData(props.project.path, props.refreshKey);
+  const connections = useCmsConnections(props.project.path, props.refreshKey);
+  const [remote, setRemote] = useState<CmsSource | undefined>(props.selectedRemote?.connection);
+  if (remote) {
+    return (
+      <RemoteCmsBrowser
+        projectPath={props.project.path}
+        connection={remote}
+        selected={props.selectedRemote}
+        onOpen={props.onSelectRemote ?? (() => undefined)}
+        onClose={() => setRemote(undefined)}
+      />
+    );
+  }
+  // Moving to a connected CMS, or to the project's content collections, closes
+  // whatever local collection was open beside it.
+  const openRemote = (source: CmsSource) => {
+    props.onNavigate?.();
+    props.onSelect(undefined);
+    props.onSelectContent(undefined);
+    setRemote(source);
+  };
+  return <LocalCmsPanel {...props} connections={connections} onOpenRemote={openRemote} />;
+}
+
+function LocalCmsPanel(
+  props: CmsPanelProps & {
+    readonly connections: readonly CmsConnection[];
+    readonly onOpenRemote: (source: CmsSource) => void;
+  },
+) {
+  const translate = useTranslate();
+  const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
-  const [openKey, setOpenKey] = useState<string | undefined>(
-    props.selectedContent ? CONTENT_KEY : undefined,
-  );
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
-  const groups = useMemo(
-    () => collectionGroups(collections, props.currentFile),
-    [collections, props.currentFile],
-  );
+  // The first frame opens the group the selected collection is in: opening it from
+  // an effect drew the group list for a frame and then swapped in the group.
+  const [openKey, setOpenKey] = useState<string | undefined>(() => selectedGroupKey(props.selectedRel, collections));
+  const groups = useMemo(() => collectionGroups(collections, props.currentFile), [collections, props.currentFile]);
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
-  useDefaultCmsGroup(groups, content, openKey, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
   const create = useCreateCollection(props, setCreating, setOpenKey, refresh);
+  const onOpenFileSettings = props.onOpenFileSettings;
   return (
     <div className="panel-section grow">
-      <PanelHeader
+      <CmsPanelHeader
         open={open}
         openKey={openKey}
-        onBack={() => closeGroup(props, setOpenKey)}
+        onBack={() => {
+          props.onNavigate?.();
+          closeGroup(props, setOpenKey);
+        }}
         onCreate={() => setCreating(true)}
+        onConnect={props.onConnect}
       />
       <div className="panel-body">
         {creating && <CreateRow onCreate={create} />}
-        {!open && openKey !== CONTENT_KEY && (
-          <GroupList content={content} groups={groups} onOpen={setOpenKey} />
+        {!open && (
+          <>
+            <ConnectionRows connections={props.connections} content={content} onOpen={props.onOpenRemote} />
+            <GroupList
+              groups={groups}
+              selectedRel={props.selectedRel}
+              onOpen={(key) => {
+                props.onNavigate?.();
+                openGroup(groups, key, { select: props.onSelect, open: setOpenKey });
+              }}
+              onSettings={
+                onOpenFileSettings === undefined
+                  ? undefined
+                  : (group) => {
+                      // A file's key is its path under src/.
+                      assert(group.kind === 'file', 'CmsPanel: only a file has file settings');
+                      onOpenFileSettings({ fileRel: group.key, label: group.label });
+                    }
+              }
+            />
+          </>
         )}
-        {openKey === CONTENT_KEY && (
-          <ContentCollectionList
-            collections={content.collections}
-            selected={props.selectedContent}
-            onSelect={props.onSelectContent}
-          />
-        )}
-        {open && (
-          <JsonCollectionList
-            collections={open.items}
-            selected={props.selectedRel}
-            onSelect={props.onSelect}
-            onOpenSettings={props.onOpenSettings}
-          />
-        )}
-        {/* Collections in other Astro files are hidden, so count only visible groups. */}
-        {groups.length === 0 && content.collections.length === 0 && !creating && (
-          <EmptyPanel onCreate={() => setCreating(true)} />
-        )}
+        {open && <JsonCollectionList collections={open.items} selected={props.selectedRel} onSelect={props.onSelect} onOpenSettings={props.onOpenSettings} />}
+        {/* The content collections' row is always there, so the panel is never empty. */}
+        <PanelReadStatus state={state} label={translate('cms.panel.collections')} retry={refresh} />
       </div>
     </div>
   );
 }
 
-function useDefaultCmsGroup(
-  groups: readonly CollectionGroup[],
-  content: CmsPanelContent,
-  openKey: string | undefined,
-  setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
-): void {
-  const initialized = useRef(false);
-  useEffect(() => {
-    if (initialized.current) {
-      return;
-    }
-    const groupCount = groups.length + (content.collections.length > 0 ? 1 : 0);
-    if (groupCount === 0) {
-      return;
-    }
-    // Default once on entry so returning to the folder list remains possible.
-    initialized.current = true;
-    if (openKey !== undefined) {
-      return;
-    }
-    if (groupCount === 1) {
-      setOpenKey(groups[0]?.key ?? CONTENT_KEY);
-    }
-  }, [groups, content, openKey, setOpenKey]);
-}
-
+const EMPTY_FILES: readonly CmsPanelFile[] = [];
 function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsPanelData {
-  const [files, setFiles] = useState<readonly CmsPanelFile[]>([]);
-  const [content, setContent] = useState<CmsPanelContent>(EMPTY_CONTENT);
-  const requestId = useRef(0);
-  const refresh = useCallback(async (): Promise<void> => {
-    const ownRequestId = ++requestId.current;
-    const [fileResult, contentResult] = await Promise.all([
-      readCmsFiles(projectPath),
-      readContentCollections(projectPath),
-    ]);
-    if (ownRequestId !== requestId.current) {
-      return;
-    }
-    setFiles(fileResult.ok ? fileResult.value : []);
-    setContent(contentResult.ok ? contentResult.value : EMPTY_CONTENT);
-  }, [projectPath]);
+  const read = useCallback(() => readCmsCatalog(projectPath), [projectPath]);
+  const { state, refresh } = usePanelData(cmsCache, projectPath, read, cmsTransport.onCmsChanged);
+  // The hook already loads once; only later external refresh keys request another read.
+  const previous = useRef(refreshKey);
   useEffect(() => {
-    void refresh();
-    const dispose = cmsTransport.onCmsChanged(() => void refresh());
-    return () => {
-      requestId.current += 1;
-      dispose();
-    };
+    if (previous.current !== refreshKey) {
+      previous.current = refreshKey;
+      void refresh();
+    }
   }, [refresh, refreshKey]);
-  return { files, content, refresh };
+  return {
+    state,
+    files: state.kind === 'ready' ? state.value.files : EMPTY_FILES,
+    content: state.kind === 'ready' ? state.value.content : EMPTY_CONTENT,
+    refresh,
+  };
 }
-
 function useCreateCollection(
   props: CmsPanelProps,
   setCreating: React.Dispatch<React.SetStateAction<boolean>>,
@@ -192,20 +216,33 @@ function useSelectedGroup(
   setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
 ): void {
   useEffect(() => {
-    if (selectedRel === undefined || openKey !== undefined) {
+    if (openKey !== undefined) {
       return;
     }
-    const selected = collections.find((collection) => collection.rel === selectedRel);
-    if (selected) {
-      setOpenKey(groupIdentity(selected.rel, selected.dir).key);
+    // Collections that arrive after the first frame (nothing was cached) open the same way.
+    const key = selectedGroupKey(selectedRel, collections);
+    if (key !== undefined) {
+      setOpenKey(key);
     }
   }, [collections, openKey, selectedRel, setOpenKey]);
 }
 
-function visibleCollections(
-  files: readonly CmsPanelFile[],
-  content: CmsPanelContent,
-): readonly Collection[] {
+/** The group to open for the selected collection; undefined when it is alone in its group, whose row already opened it. */
+export function selectedGroupKey(selectedRel: string | undefined, collections: readonly Collection[]): string | undefined {
+  if (selectedRel === undefined) {
+    return undefined;
+  }
+  const selected = collections.find((collection) => collection.rel === selectedRel);
+  if (!selected) {
+    return undefined;
+  }
+  const key = groupIdentity(selected.rel, selected.dir).key;
+  const siblings = collections.filter((collection) => groupIdentity(collection.rel, collection.dir).key === key);
+  assert(siblings.includes(selected), 'selectedGroupKey: the selected collection is in its own group');
+  return siblings.length > 1 ? key : undefined;
+}
+
+function visibleCollections(files: readonly CmsPanelFile[], content: CmsPanelContent): readonly Collection[] {
   return files
     .filter((file) => !ownedByContent(file.rel.split('#')[0] ?? '', content.covered))
     .map(collectionOf)
@@ -219,14 +256,8 @@ function ownedByContent(rel: string, covered: CmsPanelContent['covered']): boole
   return covered.dirs.some((directory) => `src/${rel}`.startsWith(`${directory}/`));
 }
 
-function collectionGroups(
-  collections: readonly Collection[],
-  currentFile: string | undefined,
-): readonly CollectionGroup[] {
-  const mutableGroups = new Map<
-    string,
-    { readonly identity: GroupIdentity; items: Collection[] }
-  >();
+function collectionGroups(collections: readonly Collection[], currentFile: string | undefined): readonly CollectionGroup[] {
+  const mutableGroups = new Map<string, { readonly identity: GroupIdentity; items: Collection[] }>();
   for (const collection of collections) {
     const identity = groupIdentity(collection.rel, collection.dir);
     if (identity.key.toLowerCase().endsWith('.astro') && identity.key !== currentFile) {
@@ -241,11 +272,7 @@ function collectionGroups(
   }
   return Array.from(mutableGroups.values(), ({ identity, items }) => {
     const current = currentFile !== undefined && identity.key === currentFile;
-    const badge: CollectionGroup['badge'] = current
-      ? identity.key.startsWith('pages/')
-        ? 'this page'
-        : 'open'
-      : undefined;
+    const badge: CollectionGroup['badge'] = current ? (identity.key.startsWith('pages/') ? 'this page' : 'open') : undefined;
     return {
       ...identity,
       items,
@@ -284,52 +311,168 @@ function directoryOf(rel: string): string {
   return rel.split('/').slice(0, -1).join('/');
 }
 
-function closeGroup(
-  props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>,
-  setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
+// A file or folder with one collection has nothing to choose between: its row
+// opens that collection, and the panel stays on the list of groups.
+function openGroup(
+  groups: readonly CollectionGroup[],
+  key: string,
+  to: {
+    readonly select: (rel: string | undefined) => void;
+    readonly open: (key: string) => void;
+  },
 ): void {
+  const group = groups.find((entry) => entry.key === key);
+  const only = group?.items.length === 1 ? group.items[0] : undefined;
+  if (only) {
+    to.select(only.rel);
+  } else {
+    to.open(key);
+  }
+}
+
+function closeGroup(props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>, setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>): void {
   setOpenKey(undefined);
   props.onSelect(undefined);
   props.onSelectContent(undefined);
 }
 
-function PanelHeader({
+// The project's connected CMSs (Settings → CMS connections), read with the panel.
+// A failure leaves them out rather than hiding the project's own collections.
+// The last list read (or the app's prefetch, cmsCatalog.ts) shows at once on the
+// next open, so the connection rows never push the collections down after the
+// first frame; and each Sanity connection's collections and their items are read
+// ahead, so opening one shows them at once.
+
+function useCmsConnections(projectPath: string, refreshKey: string | number) {
+  const [connections, setConnections] = useState<readonly CmsConnection[]>(() => {
+    const kept = keptCmsConnections.get(projectPath);
+    return kept?.kind === 'ready' ? kept.value : [];
+  });
+  useEffect(() => {
+    let active = true;
+    // Read ahead now, and again when the network returns after being offline.
+    let sanity: readonly CmsConnection[] = [];
+    const readAhead = () => {
+      for (const connection of sanity) {
+        prefetchConnection(projectPath, connection.id);
+      }
+    };
+    window.addEventListener('online', readAhead);
+    listCmsConnections(projectPath).then(
+      (list) => {
+        keptCmsConnections.set(projectPath, list.connections);
+        sanity = list.connections.filter((connection) => connection.kind === 'sanity');
+        readAhead();
+        // The content collections are read ahead too: their config loads in a child process.
+        prefetchConnection(projectPath, ASTRO_CONTENT_ID);
+        if (active) {
+          setConnections(list.connections);
+        }
+      },
+      () => active && setConnections([]),
+    );
+    return () => {
+      active = false;
+      window.removeEventListener('online', readAhead);
+    };
+  }, [projectPath, refreshKey]);
+  return connections;
+}
+
+// Each saved connection by its CMS's name, then the project's own Astro content
+// collections, always: they open the same browser, and an empty one offers to
+// create the first collection.
+function ConnectionRows(props: {
+  readonly connections: readonly CmsConnection[];
+  readonly content: CmsPanelContent;
+  readonly onOpen: (source: CmsSource) => void;
+}) {
+  const translate = useTranslate();
+  return (
+    <>
+      {props.connections.map((connection) => (
+        <GroupRow
+          key={connection.id}
+          label={connectionKindLabel(connection.kind, translate)}
+          title={connection.label}
+          onClick={() => props.onOpen(connection)}
+          icon={<ConnectionLogo kind={connection.kind} />}
+        />
+      ))}
+      <GroupRow
+        label={translate('cms.panel.contentCollections')}
+        title={props.content.configPath ? translate('cms.panel.declaredIn', { path: props.content.configPath }) : translate('cms.panel.astroContent')}
+        onClick={() => props.onOpen(ASTRO_CONTENT_SOURCE)}
+        icon={<ConnectionLogo kind="astro" />}
+      />
+    </>
+  );
+}
+
+// The CMS products are brand names and stay as written; only the generic kind is words.
+function connectionKindLabel(kind: CmsConnection['kind'], translate: Translator): string {
+  switch (kind) {
+    case 'sanity':
+      // i18n-ignore: Sanity is a product name.
+      return 'Sanity';
+    case 'payload':
+      // i18n-ignore: Payload is a product name.
+      return 'Payload';
+    case 'custom':
+      return translate('cms.panel.kindCustom');
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
+function CmsPanelHeader({
   open,
   openKey,
   onBack,
   onCreate,
+  onConnect,
 }: {
   readonly open: CollectionGroup | undefined;
   readonly openKey: string | undefined;
   readonly onBack: () => void;
   readonly onCreate: () => void;
+  /** Where the host adds a CMS connection (Settings, or Studio's dialog). */
+  readonly onConnect: (() => void) | undefined;
 }) {
-  const title =
-    openKey === CONTENT_KEY ? 'Content collections' : (open?.label ?? 'CMS Collections');
+  const translate = useTranslate();
+  const title = open?.label ?? translate('cms.panel.title');
+  // At the top level the + connects a CMS; inside a folder it adds a collection there.
+  const connect = openKey === undefined ? onConnect : undefined;
   return (
-    <div className="panel-header">
-      <div className="cms-crumb">
-        {(open || openKey === CONTENT_KEY) && (
-          <button className="ghost" title="All collections" onClick={onBack}>
-            <ChevronLeftIcon size={14} />
+    <PanelHeader
+      title={title}
+      titleHint={open?.path}
+      back={open ? { label: translate('cms.panel.back'), onBack } : undefined}
+      actions={
+        connect ? (
+          <button className="ghost" title={translate('cms.panel.connect')} onClick={connect}>
+            <PlusIcon size={14} />
           </button>
-        )}
-        <h2 title={open?.path}>{title}</h2>
-      </div>
-      <button className="ghost" title="New collection" onClick={onCreate}>
-        <PlusIcon size={14} />
-      </button>
-    </div>
+        ) : (
+          <button className="ghost" title={translate('cms.panel.newCollection')} onClick={onCreate}>
+            <PlusIcon size={14} />
+          </button>
+        )
+      }
+    />
   );
 }
 
 function CreateRow({ onCreate }: { readonly onCreate: (name: string) => Promise<void> }) {
+  const translate = useTranslate();
   return (
     <div className="cms-collection">
       <CmsIcon size={14} />
       <input
         autoFocus
-        placeholder="Collection name"
+        placeholder={translate('cms.panel.collectionName')}
         onBlur={(event) => void onCreate(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
@@ -350,34 +493,29 @@ function setInputText(inputElement: HTMLInputElement, text: string): void {
 }
 
 function GroupList({
-  content,
   groups,
+  selectedRel,
   onOpen,
+  onSettings,
 }: {
-  readonly content: CmsPanelContent;
   readonly groups: readonly CollectionGroup[];
+  readonly selectedRel: string | undefined;
   readonly onOpen: (key: string) => void;
+  /** Opens a data file's settings; absent, file rows carry no gear. */
+  readonly onSettings: ((group: CollectionGroup) => void) | undefined;
 }) {
   return (
     <>
-      {content.collections.length > 0 && (
-        <GroupRow
-          label="Content collections"
-          count={collectionCount(content.collections.length)}
-          title={content.configPath ? `Declared in ${content.configPath}` : undefined}
-          onClick={() => onOpen(CONTENT_KEY)}
-          icon={<CollectionIcon size={14} />}
-        />
-      )}
       {groups.map((group) => (
         <GroupRow
           key={group.key}
           label={group.label}
-          count={collectionCount(group.items.length)}
           title={group.path}
           badge={group.badge}
+          selected={group.items.some((item) => item.rel === selectedRel)}
           onClick={() => onOpen(group.key)}
-          icon={<FolderDefaultIcon size={14} />}
+          onSettings={group.kind === 'file' && onSettings !== undefined ? () => onSettings(group) : undefined}
+          icon={group.kind === 'file' ? <FileIcon size={14} /> : <FolderDefaultIcon size={14} />}
         />
       ))}
     </>
@@ -386,59 +524,50 @@ function GroupList({
 
 function GroupRow({
   label,
-  count: countLabel,
   title,
   badge,
+  selected,
   onClick,
+  onSettings,
   icon,
 }: {
   readonly label: string;
-  readonly count: string;
   readonly title?: string | undefined;
   readonly badge?: CollectionGroup['badge'];
+  /** Its collection is the one open: the row reads as the current place. */
+  readonly selected?: boolean | undefined;
   readonly onClick: () => void;
+  /** A data file's gear, in the place and look of a collection's (JsonCollectionList). */
+  readonly onSettings?: (() => void) | undefined;
   readonly icon: React.ReactNode;
 }) {
+  const translate = useTranslate();
   return (
-    <div className="cms-collection" onClick={onClick} title={title}>
+    <div className={`cms-collection ${selected ? 'on' : ''}`} onClick={onClick} title={title}>
       {icon}
       <span className="cms-collection-name">{label}</span>
-      {badge && <span className="badge">{badge}</span>}
-      <span className="cms-collection-count">{countLabel}</span>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
+      {badge && <span className="badge">{badge === 'this page' ? translate('cms.panel.badgeThisPage') : translate('cms.panel.badgeOpen')}</span>}
+      {/* On hover or focus a file's settings take the arrow's place, in a slot of fixed width. */}
+      <span className="cms-collection-end">
+        <span className="cms-collection-chevron">
+          <ChevronRightIcon size={10} />
+        </span>
+        {onSettings !== undefined && (
+          <button
+            type="button"
+            className="ghost cms-collection-settings"
+            title={translate('cms.panel.fileSettings')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSettings();
+            }}
+          >
+            <GearIcon size={13} />
+          </button>
+        )}
       </span>
     </div>
   );
-}
-
-function ContentCollectionList({
-  collections,
-  selected,
-  onSelect,
-}: {
-  readonly collections: readonly CmsPanelContentCollection[];
-  readonly selected: string | undefined;
-  readonly onSelect: (name: string | undefined) => void;
-}) {
-  return collections.map((collection) => (
-    <div
-      key={collection.name}
-      className={collectionClass({
-        selected: collection.name === selected,
-        broken: collection.error !== undefined,
-      })}
-      onClick={() => onSelect(collection.name)}
-      title={contentCollectionTitle(collection)}
-    >
-      {collection.editable ? <CmsIcon size={14} /> : <HideIcon size={14} />}
-      <span className="cms-collection-name">{labelize(collection.name)}</span>
-      <span className="cms-collection-count">{contentEntryCount(collection)}</span>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
-      </span>
-    </div>
-  ));
 }
 
 function JsonCollectionList({
@@ -452,6 +581,7 @@ function JsonCollectionList({
   readonly onSelect: (rel: string | undefined) => void;
   readonly onOpenSettings: (rel: string) => void;
 }) {
+  const translate = useTranslate();
   return collections.map((collection) => (
     <div
       key={collection.rel}
@@ -464,73 +594,38 @@ function JsonCollectionList({
     >
       <CmsIcon size={14} />
       <span className="cms-collection-name">{collection.label}</span>
-      <span className="cms-collection-count">{jsonItemCount(collection)}</span>
-      <button
-        className="ghost row-action"
-        title="Collection settings"
-        onClick={(event) => {
-          event.stopPropagation();
-          if (collection.error === undefined) {
-            onOpenSettings(collection.rel);
-          }
-        }}
-        disabled={collection.error !== undefined}
-      >
-        <GearIcon size={13} />
-      </button>
-      <span className="cms-collection-chevron">
-        <ChevronRightIcon size={10} />
+      <span className="cms-collection-count">{jsonItemCount(collection, translate)}</span>
+      {/* On hover or focus the settings take the arrow's place, in a slot of fixed width. */}
+      <span className="cms-collection-end">
+        <span className="cms-collection-chevron">
+          <ChevronRightIcon size={10} />
+        </span>
+        <button
+          type="button"
+          className="ghost cms-collection-settings"
+          title={translate('cms.panel.collectionSettings')}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (collection.error === undefined) {
+              onOpenSettings(collection.rel);
+            }
+          }}
+          disabled={collection.error !== undefined}
+        >
+          <GearIcon size={13} />
+        </button>
       </span>
     </div>
   ));
-}
-
-function EmptyPanel({ onCreate }: { readonly onCreate: () => void }) {
-  return (
-    <div className="props-empty">
-      <div className="cms-empty-icon" aria-hidden="true">
-        <CmsIcon size={24} />
-      </div>
-      <h3 className="cms-empty-title">No collections to show.</h3>
-      <p>Create a collection to manage reusable content.</p>
-      <div className="cms-empty-action">
-        <button className="primary" onClick={onCreate}>
-          New collection
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function collectionClass(state: { readonly selected: boolean; readonly broken: boolean }): string {
   return `cms-collection ${state.selected ? 'on' : ''} ${state.broken ? 'broken' : ''}`;
 }
 
-function collectionCount(countValue: number): string {
-  return countValue === 1 ? '1 collection' : `${countValue} collections`;
-}
-
-function contentEntryCount(collection: CmsPanelContentCollection): string {
+function jsonItemCount(collection: Collection, translate: Translator): string {
   if (collection.error !== undefined) {
-    return 'unreadable';
+    return translate('cms.collection.unreadable');
   }
-  return collection.count === 1 ? '1 entry' : `${collection.count} entries`;
-}
-
-function jsonItemCount(collection: Collection): string {
-  if (collection.error !== undefined) {
-    return 'unreadable';
-  }
-  return collection.single || collection.items.length === 1
-    ? '1 item'
-    : `${collection.items.length} items`;
-}
-
-function contentCollectionTitle(collection: CmsPanelContentCollection): string {
-  if (!collection.editable) {
-    return 'Built by a loader in this project: read-only';
-  }
-  const source =
-    collection.loader?.kind === 'file' ? collection.loader.file : collection.loader?.base;
-  return `${source ?? 'Unknown source'} — ${collection.loader?.kind ?? 'unknown'} loader`;
+  return translate('cms.itemCount', { count: collection.single ? 1 : collection.items.length });
 }

@@ -7,6 +7,7 @@
 // nesting to track, so a regex tokeniser and the browser's own caret are
 // enough, and the field stays a contentEditable that chips can live inside.
 
+import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 
 /** One coloured run of the value. `text` is raw (unescaped) source. */
@@ -21,6 +22,9 @@ const HEX = /^#[0-9a-fA-F]{3,8}/;
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/;
 const UNIT = /^(?:[A-Za-z]+|%)/;
 const IDENT = /^[A-Za-z_][\w-]*/;
+// The flag after a value. It gets its own run so a field can draw it quieter
+// than the value it qualifies, and so it never reads as a stray `!` and an ident.
+const IMPORTANT = /^!\s*important\b/i;
 
 /**
  * Split a CSS value into coloured runs. Unknown characters (punctuation,
@@ -54,6 +58,9 @@ export function cssTokens(value: string): CssToken[] {
     } else if ((match = rest.match(FUNCTION) ?? undefined)) {
       push('fn', match[0]);
       consumedLength = match[0].length;
+    } else if ((match = rest.match(IMPORTANT) ?? undefined)) {
+      push('important', match[0]);
+      consumedLength = match[0].length;
     } else if ((match = rest.match(HEX) ?? undefined)) {
       push('hex', match[0]);
       consumedLength = match[0].length;
@@ -83,15 +90,38 @@ function escapeHtml(text: string): string {
 }
 
 /** The value as coloured HTML. `plain` runs stay bare text so the markup — and
- *  the DOM the caret walks — is no deeper than it needs to be. */
+ *  the DOM the caret walks — is no deeper than it needs to be, except for their
+ *  whitespace (see plainHtml). */
 export function highlightCss(value: string): string {
   return cssTokens(value)
-    .map((token) =>
-      token.kind === 'plain'
-        ? escapeHtml(token.text)
-        : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`,
-    )
+    .map((token) => (token.kind === 'plain' ? plainHtml(token.text) : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`))
     .join('');
+}
+
+// Whitespace in a coloured value is wrapped in an element of its own.
+//
+// The single-line field is a flex container, so every bare text run between two
+// coloured spans becomes an anonymous flex item, and a flex item trims the
+// whitespace at its edges and drops a run that is only whitespace. Painted bare,
+// `rgb(255 255 255 / 0.09)` read `rgb(255255255/0.09)` and `in lab, x` read
+// `inlab,x`: still the right text in the DOM, but the wrong value on screen. A
+// `.cx-space` element is a flex item whose `white-space: pre` keeps its width,
+// and its text node is still where the caret and the serializer find it.
+const WHITESPACE_RUN = /(\s+)/;
+const WHITESPACE = /\s/;
+function plainHtml(text: string): string {
+  if (WHITESPACE.test(text)) {
+    return text.split(WHITESPACE_RUN).map(plainPartHtml).join('');
+  }
+  return escapeHtml(text);
+}
+// One piece of a split plain run: whitespace, other text, or the empty string
+// `split` leaves at either end when the run starts or ends with whitespace.
+function plainPartHtml(part: string): string {
+  if (part.trim() === '') {
+    return part === '' ? '' : `<span class="cx-space">${part}</span>`;
+  }
+  return escapeHtml(part);
 }
 
 // ───────────────────────────── Arrow-key stepping ─────────────────────────────
@@ -140,8 +170,9 @@ export function stepNumberAt(
     const start = match.index;
     const end = start + match[0].length;
     // Touching counts: the caret sits at an edge as often as inside, and after
-    // typing a number it is always at its right edge.
-    if (caret >= start && caret <= end) {
+    // typing a number it is always at its right edge. The unit is part of the
+    // number here, so the caret at the end of `1rem` still steps it.
+    if (caret >= start && caret <= unitEndAt(text, start, end)) {
       hit = { start, end, text: match[0] };
       break;
     }
@@ -154,10 +185,7 @@ export function stepNumberAt(
   }
   // A `-` immediately before, and not part of a larger expression, is this
   // number's sign — `-4px` steps up to `-3px`, not to `-5px`.
-  const signed =
-    hit.start > 0 &&
-    text[hit.start - 1] === '-' &&
-    !/[\d.\w%)]\s*$/.test(text.slice(0, hit.start - 1));
+  const signed = hit.start > 0 && text[hit.start - 1] === '-' && !/[\d.\w%)]\s*$/.test(text.slice(0, hit.start - 1));
   const start = signed ? hit.start - 1 : hit.start;
   const current = Number((signed ? '-' : '') + hit.text);
   if (!Number.isFinite(current)) {
@@ -169,10 +197,26 @@ export function stepNumberAt(
     .toFixed(precisionOf(hit.text, delta))
     .replace(/^(-?)0\./, '$1.')
     .replace(/\.$/, '');
+  // A caret in the unit stays at the same place in the unit.
+  const unitOffset = Math.max(0, caret - hit.end);
   return {
     text: text.slice(0, start) + shown + text.slice(hit.end),
-    caret: start + shown.length,
+    caret: start + shown.length + unitOffset,
   };
+}
+
+// One past the unit glued to the number at `start`..`end`; `end` when it has none.
+// Digits glued to a name or a hex colour on their left (`#3366ff`, `translate3d`)
+// have no unit: the letters after them are not one.
+function unitEndAt(text: string, start: number, end: number): number {
+  assert(start < end, 'unitEndAt: a number has characters');
+  if (start > 0 && /[\w#]/.test(text.charAt(start - 1))) {
+    return end;
+  }
+  const unit = /^[a-zA-Z%]*/.exec(text.slice(end))?.[0] ?? '';
+  const unitEnd = end + unit.length;
+  assert(unitEnd <= text.length, 'unitEndAt: the unit is inside the text');
+  return unitEnd;
 }
 
 // ───────────────────────────── Caret in a rich field ─────────────────────────
@@ -183,8 +227,7 @@ export function stepNumberAt(
 // are gone by then. A chip counts as one character, matching the placeholder
 // the value serialiser uses.
 
-const isChip = (node: Node): boolean =>
-  node instanceof HTMLElement && node.dataset['chip'] !== undefined;
+const isChip = (node: Node): boolean => node instanceof HTMLElement && node.dataset['chip'] !== undefined;
 
 /** Where the caret is, as an offset into the field's text. */
 export function caretOffset(root: HTMLElement): number | undefined {
@@ -193,7 +236,31 @@ export function caretOffset(root: HTMLElement): number | undefined {
     return undefined;
   }
   const range = selection.getRangeAt(0);
-  if (!root.contains(range.endContainer)) {
+  return pointOffset(root, range.endContainer, range.endOffset);
+}
+
+/**
+ * The field's selection as offsets into its text, start before end; a caret is
+ * a selection whose start and end are the same. Undefined when the selection is
+ * not wholly in the field.
+ */
+export function selectionOffsets(root: HTMLElement): { readonly start: number; readonly end: number } | undefined {
+  const selection = root.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return undefined;
+  }
+  const range = selection.getRangeAt(0);
+  const start = pointOffset(root, range.startContainer, range.startOffset);
+  const end = pointOffset(root, range.endContainer, range.endOffset);
+  if (start === undefined || end === undefined) {
+    return undefined;
+  }
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+// A DOM position (a container and an offset in it) as characters into the field.
+function pointOffset(root: HTMLElement, container: Node, containerOffset: number): number | undefined {
+  if (!root.contains(container)) {
     return undefined;
   }
   let offset = 0;
@@ -207,11 +274,11 @@ export function caretOffset(root: HTMLElement): number | undefined {
     if (found) {
       return;
     }
-    if (node === range.endContainer && node.nodeType !== Node.TEXT_NODE) {
+    if (node === container && node.nodeType !== Node.TEXT_NODE) {
       // A container-level position counts the children before it.
       let i = 0;
       for (const child of Array.from(node.childNodes)) {
-        if (i++ >= range.endOffset) {
+        if (i++ >= containerOffset) {
           break;
         }
         walk(child, depth + 1);
@@ -220,8 +287,8 @@ export function caretOffset(root: HTMLElement): number | undefined {
       return;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      if (node === range.endContainer) {
-        offset += range.endOffset;
+      if (node === container) {
+        offset += containerOffset;
         found = true;
       } else {
         offset += (node.textContent ?? '').length;
@@ -234,7 +301,11 @@ export function caretOffset(root: HTMLElement): number | undefined {
     }
     node.childNodes.forEach((child) => walk(child, depth + 1));
   };
-  root.childNodes.forEach((child) => walk(child, 0));
+  if (container === root) {
+    walk(root, -1);
+  } else {
+    root.childNodes.forEach((child) => walk(child, 0));
+  }
   return found ? offset : undefined;
 }
 

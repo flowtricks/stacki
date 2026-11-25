@@ -1,13 +1,7 @@
 import type { Terminal } from '@xterm/xterm';
 import type { PathStyle } from './terminalPaste';
 import { decideTerminalPaste, escapePosixPath, quoteWindowsPath } from './terminalPaste';
-import {
-  requestNativePaste,
-  saveTerminalClipboardImage,
-  sendTerminalInput,
-  terminalFilePath,
-  TERMINAL_IMAGE_BYTES_MAX,
-} from './terminalBridge';
+import { requestNativePaste, saveTerminalClipboardImage, sendTerminalInput, terminalFilePath, TERMINAL_IMAGE_BYTES_MAX } from './terminalBridge';
 
 interface InteractionOptions {
   readonly host: HTMLDivElement;
@@ -23,12 +17,7 @@ export function installTerminalInteractions(options: InteractionOptions): () => 
     if (!data) {
       return;
     }
-    const action = decideTerminalPaste(
-      Array.from(data.items),
-      data.getData('text/plain'),
-      terminalFilePath,
-      terminalPathStyle(),
-    );
+    const action = decideTerminalPaste(Array.from(data.items), data.getData('text/plain'), terminalFilePath, terminalPathStyle());
     if (action.kind === 'text') {
       return;
     }
@@ -85,19 +74,13 @@ async function persistImage(options: InteractionOptions, file: File | undefined)
       return;
     }
     const path = result.value.path;
-    options
-      .terminal()
-      ?.paste(window.avb.platform === 'win32' ? quoteWindowsPath(path) : escapePosixPath(path));
+    options.terminal()?.paste(window.avb.platform === 'win32' ? quoteWindowsPath(path) : escapePosixPath(path));
   } catch {
     forwardPasteKeystroke();
   }
 }
 
-function dropIntoTerminal(
-  options: InteractionOptions,
-  event: DragEvent,
-  pasteImage: (file: File | undefined) => void,
-): void {
+function dropIntoTerminal(options: InteractionOptions, event: DragEvent, pasteImage: (file: File | undefined) => void): void {
   const data = event.dataTransfer;
   if (!data) {
     return;
@@ -105,12 +88,7 @@ function dropIntoTerminal(
   event.preventDefault();
   event.stopImmediatePropagation();
   const plainText = data.getData('text/plain');
-  const action = decideTerminalPaste(
-    Array.from(data.items),
-    plainText,
-    terminalFilePath,
-    terminalPathStyle(),
-  );
+  const action = decideTerminalPaste(Array.from(data.items), plainText, terminalFilePath, terminalPathStyle());
   if (action.kind === 'paths') {
     options.terminal()?.paste(action.text);
   } else if (action.kind === 'image') {

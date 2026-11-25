@@ -1,3 +1,5 @@
+import { isCanvasTextEditing } from './frameTextNative';
+import { canvasCursorCSS, canvasInert, canvasSelects, guardCanvasNavigation, trackCanvasGesture } from './frameInteraction';
 // Which frame this is, and what that changes. A class on <html> says canvas
 // (`stacki-designer`) or interactive preview (`stacki-preview`); a design-mode
 // frame (#avb-design) also gets an editor cursor, inert links and forms, and
@@ -26,14 +28,28 @@ export function markFrameMode(): void {
 
 // Design-mode frames (canvas + editor preview) are marked with #avb-design.
 // They get an editor cursor (no I-beam over text) and links/forms are
-// inert — navigation only happens in the interactive preview mode.
+// inert — navigation only happens in the canvas's interact mode and the
+// interactive preview.
 export function listenForDesign(): void {
-  if (location.hash.includes('avb-design')) {
-    showDesignCursor();
-    makeNavigationInert();
-    forwardModifiers();
-    window.addEventListener('keydown', forwardShortcut, true);
-  }
+  trackCanvasGesture();
+  guardCanvasNavigation();
+  announceLeaving();
+  showDesignCursor();
+  makeNavigationInert();
+  forwardModifiers();
+  window.addEventListener('keydown', forwardShortcut, true);
+}
+
+// Said as the document goes, whatever takes it away: the host clears outlines
+// drawn for it and checks that what loads next is still the site (useCanvasInteraction).
+function announceLeaving(): void {
+  window.addEventListener('pagehide', () => {
+    try {
+      window.parent.postMessage({ type: 'avb:leaving' }, '*');
+    } catch {
+      /* no parent to tell */
+    }
+  });
 }
 
 function showDesignCursor(): void {
@@ -43,7 +59,8 @@ function showDesignCursor(): void {
     }
     const style = document.createElement('style');
     style.id = 'avb-design-style';
-    style.textContent = '*, *::before, *::after { cursor: default !important; }';
+    style.disabled = !canvasSelects();
+    style.textContent = canvasCursorCSS();
     (document.head || document.documentElement)?.appendChild(style);
   };
   if (document.readyState === 'loading') {
@@ -58,6 +75,9 @@ function makeNavigationInert(): void {
   window.addEventListener(
     'click',
     (event) => {
+      if (!canvasInert()) {
+        return;
+      }
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : undefined;
       if (anchor) {
         event.preventDefault();
@@ -65,7 +85,16 @@ function makeNavigationInert(): void {
     },
     true,
   );
-  window.addEventListener('submit', (event) => event.preventDefault(), true);
+  window.addEventListener(
+    'submit',
+    (event) => {
+      if (canvasInert()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
   // A press on the canvas is a selection, not an interaction — and left to
   // the browser, a press focuses whatever is under the pointer. Focusing
   // something REVEALS it: the page scrolls to bring it into view, sideways
@@ -83,6 +112,12 @@ function makeNavigationInert(): void {
   window.addEventListener(
     'mousedown',
     (event) => {
+      if (!canvasInert()) {
+        return; // Interact mode: a press focuses a field, opens a <select>, starts a drag.
+      }
+      if (isCanvasTextEditing(event.target)) {
+        return;
+      }
       if (event.button !== 0) {
         return;
       }
@@ -123,10 +158,57 @@ function forwardModifiers(): void {
 }
 
 // Forward app shortcuts when the canvas has keyboard focus — otherwise
-// ⌘F/⌘E die inside the iframe and the insert palette never opens.
+// ⌘F/⌘E/⌘K die inside the iframe and the insert palette never opens.
 function forwardShortcut(event: KeyboardEvent): void {
+  // ⌥P toggles the preview, so it is forwarded from the live preview too, where
+  // the canvas does not select. Matched on the physical key: Option turns P
+  // into "π". A field in the page keeps it.
+  if (isPreviewKey(event)) {
+    if (!eventInField(event)) {
+      event.preventDefault();
+      try {
+        window.parent.postMessage({ type: 'avb:shortcut', name: 'preview' }, '*');
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
+  // The app command range (shared/properties/appShortcuts.ts APP_RESERVED_SHORTCUTS,
+  // held to this list by test/shared/properties/appShortcuts.test.ts): an app's
+  // command runs from the canvas too, in the editor and the live preview alike.
+  // The preload imports nothing, so the range is written out here.
+  const commandDigit = /^Digit([1-9])$/.exec(event.code)?.[1];
+  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.altKey && commandDigit !== undefined) {
+    event.preventDefault();
+    try {
+      // i18n-ignore: a keyboard chord prefix; key names are not translated.
+      window.parent.postMessage({ type: 'avb:shortcut', name: 'appCommand', shortcut: `Mod+Alt+Shift+${commandDigit}` }, '*');
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  // The device keys 1 to 9 (usePreviewSizing useDeviceShortcuts) pick a breakpoint from the
+  // canvas, interact mode and the live preview alike: a click in the page puts keyboard focus
+  // in here, and in the preview mode the toolbar is not even drawn, so without this the keys
+  // never reach the app. Replayed there as the plain key, through the one listener that reads
+  // them. Not taken from the page (no preventDefault), and a field in the page keeps its digits.
+  if (isDeviceKey(event)) {
+    if (!eventInField(event)) {
+      try {
+        window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: false }, '*');
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
+  if (!canvasSelects()) {
+    return;
+  }
   const mod = event.metaKey || event.ctrlKey;
-  if (mod && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'e')) {
+  if (mod && ['f', 'e', 'k'].includes(event.key.toLowerCase())) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'insert' }, '*');
@@ -135,26 +217,14 @@ function forwardShortcut(event: KeyboardEvent): void {
     }
     return;
   }
-  const target = event.target;
-  const typing =
-    target instanceof window.HTMLElement &&
-    (target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.tagName === 'SELECT' ||
-      target.isContentEditable);
-  if (typing) {
+  if (eventInField(event)) {
     return;
   }
 
   // Clicking the canvas puts keyboard focus inside this frame, so the
   // app's own arrow-key navigation would never see the keys. Forward
   // them (and swallow them here, so the page doesn't scroll instead).
-  if (
-    !mod &&
-    !event.altKey &&
-    !event.shiftKey &&
-    ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)
-  ) {
+  if (!mod && !event.altKey && !event.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'arrow', key: event.key }, '*');
@@ -183,12 +253,38 @@ function forwardShortcut(event: KeyboardEvent): void {
   if (isDelete || isDuplicate || isClassJump || isProperties || isGuide || isClose) {
     event.preventDefault();
     try {
-      window.parent.postMessage(
-        { type: 'avb:shortcut', name: 'key', key: event.key, meta: mod },
-        '*',
-      );
+      window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: mod }, '*');
     } catch {
       /* ignore */
     }
   }
+}
+
+// Option and P alone, the preview toggle (usePreviewKey in the app).
+function isPreviewKey(event: KeyboardEvent): boolean {
+  if (!event.altKey) {
+    return false;
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey) {
+    return false;
+  }
+  return event.code === 'KeyP';
+}
+
+// A digit 1 to 9 with no modifier: the device keys. Shift is ruled out by the key itself (it
+// makes "!" of "1" on most layouts), so a key that still reads as a digit is the plain one.
+function isDeviceKey(event: KeyboardEvent): boolean {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) {
+    return false;
+  }
+  return /^[1-9]$/.test(event.key);
+}
+
+// Is the key going to a field in the page, which keeps it for typing?
+function eventInField(event: KeyboardEvent): boolean {
+  const target = event.target;
+  return (
+    target instanceof window.HTMLElement &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+  );
 }

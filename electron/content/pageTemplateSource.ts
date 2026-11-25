@@ -1,0 +1,462 @@
+// The text of a generated template page, one shape per data source. Pure: the
+// plan (pageTemplatePlan.ts) decides what the project allows and hands this
+// module checked values.
+//
+// Astro runs getStaticPaths in its own scope, so everything it needs is written
+// inside it, and a secret is read there from `import.meta.env`, which keeps its
+// value out of the file. Each page reads `const { entry } = Astro.props`, which
+// is the shape the data picker samples through page:dynamicPaths, so an entry's
+// fields can be bound as soon as the page opens.
+
+import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
+import {
+  SANITY_API_VERSION,
+  dataPathSegments,
+  type ContentSlug,
+  type SlugTreatment,
+  type DataSource,
+  type RouteParts,
+  type SampleFieldKind,
+  type TemplateField,
+} from '../../shared/properties/pageTemplate';
+
+export interface TemplatePageInput {
+  readonly route: RouteParts;
+  readonly source: DataSource;
+  /** The layout's name and its import path relative to the page. */
+  readonly layout: { readonly name: string; readonly importPath: string } | undefined;
+  readonly collection: CollectionFacts | undefined;
+  /** What the collection's EmDash schema says, for an `emdash` source. */
+  readonly emdash?: EmDashFacts | undefined;
+  /** `explicit` writes `prerender = true`, which a server-output project needs for getStaticPaths to run. */
+  readonly prerender: 'explicit' | 'inherited';
+}
+
+/** What a content collection's config says, for a `content-collection` source. */
+export interface CollectionFacts {
+  readonly body: 'rendered' | 'none';
+  /** The schema field shown as the page's heading, when it has one. */
+  readonly heading: string | undefined;
+  /** Astro 5 replaced `entry.render()` and `entry.slug` with `render(entry)` and `entry.id`. */
+  readonly api: 'current' | 'legacy';
+}
+
+/**
+ * What an EmDash content type holds, as its own schema says (never as Stacki would define it): the field shown as
+ * the heading, the first image and the first rich text. Each is a field slug, or absent when the type has none.
+ */
+export interface EmDashFacts {
+  readonly heading: string | undefined;
+  readonly image: string | undefined;
+  readonly body: string | undefined;
+}
+
+const HEADING_FIELDS = ['title', 'name', 'heading'] as const;
+const REQUEST_TIMEOUT_MS = 15_000;
+// One helper, inside getStaticPaths because Astro gives that function no outer
+// scope. It matches slugifyAddress (shared/properties/pageTemplate.ts), so the
+// example the form showed is the address the build makes.
+const SLUG_HELPER = [
+  '\tconst toSlug = (value: unknown) =>',
+  "\t\tString(value ?? '')",
+  "\t\t\t.normalize('NFKD')",
+  "\t\t\t.replace(/[\\u0300-\\u036f]/g, '')",
+  '\t\t\t.toLowerCase()',
+  "\t\t\t.replace(/[^a-z0-9]+/g, '-')",
+  "\t\t\t.replace(/^-+|-+$/g, '');",
+  '\tconst seen = new Map();',
+] as const;
+
+export function pageTemplateText(input: TemplatePageInput): string {
+  const { source } = input;
+  switch (source.kind) {
+    case 'content-collection': {
+      const facts = input.collection;
+      assert(facts !== undefined, 'A content template is planned with its collection');
+      return contentPageText(input, source, facts);
+    }
+    case 'emdash': {
+      assert(input.emdash !== undefined, 'An EmDash template is planned with its schema');
+      return emdashPageText(input, source, input.emdash);
+    }
+    case 'sanity':
+      return externalPageText(input, sanityRequestLines(source), {
+        listAccess: 'body?.result',
+        listLabel: 'result',
+        slugPath: source.slugPath,
+        slugTreatment: source.slugTreatment,
+        fields: source.fields,
+      });
+    case 'http-json':
+      return externalPageText(input, httpRequestLines(source), {
+        listAccess: accessor('body', source.listPath),
+        listLabel: source.listPath === '' ? 'the top of the reply' : source.listPath,
+        slugPath: source.slugPath,
+        slugTreatment: source.slugTreatment,
+        fields: source.fields,
+      });
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
+}
+
+/** The field a template shows as its heading: the first with a heading's usual name. */
+export function headingField(names: readonly string[]): string | undefined {
+  return HEADING_FIELDS.find((name) => names.includes(name));
+}
+
+type ContentSource = Extract<DataSource, { readonly kind: 'content-collection' }>;
+type EmDashSource = Extract<DataSource, { readonly kind: 'emdash' }>;
+
+// An EmDash page reads its entry when it is requested, the way EmDash documents (`getEmDashEntry`), so a change
+// in the CMS shows on the next request with no rebuild. It has no `getStaticPaths`: Stacki lists the entries to
+// preview from EmDash itself (emdashPaths.ts). `decodeSlug` is EmDash's own, and a missing entry is a 404.
+function emdashPageText(input: TemplatePageInput, source: EmDashSource, facts: EmDashFacts): string {
+  const slug = `Astro.params.${input.route.param}`;
+  const components = [...(facts.image === undefined ? [] : ['Image']), ...(facts.body === undefined ? [] : ['PortableText'])];
+  const frontmatter = [
+    "import { decodeSlug, getEmDashEntry } from 'emdash';",
+    ...(components.length === 0 ? [] : [`import { ${components.join(', ')} } from 'emdash/ui';`]),
+    ...layoutImport(input),
+    '',
+    `const slug = decodeSlug(${slug});`,
+    'if (!slug) {',
+    "\treturn Astro.rewrite('/404');",
+    '}',
+    '',
+    `const { entry, error } = await getEmDashEntry(${quoted(source.collection)}, slug);`,
+    'if (error) {',
+    "\treturn new Response('Unable to load this page.', { status: 500 });",
+    '}',
+    'if (!entry) {',
+    "\treturn Astro.rewrite('/404');",
+    '}',
+  ];
+  const content = [
+    ...(facts.image === undefined ? [] : [`{entry.data${member(facts.image)} && <Image image={entry.data${member(facts.image)}} />}`]),
+    ...(facts.heading === undefined ? [] : [`<h1>{entry.data${member(facts.heading)}}</h1>`]),
+    ...(facts.body === undefined ? [] : [`<PortableText value={entry.data${member(facts.body)}} />`]),
+  ];
+  return pageText(input, frontmatter, content);
+}
+
+function contentPageText(input: TemplatePageInput, source: ContentSource, facts: CollectionFacts): string {
+  const legacy = facts.api === 'legacy';
+  const rendered = facts.body === 'rendered';
+  const names = rendered && !legacy ? 'getCollection, render' : 'getCollection';
+  const idField = legacy ? 'entry.slug' : 'entry.id';
+  const name = quoted(source.collection);
+  const frontmatter = [
+    `import { ${names} } from 'astro:content';`,
+    `import type { CollectionEntry } from 'astro:content';`,
+    ...layoutImport(input),
+    '',
+    ...prerenderLines(input),
+    'export async function getStaticPaths() {',
+    ...contentPathLines(input.route.param, source.slug, { name, idField }),
+    '}',
+    '',
+    'interface Props {',
+    `\tentry: CollectionEntry<${name}>;`,
+    '}',
+    '',
+    'const { entry } = Astro.props;',
+    ...(rendered ? [`const { Content } = await ${legacy ? 'entry.render()' : 'render(entry)'};`] : []),
+  ];
+  const heading = facts.heading === undefined ? [] : [`<h1>{entry.data${member(facts.heading)}}</h1>`];
+  return pageText(input, frontmatter, [...heading, ...(rendered ? ['<Content />'] : [])]);
+}
+
+/**
+ * The two pieces of a content template that its settings choose, exactly as `contentPageText` writes them: the
+ * `getStaticPaths` function and the `CollectionEntry<…>` type of its entry. Page settings (pageTemplateRead.ts)
+ * recognises a template by writing these again and finding them byte for byte, and changes one by replacing them.
+ */
+export function contentTemplatePieces(
+  route: RouteParts,
+  source: Pick<ContentSource, 'collection' | 'slug'>,
+  api: CollectionFacts['api'],
+): { readonly paths: string; readonly entryType: string } {
+  const name = quoted(source.collection);
+  const idField = api === 'legacy' ? 'entry.slug' : 'entry.id';
+  const paths = ['export async function getStaticPaths() {', ...contentPathLines(route.param, source.slug, { name, idField }), '}'].join('\n');
+  return { paths, entryType: `CollectionEntry<${name}>` };
+}
+
+function contentPathLines(param: string, slug: ContentSlug, names: { readonly name: string; readonly idField: string }): readonly string[] {
+  const entries = `\tconst entries = await getCollection(${names.name});`;
+  if (slug.kind === 'entry-id') {
+    return [entries, `\treturn entries.map((entry) => ({ params: { ${key(param)}: ${names.idField} }, props: { entry } }));`];
+  }
+  const value = `entry.data${member(slug.name)}`;
+  if (slug.treatment === 'exact') {
+    return [entries, `\treturn entries.map((entry) => ({ params: { ${key(param)}: ${value} }, props: { entry } }));`];
+  }
+  return [
+    ...SLUG_HELPER,
+    entries,
+    '\treturn entries.map((entry) => {',
+    `\t\tconst slug = toSlug(${value});`,
+    "\t\tif (slug === '') {",
+    `\t\t\tthrow new Error(\`\${${names.idField}}: ${slug.name} has no letters or numbers for its page address.\`);`,
+    '\t\t}',
+    '\t\tif (seen.has(slug)) {',
+    `\t\t\tthrow new Error(\`\${seen.get(slug)} and \${${names.idField}} would both be at \${slug}. Change ${slug.name} on one of them.\`);`,
+    '\t\t}',
+    `\t\tseen.set(slug, ${names.idField});`,
+    `\t\treturn { params: { ${key(param)}: slug }, props: { entry } };`,
+    '\t});',
+  ];
+}
+
+interface ListShape {
+  readonly listAccess: string;
+  readonly listLabel: string;
+  readonly slugPath: string;
+  readonly slugTreatment: SlugTreatment;
+  readonly fields: readonly TemplateField[];
+}
+
+function externalPageText(input: TemplatePageInput, request: readonly string[], shape: ListShape): string {
+  const slugified = shape.slugTreatment === 'slugified';
+  const fields = uncovered(shape.fields);
+  const tree = fieldTree(fields);
+  const heading = headingField(shape.fields.filter((field) => field.kind === 'string').map((field) => field.path));
+  const frontmatter = [
+    ...layoutImport(input),
+    ...(input.layout === undefined ? [] : ['']),
+    ...prerenderLines(input),
+    'export async function getStaticPaths() {',
+    ...(slugified ? SLUG_HELPER : []),
+    ...request,
+    '\tif (!response.ok) {',
+    '\t\tthrow new Error(`${url} answered ${response.status}.`);',
+    '\t}',
+    '\tconst body = await response.json();',
+    `\tconst list = ${shape.listAccess};`,
+    '\tif (!Array.isArray(list)) {',
+    `\t\tthrow new Error(${quoted(`Expected a list at ${shape.listLabel}.`)});`,
+    '\t}',
+    `\tconst kinds = { ${fields.map((field) => `${key(field.path)}: ${quoted(runtimeKind(field.kind))}`).join(', ')} };`,
+    '\treturn list.map((item, index) => {',
+    ...itemSlugLines(shape),
+    '\t\tfor (const [name, kind] of Object.entries(kinds)) {',
+    "\t\t\tconst value = name.split('.').reduce((part, step) => part?.[step], item);",
+    '\t\t\tif (value !== undefined && value !== null && typeof value !== kind) {',
+    '\t\t\t\tthrow new Error(`Item ${index}: ${name} is not a ${kind}.`);',
+    '\t\t\t}',
+    '\t\t}',
+    `\t\tconst entry = ${entryLiteral(tree, 0)};`,
+    `\t\treturn { params: { ${key(input.route.param)}: ${slugified ? 'slug' : 'String(slug)'} }, props: { entry } };`,
+    '\t});',
+    '}',
+    '',
+    'interface Props {',
+    '\tentry: {',
+    ...propLines(tree, 0),
+    '\t};',
+    '}',
+    '',
+    'const { entry } = Astro.props;',
+  ];
+  return pageText(input, frontmatter, heading === undefined ? [] : [`<h1>{entry${member(heading)}}</h1>`]);
+}
+
+interface FieldNode {
+  readonly key: string;
+  readonly path: string;
+  readonly kind: SampleFieldKind;
+  readonly children: FieldNode[];
+}
+
+// A field inside one already kept whole adds nothing, and would write its key twice.
+function uncovered(fields: readonly TemplateField[]): readonly TemplateField[] {
+  return fields.filter((field) => !fields.some((other) => field.path.startsWith(`${other.path}.`)));
+}
+
+// The kept fields as the shape of `entry`. Fields arrive uncovered, so a kept
+// field is always a leaf, and the objects above it hold only what was kept.
+function fieldTree(fields: readonly TemplateField[]): readonly FieldNode[] {
+  const roots: FieldNode[] = [];
+  for (const field of fields) {
+    const steps = dataPathSegments(field.path);
+    assert(steps.ok, 'A field path was parsed at the boundary');
+    let level = roots;
+    steps.value.forEach((step, index) => {
+      const path = steps.value.slice(0, index + 1).join('.');
+      const found = level.find((node) => node.key === step);
+      const node = found ?? { key: step, path, kind: path === field.path ? field.kind : 'object', children: [] };
+      if (found === undefined) {
+        level.push(node);
+      }
+      level = node.children;
+    });
+  }
+  return roots;
+}
+
+function entryLiteral(nodes: readonly FieldNode[], depth: number): string {
+  assert(depth <= LIMITS.treeDepthMax, 'entryLiteral: a field path is bounded');
+  const parts = nodes.map((node) => {
+    if (node.children.length > 0) {
+      return `${key(node.key)}: ${entryLiteral(node.children, depth + 1)}`;
+    }
+    return `${key(node.key)}: ${node.path.includes('.') ? accessor('item', node.path) : `item${member(node.key)}`}`;
+  });
+  return `{ ${parts.join(', ')} }`;
+}
+
+function propLines(nodes: readonly FieldNode[], depth: number): readonly string[] {
+  assert(depth <= LIMITS.treeDepthMax, 'propLines: a field path is bounded');
+  const indent = '\t'.repeat(2 + depth);
+  return nodes.flatMap((node) =>
+    node.children.length > 0
+      ? [`${indent}${key(node.key)}?: {`, ...propLines(node.children, depth + 1), `${indent}};`]
+      : [`${indent}${key(node.key)}?: ${propType(node.kind)};`],
+  );
+}
+
+function itemSlugLines(shape: ListShape): readonly string[] {
+  const value = accessor('item', shape.slugPath);
+  const path = shape.slugPath;
+  const scalar = (name: string): readonly string[] => [
+    `\t\tconst ${name} = ${value};`,
+    `\t\tif (typeof ${name} !== 'string' && typeof ${name} !== 'number') {`,
+    `\t\t\tthrow new Error(\`Item \${index}: ${path} is not text or a number.\`);`,
+    '\t\t}',
+  ];
+  if (shape.slugTreatment === 'exact') {
+    return [...scalar('slug'), "\t\tif (slug === '') {", `\t\t\tthrow new Error(\`Item \${index}: ${path} is empty.\`);`, '\t\t}'];
+  }
+  return [
+    ...scalar('address'),
+    '\t\tconst slug = toSlug(address);',
+    "\t\tif (slug === '') {",
+    `\t\t\tthrow new Error(\`Item \${index}: ${path} has no letters or numbers for its page address.\`);`,
+    '\t\t}',
+    '\t\tif (seen.has(slug)) {',
+    `\t\t\tthrow new Error(\`Items \${seen.get(slug)} and \${index} would both be at \${slug}. Change ${path} on one of them.\`);`,
+    '\t\t}',
+    '\t\tseen.set(slug, index);',
+  ];
+}
+
+type HttpSource = Extract<DataSource, { readonly kind: 'http-json' }>;
+type SanitySource = Extract<DataSource, { readonly kind: 'sanity' }>;
+
+function httpRequestLines(source: HttpSource): readonly string[] {
+  const secrets = source.headers.flatMap((header, index) => secretLines(`secret${index}`, header.env));
+  const headers = source.headers.map((header, index) => {
+    const value = header.scheme === 'bearer' ? `\`Bearer \${secret${index}}\`` : `secret${index}`;
+    return `${quoted(header.name)}: ${value}`;
+  });
+  return [
+    `\tconst url = ${quoted(source.url)};`,
+    ...secrets,
+    '\tconst response = await fetch(url, {',
+    ...(headers.length === 0 ? [] : [`\t\theaders: { ${headers.join(', ')} },`]),
+    `\t\tsignal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
+    '\t});',
+  ];
+}
+
+function sanityRequestLines(source: SanitySource): readonly string[] {
+  const tokenEnv = source.tokenEnv;
+  // Sanity's CDN serves public reads; a token's reads go to the live API.
+  const host = tokenEnv === undefined ? 'apicdn' : 'api';
+  const defined = source.slugPath;
+  return [
+    '\tconst query = new URLSearchParams({',
+    `\t\tquery: ${quoted(`*[_type == $type && defined(${defined})]`)},`,
+    `\t\t$type: JSON.stringify(${quoted(source.documentType)}),`,
+    '\t});',
+    `\tconst url = \`https://${source.projectId}.${host}.sanity.io/${SANITY_API_VERSION}/data/query/${source.dataset}?\${query}\`;`,
+    ...(tokenEnv === undefined ? [] : secretLines('secret0', tokenEnv)),
+    '\tconst response = await fetch(url, {',
+    ...(tokenEnv === undefined ? [] : ['\t\theaders: { Authorization: `Bearer ${secret0}` },']),
+    `\t\tsignal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
+    '\t});',
+  ];
+}
+
+function secretLines(name: string, env: string): readonly string[] {
+  return [`\tconst ${name} = import.meta.env.${env};`, `\tif (!${name}) {`, `\t\tthrow new Error(${quoted(`Set ${env} in .env to load this page.`)});`, '\t}'];
+}
+
+function layoutImport(input: TemplatePageInput): readonly string[] {
+  const layout = input.layout;
+  return layout === undefined ? [] : [`import ${layout.name} from ${quoted(layout.importPath)};`];
+}
+
+function prerenderLines(input: TemplatePageInput): readonly string[] {
+  return input.prerender === 'explicit' ? ['export const prerender = true;', ''] : [];
+}
+
+function pageText(input: TemplatePageInput, frontmatter: readonly string[], content: readonly string[]): string {
+  const layout = input.layout;
+  const body = layout === undefined ? ['<article>', ...indented(content), '</article>'] : [`<${layout.name}>`, ...indented(content), `</${layout.name}>`];
+  const text = ['---', ...frontmatter, '---', '', ...body, ''].join('\n');
+  if (input.source.kind === 'emdash') {
+    assert(text.includes('getEmDashEntry('), 'An EmDash template page reads its entry from EmDash');
+    assert(!text.includes('getStaticPaths'), 'An EmDash template page is served when requested');
+    return text;
+  }
+  assert(text.includes('export async function getStaticPaths()'), 'A template page declares its paths');
+  assert(text.includes('Astro.props'), 'A template page reads its entry');
+  return text;
+}
+
+function indented(lines: readonly string[]): readonly string[] {
+  return lines.map((line) => `\t${line}`);
+}
+
+function runtimeKind(kind: SampleFieldKind): string {
+  return kind === 'list' ? 'object' : kind;
+}
+
+function propType(kind: SampleFieldKind): string {
+  switch (kind) {
+    case 'string':
+      return 'string';
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'object':
+      return 'Record<string, unknown>';
+    case 'list':
+      return 'unknown[]';
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
+// `base?.data?.items`, stepping safely because the value came off the network.
+function accessor(base: string, path: string): string {
+  const steps = dataPathSegments(path);
+  assert(steps.ok, 'A data path was parsed at the boundary');
+  return steps.value.reduce((code, step) => (isIdentifier(step) ? `${code}?.${step}` : `${code}?.[${quoted(step)}]`), base);
+}
+
+function member(name: string): string {
+  return isIdentifier(name) ? `.${name}` : `[${quoted(name)}]`;
+}
+
+function key(name: string): string {
+  return isIdentifier(name) ? name : quoted(name);
+}
+
+function isIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][\w$]*$/.test(name);
+}
+
+function quoted(value: string): string {
+  const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  assert(!/[\r\n]/.test(escaped), 'Generated strings are one line');
+  return `'${escaped}'`;
+}

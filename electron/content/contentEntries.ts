@@ -3,9 +3,14 @@ import fs from 'fs';
 import path from 'path';
 
 import { LIMITS } from '../../shared/core/limits';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
+import { runSliced, runSync, type SlicedWork } from '../lib/slicedWork';
 import { writeProjectText } from '../documents/documentWrites';
+import { assertContentWitness } from './contentWitness';
+import { entryTitleOf, titleFieldsOf } from '../../shared/properties/entryTitle';
 import * as frontmatter from './formats/markdownEntry';
 import * as jsonFormat from './formats/json';
 import * as yamlFormat from './formats/yaml';
@@ -34,11 +39,7 @@ interface FormatEdit {
 
 interface FormatModule {
   readonly parseData: (text: string) => unknown;
-  readonly applyEdits: (
-    text: string,
-    edits: readonly FormatEdit[],
-    opts?: { readonly body?: string },
-  ) => string;
+  readonly applyEdits: (text: string, edits: readonly FormatEdit[], opts?: { readonly body?: string }) => string;
   readonly DELETE: symbol;
 }
 
@@ -63,11 +64,12 @@ const formatName = (file: string): string => {
 };
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
-const isPlainObject = (value: unknown): boolean =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
+const isPlainObject = (value: unknown): boolean => !!value && typeof value === 'object' && !Array.isArray(value);
 
 // A glob pattern as a regular expression: `**` crosses folders, `*` does not,
-// and `{a,b}` is a choice. Enough for the patterns a content config writes.
+// `{a,b}` is a choice and `[abc]` one character of a set (`[^_]` or `[!_]`: one
+// outside it, as in Astro's `**/[^_]*.md`). Enough for the patterns a content
+// config writes.
 function globToRegExp(pattern: string): RegExp {
   let out = '';
   for (let i = 0; i < pattern.length; i++) {
@@ -79,6 +81,10 @@ function globToRegExp(pattern: string): RegExp {
       } else {
         out += '[^/]*';
       }
+    } else if (ch === '[' && pattern.indexOf(']', i + 2) !== -1) {
+      const close = pattern.indexOf(']', i + 2);
+      out += characterClass(pattern.slice(i + 1, close));
+      i = close;
     } else if (ch === '{') {
       const close = pattern.indexOf('}', i);
       out += `(?:${pattern
@@ -96,7 +102,26 @@ function globToRegExp(pattern: string): RegExp {
   return new RegExp(`^${out}$`);
 }
 
-function walkFiles(directory: string, base = directory, out: string[] = [], depth = 0): string[] {
+// The inside of a glob's `[…]` as a regular expression's: ranges keep their
+// meaning, and a set never matches the folder separator.
+function characterClass(body: string): string {
+  const negated = body.startsWith('!') || body.startsWith('^');
+  const members = (negated ? body.slice(1) : body).replace(/[\\[\]^]/g, '\\$&');
+  return negated ? `[^/${members}]` : `(?!/)[${members}]`;
+}
+
+// Whether a path under the loader's base is one of its files: it matches one of
+// the patterns and none of those written `!…`, which exclude.
+function globMatcher(pattern: LoaderInfo['pattern']): (relative: string) => boolean {
+  const list: readonly string[] = typeof pattern === 'string' ? [pattern] : (pattern ?? []);
+  const wanted = list.filter((each) => !each.startsWith('!')).map(globToRegExp);
+  const excluded = list.filter((each) => each.startsWith('!')).map((each) => globToRegExp(each.slice(1)));
+  return (relative) => wanted.some((matcher) => matcher.test(relative)) && !excluded.some((matcher) => matcher.test(relative));
+}
+
+// Every file below a folder, written once for both drivers (lib/slicedWork.ts): a collection of
+// thousands of entries is a longer walk that yields after each folder, never a cap on the listing.
+function* walkFilesSliced(directory: string, base = directory, out: string[] = [], depth = 0): SlicedWork<string[]> {
   // A project's folders are not ours to trust: a tree deeper than any real one stops the walk
   // there, before it can exhaust the stack.
   if (depth > MAIN_LIMITS.directoryDepthMax) {
@@ -114,29 +139,13 @@ function walkFiles(directory: string, base = directory, out: string[] = [], dept
     }
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      walkFiles(full, base, out, depth + 1);
+      yield* walkFilesSliced(full, base, out, depth + 1);
     } else {
       out.push(toPosix(path.relative(base, full)));
     }
   }
+  yield;
   return out;
-}
-
-// The title an entry shows in a list. Its own name if it has one, its id
-// otherwise — an id is always something, which is more than can be said for a
-// record whose fields are all optional.
-const TITLE_KEYS = ['title', 'name', 'label', 'heading', 'question', 'siteName', 'quote'] as const;
-function titleOf(data: unknown, id: string): string {
-  const record = toRecord(data);
-  if (record) {
-    for (const key of TITLE_KEYS) {
-      const value = record[key];
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-    }
-  }
-  return id;
 }
 
 export interface LoaderInfo {
@@ -179,51 +188,68 @@ export interface ListResult {
   readonly entries: Entry[];
   readonly readOnly: boolean;
   readonly reason?: string | undefined;
+  readonly reasonRef?: MessageRef | undefined;
   readonly idsAreGuesses?: boolean;
   readonly idNote?: string | undefined;
+  readonly idNoteRef?: MessageRef | undefined;
   readonly shape?: string;
   readonly parsed?: boolean;
   readonly parserNote?: string | undefined;
+  readonly parserNoteRef?: MessageRef | undefined;
+}
+
+function idNoteFields(problem: Described): Pick<ListResult, 'idNote' | 'idNoteRef'> {
+  return { idNote: problem.message, ...(problem.messageRef === undefined ? {} : { idNoteRef: problem.messageRef }) };
+}
+
+function parserNoteFields(problem: Described): Pick<ListResult, 'parserNote' | 'parserNoteRef'> {
+  return { parserNote: problem.message, ...(problem.messageRef === undefined ? {} : { parserNoteRef: problem.messageRef }) };
 }
 
 /**
  * Every entry of one collection, as { id, file, format, locator, data, body }.
  */
 function listEntries(projectPath: string, collection: ContentCollection): ListResult {
+  return runSync(entriesSliced(projectPath, collection));
+}
+
+/** The same listing in slices of the event loop: the handler's way in (lib/slicedWork.ts). */
+function listEntriesSliced(projectPath: string, collection: ContentCollection): Promise<ListResult> {
+  return runSliced(entriesSliced(projectPath, collection));
+}
+
+function* entriesSliced(projectPath: string, collection: ContentCollection): SlicedWork<ListResult> {
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
-    return globEntries(projectPath, collection);
+    return yield* globEntries(projectPath, collection);
   }
   if (loader.kind === 'file') {
     return fileEntries(projectPath, collection);
   }
-  return { entries: [], readOnly: true, reason: readOnlyReason(collection) };
+  return { entries: [], readOnly: true, ...readOnlyReason(collection) };
 }
 
-function readOnlyReason(collection: ContentCollection): string | undefined {
+function readOnlyReason(collection: ContentCollection): ReasonFields {
   const loader = collection.loader ?? {};
   if (loader.kind === 'custom') {
-    return (
-      `${collection.name} is built by a loader in this project, not stored in a file. ` +
-      'Its entries are rebuilt from scratch on every sync, so anything written here would be ' +
-      'overwritten.'
-    );
+    return reasonFields(described('cmsBackend.entries.customLoader', { collection: collection.name }));
   }
-  return undefined;
+  return {};
 }
 
-const patternsOf = (pattern: LoaderInfo['pattern']): RegExp[] => {
-  const list = Array.isArray(pattern) ? pattern : pattern !== undefined ? [pattern] : [];
-  return list.map(globToRegExp);
-};
+// A reason as the English text beside the reference the renderer translates.
+type ReasonFields = { readonly reason?: string; readonly reasonRef?: MessageRef };
+function reasonFields(problem: Described): ReasonFields {
+  return { reason: problem.message, ...(problem.messageRef === undefined ? {} : { reasonRef: problem.messageRef }) };
+}
 
-function globEntries(projectPath: string, collection: ContentCollection): ListResult {
+function* globEntries(projectPath: string, collection: ContentCollection): SlicedWork<ListResult> {
   const loader = collection.loader ?? {};
   const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
-  const matchers = patternsOf(loader.pattern);
-  const files = walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel)));
+  const files = (yield* walkFilesSliced(root)).filter(globMatcher(loader.pattern));
   files.sort();
 
+  const titleFields = titleFieldsOf(collection.schema);
   const entries: Entry[] = [];
   for (const rel of files) {
     const abs = path.join(root, rel);
@@ -233,9 +259,6 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     }
     let text = '';
     try {
-      if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
-        continue;
-      }
       text = fs.readFileSync(abs, 'utf8');
     } catch {
       continue;
@@ -259,7 +282,9 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     } catch (error: unknown) {
       entry = { ...base, error: String(error instanceof Error ? error.message : error), data: {} };
     }
-    entries.push({ ...entry, title: titleOf(entry.data, entry.id) });
+    entries.push({ ...entry, title: entryTitleOf(entry.data, { id: entry.id, fields: titleFields }) });
+    // Parsing one entry is the unit of work: thousands of entries are thousands of short slices.
+    yield;
   }
 
   const generated = loader.generateId;
@@ -270,10 +295,7 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     // rule it uses — so an id shown here is a guess, and renaming the file is
     // not what renames the entry.
     idsAreGuesses: !!generated,
-    idNote: generated
-      ? `${collection.name} builds its ids in the loader, from the entry's own fields. ` +
-        'The ids shown are the file paths, which is not what other collections reference.'
-      : undefined,
+    ...(generated ? idNoteFields(described('cmsBackend.entries.idsGenerated', { collection: collection.name })) : {}),
   };
 }
 
@@ -362,8 +384,7 @@ function locateRecords(data: unknown): { shape: string; records: RawRecord[] } {
   return { shape: records.length ? 'nested' : 'single', records };
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 function fileEntries(projectPath: string, collection: ContentCollection): ListResult {
   const loader = collection.loader ?? {};
@@ -374,20 +395,17 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     return {
       entries: [],
       readOnly: true,
-      reason: `Stacki cannot read ${path.extname(rel)} data files yet.`,
+      ...reasonFields(described('cmsBackend.data.unreadableFormat', { extension: path.extname(rel) })),
     };
   }
   let text = '';
   try {
-    if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
-      return { entries: [], readOnly: true, reason: 'This file is too large to edit here.' };
-    }
     text = fs.readFileSync(abs, 'utf8');
   } catch (error: unknown) {
     return {
       entries: [],
       readOnly: true,
-      reason: `Could not read ${rel} — ${errorMessage(error)}`,
+      ...reasonFields(described('cmsBackend.data.readFailed', { file: rel, detail: errorMessage(error) })),
     };
   }
 
@@ -398,11 +416,12 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     return {
       entries: [],
       readOnly: true,
-      reason: `${rel} could not be parsed — ${errorMessage(error)}`,
+      ...reasonFields(described('cmsBackend.data.parseFailed', { file: rel, detail: errorMessage(error) })),
     };
   }
 
   const { shape, records } = locateRecords(data);
+  const titleFields = titleFieldsOf(collection.schema);
   const entries: Entry[] = records.map(({ id, locator, record, keyed }) => ({
     id,
     file: rel,
@@ -410,7 +429,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     locator,
     keyed: !!keyed,
     data: record,
-    title: titleOf(record, id),
+    title: entryTitleOf(record, { id, fields: titleFields }),
   }));
 
   return {
@@ -421,11 +440,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     // entry holds was never in the file — and the fields it invented cannot be
     // written back through it.
     parsed: !!loader.parser,
-    parserNote: loader.parser
-      ? `${collection.name} is parsed by a function in the content config before Astro sees it. ` +
-        'Fields that are not in the file itself were made by that parser: they are shown, ' +
-        'but editing one here would have nowhere to go.'
-      : undefined,
+    ...(loader.parser ? parserNoteFields(described('cmsBackend.entries.parserNote', { collection: collection.name })) : {}),
   };
 }
 
@@ -438,20 +453,30 @@ function writeEntry(
   projectPath: string,
   entry: { readonly file: string; readonly locator?: readonly (string | number)[] },
   edits: readonly EntryEdit[],
-  { body }: { readonly body?: string } = {},
+  {
+    body,
+    expected,
+  }: {
+    readonly body?: string;
+    readonly expected?: { readonly data?: unknown; readonly body?: string | undefined };
+  } = {},
 ): { ok: true; changed: boolean } {
   const abs = cmsSourcePath(projectPath, entry.file);
   const format = formatFor(entry.file);
   if (!format) {
     throw new Error(`Stacki cannot write ${path.extname(entry.file)} files.`);
   }
-  // The same bound the reader applies: a file can grow between listing and edit.
-  if (fs.statSync(abs).size > MAIN_LIMITS.contentEntryBytesMax) {
-    throw new Error('This file is too large to edit here.');
-  }
+  // A data file of any size is edited whole: the document layer holds a file up to the platform's
+  // string length, which is the only ceiling on what this can read.
   const text = fs.readFileSync(abs, 'utf8');
 
   const locator = entry.locator ?? [];
+  if (expected) {
+    assertContentWitness(format.parseData(text), locator, expected.data);
+    if (expected.body !== undefined && frontmatter.parse(text).body !== expected.body) {
+      throw new Error('Content changed. Reopen the text before saving.');
+    }
+  }
   const prefixed: FormatEdit[] = edits.map((edit) =>
     // A rename names a key rather than setting a value, so it carries no value
     // at all — and must not be read as one being cleared.
@@ -463,14 +488,11 @@ function writeEntry(
         },
   );
 
-  const next =
-    format === frontmatter
-      ? frontmatter.applyEdits(text, prefixed, { body })
-      : format.applyEdits(text, prefixed);
+  const next = format === frontmatter ? frontmatter.applyEdits(text, prefixed, { body }) : format.applyEdits(text, prefixed);
   if (next === text) {
     return { ok: true, changed: false };
   }
-  writeProjectText(abs, next);
+  writeProjectText(abs, next, text);
   return { ok: true, changed: true };
 }
 
@@ -480,15 +502,22 @@ function writeEntry(
  * a number is a cost with nothing to show for it.
  */
 function countEntries(projectPath: string, collection: ContentCollection): number {
+  return runSync(countEntriesWork(projectPath, collection));
+}
+
+function countEntriesSliced(projectPath: string, collection: ContentCollection): Promise<number> {
+  return runSliced(countEntriesWork(projectPath, collection));
+}
+
+function* countEntriesWork(projectPath: string, collection: ContentCollection): SlicedWork<number> {
   const loader = collection.loader ?? {};
   if (loader.kind === 'glob') {
     const root = cmsDirectoryPath(projectPath, String(loader.base ?? ''));
-    const matchers = patternsOf(loader.pattern);
-    return walkFiles(root).filter((rel) => matchers.some((re) => re.test(rel))).length;
+    return (yield* walkFilesSliced(root)).filter(globMatcher(loader.pattern)).length;
   }
   if (loader.kind === 'file') {
     try {
-      return listEntries(projectPath, collection).entries.length;
+      return (yield* entriesSliced(projectPath, collection)).entries.length;
     } catch {
       return 0;
     }
@@ -508,6 +537,19 @@ function coveredPaths(
   files: string[];
   dirs: string[];
 } {
+  return runSync(coveredSliced(projectPath, collections));
+}
+
+function coveredPathsSliced(projectPath: string, collections: readonly ContentCollection[]): Promise<CoveredPaths> {
+  return runSliced(coveredSliced(projectPath, collections));
+}
+
+interface CoveredPaths {
+  files: string[];
+  dirs: string[];
+}
+
+function* coveredSliced(projectPath: string, collections: readonly ContentCollection[]): SlicedWork<CoveredPaths> {
   const files: string[] = [];
   const directories: string[] = [];
   for (const collection of collections) {
@@ -523,9 +565,9 @@ function coveredPaths(
       // disappear from the file-based CMS.
       if (isDataDirectory(base)) {
         const root = cmsDirectoryPath(projectPath, base);
-        const matchers = patternsOf(loader.pattern);
-        for (const relative of walkFiles(root)) {
-          if (matchers.some((matcher) => matcher.test(relative))) {
+        const matches = globMatcher(loader.pattern);
+        for (const relative of yield* walkFilesSliced(root)) {
+          if (matches(relative)) {
             files.push(toPosix(path.relative(projectPath, path.join(root, relative))));
           }
         }
@@ -549,11 +591,14 @@ function isDataDirectory(directory: string): boolean {
 
 export {
   listEntries,
+  listEntriesSliced,
   writeEntry,
   countEntries,
+  countEntriesSliced,
   coveredPaths,
+  coveredPathsSliced,
   locateRecords,
-  globToRegExp,
+  globMatcher,
   formatFor,
   formatName,
 };

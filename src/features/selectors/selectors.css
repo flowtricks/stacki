@@ -1,0 +1,484 @@
+/* The style selectors panel. A quiet list: one line per selector in the
+   panel's own text colour, with only the class names that make a rule
+   removable tinted (orange). Fills, never borders; red is kept for the
+   confirmation's Remove button. */
+
+.selectors-panel {
+  --selectors-unused: #ff9f4a;
+  --selectors-unknown: #e8c35a;
+  --selectors-kept: #7cc4ff;
+}
+
+.selectors-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+/* Three tabs that always fit: label and count side by side. */
+.selectors-tabs {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.selectors-tab {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.selectors-tab:hover:not(.on) {
+  color: var(--text);
+}
+/* Hover changes only the text colour: the app's own button fills (which
+   outrank a single class) would cover the sliding background. */
+.selectors-tabs .selectors-tab,
+.selectors-tabs .selectors-tab:focus,
+.selectors-tabs .selectors-tab:active,
+.selectors-tabs .selectors-tab:hover:not(:disabled) {
+  background: transparent;
+}
+.selectors-tab.on {
+  color: var(--text);
+}
+/* The tabs sit above the sliding background; the active one draws none of its own. */
+.selectors-tab {
+  position: relative;
+  z-index: 1;
+}
+.selectors-tab-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0; /* physical: indicator moved by measured offsetLeft */
+  border-radius: 5px;
+  background: var(--bg-active);
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectors-tab-indicator {
+    transition: none;
+  }
+}
+.selectors-tab-count {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.selectors-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+}
+.selectors-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+.selectors-search:focus-within {
+  background: var(--bg-active);
+}
+
+.selectors-body {
+  padding-top: 0;
+}
+/* An empty-state card sits at the top, a normal gap under the search field, its edges in line with the
+   field's (the controls pad 12px, the body 8px, so the card steps in 4px). */
+.selectors-body > .ui-empty-state {
+  margin-block-start: 4px;
+  margin-inline: 4px;
+}
+
+/* What the tab means, and the clean-up where it applies. */
+.selectors-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px 10px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.selectors-group {
+  margin-bottom: 12px;
+}
+/* The group's heading and rows, in one grid item so the group can close and
+   open as one (see the slots below). */
+.selectors-group-body {
+  min-width: 0;
+}
+.selectors-file {
+  margin: 0 4px 2px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A stylesheet's or folder's heading: its name, and a lock that keeps the
+   whole library through every clean-up. The lock shows on hover, and always
+   once locked — that is the heading's state, as on a locked row. The 4px on
+   the right is the row actions' own, so a heading's lock sits in the same
+   column as the locks of the rows below it. */
+.selectors-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  margin: 0 0 2px;
+  padding: 0 4px;
+}
+.selectors-heading .selectors-heading-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.selectors-folder {
+  margin: 0;
+  border-radius: 5px;
+  background: var(--bg-input);
+}
+/* The folder heading's spacing lives on its slot, so it closes with it. */
+.selectors-folder-slot {
+  margin: 4px 0 6px;
+}
+.selectors-folder .selectors-heading-name {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectors-sheet-lock-anchor {
+  display: inline-flex;
+  opacity: 0;
+}
+/* The row lock's look, without its row tints or shackle motion: a heading
+   lock is grey until it is on, then the locked blue. */
+.selectors-sheet-lock {
+  flex-shrink: 0;
+  padding: 3px;
+  color: var(--text-faint);
+  transition: color 200ms ease;
+}
+.selectors-sheet-lock.on {
+  color: var(--selectors-kept);
+}
+.selectors-heading:hover .selectors-sheet-lock-anchor,
+.selectors-sheet-lock-anchor:focus-within,
+.selectors-sheet-lock-anchor:has(.selectors-sheet-lock.on) {
+  opacity: 1;
+}
+.selectors-group.is-locked .selectors-file {
+  color: var(--selectors-kept);
+}
+.selectors-reason {
+  margin: 0 4px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* One line per selector; hovering a row shows the whole selector in a tooltip. */
+.selectors-row {
+  --selectors-row-fill: var(--bg-panel);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+.selectors-row:hover {
+  background: var(--bg-hover);
+}
+/* A selector is code: isolated left to right inside a mirrored row. */
+.selectors-selector {
+  direction: ltr;
+  unicode-bidi: isolate;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 0;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectors-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+}
+.selectors-tip-selector {
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: #ededed;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+/* The tooltip renders outside the panel, so it names its tints directly, and
+   takes the row's state: orange when unused, yellow when it can't tell, blue
+   when locked — the same colours as the row it describes. */
+.selectors-tip .selectors-flag {
+  padding: 0;
+  background: transparent;
+  color: #ff9f4a;
+}
+.selectors-tip.is-unknown .selectors-flag {
+  color: #e8c35a;
+}
+.selectors-tip.is-kept .selectors-flag {
+  color: #7cc4ff;
+}
+.selectors-row.is-used .selectors-selector,
+.selectors-row.is-checking .selectors-selector {
+  color: var(--text-dim);
+}
+.selectors-flag {
+  padding: 0;
+  background: transparent;
+  color: var(--selectors-unused);
+  /* Locking or unlocking eases the names into their new state's colour. */
+  transition: color 200ms ease;
+}
+.selectors-row.is-unknown .selectors-flag {
+  color: var(--selectors-unknown);
+}
+.selectors-row.is-kept .selectors-flag {
+  color: var(--selectors-kept);
+}
+/* The row's buttons float over its end behind a short fade, so the selector
+   keeps the full width until the row is hovered or a button is focused. A
+   locked row always shows its lock: that is its state. */
+.selectors-row:hover {
+  --selectors-row-fill: #1d1d1d;
+}
+.selectors-actions {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-block: 0;
+  padding-inline: 18px 4px;
+  border-start-start-radius: 0;
+  border-start-end-radius: 5px;
+  border-end-end-radius: 5px;
+  border-end-start-radius: 0;
+  background: linear-gradient(90deg, transparent, var(--selectors-row-fill) 14px);
+  opacity: 0;
+  pointer-events: none;
+}
+/* The fade runs from the selector toward the row's end, which is the left edge in a right-to-left layout. */
+:root[dir='rtl'] .selectors-actions {
+  background: linear-gradient(270deg, transparent, var(--selectors-row-fill) 14px);
+}
+.selectors-row:hover .selectors-actions,
+.selectors-actions:focus-within,
+.selectors-row.is-kept .selectors-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* A locked row always shows its lock; its trash still waits for hover. */
+.selectors-row.is-kept:not(:hover) .selectors-remove-one:not(:focus-visible) {
+  display: none;
+}
+.selectors-lock,
+.selectors-remove-one {
+  flex-shrink: 0;
+  padding: 3px;
+  color: var(--text-faint);
+}
+/* The lock takes its row's tint, so unlocking eases it from blue to the same
+   orange (or yellow) as the names beside it, and the shackle opening stays
+   visible; grey would fade it out mid-swing. */
+.selectors-row.is-unused .selectors-lock {
+  color: var(--selectors-unused);
+}
+.selectors-row.is-unknown .selectors-lock {
+  color: var(--selectors-unknown);
+}
+.selectors-lock.on {
+  color: var(--selectors-kept);
+}
+.selectors-lock {
+  transition: color 200ms ease;
+}
+
+/* The padlock's shackle pivots on its left leg, where it meets the body
+   (5.5, 7 in the icon's 16-unit box). Unlocking lifts it, then swings it open;
+   locking swings it shut, then drops it in. Each way takes 200ms. */
+.selectors-shackle {
+  transform-box: view-box;
+  transform-origin: 5.5px 7px;
+  transition:
+    rotate 120ms ease-in-out,
+    translate 80ms ease-in 120ms;
+}
+.selectors-lock-icon.is-open .selectors-shackle {
+  translate: 0 -1px;
+  rotate: -22deg;
+  transition:
+    translate 80ms ease-out,
+    rotate 120ms ease-in-out 80ms;
+}
+
+/* A row leaving the open tab closes after its lock and colour have changed:
+   the slot's one grid track shrinks from the row's height to nothing, so the
+   rows below slide up into its place. A row arriving opens the same way in
+   reverse, from `@starting-style`, as it is first drawn. A stylesheet, folder
+   or reason whose rows all leave or all arrive closes or opens with them, its
+   spacing included, so its heading never pops. */
+.selectors-row-slot,
+.selectors-group,
+.selectors-folder-slot {
+  display: grid;
+  /* A grid item is as wide as its content unless its track says otherwise:
+     minmax(0, 1fr) keeps a long selector's row to the list's width, so the
+     selector ends in an ellipsis and the lock stays at the visible end. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 200ms ease,
+    opacity 200ms ease,
+    margin 200ms ease;
+}
+.selectors-row-slot.is-collapsing,
+.selectors-group.is-collapsing,
+.selectors-folder-slot.is-collapsing {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.selectors-row-slot:is(.is-collapsing, .is-entering) > .selectors-row,
+.selectors-group:is(.is-collapsing, .is-entering) > .selectors-group-body,
+.selectors-folder-slot:is(.is-collapsing, .is-entering) > .selectors-folder {
+  min-height: 0;
+  overflow: hidden;
+}
+@starting-style {
+  .selectors-row-slot.is-entering,
+  .selectors-group.is-entering,
+  .selectors-folder-slot.is-entering {
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .selectors-flag,
+  .selectors-lock,
+  .selectors-shackle,
+  .selectors-lock-icon.is-open .selectors-shackle,
+  .selectors-row-slot,
+  .selectors-group,
+  .selectors-folder-slot {
+    transition: none;
+  }
+}
+
+.selectors-more {
+  min-height: 1px;
+  margin: 4px;
+}
+
+.selectors-empty {
+  margin: 4px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* Filled buttons, as in Webflow's confirmation: a neutral Cancel and a red
+   Remove — the one place the panel uses red as a fill. */
+.selectors-cancel,
+.selectors-delete {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.selectors-cancel {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.selectors-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+.selectors-delete {
+  background: #d93f3f;
+  color: #fff;
+}
+.selectors-delete:hover:not(:disabled) {
+  background: #e5534b;
+}
+.selectors-delete:disabled {
+  opacity: 0.6;
+}
+.selectors-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: var(--bg-panel);
+}
+
+.selectors-notes {
+  margin: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.selectors-notes summary {
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+.selectors-notes p {
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+.selectors-note-file {
+  display: block;
+  color: var(--text);
+}

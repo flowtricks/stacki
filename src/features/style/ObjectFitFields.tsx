@@ -1,38 +1,35 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { more as centralMore } from '../../ui/central/centralGeometry';
 // How an image fills its box: object-fit, with Custom asking for the caret
 // only when it was picked, and object-position as a grid, two offsets and a
 // modal editor (SizeSection.tsx).
 
 import { useEffect, useRef, useState } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
-import { HoverTooltip } from './components/SegmentedControl';
-import Select, { type SelectOption } from './components/Select';
+import { HoverTooltip } from '../../ui/SegmentedControl';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
 import useScrub from './components/useScrub';
 import VariableConnect from './VariableConnect';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf, type Display } from './model/styleDisplay';
-import {
-  type SetProp,
-  type ClearProp,
-  type LiveSetProp,
-  type Props,
-  SizeLabel,
-  withImportant,
-  useFollowingDraft,
-  stepSizeKey,
-} from './SizeKit';
+import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
 import { RatioOtherInput } from './AspectRatioField';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────────────── Image fit (object-fit / object-position) ───────────────────────
 
 export const FIT_OPTIONS: SelectOption<string>[] = [
-  { value: 'fill', label: 'Fill' },
-  { value: 'contain', label: 'Contain' },
-  { value: 'cover', label: 'Cover' },
-  { value: 'none', label: 'None' },
-  { value: 'scale-down', label: 'Scale Down' },
+  // The labels are the CSS object-fit keywords, which designers read untranslated.
+  { value: 'fill', label: 'Fill' }, // i18n-ignore: CSS keyword.
+  { value: 'contain', label: 'Contain' }, // i18n-ignore: CSS keyword.
+  { value: 'cover', label: 'Cover' }, // i18n-ignore: CSS keyword.
+  { value: 'none', label: 'None' }, // i18n-ignore: CSS keyword.
+  { value: 'scale-down', label: 'Scale Down' }, // i18n-ignore: CSS keyword.
 ];
 export const FIT_CUSTOM = '__custom__';
 
@@ -45,13 +42,7 @@ export function objectPositionAxis(token: string): number {
   if (normalized === '' || normalized === 'center' || normalized === '50%') {
     return 1;
   }
-  if (
-    normalized === 'left' ||
-    normalized === 'top' ||
-    normalized === '0' ||
-    normalized === '0%' ||
-    normalized === '0px'
-  ) {
+  if (normalized === 'left' || normalized === 'top' || normalized === '0' || normalized === '0%' || normalized === '0px') {
     return 0;
   }
   if (normalized === 'right' || normalized === 'bottom' || normalized === '100%') {
@@ -60,15 +51,7 @@ export function objectPositionAxis(token: string): number {
   return -1;
 }
 
-export function DotsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <circle cx="3.5" cy="8" r="1.35" />
-      <circle cx="8" cy="8" r="1.35" />
-      <circle cx="12.5" cy="8" r="1.35" />
-    </svg>
-  );
-}
+export const DotsIcon = centralIcon(centralMore);
 
 // A position offset field. The same field the rest of the panel uses — it was its
 // own smaller control with a bordered box and an inline "%" chip, which made this
@@ -88,6 +71,7 @@ export function ObjectPositionInput({
   onLive: (value: string) => void;
   onCommit: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const { draft, setDraft, focused } = useFollowingDraft(value);
   const commitScrub = (text: string) => {
     setDraft(text);
@@ -103,9 +87,10 @@ export function ObjectPositionInput({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${label} to a variable`}
+      ariaLabel={translate('style.objectFitFields.connect', { name: label })}
       disabled={busy}
       prop="object-position"
+      canvasProperty="object-position"
       onPick={(binding) => onCommit(binding)}
     >
       <input
@@ -152,27 +137,20 @@ export function asPositionOffset(typed: string): string {
 // Popup shell over the panel — the same darkening backdrop the transform / shadow
 // editors use; closes on backdrop click or Escape.
 export function PositionModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <Popup
+    <PanelSheet
       className="embed-editor_bg-modal embed-editor_pos-modal u-surface-surface"
-
-      label="Object position"
+      label={translate('style.objectFitFields.objectPosition')}
       onClose={onClose}
     >
       {children}
-    </Popup>
+    </PanelSheet>
   );
 }
 
-export function ImageFitField({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function ImageFitField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
+  const translate = useTranslate();
   const fit = displayOf(read('object-fit'));
   const positionDisplay = displayOf(read('object-position'));
   const [positionOpen, setPositionOpen] = useState(false);
@@ -183,7 +161,7 @@ export function ImageFitField({
     <>
       <div className="embed-editor_size-row">
         <SizeLabel
-          label="Image fit"
+          label={translate('style.objectFitFields.imageFit')}
           prop="object-fit"
           display={fit}
           contributors={read('object-fit')?.contributors ?? []}
@@ -193,19 +171,8 @@ export function ImageFitField({
           onSelectSelector={onSelectSelector}
         />
         <div className="embed-editor_imgfit-controls">
-          <ObjectFitSelect
-            fit={fit}
-            busy={busy}
-            setProp={setProp}
-            clearProp={clearProp}
-            liveSetProp={liveSetProp}
-          />
-          <ObjectPositionButton
-            busy={busy}
-            positionSet={positionSet}
-            positionOpen={positionOpen}
-            onToggle={() => setPositionOpen((open) => !open)}
-          />
+          <ObjectFitSelect fit={fit} busy={busy} setProp={setProp} clearProp={clearProp} liveSetProp={liveSetProp} />
+          <ObjectPositionButton busy={busy} positionSet={positionSet} positionOpen={positionOpen} onToggle={() => setPositionOpen((open) => !open)} />
         </div>
       </div>
       {positionOpen ? (
@@ -238,6 +205,7 @@ export function ObjectPositionButton({
   positionOpen: boolean;
   onToggle: () => void;
 }) {
+  const translate = useTranslate();
   const moreRef = useRef<HTMLButtonElement>(null);
   const tip = useDelayedTip();
   return (
@@ -245,13 +213,11 @@ export function ObjectPositionButton({
       <button
         ref={moreRef}
         type="button"
-        className={
-          'embed-editor_icon-btn embed-editor_imgfit-more ' + (positionSet ? 'is-active' : '')
-        }
+        className={'embed-editor_icon-btn embed-editor_imgfit-more ' + (positionSet ? 'is-active' : '')}
         disabled={busy}
         aria-haspopup="dialog"
         aria-expanded={positionOpen}
-        aria-label="Object position settings"
+        aria-label={translate('style.objectFitFields.positionSettings')}
         onClick={() => {
           tip.end();
           onToggle();
@@ -262,7 +228,7 @@ export function ObjectPositionButton({
         <DotsIcon />
       </button>
       {tip.open && moreRef.current && !positionOpen ? (
-        <HoverTooltip anchor={moreRef.current}>Object position settings</HoverTooltip>
+        <HoverTooltip anchor={moreRef.current}>{translate('style.objectFitFields.positionSettings')}</HoverTooltip>
       ) : undefined}
     </>
   );
@@ -310,10 +276,14 @@ export function ObjectFitSelect({
   clearProp: ClearProp;
   liveSetProp: LiveSetProp;
 }) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
+  const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
   const fitValue = fit.value.trim().toLowerCase();
   const knownFit = FIT_OPTIONS.some((option) => option.value === fitValue);
-  const fitCustom = forceCustom || (fit.present && fitValue !== '' && !knownFit);
+  // A flagged value opens the custom field, whose text shows `!important`.
+  const fitCustom = forceCustom || (fit.present && fitValue !== '' && !knownFit) || fit.important;
   // Chosen from the menu, as opposed to a value the list can't show — the field
   // is the same either way, but only the first wants the caret.
   const askedForCustom = useRef(false);
@@ -329,16 +299,21 @@ export function ObjectFitSelect({
     setProp('object-fit', choice, false);
   };
   return (
-    <Select
+    <VariableSelect
+      prop="object-fit"
+      rawValue={fit.present ? fit.value : ''}
+      onVariable={(binding) => {
+        askedForCustom.current = false;
+        setForceCustom(false);
+        setProp('object-fit', binding, fit.important);
+      }}
       className="embed-editor_imgfit-select"
       value={fitCustom ? FIT_CUSTOM : fit.present ? fitValue : 'fill'}
-      options={[...FIT_OPTIONS, { value: FIT_CUSTOM, label: 'Custom' }]}
-      ariaLabel="Object fit"
+      options={[...FIT_OPTIONS, { value: FIT_CUSTOM, label: translate('style.objectFitFields.custom') }]}
+      ariaLabel={translate('style.objectFitFields.objectFit')}
       disabled={busy}
       onChange={pickFit}
-      onPreview={(choice) =>
-        liveSetProp('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)
-      }
+      onPreview={(choice) => hoverPreview('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)}
       customInput={
         fitCustom ? (
           <RatioOtherInput
@@ -346,7 +321,7 @@ export function ObjectFitSelect({
             busy={busy}
             prop="object-fit"
             autoFocus={askedForCustom.current}
-            ariaLabel="Object fit value"
+            ariaLabel={translate('style.objectFitFields.objectFitValue')}
             onCommit={(value, important) => setProp('object-fit', value, important)}
             onLiveCommit={(value, important) => liveSetProp('object-fit', value, important)}
             onClear={() => {
@@ -376,6 +351,7 @@ export function ObjectPositionEditor({
   clearProp: ClearProp;
   liveSetProp: LiveSetProp;
 }) {
+  const translate = useTranslate();
   const positionParts = splitTopLevelSpaces(positionRaw).filter(Boolean);
   const left = positionParts[0] ?? '';
   const top = positionParts[1] ?? '';
@@ -400,10 +376,10 @@ export function ObjectPositionEditor({
         active={positionSet}
         disabled={busy}
         onReset={() => clearProp('object-position')}
-        resetLabel="Clear"
+        resetLabel={translate('style.objectFitFields.clear')}
         tooltip={<PropTip props={['object-position']} />}
       >
-        Position
+        {translate('style.objectFitFields.position')}
       </FieldLabel>
       <div className="embed-editor_bg-position">
         <ObjectPositionGrid
@@ -436,30 +412,27 @@ export function ObjectPositionFields({
   busy: boolean;
   writePosition: (value: string, mode: 'live' | 'commit') => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_bg-posfields">
       <div className="embed-editor_bg-posfield">
-        <span className="embed-editor_bg-posfield-cap">Left</span>
+        <span className="embed-editor_bg-posfield-cap">{translate('style.objectFitFields.left')}</span>
         <ObjectPositionInput
           value={left}
           busy={busy}
-          label="Object position left"
+          label={translate('style.objectFitFields.positionLeft')}
           onLive={(value) => writePosition(`${value || '50%'} ${top || '50%'}`, 'live')}
-          onCommit={(value) =>
-            writePosition(value || top ? `${value || '50%'} ${top || '50%'}` : '', 'commit')
-          }
+          onCommit={(value) => writePosition(value || top ? `${value || '50%'} ${top || '50%'}` : '', 'commit')}
         />
       </div>
       <div className="embed-editor_bg-posfield">
-        <span className="embed-editor_bg-posfield-cap">Top</span>
+        <span className="embed-editor_bg-posfield-cap">{translate('style.objectFitFields.top')}</span>
         <ObjectPositionInput
           value={top}
           busy={busy}
-          label="Object position top"
+          label={translate('style.objectFitFields.positionTop')}
           onLive={(value) => writePosition(`${left || '50%'} ${value || '50%'}`, 'live')}
-          onCommit={(value) =>
-            writePosition(left || value ? `${left || '50%'} ${value || '50%'}` : '', 'commit')
-          }
+          onCommit={(value) => writePosition(left || value ? `${left || '50%'} ${value || '50%'}` : '', 'commit')}
         />
       </div>
     </div>
@@ -478,24 +451,24 @@ export function ObjectPositionGrid({
   busy: boolean;
   onPick: (value: string) => void;
 }) {
+  const translate = useTranslate();
+  const columnLabels = [
+    translate('style.objectFitFields.cellLeft'),
+    translate('style.objectFitFields.cellCenter'),
+    translate('style.objectFitFields.cellRight'),
+  ];
+  const rowLabels = [translate('style.objectFitFields.cellTop'), translate('style.objectFitFields.cellMiddle'), translate('style.objectFitFields.cellBottom')];
   return (
-    <div className="embed-editor_bg-posgrid" role="group" aria-label="Object position preset">
+    <div className="embed-editor_bg-posgrid" role="group" aria-label={translate('style.objectFitFields.positionPreset')}>
       {[0, 1, 2].flatMap((row) =>
         [0, 1, 2].map((column) => (
           <button
             key={`${row}-${column}`}
             type="button"
-            className={
-              'embed-editor_bg-poscell ' +
-              (activeColumn === column && activeRow === row ? 'is-active' : '')
-            }
+            className={'embed-editor_bg-poscell ' + (activeColumn === column && activeRow === row ? 'is-active' : '')}
             disabled={busy}
-            aria-label={
-              `${['Left', 'Center', 'Right'][column]} ` + `${['top', 'center', 'bottom'][row]}`
-            }
-            onClick={() =>
-              onPick(`${OBJECT_POSITION_PERCENTS[column]} ${OBJECT_POSITION_PERCENTS[row]}`)
-            }
+            aria-label={translate('style.objectFitFields.positionCell', { horizontal: columnLabels[column] ?? '', vertical: rowLabels[row] ?? '' })}
+            onClick={() => onPick(`${OBJECT_POSITION_PERCENTS[column]} ${OBJECT_POSITION_PERCENTS[row]}`)}
           />
         )),
       )}

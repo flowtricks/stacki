@@ -40,8 +40,7 @@ const check = (what, condition, detail) => {
     // The editor and the picker field the app hands it (connectCustomField).
     stdin: {
       contents:
-        "export * from './src/features/style/CustomValueEditor.tsx';\n" +
-        "export { connectCustomField } from './src/features/style/VariableConnect.tsx';\n",
+        "export * from './src/features/style/CustomValueEditor.tsx';\n" + "export { connectCustomField } from './src/features/style/VariableConnect.tsx';\n",
       resolveDir: ROOT,
       loader: 'ts',
     },
@@ -92,12 +91,9 @@ const check = (what, condition, detail) => {
     // The value is drawn wider than the box holding it — the only reliable
     // answer, and the reason character counting is a fallback rather than the
     // rule.
-    check(
-      'a value drawn wider than its field does not fit',
-      doesNotFit(fieldWith(100, 240), 'short'),
-      'measured overflow missed',
-    );
+    check('a value drawn wider than its field does not fit', doesNotFit(fieldWith(100, 240), 'short'), 'measured overflow missed');
     check('one that fits, fits', !doesNotFit(fieldWith(240, 240), 'short'));
+    check('an overflowing placeholder is not a value', !doesNotFit(fieldWith(100, 240), ''));
     // A pixel of slack, so a value that exactly fills its field is not treated
     // as overflowing by a rounding error.
     check('a hair over is still a fit', !doesNotFit(fieldWith(240, 241), 'short'));
@@ -106,10 +102,7 @@ const check = (what, condition, detail) => {
     // Before layout — and in every headless render — clientWidth is 0. Falling
     // back to the count is what keeps the decision sane there rather than
     // deciding everything fits.
-    check(
-      'an unlaid-out field falls back to counting',
-      doesNotFit(fieldWith(0, 0), 'x'.repeat(40)),
-    );
+    check('an unlaid-out field falls back to counting', doesNotFit(fieldWith(0, 0), 'x'.repeat(40)));
     check('and still says short values fit', !doesNotFit(fieldWith(0, 0), '10px'));
 
     // The rich token editor is what is visible when a value has a chip in it;
@@ -121,20 +114,13 @@ const check = (what, condition, detail) => {
     Object.defineProperty(rich, 'clientWidth', { value: 100 });
     Object.defineProperty(rich, 'scrollWidth', { value: 300 });
     both.insertBefore(rich, both.firstChild);
-    check(
-      'the visible editor is the one measured',
-      doesNotFit(both, 'short'),
-      'measured the hidden input instead',
-    );
+    check('the visible editor is the one measured', doesNotFit(both, 'short'), 'measured the hidden input instead');
 
     // A style-panel field is a plain <input> with neither class, and it has to
     // be found too or the panel would never open the box by measurement.
     check('a bare input is found as well', doesNotFit(fieldWith(100, 300, 'u-input'), 'short'));
     // Nothing to measure at all: fall back rather than throw.
-    check(
-      'a container with no field falls back',
-      doesNotFit(dom.window.document.createElement('div'), 'x'.repeat(40)),
-    );
+    check('a container with no field falls back', doesNotFit(dom.window.document.createElement('div'), 'x'.repeat(40)));
   }
 
   // --- Picking a variable inside an expression ------------------------------
@@ -146,11 +132,7 @@ const check = (what, condition, detail) => {
       withBinding('calc(var(--a) + 10px)', 'var(--b)') === 'calc(var(--b) + 10px)',
       withBinding('calc(var(--a) + 10px)', 'var(--b)'),
     );
-    check(
-      'a value with no variable becomes the binding',
-      withBinding('10px', 'var(--b)') === 'var(--b)',
-      withBinding('10px', 'var(--b)'),
-    );
+    check('a value with no variable becomes the binding', withBinding('10px', 'var(--b)') === 'var(--b)', withBinding('10px', 'var(--b)'));
     check(
       'only the first reference is replaced',
       withBinding('calc(var(--a) + var(--c))', 'var(--b)') === 'calc(var(--b) + var(--c))',
@@ -170,8 +152,7 @@ const check = (what, condition, detail) => {
   // `)` past a variable chip looked like it saved and reopened unchanged.
   {
     const { JSDOM: JSDOM2 } = require('jsdom');
-    const win = new JSDOM2('<!doctype html><div id="root"></div>', { pretendToBeVisual: true })
-      .window;
+    const win = new JSDOM2('<!doctype html><div id="root"></div>', { pretendToBeVisual: true }).window;
     const previous = {
       window: global.window,
       document: global.document,
@@ -179,6 +160,8 @@ const check = (what, condition, detail) => {
     };
     require('../../helpers/popupDom').installPopupDOM(win);
     global.window = win;
+    // The pickers listen for variable changes, as they do under the real preload.
+    win.avb = { onCssChanged: () => () => {} };
     global.document = win.document;
     global.navigator = win.navigator;
     global.Node = win.Node;
@@ -259,11 +242,7 @@ const check = (what, condition, detail) => {
         win.document.body.dispatchEvent(new win.MouseEvent('mousedown', { bubbles: true }));
       });
       await settle();
-      check(
-        'closing it saves what the rich field holds',
-        saved[0] === 'calc(2rem + var(--nav-height))',
-        JSON.stringify(saved),
-      );
+      check('closing it saves what the rich field holds', saved[0] === 'calc(2rem + var(--nav-height))', JSON.stringify(saved));
     }
     // The box focuses its field on a timer of its own; unmount inside act so that
     // last update doesn't land outside one (React warns, and the suite prints it).

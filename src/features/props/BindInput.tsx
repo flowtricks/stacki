@@ -1,8 +1,10 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import type { Part } from '../../editor/bindings';
+import type { Part, TemplateHole } from '../../editor/bindings';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { deleteChipAtCaret } from './chipKeys';
+import { insertAtRange } from './fieldFocus';
+import { commitEditableInPlace } from '../../ui/commitInPlace';
 
 // A prop's value as a field you can type in, with the data in it shown as
 // chips: `Posted ` · [post.data.pubDate] · ` in London`. The chip is atomic —
@@ -15,8 +17,7 @@ import { deleteChipAtCaret } from './chipKeys';
 // keystroke. Outside changes (undo, a different node) are applied only while
 // it isn't focused.
 
-const esc = (text: string | undefined) =>
-  String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (text: string | undefined) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // `data-expr` is what the chip WRITES; `data-full` is what it MEANS. They are
 // the same for an ordinary chip, and differ for one reached through a `?`:
@@ -24,9 +25,18 @@ const esc = (text: string | undefined) =>
 // last chip writes `.data.title` while standing for `featured.data.title`. The
 // picker needs the second one to know which value is the current one.
 const chipHtml = (path: string, full?: string) =>
-  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${
-    full && full !== path ? ` data-full="${esc(full)}"` : ''
-  }>${esc(path)}</span>`;
+  `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${full && full !== path ? ` data-full="${esc(full)}"` : ''}>${esc(path)}</span>`;
+
+// The same chip as a node, for putting into the field at a range.
+function chipNode(document: Document, path: string): HTMLElement {
+  const chip = document.createElement('span');
+  chip.className = 'expr-chip';
+  chip.setAttribute('contenteditable', 'false');
+  chip.setAttribute('data-expr', path);
+  chip.textContent = path;
+  assert(chip.getAttribute('data-expr') === path, 'BindInput: a chip writes the path it was given');
+  return chip;
+}
 
 const partsToHtml = (parts: readonly Part[] | undefined): string => {
   assert((parts?.length ?? 0) <= LIMITS.treeNodesMax, 'BindInput: part limit exceeded');
@@ -72,7 +82,7 @@ function readParts(host: HTMLElement): Part[] {
 
 export interface BindInputHandle {
   readonly insert: (path: string) => void;
-  readonly replace: (chip: Element | undefined, path: string) => void;
+  readonly replace: (chip: Element | TemplateHole | undefined, path: string) => void;
   readonly focus: () => void;
 }
 interface BindInputProps {
@@ -109,7 +119,9 @@ const BindInput = forwardRef<BindInputHandle, BindInputProps>(function BindInput
         // One line: Enter commits rather than splitting the value in two.
         if (event.key === 'Enter') {
           event.preventDefault();
-          hostRef.current?.blur();
+          if (hostRef.current) {
+            commitEditableInPlace(hostRef.current);
+          }
           return;
         }
         // Backspace against a chip takes that chip, and only that chip.
@@ -127,10 +139,7 @@ const BindInput = forwardRef<BindInputHandle, BindInputProps>(function BindInput
       }}
       onMouseDown={(event) => {
         const ElementType = event.currentTarget.ownerDocument.defaultView?.Element;
-        const chip =
-          ElementType && event.target instanceof ElementType
-            ? event.target.closest('.expr-chip')
-            : undefined;
+        const chip = ElementType && event.target instanceof ElementType ? event.target.closest('.expr-chip') : undefined;
         if (!chip) {
           return;
         }
@@ -214,22 +223,8 @@ function bindHandle(state: BindState): BindInputHandle {
         return;
       }
       host.focus();
-      const selection = window.getSelection();
-      const saved = rangeRef.current;
-      const range = document.createRange();
-      if (saved && host.contains(saved.commonAncestorContainer)) {
-        range.setStart(saved.startContainer, saved.startOffset);
-        range.setEnd(saved.endContainer, saved.endOffset);
-      } else {
-        range.selectNodeContents(host);
-        range.collapse(false);
-      }
-      if (!selection) {
-        return;
-      }
-      selection.removeAllRanges();
-      selection.addRange(range);
-      document.execCommand('insertHTML', false, chipHtml(path));
+      // Over the selection the caret last had in the field, or at its end.
+      insertAtRange(host, rangeRef.current, chipNode(host.ownerDocument, path));
       saveRange();
       emit();
     },
@@ -242,10 +237,12 @@ function bindHandle(state: BindState): BindInputHandle {
   };
 }
 
-function bindReplace(chipElement: Element | undefined, path: string, emit: () => void): void {
-  if (!chipElement) {
+function bindReplace(chip: Element | TemplateHole | undefined, path: string, emit: () => void): void {
+  // A hole is a chip of the code field (CodeBindInput.tsx), not of this one.
+  if (!chip || !('getAttribute' in chip)) {
     return;
   }
+  const chipElement = chip;
   const full = chipElement.getAttribute('data-full');
   if (full) {
     // A chip reached through a `?` writes only its tail. Repointing it

@@ -1,0 +1,58 @@
+---
+import type { HTMLAttributes } from "astro/types";
+import { slotContent } from "@/utils/slots.ts";
+
+type ParagraphStyle =
+  | "inherit"
+  | "display"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
+  | "large"
+  | "main"
+  | "small";
+
+interface Props extends HTMLAttributes<"p"> {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+  /** HTML element. */
+  tag?: "p" | "span" | "div";
+  /** Type style. */
+  variant?: ParagraphStyle;
+  /**
+   * Maximum line length in characters.
+   *
+   * @min 1
+   * @int
+   */
+  maxWidth?: number;
+}
+
+const {
+  render = true,
+  tag: Tag = "p",
+  variant = "inherit",
+  maxWidth,
+  class: className,
+  ...rest
+} = Astro.props;
+
+const content = await slotContent(Astro.slots);
+---
+
+{render && content && (
+  <Tag
+    class:list={[
+      "text",
+      variant !== "inherit" && `text-style-${variant}`,
+      className,
+    ]}
+    style={maxWidth ? `--_mw: ${maxWidth}ch;` : undefined}
+    {...rest}
+  >
+    <Fragment set:html={content} />
+  </Tag>
+)}

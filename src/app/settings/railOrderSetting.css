@@ -1,0 +1,21 @@
+/* The Sidebar icon order row's button: a quiet fill, never a border. */
+.rail-order-reset {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.rail-order-reset:hover {
+  background: var(--bg-active);
+}
+.rail-order-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

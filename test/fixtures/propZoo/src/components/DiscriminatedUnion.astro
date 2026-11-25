@@ -1,0 +1,11 @@
+---
+type Props =
+  | { kind: 'link'; href: string; label: string }
+  | { kind: 'button'; label: string; disabled?: boolean };
+const props = Astro.props;
+---
+{props.kind === 'link' ? (
+  <a class="discriminated-union" href={props.href}>{props.label}</a>
+) : (
+  <button class="discriminated-union" disabled={props.disabled}>{props.label}</button>
+)}

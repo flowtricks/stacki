@@ -4,29 +4,12 @@ import { parsePage } from '../source/source';
 import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
 import type { InlineNode } from '../../../vendor/stacki/src/features/props/RichContent';
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
-import {
-  applyEdits,
-  attributeEdit,
-  bounds,
-  nodeAt,
-  type Edit,
-  type ParserNode,
-} from '../source/source';
+import { applyEdits, attributeEdit, bounds, nodeAt, type Edit, type ParserNode } from '../source/source';
 
-export function setAttributes(
-  source: string,
-  id: string,
-  values: Readonly<Record<string, Attr | undefined>>,
-) {
+export function setAttributes(source: string, id: string, values: Readonly<Record<string, Attr | undefined>>) {
   for (const [name, value] of Object.entries(values)) {
     source = applyEdits(source, [
-      attributeEdit(
-        source,
-        id,
-        name,
-        value?.type === 'bare' ? 'true' : value?.value,
-        value?.type === 'expr' || value?.type === 'bare',
-      ),
+      attributeEdit(source, id, name, value?.type === 'bare' ? 'true' : value?.value, value?.type === 'expr' || value?.type === 'bare'),
     ]);
   }
   return source;
@@ -41,10 +24,7 @@ function serializeInline(nodes: readonly InlineNode[], depth = 0): string {
   return nodes
     .map((node): string => {
       if (node.kind === 'text') {
-        return node.value
-          .replaceAll('&', '&amp;')
-          .replaceAll('<', '&lt;')
-          .replaceAll('{', '&#123;');
+        return node.value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('{', '&#123;');
       }
       if (node.kind === 'expr') {
         return node.value;
@@ -61,9 +41,7 @@ function serializeInline(nodes: readonly InlineNode[], depth = 0): string {
               : ` ${key}="${value.value.replaceAll('&', '&amp;').replaceAll('"', '&quot;')}"`;
         })
         .join('');
-      return node.name === 'br'
-        ? '<br>'
-        : `<${node.name}${attrs}>${serializeInline(node.children ?? [], depth + 1)}</${node.name}>`;
+      return node.name === 'br' ? '<br>' : `<${node.name}${attrs}>${serializeInline(node.children ?? [], depth + 1)}</${node.name}>`;
     })
     .join('');
 }
@@ -79,7 +57,8 @@ export function innerContentEdit(source: string, id: string, content: string): E
   if (/\/\s*>$/.test(written)) {
     return { ...range, text: written.replace(/\/\s*>$/, '>') + content + `</${node.name}>` };
   }
-  const end = source.lastIndexOf('</', range.end);
+  // Searched from the node's last character: `range.end` itself may open the parent's closing tag.
+  const end = source.lastIndexOf('</', range.end - 1);
   if (end < range.start) {
     throw new Error('This node cannot contain content');
   }
@@ -95,7 +74,7 @@ export function nodeTextEdit(source: string, id: string, value: string): Edit {
     return headEdit(source, node, value);
   }
   if (node.kind === 'raw') {
-    const end = source.lastIndexOf('</', range.end);
+    const end = source.lastIndexOf('</', range.end - 1);
     // A quoted attribute may contain ">"; the parser already found the
     // exact inner content, so measure back from the closing tag instead.
     const start = end - node.inner.length;
@@ -118,9 +97,7 @@ export function renameTag(source: string, id: string, name: string): string {
     throw new Error('This node has no tag');
   }
   const range = bounds(node);
-  const edits: Edit[] = [
-    { start: range.start + 1, end: range.start + 1 + node.name.length, text: name },
-  ];
+  const edits: Edit[] = [{ start: range.start + 1, end: range.start + 1 + node.name.length, text: name }];
   const closing = source.lastIndexOf('</' + node.name, range.end);
   if (closing >= range.start) {
     edits.push({ start: closing + 2, end: closing + 2 + node.name.length, text: name });
@@ -159,22 +136,26 @@ export function assetProp(source: string, id: string, file: string, name: string
   source = setAttributes(source, id, {
     [name]: { type: 'expr', value: node.kind === 'element' ? binding + '.src' : binding },
   });
-  if (!existing) {
-    const eol = parsed.model.eol;
-    const offset = source.startsWith('---\r\n') ? 5 : 4;
-    const line = `import ${binding} from ${JSON.stringify(specifier)};${eol}`;
-    source = parsed.model.hadFrontmatter
-      ? source.slice(0, offset) + line + source.slice(offset)
-      : `---${eol}${line}---${eol}${source}`;
-  }
-  return source;
+  return existing ? source : withImport(source, `import ${binding} from ${JSON.stringify(specifier)};`, parsed.model);
 }
 
-function headEdit(
-  source: string,
-  node: Extract<ParserNode, { kind: 'map' | 'cond' }>,
-  value: string,
-): Edit {
+// The opening fence is not always the file's first four characters: a byte order mark,
+// blank lines or trailing spaces may surround it, and an offset that assumes otherwise
+// joins the import to the fence, which breaks the page.
+function withImport(source: string, statement: string, model: { readonly eol: string; readonly hadFrontmatter: boolean }): string {
+  const line = `${statement}${model.eol}`;
+  if (!model.hadFrontmatter) {
+    const start = source.startsWith('\uFEFF') ? 1 : 0;
+    return `${source.slice(0, start)}---${model.eol}${line}---${model.eol}${source.slice(start)}`;
+  }
+  const fence = /^\s*---[^\S\r\n]*\r?\n/.exec(source);
+  if (!fence) {
+    throw new Error('Fix the page syntax before choosing an asset.');
+  }
+  return fence[0] + line + source.slice(fence[0].length);
+}
+
+function headEdit(source: string, node: Extract<ParserNode, { kind: 'map' | 'cond' }>, value: string): Edit {
   const range = bounds(node);
   if (node.kind === 'cond') {
     const offset = source.indexOf(node.test, range.start + 1);

@@ -21,33 +21,13 @@ const render = (page, selector, prop, value) => {
 
 test('a new rule in an indented <style> block closes at the block indent', () => {
   const page = ['<style>', '  .hero {', '    color: red;', '  }', '</style>', ''].join('\n');
-  const expected = [
-    '<style>',
-    '  .hero {',
-    '    color: red;',
-    '  }',
-    '  .is-big {',
-    '    font-size: 22px;',
-    '  }',
-    '</style>',
-    '',
-  ].join('\n');
+  const expected = ['<style>', '  .hero {', '    color: red;', '  }', '  .is-big {', '    font-size: 22px;', '  }', '</style>', ''].join('\n');
   assert.equal(render(page, '.is-big', 'font-size', '22px'), expected);
 });
 
 test('a block written flush left keeps its flush-left rules', () => {
   const page = ['<style>', '.hero {', '  color: red;', '}', '</style>', ''].join('\n');
-  const expected = [
-    '<style>',
-    '.hero {',
-    '  color: red;',
-    '}',
-    '.is-big {',
-    '  font-size: 22px;',
-    '}',
-    '</style>',
-    '',
-  ].join('\n');
+  const expected = ['<style>', '.hero {', '  color: red;', '}', '.is-big {', '  font-size: 22px;', '}', '</style>', ''].join('\n');
   assert.equal(render(page, '.is-big', 'font-size', '22px'), expected);
 });
 

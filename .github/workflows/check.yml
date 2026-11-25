@@ -6,6 +6,18 @@ on:
     branches:
       - main
 
+# A newer push to the same branch supersedes the older run: only the tip can be
+# released (release:ship tags origin/main's HEAD), and a stale run would hold
+# scarce macOS runners for half an hour (11 runs that week waited on them).
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # The per-platform aggregate jobs read this run's shard results.
+  actions: read
+
 jobs:
   # The fast lane: formatting, the repository policy scan, and both type-check
   # programs finish in a few minutes and fail a pull request before the full
@@ -13,8 +25,8 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -24,17 +36,79 @@ jobs:
       - run: npm run check:policy
       - run: npm run typecheck
 
-  # The full gate on every platform the app ships on, plus Linux. Linux has no
-  # display, so the Electron probes run under a virtual one.
-  test:
+  # The full gate on every platform the app ships on, split so no job carries
+  # more than about a quarter of it. One Linux job runs the builds and the
+  # desktop static checks (`--checks=desktop`: tsc, ESLint, Prettier, the
+  # policy scan, the adapter ratchet; platform-independent verdicts). Per
+  # platform, one job runs Studio's verify alone (`--checks=studio`, the long
+  # one), and four shards run the builds and their share of the suites (a
+  # stable hash of each suite's path, scripts/gate/testShard.ts). Together they
+  # run exactly `npm test` on Linux and every build and suite everywhere.
+  # Linux has no display, so the Electron probes run under a virtual one.
+  static:
+    name: test static (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux only: tsc, ESLint, Prettier and the policy scan give the same verdict on every
+        # platform, and the shards below still build and test on all three
+        # (scripts/release/releaseStatus.mts, STATIC_CHECK_OPERATING_SYSTEMS).
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test -- --checks=desktop
+      - if: runner.os != 'Linux'
+        run: npm test -- --checks=desktop
+
+  studio:
+    name: test studio (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Studio's verify measured 600 s on the macOS runner; the gate's own limit for it is 25 minutes.
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test -- --checks=studio
+      - if: runner.os != 'Linux'
+        run: npm test -- --checks=studio
+
+  shard:
+    name: test shard (${{ matrix.os }}, ${{ matrix.shard }}/4)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        shard: [1, 2, 3, 4]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -47,6 +121,32 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum npm test
+        run: xvfb-run --auto-servernum npm test -- --shard=${{ matrix.shard }}/4
       - if: runner.os != 'Linux'
-        run: npm test
+        run: npm test -- --shard=${{ matrix.shard }}/4
+
+  # One job per platform under the name branch protection and the release
+  # scripts have always read (`test (<os>)`). It passes only when its
+  # platform's two checks jobs and all four shards passed in this run
+  # attempt; it runs even when one failed, so the platform reports red
+  # instead of skipped.
+  test:
+    name: test (${{ matrix.os }})
+    needs: [static, studio, shard]
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ubuntu-latest
+    steps:
+      # The aggregate needs only the scripts; cone-mode sparse checkouts keep root files such as .nvmrc.
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --experimental-strip-types scripts/release/checkShards.mts --os=${{ matrix.os }} --run-id=${{ github.run_id }} --attempt=${{ github.run_attempt }}
+        env:
+          GH_TOKEN: ${{ github.token }}

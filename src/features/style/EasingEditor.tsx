@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import Popup from '../../ui/Popup';
+import { GearIcon } from '../../ui/Icons';
+import PanelSheet from './components/PanelSheet';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { easingToBezier, bezierToEasing, isEasing } from './model/transition';
 import VariableConnect from './VariableConnect';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // A cubic-bezier easing editor (Webflow-style): preset curves on the left, a large
 // draggable curve on the right. Dragging either control point (or picking a preset)
@@ -16,50 +19,50 @@ const PRESETS: ReadonlyArray<{
   items: ReadonlyArray<{ label: string; b: Bezier }>;
 }> = [
   {
-    heading: 'Default',
+    heading: 'Default', // i18n-ignore: an id compared by value; the shown text comes from the catalog.
     items: [
-      { label: 'Linear', b: [0, 0, 1, 1] },
-      { label: 'Ease', b: [0.25, 0.1, 0.25, 1] },
-      { label: 'Ease In Out', b: [0.42, 0, 0.58, 1] },
+      { label: 'Linear', b: [0, 0, 1, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Ease', b: [0.25, 0.1, 0.25, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Ease In Out', b: [0.42, 0, 0.58, 1] }, // i18n-ignore: standard easing curve name.
     ],
   },
   {
-    heading: 'Ease In',
+    heading: 'Ease In', // i18n-ignore: standard easing family name.
     items: [
-      { label: 'Sine', b: [0.12, 0, 0.39, 0] },
-      { label: 'Quad', b: [0.11, 0, 0.5, 0] },
-      { label: 'Cubic', b: [0.32, 0, 0.67, 0] },
-      { label: 'Quart', b: [0.5, 0, 0.75, 0] },
-      { label: 'Quint', b: [0.64, 0, 0.78, 0] },
-      { label: 'Expo', b: [0.7, 0, 0.84, 0] },
-      { label: 'Circ', b: [0.55, 0, 1, 0.45] },
-      { label: 'Back', b: [0.36, 0, 0.66, -0.56] },
+      { label: 'Sine', b: [0.12, 0, 0.39, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quad', b: [0.11, 0, 0.5, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Cubic', b: [0.32, 0, 0.67, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quart', b: [0.5, 0, 0.75, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quint', b: [0.64, 0, 0.78, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Expo', b: [0.7, 0, 0.84, 0] }, // i18n-ignore: standard easing curve name.
+      { label: 'Circ', b: [0.55, 0, 1, 0.45] }, // i18n-ignore: standard easing curve name.
+      { label: 'Back', b: [0.36, 0, 0.66, -0.56] }, // i18n-ignore: standard easing curve name.
     ],
   },
   {
-    heading: 'Ease Out',
+    heading: 'Ease Out', // i18n-ignore: standard easing family name.
     items: [
-      { label: 'Sine', b: [0.61, 1, 0.88, 1] },
-      { label: 'Quad', b: [0.5, 1, 0.89, 1] },
-      { label: 'Cubic', b: [0.33, 1, 0.68, 1] },
-      { label: 'Quart', b: [0.25, 1, 0.5, 1] },
-      { label: 'Quint', b: [0.22, 1, 0.36, 1] },
-      { label: 'Expo', b: [0.16, 1, 0.3, 1] },
-      { label: 'Circ', b: [0, 0.55, 0.45, 1] },
-      { label: 'Back', b: [0.34, 1.56, 0.64, 1] },
+      { label: 'Sine', b: [0.61, 1, 0.88, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quad', b: [0.5, 1, 0.89, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Cubic', b: [0.33, 1, 0.68, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quart', b: [0.25, 1, 0.5, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quint', b: [0.22, 1, 0.36, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Expo', b: [0.16, 1, 0.3, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Circ', b: [0, 0.55, 0.45, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Back', b: [0.34, 1.56, 0.64, 1] }, // i18n-ignore: standard easing curve name.
     ],
   },
   {
-    heading: 'Ease In Out',
+    heading: 'Ease In Out', // i18n-ignore: standard easing family name.
     items: [
-      { label: 'Sine', b: [0.37, 0, 0.63, 1] },
-      { label: 'Quad', b: [0.45, 0, 0.55, 1] },
-      { label: 'Cubic', b: [0.65, 0, 0.35, 1] },
-      { label: 'Quart', b: [0.76, 0, 0.24, 1] },
-      { label: 'Quint', b: [0.83, 0, 0.17, 1] },
-      { label: 'Expo', b: [0.87, 0, 0.13, 1] },
-      { label: 'Circ', b: [0.85, 0, 0.15, 1] },
-      { label: 'Back', b: [0.68, -0.6, 0.32, 1.6] },
+      { label: 'Sine', b: [0.37, 0, 0.63, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quad', b: [0.45, 0, 0.55, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Cubic', b: [0.65, 0, 0.35, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quart', b: [0.76, 0, 0.24, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Quint', b: [0.83, 0, 0.17, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Expo', b: [0.87, 0, 0.13, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Circ', b: [0.85, 0, 0.15, 1] }, // i18n-ignore: standard easing curve name.
+      { label: 'Back', b: [0.68, -0.6, 0.32, 1.6] }, // i18n-ignore: standard easing curve name.
     ],
   },
 ];
@@ -75,27 +78,25 @@ const EDGE = 8;
 // gaps), and no wider: filling the panel made a dialog the size of the sheet it
 // was opened over.
 const IDEAL_WIDTH = 480;
-function framedStyle(frame: { left: number; width: number }): { left: number; width: number } {
-  const room =
-    (typeof window === 'undefined' ? 0 : window.innerWidth) || frame.width || IDEAL_WIDTH;
+function framedStyle(frame: { left: number; width: number }): { left: number; width: number; maxWidth: number } {
+  const room = (typeof window === 'undefined' ? 0 : window.innerWidth) || frame.width || IDEAL_WIDTH;
   const panel = frame.width || room;
   const width = Math.max(320, Math.min(IDEAL_WIDTH, panel - EDGE * 2, room - EDGE * 2));
   // Centred in the panel it belongs to, then kept inside the window.
   const centred = (frame.left || 0) + (panel - width) / 2;
   const left = Math.max(EDGE, Math.min(centred, room - width - EDGE));
-  return { left, width };
+  // `maxWidth` too: a sheet's stylesheet caps it at the Style panel's width, which a collapsed panel
+  // reports as 0px, and a framed sheet drew as a 2px hairline. The frame is the box that owns its width.
+  return { left, width, maxWidth: width };
 }
 
-const bezEq = (left: Bezier, right: Bezier) =>
-  left.every((coordinate, i) => Math.abs(coordinate - (right[i] ?? 0)) < 0.005);
+const bezEq = (left: Bezier, right: Bezier) => left.every((coordinate, i) => Math.abs(coordinate - (right[i] ?? 0)) < 0.005);
 const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
 // One coordinate of the unit cubic-bezier (0,0)->(1,1) at parameter s.
 // Each bisection halves the interval: 2⁻²⁴ is far finer than a rendered curve.
 const BISECTION_PASSES_MAX = 24;
 const bezAt = (parameter: number, firstControl: number, secondControl: number) =>
-  3 * (1 - parameter) ** 2 * parameter * firstControl +
-  3 * (1 - parameter) * parameter ** 2 * secondControl +
-  parameter ** 3;
+  3 * (1 - parameter) ** 2 * parameter * firstControl + 3 * (1 - parameter) * parameter ** 2 * secondControl + parameter ** 3;
 // The eased PROGRESS (output) at input time t: solve x(s)=t for the parameter s, then
 // read y(s). This is what makes the playback follow the ease — the parameter s is NOT
 // time, so tracing the curve by s alone moves at the wrong (uniform) rate.
@@ -124,7 +125,7 @@ function easeProgress(time: number, x1: number, y1: number, x2: number, y2: numb
   return bezAt(parameter, y1, y2);
 }
 // The matched preset's name ("Ease", "Ease In Sine"), else "Custom".
-function presetName(bezier: Bezier): string {
+function presetName(bezier: Bezier, translate: Translator): string {
   for (const group of PRESETS) {
     for (const item of group.items) {
       if (bezEq(item.b, bezier)) {
@@ -132,19 +133,8 @@ function presetName(bezier: Bezier): string {
       }
     }
   }
-  return 'Custom';
+  return translate('style.easingEditor.custom');
 }
-const GearIcon = () => (
-  <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-    <path
-      d="M8 1.5v1.5M8 13v1.5M2.4 4.6l1.3.75M12.3 10.65l1.3.75M2.4 11.4l1.3-.75M12.3 5.35l1.3-.75"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
 const PlayIcon = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
     <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" />
@@ -163,19 +153,11 @@ const PauseIcon = () => (
  *  the button that opens this editor from the variables sheet. */
 export function MiniCurve({ b: bezier }: { b: Bezier }) {
   const size = 24;
-  const point = (x: number, y: number) =>
-    `${(x * size).toFixed(1)} ${(size - y * size).toFixed(1)}`;
+  const point = (x: number, y: number) => `${(x * size).toFixed(1)} ${(size - y * size).toFixed(1)}`;
   return (
-    <svg
-      viewBox={`-3 -8 ${size + 6} ${size + 16}`}
-      className="embed-editor_ease-mini"
-      aria-hidden="true"
-    >
+    <svg viewBox={`-3 -8 ${size + 6} ${size + 16}`} className="embed-editor_ease-mini" aria-hidden="true">
       <path
-        d={
-          `M ${point(0, 0)} C ${point(bezier[0], bezier[1])} ` +
-          `${point(bezier[2], bezier[3])} ${point(1, 1)}`
-        }
+        d={`M ${point(0, 0)} C ${point(bezier[0], bezier[1])} ` + `${point(bezier[2], bezier[3])} ${point(1, 1)}`}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
@@ -184,15 +166,7 @@ export function MiniCurve({ b: bezier }: { b: Bezier }) {
   );
 }
 
-function BezierEditor({
-  value,
-  onChange,
-  playTime,
-}: {
-  value: Bezier;
-  onChange: (b: Bezier) => void;
-  playTime: number | undefined;
-}) {
+function BezierEditor({ value, onChange, playTime }: { value: Bezier; onChange: (b: Bezier) => void; playTime: number | undefined }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const areaRef = useRef<SVGRectElement>(null);
   const [drag, setDrag] = useState<0 | 1 | undefined>(undefined);
@@ -222,14 +196,7 @@ function BezierEditor({
       onPointerMove={move}
       onPointerUp={() => setDrag(undefined)}
     >
-      <rect
-        ref={areaRef}
-        x="0"
-        y="0"
-        width={CURVE_SIZE}
-        height={CURVE_SIZE}
-        className="embed-editor_ease-grid"
-      />
+      <rect ref={areaRef} x="0" y="0" width={CURVE_SIZE} height={CURVE_SIZE} className="embed-editor_ease-grid" />
       <CurveAxes />
       <CurveLines value={value} />
       {playPoint ? <CurvePlayhead point={playPoint} /> : undefined}
@@ -269,19 +236,10 @@ const curveY = (y: number) => CURVE_SIZE - y * CURVE_SIZE;
 function CurveAxes() {
   return (
     <>
-      <text
-        transform={`translate(-34 ${CURVE_SIZE / 2}) rotate(-90)`}
-        textAnchor="middle"
-        className="embed-editor_ease-axis"
-      >
+      <text transform={`translate(-34 ${CURVE_SIZE / 2}) rotate(-90)`} textAnchor="middle" className="embed-editor_ease-axis">
         PROGRESS
       </text>
-      <text
-        x={CURVE_SIZE / 2}
-        y={CURVE_SIZE + 42}
-        textAnchor="middle"
-        className="embed-editor_ease-axis"
-      >
+      <text x={CURVE_SIZE / 2} y={CURVE_SIZE + 42} textAnchor="middle" className="embed-editor_ease-axis">
         TIME
       </text>
       {[1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -299,26 +257,11 @@ function CurveLines({ value }: { value: Bezier }) {
   return (
     <>
       {/* Handle guide lines from the endpoints to the control points. */}
-      <line
-        x1={curveX(0)}
-        y1={curveY(0)}
-        x2={curveX(value[0])}
-        y2={curveY(value[1])}
-        className="embed-editor_ease-handle-line"
-      />
-      <line
-        x1={curveX(1)}
-        y1={curveY(1)}
-        x2={curveX(value[2])}
-        y2={curveY(value[3])}
-        className="embed-editor_ease-handle-line"
-      />
+      <line x1={curveX(0)} y1={curveY(0)} x2={curveX(value[0])} y2={curveY(value[1])} className="embed-editor_ease-handle-line" />
+      <line x1={curveX(1)} y1={curveY(1)} x2={curveX(value[2])} y2={curveY(value[3])} className="embed-editor_ease-handle-line" />
       {/* The easing curve. */}
       <path
-        d={
-          `M ${curveX(0)} ${curveY(0)} C ${curveX(value[0])} ${curveY(value[1])} ` +
-          `${curveX(value[2])} ${curveY(value[3])} ${curveX(1)} ${curveY(1)}`
-        }
+        d={`M ${curveX(0)} ${curveY(0)} C ${curveX(value[0])} ${curveY(value[1])} ` + `${curveX(value[2])} ${curveY(value[3])} ${curveX(1)} ${curveY(1)}`}
         className="embed-editor_ease-path"
       />
     </>
@@ -332,10 +275,7 @@ function CurvePlayhead({ point }: { point: { x: number; y: number } }) {
   return (
     <>
       <polygon
-        points={
-          `${size},${point.y} ${size + 9},${point.y - 9} ${size + 27},${point.y - 9} ` +
-          `${size + 27},${point.y + 9} ${size + 9},${point.y + 9}`
-        }
+        points={`${size},${point.y} ${size + 9},${point.y - 9} ${size + 27},${point.y - 9} ` + `${size + 27},${point.y + 9} ${size + 9},${point.y + 9}`}
         className="embed-editor_ease-playhead"
       />
       <circle cx={point.x} cy={point.y} r="6" className="embed-editor_ease-play-dot" />
@@ -409,6 +349,7 @@ export default function EasingEditor({
    *  was opened from instead of the panel beside it. */
   frame?: { left: number; width: number };
 }) {
+  const translate = useTranslate();
   const [bezier, setBezier] = useState<Bezier>(() => easingToBezier(value));
   // What is being typed into the value field, until it is committed. Undefined while
   // the field simply shows the curve.
@@ -421,11 +362,10 @@ export default function EasingEditor({
   };
 
   return (
-    <Popup
+    <PanelSheet
       className={`embed-editor_ease-modal u-surface-surface${frame ? ' is-framed' : ''}`}
       style={frame ? framedStyle(frame) : undefined}
-
-      label="Easing editor"
+      label={translate('style.easingEditor.easingEditor')}
       onClose={onClose}
     >
       {({ close }) => (
@@ -438,11 +378,11 @@ export default function EasingEditor({
                   type="button"
                   className={`embed-editor_ease-play ${playing ? 'is-playing' : ''}`}
                   onClick={togglePlay}
-                  aria-label={playing ? 'Pause preview' : 'Preview easing'}
+                  aria-label={playing ? translate('style.easingEditor.pausePreview') : translate('style.easingEditor.previewEasing')}
                 >
                   {playing ? <PauseIcon /> : <PlayIcon />}
                 </button>
-                <span className="embed-editor_ease-name">{presetName(bezier)}</span>
+                <span className="embed-editor_ease-name">{presetName(bezier, translate)}</span>
               </div>
               <BezierEditor value={bezier} onChange={apply} playTime={playTime} />
               <EasingValueField bezier={bezier} draft={draft} setDraft={setDraft} apply={apply} />
@@ -451,24 +391,22 @@ export default function EasingEditor({
           </div>
         </>
       )}
-    </Popup>
+    </PanelSheet>
   );
 }
 
+// The header is the editor's drag handle (see PanelSheet): it opens over the
+// variables window it was launched from, and has to be moved to see that window.
 function EasingHeader({ onClose }: { onClose: () => void }) {
+  const translate = useTranslate();
   return (
-    <header className="embed-editor_ease-head">
+    <header className="embed-editor_ease-head" data-floating-drag-handle="">
       <span className="embed-editor_ease-title">
-        <GearIcon /> Easing Editor
+        <GearIcon size={16} /> {translate('style.easingEditor.title')}
       </span>
-      <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label="Close">
+      <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label={translate('ui.close')}>
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-          <path
-            d="M4 4l8 8M12 4l-8 8"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-          />
+          <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
         </svg>
       </button>
     </header>
@@ -490,6 +428,7 @@ function EasingValueField({
   setDraft: (draft: string | undefined) => void;
   apply: (next: Bezier) => void;
 }) {
+  const translate = useTranslate();
   /** Take what was typed, if it is a curve this editor can show. */
   const commitText = () => {
     const text = (draft ?? '').trim();
@@ -505,14 +444,14 @@ function EasingValueField({
         className="is-fill"
         code
         prop="transition-timing-function"
-        ariaLabel="Timing function"
+        ariaLabel={translate('style.easingEditor.timingFunction')}
         onPick={(binding) => setDraft(binding)}
       >
         <input
           className="u-input embed-editor_ease-input"
           value={draft ?? bezierToEasing(bezier)}
           spellCheck={false}
-          aria-label="Timing function"
+          aria-label={translate('style.easingEditor.timingFunction')}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => commitText()}
           onKeyDown={(event) => {
@@ -532,20 +471,19 @@ function EasingValueField({
 }
 
 function EasingPresets({ bezier, apply }: { bezier: Bezier; apply: (next: Bezier) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_ease-presets">
       {PRESETS.map((group) => (
         <div key={group.heading} className="embed-editor_ease-group">
-          <h4 className="embed-editor_ease-group-title">{group.heading}</h4>
+          <h4 className="embed-editor_ease-group-title">{group.heading === 'Default' ? translate('style.easingEditor.defaultHeading') : group.heading}</h4>
           <div className="embed-editor_ease-grid-presets">
             {group.items.map((preset) => (
               <button
                 key={preset.label}
                 type="button"
-                className={
-                  'embed-editor_ease-preset ' + (bezEq(preset.b, bezier) ? 'is-active' : '')
-                }
-                title={`${group.heading} ${preset.label}`}
+                className={'embed-editor_ease-preset ' + (bezEq(preset.b, bezier) ? 'is-active' : '')}
+                title={group.heading === 'Default' ? preset.label : `${group.heading} ${preset.label}`}
                 onClick={() => apply(preset.b)}
               >
                 <MiniCurve b={preset.b} />

@@ -1,0 +1,207 @@
+/* The Running chip and its panel (RunningPanel.tsx). The chip is a quiet pill above the composer; the panel opens over
+   the bottom of the chat column, as wide as the column, so it never leaves the window, and scrolls inside itself with
+   its gutter reserved. Its rows use the subagent strip's columns (chevron, dot, task, model, time), so dots, models
+   and times line up whatever the words. Backgrounds and a shadow only: no borders, no dividers. */
+.ai-running {
+  --ai-agent-model-width: 6.5rem;
+  --ai-agent-time-width: 3.25rem;
+  position: relative;
+  flex: none;
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.ai-running-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.ai-running-chip:hover,
+.ai-running-chip.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-running-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-running-panel {
+  /* Its rows lay themselves out for the panel's own width (below). */
+  container-type: inline-size;
+  position: absolute;
+  z-index: 20;
+  inset-inline: 0;
+  inset-block-end: calc(100% + 6px);
+  box-sizing: border-box;
+  max-block-size: min(60vh, 520px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: 6px;
+  border-radius: 12px;
+  /* The solid surface menus and popovers use. Why not a mix of --bg-input: that token is translucent (white at 6%), so
+     any mix of it stays translucent and the transcript scrolling under the panel showed through its rows. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+.ai-running-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-running-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ai-running-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 6px;
+  color: var(--text-dim);
+}
+.ai-running-fold {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  /* The app centres bare buttons; the fold reads from the start like the section heads beside it. */
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: -2px -6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+.ai-running-fold:hover {
+  background: var(--bg-hover);
+}
+.ai-running-section-title {
+  font-weight: 600;
+}
+.ai-running-count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ai-running-section-head > .ai-running-count {
+  flex: 1;
+}
+.ai-running-stop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 11px;
+}
+.ai-running-stop:hover:not(:disabled) {
+  background: var(--bg-pressed);
+}
+/* Stopping: the same fill, its words dimmed, so it reads as waiting rather than gone. */
+.ai-running-stop:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+.ai-running-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ai-running-more {
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-running-row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 6px;
+}
+.ai-running-row:has(> .ai-running-steps) {
+  background: var(--bg-hover);
+}
+.ai-running-head {
+  display: grid;
+  grid-template-columns: 12px 7px minmax(0, 1fr) var(--ai-agent-model-width) var(--ai-agent-time-width);
+  align-items: center;
+  gap: 1px 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+}
+.ai-running-head:hover {
+  background: var(--bg-hover);
+}
+.ai-running-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-running-summary {
+  grid-column: 3 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-running-failed .ai-running-summary {
+  color: var(--red);
+}
+.ai-running-steps {
+  min-width: 0;
+  padding-block-end: 4px;
+}
+.ai-running-steps.ai-step-technical {
+  padding: 0 6px 6px calc(6px + 12px + 6px + 7px + 6px);
+}
+/* A narrow panel gives the task the model's column: the model moves to the start of the summary line, so a title
+   such as "Release Stacki 1.4.14" stays whole at the AI panel's narrowest width. */
+.ai-running-model-inline {
+  display: none;
+}
+@container (max-width: 26rem) {
+  .ai-running-head {
+    grid-template-columns: 12px 7px minmax(0, 1fr) var(--ai-agent-time-width);
+  }
+  .ai-running-head > .ai-agent-model {
+    display: none;
+  }
+  .ai-running-model-inline {
+    display: inline;
+  }
+}

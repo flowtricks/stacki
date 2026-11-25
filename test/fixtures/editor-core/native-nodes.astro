@@ -1,0 +1,45 @@
+{items.map(async raw => {
+  if (raw == null || raw === false) return null;
+  if (typeof raw !== 'object') return text(raw);
+  if (raw.__html != null) return <Fragment set:html={raw.__html} />;
+  const el = raw.type === 'Element' ? raw.val : raw;
+  const context = raw._scope || scope;
+  if (!Array.isArray(el.type)) return text(raw);
+  const fields = evaluate(el.data, context) || {};
+  if (!isVisible(fields.visibility) && !fields.visibility?.keepInHtml) return null;
+  if (el.type[0] === '__SitePlugin') {
+    const loader = registry['../components/' + names[el.type[1]] + '.astro'];
+    if (!loader) return null;
+    const { default: Component } = await loader();
+    return <Component {...fields} __cms={context.Dynamo || {}} />;
+  }
+  if (el.type[1] === 'String') return text(fields);
+  const fallback = {
+    Body:'body', Link:'a', Image:'img', Heading:'h1', Paragraph:'p', List:'ul', ListItem:'li',
+    FormForm:'form', FormTextInput:'input', FormTextarea:'textarea', FormButton:'input'
+  };
+  const candidate = fields.tag || fallback[el.type[1]] || 'div';
+  const Tag = /^[a-zA-Z][a-zA-Z0-9-]*$/.test(candidate) ? candidate : 'div';
+  const attrs = nodeAttrs(el, context);
+  if (variants) attrs['data-wf-variant'] = variantTokens(variants);
+  const source = fields.dyn?.collection?.id || collection;
+  const nextQuery = fields.dyn?.query || query;
+  const collectionItems = queryItems(
+    allCollections[collectionKey(source)] || [], nextQuery, context.Dynamo
+  );
+  if (el.type[1] === 'DynamoEmpty' && collectionItems.length) return null;
+  if (el.type[1] === 'DynamoItem' && source) return collectionItems.map(item =>
+    <Tag {...nodeAttrs(el, {...context,Dynamo:item.fields})}>
+      <Astro.self value={el.data.val.children} scope={{...context,Dynamo:item.fields}}
+        collection={source} query={nextQuery} depth={depth+1} />
+    </Tag>
+  );
+  const voidTags = ['area','base','br','col','embed','hr','img','input','link','meta',
+    'param','source','track','wbr'];
+  if (voidTags.includes(Tag)) return <Tag {...attrs} />;
+  if (el.type[1] === 'HtmlEmbed') return <Tag {...attrs} set:html={embedHtml(fields)} />;
+  return <Tag {...attrs}>
+    <Astro.self value={fields.children} scope={context}
+      collection={source} query={nextQuery} depth={depth+1} />
+  </Tag>;
+})}

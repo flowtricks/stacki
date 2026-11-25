@@ -44,14 +44,7 @@ export function readPropertyOrigins(document: PropertySyntax): PropertyOrigins {
         );
         sources.set(
           name,
-          entries.map((entry) =>
-            originSource(
-              document,
-              entry.member,
-              `${entry.owner}.${name}`,
-              entry.member.type?.getText() ?? 'unknown',
-            ),
-          ),
+          entries.map((entry) => originSource(document, entry.member, `${entry.owner}.${name}`, entry.member.type?.getText() ?? 'unknown')),
         );
       }
     }
@@ -63,12 +56,7 @@ export function readPropertyOrigins(document: PropertySyntax): PropertyOrigins {
       declarations: sources.get(name) ?? [],
       ...(binding?.initializer
         ? {
-            defaultValue: originSource(
-              document,
-              binding,
-              `Astro.props.${name}`,
-              binding.initializer.getText(),
-            ),
+            defaultValue: originSource(document, binding, `Astro.props.${name}`, binding.initializer.getText()),
           }
         : {}),
     }),
@@ -79,10 +67,7 @@ interface OriginMember {
   readonly member: ts.PropertySignature;
   readonly owner: string;
 }
-function readOriginMembers(
-  root: Declaration | undefined,
-  declarations: ReadonlyMap<string, Declaration>,
-): ReadonlyMap<string, readonly OriginMember[]> {
+function readOriginMembers(root: Declaration | undefined, declarations: ReadonlyMap<string, Declaration>): ReadonlyMap<string, readonly OriginMember[]> {
   const work: Work[] = root ? [{ node: root, owner: root.name.text }] : [];
   const seen = new Set<ts.Node>();
   const members = new Map<string, readonly OriginMember[]>();
@@ -117,9 +102,7 @@ function originChildren(item: Work, declarations: ReadonlyMap<string, Declaratio
   if (ts.isInterfaceDeclaration(node)) {
     return [
       ...node.members.map((member) => ({ node: member, owner: node.name.text })),
-      ...(node.heritageClauses ?? [])
-        .flatMap((clause) => clause.types)
-        .flatMap((type) => originReference(type.expression.getText(), declarations)),
+      ...(node.heritageClauses ?? []).flatMap((clause) => clause.types).flatMap((type) => originReference(type.expression.getText(), declarations)),
     ];
   }
   if (ts.isTypeLiteralNode(node)) {
@@ -143,20 +126,13 @@ function originReference(name: string, declarations: ReadonlyMap<string, Declara
   return declaration ? [{ node: declaration, owner: name }] : [];
 }
 
-function originSource(
-  document: PropertySyntax,
-  node: ts.Node,
-  label: string,
-  expression: string,
-): PropertySource {
+function originSource(document: PropertySyntax, node: ts.Node, label: string, expression: string): PropertySource {
   const offset = node.getStart(document.syntax);
   assert(offset >= 0, 'Property source offset is nonnegative');
   assert(offset <= document.frontmatter.length, 'Property source offset is inside frontmatter');
   return {
     label,
     expression,
-    line:
-      document.syntax.getLineAndCharacterOfPosition(offset).line +
-      document.source.slice(0, document.start).split('\n').length,
+    line: document.syntax.getLineAndCharacterOfPosition(offset).line + document.source.slice(0, document.start).split('\n').length,
   };
 }

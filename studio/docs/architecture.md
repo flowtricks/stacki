@@ -16,6 +16,14 @@ Cursor presence uses a separate, ephemeral WebSocket message path, coalesced at 
 
 A project coordinator sequences accepted mutations and snapshot capture. Draft persistence is acknowledged before Saved. The filesystem powers the preview; R2 stores collaborative recovery state in hosted deployments. Browser IndexedDB preserves pending document updates. Closing a tab while offline does not constitute publication. If server draft identity is deliberately replaced, the old browser draft is retained and editing stops instead of merging unrelated histories.
 
+Durable writes normally batch for two seconds. An unacknowledged edit has a separate
+25-second deadline: socket heartbeats and subsequent typing cannot postpone it. Studio
+reconnects and replays the retained Yjs document at most three times before showing Needs
+attention. A replay retries filesystem and durable writes even when Yjs already merged it;
+an in-memory duplicate is not proof of a successful save. Edits during a reconnect handshake
+remain local until synchronization completes. Preview subscriptions request a current render
+on connection so changes made during sleep are visible without another edit.
+
 An Astro integration marks page-authored nodes in memory. The parent selects instances, and the iframe morphs the rendered DOM. HTML preview responses embed their exact initial HTML as inert, escaped JSON (bounded at 4 MB), so edits during script loading do not corrupt the comparison baseline. Component template source is edited only through an explicit code change such as an AI proposal. Preview instrumentation applies only to the dev server and is excluded from production builds.
 
 The hosted preview uses a sibling subdomain, such as `preview.example.com`, with its own audience-restricted session. GitHub credentials and the studio session secret stay in the Worker. The Container receives a narrower token for draft storage, GitHub operations, and the AI gateway. Site code and dependencies execute in that Container, so site contributors and invited editors are trusted to change application code. This is not a multi-tenant hostile-code sandbox.
@@ -30,7 +38,14 @@ from pushed HTML, and normal page fetching remains the fallback after failed del
 
 ## Publishing and GitHub synchronization
 
-A publish captures an isolated filesystem snapshot under the project coordinator, then releases editing while the build runs. Only after a successful build does the GitHub App create a commit and update the branch without forcing it. Both the starting head and the final fast-forward condition are checked. A changed remote branch stops publication. Binary assets use Git blob uploads. The UI shows completed publish stages. When configured, it confirms the exact revision from the live gateway before reporting deployment success. Otherwise it reports only the GitHub commit.
+A publish captures immutable Git objects under the project coordinator. GitHub-only actions skip
+builds and hooks; hosting actions copy and build an isolated snapshot. Git transfers missing
+objects directly, preserving unrelated repository paths and publishing captured asset deletions
+in the same commit. An exact expected-head lease prevents overwriting concurrent changes. The
+Worker grants repository-scoped installation access only to the authenticated container; the
+App private key stays in the Worker. The UI shows completed stages and, when configured, confirms
+the exact revision from the live gateway before reporting deployment success. Otherwise it reports
+only the GitHub commit.
 
 While the studio is open, GitHub source changes are checked at most once per minute per visible active editor. Disjoint edits merge into the active shared documents. Conflicts leave the previous baseline in place and let the editor choose draft or GitHub versions for conflicting files. Resolutions are tied to the inspected GitHub revision. No publish is performed by synchronization.
 

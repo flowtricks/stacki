@@ -3,11 +3,14 @@ import { readPropertyConsumers } from './propertyConsumers';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import type { PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
+import { inFile, refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
 import { readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { planVariantRuleChanges } from './variantRulePlan';
+import { planPropertyRemoval as planSitePropertyRemoval, removalChanges } from './propertyRemoval';
 interface PropertyLocation {
   readonly projectPath: string;
   readonly file: string;
@@ -22,14 +25,14 @@ export interface FileChange {
   readonly after: string;
 }
 
-export function planPropertyChanges(
-  request: PropertyEditRequest,
-  source: string,
-): Result<readonly FileChange[]> {
+export function planPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
   const change = request.change;
   const first = { file: request.file, before: request.source, after: source };
   if (change.kind === 'remove') {
     return planPropertyRemoval(request, first, change.name);
+  }
+  if (change.kind === 'variantRules') {
+    return planVariantRuleChanges(request, first, change.edit);
   }
   const propertyRename = propertyRenameForChange(change);
   const optionRenames = change.kind === 'save' ? (change.optionRenames ?? []) : [];
@@ -37,10 +40,7 @@ export function planPropertyChanges(
     return ok([first]);
   }
   if (change.kind !== 'save' || !change.originalName) {
-    return err({
-      code: 'option',
-      message: 'Only an existing property can rename options.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsExisting'));
   }
   const valid = validateOptionRenames(request.source, source, change, optionRenames);
   if (!valid.ok) {
@@ -56,19 +56,9 @@ export function planPropertyChanges(
     const own = sameFilesystemPath(file, request.file);
     const original = own ? source : consumer.source;
     const owner = own ? 'definition' : 'consumer';
-    const changed = planConsumerChange(
-      original,
-      names,
-      change,
-      propertyRename,
-      optionRenames,
-      owner,
-    );
+    const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
-      return err({
-        code: changed.error.code,
-        message: `${path.relative(request.projectPath, file)}: ${changed.error.message}`,
-      });
+      return err(inFile(path.relative(request.projectPath, file), changed.error));
     }
     if (own || changed.value !== original) {
       changes.push({
@@ -85,15 +75,11 @@ export function planPropertyChanges(
   return ok(changes);
 }
 
-function propertyRenameForChange(
-  change: PropertyChange,
-): { readonly from: string; readonly to: string } | undefined {
+function propertyRenameForChange(change: PropertyChange): { readonly from: string; readonly to: string } | undefined {
   if (change.kind !== 'save' || !change.originalName) {
     return undefined;
   }
-  return change.originalName === change.property.name
-    ? undefined
-    : { from: change.originalName, to: change.property.name };
+  return change.originalName === change.property.name ? undefined : { from: change.originalName, to: change.property.name };
 }
 
 function planConsumerChange(
@@ -104,9 +90,7 @@ function planConsumerChange(
   optionRenames: readonly PropertyOptionRename[],
   owner: 'definition' | 'consumer',
 ): Result<string> {
-  const renamed = propertyRename
-    ? renameComponentReferences(source, names, propertyRename, owner)
-    : ok(source);
+  const renamed = propertyRename ? renameComponentReferences(source, names, propertyRename, owner) : ok(source);
   if (!renamed.ok || optionRenames.length === 0) {
     return renamed;
   }
@@ -122,58 +106,35 @@ function validateOptionRenames(
   if (renames.length === 0) {
     return ok(undefined);
   }
-  const before = readComponentProperties(beforeSource).properties.find(
-    (property) => property.name === change.originalName,
-  );
-  const after = readComponentProperties(afterSource).properties.find(
-    (property) => property.name === change.property.name,
-  );
+  const before = readComponentProperties(beforeSource).properties.find((property) => property.name === change.originalName);
+  const after = readComponentProperties(afterSource).properties.find((property) => property.name === change.property.name);
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
-    return err({
-      code: 'option',
-      message: 'Option renames require an editable literal union.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsUnion'));
   }
   for (const rename of renames) {
     if (!beforeOptions.includes(rename.from) || !afterOptions.includes(rename.to)) {
-      return err({
-        code: 'option',
-        message: 'An option rename does not match the saved union.',
-      });
+      return err(refusal('option', 'props.edit.optionMismatch'));
     }
   }
   return ok(undefined);
 }
 
-function planPropertyRemoval(
-  request: PropertyEditRequest,
-  change: FileChange,
-  name: string,
-): Result<readonly FileChange[]> {
-  const consumers = readPropertyConsumers(request);
-  if (!consumers.ok) {
-    return consumers;
+// The component without the prop, and every instance without the value that passes it (propertyRemoval.ts).
+function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, name: string): Result<readonly FileChange[]> {
+  const plan = planSitePropertyRemoval(request, name);
+  if (!plan.ok) {
+    return plan;
   }
-  for (const consumer of consumers.value) {
-    const result = renameComponentReferences(
-      consumer.source,
-      consumer.names,
-      { from: name, to: '_stackiDeletedProperty' },
-      'consumer',
-    );
-    if (!result.ok) {
-      return result;
-    }
-    if (result.value !== consumer.source) {
-      return err({
-        code: 'in-use',
-        message:
-          `${consumer.file} still passes ${name}. ` +
-          'Remove that instance value before deleting the prop.',
-      });
-    }
+  const changes = removalChanges(plan.value);
+  if (!changes.ok) {
+    return changes;
   }
-  return ok([change]);
+  const component = changes.value.find((entry) => sameFilesystemPath(entry.file, request.file));
+  assert(component !== undefined, 'A removal writes the component');
+  // The definition edit already took the declarations out; the site plan may only take more out (a self-instance's value).
+  assert(component.before === change.before, 'The removal plans from the source the edit was checked against');
+  assert(component.after.length <= change.after.length, 'Removing instance values only takes text out of the component');
+  return changes;
 }

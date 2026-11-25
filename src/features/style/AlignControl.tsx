@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import Select, { type SelectOption } from './components/Select';
+import type { SelectOption } from './components/Select';
+import { VariableSelect } from './KeywordConnect';
+import VariableConnect from './VariableConnect';
 import { GroupLabel } from './TypographySection';
 import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
+import { assert } from '../../../shared/core/assert';
+import ImportantMark from './components/ImportantMark';
+import { displayOf } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
@@ -46,26 +54,19 @@ function Icon({ children, rotate = 0 }: { children: ReactNode; rotate?: number }
 }
 
 const JUSTIFY_FLEX_START_PATH =
-  'M2 14V1H3V5H11.5C11.7761 5 12 5.22386 12 5.5V6.5C12 6.77614 11.7761 7 11.5 7H3V8H7.5' +
-  'C7.77614 8 8 8.22386 8 8.5V9.5C8 9.77614 7.77614 10 7.5 10H3V14H2Z';
+  'M2 14V1H3V5H11.5C11.7761 5 12 5.22386 12 5.5V6.5C12 6.77614 11.7761 7 11.5 7H3V8H7.5' + 'C7.77614 8 8 8.22386 8 8.5V9.5C8 9.77614 7.77614 10 7.5 10H3V14H2Z';
 const JUSTIFY_CENTER_FIRST_PATH =
-  'M7 14V10H4.5C4.22386 10 4 9.77614 4 9.5V8.5C4 8.22386 4.22386 8 4.5 8H7V7H2.5' +
-  'C2.22386 7 2 6.77614 2 6.5V5.5C2 5.22386 2.22386 5 2.5 5H7V1H8V14H7Z';
+  'M7 14V10H4.5C4.22386 10 4 9.77614 4 9.5V8.5C4 8.22386 4.22386 8 4.5 8H7V7H2.5' + 'C2.22386 7 2 6.77614 2 6.5V5.5C2 5.22386 2.22386 5 2.5 5H7V1H8V14H7Z';
 const JUSTIFY_FLEX_END_PATH =
-  'M13 14V10H8.5C8.22386 10 8 9.77614 8 9.5V8.5C8 8.22386 8.22386 8 8.5 8H13V7H4.5' +
-  'C4.22386 7 4 6.77614 4 6.5V5.5C4 5.22386 4.22386 5 4.5 5H13V1H14V14H13Z';
+  'M13 14V10H8.5C8.22386 10 8 9.77614 8 9.5V8.5C8 8.22386 8.22386 8 8.5 8H13V7H4.5' + 'C4.22386 7 4 6.77614 4 6.5V5.5C4 5.22386 4.22386 5 4.5 5H13V1H14V14H13Z';
 const JUSTIFY_SPACE_BETWEEN_FIRST_PATH =
-  'M14 4L14 1L15 1L15 14L14 14L14 11L12.5 11C12.2239 11 12 10.7761 12 10.5L12 4.5' +
-  'C12 4.22386 12.2239 4 12.5 4L14 4Z';
+  'M14 4L14 1L15 1L15 14L14 14L14 11L12.5 11C12.2239 11 12 10.7761 12 10.5L12 4.5' + 'C12 4.22386 12.2239 4 12.5 4L14 4Z';
 const JUSTIFY_SPACE_BETWEEN_SECOND_PATH =
-  'M2 14L2 0.999999L3 0.999999L3 4L4.5 4C4.77614 4 5 4.22386 5 4.5L5 10.5' +
-  'C5 10.7761 4.77614 11 4.5 11L3 11L3 14L2 14Z';
+  'M2 14L2 0.999999L3 0.999999L3 4L4.5 4C4.77614 4 5 4.22386 5 4.5L5 10.5' + 'C5 10.7761 4.77614 11 4.5 11L3 11L3 14L2 14Z';
 const JUSTIFY_SPACE_AROUND_SECOND_PATH =
-  'M4.5 4C4.22386 4 4 4.22386 4 4.5L4 10.5C4 10.7761 4.22386 11 4.5 11H5.5' +
-  'C5.77614 11 6 10.7761 6 10.5L6 4.5C6 4.22386 5.77614 4 5.5 4L4.5 4Z';
+  'M4.5 4C4.22386 4 4 4.22386 4 4.5L4 10.5C4 10.7761 4.22386 11 4.5 11H5.5' + 'C5.77614 11 6 10.7761 6 10.5L6 4.5C6 4.22386 5.77614 4 5.5 4L4.5 4Z';
 const JUSTIFY_SPACE_AROUND_THIRD_PATH =
-  'M11.5 11C11.2239 11 11 10.7761 11 10.5V4.5C11 4.22386 11.2239 4 11.5 4L12.5 4' +
-  'C12.7761 4 13 4.22386 13 4.5V10.5C13 10.7761 12.7761 11 12.5 11H11.5Z';
+  'M11.5 11C11.2239 11 11 10.7761 11 10.5V4.5C11 4.22386 11.2239 4 11.5 4L12.5 4' + 'C12.7761 4 13 4.22386 13 4.5V10.5C13 10.7761 12.7761 11 12.5 11H11.5Z';
 
 // justify-content — authored HORIZONTAL (bars packed left→right).
 const JUSTIFY_PATHS: Record<string, ReactNode> = {
@@ -73,14 +74,8 @@ const JUSTIFY_PATHS: Record<string, ReactNode> = {
   center: (
     <>
       <path d={JUSTIFY_CENTER_FIRST_PATH} fill="currentColor" />
-      <path
-        d="M14 5.5C14 5.22386 13.7761 5 13.5 5H9V7H13.5C13.7761 7 14 6.77614 14 6.5V5.5Z"
-        fill="currentColor"
-      />
-      <path
-        d="M12 8.5C12 8.22386 11.7761 8 11.5 8H9V10H11.5C11.7761 10 12 9.77614 12 9.5V8.5Z"
-        fill="currentColor"
-      />
+      <path d="M14 5.5C14 5.22386 13.7761 5 13.5 5H9V7H13.5C13.7761 7 14 6.77614 14 6.5V5.5Z" fill="currentColor" />
+      <path d="M12 8.5C12 8.22386 11.7761 8 11.5 8H9V10H11.5C11.7761 10 12 9.77614 12 9.5V8.5Z" fill="currentColor" />
     </>
   ),
   'flex-end': <path d={JUSTIFY_FLEX_END_PATH} fill="currentColor" />,
@@ -122,28 +117,13 @@ const ALIGN_PATHS: Record<string, ReactNode> = {
   center: (
     <>
       <path d={ALIGN_CENTER_FIRST_PATH} fill="currentColor" />
-      <path
-        d="M8 9V13.5C8 13.7761 7.77614 14 7.5 14H6.5C6.22386 14 6 13.7761 6 13.5V9H8Z"
-        fill="currentColor"
-      />
-      <path
-        d="M10.5 12C10.7761 12 11 11.7761 11 11.5V9H9V11.5C9 11.7761 9.22386 12 9.5 12H10.5Z"
-        fill="currentColor"
-      />
+      <path d="M8 9V13.5C8 13.7761 7.77614 14 7.5 14H6.5C6.22386 14 6 13.7761 6 13.5V9H8Z" fill="currentColor" />
+      <path d="M10.5 12C10.7761 12 11 11.7761 11 11.5V9H9V11.5C9 11.7761 9.22386 12 9.5 12H10.5Z" fill="currentColor" />
     </>
   ),
   'flex-end': <path d={ALIGN_FLEX_END_PATH} fill="currentColor" />,
-  stretch: (
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M6 3L2 3V2H15V3L11 3V13L15 13V14L2 14V13H6L6 3ZM8 3L9 3L9 13H8L8 3Z"
-      fill="currentColor"
-    />
-  ),
-  baseline: (
-    <path fillRule="evenodd" clipRule="evenodd" d={ALIGN_BASELINE_PATH} fill="currentColor" />
-  ),
+  stretch: <path fillRule="evenodd" clipRule="evenodd" d="M6 3L2 3V2H15V3L11 3V13L15 13V14L2 14V13H6L6 3ZM8 3L9 3L9 13H8L8 3Z" fill="currentColor" />,
+  baseline: <path fillRule="evenodd" clipRule="evenodd" d={ALIGN_BASELINE_PATH} fill="currentColor" />,
 };
 
 // The icon for a value on a given SCREEN axis. Glyphs are authored for their natural
@@ -167,42 +147,14 @@ function iconFor(value: string, prop: string, axis: 'x' | 'y'): ReactNode {
 // so Space-between pushes them to the edges, Center sits them together, etc.
 const BASELINE_LETTER = (
   <svg viewBox="0 0 14 16" width="14" height="16" fill="none" aria-hidden="true">
-    <path
-      d="M2.6 10 L7 3 L11.4 10 M4.1 7.6 H9.9"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <line
-      x1="1.4"
-      y1="13"
-      x2="12.6"
-      y2="13"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M2.6 10 L7 3 L11.4 10 M4.1 7.6 H9.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="1.4" y1="13" x2="12.6" y2="13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 const BASELINE_ARROW = (
   <svg viewBox="0 0 14 16" width="14" height="16" fill="none" aria-hidden="true">
-    <path
-      d="M7 3 V9.2 M4.4 6.9 L7 9.6 L9.6 6.9"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <line
-      x1="1.4"
-      y1="13"
-      x2="12.6"
-      y2="13"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
+    <path d="M7 3 V9.2 M4.4 6.9 L7 9.6 L9.6 6.9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="1.4" y1="13" x2="12.6" y2="13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 
@@ -223,24 +175,24 @@ function norm(value: string): string {
 
 // Labels track the screen axis, not the property: start/end read as Left/Right on
 // the X axis and Top/Bottom on the Y axis.
-function axisLabel(value: string, axis: 'x' | 'y'): string {
+function axisLabel(value: string, axis: 'x' | 'y', translate: Translator): string {
   switch (value) {
     case 'flex-start':
-      return axis === 'x' ? 'Left' : 'Top';
+      return axis === 'x' ? translate('style.alignControl.left') : translate('style.alignControl.top');
     case 'flex-end':
-      return axis === 'x' ? 'Right' : 'Bottom';
+      return axis === 'x' ? translate('style.alignControl.right') : translate('style.alignControl.bottom');
     case 'center':
-      return 'Center';
+      return translate('style.alignControl.center');
     case 'space-between':
-      return 'Space between';
+      return translate('style.alignControl.spaceBetween');
     case 'space-around':
-      return 'Space around';
+      return translate('style.alignControl.spaceAround');
     case 'space-evenly':
-      return 'Space evenly';
+      return translate('style.alignControl.spaceEvenly');
     case 'stretch':
-      return 'Stretch';
+      return translate('style.alignControl.stretch');
     case 'baseline':
-      return 'Baseline';
+      return translate('style.alignControl.baseline');
     default:
       return value;
   }
@@ -248,7 +200,10 @@ function axisLabel(value: string, axis: 'x' | 'y'): string {
 
 // The free-text field shown in Custom mode: live-updates while typing, commits on
 // blur, and clears the property when emptied (mirrors the panel's other inputs).
+// Wrapped like every other field: a `var(--x)` here is the purple chip, never the
+// raw text it was, and a plain value has the dot to connect one.
 function CustomInput({
+  prop,
   value,
   busy,
   ariaLabel,
@@ -257,6 +212,7 @@ function CustomInput({
   onLive,
   onClear,
 }: {
+  prop: string;
   value: string;
   busy: boolean;
   ariaLabel: string;
@@ -281,33 +237,48 @@ function CustomInput({
       onClear();
     }
   };
+  const translate = useTranslate();
   return (
-    <input
-      className="u-select-custom-input"
-      value={draft}
-      onChange={(event) => {
-        setDraft(event.target.value);
-        scheduleLive(event.target.value);
-      }}
-      onFocus={() => {
-        focused.current = true;
-      }}
-      onBlur={() => {
-        focused.current = false;
-        cancelLive();
-        commit();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          commitInPlace(event.currentTarget);
-        }
-      }}
+    <VariableConnect
+      className="is-fill"
+      prop={prop}
+      canvasProperty={prop}
       disabled={busy}
-      spellCheck={false}
-      placeholder="unset"
-      aria-label={ariaLabel}
-      autoFocus={autoFocus}
-    />
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
+      onPick={(binding) => {
+        // The pick is the edit: a live preview still waiting must not land after it.
+        cancelLive();
+        setDraft(binding);
+        onCommit(binding);
+      }}
+    >
+      <input
+        className="u-select-custom-input"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          scheduleLive(event.target.value);
+        }}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onBlur={() => {
+          focused.current = false;
+          cancelLive();
+          commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commitInPlace(event.currentTarget);
+          }
+        }}
+        disabled={busy}
+        spellCheck={false}
+        placeholder="unset"
+        aria-label={ariaLabel}
+        autoFocus={autoFocus}
+      />
+    </VariableConnect>
   );
 }
 
@@ -337,17 +308,13 @@ function useLiveTimer(onLive: (value: string) => void) {
 
 // The options of one axis dropdown: its values with their screen-axis labels and
 // icons, then "Custom".
-function axisOptions(
-  values: readonly string[],
-  prop: string,
-  axis: 'x' | 'y',
-): SelectOption<string>[] {
+function axisOptions(values: readonly string[], prop: string, axis: 'x' | 'y', translate: Translator): SelectOption<string>[] {
   const options: SelectOption<string>[] = values.map((option) => ({
     value: option,
-    label: axisLabel(option, axis),
+    label: axisLabel(option, axis, translate),
     icon: iconFor(option, prop, axis),
   }));
-  options.push({ value: CUSTOM, label: 'Custom' });
+  options.push({ value: CUSTOM, label: translate('style.alignControl.custom') });
   return options;
 }
 
@@ -355,10 +322,7 @@ function axisOptions(
 // align-items, per direction); `fallback` is the CSS default shown when unset. The
 // last option is always "Custom", which seeds `unset` and reveals a free-text field
 // for any other value.
-type AxisSelectProps = Pick<
-  Props,
-  'busy' | 'read' | 'onSet' | 'onLive' | 'onClear' | 'onProvenance' | 'onSelectSelector'
-> & {
+type AxisSelectProps = Pick<Props, 'busy' | 'read' | 'onSet' | 'onLive' | 'onClear' | 'onProvenance' | 'onSelectSelector'> & {
   axis: 'x' | 'y';
   label: string;
   prop: string;
@@ -367,9 +331,12 @@ type AxisSelectProps = Pick<
   fallback: string;
 };
 function AxisSelect(props: AxisSelectProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { axis, prop, value, values, fallback, busy, onSet, onLive, onClear } = props;
+  const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
-  const ariaLabel = axis === 'x' ? 'Horizontal alignment' : 'Vertical alignment';
+  const ariaLabel = axis === 'x' ? translate('style.alignControl.horizontalAlignment') : translate('style.alignControl.verticalAlignment');
   const present = Boolean(value.trim());
   const normalized = norm(value);
   const known = values.includes(normalized);
@@ -378,7 +345,7 @@ function AxisSelect(props: AxisSelectProps) {
   // through to the CSS default below.
   const shownComputed = useHighlight('', present ? '' : prop, values, fallback);
   const customMode = forceCustom || (present && !known);
-  const options = axisOptions(values, prop, axis);
+  const options = axisOptions(values, prop, axis, translate);
 
   const pick = (choice: string) => {
     if (choice === CUSTOM) {
@@ -392,8 +359,7 @@ function AxisSelect(props: AxisSelectProps) {
   // Hover scrub: preview the option under the pointer on the canvas, and put the
   // original back when the list closes without a pick. "Custom" has no value of its own
   // to show, so landing on it reverts rather than previewing `unset`.
-  const preview = (option: string | undefined) =>
-    onLive(prop, option === CUSTOM ? undefined : option);
+  const preview = (option: string | undefined) => hoverPreview(prop, option === CUSTOM ? undefined : option, false);
 
   return (
     <div className="embed-editor_align-axis">
@@ -408,42 +374,123 @@ function AxisSelect(props: AxisSelectProps) {
         onProvenance={props.onProvenance}
         onSelectSelector={props.onSelectSelector}
       />
-      <Select
-        value={customMode ? CUSTOM : present ? normalized : shownComputed}
-        options={options}
-        ariaLabel={ariaLabel}
-        disabled={busy}
-        hideTriggerIcon
-        onChange={pick}
-        onPreview={(option) => preview(option ?? undefined)}
-        customInput={
-          customMode ? (
-            <CustomInput
-              value={value}
-              busy={busy}
-              ariaLabel={ariaLabel}
-              autoFocus={forceCustom}
-              onCommit={(next) => onSet(prop, next)}
-              onLive={(next) => onLive(prop, next)}
-              onClear={() => {
-                setForceCustom(false);
-                onClear(prop);
-              }}
-            />
-          ) : undefined
-        }
-      />
+      <ImportantMark important={displayOf(props.read(prop)).important}>
+        <VariableSelect
+          prop={prop}
+          rawValue={value}
+          onVariable={(binding) => {
+            setForceCustom(false);
+            onSet(prop, binding);
+          }}
+          value={customMode ? CUSTOM : present ? normalized : shownComputed}
+          options={options}
+          ariaLabel={ariaLabel}
+          disabled={busy}
+          hideTriggerIcon
+          onChange={pick}
+          onPreview={(option) => preview(option ?? undefined)}
+          customInput={
+            customMode ? (
+              <CustomInput
+                prop={prop}
+                value={value}
+                busy={busy}
+                ariaLabel={ariaLabel}
+                autoFocus={forceCustom}
+                onCommit={(next) => onSet(prop, next)}
+                onLive={(next) => onLive(prop, next)}
+                onClear={() => {
+                  setForceCustom(false);
+                  onClear(prop);
+                }}
+              />
+            ) : undefined
+          }
+        />
+      </ImportantMark>
     </div>
   );
 }
 
-const ALIGN_POSITIONS = ['flex-start', 'center', 'flex-end'];
+const ALIGN_POSITIONS = ['flex-start', 'center', 'flex-end'] as const;
+type AlignPosition = (typeof ALIGN_POSITIONS)[number];
 
-// The 3×3 click targets: start / center / end on each screen axis.
-function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onSet'>) {
-  // Screen X → horizontal property, screen Y → vertical property (flip on column).
-  const xProp = column ? 'align-items' : 'justify-content';
-  const yProp = column ? 'justify-content' : 'align-items';
+/** The box's values in screen terms: which property each axis drives and what it holds. */
+export interface AlignBoxState {
+  readonly justify: string;
+  readonly align: string;
+  readonly column: boolean;
+}
+
+/** A write the box makes: one property, one value. */
+export type AlignWrite = readonly [prop: string, value: string];
+
+// Screen X → horizontal property, screen Y → vertical property (flip on column).
+function axisProps(state: Pick<AlignBoxState, 'column'>): { readonly x: string; readonly y: string } {
+  return state.column ? { x: 'align-items', y: 'justify-content' } : { x: 'justify-content', y: 'align-items' };
+}
+
+function positionIndex(value: string): number {
+  return ALIGN_POSITIONS.findIndex((position) => position === value);
+}
+
+function valueOf(state: AlignBoxState, prop: string): string {
+  return norm(prop === 'justify-content' ? state.justify : state.align);
+}
+
+// Space between and Space around spread the items along the main axis: a dot
+// there names a cross-axis position, not a reason to bunch the items up again.
+function distributed(value: string): boolean {
+  return value === 'space-between' || value === 'space-around';
+}
+
+/**
+ * The writes a click on dot (x, y) makes. A distributed main axis keeps its
+ * distribution, so with Space between a dot in the vertical middle sets only
+ * the vertical alignment to center.
+ */
+export function alignDotWrites(state: AlignBoxState, x: AlignPosition, y: AlignPosition): readonly AlignWrite[] {
+  const props = axisProps(state);
+  const writes: AlignWrite[] = [];
+  for (const [prop, position] of [
+    [props.x, x],
+    [props.y, y],
+  ] as const) {
+    if (!(prop === 'justify-content' && distributed(valueOf(state, prop)))) {
+      writes.push([prop, position]);
+    }
+  }
+  assert(writes.length >= 1, 'A dot always sets the cross axis');
+  return writes;
+}
+
+/**
+ * The write an arrow key makes while the box has focus: Up and Down step the
+ * vertical alignment through start, center and end, Left and Right the
+ * horizontal one; a value that is not one of the three (stretch, baseline,
+ * space between) steps to center first. Undefined at an end, or for another key.
+ */
+export function alignArrowWrite(state: AlignBoxState, key: string): AlignWrite | undefined {
+  const props = axisProps(state);
+  const step = key === 'ArrowUp' || key === 'ArrowLeft' ? -1 : key === 'ArrowDown' || key === 'ArrowRight' ? 1 : 0;
+  if (step === 0) {
+    return undefined;
+  }
+  const prop = key === 'ArrowUp' || key === 'ArrowDown' ? props.y : props.x;
+  const at = positionIndex(valueOf(state, prop));
+  const next = at === -1 ? 'center' : ALIGN_POSITIONS[at + step];
+  if (next === undefined) {
+    return undefined;
+  }
+  assert(ALIGN_POSITIONS.includes(next), 'An arrow steps to a position');
+  return [prop, next];
+}
+
+// The 3×3 click targets: start / center / end on each screen axis. A
+// double-click toggles the main axis between Space between and that position.
+function AlignDots({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+  const translate = useTranslate();
+  const state: AlignBoxState = { justify, align, column };
   return (
     <div className="embed-editor_align-dots">
       {ALIGN_POSITIONS.map((ry) =>
@@ -453,10 +500,16 @@ function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onS
             type="button"
             className="embed-editor_align-dot"
             disabled={busy}
-            aria-label={`Align ${axisLabel(cx, 'x')} ${axisLabel(ry, 'y')}`}
+            aria-label={translate('style.alignControl.alignAt', { horizontal: axisLabel(cx, 'x', translate), vertical: axisLabel(ry, 'y', translate) })}
+            title={norm(justify) === 'space-between' ? translate('style.alignControl.alignHere') : translate('style.alignControl.spaceBetweenHint')}
             onClick={() => {
-              onSet(xProp, cx);
-              onSet(yProp, ry);
+              for (const [prop, value] of alignDotWrites(state, cx, ry)) {
+                onSet(prop, value);
+              }
+            }}
+            onDoubleClick={() => {
+              const position = column ? ry : cx;
+              onSet('justify-content', norm(justify) === 'space-between' ? position : 'space-between');
             }}
           >
             <span />
@@ -469,13 +522,8 @@ function AlignDots({ column, busy, onSet }: Pick<Props, 'column' | 'busy' | 'onS
 
 // The preview square: a 3×3 grid of click targets (start / center / end on each
 // axis) under a real-flex bar preview that lays out with the current values.
-function AlignBox({
-  justify,
-  align,
-  column,
-  busy,
-  onSet,
-}: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+  const translate = useTranslate();
   const justifyValue = norm(justify) || 'flex-start';
   const alignValue = norm(align) || 'stretch';
   const isBaseline = alignValue === 'baseline';
@@ -483,9 +531,7 @@ function AlignBox({
   // other value → a short fixed-length bar that align-items then positions (Webflow
   // shows the children as small ticks unless they're stretched).
   const cross = alignValue === 'stretch' ? undefined : '28%';
-  const barStyle: CSSProperties = column
-    ? { height: 2, width: cross }
-    : { width: 2, height: cross };
+  const barStyle: CSSProperties = column ? { height: 2, width: cross } : { width: 2, height: cross };
   // Baseline aligns items to the first text baseline — i.e. the cross-axis start (the
   // top of a row) — so pin the A↓ glyph there (like Webflow), while the other axis
   // (justify-content) still positions it left/center/right.
@@ -495,8 +541,20 @@ function AlignBox({
     alignItems: isBaseline ? 'flex-start' : alignValue,
   };
   return (
-    <div className="embed-editor_align-box">
-      <AlignDots column={column} busy={busy} onSet={onSet} />
+    <div
+      className="embed-editor_align-box"
+      role="group"
+      aria-label={translate('style.alignControl.alignment')}
+      onKeyDown={(event) => {
+        // Arrow keys move the alignment while focus is in the box (a dot just clicked).
+        const write = busy ? undefined : alignArrowWrite({ justify, align, column }, event.key);
+        if (write !== undefined) {
+          event.preventDefault();
+          onSet(write[0], write[1]);
+        }
+      }}
+    >
+      <AlignDots justify={justify} align={align} column={column} busy={busy} onSet={onSet} />
       <div className="embed-editor_align-preview" style={previewStyle} aria-hidden="true">
         {isBaseline ? (
           <>
@@ -504,44 +562,16 @@ function AlignBox({
             <span className="embed-editor_align-baseline">{BASELINE_ARROW}</span>
           </>
         ) : (
-          // Double-click the clustered bars → space-between; double-click a spread bar
-          // → collapse the main axis to that bar's position (start / center / end).
-          ALIGN_POSITIONS.map((position, i) => (
-            <span
-              key={i}
-              className="embed-editor_align-bar"
-              style={barStyle}
-              title={
-                justifyValue === 'space-between'
-                  ? 'Double-click to align here'
-                  : 'Double-click for Space between'
-              }
-              onDoubleClick={() =>
-                onSet(
-                  'justify-content',
-                  justifyValue === 'space-between' ? position : 'space-between',
-                )
-              }
-            />
-          ))
+          // Shown only: clicks fall through to the dots beneath, which a stretched
+          // bar used to cover, so its middle never set center.
+          ALIGN_POSITIONS.map((position) => <span key={position} className="embed-editor_align-bar" style={barStyle} />)
         )}
       </div>
     </div>
   );
 }
 
-export default function AlignControl({
-  justify,
-  align,
-  column,
-  busy,
-  read,
-  onSet,
-  onLive,
-  onClear,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export default function AlignControl({ justify, align, column, busy, read, onSet, onLive, onClear, onProvenance, onSelectSelector }: Props) {
   // X = horizontal screen axis, Y = vertical. In a column layout the main axis is
   // vertical, so justify/align swap which screen axis they drive.
   const xProp = column ? 'align-items' : 'justify-content';

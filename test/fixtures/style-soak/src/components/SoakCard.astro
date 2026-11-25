@@ -1,0 +1,29 @@
+---
+// A component with scoped styles: its class rules live in this file, scoped by Astro.
+---
+<div class="soak-card">
+  <h3 class="soak-card_title" id="soak-card-title">Scoped card title</h3>
+  <p class="soak-card_text" id="soak-card-text">Scoped card text.</p>
+</div>
+
+<style>
+  .soak-card {
+    padding: var(--space-5);
+    background-color: var(--background-2);
+    border-radius: var(--radius-main);
+  }
+  .soak-card_title {
+    font-family: var(--h3-font-family);
+    font-size: var(--h3);
+    line-height: var(--h3-line-height);
+    color: var(--text);
+  }
+  .soak-card_text {
+    font-size: var(--text-main);
+  }
+  @media screen and (max-width: 767px) {
+    .soak-card_title {
+      font-size: 1.5rem;
+    }
+  }
+</style>

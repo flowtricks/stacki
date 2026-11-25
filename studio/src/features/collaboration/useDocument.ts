@@ -1,13 +1,20 @@
+import { studioTranslate, studioWireText } from '../../shared/studioTranslate';
+import { documentStorageName } from '../../shared/workspaceIdentity';
 import { EditorHistory } from './editorHistory';
 import { SelectionIntent } from './selectionIntent';
 import { watchConnection } from './connectionWatch';
+import { SaveWatch } from './saveWatch';
+import { parseSaveSequence } from './saveProtocol';
+import { addCause, causeFromServerError, type AttentionCause } from './attention';
+import { parseMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { receiveSharedPublish } from '../publishing/sharedPublish';
 import { getEditorRole, subscribeRole } from '../roles/roleStore';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
 import { occurrenceOf, parsePeer, type Peer } from './presence';
-import { selectionOwner, selectionLockedMessage } from './selectionLock';
+import { selectionOwner } from './selectionLock';
 import { CursorChannel, participantId } from './cursorChannel';
 import { ActionableNotice } from '../notifications/notice';
+import { SourceStamp } from './sourceStamp';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { useEffect, useState } from 'react';
@@ -15,6 +22,8 @@ import { record, string, textChange } from '../../shared/validation';
 import type { Edit, TreeAction } from '../source/source';
 
 export const LOCAL = Symbol('local');
+// An unanswered structural action releases an undo after this long, so a lost answer cannot freeze undo.
+const ACTION_ANSWER_WAIT_MS = 3000;
 const STRUCTURE = Symbol('structure');
 export class SharedDocument {
   readonly cursors = new CursorChannel((message) => this.send(message));
@@ -25,7 +34,7 @@ export class SharedDocument {
     trackedOrigins: new Set([LOCAL, STRUCTURE]),
     captureTimeout: 400,
   });
-  readonly history = new EditorHistory(this.undo);
+  readonly history = new EditorHistory(this.undo, () => this.actionAnswered());
   private readonly stopRoleCapture = subscribeRole(() => this.undo.stopCapturing());
   recordCommand = this.history.record.bind(this.history);
   revision = 0;
@@ -36,19 +45,45 @@ export class SharedDocument {
   private page = '';
   private occurrence = 0;
   status = 'Connecting';
+  // Why the status reads 'Needs attention': every path that sets that status records its cause here, and a confirmed save clears them.
+  attention: readonly AttentionCause[] = [];
   error = '';
   get selectionNotice(): ActionableNotice | undefined {
     const owner = selectionOwner(this.peers, this.selfId, this.file, this.selected);
-    return owner
-      ? this.lockNotice(owner, this.selected, this.page || this.file, this.selectedOccurrence)
-      : undefined;
+    return owner ? this.lockNotice(owner, this.selected, this.page || this.file, this.selectedOccurrence) : undefined;
   }
   ready = false;
   private socket: WebSocket | undefined;
   private closed = false;
   private suspended = false;
   private attempts = 0;
-  private pending = 0;
+  private synchronized = false;
+  private saveRecoveries = 0;
+  // The save sequence of the last structural action sent and not yet answered. The
+  // server answers an applied action with its own update before the save
+  // acknowledgement; one acknowledged with no update, or answered with an error, was
+  // refused, and whatever the canvas showed ahead of it goes back (actionRefused).
+  private actionSaveValue: number | undefined;
+  // Actions between their call and their send: the checksum is computed first, and an undo in that gap
+  // would still take the step before the move.
+  private actionsStarting = 0;
+  private readonly actionWaiters = new Set<() => void>();
+  private get actionSave(): number | undefined {
+    return this.actionSaveValue;
+  }
+  // Whoever waits for the answer (undo, see actionAnswered) is released the moment the action stops being pending.
+  private set actionSave(value: number | undefined) {
+    this.actionSaveValue = value;
+    this.releaseActionWaiters();
+  }
+  private releaseActionWaiters() {
+    if (this.actionSaveValue === undefined && this.actionsStarting === 0) {
+      for (const release of [...this.actionWaiters]) {
+        release();
+      }
+    }
+  }
+  private readonly saves = new SaveWatch(() => this.recoverSave());
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopWatching?: () => void;
   private readonly listeners = new Set<() => void>();
@@ -56,19 +91,20 @@ export class SharedDocument {
   private readonly selectionIntent = new SelectionIntent();
   private epoch = '';
   private readonly persistence: IndexeddbPersistence;
-  private readonly name =
-    sessionStorage.getItem('studio-name') ?? `Editor ${Math.floor(Math.random() * 900 + 100)}`;
-  constructor(readonly file: string) {
-    this.persistence = new IndexeddbPersistence(
-      'astro-studio:' + location.origin + ':' + file,
-      this.doc,
-    );
+  private readonly stamp: SourceStamp;
+  private readonly name = sessionStorage.getItem('studio-name') ?? `Editor ${Math.floor(Math.random() * 900 + 100)}`;
+  constructor(
+    readonly file: string,
+    readonly workspaceId?: string,
+  ) {
+    this.stamp = new SourceStamp(file);
+    this.persistence = new IndexeddbPersistence(documentStorageName(location.origin, file, workspaceId), this.doc);
     sessionStorage.setItem('studio-name', this.name);
     this.doc.on('update', (update: Uint8Array, origin: unknown) => {
       this.revision++;
+      this.stamp.refresh(this.text.toString());
       if (origin === LOCAL || origin === this.undo) {
-        this.status =
-          this.socket?.readyState === WebSocket.OPEN ? 'Saving' : 'Offline · edits pending';
+        this.status = this.socket?.readyState === WebSocket.OPEN ? 'Saving' : 'Offline · edits pending';
         this.send({ type: 'update', epoch: this.epoch, update: encode(update) });
       }
       this.emit();
@@ -82,7 +118,7 @@ export class SharedDocument {
         this.connect();
       })
       .catch((error: unknown) => {
-        this.error = 'Offline storage unavailable: ' + String(error);
+        this.error = studioTranslate('studio.collab.offlineStorage', { message: String(error) });
         this.connect();
       });
   }
@@ -102,22 +138,16 @@ export class SharedDocument {
       return;
     }
     const socket = new WebSocket(
-      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/studio/sync?file=${encodeURIComponent(this.file)}&participant=${this.participant}`,
+      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/studio/sync?file=${encodeURIComponent(this.file)}&participant=${this.participant}&workspace=${encodeURIComponent(this.workspaceId ?? '')}`,
     );
     this.socket = socket;
+    this.synchronized = false;
     this.stopWatching?.();
     this.stopWatching = watchConnection(socket, () => {
       if (this.socket !== socket || this.closed || this.suspended) {
         return;
       }
-      this.stopWatching?.();
-      // Do not wait for the broken connection to complete a close handshake.
-      this.socket = undefined;
-      socket.close();
-      this.cursors.reset();
-      this.status = 'Reconnecting…';
-      this.emit();
-      this.connect();
+      this.restartConnection();
     });
     socket.addEventListener('message', (event) => {
       if (this.socket === socket && !this.closed) {
@@ -129,18 +159,15 @@ export class SharedDocument {
         return;
       }
       this.cursors.reset();
+      this.synchronized = false;
+      this.saves.reset();
       if (event.code === 4001) {
         this.status = 'Sign-in required';
-        this.error =
-          'Your session expired or repository access changed. Your local edits are preserved. Sign in again.';
+        this.error = studioTranslate('studio.collab.sessionExpired');
         this.emit();
         return;
       }
-      this.status = this.suspended
-        ? 'Saved'
-        : navigator.onLine
-          ? 'Reconnecting…'
-          : 'Offline · edits pending';
+      this.status = this.suspended ? this.status : navigator.onLine ? 'Reconnecting…' : 'Offline · edits pending';
       this.selected = '';
       this.emit();
       if (!this.closed && !this.suspended) {
@@ -149,31 +176,53 @@ export class SharedDocument {
       }
     });
   }
+  private restartConnection() {
+    this.disconnectConnection();
+    this.status = 'Reconnecting…';
+    this.emit();
+    this.connect();
+  }
+  private disconnectConnection() {
+    this.stopWatching?.();
+    this.saves.reset();
+    clearTimeout(this.reconnect);
+    // A broken proxy need not finish its close handshake before we reconnect.
+    const socket = this.socket;
+    this.socket = undefined;
+    this.synchronized = false;
+    socket?.close();
+    this.cursors.reset();
+  }
+  private recoverSave() {
+    if (this.closed || this.suspended) {
+      return;
+    }
+    if (this.saveRecoveries < 3) {
+      this.saveRecoveries++;
+      this.restartConnection();
+    } else {
+      this.disconnectConnection();
+      this.needAttention({ kind: 'save-unconfirmed' });
+      this.error = studioTranslate('studio.collab.saveUnconfirmed');
+      this.emit();
+    }
+  }
   private receive(event: MessageEvent) {
     try {
       const message = record(JSON.parse(string(event.data, 12_000_000)));
-      if (this.cursors.receive(message)) {
-        return;
-      }
-      if (message['type'] === 'project-changed') {
-        window.dispatchEvent(new CustomEvent('studio:project-changed'));
-        return;
-      }
-      if (message['type'] === 'publishing') {
-        receiveSharedPublish(message['state']);
-        return;
-      }
-      if (message['type'] === 'ping') {
-        this.send({ type: 'pong' });
+      if (this.receiveSignal(message)) {
         return;
       }
       if (message['type'] === 'sync' || message['type'] === 'update') {
         if (message['type'] === 'sync') {
           const epoch = string(message['epoch'], 100);
           if (this.epoch && this.epoch !== epoch) {
-            this.error =
-              'The server draft was replaced. This browser still has the previous draft; export its source before clearing this site’s stored data.';
+            this.error = studioTranslate('studio.collab.draftReplaced');
+            // A different document identity cannot converge by reconnecting. Keep
+            // the local draft intact and stop transport recovery until it is resolved.
             this.ready = false;
+            this.disconnectConnection();
+            this.needAttention({ kind: 'draft-replaced' });
             this.emit();
             return;
           }
@@ -182,11 +231,16 @@ export class SharedDocument {
           this.peers = [];
         }
         const shouldReplay = this.ready || this.doc.getMap('metadata').has('epoch');
+        if (message['ownAction'] === true) {
+          this.actionSave = undefined;
+        }
         this.applyServerUpdate(message);
         if (message['type'] === 'sync') {
           this.attempts = 0;
-          this.pending = 0;
+          this.saves.reset();
+          this.synchronized = true;
           this.ready = true;
+          this.attention = [];
           this.status = shouldReplay ? 'Saving' : 'Saved';
           if (shouldReplay) {
             this.send({
@@ -197,19 +251,24 @@ export class SharedDocument {
           }
           this.select(this.selection, this.page || this.file, this.occurrence);
         }
-        window.dispatchEvent(new CustomEvent('studio:source-updated'));
+        if (message['writePending'] !== true) {
+          notifySourceUpdated(message);
+        }
       } else if (message['type'] === 'saved') {
-        this.pending = Math.max(0, this.pending - 1);
-        this.status = this.pending ? 'Saving' : 'Saved';
+        const sequence = parseSaveSequence(message['save']);
+        if (this.actionSave !== undefined && sequence !== undefined && sequence >= this.actionSave) {
+          this.refuseAction();
+        }
+        this.receiveSaved(sequence);
       } else if (message['type'] === 'selection') {
         this.receiveSelection(message);
       } else if (message['type'] === 'error') {
-        this.error = string(message['message']);
-        this.status = 'Needs attention';
+        this.refuseAction();
+        this.error = studioWireText(message);
+        const reference = parseMessageRef(message['messageRef']);
+        this.needAttention(causeFromServerError(reference.ok ? reference.value.key : undefined, this.error));
       } else if (message['type'] === 'presence' && Array.isArray(message['peers'])) {
-        this.peers = message['peers']
-          .slice(0, 3000)
-          .map((peer: unknown) => parsePeer(peer, this.file));
+        this.peers = message['peers'].slice(0, 3000).map((peer: unknown) => parsePeer(peer, this.file));
       }
       this.emit();
     } catch (error) {
@@ -217,16 +276,94 @@ export class SharedDocument {
       this.emit();
     }
   }
+  private receiveSignal(message: Record<string, unknown>): boolean {
+    if (this.cursors.receive(message)) {
+      return true;
+    }
+    switch (message['type']) {
+      case 'project-changed':
+        window.dispatchEvent(new CustomEvent('studio:project-changed'));
+        return true;
+      case 'publishing':
+        receiveSharedPublish(message['state']);
+        return true;
+      case 'ping':
+        this.send({ type: 'pong' });
+        return true;
+      case 'source-written':
+        notifySourceUpdated(message);
+        return true;
+      default:
+        return false;
+    }
+  }
+  /**
+   * Resolves once the structural action sent last is answered (applied or refused), or after
+   * ACTION_ANSWER_WAIT_MS. Why: the navigator shows a move at once, but its undo step exists only
+   * when the server's update arrives; undoing in that gap would undo the step before the move, and
+   * the two edits then tangle (the 1.2.0 browser-test failure after a navigator drag).
+   */
+  actionAnswered(): Promise<void> {
+    if (this.actionSave === undefined && this.actionsStarting === 0) {
+      return Promise.resolve();
+    }
+    if (this.actionWaiters.size >= 100) {
+      throw new Error('Assertion failed: undo waiters stay bounded');
+    }
+    return new Promise<void>((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        this.actionWaiters.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, ACTION_ANSWER_WAIT_MS);
+      this.actionWaiters.add(release);
+    });
+  }
+  private refuseAction() {
+    if (this.actionSave === undefined) {
+      return;
+    }
+    this.actionSave = undefined;
+    window.dispatchEvent(new CustomEvent('studio:action-refused'));
+  }
+  private receiveSaved(sequence: number | undefined) {
+    if (!this.saves.saved(sequence)) {
+      return;
+    }
+    this.status = this.saves.pending ? 'Saving' : 'Saved';
+    if (!this.saves.pending) {
+      this.saveRecoveries = 0;
+      this.error = '';
+      this.attention = [];
+    }
+  }
+  private needAttention(cause: AttentionCause) {
+    this.status = 'Needs attention';
+    this.attention = addCause(this.attention, cause);
+    if (this.attention.length === 0) {
+      throw new Error('Assertion failed: a status that needs attention has a cause');
+    }
+  }
+  /**
+   * Sends the local edits again on a fresh connection, after a save that was not confirmed or stored. The sync handshake replays the whole
+   * local document, so nothing typed since is lost. A replaced draft is not repaired by this (see the epoch check in receive): that cause
+   * comes straight back, and the transport stays quiet.
+   */
+  retrySave() {
+    if (this.closed || this.suspended) {
+      return;
+    }
+    this.saveRecoveries = 0;
+    this.attempts = 0;
+    this.restartConnection();
+  }
   private applyServerUpdate(message: Record<string, unknown>) {
     const ownAction = message['ownAction'] === true;
     if (ownAction) {
       this.undo.stopCapturing();
     }
-    Y.applyUpdate(
-      this.doc,
-      decode(string(message['update'], 12_000_000)),
-      ownAction ? STRUCTURE : 'remote',
-    );
+    Y.applyUpdate(this.doc, decode(string(message['update'], 12_000_000)), ownAction ? STRUCTURE : 'remote');
     if (ownAction) {
       this.undo.stopCapturing();
     }
@@ -240,7 +377,7 @@ export class SharedDocument {
     }
     this.selection = this.selected = string(message['selection'], 500);
     this.selectedOccurrence = occurrenceOf(message['occurrence']);
-    this.error = typeof message['message'] === 'string' ? message['message'] : '';
+    this.error = typeof message['message'] === 'string' ? studioWireText(message) : '';
   }
   select(selection: string, page = this.file, occurrence = 0) {
     if (this.socket?.readyState !== WebSocket.OPEN) {
@@ -265,13 +402,13 @@ export class SharedDocument {
     return !selectionOwner(this.peers, this.selfId, this.file, selection);
   }
   private lockNotice(owner: Peer, selection: string, page: string, occurrence: number) {
-    return new ActionableNotice(selectionLockedMessage(owner), {
+    return new ActionableNotice(studioTranslate('studio.collab.selectionLocked', { name: owner.name }), {
       person: { id: owner.githubId, name: owner.name },
       action: {
-        label: 'Take over',
+        label: studioTranslate('studio.collab.takeOver'),
         run: () => {
           if (this.closed || this.socket?.readyState !== WebSocket.OPEN) {
-            throw new Error('The session changed. Select the element again.');
+            throw new Error(studioTranslate('studio.collab.sessionChanged'));
           }
           this.page = page;
           this.occurrence = occurrence;
@@ -294,7 +431,7 @@ export class SharedDocument {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         off();
-        reject(new Error('The save did not finish.'));
+        reject(new Error(studioTranslate('studio.collab.saveUnfinished')));
       }, 15000);
       const off = this.subscribe(() => {
         if (this.status === 'Saved') {
@@ -320,11 +457,7 @@ export class SharedDocument {
     }
     if (getEditorRole() === 'client') {
       const source = this.text.toString();
-      assertClientSourceChange(
-        this.file,
-        source,
-        source.slice(0, edit.start) + edit.text + source.slice(edit.end),
-      );
+      assertClientSourceChange(this.file, source, source.slice(0, edit.start) + edit.text + source.slice(edit.end));
     }
     const previous = this.text.toString().slice(edit.start, edit.end);
     const minimal = textChange(previous, edit.text);
@@ -333,48 +466,64 @@ export class SharedDocument {
       this.text.insert(edit.start + minimal.start, minimal.insert);
     }, LOCAL);
   }
-  async action(action: TreeAction) {
+  /** The canvas stamp of the source as it is now, for a change shown before its edit is answered (sourceStamp.ts). */
+  sourceStamp(): string | undefined {
+    return this.stamp.of(this.text.toString());
+  }
+  /** Sends a structural action; false when it was not sent (nothing to edit). */
+  async action(action: TreeAction): Promise<boolean> {
+    this.actionsStarting++;
+    try {
+      return await this.sendAction(action);
+    } finally {
+      this.actionsStarting--;
+      this.releaseActionWaiters();
+    }
+  }
+  private async sendAction(action: TreeAction): Promise<boolean> {
     if (getEditorRole() === 'client') {
       if (!this.file.startsWith('src/pages/')) {
-        throw new Error('Component source is protected in Client mode.');
+        throw new Error(studioTranslate('studio.collab.sourceProtected'));
       }
       assertClientAction(this.text.toString(), action);
     }
     if ('node' in action && !this.canEdit(action.node)) {
-      return;
+      return false;
     }
-    if (this.socket?.readyState !== WebSocket.OPEN) {
-      throw new Error('Reconnect before rearranging the page');
+    if (!this.synchronized || this.socket?.readyState !== WebSocket.OPEN) {
+      throw new Error(studioTranslate('studio.collab.reconnectFirst'));
     }
     const source = this.text.toString();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
     if (source !== this.text.toString()) {
-      throw new Error('The page changed; repeat the action');
+      throw new Error(studioTranslate('studio.collab.pageChanged'));
     }
-    const checksum = [...new Uint8Array(digest)]
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
+    const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
     this.send({ type: 'action', epoch: this.epoch, checksum, action });
+    return true;
   }
   private send(data: unknown) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        data.type === 'cursor' &&
-        this.socket.bufferedAmount > 64000
-      ) {
+      if (data && typeof data === 'object' && 'type' in data && data.type === 'cursor' && this.socket.bufferedAmount > 64000) {
         return;
       }
-      if (
-        data &&
-        typeof data === 'object' &&
-        'type' in data &&
-        (data.type === 'update' || data.type === 'action')
-      ) {
-        this.pending++;
+      if (data && typeof data === 'object' && 'type' in data && (data.type === 'update' || data.type === 'action')) {
+        // The sync handshake replays the complete local document, including edits
+        // made while the new socket was open but had not received its epoch yet.
+        if (!this.synchronized) {
+          return;
+        }
+        const save = this.saves.sent();
+        if (save === undefined) {
+          this.recoverSave();
+          return;
+        }
+        if (data.type === 'action') {
+          this.actionSave = save;
+        }
         this.status = 'Saving';
+        this.socket.send(JSON.stringify({ ...data, save }));
+        return;
       }
       this.socket.send(JSON.stringify(data));
     }
@@ -387,6 +536,7 @@ export class SharedDocument {
     clearTimeout(this.reconnect);
     if (suspended) {
       this.stopWatching?.();
+      this.saves.reset();
       this.socket?.close();
     } else {
       this.connect();
@@ -397,6 +547,7 @@ export class SharedDocument {
     this.stopRoleCapture();
     this.closed = true;
     this.stopWatching?.();
+    this.saves.reset();
     clearTimeout(this.reconnect);
     this.socket?.close();
     void this.persistence.destroy();
@@ -404,24 +555,24 @@ export class SharedDocument {
     this.doc.destroy();
   }
 }
-export function useDocument(file: string, active = true) {
+export function useDocument(file: string, active = true, workspaceId?: string) {
   const [document, setDocument] = useState<SharedDocument>();
   const [, refresh] = useState(0);
   useEffect(() => {
-    const document = new SharedDocument(file);
+    const document = new SharedDocument(file, workspaceId);
     setDocument(document);
     const unsubscribe = document.subscribe(() => refresh((value) => value + 1));
     return () => {
       unsubscribe();
       document.close();
     };
-  }, [file]);
+  }, [file, workspaceId]);
   useEffect(() => {
     document?.suspend(!active);
   }, [document, active]);
   // File sessions can change while the editor and preview stay mounted.
   // Never pair the previous document's source/actions with the new filename.
-  return document?.file === file ? document : undefined;
+  return document?.file === file && document.workspaceId === workspaceId ? document : undefined;
 }
 function encode(bytes: Uint8Array) {
   let result = '';
@@ -429,6 +580,13 @@ function encode(bytes: Uint8Array) {
     result += String.fromCharCode(...bytes.subarray(index, index + 8192));
   }
   return btoa(result);
+}
+function notifySourceUpdated(message: Readonly<Record<string, unknown>>): void {
+  window.dispatchEvent(
+    new CustomEvent('studio:source-updated', {
+      detail: message['structural'] === true || message['ownAction'] === true ? 'structure' : undefined,
+    }),
+  );
 }
 function decode(value: string) {
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));

@@ -91,9 +91,7 @@ test('stored and expanded trees are bounded independently', () => {
   for (let depth = 0; depth <= DEFAULT_LIMITS.depthMax; depth += 1) {
     child = { component: wrapper, children: [child] };
   }
-  assert.throws(() =>
-    parseComponentDefaults({ version: 1, components: { [wrapper]: { children: [child] } } }),
-  );
+  assert.throws(() => parseComponentDefaults({ version: 1, components: { [wrapper]: { children: [child] } } }));
   assert.throws(() =>
     parseComponentDefaults({
       version: 1,
@@ -156,9 +154,7 @@ test('metadata IPC validates both directions and restricts file selection', () =
     projectPath: '/site',
     kind: 'guide',
   });
-  assert.throws(() =>
-    parseIpcPayload('project:metadata', { projectPath: '/site', kind: '../secret' }),
-  );
+  assert.throws(() => parseIpcPayload('project:metadata', { projectPath: '/site', kind: '../secret' }));
   assert.deepEqual(parseMetadataResult({ ok: true, value: {} }), { ok: true, value: {} });
   assert.throws(() => parseMetadataResult({ ok: true, value: { source: 4 } }));
   assert.throws(() => parseMetadataResult({ ok: false, error: { code: 'disk' } }));

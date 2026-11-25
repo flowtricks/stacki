@@ -50,19 +50,11 @@ export const sourceLayers: RuleModule<MessageIds, [Options]> = {
     type: 'problem',
     docs: { description: 'Modules import along the structure of their root (docs/codebase.md).' },
     messages: {
-      layerOrder:
-        '{{from}} may not import {{to}}: a layer imports only the layers below it ({{order}}).',
-      areaEdge:
-        '{{root}}/{{from}} may not import {{root}}/{{to}}; it may import {{allowed}} ' +
-        '(eslint.config.mjs).',
-      crossFeature:
-        'features/{{from}} may not import {{target}}: features import each other only along ' +
-        'the edges eslint.config.mjs lists.',
-      outsideRoot:
-        '{{importer}} may not import {{target}}: renderer code reaches outside {{root}}/ only ' +
-        'into {{outside}}.',
-      extension:
-        "Relative imports carry no extension ('{{specifier}}'): tsc and Vite resolve the module.",
+      layerOrder: '{{from}} may not import {{to}}: a layer imports only the layers below it ({{order}}).',
+      areaEdge: '{{root}}/{{from}} may not import {{root}}/{{to}}; it may import {{allowed}} ' + '(eslint.config.mjs).',
+      crossFeature: 'features/{{from}} may not import {{target}}: features import each other only along ' + 'the edges eslint.config.mjs lists.',
+      outsideRoot: '{{importer}} may not import {{target}}: renderer code reaches outside {{root}}/ only ' + 'into {{outside}}.',
+      extension: "Relative imports carry no extension ('{{specifier}}'): tsc and Vite resolve the module.",
     },
     schema: [
       {
@@ -114,8 +106,7 @@ export const sourceLayers: RuleModule<MessageIds, [Options]> = {
       ExportAllDeclaration: (node) => check(node.source),
       ExportNamedDeclaration: (node) => check(node.source ?? undefined),
       ImportExpression: (node) => check(node.source),
-      TSImportType: (node) =>
-        check(node.argument.type === 'TSLiteralType' ? node.argument.literal : undefined),
+      TSImportType: (node) => check(node.argument.type === 'TSLiteralType' ? node.argument.literal : undefined),
     };
   },
 };
@@ -127,11 +118,7 @@ interface Verdict {
 
 // The whole decision, as a pure function of the options, the importing file
 // and the specifier: undefined when the import is allowed.
-export function importVerdict(
-  options: Options,
-  importer: string,
-  specifier: string,
-): Verdict | undefined {
+export function importVerdict(options: Options, importer: string, specifier: string): Verdict | undefined {
   if (!specifier.startsWith('.')) {
     return undefined;
   }

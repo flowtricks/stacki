@@ -17,14 +17,7 @@ export interface IconProps {
 // glance as Astro's rather than the project's or plain HTML's.
 export const ASTRO_ASSET_ACCENT = '#ff5d01';
 
-export const I = ({
-  children,
-  size = 16,
-  className,
-  style,
-  filled = false,
-  strokeWidth = 1.3,
-}: IconProps) => (
+export const I = ({ children, size = 16, className, style, filled = false, strokeWidth = 1.3 }: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -35,7 +28,7 @@ export const I = ({
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
     aria-hidden="true"
   >
     {children}
@@ -50,7 +43,7 @@ export const I24 = ({ children, size = 24, className, style }: IconProps) => (
     viewBox="0 0 24 24"
     fill="none"
     className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
     aria-hidden="true"
   >
     {children}

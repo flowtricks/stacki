@@ -4,15 +4,11 @@ import { assert } from '../../../../shared/core/assert';
 export type Answer = string | undefined;
 
 /** A read of one key: still being asked, or settled on the page's answer. */
-export type CachedAnswer =
-  { readonly kind: 'pending' } | { readonly kind: 'settled'; readonly answer: Answer };
+export type CachedAnswer = { readonly kind: 'pending' } | { readonly kind: 'settled'; readonly answer: Answer };
 
 // The page's reply for a batch of keys. Values stay `unknown` here because the bridge
 // reports a missing value as `null`; each one is narrowed to a string or "no answer".
-type Query = (
-  path: string,
-  keys: string[],
-) => Promise<Readonly<Record<string, unknown>> | undefined>;
+type Query = (path: string, keys: string[]) => Promise<Readonly<Record<string, unknown>> | undefined>;
 type Batches = Map<string, Map<string, Entry>>;
 
 const PENDING: CachedAnswer = { kind: 'pending' };

@@ -4,6 +4,7 @@
 // repoPath('src/editor/pageEdits.ts'), never path pieces or `../` — and stubs a
 // module by the file it resolves to, never by the text of an import, so a
 // changed specifier can never make a stub silently stop matching.
+const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -79,12 +80,13 @@ const PANEL_SOURCES = Object.freeze([
   'src/features/componentProperties/PropertyDefault.tsx',
   'src/features/componentProperties/PropertyEditor.tsx',
   'src/features/componentProperties/PropertyOptions.tsx',
-  'src/features/componentProperties/PropertyReadOnlyFields.tsx',
   'src/features/componentProperties/PropertyReorder.tsx',
+  'src/features/componentProperties/PropertySettingsDialog.tsx',
   'src/features/componentProperties/PropertyType.tsx',
   'src/features/props/PropsPanel.tsx',
   'src/features/git/PublishModal.tsx',
   'src/app/SaveConflictNotice.tsx',
+  'src/features/selectors/SelectorsPanel.tsx',
   'src/features/structure/StructurePanel.tsx',
   'src/features/structure/StructureTree.tsx',
   'src/features/style/StylePanel.tsx',
@@ -108,11 +110,45 @@ const PANEL_SOURCES = Object.freeze([
  * or undefined to keep the real component.
  */
 function stubPanels(name, stub) {
-  const stubs = PANEL_SOURCES.map((file) => [
-    file,
-    () => stub(path.basename(file, path.extname(file))),
-  ]);
+  const stubs = PANEL_SOURCES.map((file) => [file, () => withNamedExports(file, stub(path.basename(file, path.extname(file))))]);
   return stubSources(name, Object.fromEntries(stubs));
+}
+
+// A stub exports a default panel and little else, but modules that stay real import other names from a stubbed
+// file (the page settings dialog mounts InstancePropFields, the drop overlay draws outlineIcon, the source panels
+// call assetImportOf). esbuild refuses such a bundle with "No matching export", so each value export the real
+// file declares is also exported from the stub as a function that renders and returns nothing. The names are read
+// from the real file's own export statements, so a new export needs no edit here. Types are erased and skipped.
+function valueExportNames(file) {
+  const text = fs.readFileSync(repoPath(file), 'utf8');
+  const names = new Set();
+  for (const match of text.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)) {
+    names.add(match[1]);
+  }
+  for (const match of text.matchAll(/^export\s*(?!type\b)\{([^}]*)\}/gm)) {
+    for (const item of match[1].split(',')) {
+      const entry = item.trim();
+      if (entry.length > 0 && !entry.startsWith('type ')) {
+        names.add(
+          entry
+            .split(/\s+as\s+/)
+            .pop()
+            .trim(),
+        );
+      }
+    }
+  }
+  names.delete('default');
+  return [...names];
+}
+
+function withNamedExports(file, stubbed) {
+  if (stubbed === undefined) {
+    return stubbed;
+  }
+  const missing = valueExportNames(file).filter((exportName) => !new RegExp(`export\\s+(?:const|function|class)\\s+${exportName}\\b`).test(stubbed.contents));
+  const exported = missing.map((exportName) => `export const ${exportName} = () => null;`).join(' ');
+  return { ...stubbed, contents: `${stubbed.contents}\n${exported}\n` };
 }
 
 module.exports = { PANEL_SOURCES, ROOT, repoPath, sourceSpecifier, stubPanels, stubSources };

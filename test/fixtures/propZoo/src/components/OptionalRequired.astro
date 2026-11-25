@@ -1,0 +1,12 @@
+---
+interface Props {
+  name: string;
+  nickname?: string;
+  age?: number;
+  verified?: boolean;
+}
+const { name, nickname, age, verified } = Astro.props;
+---
+<p class="optional-required">
+  {name}{nickname && ` (${nickname})`}{age !== undefined && `, ${age}`}{verified && ' ✓'}
+</p>

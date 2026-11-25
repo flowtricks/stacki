@@ -1,11 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { Item } from './arrayValue';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import PropTip from './PropTip';
+import { reportActionToast } from '../../ui/errorNotices';
+import { itemFieldTitle } from '../../editor/itemFields';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Attr } from '../../../shared/page/pageNode';
+import type { Item, ItemField } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { PlusIcon, CloseIcon } from '../../ui/Icons';
+import { PlusIcon, CloseIcon, ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
 import ListFieldRow from '../../ui/ListFieldRow';
+import type { PickedAsset } from '../../ui/AssetField';
 import { allowDragEffect } from '../../editor/dragState';
-import { arrayItems, arrayText, blankLike, itemLabel, moveItem } from './arrayValue';
+import { arrayItems, arrayText, blankLike, itemLabel, moveItem, nestedItems } from './arrayValue';
+import type { SourceContext } from './bindingTypes';
+import ListScalarItem from './ListScalarItem';
+import { defaultItemOf, kindOfItem, listItemKindOf, type DeclaredItemType, type ListItemKind } from './listItemType';
+import { blankItemOf, conformedItem, itemFieldDeclaration, itemFieldDefinition, itemFieldOf, itemFieldValue, type ItemShapeField } from './listItemShape';
+import PropField from './PropField';
+import type { RichContext } from './RichContent';
 
 // A prop that takes a list, edited as a list.
 //
@@ -18,6 +31,16 @@ import { arrayItems, arrayText, blankLike, itemLabel, moveItem } from './arrayVa
 // always one thing: `{ value: "us", label: "United States" }` is a row with two
 // fields, and there is no room beside the row's own name for either of them.
 // One place to edit an item, whatever the item turns out to be.
+//
+// A list whose component declares its items (`items?: readonly { title:
+// string; featured: boolean }[]`) is given that shape (listItemShape.ts): each
+// field in the popup is the control its kind takes (a switch for a boolean, a
+// number box, an image card, a link box), every item shows every declared
+// field, and Add item starts from the shape even when the list is empty. Those
+// are PropField's own controls, so a field binds to data as any prop's does and
+// the code lands in the literal: `{ title: entry.data.title, number: 0 }`. An
+// instance that sets nothing shows the component's default items, dimmed, and
+// the first change writes the list from them.
 //
 // Every action writes the whole array back, because that is what the file
 // holds: one value, not a list of values. The code editor is still one press of
@@ -32,68 +55,266 @@ interface Position {
 }
 interface ItemEditorProps {
   readonly item: Item;
+  readonly shape: readonly ItemShapeField[] | undefined;
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  /** What the list's items are, and the type the component declares for them. */
+  readonly kind: ListItemKind;
+  readonly itemType: DeclaredItemType | undefined;
+  /** The quote the list's words are written in. */
+  readonly quote: string;
   readonly position: Position;
   readonly trigger: HTMLElement;
   readonly onChange: (item: Item) => void;
   readonly onClose: () => void;
 }
-function ItemEditor({ item, position, trigger, onChange, onClose }: ItemEditorProps) {
+function ItemEditor({
+  item: given,
+  shape,
+  projectPath,
+  bindContext,
+  dataContext,
+  kind,
+  itemType,
+  quote,
+  position,
+  trigger,
+  onChange,
+  onClose,
+}: ItemEditorProps) {
+  const translate = useTranslate();
   const ref = useListEditorDismiss(trigger, onClose);
-  const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    firstRef.current?.focus();
-    firstRef.current?.select();
-  }, []);
-
-  // A word is one field called Value; an object is its own fields, named as the
-  // file names them. Either way the popup is a list of labelled boxes, so there
-  // is one thing to learn rather than two.
-  const fields = item.fields || [{ key: 'value', text: item.text, quote: item.quote }];
-  const set = (i: number, text: string) => {
-    if (item.fields) {
-      onChange({
-        ...item,
-        fields: item.fields.map((field, at) => (at === i ? { ...field, text } : field)),
-      });
-      return;
+    const first = ref.current?.querySelector<HTMLInputElement>('input:not([type="color"]), .bind-input, .cm-content');
+    first?.focus();
+    if (first?.tagName === 'INPUT') {
+      first.select();
     }
-    onChange({ ...item, text });
-  };
+  }, [ref]);
 
+  // A plain value is one field of the kind the list's items are (a number input
+  // with the number icon for `number[]`); an object is its own fields, named as
+  // the file names them (every declared one, when the component declares them).
+  // Either way the popup is a list of labelled fields, so there is one thing
+  // to learn rather than two.
+  const item = conformedItem(given, shape, '"');
+  const fields = item.fields;
+  // The kind of a plain value: the list's, or its own where the list has no one kind.
+  const scalarKind = kind === 'text' || kind === 'number' || kind === 'switch' || kind === 'choice' ? kind : kindOfItem(item);
   return (
     <div
       ref={ref}
       className="attr-editor list-item-editor"
       style={{ top: position.top, left: position.left, width: position.width }}
+      onKeyDown={(event) => closeOnEnter(event, onClose)}
     >
       <div className="var-src-head">
-        <span className="var-src-name">{item.fields ? 'Item' : 'Value'}</span>
+        <span className="var-src-name">{translate('props.list.item')}</span>
         <span style={{ flex: 1 }} />
-        <button className="ghost" title="Close" onClick={onClose}>
+        <button className="ghost" title={translate('ui.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
-      {fields.map((field, i) => (
-        <label className="list-item-field" key={field.key}>
-          <span>{field.key}</span>
-          <input
-            ref={i === 0 ? firstRef : undefined}
-            value={field.text}
-            spellCheck={false}
-            maxLength={LIMITS.attrCharsMax}
-            onChange={(event) => set(i, event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                onClose();
-              }
-            }}
+      {fields === undefined ? (
+        <ListScalarItem
+          item={item}
+          kind={scalarKind}
+          declared={itemType}
+          quote={quote}
+          bindContext={bindContext}
+          dataContext={dataContext}
+          onChange={onChange}
+        />
+      ) : (
+        fields.map((field, at) => (
+          <ItemFieldControl
+            key={field.key}
+            field={field}
+            declaration={itemFieldDeclaration(field, shape)}
+            projectPath={projectPath}
+            bindContext={bindContext}
+            dataContext={dataContext}
+            onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
           />
-        </label>
+        ))
+      )}
+    </div>
+  );
+}
+
+// Enter closes the popup from a one-line field. Not from a code editor, where it
+// commits, nor from the data picker a field opened, where it belongs to the search.
+function closeOnEnter(event: React.KeyboardEvent<HTMLDivElement>, onClose: () => void): void {
+  const ElementType = event.currentTarget.ownerDocument.defaultView?.Element;
+  if (event.key !== 'Enter' || ElementType === undefined || !(event.target instanceof ElementType)) {
+    return;
+  }
+  if (event.target.closest('.bind-menu, .cm-editor') === null) {
+    event.preventDefault();
+    onClose();
+  }
+}
+
+// One field of an object item, drawn by PropField as any prop's field is: its
+// label, its `{}`, its bind dot, its chips, and the control its kind takes. A
+// List or a Group is a sub-editor of its own, drawn by NestedFieldEditor.
+function ItemFieldControl(props: {
+  readonly field: ItemField;
+  readonly declaration: ItemShapeField;
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onSet: (field: ItemField) => void;
+}) {
+  const { field, declaration, projectPath, onSet } = props;
+  // Code the list cannot hold yet stays on screen here, because the number box
+  // shows only what it is given and `-` has to survive on the way to `-2`.
+  const [draft, setDraft] = useState<Attr | undefined>(undefined);
+  if (declaration.kind === 'list' || declaration.kind === 'group') {
+    return (
+      <NestedFieldEditor
+        field={field}
+        declaration={declaration}
+        projectPath={projectPath}
+        bindContext={props.bindContext}
+        dataContext={props.dataContext}
+        onSet={onSet}
+      />
+    );
+  }
+  const write = (value: Attr | undefined): void => {
+    const next = itemFieldOf(field, value, declaration, '"');
+    setDraft(next === undefined ? heldDraft(value, declaration.kind) : undefined);
+    if (next !== undefined) {
+      onSet(next);
+    }
+  };
+  // An image in a list is a URL: the array literal can name a file in public/
+  // or one hosted elsewhere, but not import one from src/, which needs an import
+  // statement of its own.
+  const pickAsset = (_name: string, picked: PickedAsset): void => {
+    if (picked.root === 'public') {
+      write({ type: 'string', value: `/${picked.rel.split('/').slice(1).join('/')}` });
+    } else {
+      reportActionToast('A list item’s image is a URL: choose one from public/, or enter its address.', 'warning', []);
+    }
+  };
+  return (
+    <>
+      <PropField
+        nodeKey={`item:${field.key}`}
+        field={itemFieldDefinition(field.key, declaration)}
+        value={draft ?? itemFieldValue(field)}
+        bindContext={props.bindContext}
+        dataContext={props.dataContext}
+        assetContext={projectPath === undefined ? undefined : { projectPath, onPickAsset: pickAsset }}
+        onChange={write}
+      />
+    </>
+  );
+}
+
+// A List or a Group among an item's fields: a collapsible sub-editor with the
+// very rows and fields the item itself is edited with. A list is a ListField
+// over the nested array; a group is the fields of its one object. Both write
+// the nested literal back into the field as one value, so the file keeps one
+// array literal (arrayValue.ts).
+function NestedFieldEditor(props: {
+  readonly field: ItemField;
+  readonly declaration: Extract<ItemShapeField, { kind: 'list' | 'group' }>;
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onSet: (field: ItemField) => void;
+}) {
+  const translate = useTranslate();
+  const { field, declaration, onSet } = props;
+  const [open, setOpen] = useState(false);
+  const nested = field.quote === undefined ? nestedItems(field.text) : undefined;
+  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
+  const summary = declaration.kind === 'list' ? countLabel(nested?.length ?? 0, translate) : '';
+  return (
+    <div className="props-field list-item-nested" data-kind={declaration.kind}>
+      <button
+        type="button"
+        className="list-item-nested-head"
+        aria-expanded={open}
+        aria-label={translate('props.list.nestedLabel', { key: field.key, kind: itemFieldTitle(declaration.kind, translate) })}
+        onClick={() => setOpen(!open)}
+      >
+        <Chevron size={12} />
+        <span className="list-item-nested-name">{field.key}</span>
+        {/* Why there is nothing to open: this one is code, behind a "?" rather than a line beneath. */}
+        {nested === undefined && <PropTip text={translate(declaration.kind === 'list' ? 'props.list.listInCode' : 'props.list.groupInCode')} />}
+        {summary !== '' && <span className="list-item-nested-count">{summary}</span>}
+      </button>
+      {open && nested !== undefined && declaration.kind === 'list' && (
+        <ListField
+          value={field.text}
+          itemShape={declaration.fields}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          itemsMax={LIST_ITEMS_MAX}
+          onChange={(text) => onSet({ ...field, text })}
+        />
+      )}
+      {open && nested !== undefined && declaration.kind === 'group' && (
+        <GroupFields
+          fields={nested[0]?.fields ?? []}
+          shape={declaration.fields}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          onChange={(fields) => onSet({ ...field, text: arrayText([{ fields }]).slice(1, -1) })}
+        />
+      )}
+    </div>
+  );
+}
+
+// The fields of one object, each with the control its kind takes.
+function GroupFields(props: {
+  readonly fields: readonly ItemField[];
+  readonly shape: readonly ItemShapeField[];
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onChange: (fields: readonly ItemField[]) => void;
+}) {
+  const fields = conformedItem({ fields: props.fields }, props.shape, '"').fields ?? [];
+  return (
+    <div className="list-item-nested-body">
+      {fields.map((field, at) => (
+        <ItemFieldControl
+          key={field.key}
+          field={field}
+          declaration={itemFieldDeclaration(field, props.shape)}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          onSet={(next) => props.onChange(fields.map((own, index) => (index === at ? next : own)))}
+        />
       ))}
     </div>
   );
+}
+
+// "No items", "1 item", "3 items".
+function countLabel(count: number, translate: Translator): string {
+  return count === 0 ? translate('props.list.noItems') : translate('props.list.itemCount', { count });
+}
+
+// What a refused value is held as. As code, a number on its way (`-`) reads as
+// bound and PropField would swap the box for the code field under the caret;
+// as words it stays in the box until the next key makes it a number.
+function heldDraft(value: Attr | undefined, kind: ItemShapeField['kind']): Attr | undefined {
+  if (value?.type === 'expr' && kind === 'number' && /^[-+]?\.?$/.test(value.value.trim())) {
+    return { type: 'string', value: value.value };
+  }
+  return value;
 }
 
 function useListEditorDismiss(trigger: HTMLElement, onClose: () => void) {
@@ -110,7 +331,8 @@ function useListEditorDismiss(trigger: HTMLElement, onClose: () => void) {
       }
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      // A field's data picker takes its own Escape, and the item stays open under it.
+      if (event.key === 'Escape' && !ref.current?.querySelector('.bind-menu')) {
         event.stopPropagation();
         onClose();
       }
@@ -135,6 +357,9 @@ export function emptyNote(placeholder: unknown) {
   return !text || /^\[\s*\]$/.test(text) ? '' : text;
 }
 
+// A nested list holds as many items as a List property's own default does.
+const LIST_ITEMS_MAX = 100;
+
 export type ListFieldChange =
   | { readonly kind: 'edit'; readonly index: number }
   | { readonly kind: 'add' }
@@ -149,6 +374,17 @@ interface ListFieldProps {
   readonly itemsMin?: number;
   readonly itemsMax?: number;
   readonly valueCharsMax?: number;
+  /** The fields every item has, when the component declares them. */
+  readonly itemShape?: readonly ItemShapeField[] | undefined;
+  /** What each item is, when the component declares plain items (`number[]`): the item's editor takes that kind's control. */
+  readonly itemType?: DeclaredItemType | undefined;
+  /** The items shown, dimmed, while no value is set: the component's default list. */
+  readonly fallback?: string | undefined;
+  /** The project, for an image field's asset card. */
+  readonly projectPath?: string | undefined;
+  /** The data an item's fields can bind to. Absent, they take typed values and code. */
+  readonly bindContext?: RichContext | undefined;
+  readonly dataContext?: SourceContext | undefined;
 }
 type Editor =
   | { readonly kind: 'closed' }
@@ -174,15 +410,15 @@ type Drag =
     };
 
 export default function ListField(props: ListFieldProps) {
+  const translate = useTranslate();
   const state = useListField(props);
-  const note = emptyNote(props.placeholder);
+  const note = state.fallback ? '' : emptyNote(props.placeholder);
+  const { itemsRef, scrolls } = useItemsScroll(state.items.length);
   return (
-    <div className="list-field" onDragOver={(event) => event.preventDefault()} onDrop={state.drop}>
-      {state.items.length === 0 && note ? (
-        <div className="list-field-empty">{note}</div>
-      ) : undefined}
+    <div className={`list-field ${state.fallback ? 'is-fallback' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={state.drop}>
+      {state.items.length === 0 && note ? <div className="list-field-empty">{note}</div> : undefined}
       {state.items.length > 0 && (
-        <div className="list-field-items" onScroll={() => closeListRowEditor(state)}>
+        <div ref={itemsRef} className={`list-field-items${scrolls ? ' is-scrolling' : ''}`} onScroll={() => closeListRowEditor(state)}>
           {state.items.map((item, index) => (
             <ListRow key={index} item={item} index={index} state={state} />
           ))}
@@ -196,36 +432,58 @@ export default function ListField(props: ListFieldProps) {
           if (state.editor.kind === 'pending') {
             state.closePending();
           } else {
-            state.openAt(event, undefined, blankLike(state.items));
+            state.openAt(event, undefined, state.blank());
           }
         }}
       >
         <PlusIcon size={12} />
-        Add item
+        {translate('props.list.addItem')}
       </button>
       <ListEditor state={state} />
     </div>
   );
 }
 
+// Whether the rows overflow their box (a host caps its height, as Options does),
+// so Add item can sit over the last visible row and show that the list scrolls.
+// Measured after each layout and on resize; a list that fits is drawn as before.
+function useItemsScroll(count: number) {
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const element = itemsRef.current;
+    if (element === null) {
+      setScrolls(false);
+      return undefined;
+    }
+    const measure = (): void => setScrolls(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [count]);
+  return { itemsRef, scrolls };
+}
+
 function useListField(props: ListFieldProps) {
-  const {
-    value,
-    onChange,
-    disabled = false,
-    itemsMin = 0,
-    itemsMax = LIMITS.scanEntriesMax,
-    valueCharsMax = LIMITS.attrCharsMax,
-  } = props;
+  const { value, onChange, disabled = false, itemsMin = 0, itemsMax = LIMITS.scanEntriesMax, valueCharsMax = LIMITS.attrCharsMax, itemShape } = props;
   assert((value?.length ?? 0) <= valueCharsMax, 'ListField: value limit exceeded');
-  const items = arrayItems(value) || [];
+  const own = arrayItems(value, 0, 'bindable');
+  // Nothing set: the component's default items stand in, and the first change writes from them.
+  const fallbackItems = own === undefined && (value ?? '').trim() === '' ? arrayItems(props.fallback, 0, 'bindable') : undefined;
+  const fallback = fallbackItems !== undefined && fallbackItems.length > 0;
+  const items = own || fallbackItems || [];
   assert(items.length <= itemsMax, 'ListField: item count limit exceeded');
   const [editor, setEditor] = useState<Editor>({ kind: 'closed' });
-  const write = (
-    next: readonly Item[],
-    options: { readonly immediate: boolean; readonly change: ListFieldChange },
-  ) => {
+  const write = (next: readonly Item[], options: { readonly immediate: boolean; readonly change: ListFieldChange }) => {
     if (disabled) {
+      return;
+    }
+    // Opening and closing a default item changes nothing, and must not turn the defaults into the instance's own list.
+    if (fallback && next.length === items.length && next.every((item, index) => item === items[index])) {
       return;
     }
     const text = arrayText(next);
@@ -235,11 +493,7 @@ function useListField(props: ListFieldProps) {
   };
   const { drag, setDrag, drop } = useListDrag(items, write);
   // No index opens a new item, not yet in the list.
-  const openAt = (
-    event: React.MouseEvent<HTMLElement>,
-    index: number | undefined,
-    item: Item,
-  ): void => {
+  const openAt = (event: React.MouseEvent<HTMLElement>, index: number | undefined, item: Item): void => {
     setEditor(listEditorAt(event.currentTarget, index, item));
   };
   const closePending = (): void => {
@@ -262,8 +516,28 @@ function useListField(props: ListFieldProps) {
       },
     );
   };
+  // The next item: shaped as the component declares its items, else like the ones already there.
+  const quote = items.find((item) => item.quote)?.quote ?? items.flatMap((item) => item.fields ?? []).find((field) => field.quote)?.quote ?? '"';
+  const kind = listItemKindOf(props.itemType, items, itemShape);
+  // A new plain value starts as the list's kind is blank: a number at 0 (inside its bounds), a switch off.
+  const plain = kind !== 'object' && !items.some((item) => item.fields !== undefined);
+  const blank = (): Item => {
+    if (plain) {
+      return defaultItemOf(kind, props.itemType, quote);
+    }
+    return itemShape !== undefined && itemShape.length > 0 ? blankItemOf(itemShape, quote) : blankLike(items);
+  };
   return {
     items,
+    fallback,
+    blank,
+    kind,
+    itemType: props.itemType,
+    quote,
+    itemShape,
+    projectPath: props.projectPath,
+    bindContext: props.bindContext,
+    dataContext: props.dataContext,
     editor,
     setEditor,
     drag,
@@ -280,19 +554,24 @@ function useListField(props: ListFieldProps) {
 }
 function listEditorAt(trigger: HTMLElement, index: number | undefined, item: Item): Editor {
   const position = listPopupPosition(trigger);
-  return index === undefined
-    ? { kind: 'pending', item, position, trigger }
-    : { kind: 'existing', index, position, trigger };
+  return index === undefined ? { kind: 'pending', item, position, trigger } : { kind: 'existing', index, position, trigger };
 }
 
+// A new item is added once something is said in it: words in a text field,
+// or a number or a switch moved off where it started (0, off).
 function pendingListItem(editor: Editor): Item | undefined {
   if (editor.kind !== 'pending') {
     return undefined;
   }
-  const said = editor.item.fields
-    ? editor.item.fields.some((field) => String(field.text).trim())
-    : String(editor.item.text).trim();
+  const said = editor.item.fields ? editor.item.fields.some(fieldSaid) : String(editor.item.text).trim();
   return said ? editor.item : undefined;
+}
+
+function fieldSaid(field: ItemField): boolean {
+  if (field.quote !== undefined) {
+    return String(field.text).trim() !== '';
+  }
+  return field.text !== '0' && field.text !== 'false' && field.text !== '';
 }
 
 function useListDrag(
@@ -335,15 +614,8 @@ function listPopupPosition(element: HTMLElement): Position {
 
 type ListState = ReturnType<typeof useListField>;
 
-function ListRow({
-  item,
-  index,
-  state,
-}: {
-  readonly item: Item;
-  readonly index: number;
-  readonly state: ListState;
-}) {
+function ListRow({ item, index, state }: { readonly item: Item; readonly index: number; readonly state: ListState }) {
+  const translate = useTranslate();
   const { drag, editor, setDrag, remove, drop } = state;
   const dragging = drag.kind === 'dragging' ? drag.index : undefined;
   const gap = drag.kind === 'dragging' ? drag.gap : undefined;
@@ -375,21 +647,16 @@ function ListRow({
       expanded={open}
       disabled={state.disabled}
       removeDisabled={state.disabled || state.items.length <= state.itemsMin}
-      removeLabel={`Remove ${itemLabel(item) || 'item'}`}
+      removeLabel={translate('props.list.removeItem', { item: itemLabel(item) || translate('props.list.item') })}
       onOpen={(event) => toggleListRow(event, state, index, item)}
       onRemove={() => remove(index)}
     >
-      {itemLabel(item) || <span className="list-field-blank">Empty</span>}
+      {itemLabel(item) || <span className="list-field-blank">{translate('props.conditional.empty')}</span>}
     </ListFieldRow>
   );
 }
 
-function toggleListRow(
-  event: React.MouseEvent<HTMLElement>,
-  state: ListState,
-  index: number,
-  item: Item,
-): void {
+function toggleListRow(event: React.MouseEvent<HTMLElement>, state: ListState, index: number, item: Item): void {
   if (state.editor.kind === 'existing' && state.editor.index === index) {
     state.write(state.items, {
       immediate: true,
@@ -428,6 +695,13 @@ function ListEditor({ state }: { readonly state: ListState }) {
       return (
         <ItemEditor
           item={item}
+          shape={state.itemShape}
+          kind={state.kind}
+          itemType={state.itemType}
+          quote={state.quote}
+          projectPath={state.projectPath}
+          bindContext={state.bindContext}
+          dataContext={state.dataContext}
           position={editor.position}
           trigger={editor.trigger}
           onChange={(next) =>
@@ -447,11 +721,16 @@ function ListEditor({ state }: { readonly state: ListState }) {
       return (
         <ItemEditor
           item={editor.item}
+          shape={state.itemShape}
+          kind={state.kind}
+          itemType={state.itemType}
+          quote={state.quote}
+          projectPath={state.projectPath}
+          bindContext={state.bindContext}
+          dataContext={state.dataContext}
           position={editor.position}
           trigger={editor.trigger}
-          onChange={(item) =>
-            setEditor((current) => (current.kind === 'pending' ? { ...current, item } : current))
-          }
+          onChange={(item) => setEditor((current) => (current.kind === 'pending' ? { ...current, item } : current))}
           onClose={closePending}
         />
       );

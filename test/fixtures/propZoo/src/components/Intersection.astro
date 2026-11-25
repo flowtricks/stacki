@@ -1,0 +1,12 @@
+---
+type Base = {
+  id: string;
+  hidden?: boolean;
+};
+type Props = Base & {
+  title: string;
+  tone?: 'calm' | 'loud';
+};
+const { id, hidden = false, title, tone = 'calm' } = Astro.props;
+---
+<section class={`intersection tone-${tone}`} id={id} hidden={hidden}>{title}</section>

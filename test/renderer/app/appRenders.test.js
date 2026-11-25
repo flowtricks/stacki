@@ -107,12 +107,7 @@ const check = (what, condition, detail) => {
     {
       // Anything else: a function returning null, and an `on*` subscription
       // returning its own unsubscribe.
-      get: (target, prop) =>
-        prop in target
-          ? target[prop]
-          : typeof prop === 'string' && prop.startsWith('on')
-            ? () => () => {}
-            : noop,
+      get: (target, prop) => (prop in target ? target[prop] : typeof prop === 'string' && prop.startsWith('on') ? () => () => {} : noop),
     },
   );
   dom.window.avb = bridge;
@@ -152,14 +147,10 @@ const check = (what, condition, detail) => {
   check(
     'no hook reads something declared later in the component',
     !tdz,
-    tdz &&
-      `${tdz.split('\n').slice(0, 3).join('\n    ')}\n` +
-        `    → move that hook below the declaration it names`,
+    tdz && `${tdz.split('\n').slice(0, 3).join('\n    ')}\n` + `    → move that hook below the declaration it names`,
   );
 
-  const other = errors.filter(
-    (error) => !/before initialization/.test(error) && /Error|Warning: Failed/.test(error),
-  );
+  const other = errors.filter((error) => !/before initialization/.test(error) && /Error|Warning: Failed/.test(error));
   check(
     'nothing else was reported during render',
     other.length === 0,
@@ -183,9 +174,10 @@ const check = (what, condition, detail) => {
     // naming its file, so the split is by module rather than by line: xterm
     // ships a `confirm()` before opening a link from terminal output, minified
     // onto lines that say nothing about where they came from.
+    // Linked dependencies can have parent-relative or absolute module banners.
     const ours = bundle
       .split(/^(?=\/\/ \S+\n)/m)
-      .filter((chunk) => !/^\/\/ node_modules\//.test(chunk))
+      .filter((chunk) => !/^\/\/ (?:.*[/\\])?node_modules[/\\]/.test(chunk))
       .join('\n');
     const native = [...ours.matchAll(/(?<![.\w])(?:window\.)?(confirm|alert)\s*\(/g)]
       .map((match) => match[0])

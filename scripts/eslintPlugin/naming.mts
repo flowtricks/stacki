@@ -26,9 +26,7 @@ export const naming: RuleModule<MessageIds, [Options]> = {
     docs: { description: 'Names are unabbreviated, with qualifiers last (AGENTS.md §12).' },
     messages: {
       abbreviation: "'{{name}}' abbreviates '{{word}}': write '{{replacement}}' (AGENTS.md §12).",
-      qualifierFirst:
-        "'{{name}}' puts its qualifier first: write the quantity, then '{{qualifier}}' " +
-        '(latencyMsMax, not maxLatencyMs; AGENTS.md §12).',
+      qualifierFirst: "'{{name}}' puts its qualifier first: write the quantity, then '{{qualifier}}' " + '(latencyMsMax, not maxLatencyMs; AGENTS.md §12).',
     },
     schema: [
       {
@@ -68,11 +66,7 @@ export const naming: RuleModule<MessageIds, [Options]> = {
     }
 
     function checkFunction(
-      node:
-        | TSESTree.ArrowFunctionExpression
-        | TSESTree.FunctionDeclaration
-        | TSESTree.FunctionExpression
-        | TSESTree.TSDeclareFunction,
+      node: TSESTree.ArrowFunctionExpression | TSESTree.FunctionDeclaration | TSESTree.FunctionExpression | TSESTree.TSDeclareFunction,
     ): void {
       if (node.id) {
         check(node.id);
@@ -114,11 +108,7 @@ type NameProblem =
       readonly data: { readonly name: string; readonly qualifier: string };
     };
 
-export function nameProblem(
-  name: string,
-  words: ReadonlyMap<string, string>,
-  quantities: ReadonlySet<string>,
-): NameProblem | undefined {
+export function nameProblem(name: string, words: ReadonlyMap<string, string>, quantities: ReadonlySet<string>): NameProblem | undefined {
   const parts = identifierWords(name);
   for (const word of parts) {
     const replacement = words.get(word);

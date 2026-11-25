@@ -1,0 +1,232 @@
+// A tool call as one line (status, what it did, how long it took) that opens to the command, the
+// files it touched, its diff and its output. A card is closed unless it is an edit in a turn that
+// is still running (its diff is what the person is about to approve); what the person opens or
+// closes is remembered (transcriptUi.ts). Styled as Stacki is styled: background fills, never borders.
+import { memo, useId, useState } from 'react';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
+import { CodeBlock, CodeInline } from '../../../ui/CodeBlock';
+import { LoaderDots } from '../../../ui/LoaderDots';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  ExternalIcon,
+  FileIcon,
+  PencilIcon,
+  SearchIcon,
+  SparkleIcon,
+  TerminalIcon,
+  TrashIcon,
+  WarningTriangleIcon,
+} from '../../../ui/Icons';
+import { formatDuration } from '../chatStatus';
+import { UNNAMED_TOOL_TITLE, type ToolItem } from '../chatReducer';
+import { DiffView } from './DiffView';
+import { relativePath, relativeTitle } from './paths';
+import { PayloadDetails } from './PayloadDetails';
+import { useNow } from './ticker';
+import { isRawPayload, toolTitleText } from './toolWords';
+import { clampOutput, OUTPUT_PREVIEW_CHARS, toolDurationMs } from './transcriptModel';
+import { useOpenState } from './transcriptUi';
+
+/** A command longer than this is cut in the closed line; the open card shows it whole (bounded). */
+const COMMAND_CHARS_MAX = 4000;
+/** About how many characters of a command fit the closed line of a narrow panel. */
+const COMMAND_LINE_CHARS = 36;
+
+export interface ToolCardProps {
+  readonly item: ToolItem;
+  readonly chatId: string;
+  readonly projectPath: string;
+  /** The turn this call belongs to is running: a diff is shown open, and a running call counts its seconds. */
+  readonly live: boolean;
+  /** Calls nested under this one (a subagent's own calls); zero for an ordinary call. */
+  readonly childCount: number;
+  /** Drawn one step in, under the call it runs under; by default whenever it names a parent. */
+  readonly nested?: boolean | undefined;
+}
+
+export const ToolCard = memo(function ToolCard({ item, chatId, projectPath, live, childCount, nested }: ToolCardProps) {
+  const translate = useTranslate();
+  const hasOutput = item.output !== '';
+  const hasDiffs = item.diffs.length > 0;
+  const command = item.toolKind === 'execute' ? (item.command ?? item.title) : undefined;
+  const hasBody = hasDiffs || hasOutput || item.paths.length > 0 || command !== undefined;
+  const [open, change] = useOpenState(chatId, `tool:${item.id}`, { open: hasDiffs && live });
+  const bodyId = useId();
+  const Icon = toolIcon(item.toolKind);
+  const expanded = open && hasBody;
+  return (
+    <div className={`ai-tool ai-tool-${item.status}${(nested ?? item.parent !== undefined) ? ' ai-tool-nested' : ''}`}>
+      <button
+        className="ai-tool-head"
+        aria-expanded={hasBody ? expanded : undefined}
+        aria-controls={expanded ? bodyId : undefined}
+        disabled={!hasBody}
+        onClick={() => change({ open: !open })}
+      >
+        {hasBody ? expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} /> : <span className="ai-tool-spacer" />}
+        <Icon size={14} />
+        <span className="ai-tool-title">
+          {command === undefined ? (
+            item.title === UNNAMED_TOOL_TITLE ? (
+              translate('ai.tool.untitled')
+            ) : (
+              relativeTitle(toolTitleText(item.title, item.toolName, translate), projectPath)
+            )
+          ) : (
+            <CodeInline text={closedCommand(command)} language="shell" />
+          )}
+        </span>
+        {childCount > 0 && <span className="ai-tool-count">{translate('ai.tool.calls', { count: childCount })}</span>}
+        <ToolTime item={item} />
+        <ToolStatus item={item} />
+      </button>
+      {expanded && (
+        <div className="ai-tool-body" id={bodyId}>
+          {command !== undefined && showsCommand(command) && (
+            <CodeBlock className="ai-tool-command" text={command.slice(0, COMMAND_CHARS_MAX)} language="shell" />
+          )}
+          {item.diffs.length === 0 && item.paths.length > 0 && !(hasOutput && item.paths.length === 1) && (
+            <ul className="ai-tool-paths">
+              {item.paths.map((file) => (
+                <li key={file}>{relativePath(file, projectPath)}</li>
+              ))}
+            </ul>
+          )}
+          {item.diffs.map((diff, index) => (
+            <DiffView key={`${diff.path}-${index}`} diff={diff} projectPath={projectPath} />
+          ))}
+          {hasOutput && (isRawPayload(item) ? <PayloadDetails text={item.output} /> : <ToolOutput item={item} />)}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/** The tool's output: a preview of it, with the rest on request, in a block that scrolls and is coloured as what it is. */
+function ToolOutput({ item }: { readonly item: ToolItem }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
+  const [all, setAll] = useState(false);
+  const clamped = all
+    ? { text: item.output, hidden: 0 }
+    : clampOutput(item.output, { from: item.toolKind === 'execute' ? 'end' : 'start', limit: OUTPUT_PREVIEW_CHARS });
+  const fromEnd = item.toolKind === 'execute';
+  return (
+    <>
+      {clamped.hidden > 0 && fromEnd && (
+        <div className="ai-tool-more">{translate('ai.tool.hiddenEarlier', { count: clamped.hidden, total: formatNumber(clamped.hidden) })}</div>
+      )}
+      <CodeBlock className="ai-tool-output" text={clamped.text} filename={outputFilename(item)} label={translate('ai.tool.output')} />
+      {clamped.hidden > 0 && !fromEnd && (
+        <div className="ai-tool-more">{translate('ai.tool.hiddenMore', { count: clamped.hidden, total: formatNumber(clamped.hidden) })}</div>
+      )}
+      {clamped.hidden > 0 && (
+        <button className="ai-tool-showall" onClick={() => setAll(true)}>
+          {translate('ai.tool.showAll')}
+        </button>
+      )}
+    </>
+  );
+}
+
+/** How long the call took: counted live while it runs (one shared ticker), fixed once it ends; nothing under a second or without stamps. */
+function ToolTime({ item }: { readonly item: ToolItem }) {
+  const { formatNumber } = useFormat();
+  if (item.status === 'in_progress' && item.at !== undefined) {
+    return <RunningTime startedAt={item.at} />;
+  }
+  const duration = toolDurationMs(item);
+  return duration !== undefined && duration >= 1000 ? <span className="ai-tool-time">{formatDuration(duration, formatNumber)}</span> : undefined;
+}
+
+function RunningTime({ startedAt }: { readonly startedAt: number }) {
+  const { formatNumber } = useFormat();
+  const elapsed = useNow() - startedAt;
+  return elapsed >= 1000 ? <span className="ai-tool-time">{formatDuration(elapsed, formatNumber)}</span> : undefined;
+}
+
+function ToolStatus({ item }: { readonly item: ToolItem }) {
+  const translate = useTranslate();
+  switch (item.status) {
+    case 'pending':
+      return (
+        <span className="ai-tool-status" role="img" aria-label={translate('ai.tool.status.waiting')}>
+          <ClockIcon size={12} />
+        </span>
+      );
+    case 'in_progress':
+      return (
+        <span className="ai-tool-status ai-status-in_progress">
+          <LoaderDots label={translate('ai.tool.status.running')} dotPx={3} />
+        </span>
+      );
+    case 'completed':
+      return item.exitCode !== undefined && item.exitCode !== 0 ? (
+        <span className="ai-tool-status ai-status-failed">{translate('ai.tool.exit', { code: item.exitCode })}</span>
+      ) : (
+        <span className="ai-tool-status ai-status-completed" role="img" aria-label={translate('ai.tool.status.done')}>
+          <CheckIcon size={12} />
+        </span>
+      );
+    case 'failed':
+      return (
+        <span className="ai-tool-status ai-status-failed" role="img" aria-label={translate('ai.tool.status.failed')}>
+          <WarningTriangleIcon size={12} />
+        </span>
+      );
+    default: {
+      const exhaustive: never = item.status;
+      return exhaustive;
+    }
+  }
+}
+
+// A read of one file returns that file's text, so it is coloured as the file's
+// language; any other output (a command's log, a search's matches) is not code
+// in one language and shows uncoloured, in the same block.
+function outputFilename(item: ToolItem): string | undefined {
+  if (item.toolKind === 'read') {
+    return item.paths.length === 1 ? item.paths[0] : undefined;
+  }
+  return undefined;
+}
+
+/** The open card repeats the command when the closed line cut it: more than one line, or longer than fits the panel. */
+function showsCommand(command: string): boolean {
+  return command.includes('\n') || command.length > COMMAND_LINE_CHARS;
+}
+
+/** The first line of a command, marked when more follows, and never longer than the bound. */
+function closedCommand(command: string): string {
+  const line = (command.split('\n')[0] ?? '').slice(0, COMMAND_CHARS_MAX);
+  return line.length < command.length ? `${line} …` : line;
+}
+
+function toolIcon(kind: ToolItem['toolKind']) {
+  switch (kind) {
+    case 'read':
+      return FileIcon;
+    case 'edit':
+    case 'move':
+      return PencilIcon;
+    case 'delete':
+      return TrashIcon;
+    case 'search':
+      return SearchIcon;
+    case 'execute':
+      return TerminalIcon;
+    case 'fetch':
+      return ExternalIcon;
+    case 'think':
+    case 'switch_mode':
+    case 'other':
+      return SparkleIcon;
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}

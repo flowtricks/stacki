@@ -1,19 +1,17 @@
 // How text breaks and wraps: word-break and white-space, overflow-wrap, and
 // truncation with text-overflow (TypographySection.tsx).
 
-import { useState } from 'react';
-import Select, { type SelectOption } from './components/Select';
-import SegmentedControl from './components/SegmentedControl';
+import type { SelectOption } from './components/Select';
+import { KeywordSegments, VariableSelect } from './KeywordConnect';
+import SegmentedControl from '../../ui/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
-import { displayOf } from './model/styleDisplay';
-import {
-  type Props,
-  joinImportant,
-  CUSTOM,
-  PropLabel,
-  LiveInput,
-  useSegCustomFocus,
-} from './TypographyKit';
+import { displayOf, withImportant } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
+import { type Props, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './TypographyKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────── Breaking (word-break / white-space) ───────────────
 
@@ -21,18 +19,18 @@ import {
 // (white-space) — each stacked over its own clickable label (mirrors Webflow).
 export type BreakDefinition = {
   prop: string;
-  label: string;
-  ariaLabel: string;
+  labelKey: MessageKey;
+  ariaLabelKey: MessageKey;
   /** CSS default shown selected when unset (the label stays dim until set). */
   fallback: string;
-  /** [css value, menu label] pairs, in Webflow's order. */
+  /** [css value, menu label] pairs, in Webflow's order. The labels are the CSS keywords, which designers read untranslated. */
   options: ReadonlyArray<readonly [string, string]>;
 };
 
 export const WORD_BREAK: BreakDefinition = {
   prop: 'word-break',
-  label: 'Word',
-  ariaLabel: 'Word breaking',
+  labelKey: 'style.textWrapRows.word',
+  ariaLabelKey: 'style.textWrapRows.wordBreaking',
   fallback: 'normal',
   options: [
     ['normal', 'Normal'],
@@ -42,8 +40,8 @@ export const WORD_BREAK: BreakDefinition = {
 };
 export const WHITE_SPACE: BreakDefinition = {
   prop: 'white-space',
-  label: 'Line',
-  ariaLabel: 'Line breaking',
+  labelKey: 'style.textWrapRows.line',
+  ariaLabelKey: 'style.textWrapRows.lineBreaking',
   fallback: 'normal',
   options: [
     ['normal', 'Normal'],
@@ -70,8 +68,11 @@ export type EnumSelectProps = {
 } & Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp'>;
 
 export function EnumSelect(props: EnumSelectProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { prop, ariaLabel, fallback, options: choices, forceCustom, setForceCustom } = props;
   const { read, busy, setProp, clearProp, liveSetProp } = props;
+  const translate = useTranslate();
   const display = displayOf(read(prop));
   const values = new Set(choices.map(([value]) => value));
   const current = display.present ? display.value.trim().toLowerCase() : '';
@@ -84,11 +85,12 @@ export function EnumSelect(props: EnumSelectProps) {
     choices.map(([value]) => value),
     fallback,
   );
-  const customMode = forceCustom || (display.present && !matched);
+  // A flagged value opens the custom field, whose text shows `!important`.
+  const customMode = forceCustom || (display.present && !matched) || display.important;
 
   const options: SelectOption<string>[] = [
     ...choices.map(([value, optionLabel]) => ({ value, label: optionLabel })),
-    { value: CUSTOM, label: 'Custom…' },
+    { value: CUSTOM, label: translate('style.textWrapRows.custom') },
   ];
 
   // Focus + select the custom field once its `unset` write settles (busy clears), so
@@ -109,20 +111,24 @@ export function EnumSelect(props: EnumSelectProps) {
   };
 
   return (
-    <Select
+    <VariableSelect
+      prop={prop}
+      rawValue={display.present ? display.value : ''}
+      onVariable={(binding) => {
+        setForceCustom(false);
+        setProp(prop, binding, display.important);
+      }}
       value={customMode ? CUSTOM : (matched ?? shownComputed)}
       options={options}
       onChange={pick}
-      onPreview={(value) =>
-        liveSetProp(prop, value === CUSTOM ? undefined : (value ?? undefined), false)
-      }
+      onPreview={(value) => hoverPreview(prop, value === CUSTOM ? undefined : (value ?? undefined), false)}
       ariaLabel={ariaLabel}
       disabled={busy}
       customInput={
         customMode ? (
           <LiveInput
             inputRef={inputRef}
-            value={display.present ? joinImportant(display) : 'unset'}
+            value={display.present ? withImportant(display) : 'unset'}
             busy={busy}
             placeholder={prop}
             ariaLabel={ariaLabel}
@@ -152,8 +158,9 @@ export function BreakSelect({
   onProvenance,
   onSelectSelector,
 }: { definition: BreakDefinition } & Props) {
-  const { prop, label, ariaLabel, fallback, options } = definition;
-  const [forceCustom, setForceCustom] = useState(false);
+  const { prop, labelKey, ariaLabelKey, fallback, options } = definition;
+  const translate = useTranslate();
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const display = displayOf(read(prop));
   const onClear = () => {
     setForceCustom(false);
@@ -163,7 +170,7 @@ export function BreakSelect({
     <div className="embed-editor_type-cell">
       <EnumSelect
         prop={prop}
-        ariaLabel={ariaLabel}
+        ariaLabel={translate(ariaLabelKey)}
         fallback={fallback}
         options={options}
         forceCustom={forceCustom}
@@ -175,7 +182,7 @@ export function BreakSelect({
         liveSetProp={liveSetProp}
       />
       <PropLabel
-        label={label}
+        label={translate(labelKey)}
         prop={prop}
         display={display}
         contributors={read(prop)?.contributors ?? []}
@@ -191,9 +198,10 @@ export function BreakSelect({
 // The Breaking row: a static "Breaking" label in the shared label column, then the
 // Word + Line dropdowns sharing the control area.
 export function BreakingRow(props: Props) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_break-row">
-      <span className="embed-editor_size-label embed-editor_break-title">Breaking</span>
+      <span className="embed-editor_size-label embed-editor_break-title">{translate('style.textWrapRows.breaking')}</span>
       <div className="embed-editor_break-pair">
         <BreakSelect definition={WORD_BREAK} {...props} />
         <BreakSelect definition={WHITE_SPACE} {...props} />
@@ -201,6 +209,12 @@ export function BreakingRow(props: Props) {
     </div>
   );
 }
+
+/** Truncate's two keywords (text-overflow), shared with a code chip's keyword popover. */
+export const TEXT_OVERFLOW_OPTIONS: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
+  { value: 'clip', label: 'Clip' }, // i18n-ignore: CSS keyword.
+  { value: 'ellipsis', label: 'Ellipsis' }, // i18n-ignore: CSS keyword.
+];
 
 // ─────────────── Wrap (overflow-wrap) ───────────────
 
@@ -211,16 +225,9 @@ export const WRAP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 // A single full-width row: the "Wrap" label + the overflow-wrap dropdown.
-export function WrapRow({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  liveSetProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
-  const [forceCustom, setForceCustom] = useState(false);
+export function WrapRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
+  const translate = useTranslate();
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const display = displayOf(read('overflow-wrap'));
   const onClear = () => {
     setForceCustom(false);
@@ -229,7 +236,7 @@ export function WrapRow({
   return (
     <div className="embed-editor_size-row">
       <PropLabel
-        label="Wrap"
+        label={translate('style.textWrapRows.wrap')}
         prop="overflow-wrap"
         display={display}
         contributors={read('overflow-wrap')?.contributors ?? []}
@@ -240,7 +247,7 @@ export function WrapRow({
       />
       <EnumSelect
         prop="overflow-wrap"
-        ariaLabel="Text wrap"
+        ariaLabel={translate('style.textWrapRows.textWrap')}
         fallback="normal"
         options={WRAP_OPTIONS}
         forceCustom={forceCustom}
@@ -259,30 +266,15 @@ export function WrapRow({
 
 // ─────────────── Truncate (text-overflow) ───────────────
 
-export function TruncateRow({
-  read,
-  busy,
-  setProp,
-  clearProp,
-  onProvenance,
-  onSelectSelector,
-}: Props) {
+export function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSelectSelector }: Props) {
+  const translate = useTranslate();
   const display = displayOf(read('text-overflow'));
-  const shownOverflow = useHighlight(
-    '',
-    display.present ? '' : 'text-overflow',
-    ['clip', 'ellipsis'],
-    'clip',
-  );
-  const current = display.present
-    ? display.value.trim().toLowerCase() === 'ellipsis'
-      ? 'ellipsis'
-      : 'clip'
-    : shownOverflow;
+  const shownOverflow = useHighlight('', display.present ? '' : 'text-overflow', ['clip', 'ellipsis'], 'clip');
+  const current = display.present ? (display.value.trim().toLowerCase() === 'ellipsis' ? 'ellipsis' : 'clip') : shownOverflow;
   return (
     <div className="embed-editor_size-row">
       <PropLabel
-        label="Truncate"
+        label={translate('style.textWrapRows.truncate')}
         prop="text-overflow"
         display={display}
         contributors={read('text-overflow')?.contributors ?? []}
@@ -291,16 +283,27 @@ export function TruncateRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <SegmentedControl
-        options={[
-          { value: 'clip', label: 'Clip' },
-          { value: 'ellipsis', label: 'Ellipsis' },
-        ]}
-        value={current}
-        onChange={(value) => setProp('text-overflow', value, false)}
-        ariaLabel="Truncate"
-        disabled={busy}
-      />
+      {/* Two segments and no custom field: a flagged value is marked, and a
+          pick keeps the flag, since there is no text to delete it from. */}
+      <ImportantMark important={display.important}>
+        <KeywordSegments
+          prop="text-overflow"
+          value={display.present ? display.value : ''}
+          important={display.important}
+          ariaLabel={translate('style.textWrapRows.truncate')}
+          busy={busy}
+          onWrite={(value, important) => setProp('text-overflow', value, important)}
+          onClear={() => clearProp('text-overflow')}
+        >
+          <SegmentedControl
+            options={TEXT_OVERFLOW_OPTIONS}
+            value={current}
+            onChange={(value) => setProp('text-overflow', value, display.important)}
+            ariaLabel={translate('style.textWrapRows.truncate')}
+            disabled={busy}
+          />
+        </KeywordSegments>
+      </ImportantMark>
     </div>
   );
 }

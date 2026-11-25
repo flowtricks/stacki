@@ -21,14 +21,7 @@
 import { assert } from '../core/assert';
 import { blankLinePrefix, markdownPrefix } from './markdownLayout';
 import type { Placement } from './intent';
-import {
-  nodeAtPath,
-  parentPath,
-  siblingsOf,
-  startsWith,
-  textOf,
-  type ValidProjection,
-} from './planSupport';
+import { nodeAtPath, parentPath, siblingsOf, startsWith, textOf, type ValidProjection } from './planSupport';
 import { toByteSpan, type ByteSpan, type ByteString } from '../core/span';
 import type { ProjectedNode } from '../page/sourceProjection';
 
@@ -64,11 +57,7 @@ export function markdownRemoved(projection: ValidProjection, node: ProjectedNode
  * it, or the gap after it, whichever leaves its neighbours separated; between
  * two blocks that no remaining gap separates, a blank line in their place.
  * Undefined when that blank line has no prefix to be written with. */
-export function markdownRemoval(
-  bytes: ByteString,
-  projection: ValidProjection,
-  node: ProjectedNode,
-): MarkdownSplice | undefined {
+export function markdownRemoval(bytes: ByteString, projection: ValidProjection, node: ProjectedNode): MarkdownSplice | undefined {
   assert(node.list === 'blocks' || node.list === 'items', 'Only blocks and items are removed');
   const { previous, next } = neighboursOf(projection, node);
   if (previous !== undefined) {
@@ -86,12 +75,7 @@ export function markdownRemoval(
 }
 
 // A block between two others: keep whichever gap separates them.
-function blockRemoval(
-  bytes: ByteString,
-  previous: ProjectedNode,
-  node: ProjectedNode,
-  next: ProjectedNode,
-): MarkdownSplice | undefined {
+function blockRemoval(bytes: ByteString, previous: ProjectedNode, node: ProjectedNode, next: ProjectedNode): MarkdownSplice | undefined {
   if (separates('blocks', gapText(bytes, previous, node))) {
     return { range: toByteSpan(node.span.start, next.span.start), text: '' };
   }
@@ -120,10 +104,7 @@ export function markdownBeside(
       return { node, side: placement };
     case 'first-child':
     case 'last-child': {
-      const children = projection.nodes.filter(
-        (candidate) =>
-          candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path),
-      );
+      const children = projection.nodes.filter((candidate) => candidate.path.length === node.path.length + 1 && startsWith(candidate.path, node.path));
       const child = placement === 'first-child' ? children[0] : children[children.length - 1];
       if (child === undefined) {
         return undefined;
@@ -244,11 +225,7 @@ function separates(list: 'blocks' | 'items', gap: string): boolean {
  * destination's prefix instead of its own. Undefined when a line carries
  * neither its container's prefix nor, blank, that prefix's visible part — a
  * lazy continuation line, whose meaning is its place. */
-export function reprefixed(
-  bytes: ByteString,
-  node: ProjectedNode,
-  destination: string,
-): string | undefined {
+export function reprefixed(bytes: ByteString, node: ProjectedNode, destination: string): string | undefined {
   const source = markdownPrefix(bytes, node.span.start);
   if (source === undefined) {
     return undefined;

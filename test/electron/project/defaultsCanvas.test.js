@@ -5,9 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  registerProjectMetadataHandlers,
-} = require('#dist/electron/handlers/projectMetadataHandlers.js');
+const { registerProjectMetadataHandlers } = require('#dist/electron/handlers/projectMetadataHandlers.js');
 const { parseIpcPayload } = require('#dist/shared/ipc/ipcPayloads.js');
 test('desktop creates and removes only bounded temporary defaults canvases', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-defaults-canvas-'));
@@ -17,8 +15,7 @@ test('desktop creates and removes only bounded temporary defaults canvases', (co
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
     assertInProject: (file) => assert.ok(file.startsWith(fs.realpathSync(root) + path.sep)),
   });
-  const invoke = (channel, input) =>
-    handlers.get(channel)(undefined, parseIpcPayload(channel, input));
+  const invoke = (channel, input) => handlers.get(channel)(undefined, parseIpcPayload(channel, input));
   const file = '.stacki/canvas/12345678-1234-1234-1234-123456789012.astro';
   const canvas = { file, source: '<main>Starting content</main>' };
   assert.deepEqual(invoke('project:createDefaultsCanvas', { projectPath: root, canvas }), { file });
@@ -37,8 +34,5 @@ test('desktop creates and removes only bounded temporary defaults canvases', (co
   fs.rmSync(path.join(root, '.stacki/canvas'), { recursive: true });
   fs.mkdirSync(path.join(root, 'outside'));
   fs.symlinkSync(path.join(root, 'outside'), path.join(root, '.stacki/canvas'));
-  assert.throws(
-    () => invoke('project:createDefaultsCanvas', { projectPath: root, canvas }),
-    /symbolic/,
-  );
+  assert.throws(() => invoke('project:createDefaultsCanvas', { projectPath: root, canvas }), /symbolic/);
 });

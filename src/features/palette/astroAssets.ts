@@ -47,6 +47,7 @@ const COMMON: readonly BuiltinField[] = [
 
 export const ASTRO_ASSETS: readonly AstroAsset[] = [
   {
+    // i18n-ignore: Astro's component name.
     name: 'Image',
     // What it renders — used for the icon, so the row shows an image glyph.
     tag: 'img',
@@ -64,6 +65,7 @@ export const ASTRO_ASSETS: readonly AstroAsset[] = [
     ],
   },
   {
+    // i18n-ignore: Astro's component name.
     name: 'Picture',
     tag: 'picture',
     blurb: 'Responsive <picture> from astro:assets',

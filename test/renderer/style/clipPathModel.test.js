@@ -10,7 +10,17 @@
 // test/fixtures/clipPath/characterization.json were recorded from ClipPath.tsx
 // while it was still one file. The functions are bundled from the modules they
 // now live in and run in jsdom (SVG import parses with DOMParser); every recorded
-// value must come back equal.
+// value must come back equal. One deliberate change since: the preview draws
+// absolute lengths at their real size (a px is a screen pixel, a rem 16px), so
+// the eight recorded `preview` values with px or rem lengths were re-recorded.
+// A second: a raw clip-path (one with px, rem or bare-zero lengths) now writes
+// back the text it was read from, not its parse spelled out to four sides, so
+// the two raw inset cases were re-recorded — their formatted, normalized,
+// reparsed and unsized preview CSS, and the code highlights and token ranges
+// of that shorter text. A third: an SVG with nothing drawn in it is no
+// shape, so the two empty-SVG cases were re-recorded as undefined; they used to
+// fall through to the default shape, as if pasting `<svg></svg>` drew it.
+// Nothing else changed.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -39,9 +49,7 @@ const MODULES = {
 function loadFunctions() {
   assert.deepEqual(Object.keys(MODULES).sort(), [...FUNCTION_NAMES].sort());
   const folder = repoPath('src/features/style/clipPath');
-  const lines = Object.entries(MODULES).map(
-    ([name, module]) => `export { ${name} } from ${JSON.stringify(path.join(folder, module))};`,
-  );
+  const lines = Object.entries(MODULES).map(([name, module]) => `export { ${name} } from ${JSON.stringify(path.join(folder, module))};`);
   const outfile = repoPath('node_modules/.stacki-test/clip-path-model.bundle.cjs');
   esbuild.buildSync({
     stdin: { contents: lines.join('\n'), resolveDir: folder, loader: 'ts' },
@@ -88,9 +96,7 @@ test('the split editor reproduces every recorded clip-path behaviour', () => {
   for (const name of ['window', 'document', 'DOMParser', 'Element', 'Node', 'SVGElement']) {
     global[name] = name === 'window' ? dom.window : dom.window[name];
   }
-  const expected = JSON.parse(
-    fs.readFileSync(repoPath('test/fixtures/clipPath/characterization.json'), 'utf8'),
-  );
+  const expected = JSON.parse(fs.readFileSync(repoPath('test/fixtures/clipPath/characterization.json'), 'utf8'));
   const actual = runCases(loadFunctions());
   for (const section of ['css', 'svg', 'fit']) {
     assert.ok(Object.keys(expected[section]).length > 0, `${section} has recorded cases`);

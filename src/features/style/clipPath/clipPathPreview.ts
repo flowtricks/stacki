@@ -14,41 +14,17 @@ import {
 } from './clipPathTypes';
 import { CORNERS } from './clipPathConstants';
 import { formatCssUnitValue, formatCssCoordinateValue } from './clipPathMeasure';
-import {
-  HANDLE_COLOR_CLASSES,
-  handleColorClass,
-  polygonPointColorClass,
-  shorthandGroups,
-} from './clipPathHandles';
-import {
-  splitTopLevelWhitespace,
-  splitTopLevelChar,
-  splitTopLevelKeyword,
-  splitShapeCommandList,
-} from './clipPathParse';
-import {
-  formatShapeValueFromCssSubpaths,
-  parseShapeCssSubpaths,
-  mapShapeCssSubpathPoints,
-} from './shapeFunctionModel';
+import { HANDLE_COLOR_CLASSES, handleColorClass, polygonPointColorClass, shorthandGroups } from './clipPathHandles';
+import { splitTopLevelWhitespace, splitTopLevelChar, splitTopLevelKeyword, splitShapeCommandList } from './clipPathParse';
+import { formatShapeValueFromCssSubpaths, parseShapeCssSubpaths, mapShapeCssSubpathPoints } from './shapeFunctionModel';
 import { addPreviewVariableFallbacks, previewCssCoordinateToken } from './clipPathFormat';
 
-export function formatCssCoordinateValueForPreview(
-  value: CssCoordinateValue,
-  axis?: 'x' | 'y',
-  size?: CanvasSize,
-) {
+export function formatCssCoordinateValueForPreview(value: CssCoordinateValue, axis?: 'x' | 'y', size?: CanvasSize) {
   const formatted = formatCssCoordinateValue(value);
-  return axis && size
-    ? previewCssCoordinateToken(formatted, axis, size)
-    : addPreviewVariableFallbacks(formatted);
+  return axis && size ? previewCssCoordinateToken(formatted, axis, size) : addPreviewVariableFallbacks(formatted);
 }
 
-export function formatCssUnitValueForPreview(
-  value: CssUnitValue,
-  axis: 'x' | 'y',
-  size: CanvasSize,
-) {
+export function formatCssUnitValueForPreview(value: CssUnitValue, axis: 'x' | 'y', size: CanvasSize) {
   return previewCssCoordinateToken(formatCssUnitValue(value), axis, size);
 }
 
@@ -57,18 +33,11 @@ export function expandCssShorthandTokens(tokens: string[]) {
   return [first, tokens[1] || first, tokens[2] || first, tokens[3] || tokens[1] || first];
 }
 
-export function formatRawEditableClipPathForPreview(
-  editable: RawEditableClipPath,
-  size: CanvasSize,
-) {
+export function formatRawEditableClipPathForPreview(editable: RawEditableClipPath, size: CanvasSize) {
   if (editable.kind === 'polygon') {
     const prefix = editable.fillRule ? `${editable.fillRule}, ` : '';
     const points = editable.points
-      .map(
-        (point) =>
-          `${formatCssCoordinateValueForPreview(point.x, 'x', size)} ` +
-          formatCssCoordinateValueForPreview(point.y, 'y', size),
-      )
+      .map((point) => `${formatCssCoordinateValueForPreview(point.x, 'x', size)} ` + formatCssCoordinateValueForPreview(point.y, 'y', size))
       .join(', ');
     return `polygon(${prefix}${points})`;
   }
@@ -100,12 +69,8 @@ export function formatRawEditableClipPathForPreview(
 
   const horizontalValues = expandCssUnitValues(editable.radii.horizontal);
   const verticalValues = expandCssUnitValues(editable.radii.vertical || editable.radii.horizontal);
-  const horizontal = horizontalValues
-    .map((value) => formatCssUnitValueForPreview(value, 'x', size))
-    .join(' ');
-  const vertical = verticalValues
-    .map((value) => formatCssUnitValueForPreview(value, 'y', size))
-    .join(' ');
+  const horizontal = horizontalValues.map((value) => formatCssUnitValueForPreview(value, 'x', size)).join(' ');
+  const vertical = verticalValues.map((value) => formatCssUnitValueForPreview(value, 'y', size)).join(' ');
   const verticalSuffix = horizontal === vertical ? '' : ` / ${vertical}`;
   return `inset(${sides} round ${horizontal}${verticalSuffix})`;
 }
@@ -126,10 +91,7 @@ export function formatShapeFunctionForPreview(shape: ShapeFunctionShape, size: C
 
 // A raw `x y` coordinate pair, each token given its preview fallbacks for its own axis.
 export function previewCssCoordinatePair(xToken: string, yToken: string, size: CanvasSize) {
-  return (
-    `${previewCssCoordinateToken(xToken, 'x', size)} ` +
-    previewCssCoordinateToken(yToken, 'y', size)
-  );
+  return `${previewCssCoordinateToken(xToken, 'x', size)} ` + previewCssCoordinateToken(yToken, 'y', size);
 }
 
 export function formatRawClipPathStringForPreview(value: string, size: CanvasSize) {
@@ -159,9 +121,7 @@ export function previewRawPolygon(argument: string, size: CanvasSize) {
   const pointParts = fillRule ? parts.slice(1) : parts;
   const points = pointParts.map((part) => {
     const tokens = splitTopLevelWhitespace(part);
-    return tokens.length === 2
-      ? previewCssCoordinatePair(tokens[0] ?? '', tokens[1] ?? '', size)
-      : part;
+    return tokens.length === 2 ? previewCssCoordinatePair(tokens[0] ?? '', tokens[1] ?? '', size) : part;
   });
   return `polygon(${[fillRule, ...points].filter(Boolean).join(', ')})`;
 }
@@ -178,17 +138,14 @@ export function previewCenterSuffix(centerPart: string | undefined, size: Canvas
 export function previewRawCircle(argument: string, size: CanvasSize) {
   const [radiusPart, centerPart] = splitTopLevelKeyword(argument, 'at');
   const radiusTokens = splitTopLevelWhitespace(radiusPart);
-  const radius = radiusTokens[0]
-    ? previewCssCoordinateToken(radiusTokens[0], 'x', size)
-    : radiusPart;
+  const radius = radiusTokens[0] ? previewCssCoordinateToken(radiusTokens[0], 'x', size) : radiusPart;
   return `circle(${radius}${previewCenterSuffix(centerPart, size)})`;
 }
 
 export function previewRawEllipse(argument: string, size: CanvasSize) {
   const [radiiPart, centerPart] = splitTopLevelKeyword(argument, 'at');
   const radii = splitTopLevelWhitespace(radiiPart);
-  const previewRadii =
-    radii.length === 2 ? previewCssCoordinatePair(radii[0] ?? '', radii[1] ?? '', size) : radiiPart;
+  const previewRadii = radii.length === 2 ? previewCssCoordinatePair(radii[0] ?? '', radii[1] ?? '', size) : radiiPart;
   return `ellipse(${previewRadii}${previewCenterSuffix(centerPart, size)})`;
 }
 
@@ -198,9 +155,7 @@ export function previewRawInset(argument: string, size: CanvasSize) {
   const previewSides =
     sides.length >= 1 && sides.length <= 4
       ? expandCssShorthandTokens(sides)
-          .map((token, index) =>
-            previewCssCoordinateToken(token, index % 2 === 0 ? 'y' : 'x', size),
-          )
+          .map((token, index) => previewCssCoordinateToken(token, index % 2 === 0 ? 'y' : 'x', size))
           .join(' ')
       : insetPart;
   if (!roundPart) {
@@ -220,11 +175,7 @@ export function previewRawInset(argument: string, size: CanvasSize) {
   return `inset(${previewSides} round ${horizontal}${verticalSuffix})`;
 }
 
-export function formatClipPathForPreview(
-  shape: ClipShape,
-  css: string,
-  size: CanvasSize | undefined,
-) {
+export function formatClipPathForPreview(shape: ClipShape, css: string, size: CanvasSize | undefined) {
   if (shape.kind === 'none') {
     return 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)';
   }
@@ -232,9 +183,7 @@ export function formatClipPathForPreview(
     return addPreviewVariableFallbacks(css);
   }
   if (shape.kind === 'raw') {
-    return shape.editable
-      ? formatRawEditableClipPathForPreview(shape.editable, size)
-      : formatRawClipPathStringForPreview(shape.value, size);
+    return shape.editable ? formatRawEditableClipPathForPreview(shape.editable, size) : formatRawClipPathStringForPreview(shape.value, size);
   }
   if (shape.kind === 'shape') {
     return formatShapeFunctionForPreview(shape, size);
@@ -265,9 +214,7 @@ export function tokenRangesFromParts(value: string, parts: string[]) {
 export function functionContentRange(value: string) {
   const open = value.indexOf('(');
   const close = value.lastIndexOf(')');
-  return open >= 0 && close > open
-    ? { from: open + 1, to: close, content: value.slice(open + 1, close) }
-    : undefined;
+  return open >= 0 && close > open ? { from: open + 1, to: close, content: value.slice(open + 1, close) } : undefined;
 }
 
 export function splitPolygonCoordinateTokens(value: string) {
@@ -286,10 +233,7 @@ export function splitCircleCoordinateTokens(value: string) {
     return [];
   }
   const [radiusPart, centerPart] = splitTopLevelKeyword(range.content, 'at');
-  return [
-    ...splitTopLevelWhitespace(radiusPart),
-    ...(centerPart ? splitTopLevelWhitespace(centerPart) : []),
-  ];
+  return [...splitTopLevelWhitespace(radiusPart), ...(centerPart ? splitTopLevelWhitespace(centerPart) : [])];
 }
 
 export function splitEllipseCoordinateTokens(value: string) {
@@ -338,11 +282,7 @@ export type ClipPathCodeHighlight = CodeEditorTokenHighlight & {
   handles: HandleTarget[];
 };
 
-export function buildClipPathCodeHighlights(
-  shape: ClipShape,
-  value: string,
-  polygonPointColors: string[] = [],
-): ClipPathCodeHighlight[] {
+export function buildClipPathCodeHighlights(shape: ClipShape, value: string, polygonPointColors: string[] = []): ClipPathCodeHighlight[] {
   const ranges = clipPathValueTokenRanges(value, shape);
   const highlights: ClipPathCodeHighlight[] = [];
   const addHighlight: AddCodeHighlight = (range, handles, colorClass) => {
@@ -388,36 +328,19 @@ export function buildClipPathCodeHighlights(
 }
 
 // Records one highlighted code range and the handles it belongs to.
-export type AddCodeHighlight = (
-  range: { from: number; to: number } | undefined,
-  handles: HandleTarget[],
-  colorClass?: string,
-) => void;
+export type AddCodeHighlight = (range: { from: number; to: number } | undefined, handles: HandleTarget[], colorClass?: string) => void;
 
 // An inset's code ranges: the side lengths before `round`, then the horizontal and
 // vertical radii either side of the `/`, each shorthand token owning the handles it
 // sets.
-export function addInsetCodeHighlights(
-  value: string,
-  ranges: Array<{ from: number; to: number }>,
-  addHighlight: AddCodeHighlight,
-): void {
+export function addInsetCodeHighlights(value: string, ranges: Array<{ from: number; to: number }>, addHighlight: AddCodeHighlight): void {
   const roundMatch = value.match(/\bround\b/i);
   const roundIndex = roundMatch?.index ?? -1;
   const sideRanges = roundIndex >= 0 ? ranges.filter((range) => range.from < roundIndex) : ranges;
   const radiusRanges = roundIndex >= 0 ? ranges.filter((range) => range.from > roundIndex) : [];
-  const sideHandles: HandleTarget[] = [
-    { kind: 'inset-top' },
-    { kind: 'inset-right' },
-    { kind: 'inset-bottom' },
-    { kind: 'inset-left' },
-  ];
+  const sideHandles: HandleTarget[] = [{ kind: 'inset-top' }, { kind: 'inset-right' }, { kind: 'inset-bottom' }, { kind: 'inset-left' }];
   shorthandGroups(sideHandles, sideRanges.length).forEach((handles, index) => {
-    addHighlight(
-      sideRanges[index],
-      handles,
-      HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length],
-    );
+    addHighlight(sideRanges[index], handles, HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length]);
   });
 
   const radiusHandles: HandleTarget[] = CORNERS.map((corner) => ({
@@ -425,17 +348,11 @@ export function addInsetCodeHighlights(
     corner,
   }));
   const slashIndex = roundIndex >= 0 ? value.indexOf('/', roundIndex) : -1;
-  const horizontalRadiusRanges =
-    slashIndex >= 0 ? radiusRanges.filter((range) => range.from < slashIndex) : radiusRanges;
-  const verticalRadiusRanges =
-    slashIndex >= 0 ? radiusRanges.filter((range) => range.from > slashIndex) : [];
+  const horizontalRadiusRanges = slashIndex >= 0 ? radiusRanges.filter((range) => range.from < slashIndex) : radiusRanges;
+  const verticalRadiusRanges = slashIndex >= 0 ? radiusRanges.filter((range) => range.from > slashIndex) : [];
   for (const radiusRangeList of [horizontalRadiusRanges, verticalRadiusRanges]) {
     shorthandGroups(radiusHandles, radiusRangeList.length).forEach((handles, index) => {
-      addHighlight(
-        radiusRangeList[index],
-        handles,
-        HANDLE_COLOR_CLASSES[(index + 4) % HANDLE_COLOR_CLASSES.length],
-      );
+      addHighlight(radiusRangeList[index], handles, HANDLE_COLOR_CLASSES[(index + 4) % HANDLE_COLOR_CLASSES.length]);
     });
   }
 }

@@ -68,9 +68,7 @@ export function useColumnGuide(options: {
 }
 
 /** The settings for the open project, and the one way to change them. */
-export function useGuideSettings(
-  projectKey: string | undefined,
-): readonly [GuideSettings, GuideUpdate] {
+export function useGuideSettings(projectKey: string | undefined): readonly [GuideSettings, GuideUpdate] {
   const { settings, update } = useProjectGuideSettings(projectKey);
   useGuideShortcut(update);
   return [settings, update] as const;
@@ -87,8 +85,7 @@ function useGuideVariables(names: readonly string[], frame: GuideFrameLink): voi
     link.current = frame;
   });
   useEffect(() => {
-    const send = (): void =>
-      link.current.post({ type: 'avb:guide-variables', names: key === '' ? [] : key.split('\n') });
+    const send = (): void => link.current.post({ type: 'avb:guide-variables', names: key === '' ? [] : key.split('\n') });
     send();
     return link.current.subscribeLoad(send);
   }, [key]);
@@ -165,24 +162,34 @@ function storageKey(projectKey: string): string {
   return GUIDE_STORAGE_PREFIX + projectKey;
 }
 
-export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings {
+// Missing or unreadable records cannot justify creating a project settings file on open.
+export function loadLegacyGuideSettings(projectKey: string | undefined): GuideSettings | undefined {
   if (projectKey === undefined) {
-    return GUIDE_DEFAULTS;
+    return undefined;
   }
   const key = storageKey(projectKey);
   try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) {
-      return GUIDE_DEFAULTS;
+    const raw = localStorage.getItem(key) ?? undefined;
+    if (raw === undefined) {
+      return undefined;
     }
     if (raw.length > GUIDE_STORED_CHARS_MAX) {
-      return GUIDE_DEFAULTS;
+      return undefined;
     }
     const stored: unknown = JSON.parse(raw);
+    if (typeof stored !== 'object') {
+      return undefined;
+    }
+    if (stored === null) {
+      return undefined;
+    }
+    if (Array.isArray(stored)) {
+      return undefined;
+    }
     return parseGuideSettings(stored);
   } catch {
-    // Unreadable storage or a corrupt record: the defaults, never a failed load.
-    return GUIDE_DEFAULTS;
+    // The controller uses in-memory defaults without migrating inaccessible storage.
+    return undefined;
   }
 }
 

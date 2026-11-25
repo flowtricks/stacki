@@ -28,21 +28,11 @@ import { capabilityAcceptsVisualIntent } from '#dist/shared/page/capability.js';
 import { toIntent, type Intent } from '#dist/shared/engine/intent.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import { planIntent, type Splice } from '#dist/shared/engine/planner.js';
-import {
-  hostContext,
-  projectValueSplice,
-  valueBytesNeutral,
-} from '#dist/shared/engine/projectionPatch.js';
+import { hostContext, projectValueSplice, valueBytesNeutral } from '#dist/shared/engine/projectionPatch.js';
 import { toAnchorRef, toChildIndex } from '#dist/shared/page/ref.js';
 import { createSnapshot, type Snapshot } from '#dist/shared/page/snapshot.js';
 import type { ProjectedNode } from '#dist/shared/page/sourceProjection.js';
-import {
-  byteStringsEqual,
-  decodeUtf8,
-  encodeUtf8,
-  toByteString,
-  type ByteString,
-} from '#dist/shared/core/span.js';
+import { byteStringsEqual, decodeUtf8, encodeUtf8, toByteString, type ByteString } from '#dist/shared/core/span.js';
 import { Prng } from './prng.ts';
 import { projectBytes, sha256, snapshotOf } from './project.ts';
 import { applySplices, witnessesHold } from '#dist/shared/engine/splice.js';
@@ -51,9 +41,7 @@ import { applySplices, witnessesHold } from '#dist/shared/engine/splice.js';
 const UNIQUE_DRAWS_MAX = 500;
 const ALL = ['nodes-25', 'nodes-50', 'nodes-100', 'bytes-25', 'bytes-50', 'bytes-100'] as const;
 // STACKI_PATCH_FIXTURES=bytes-100,nodes-25 narrows the run to named fixtures.
-const NAMES = ALL.filter((name) =>
-  (process.env['STACKI_PATCH_FIXTURES'] ?? ALL.join(',')).split(',').includes(name),
-);
+const NAMES = ALL.filter((name) => (process.env['STACKI_PATCH_FIXTURES'] ?? ALL.join(',')).split(',').includes(name));
 const SAMPLES = 30;
 const KEYSTROKE_SAMPLES = 20;
 const TYPING_BATCH_MS = 300;
@@ -148,11 +136,7 @@ function engineOf(stages: Stages): number {
 
 // Every registered row, and "incomplete" when a narrowed run leaves one
 // unmeasured: a verdict is never computed from a partial run.
-function printVerdicts(
-  measured: ReadonlyMap<string, Measured>,
-  keystrokes: ReadonlyMap<string, number>,
-  compared: number,
-): void {
+function printVerdicts(measured: ReadonlyMap<string, Measured>, keystrokes: ReadonlyMap<string, number>, compared: number): void {
   const rows: string[] = [];
   const row = (id: string, where: string, value: number | undefined, max: number): void => {
     if (value === undefined) {
@@ -226,10 +210,7 @@ function runSeries(file: string, scenario: Scenario): Series {
     // A stale intent on an element whose identity bytes repeat is refused by
     // the uniqueness guard (planner.ts), by design; the bench measures the
     // applied path, so its stale targets are unique in the file.
-    const target =
-      scenario === 'stale'
-        ? pickUniqueTarget(prng, snapshot)
-        : pickTarget(prng, snapshot, undefined);
+    const target = scenario === 'stale' ? pickUniqueTarget(prng, snapshot) : pickTarget(prng, snapshot, undefined);
     if (scenario === 'stale') {
       writeExternally(file, snapshot.bytes, pickTarget(prng, snapshot, target.node), index);
     }
@@ -255,12 +236,7 @@ interface PipelineResult {
   readonly patched: boolean;
 }
 
-function runPipeline(
-  file: string,
-  held: Snapshot,
-  intent: Intent,
-  variant: Variant,
-): PipelineResult {
+function runPipeline(file: string, held: Snapshot, intent: Intent, variant: Variant): PipelineResult {
   const clock = lapClock();
   const bytes = readBounded(file);
   const checksum = sha256(bytes);
@@ -276,8 +252,7 @@ function runPipeline(
   const splice = clock();
   const [only] = splices;
   assert.ok(only !== undefined, 'A set-attribute plans one splice');
-  const patched =
-    variant === 'patch' ? projectValueSplice(current.projection, current.bytes, only) : undefined;
+  const patched = variant === 'patch' ? projectValueSplice(current.projection, current.bytes, only) : undefined;
   if (variant === 'patch') {
     refusals[patched === undefined ? refusalReason(current, only) : 'patched']++;
   }
@@ -329,8 +304,7 @@ function seriesRow(name: string, scenario: Scenario, variant: string, runs: read
 // fixture: the `every` closure the spike measured, and the word loop.
 function equalityRow(name: string, bytes: ByteString): string {
   const copy = toByteString(bytes);
-  const every = (left: ByteString, right: ByteString) =>
-    left.length === right.length && left.every((byte, index) => byte === right[index]);
+  const every = (left: ByteString, right: ByteString) => left.length === right.length && left.every((byte, index) => byte === right[index]);
   const series: Record<'every' | 'words', number[]> = { every: [], words: [] };
   for (let run = 0; run < EQUAL_RUNS; run++) {
     let start = performance.now();
@@ -405,9 +379,7 @@ function writeExternally(file: string, bytes: ByteString, target: Target, index:
 }
 
 function sameLengthValue(bytes: number, seed: number): string {
-  return Array.from({ length: bytes }, (_, offset) =>
-    String.fromCharCode(97 + ((seed + offset) % 26)),
-  ).join('');
+  return Array.from({ length: bytes }, (_, offset) => String.fromCharCode(97 + ((seed + offset) % 26))).join('');
 }
 
 function lapClock(): () => number {

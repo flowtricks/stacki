@@ -58,20 +58,28 @@ test('terminal requests validate replies and preserve transport failures', async
       terminalAck: (id, count) => calls.push(['ack', id, count]),
     },
   };
-  assert.equal((await terminal.startTerminal('one', '/project', 'codex')).ok, true);
+  assert.equal(
+    (
+      await terminal.startTerminal({
+        id: 'one',
+        cwd: '/project',
+        autoLaunch: 'codex',
+        cols: 92,
+        rows: 18,
+      })
+    ).ok,
+    true,
+  );
   assert.equal((await terminal.resizeTerminal('one', 80, 24)).ok, true);
   assert.deepEqual(await terminal.closeTerminal('one'), {
     ok: false,
     error: 'pty unavailable',
   });
-  assert.equal(
-    (await terminal.saveTerminalClipboardImage(new Uint8Array(2), 'image/png')).ok,
-    true,
-  );
+  assert.equal((await terminal.saveTerminalClipboardImage(new Uint8Array(2), 'image/png')).ok, true);
   terminal.sendTerminalInput('one', 'a');
   terminal.acknowledgeTerminalData('one', 1);
   assert.deepEqual(calls, [
-    ['start', { id: 'one', cwd: '/project', autoLaunch: 'codex' }],
+    ['start', { id: 'one', cwd: '/project', autoLaunch: 'codex', cols: 92, rows: 18 }],
     ['resize', { id: 'one', cols: 80, rows: 24 }],
     ['close', { id: 'one' }],
     ['image', 2, 'image/png'],

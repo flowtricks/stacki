@@ -1,0 +1,504 @@
+{
+  "exceptions": [
+    {
+      "file": "src/features/palette/InsertAppRows.tsx",
+      "pattern": "insert-apps-empty-note",
+      "reason": "The Apps tab empty state: a legitimate empty state that explains what apps are, shown instead of the list."
+    },
+    {
+      "file": "src/features/palette/InsertCards.tsx",
+      "pattern": "className=\"insert-hint\"",
+      "reason": "The palette footer key hint (Enter inserts): a fixed footer that is always there, not text that appears under a field."
+    },
+    {
+      "file": "src/features/palette/InsertPlacementTip.tsx",
+      "pattern": "className=\"info-hint-text\"",
+      "reason": "The visually hidden description a screen reader reads for the highlighted row (aria-describedby); never drawn."
+    },
+    {
+      "file": "src/features/palette/InsertPreview.tsx",
+      "pattern": "className=\"insert-surface-note\"",
+      "reason": "The preview tile state that replaces the picture at the same height; its reason is a tooltip, not a row."
+    },
+    {
+      "file": "src/features/palette/InsertPreview.tsx",
+      "pattern": "insert-surface-note-icon",
+      "reason": "The icon of the same preview tile state."
+    },
+    {
+      "file": "src/features/style/BordersKit.tsx",
+      "pattern": "className=\"embed-editor_override-note\"",
+      "reason": "Content of the property label menu (a popup the person opens), not a paragraph appended to the panel."
+    },
+    {
+      "file": "src/features/style/BordersKit.tsx",
+      "pattern": "embed-editor_override-note-sel",
+      "reason": "The selector button inside the same menu row: an action, not a notice."
+    },
+    {
+      "file": "src/features/style/components/CssPropertyTip.tsx",
+      "pattern": "u-prop-tip-note",
+      "reason": "Body of the property tooltip itself: a tooltip is where explanations belong."
+    },
+    {
+      "file": "src/features/style/components/FieldLabel.tsx",
+      "pattern": "u-field-label-menu-note",
+      "reason": "Content of the field label menu (a popup the person opens), not a paragraph appended to the panel."
+    },
+    {
+      "file": "src/features/style/embed/SelectorPicker.tsx",
+      "pattern": "u-prop-tip-note",
+      "reason": "Body of the selector chip tooltip itself: a tooltip is where explanations belong."
+    },
+    {
+      "file": "src/ui/TipAnchor.tsx",
+      "pattern": "className=\"info-hint-text\"",
+      "reason": "The visually hidden description a screen reader reads for the wrapped control (aria-describedby); never drawn."
+    },
+    {
+      "file": "src/features/props/LinkField.tsx",
+      "pattern": "className=\"link-note\"",
+      "reason": "Empty state of the link's section chooser: it stands where the dropdown would be, at the same height, when the target page has no sections."
+    },
+    {
+      "file": "src/features/props/PropControls.tsx",
+      "pattern": "className=\"props-code-row-note\"",
+      "reason": "The content of the read-only code row that stands in place of a control a prop only code can fill: it is the control, not text appended under one."
+    },
+    {
+      "file": "src/app/shell/PageSettingsDesktop.tsx",
+      "pattern": "return <div className=\"page-settings-note\">{translate('pages.settings.layout.none')}</div>;",
+      "reason": "Empty state of the page layout section: says the layout has no fields, next to its add-prop button."
+    },
+    {
+      "file": "src/app/shell/PageSettingsDesktop.tsx",
+      "pattern": "<div className=\"page-settings-note\">{translate('pages.settings.layout.empty', { name })}</div>",
+      "reason": "Empty state of the page layout section: says the layout has no fields, next to its add-prop button."
+    },
+    {
+      "file": "src/features/apps/AppConnections.tsx",
+      "pattern": "return <p className=\"apps-network-note offline\">{summary}</p>;",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppConnections.tsx",
+      "pattern": "<p className=\"apps-network-note external\" title={summary}>",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppConnections.tsx",
+      "pattern": "return <p className=\"apps-connections-note\">{translate('apps.connections.ownClientCustom')}</p>;",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppDetailsLayout.tsx",
+      "pattern": "<span id={id} className=\"apps-details-hint-text\">",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppSettings.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.settings.needsBeforeStart', { name: app.manifest.name })}</p>",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppSettings.tsx",
+      "pattern": "return <p className=\"apps-note\">{translate('apps.settings.reading')}</p>;",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppSettings.tsx",
+      "pattern": "{missing.length > 0 && <span className=\"apps-note\">{translate('apps.settings.requiredEmpty', { count: missing.length })}</span>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppSettings.tsx",
+      "pattern": "<span key={note} className=\"apps-note\">",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/AppsPanel.tsx",
+      "pattern": "<p className=\"apps-note\">",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ConnectGitHub.tsx",
+      "pattern": "{props.hint !== undefined && <p className=\"apps-connect-empty-hint\">{props.hint}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ConnectGitHub.tsx",
+      "pattern": "<li className=\"apps-connect-notice\" role=\"presentation\">",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ConnectGitHub.tsx",
+      "pattern": "{load.kind === 'loading' && <p className=\"apps-note\">{translate('apps.connect.loadingReleases')}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ConnectGitHub.tsx",
+      "pattern": "{load.kind === 'ready' && releases.length === 0 && <p className=\"apps-note\">{translate('apps.connect.noReleases')}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "{status.kind === 'loading' && <p className=\"apps-note\">{translate('apps.publish.reading', { name })}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "{!clean && <p className=\"apps-note\">{translate('apps.publish.scanFirst')}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "{status.license !== undefined && <p className=\"apps-note\">{translate('apps.publish.licenseReadAs', { license: status.license })}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "{status.license !== undefined && <p className=\"apps-note\">{translate('apps.publish.replaceLicense')}</p>}",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.publish.attachZip')}</p>",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "<p className=\"apps-note\">{text.detail}</p>",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/PublishMarketplace.tsx",
+      "pattern": "return <p className=\"apps-note\">{translate('apps.publish.asking')}</p>;",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note apps-scan\" role=\"status\">",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "return <p className=\"apps-note\">{translateDescribed(load)}</p>;",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.scan.cannotFinish', { reason: translateDescribed({ message: scan.reason, messageRef: scan.reasonRef }) })}</p>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.scan.everyone')}</p>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<span className=\"apps-note\">{translateRef(secretRuleRef(finding.rule))}</span>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<span className=\"apps-note\">{translateRich('apps.scan.lineHash', { hash: <CodeInline text={finding.lineSha256} /> })}</span>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note\">{translateRich('apps.scan.moveKey', { file: <CodeInline text=\"stacki-app.json\" /> })}</p>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.scan.thenRead')}</p>",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/SecretScanReport.tsx",
+      "pattern": "<p className=\"apps-note\">",
+      "reason": "Body of the secret scan fix guide, beside its CodeBlock examples; loading text replaces the report in place."
+    },
+    {
+      "file": "src/features/apps/ShareApp.tsx",
+      "pattern": "<span className=\"apps-note\">",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ShareApp.tsx",
+      "pattern": "return <p className=\"apps-note\">{translate('apps.share.nothingCreated')}</p>;",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/apps/ShareApp.tsx",
+      "pattern": "<p className=\"apps-note\">{translate('apps.share.createdBefore')}</p>",
+      "reason": "Persistent fact, empty or loading state, requirement checklist item or description that is the content of the apps view, not an appended failure."
+    },
+    {
+      "file": "src/features/audits/AuditsPanel.tsx",
+      "pattern": "<p className=\"audits-note audits-clean\">",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/audits/AuditsPanel.tsx",
+      "pattern": "return <p className=\"audits-note\">{state.running ? translate('auditsUi.empty.auditing') : translate('auditsUi.empty.open')}</p>;",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/audits/AuditsPanel.tsx",
+      "pattern": "return <p className=\"audits-note\">{translate('auditsUi.empty.nothing')}</p>;",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/audits/AuditsPanel.tsx",
+      "pattern": "<span className=\"audits-note-line\" title={note}>",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/audits/IgnoredList.tsx",
+      "pattern": "return <p className=\"audits-note\">{translate('audits.ignored.empty')}</p>;",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/audits/PerformanceBar.tsx",
+      "pattern": "<p className=\"audits-card-note\">{translate('auditsUi.perf.startPreview')}</p>",
+      "reason": "Empty state or loading step of the performance card, replaced in place at the same height."
+    },
+    {
+      "file": "src/features/audits/PerformanceBar.tsx",
+      "pattern": "<p className=\"audits-card-note\">{elapsed < LOADING_STEP_MS ? translate('auditsUi.perf.stepLoading') : translate('auditsUi.perf.stepCollecting')}</p>",
+      "reason": "Empty state or loading step of the performance card, replaced in place at the same height."
+    },
+    {
+      "file": "src/features/audits/StyleReview.tsx",
+      "pattern": "{shown.length === 0 && <p className=\"audits-note\">{translate('auditsUi.review.noMatch')}</p>}",
+      "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
+    },
+    {
+      "file": "src/features/content/ContentFields.tsx",
+      "pattern": "<span className=\"content-note\" title={props.context.parserNote}>",
+      "reason": "Header badge that carries a title tooltip; the parser note is not appended text."
+    },
+    {
+      "file": "src/features/history/HistoryCommitFiles.tsx",
+      "pattern": "return <p className=\"history-note\">{translate('history.files.none')}</p>;",
+      "reason": "Empty state of the history list: nothing to show, so the line says so."
+    },
+    {
+      "file": "src/features/history/HistoryFileDiff.tsx",
+      "pattern": "return <p className=\"history-note\">{translate('history.diff.noTextChanges')}</p>;",
+      "reason": "Empty state of the history list: nothing to show, so the line says so."
+    },
+    {
+      "file": "src/features/instructions/InstructionsView.tsx",
+      "pattern": "<div className=\"instructions-conflict\" role=\"alert\">",
+      "reason": "Conflict bar with Merge, Keep and Take actions: a decision the person must make, not a notice."
+    },
+    {
+      "file": "src/features/pages/PageSettingsDialog.tsx",
+      "pattern": "<div className=\"page-settings-note\">{translate('pages.settings.confirm.review')}</div>",
+      "reason": "Body of the confirm dialog: the review list of what the swap changes is the dialog content itself."
+    },
+    {
+      "file": "src/features/pages/PageSettingsDialog.tsx",
+      "pattern": "{summary.reviewsMore > 0 && <div className=\"page-settings-note\">{translate('pages.settings.confirm.reviewMore', { count: summary.reviewsMore })}</div>}",
+      "reason": "Body of the confirm dialog: the review list of what the swap changes is the dialog content itself."
+    },
+    {
+      "file": "src/features/projectSettings/McpJsonView.tsx",
+      "pattern": "<p className=\"secrets-note\" role=\"alert\">",
+      "reason": "State that replaces the whole tab body (the running app lacks the channels, only a restart helps); nothing else is shown."
+    },
+    {
+      "file": "src/features/projectSettings/McpTab.tsx",
+      "pattern": "<p className=\"secrets-note\" role=\"alert\">",
+      "reason": "State that replaces the whole tab body (the running app lacks the channels, only a restart helps); nothing else is shown."
+    },
+    {
+      "file": "src/features/projectSettings/SecretsTab.tsx",
+      "pattern": "<p className=\"secrets-note\" role=\"alert\">",
+      "reason": "State that replaces the whole tab body (the running app lacks the channels, only a restart helps); nothing else is shown."
+    },
+    {
+      "file": "src/features/selectors/SelectorsPanel.tsx",
+      "pattern": "<span className=\"selectors-note-file\">{note.rel}</span>",
+      "reason": "Rows inside a details element the person opens, listing the files; content they asked to see."
+    },
+    {
+      "file": "src/features/structure/StructureTree.tsx",
+      "pattern": "<span className=\"node-note\" title={snippet}>",
+      "reason": "Comment snippet inside a tree label with a title tooltip; it is the node content."
+    },
+    {
+      "file": "src/features/structure/StructureTree.tsx",
+      "pattern": "<span className=\"node-note\" title={noteValue.trim()}>",
+      "reason": "Comment snippet inside a tree label with a title tooltip; it is the node content."
+    },
+    {
+      "file": "src/features/welcome/WelcomeWizards.tsx",
+      "pattern": "<div className=\"starter-note\">",
+      "reason": "Dialog description of the command that will run, or a template option description inside its own card; rich text cannot live in a tooltip."
+    },
+    {
+      "file": "src/features/welcome/AstroCopyDialog.tsx",
+      "pattern": "<div className=\"starter-note\">{translate('welcome.copy.explain')}</div>",
+      "reason": "The Astro copy dialog's one fixed line saying the original folder stays untouched: the dialog's description, always there, never a refusal or a notice appended under a field."
+    },
+    {
+      "file": "src/features/welcome/WelcomeWizards.tsx",
+      "pattern": "<div className=\"template-hint\">{translate(template.hintKey)}</div>",
+      "reason": "Dialog description of the command that will run, or a template option description inside its own card; rich text cannot live in a tooltip."
+    },
+    {
+      "file": "src/app/recovery/RecoveryScreen.tsx",
+      "pattern": "className=\"recovery-screen\" role=\"alert\"",
+      "reason": "The whole-window recovery screen: the failure IS the screen's content (it replaces the app that could not render), not text appended under anything."
+    },
+    {
+      "file": "src/app/settings/AgentsSettings.tsx",
+      "pattern": "className=\"agents-row-warning\"",
+      "reason": "A definition that cannot be read: the warning replaces that row's description at the same height (persistent status in place), and the file stays listed and opens."
+    },
+    {
+      "file": "src/app/settings/RoleComponents.tsx",
+      "pattern": "app-role-components-note",
+      "reason": "Inline status inside a component row that already exists (hidden by folder, own override): same row height, no row is added."
+    },
+    {
+      "file": "src/app/settings/SettingsEmptyState.tsx",
+      "pattern": "settings-empty-state-hint",
+      "reason": "The hint of a legitimate empty state (a list with nothing in it): it says what to do instead of the list, and leaves with the first item."
+    },
+    {
+      "file": "src/app/shell/CanvasImagePopup.tsx",
+      "pattern": "className=\"canvas-image-note\"",
+      "reason": "A refused image has no fields, so the reason is the popup's whole body (a dialog body that IS its content); the alt-text explanation is a tip beside the title."
+    },
+    {
+      "file": "src/ui/CodeAccess.tsx",
+      "pattern": "className=\"panel-note\"",
+      "reason": "The label that replaces a code field when the code is managed elsewhere: persistent status shown in place of the field, not text appended under it."
+    },
+    {
+      "file": "src/ui/ConfirmDialog.tsx",
+      "pattern": "className=\"choice-dialog-hint\"",
+      "reason": "A choice's own explanation inside a confirm dialog: part of the dialog's body, present with the choice, never added later."
+    },
+    {
+      "file": "src/ui/DataTree.tsx",
+      "pattern": "className=\"dp-note\"",
+      "reason": "The detail column of a data-tree row: content of the row, drawn with it."
+    },
+    {
+      "file": "src/ui/Dropdown.tsx",
+      "pattern": "className=\"dd-create-error\"",
+      "reason": "Inside the dropdown's open popup: an option's own hint, and the create row's refusal, which replaces the row's input hint in place while the popup is open."
+    },
+    {
+      "file": "src/ui/Dropdown.tsx",
+      "pattern": "className=\"dd-hint\"",
+      "reason": "Inside the dropdown's open popup: an option's own hint, and the create row's refusal, which replaces the row's input hint in place while the popup is open."
+    },
+    {
+      "file": "src/ui/HtmlField.tsx",
+      "pattern": "className=\"html-notice\"",
+      "reason": "The HTML editor's own footer and its restricted-mode banner: fixed parts of the editor frame, not text that appears under a field."
+    },
+    {
+      "file": "src/ui/HtmlField.tsx",
+      "pattern": "className=\"html-footer-hint\"",
+      "reason": "The HTML editor's own footer and its restricted-mode banner: fixed parts of the editor frame, not text that appears under a field."
+    },
+    {
+      "file": "src/ui/InfoHint.tsx",
+      "pattern": "className=\"info-hint-text\"",
+      "reason": "The visually hidden description a screen reader reads for the hint button (aria-describedby); never drawn."
+    },
+    {
+      "file": "src/ui/Menu.tsx",
+      "pattern": "className=\"menu-note\"",
+      "reason": "A note row inside an open menu popup: menu content, not a paragraph appended to a panel."
+    },
+    {
+      "file": "src/ui/OverrideNote.tsx",
+      "pattern": "className=\"override-note\"",
+      "reason": "The label menu's override marker with its explanation as a title tooltip: popup content, not an appended paragraph."
+    },
+    {
+      "file": "src/ui/PanelBoundary.tsx",
+      "pattern": "className=\"panel-boundary\"",
+      "reason": "The crash boundary replaces the whole failed panel with its recovery screen: a replacement of the panel, not an addition to it."
+    },
+    {
+      "file": "src/ui/PanelReadStatus.tsx",
+      "pattern": "className=\"props-empty\"",
+      "reason": "The panel's read-failure state replaces the empty list in place, with its retry: an empty state, not a paragraph appended to content."
+    },
+    {
+      "file": "src/ui/PanelSection.tsx",
+      "pattern": "className=\"panel-block-note\"",
+      "reason": "A section's own explanatory block, drawn with the section from its first render, never added after a state change."
+    },
+    {
+      "file": "src/ui/ShortcutRecorder.tsx",
+      "pattern": "className=\"shortcut-recorder-hint\"",
+      "reason": "The recorder's prompt inside its own field, replacing the key label in place while recording."
+    },
+    {
+      "file": "src/features/ai/AgentChoices.tsx",
+      "pattern": "className=\"ai-agent-choices-notice\"",
+      "reason": "The agent picker's own empty and status lines inside the choices list, replacing the list in place (the AI panel was outside the notice sweep of app panels and dialogs)."
+    },
+    {
+      "file": "src/features/ai/transcript/DiffView.tsx",
+      "pattern": "className=\"ai-diffview-note\"",
+      "reason": "The diff view's own state line (binary, line endings, nothing changed, large) replacing the diff body in place."
+    },
+    {
+      "file": "src/features/ai/transcript/TranscriptView.tsx",
+      "pattern": "className={`ai-notice ai-notice-${item.severity}`}",
+      "reason": "A transcript item: the conversation's own record of a notice, a turn end or a label, which belongs to the history and is kept with it."
+    },
+    {
+      "file": "src/features/ai/transcript/TranscriptView.tsx",
+      "pattern": "className=\"ai-notice ai-notice-warning\"",
+      "reason": "A transcript item: the conversation's own record of a notice, a turn end or a label, which belongs to the history and is kept with it."
+    },
+    {
+      "file": "src/features/ai/transcript/TranscriptView.tsx",
+      "pattern": "className=\"ai-notice ai-notice-info\"",
+      "reason": "A transcript item: the conversation's own record of a notice, a turn end or a label, which belongs to the history and is kept with it."
+    },
+    {
+      "file": "src/features/ai/transcript/UntrackedChangesNote.tsx",
+      "pattern": "className=\"ai-notice ai-notice-info\"",
+      "reason": "A transcript item for changes made outside tracking: part of the conversation record, not a panel paragraph."
+    },
+    {
+      "file": "src/features/ai/transcript/UntrackedChangesNote.tsx",
+      "pattern": "className=\"ai-notice ai-notice-info ai-untracked\"",
+      "reason": "A transcript item for changes made outside tracking: part of the conversation record, not a panel paragraph."
+    },
+    {
+      "file": "src/features/ai/screenshot/RegionSelector.tsx",
+      "pattern": "className=\"ai-region-hint\"",
+      "reason": "The drag hint shown over the region selector while selecting: part of that fullscreen selection mode, gone when it ends."
+    },
+    {
+      "file": "src/features/ai/composer/ChatComposer.tsx",
+      "pattern": "className=\"ai-compose-note\"",
+      "reason": "The composer's own status line inside the composer frame, replacing its placeholder row in place."
+    },
+    {
+      "file": "src/features/ai/composer/VoiceLine.tsx",
+      "pattern": "className={`ai-voice-text${interim === '' ? ' is-hint' : ''}`}",
+      "reason": "The live dictation line inside the composer: the interim text replaces the hint in place and is the content itself."
+    },
+    {
+      "file": "src/features/welcome/FolderDropHost.tsx",
+      "pattern": "className=\"folder-drop-hint\"",
+      "reason": "The line of the full-window overlay shown only while a folder is dragged over Stacki: it is the overlay itself, replaces nothing on the page, and is gone on drop or leave."
+    }
+  ]
+}

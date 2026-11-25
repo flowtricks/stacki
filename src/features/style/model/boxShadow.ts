@@ -4,7 +4,9 @@
 // list (index 0 = the first/top shadow) and serialize back, splitting on TOP-LEVEL
 // commas/spaces only so rgba()/hsl()/var() with inner separators survive.
 
-import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
+import { isShadowLength, splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type BoxShadow = {
   inset: boolean;
@@ -17,17 +19,7 @@ export type BoxShadow = {
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type BoxShadowPatch =
-  | Pick<BoxShadow, 'inset'>
-  | Pick<BoxShadow, 'x'>
-  | Pick<BoxShadow, 'y'>
-  | Pick<BoxShadow, 'blur'>
-  | Pick<BoxShadow, 'spread'>
-  | Pick<BoxShadow, 'color'>;
-
-/** A token that reads as a length (a number with an optional CSS unit). */
-function isLength(token: string): boolean {
-  return /^-?[\d.]+(px|em|rem|%|vw|vh|vmin|vmax|ch|ex|cqw|cqh|cqi|cqb)?$/i.test(token.trim());
-}
+  Pick<BoxShadow, 'inset'> | Pick<BoxShadow, 'x'> | Pick<BoxShadow, 'y'> | Pick<BoxShadow, 'blur'> | Pick<BoxShadow, 'spread'> | Pick<BoxShadow, 'color'>;
 
 /** Parse a `box-shadow` value into an ordered shadow list (`none`/'' → empty). */
 export function parseBoxShadows(value: string): BoxShadow[] {
@@ -46,7 +38,7 @@ export function parseBoxShadows(value: string): BoxShadow[] {
           inset = true;
           continue;
         }
-        if (isLength(token)) {
+        if (isShadowLength(token)) {
           lengths.push(token);
         } else {
           color = color ? `${color} ${token}` : token;
@@ -74,13 +66,7 @@ export function serializeBoxShadows(shadows: BoxShadow[]): string {
   if (!shadows.length) {
     return '';
   }
-  return shadows
-    .map(
-      (shadow) =>
-        `${shadow.inset ? 'inset ' : ''}${boxShadowLengths(shadow)}` +
-        (shadow.color ? ` ${shadow.color}` : ''),
-    )
-    .join(', ');
+  return shadows.map((shadow) => `${shadow.inset ? 'inset ' : ''}${boxShadowLengths(shadow)}` + (shadow.color ? ` ${shadow.color}` : '')).join(', ');
 }
 
 /** A new shadow with Webflow-like defaults (outer, `0px 2px 5px 0px rgba(0,0,0,0.2)`). */
@@ -96,6 +82,7 @@ export function blankBoxShadow(): BoxShadow {
 }
 
 /** A short label for a collapsed row ("Outer shadow: 0px 2px 5px 0px"). */
-export function boxShadowLabel(shadow: BoxShadow): string {
-  return `${shadow.inset ? 'Inner' : 'Outer'} shadow: ${boxShadowLengths(shadow)}`;
+export function boxShadowLabel(shadow: BoxShadow, translate: Translator = ENGLISH_TRANSLATE): string {
+  const lengths = boxShadowLengths(shadow);
+  return shadow.inset ? translate('styleModel.boxShadow.inner', { lengths }) : translate('styleModel.boxShadow.outer', { lengths });
 }

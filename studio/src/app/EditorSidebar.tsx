@@ -1,3 +1,5 @@
+import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
+import { GitPanel } from '../features/history/GitPanel';
 import type { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsNavigation } from '../features/cms/CmsWorkspace';
 import { CodePanel } from '../features/code/CodePanel';
@@ -8,10 +10,14 @@ import { PagesPanel } from '../features/pages/PagesPanel';
 import { AssetsPanel } from '../features/assets/AssetsPanel';
 import { ComponentsPanel } from '../features/components/ComponentsPanel';
 import { ChatPanel } from '../features/ai/ChatPanel';
+import { StudioProjectSettings } from '../features/projectSettings/StudioProjectSettings';
+import { StudioAppsPanel } from '../features/apps/StudioApps';
 import type { EditorProps } from './Editor';
 import type { useEditor } from '../features/project/useEditor';
-import type { SharedDocument } from '../features/collaboration/useDocument';
 import type { Panel } from './EditorRail';
+import { useMobileEditor } from './mobileEditor';
+import { PanelCloseButton } from './PanelCloseButton';
+import { usePanelResize } from '../../vendor/stacki/src/app/shell/ResizablePanel';
 interface SidebarProps {
   readonly panel: Panel;
   readonly defaultsCanvas: ReturnType<typeof useStudioDefaultsCanvas>;
@@ -21,39 +27,25 @@ interface SidebarProps {
   readonly props: EditorProps;
   readonly model: ReturnType<typeof useEditor>;
 }
-export function EditorSidebar({
-  panel,
-  close,
-  props,
-  model,
-  openCode,
-  showNavigator,
-  defaultsCanvas,
-}: SidebarProps) {
+export function EditorSidebar({ panel, close, props, model, openCode, showNavigator, defaultsCanvas }: SidebarProps) {
+  const translate = useTranslate();
   const { project, file, open, refresh, report } = props;
   const { selected, document, openComponent } = model;
+  // Desktop's resize handle and stored widths. Collapsed, the panel floats at that width.
+  const resize = usePanelResize(panel === 'code' ? 'code' : 'left');
+  const mobile = useMobileEditor();
   return (
     <aside
       className={`studio-left ${panel === 'code' ? 'code-panel-shell' : ''}`}
-      data-variable-selected={
-        (panel === 'variables' && !!props.view.variable) ||
-        (panel === 'collections' && !!props.view.cms)
-      }
+      style={{ width: resize.width }}
+      data-variable-selected={(panel === 'variables' && !!props.view.variable) || (panel === 'collections' && !!props.view.cms)}
     >
-      <button className="mobile-close ghost" onClick={() => close()} aria-label="Close panel">
-        ×
-      </button>
-      {panel === 'navigator' && (
-        <DefaultsNavigator
-          props={props}
-          model={model}
-          defaultsCanvas={defaultsCanvas}
-          openCode={openCode}
-        />
-      )}
+      <PanelCloseButton label={translate('studio.panel.close')} close={close} />
+      {panel === 'navigator' && <DefaultsNavigator props={props} model={model} defaultsCanvas={defaultsCanvas} openCode={openCode} />}
       {panel === 'collections' && <CmsNavigation props={props} />}
       {panel === 'pages' && (
         <PagesPanel
+          flushSave={() => document?.whenSaved() ?? Promise.resolve()}
           project={project}
           peers={document?.peers ?? []}
           file={file}
@@ -63,9 +55,7 @@ export function EditorSidebar({
           collection={false}
         />
       )}
-      {panel === 'components' && (
-        <ComponentsSidebar props={props} model={model} showNavigator={showNavigator} />
-      )}
+      {panel === 'components' && <ComponentsSidebar props={props} model={model} showNavigator={showNavigator} />}
       {panel === 'assets' && (
         <AssetsPanel
           key={`${selected}:${props.view.pick?.current ?? ''}:${props.view.pick?.mediaKind ?? ''}`}
@@ -76,20 +66,17 @@ export function EditorSidebar({
         />
       )}
       {panel === 'code' && <CodePanel {...model} openComponent={openComponent} />}
-      {panel === 'properties' && document && !file.startsWith('src/pages/') && (
-        <ComponentProperties key={file} document={document} refresh={refresh} />
-      )}
-      {panel === 'variables' && <VariableNavigation view={props.view} />}
-      {panel === 'history' && <HistoryPanel document={document} report={report} />}
-      {panel === 'ai' && <ChatPanel file={file} refresh={refresh} error={report} />}
+      {panel === 'properties' && document && !file.startsWith('src/pages/') && <ComponentProperties key={file} document={document} refresh={refresh} />}
+      {panel === 'variables' && <VariableNavigation view={props.view} file={file} />}
+      {panel === 'history' && <HistorySidebar props={props} model={model} />}
+      {panel === 'ai' && <ChatPanel file={file} project={project} refresh={refresh} error={report} />}
+      {panel === 'apps' && <StudioAppsPanel props={props} />}
+      {panel === 'projectSettings' && <StudioProjectSettings />}
+      {!mobile && resize.handle}
     </aside>
   );
 }
-function ComponentsSidebar({
-  props,
-  model,
-  showNavigator,
-}: Pick<SidebarProps, 'props' | 'model' | 'showNavigator'>) {
+function ComponentsSidebar({ props, model, showNavigator }: Pick<SidebarProps, 'props' | 'model' | 'showNavigator'>) {
   return (
     <ComponentsPanel
       project={props.project}
@@ -108,38 +95,10 @@ function ComponentsSidebar({
     />
   );
 }
-function HistoryPanel({
-  document,
-  report,
-}: {
-  document: SharedDocument | undefined;
-  report: (error: unknown) => void;
-}) {
-  return (
-    <>
-      <div className="panel-header">
-        <h2>History</h2>
-      </div>
-      <div className="panel-note">
-        Undo reverses your own text and layout edits in this editing session. Other editors’ changes
-        stay in place.
-      </div>
-      <div className="node-actions">
-        <button onClick={() => void document?.history.step('undo').catch(report)}>Undo</button>
-        <button onClick={() => void document?.history.step('redo').catch(report)}>Redo</button>
-      </div>
-    </>
-  );
-}
 
-function DefaultsNavigator({
-  props,
-  model,
-  defaultsCanvas,
-  openCode,
-}: Pick<SidebarProps, 'props' | 'model' | 'defaultsCanvas' | 'openCode'>) {
+function DefaultsNavigator({ props, model, defaultsCanvas, openCode }: Pick<SidebarProps, 'props' | 'model' | 'defaultsCanvas' | 'openCode'>) {
   const { project, report } = props;
-  const { selected, select, action, insert, document, openComponent } = model;
+  const { selected, select, action, move, insert, document, openComponent } = model;
   return (
     <Navigator
       editRootId={defaultsCanvas.rootId}
@@ -156,11 +115,25 @@ function DefaultsNavigator({
       select={select}
       hover={model.hover}
       action={action}
+      move={move}
       insert={insert}
       openCode={openCode}
       openCodeWindow={model.codeWindow.open}
       openComponent={openComponent}
       report={report}
+    />
+  );
+}
+
+function HistorySidebar({ props, model }: Pick<SidebarProps, 'props' | 'model'>) {
+  return (
+    <GitPanel
+      project={props.project}
+      report={props.report}
+      flushSave={() => model.document?.whenSaved() ?? Promise.resolve()}
+      refreshProject={async () => {
+        await props.refresh();
+      }}
     />
   );
 }

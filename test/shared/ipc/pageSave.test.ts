@@ -19,9 +19,11 @@ import { parsePageDiskRead, parsePageEditResult } from '#dist/shared/ipc/pageSav
 import { diffCodePatch } from '#dist/shared/engine/codePatch.js';
 import { toDigest } from '#dist/shared/core/brand.js';
 import type { PageDiskRead } from '#dist/shared/ipc/pageSave.js';
+import { parseScanResult } from '#dist/shared/properties/projectScan.js';
 import { toRecord } from '#dist/shared/core/record.js';
-import { ATOMIC_DIRECTORY } from '#dist/electron/documents/atomicDirectory.js';
+import { atomicDirectoryOf } from '#dist/electron/documents/atomicDirectory.js';
 import { pageEditError } from '#dist/electron/documents/pageRequests.js';
+import { LIMITS, PLATFORM_LIMITS } from '#dist/shared/core/limits.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -62,7 +64,7 @@ function fixture() {
 type Harness = ReturnType<typeof fixture>;
 
 function temporaries(directory: string): readonly string[] {
-  const staging = path.join(directory, ATOMIC_DIRECTORY);
+  const staging = atomicDirectoryOf(path.join(directory, 'page.astro'));
   return fs.existsSync(staging) ? fs.readdirSync(staging) : [];
 }
 
@@ -81,10 +83,7 @@ test('edit payloads require a well-formed authored checksum', () => {
   assert.equal(parsed.authoredChecksum, base);
   assert.throws(() => parseIpcPayload('page:edit', payload), /Expected digest string/);
   assert.throws(() => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 42 }), /digest/);
-  assert.throws(
-    () => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 'B'.repeat(64) }),
-    /Digest: expected 64 lowercase hex characters/,
-  );
+  assert.throws(() => parseIpcPayload('page:edit', { ...payload, authoredChecksum: 'B'.repeat(64) }), /Digest: expected 64 lowercase hex characters/);
 });
 
 test('the whole-file channels are retired: every save is an edit through page:edit', () => {
@@ -111,21 +110,12 @@ test('page read and edit replies parse only with a valid checksum', () => {
   const checksum = 'c'.repeat(64);
   assert.equal(parsePageDiskRead({ ...page, checksum }).checksum, checksum);
   assert.throws(() => parsePageDiskRead(page), /PageDiskRead\.checksum: expected string/);
-  assert.throws(
-    () => parsePageDiskRead({ ...page, checksum: 'c'.repeat(63) }),
-    /PageDiskRead\.checksum: Digest/,
-  );
+  assert.throws(() => parsePageDiskRead({ ...page, checksum: 'c'.repeat(63) }), /PageDiskRead\.checksum: Digest/);
   // An edit's reply carries the inverse Undo submits (step 9).
   const written = parsePageEditResult({ ok: true, ...page, checksum, inverse: [] });
   assert.equal(written.ok && written.value.checksum, checksum);
-  assert.throws(
-    () => parsePageEditResult({ ok: true, ...page, inverse: [] }),
-    /PageDiskRead\.checksum/,
-  );
-  assert.throws(
-    () => parsePageEditResult({ ok: true, ...page, checksum }),
-    /PageEdited\.inverse: expected array/,
-  );
+  assert.throws(() => parsePageEditResult({ ok: true, ...page, inverse: [] }), /PageDiskRead\.checksum/);
+  assert.throws(() => parsePageEditResult({ ok: true, ...page, checksum }), /PageEdited\.inverse: expected array/);
   assert.throws(() => parsePageEditResult(jsonNull), /PageEditResult: expected object/);
   assert.throws(() => parsePageEditResult({ ok: 'yes' }), /PageEditResult\.ok/);
 });
@@ -150,12 +140,18 @@ test('edit refusals parse per code; unknown or malformed ones throw', () => {
     [{ ...refusal, reason: 'teapot' }, /unknown rejection reason/],
     [{ code: 'teapot', message: 'm' }, /PageWriteFailure\.code: unknown value/],
     [{ code: 'missing' }, /PageWriteFailure\.message: expected string/],
-    [{ code: 'missing', message: 'm'.repeat(9000) }, /PageWriteFailure\.message: exceeds limit/],
     [undefined, /PageEditError: expected object/],
   ] as const;
   for (const [error, message] of bad) {
     assert.throws(() => parsePageEditResult({ ok: false, error }), message);
   }
+  // A message is bounded only by the string (attrCharsMax): a longer one cannot be built, and Stacki has no product size limit.
+  assert.equal(LIMITS.attrCharsMax, PLATFORM_LIMITS.stringUnitsMax);
+  const long = 'm'.repeat(1024 * 1024);
+  assert.deepEqual(parsePageEditResult({ ok: false, error: { code: 'missing', message: long } }), {
+    ok: false,
+    error: { code: 'missing', message: long },
+  });
 });
 
 test('a read reports the checksum of the exact bytes on disk', async (context) => {
@@ -218,10 +214,7 @@ test('an outside edit between read and write is refused and left on disk', async
   const payload = { pagePath: notes, authoredChecksum: before.checksum, edit: level };
   const result = parsePageEditResult(await harness.invoke('page:edit', payload));
   assert.equal(!result.ok && result.error.code, 'rejected');
-  assert.equal(
-    !result.ok && result.error.code === 'rejected' && result.error.diskChecksum,
-    sha256('# Outside\n'),
-  );
+  assert.equal(!result.ok && result.error.code === 'rejected' && result.error.diskChecksum, sha256('# Outside\n'));
   assert.equal(fs.readFileSync(notes, 'utf8'), '# Outside\n', 'the gesture left disk alone');
   const file = path.join(harness.root, 'src/pages/index.astro');
   fs.writeFileSync(file, '<h1>Before</h1>\n');
@@ -230,10 +223,7 @@ test('an outside edit between read and write is refused and left on disk', async
   // The code editor's save of the same word overlaps the outside edit.
   const code = await saveCode(harness, file, read, '<h1>Mine</h1>\n');
   assert.equal(!code.ok && code.error.code === 'rejected' && code.error.reason, 'merge-conflict');
-  assert.equal(
-    !code.ok && code.error.code === 'rejected' && code.error.diskChecksum,
-    sha256('<h1>Outside</h1>\n'),
-  );
+  assert.equal(!code.ok && code.error.code === 'rejected' && code.error.diskChecksum, sha256('<h1>Outside</h1>\n'));
   assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Outside</h1>\n', 'the patch left disk alone');
   assert.deepEqual(temporaries(path.dirname(file)), []);
 });
@@ -322,4 +312,20 @@ test('a byte-order mark does not hide the frontmatter', async (context) => {
   const post = toRecord(toRecord(await harness.invoke('page:read', markdown))?.['model']);
   assert.equal(post?.['mdHasFrontmatter'], true);
   assert.match(String(post?.['extraFrontmatter']), /^title: Shipping the editor/);
+});
+
+test('project scans hide save staging while retaining authored empty folders', async () => {
+  const harness = fixture();
+  try {
+    for (const folder of ['.stacki-io', '.stacki/io', 'blog', 'blog/.stacki-io']) {
+      fs.mkdirSync(path.join(harness.root, 'src/pages', folder), { recursive: true });
+    }
+    fs.mkdirSync(path.join(harness.root, '.git/info'), { recursive: true });
+    const scan = parseScanResult(await harness.invoke('project:scan', harness.root));
+    assert.deepEqual(scan.pageFolders, ['blog']);
+    const exclusions = fs.readFileSync(path.join(harness.root, '.git/info/exclude'), 'utf8');
+    assert.ok(exclusions.split('\n').includes('.stacki/io/'));
+  } finally {
+    harness.dispose();
+  }
 });

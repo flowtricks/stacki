@@ -1,0 +1,80 @@
+// Traditional Chinese (Taiwan) `history` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/history';
+
+export const messages = {
+  'history.backToNow': '回到現在',
+  'history.commit.actions': '提交動作',
+  'history.commit.merge': '合併提交',
+  'history.commit.preview': '預覽',
+  'history.commit.restoreProject': '將專案還原到此提交…',
+  'history.commit.you': '你',
+  'history.day.today': '今天',
+  'history.day.yesterday': '昨天',
+  'history.dialog.close': '關閉已變更的檔案',
+  'history.dialog.title': '已變更的檔案（{count}）',
+  'history.diff.allFiles': '所有檔案',
+  'history.diff.emptyTree': '空的樹狀結構',
+  'history.diff.firstParent': '與第一個父提交比較',
+  'history.diff.label': '檔案差異',
+  'history.diff.noTextChanges': '此檔案沒有文字變更。',
+  'history.diff.restoreFile': '還原檔案…',
+  'history.error.diffUnreadable': '無法讀取此提交的差異。',
+  'history.files.added': {
+    other: '新增 {count} 個檔案',
+  },
+  'history.files.changedLabel': '已變更的檔案',
+  'history.files.count': {
+    other: '{count} 個檔案',
+  },
+  'history.files.deleted': {
+    other: '刪除 {count} 個檔案',
+  },
+  'history.files.from': '來自 {path}',
+  'history.files.listLabel': '已變更的檔案清單',
+  'history.files.noMatch': '沒有符合此篩選條件的檔案。',
+  'history.files.none': '沒有檔案變更。',
+  'history.files.unavailable': '此提交的已變更檔案無法使用。',
+  'history.files.updated': {
+    other: '更新 {count} 個檔案',
+  },
+  'history.files.view': '檢視已變更的檔案（{count}）',
+  'history.files.viewDiff': '檢視 {path} 的差異',
+  'history.filter.added': '新增',
+  'history.filter.all': '全部',
+  'history.filter.deleted': '已刪除',
+  'history.filter.label': '篩選已變更的檔案',
+  'history.filter.updated': '已變更',
+  'history.scope.all': '所有分支',
+  'history.scope.ariaLabel': '依分支篩選提交',
+  'history.scope.current': '目前分支',
+  'history.scope.label': '篩選提交',
+  'history.scope.showing': '正在顯示 {branch} 上的提交',
+  'history.sort.ariaLabel': '排序已變更的檔案',
+  'history.sort.label': '排序',
+  'history.sort.path': '檔案路徑',
+  'history.sort.status': '狀態',
+  'history.summary.moreFiles': {
+    other: '{first} 及其他 {count} 個檔案',
+  },
+  'history.summary.morePages': {
+    other: '{first} 及其他 {count} 個頁面',
+  },
+  'history.summary.none': '沒有檔案變更',
+  'history.summary.two': '{first} 和 {second}',
+  'history.time.daysAgo': {
+    other: '{count} 天前',
+  },
+  'history.time.hoursAgo': {
+    other: '{count} 小時前',
+  },
+  'history.time.justNow': '剛剛',
+  'history.time.minutesAgo': {
+    other: '{count} 分鐘前',
+  },
+  'history.time.yesterday': '昨天',
+  'history.timeline.empty': '還沒有儲存任何內容。儲存第一個版本後就會顯示在這裡，你可以隨時回到該版本。',
+  'history.timeline.label': 'Git 歷史記錄',
+  'history.timeline.showOlder': '顯示較舊的項目',
+  'history.versionHistory': '版本記錄',
+} as const satisfies CatalogOf<MessageKey>;

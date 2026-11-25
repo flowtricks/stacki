@@ -2,6 +2,7 @@
 // drag target is, its colour, its label — and comparing shapes, points and
 // radii (ClipPath.tsx).
 
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import {
   type Point,
   type CornerName,
@@ -16,8 +17,12 @@ import {
   type HandleTarget,
   type DragTarget,
 } from './clipPathTypes';
+import { assert } from '../../../../shared/core/assert';
 import { CORNERS } from './clipPathConstants';
 import { formatPercent, formatCssUnitValue, formatCssCoordinatePoint } from './clipPathMeasure';
+
+// The most parts a box list (inset sides, corner radii) has.
+const BOX_PARTS_MAX = 4;
 
 export function makeInsetRadii(radius: number): CornerRadii {
   return {
@@ -33,11 +38,7 @@ export function radiusValuesClose(left: number, right: number) {
 }
 
 export function radiiClose(left: CornerRadii, right: CornerRadii) {
-  return CORNERS.every(
-    (corner) =>
-      radiusValuesClose(left[corner].x, right[corner].x) &&
-      radiusValuesClose(left[corner].y, right[corner].y),
-  );
+  return CORNERS.every((corner) => radiusValuesClose(left[corner].x, right[corner].x) && radiusValuesClose(left[corner].y, right[corner].y));
 }
 
 export function hasRoundedCorners(radii: CornerRadii) {
@@ -45,21 +46,50 @@ export function hasRoundedCorners(radii: CornerRadii) {
 }
 
 export function formatRadiusList(values: number[]) {
-  const formatted = values.map(formatPercent);
-  if (
-    formatted[0] === formatted[1] &&
-    formatted[0] === formatted[2] &&
-    formatted[0] === formatted[3]
-  ) {
-    return formatted[0];
+  return shortestBoxForm(values.map(formatPercent));
+}
+
+// The parts of a four-part box list — inset sides (top right bottom left) or
+// border radii (top-left top-right bottom-right bottom-left) — written out to
+// all four, as CSS fills them: a missing part copies the one two places back,
+// or the first. Clip paths list sides and corners in the same clockwise order,
+// so one rule serves both.
+export function expandBoxParts(parts: readonly string[]): readonly [string, string, string, string] {
+  assert(parts.length >= 1, 'expandBoxParts: a box list has at least one part');
+  assert(parts.length <= BOX_PARTS_MAX, 'expandBoxParts: a box list has at most four parts');
+  const first = parts[0] ?? '';
+  const second = parts[1] ?? first;
+  return [first, second, parts[2] ?? first, parts[3] ?? second];
+}
+
+// A box list in its shortest equivalent form, as margin, padding and
+// border-radius are written by hand: four equal parts are one, top = bottom
+// with left = right is two, left = right alone is three. The parts compare as
+// written text, so `0` and `0px` stay apart; that only ever keeps a longer
+// form, never changes the value.
+export function shortestBoxForm(parts: readonly string[]): string {
+  const [top, right, bottom, left] = expandBoxParts(parts);
+  const shortest = shortestBoxParts(top, right, bottom, left);
+  const expanded = expandBoxParts(shortest);
+  assert(expanded[0] === top, 'shortestBoxForm: the short form keeps the first part');
+  assert(expanded[1] === right, 'shortestBoxForm: the short form keeps the second part');
+  assert(expanded[2] === bottom, 'shortestBoxForm: the short form keeps the third part');
+  assert(expanded[3] === left, 'shortestBoxForm: the short form keeps the fourth part');
+  return shortest.join(' ');
+}
+
+// The fewest parts that expand back to these four.
+function shortestBoxParts(top: string, right: string, bottom: string, left: string): readonly string[] {
+  if (right === left) {
+    if (top === bottom) {
+      if (top === right) {
+        return [top];
+      }
+      return [top, right];
+    }
+    return [top, right, bottom];
   }
-  if (formatted[0] === formatted[2] && formatted[1] === formatted[3]) {
-    return `${formatted[0]} ${formatted[1]}`;
-  }
-  if (formatted[1] === formatted[3]) {
-    return `${formatted[0]} ${formatted[1]} ${formatted[2]}`;
-  }
-  return formatted.join(' ');
+  return [top, right, bottom, left];
 }
 
 export function formatRadii(radii: CornerRadii) {
@@ -72,10 +102,6 @@ export function formatRadii(radii: CornerRadii) {
 
 export function formatInsetSides(shape: InsetShape) {
   return formatRadiusList([shape.top, shape.right, shape.bottom, shape.left]);
-}
-
-export function formatCssUnitList(values: CssUnitValue[]) {
-  return values.map(formatCssUnitValue).join(' ');
 }
 
 export function formatRawEditableClipPath(editable: RawEditableClipPath) {
@@ -96,15 +122,27 @@ export function formatRawEditableClipPath(editable: RawEditableClipPath) {
     return `ellipse(${radii} at ${center})`;
   }
 
-  const sides = formatCssUnitList([editable.top, editable.right, editable.bottom, editable.left]);
+  // Shortest forms, as the sides and radii are written by hand: a drag of one
+  // handle must not spell `inset(0.5rem round 2rem)` out to four sides, four
+  // radii and a `/` of the same four again.
+  const sides = shortestBoxForm([editable.top, editable.right, editable.bottom, editable.left].map(formatCssUnitValue));
   if (!editable.radii) {
     return `inset(${sides})`;
   }
-  const horizontal = formatCssUnitList(editable.radii.horizontal);
-  const vertical = editable.radii.vertical
-    ? ` / ${formatCssUnitList(editable.radii.vertical)}`
-    : '';
-  return `inset(${sides} round ${horizontal}${vertical})`;
+  return `inset(${sides} round ${formatRawInsetRadii(editable.radii)})`;
+}
+
+// An inset's `round` radii, shortest first; the `/ vertical` half only when it
+// differs from the horizontal one, since CSS reads a missing half as equal.
+export function formatRawInsetRadii(radii: { horizontal: CssUnitValue[]; vertical?: CssUnitValue[] }): string {
+  const horizontalParts = radii.horizontal.map(formatCssUnitValue);
+  const horizontal = shortestBoxForm(horizontalParts);
+  if (!radii.vertical) {
+    return horizontal;
+  }
+  const vertical = shortestBoxForm(radii.vertical.map(formatCssUnitValue));
+  assert(horizontal.length > 0, 'formatRawInsetRadii: the horizontal radii are written');
+  return vertical === horizontal ? horizontal : `${horizontal} / ${vertical}`;
 }
 
 export function oppositeCorner(corner: CornerName): CornerName {
@@ -157,11 +195,7 @@ export function isInsetHandle(handle: HandleTarget | undefined) {
   return Boolean(handle && (handle.kind === 'inset-radius' || insetSideForHandle(handle)));
 }
 
-export function isInsetHandleAffected(
-  activeHandle: HandleTarget | undefined,
-  candidate: HandleTarget,
-  mode: InsetModifierMode,
-) {
+export function isInsetHandleAffected(activeHandle: HandleTarget | undefined, candidate: HandleTarget, mode: InsetModifierMode) {
   if (mode === 'single' || !activeHandle || handlesMatch(activeHandle, candidate)) {
     return false;
   }
@@ -179,17 +213,17 @@ export function isInsetHandleAffected(
   return mode === 'all' || candidateSide === oppositeInsetSide(activeSide);
 }
 
-export function cornerLabel(corner: CornerName) {
+export function cornerLabel(corner: CornerName, translate: Translator) {
   if (corner === 'topLeft') {
-    return 'top left';
+    return translate('styleModel.clipPath.corner.topLeft');
   }
   if (corner === 'topRight') {
-    return 'top right';
+    return translate('styleModel.clipPath.corner.topRight');
   }
   if (corner === 'bottomRight') {
-    return 'bottom right';
+    return translate('styleModel.clipPath.corner.bottomRight');
   }
-  return 'bottom left';
+  return translate('styleModel.clipPath.corner.bottomLeft');
 }
 
 export function pointsClose(left: Point[], right: Point[]) {
@@ -198,9 +232,7 @@ export function pointsClose(left: Point[], right: Point[]) {
   }
   return left.every((point, index) => {
     const other = right[index];
-    return (
-      other !== undefined && Math.abs(point.x - other.x) < 1 && Math.abs(point.y - other.y) < 1
-    );
+    return other !== undefined && Math.abs(point.x - other.x) < 1 && Math.abs(point.y - other.y) < 1;
   });
 }
 
@@ -218,19 +250,10 @@ export function shapesClose(left: ClipShape, right: ClipShape) {
     return pointsClose(left.points, right.points);
   }
   if (left.kind === 'circle' && right.kind === 'circle') {
-    return (
-      Math.abs(left.radius - right.radius) < 1 &&
-      Math.abs(left.cx - right.cx) < 1 &&
-      Math.abs(left.cy - right.cy) < 1
-    );
+    return Math.abs(left.radius - right.radius) < 1 && Math.abs(left.cx - right.cx) < 1 && Math.abs(left.cy - right.cy) < 1;
   }
   if (left.kind === 'ellipse' && right.kind === 'ellipse') {
-    return (
-      Math.abs(left.rx - right.rx) < 1 &&
-      Math.abs(left.ry - right.ry) < 1 &&
-      Math.abs(left.cx - right.cx) < 1 &&
-      Math.abs(left.cy - right.cy) < 1
-    );
+    return Math.abs(left.rx - right.rx) < 1 && Math.abs(left.ry - right.ry) < 1 && Math.abs(left.cx - right.cx) < 1 && Math.abs(left.cy - right.cy) < 1;
   }
   if (left.kind === 'inset' && right.kind === 'inset') {
     return (
@@ -242,9 +265,7 @@ export function shapesClose(left: ClipShape, right: ClipShape) {
     );
   }
   if (left.kind === 'shape' && right.kind === 'shape') {
-    return (
-      left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero')
-    );
+    return left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero');
   }
   return false;
 }
@@ -260,9 +281,7 @@ export function pointsEqual(left: Point[], right: Point[]) {
 }
 
 export function radiiEqual(left: CornerRadii, right: CornerRadii) {
-  return CORNERS.every(
-    (corner) => left[corner].x === right[corner].x && left[corner].y === right[corner].y,
-  );
+  return CORNERS.every((corner) => left[corner].x === right[corner].x && left[corner].y === right[corner].y);
 }
 
 export function shapesEqual(left: ClipShape, right: ClipShape) {
@@ -282,25 +301,15 @@ export function shapesEqual(left: ClipShape, right: ClipShape) {
     return left.radius === right.radius && left.cx === right.cx && left.cy === right.cy;
   }
   if (left.kind === 'ellipse' && right.kind === 'ellipse') {
-    return (
-      left.rx === right.rx && left.ry === right.ry && left.cx === right.cx && left.cy === right.cy
-    );
+    return left.rx === right.rx && left.ry === right.ry && left.cx === right.cx && left.cy === right.cy;
   }
   if (left.kind === 'inset' && right.kind === 'inset') {
     return (
-      left.top === right.top &&
-      left.right === right.right &&
-      left.bottom === right.bottom &&
-      left.left === right.left &&
-      radiiEqual(left.radii, right.radii)
+      left.top === right.top && left.right === right.right && left.bottom === right.bottom && left.left === right.left && radiiEqual(left.radii, right.radii)
     );
   }
   if (left.kind === 'shape' && right.kind === 'shape') {
-    return (
-      left.value === right.value &&
-      (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero') &&
-      (left.pathData || '') === (right.pathData || '')
-    );
+    return left.value === right.value && (left.fillRule || 'nonzero') === (right.fillRule || 'nonzero') && (left.pathData || '') === (right.pathData || '');
   }
   return false;
 }
@@ -318,9 +327,7 @@ export function handlesMatch(left: HandleTarget | undefined, right: HandleTarget
   return left.kind !== 'polygon-point' && left.kind !== 'inset-radius';
 }
 
-export function isPolygonPointHandle(
-  handle: HandleTarget | undefined,
-): handle is Extract<HandleTarget, { kind: 'polygon-point' }> {
+export function isPolygonPointHandle(handle: HandleTarget | undefined): handle is Extract<HandleTarget, { kind: 'polygon-point' }> {
   return handle?.kind === 'polygon-point';
 }
 
@@ -337,11 +344,7 @@ export function uniqueHandles(handles: HandleTarget[]) {
   }, []);
 }
 
-export function previousSurvivingPolygonIndex(
-  pointCount: number,
-  deletedIndexes: Set<number>,
-  referenceIndex: number,
-) {
+export function previousSurvivingPolygonIndex(pointCount: number, deletedIndexes: Set<number>, referenceIndex: number) {
   for (let offset = 1; offset <= pointCount; offset += 1) {
     const index = (referenceIndex - offset + pointCount) % pointCount;
     if (!deletedIndexes.has(index)) {
@@ -381,16 +384,7 @@ export function handleFromDragTarget(target: DragTarget): HandleTarget {
   return { kind: target.kind };
 }
 
-export const HANDLE_COLOR_CLASSES: readonly [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-] = [
+export const HANDLE_COLOR_CLASSES: readonly [string, string, string, string, string, string, string, string] = [
   'clip-path_color-a',
   'clip-path_color-b',
   'clip-path_color-c',
@@ -408,11 +402,7 @@ export function handleColorClass(handle: HandleTarget) {
   if (handle.kind === 'circle-center' || handle.kind === 'ellipse-center') {
     return 'clip-path_color-center';
   }
-  if (
-    handle.kind === 'circle-radius' ||
-    handle.kind === 'ellipse-rx' ||
-    handle.kind === 'inset-top'
-  ) {
+  if (handle.kind === 'circle-radius' || handle.kind === 'ellipse-rx' || handle.kind === 'inset-top') {
     return 'clip-path_color-a';
   }
   if (handle.kind === 'ellipse-ry' || handle.kind === 'inset-right') {
@@ -425,20 +415,13 @@ export function handleColorClass(handle: HandleTarget) {
     return 'clip-path_color-d';
   }
   if (handle.kind === 'inset-radius') {
-    return (
-      HANDLE_COLOR_CLASSES[(CORNERS.indexOf(handle.corner) + 4) % HANDLE_COLOR_CLASSES.length] ??
-      'clip-path_color-a'
-    );
+    return HANDLE_COLOR_CLASSES[(CORNERS.indexOf(handle.corner) + 4) % HANDLE_COLOR_CLASSES.length] ?? 'clip-path_color-a';
   }
   return 'clip-path_color-a';
 }
 
 export function polygonPointColorClass(index: number, colorClasses: string[] = []) {
-  return (
-    colorClasses[index] ||
-    HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length] ||
-    'clip-path_color-a'
-  );
+  return colorClasses[index] || HANDLE_COLOR_CLASSES[index % HANDLE_COLOR_CLASSES.length] || 'clip-path_color-a';
 }
 
 export function normalizePolygonPointColors(count: number, colors: string[] = []) {
@@ -447,15 +430,11 @@ export function normalizePolygonPointColors(count: number, colors: string[] = []
 
 export function nextPolygonPointColor(colors: string[], insertIndex: number) {
   const blocked = new Set([colors[insertIndex - 1], colors[insertIndex]].filter(Boolean));
-  const unusedColor = HANDLE_COLOR_CLASSES.find(
-    (colorClass) => !colors.includes(colorClass) && !blocked.has(colorClass),
-  );
+  const unusedColor = HANDLE_COLOR_CLASSES.find((colorClass) => !colors.includes(colorClass) && !blocked.has(colorClass));
   if (unusedColor) {
     return unusedColor;
   }
-  return (
-    HANDLE_COLOR_CLASSES.find((colorClass) => !blocked.has(colorClass)) || HANDLE_COLOR_CLASSES[0]
-  );
+  return HANDLE_COLOR_CLASSES.find((colorClass) => !blocked.has(colorClass)) || HANDLE_COLOR_CLASSES[0];
 }
 
 export function shorthandGroups<T>(items: T[], count = items.length) {

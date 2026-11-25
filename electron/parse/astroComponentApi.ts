@@ -4,6 +4,7 @@
 import type { RenderTag } from './astroParserTypes';
 import { VOID_ELEMENTS, required } from './astroAttrs';
 import { skipStringOrComment } from './astroScan';
+import { frontmatterOf } from './astroFence';
 
 // The slot a use of `Astro.slots` is about, and the const it was read into.
 //
@@ -60,9 +61,7 @@ function slotApiUses(source: string): { slot: string; varName: string | undefine
     }
     // `const content = await slotContent(...)` — the name that now holds it,
     // which is what the template puts back with `set:html`.
-    const decl = text
-      .slice(0, match.index)
-      .match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*$/);
+    const decl = text.slice(0, match.index).match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?[^;\n]*$/);
     uses.push({
       slot: name || 'default',
       varName: decl ? required(decl[1], 'Slot variable capture') : undefined,
@@ -81,7 +80,7 @@ function slotApiUses(source: string): { slot: string; varName: string | undefine
 // more likely to be the middle of a URL than the start of a comment. Html
 // comments are blanked wherever they are.
 function withoutComments(source: string): string {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
+  const fm = frontmatterOf(source);
   const chars = [...source];
   const blank = (from: number, to: number) => {
     for (let i = from; i < to && i < chars.length; i++) {
@@ -90,7 +89,7 @@ function withoutComments(source: string): string {
       }
     }
   };
-  const end = fm ? fm[0].length : 0;
+  const end = fm ? fm.length : 0;
   for (let i = 0; i < end; i++) {
     const skipped = skipStringOrComment(source, i);
     if (skipped === i) {
@@ -112,15 +111,13 @@ function withoutComments(source: string): string {
 // `Astro.slots` (see slotApiUses). Default first, then named in appearance
 // order.
 export function parseSlots(source: string): string[] {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const body = fm ? source.slice(fm[0].length) : source;
+  const fm = frontmatterOf(source);
+  const body = fm ? source.slice(fm.length) : source;
   const found = new Set<string>();
   const re = /<slot\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)\/?>/g;
   let match;
   while ((match = re.exec(body)) !== null) {
-    const nameMatch = required(match[1], 'Slot attributes capture').match(
-      /\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/,
-    );
+    const nameMatch = required(match[1], 'Slot attributes capture').match(/\bname\s*=\s*(?:"([^"]*)"|'([^']*)')/);
     found.add(nameMatch ? required(nameMatch[1] ?? nameMatch[2], 'Slot name capture') : 'default');
   }
   for (const use of slotApiUses(source)) {
@@ -181,9 +178,9 @@ function dynamicTagLiterals(frontmatter: string, name: string): string[] {
   if (!decl) {
     return [];
   }
-  const literals = [
-    ...required(decl[1], 'Dynamic tag expression capture').matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g),
-  ].map((match) => required(match[1], 'Tag literal capture'));
+  const literals = [...required(decl[1], 'Dynamic tag expression capture').matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((match) =>
+    required(match[1], 'Tag literal capture'),
+  );
   if (literals.length) {
     return literals;
   }
@@ -194,31 +191,30 @@ function dynamicTagLiterals(frontmatter: string, name: string): string[] {
     return [];
   }
   // `const Tag = tag` — the default sits in the destructure or its own const.
-  const viaDefault = frontmatter.match(
-    new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`),
-  );
+  const viaDefault = frontmatter.match(new RegExp(`\\b${ident[1]}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
   return viaDefault ? [required(viaDefault[1], 'Dynamic tag default capture')] : [];
 }
 
 // Lumos also declares dynamic tags directly in Astro.props: `tag: Tag = "h2"`.
-function destructuredTag(
-  frontmatter: string,
-  name: string,
-): { prop: string; tag: string } | undefined {
-  const declarations = frontmatter.matchAll(
-    /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*Astro\.props\b/g,
-  );
+function destructuredTag(frontmatter: string, name: string): { prop: string; tag: string } | undefined {
+  const declarations = frontmatter.matchAll(/\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*Astro\.props\b/g);
   for (const declaration of declarations) {
-    const match = declaration[1]?.match(
-      new RegExp(
-        `(?:^|,)\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*${name}\\s*=\\s*["']([A-Za-z][\\w-]*)["']`,
-      ),
-    );
+    const match = declaration[1]?.match(new RegExp(`(?:^|,)\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*${name}\\s*=\\s*["']([A-Za-z][\\w-]*)["']`));
     if (match?.[1] && match[2]) {
       return { prop: match[1], tag: match[2].toLowerCase() };
     }
   }
   return undefined;
+}
+
+// Whether a component forwards arbitrary attributes: a `...rest` spread on
+// Astro.props, which the Settings panel answers with a free-form Attributes
+// section on its instances. Anchored to the end of the destructure rather than
+// scanning forward from its `{`: a rest element is always last, and looking
+// forward tripped over any `}` in front of it (`containerAttrs = {}, ...rest`).
+// The optional `: Type` covers an annotated destructure.
+export function forwardsRest(source: string): boolean {
+  return /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source);
 }
 
 // The HTML tag a component renders as, so nesting rules can reach through it:
@@ -227,10 +223,76 @@ function destructuredTag(
 // options } when a prop decides it (`<Tag>` from `const Tag = tag`, with
 // `tag = "h2"` in the destructure), or undefined when it can't be told.
 export function rootTag(source: string): RenderTag | undefined {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const frontmatter = fm ? fm[0] : '';
-  const body = fm ? source.slice(fm[0].length) : source;
-  // The first element of the template that isn't a wrapper Astro strips.
+  const root = rootElement(source);
+  if (root === undefined) {
+    return undefined;
+  }
+  const { name, frontmatter } = root;
+  const lower = name.toLowerCase();
+  if (!/^[A-Z]/.test(name)) {
+    return { tag: lower };
+  }
+  // A capitalised name is either another component — whose own tag this
+  // file can't know — or a variable holding one.
+  const alias = destructuredTag(frontmatter, name);
+  if (alias) {
+    return alias;
+  }
+  const decl = frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`));
+  if (!decl) {
+    return undefined;
+  }
+  const expr = required(decl[1], 'Dynamic tag expression capture').trim();
+  // `const Tag = tag` — the prop decides, so report it along with the
+  // default, and an instance that sets the prop overrides the default.
+  const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
+  if (ident) {
+    const prop = required(ident[1], 'Dynamic tag prop capture');
+    const dflt = frontmatter.match(new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
+    return dflt ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() } : { prop };
+  }
+  // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
+  // one depends on values only the page knows.
+  const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) => required(x[1], 'Root tag literal capture').toLowerCase());
+  if (lits.length === 1) {
+    return { tag: required(lits[0], 'Root has exactly one literal tag') };
+  }
+  if (lits.length > 1) {
+    return { options: lits };
+  }
+  return undefined;
+}
+
+// The component a component's template opens with, by name: `Section` for a
+// file that starts `<Section class="hero">`. It is the capitalised root that
+// rootTag reports as unknown, because it is neither a destructured tag prop nor
+// a variable holding a tag. Undefined when the root is a plain element, a
+// variable or alias, or there is no root. The insert palette follows these names
+// to learn whether a component ends up rendering a <section>.
+export function rootComponent(source: string): string | undefined {
+  const root = rootElement(source);
+  if (root === undefined) {
+    return undefined;
+  }
+  const { name, frontmatter } = root;
+  if (!/^[A-Z]/.test(name)) {
+    return undefined;
+  }
+  if (destructuredTag(frontmatter, name)) {
+    return undefined;
+  }
+  if (frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`))) {
+    return undefined;
+  }
+  return name;
+}
+
+// The first element of the template that isn't a wrapper Astro strips, with
+// the frontmatter that declares what a capitalised name might be.
+function rootElement(source: string): { readonly name: string; readonly frontmatter: string } | undefined {
+  const fm = frontmatterOf(source);
+  const frontmatter = fm ? source.slice(0, fm.length) : '';
+  const body = fm ? source.slice(fm.length) : source;
   const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
   let match;
   while ((match = re.exec(body)) !== null) {
@@ -243,46 +305,7 @@ export function rootTag(source: string): RenderTag | undefined {
     if (lower === 'fragment' || lower === 'slot' || lower === 'style' || lower === 'script') {
       continue;
     }
-    if (!/^[A-Z]/.test(name)) {
-      return { tag: lower };
-    }
-    // A capitalised name is either another component — whose own tag this
-    // file can't know — or a variable holding one.
-    const alias = destructuredTag(frontmatter, name);
-    if (alias) {
-      return alias;
-    }
-    const decl = frontmatter.match(
-      new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`),
-    );
-    if (!decl) {
-      return undefined;
-    }
-    const expr = required(decl[1], 'Dynamic tag expression capture').trim();
-    // `const Tag = tag` — the prop decides, so report it along with the
-    // default, and an instance that sets the prop overrides the default.
-    const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
-    if (ident) {
-      const prop = required(ident[1], 'Dynamic tag prop capture');
-      const dflt = frontmatter.match(
-        new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`),
-      );
-      return dflt
-        ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() }
-        : { prop };
-    }
-    // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
-    // one depends on values only the page knows.
-    const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) =>
-      required(x[1], 'Root tag literal capture').toLowerCase(),
-    );
-    if (lits.length === 1) {
-      return { tag: required(lits[0], 'Root has exactly one literal tag') };
-    }
-    if (lits.length > 1) {
-      return { options: lits };
-    }
-    return undefined;
+    return { name, frontmatter };
   }
   return undefined;
 }
@@ -296,9 +319,9 @@ export function rootTag(source: string): RenderTag | undefined {
 // inside a <Tag> is where the default slot renders. Which const holds it comes
 // from slotApiUses.
 export function defaultSlotInline(source: string): boolean {
-  const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
-  const frontmatter = fm ? fm[0] : '';
-  const body = fm ? source.slice(fm[0].length) : source;
+  const fm = frontmatterOf(source);
+  const frontmatter = fm ? source.slice(0, fm.length) : '';
+  const body = fm ? source.slice(fm.length) : source;
   const heldBy = new Set(
     slotApiUses(source)
       .filter((use) => use.slot === 'default' && use.varName)
@@ -316,8 +339,7 @@ export function defaultSlotInline(source: string): boolean {
     const isSlot = tag.toLowerCase() === 'slot' && !closing && !/\bname\s*=/.test(attrs);
     // A <Fragment> renders nothing of its own, so what wraps the content is
     // the tag above it. Anything else IS the wrapper.
-    const placeholder =
-      isSlot || (html && heldBy.has(required(html[1], 'Slot content variable capture')));
+    const placeholder = isSlot || (html && heldBy.has(required(html[1], 'Slot content variable capture')));
     if (placeholder) {
       const parent = isSlot || tag === 'Fragment' ? stack[stack.length - 1] : tag;
       if (!parent) {
@@ -345,16 +367,43 @@ export function defaultSlotInline(source: string): boolean {
 }
 
 // Extracts the tag from `interface Props extends HTMLAttributes<"button">`
-// so the UI can offer that element's built-in attributes (type, disabled, …).
+// so the UI can offer that element's built-in attributes (type, disabled, …)
+// and check an instance's attribute names against it. HTMLAttributes may sit
+// anywhere in the extends list (`extends Base, HTMLAttributes<"img">`, as
+// Stacki's attributes prop writes it), or anywhere in a `type Props` alias's
+// intersection. The tag-less `astroHTML.JSX.HTMLAttributes` names no tag.
 export function parseExtendsTag(source: string): string | undefined {
-  const fm = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  const frontmatter = fm ? required(fm[1], 'Frontmatter capture') : '';
-  const match = frontmatter.match(
-    new RegExp(
-      'interface\\s+Props\\s+extends\\s+(?:astroHTML\\.JSX\\' +
-        '.)?HTMLAttributes\\s*<\\s*[\'"](\\w+)[\'"]\\s*>',
-      '',
-    ),
-  );
-  return match ? required(match[1], 'Extended HTML tag capture') : undefined;
+  const frontmatter = frontmatterOf(source)?.code ?? '';
+  const tagOf = (typing: string): string | undefined => {
+    const match = /\b(?:astroHTML\.JSX\.)?HTMLAttributes\s*<\s*['"]([a-z][a-z0-9]*)['"]\s*>/.exec(typing);
+    return match ? required(match[1], 'Extended HTML tag capture') : undefined;
+  };
+  // The extends list runs to the interface's `{`; a list never holds one, though a generic's `<…>` may.
+  const extended = /\binterface\s+Props\s+extends\s+([^{]*)\{/.exec(frontmatter);
+  if (extended) {
+    return tagOf(required(extended[1], 'Extends list capture'));
+  }
+  // In an alias only a top-level intersection member counts: `{ attrs: HTMLAttributes<"div"> }` is a prop, not the Props' attributes.
+  const aliased = /\btype\s+Props\s*=/.exec(frontmatter);
+  return aliased ? tagOf(topLevelText(frontmatter.slice(aliased.index + aliased[0].length))) : undefined;
+}
+
+// A type's text with the insides of its `{}`, `()` and `[]` blanked, up to the
+// `;` or line that ends it at the top level. One pass over at most the text.
+function topLevelText(text: string): string {
+  let depth = 0;
+  let out = '';
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index] ?? '';
+    if ('{(['.includes(character)) {
+      depth++;
+    } else if ('})]'.includes(character)) {
+      depth = Math.max(0, depth - 1);
+    } else if (depth === 0 && (character === ';' || (character === '\n' && /^\n[A-Za-z]/.test(text.slice(index, index + 2))))) {
+      return out;
+    } else if (depth === 0) {
+      out += character;
+    }
+  }
+  return out;
 }

@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import { toRecord } from '../../shared/core/record';
+import { epochNowMs, isCanvasPressMessage } from './popupDismiss';
 import { useEffect } from 'react';
 
 // Closing a popup when the user goes somewhere else.
@@ -26,11 +27,7 @@ import { useEffect } from 'react';
  * `active` skips the listeners entirely while the popup is shut, so a closed
  * menu costs nothing.
  */
-export default function useDismiss(
-  ref: RefObject<HTMLElement> | undefined,
-  { active }: { readonly active: boolean },
-  onDismiss: () => void,
-): void {
+export default function useDismiss(ref: RefObject<HTMLElement> | undefined, { active }: { readonly active: boolean }, onDismiss: () => void): void {
   useEffect(() => {
     if (!active) {
       return undefined;
@@ -60,10 +57,15 @@ export default function useDismiss(
     // window (see electron/preload/frameTargets.ts), which is a signal that does not depend
     // on how focus behaves — belt and braces, since the two cost the same and
     // a menu left hanging over the page is the thing being fixed.
+    const openedAtMs = epochNowMs();
     const onMessage = (event: MessageEvent<unknown>): void => {
       const type = toRecord(event.data)?.['type'];
-      if (typeof type === 'string' && (type === 'avb:click-node' || type === 'avb:open-node')) {
-        onDismiss();
+      // A retried click's answer (`replay`), or a press the canvas posted late from before this opened,
+      // is the press already handled, not a new one (popupDismiss.ts).
+      if (type === 'avb:click-node' || type === 'avb:open-node') {
+        if (isCanvasPressMessage(event.data, { openedAtMs })) {
+          onDismiss();
+        }
       }
     };
 

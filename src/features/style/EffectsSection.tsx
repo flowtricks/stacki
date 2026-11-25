@@ -1,15 +1,15 @@
 import SegmentedField from './SegmentedField';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, withImportant } from './model/styleDisplay';
 import {
   type Props,
   EffLabel,
   LiveText,
   BLEND_MODES,
-  CURSORS,
-  OUTLINE_OPTIONS,
-  EVENTS_OPTIONS,
+  cursorOptions,
+  outlineOptions,
+  eventsOptions,
   BLEND_SET,
   CURSOR_SET,
   PresetSelectRow,
@@ -19,6 +19,7 @@ import { FiltersRow, TransformsRow } from './TransformsRow';
 import { TransitionsRow } from './TransitionsRow';
 import { BoxShadowsRow } from './BoxShadowsRow';
 import { ClipPathRow } from './ClipPathRow';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Effects section (Webflow parity): blending, opacity, outline, box shadows,
 // transforms, transitions, filters, backdrop filters, cursor, and pointer-events.
@@ -30,7 +31,8 @@ import { ClipPathRow } from './ClipPathRow';
 // as it happens. The drag writes to the canvas, not to the model the field
 // reads, so without this the page moves under the pointer while the number
 // sits still (see liveColor.ts).
-function OutlineColor({ props, value }: { props: Props; value: string }) {
+function OutlineColor({ props, value, important }: { props: Props; value: string; important: boolean }) {
+  const translate = useTranslate();
   const { busy, setProp, liveSetProp } = props;
   const [shown, noteLive] = useLiveColor(value);
   return (
@@ -38,13 +40,14 @@ function OutlineColor({ props, value }: { props: Props; value: string }) {
       <ColorSwatch
         value={shown}
         busy={busy}
-        ariaLabel="Outline color"
+        ariaLabel={translate('style.effectsSection.outlineColor')}
         onChange={(color, live) => {
           noteLive(live ? color : undefined);
+          // The swatch picks a colour, not the flag: a flagged colour stays so.
           if (live) {
-            liveSetProp('outline-color', color, false);
+            liveSetProp('outline-color', color, important);
           } else {
-            setProp('outline-color', color, false);
+            setProp('outline-color', color, important);
           }
         }}
       />
@@ -52,7 +55,7 @@ function OutlineColor({ props, value }: { props: Props; value: string }) {
         prop="outline-color"
         placeholder="currentColor"
         props={props}
-        {...(shown === value ? {} : { dragging: shown })}
+        {...(shown === value ? {} : { dragging: withImportant({ value: shown, important }) })}
       />
     </>
   );
@@ -60,13 +63,14 @@ function OutlineColor({ props, value }: { props: Props; value: string }) {
 
 export default function EffectsSection(props: Props) {
   const { read, busy, setProp } = props;
+  const translate = useTranslate();
   const events = displayOf(read('pointer-events'));
 
   return (
     <div className="embed-editor_size embed-editor_effects">
       <PresetSelectRow
         prop="mix-blend-mode"
-        label="Blending"
+        label={translate('style.effectsSection.blending')}
         options={BLEND_MODES}
         presets={BLEND_SET}
         fallback="normal"
@@ -80,15 +84,15 @@ export default function EffectsSection(props: Props) {
       <BoxShadowsRow props={props} />
       <TransformsRow props={props} />
       <TransitionsRow props={props} />
-      <FiltersRow prop="filter" label="Filters" props={props} />
-      <FiltersRow prop="backdrop-filter" label="Backdrop filters" props={props} />
+      <FiltersRow prop="filter" label={translate('style.effectsSection.filters')} props={props} />
+      <FiltersRow prop="backdrop-filter" label={translate('style.effectsSection.backdropFilters')} props={props} />
 
       <ClipPathRow props={props} />
 
       <PresetSelectRow
         prop="cursor"
-        label="Cursor"
-        options={CURSORS}
+        label={translate('style.effectsSection.cursor')}
+        options={cursorOptions(translate)}
         presets={CURSOR_SET}
         fallback="auto"
         placeholder="cursor"
@@ -97,16 +101,16 @@ export default function EffectsSection(props: Props) {
       />
 
       <div className="embed-editor_size-row">
-        <EffLabel label="Events" prop="pointer-events" props={props} />
+        <EffLabel label={translate('style.effectsSection.events')} prop="pointer-events" props={props} />
         <SegmentedField
           value={events.present ? events.value : ''}
           important={events.important}
-          options={EVENTS_OPTIONS}
+          options={eventsOptions(translate)}
           prop="pointer-events"
           fallback="auto"
           busy={busy}
           onCommit={(next, imp) => setProp('pointer-events', next, imp)}
-          ariaLabel="Pointer events"
+          ariaLabel={translate('style.effectsSection.pointerEvents')}
         />
       </div>
     </div>
@@ -116,35 +120,36 @@ export default function EffectsSection(props: Props) {
 // Outline: its style, width and offset, and colour.
 function OutlineRows({ props }: { props: Props }) {
   const { read, busy, setProp } = props;
+  const translate = useTranslate();
   const outline = displayOf(read('outline-style'));
   const outlineColor = displayOf(read('outline-color'));
   return (
     <>
       <div className="embed-editor_size-row">
-        <EffLabel label="Outline" prop="outline-style" props={props} />
+        <EffLabel label={translate('style.effectsSection.outline')} prop="outline-style" props={props} />
         <SegmentedField
           value={outline.present ? outline.value : ''}
           important={outline.important}
-          options={OUTLINE_OPTIONS}
+          options={outlineOptions(translate)}
           prop="outline-style"
           fallback="none"
           busy={busy}
           onCommit={(next, imp) => setProp('outline-style', next, imp)}
-          ariaLabel="Outline style"
+          ariaLabel={translate('style.effectsSection.outlineStyle')}
         />
       </div>
       <div className="embed-editor_size-row">
-        <EffLabel label="Width" prop="outline-width" props={props} />
+        <EffLabel label={translate('style.effectsSection.width')} prop="outline-width" props={props} />
         <div className="embed-editor_eff-outline-pair">
           <LiveText prop="outline-width" placeholder="0" props={props} />
-          <EffLabel label="Offset" prop="outline-offset" props={props} />
+          <EffLabel label={translate('style.effectsSection.offset')} prop="outline-offset" props={props} />
           <LiveText prop="outline-offset" placeholder="0" props={props} />
         </div>
       </div>
       <div className="embed-editor_size-row">
-        <EffLabel label="Color" prop="outline-color" props={props} />
+        <EffLabel label={translate('style.effectsSection.color')} prop="outline-color" props={props} />
         <div className="embed-editor_bg-inline">
-          <OutlineColor props={props} value={outlineColor.present ? outlineColor.value : ''} />
+          <OutlineColor props={props} value={outlineColor.present ? outlineColor.value : ''} important={outlineColor.important} />
         </div>
       </div>
     </>

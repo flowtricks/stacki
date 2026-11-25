@@ -8,12 +8,7 @@
 // that moves only in part, and a regular expression over a moved folder.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-  applyEdits,
-  planStep,
-  resolvePath,
-  type StepPlan,
-} from '../../../scripts/move/moveSourcesPlan.mts';
+import { applyEdits, planStep, resolvePath, type StepPlan } from '../../../scripts/move/moveSourcesPlan.mts';
 import { nameProblem, parseManifest } from '../../../scripts/move/moveSources.mts';
 
 function plan(texts: Readonly<Record<string, string>>, moves: Record<string, string>): StepPlan {
@@ -39,18 +34,14 @@ describe('module specifiers', () => {
   it('re-root the moved file’s own imports, including import() and import types', () => {
     const result = plan(
       {
-        'src/panels/Props.tsx':
-          "import x from '../ui/Icons';\nconst y = import('./Lazy');\n" +
-          "type Z = import('../../shared/limits').Limits;\n",
+        'src/panels/Props.tsx': "import x from '../ui/Icons';\nconst y = import('./Lazy');\n" + "type Z = import('../../shared/limits').Limits;\n",
         'src/ui/Icons.tsx': '',
         'src/panels/Lazy.tsx': '',
         'shared/limits.ts': '',
       },
       { 'src/panels/Props.tsx': 'src/features/props/Props.tsx' },
     );
-    const text =
-      "import x from '../../ui/Icons';\nconst y = import('../../panels/Lazy');\n" +
-      "type Z = import('../../../shared/limits').Limits;\n";
+    const text = "import x from '../../ui/Icons';\nconst y = import('../../panels/Lazy');\n" + "type Z = import('../../../shared/limits').Limits;\n";
     assert.deepEqual([...result.writes], [['src/features/props/Props.tsx', text]]);
   });
 
@@ -67,18 +58,12 @@ describe('module specifiers', () => {
         'test/helper.js': 'test/helpers/helper.js',
       },
     );
-    assert.equal(
-      result.writes.get('scripts/policy/scan.mts'),
-      "import { a } from '../lib/assert.mts';\n",
-    );
+    assert.equal(result.writes.get('scripts/policy/scan.mts'), "import { a } from '../lib/assert.mts';\n");
     assert.equal(result.writes.get('test/x.js'), "const a = require('./helpers/helper.js');\n");
   });
 
   it('leave a file that names nothing moved untouched, byte for byte', () => {
-    const result = plan(
-      { 'src/a.ts': "import b from './b';\n// src/b.ts\n", 'src/b.ts': '', 'src/c.ts': '' },
-      { 'src/c.ts': 'src/lib/c.ts' },
-    );
+    const result = plan({ 'src/a.ts': "import b from './b';\n// src/b.ts\n", 'src/b.ts': '', 'src/c.ts': '' }, { 'src/c.ts': 'src/lib/c.ts' });
     assert.equal(result.writes.size, 0);
     assert.deepEqual(result.reports, []);
   });
@@ -98,9 +83,7 @@ describe('repository paths written as text', () => {
   it('rewrite file paths, .js names (keeping .js) and #dist build paths', () => {
     const result = plan(
       {
-        'test/a.js':
-          "load('src/panels/Props.jsx');\nrequire('#dist/electron/astroParser.js');\n" +
-          '// See src/panels/Props.tsx.\n',
+        'test/a.js': "load('src/panels/Props.jsx');\nrequire('#dist/electron/astroParser.js');\n" + '// See src/panels/Props.tsx.\n',
         'src/panels/Props.tsx': '',
         'electron/astroParser.ts': '',
       },
@@ -109,9 +92,7 @@ describe('repository paths written as text', () => {
         'electron/astroParser.ts': 'electron/parse/astroParser.ts',
       },
     );
-    const text =
-      "load('src/features/props/Props.jsx');\nrequire('#dist/electron/parse/astroParser.js');\n" +
-      '// See src/features/props/Props.tsx.\n';
+    const text = "load('src/features/props/Props.jsx');\nrequire('#dist/electron/parse/astroParser.js');\n" + '// See src/features/props/Props.tsx.\n';
     assert.equal(result.writes.get('test/a.js'), text);
   });
 
@@ -127,10 +108,7 @@ describe('repository paths written as text', () => {
         'src/style-panel/lib/css.ts': 'src/features/style/model/css.ts',
       },
     );
-    assert.equal(
-      result.writes.get('docs/a.md'),
-      'The model lives in `src/features/style/model/`.\n',
-    );
+    assert.equal(result.writes.get('docs/a.md'), 'The model lives in `src/features/style/model/`.\n');
   });
 
   it('report a folder that moves only in part, and leave it as written', () => {
@@ -154,17 +132,11 @@ describe('repository paths written as text', () => {
         'src/tool-prefs.ts': 'src/lib/toolPreferences.ts',
       },
     );
-    assert.deepEqual(result.reports, [
-      'test/a.js:1: a regular expression names moved folder src\\/panels',
-      'test/a.js:2: names renamed file tool-prefs.ts',
-    ]);
+    assert.deepEqual(result.reports, ['test/a.js:1: a regular expression names moved folder src\\/panels', 'test/a.js:2: names renamed file tool-prefs.ts']);
   });
 
   it('leave paths inside fixture projects alone: they name no tracked file', () => {
-    const result = plan(
-      { 'test/a.js': "write('src/pages/index.astro');\n", 'src/pages.ts': '' },
-      { 'src/pages.ts': 'src/lib/pages.ts' },
-    );
+    const result = plan({ 'test/a.js': "write('src/pages/index.astro');\n", 'src/pages.ts': '' }, { 'src/pages.ts': 'src/lib/pages.ts' });
     assert.equal(result.writes.size, 0);
   });
 });
@@ -194,14 +166,8 @@ describe('files that hold paths as data', () => {
 
 describe('esbuild stdin specifiers resolved from the root', () => {
   it('follow their file, keeping the extension they were written with', () => {
-    const before = [
-      "export { x } from './src/ui/Dropdown.jsx';",
-      "export { y } from './src/ui/Icons';",
-    ].join('\n');
-    const after = [
-      "export { x } from './src/ui/menus/Dropdown.jsx';",
-      "export { y } from './src/lib/Icons';",
-    ].join('\n');
+    const before = ["export { x } from './src/ui/Dropdown.jsx';", "export { y } from './src/ui/Icons';"].join('\n');
+    const after = ["export { x } from './src/ui/menus/Dropdown.jsx';", "export { y } from './src/lib/Icons';"].join('\n');
     const result = plan(
       { 'test/a.js': before, 'src/ui/Dropdown.tsx': '', 'src/ui/Icons.tsx': '' },
       {
@@ -252,13 +218,9 @@ describe('the tool’s own boundaries', () => {
     assert.equal(nameProblem('test/renderer/props/listField.test.js'), undefined);
     assert.equal(
       nameProblem('src/features/style/model/css-rule-view.ts'),
-      "src/features/style/model/css-rule-view.ts: 'css-rule-view.ts' is neither a camelCase " +
-        'module nor a PascalCase component',
+      "src/features/style/model/css-rule-view.ts: 'css-rule-view.ts' is neither a camelCase " + 'module nor a PascalCase component',
     );
-    assert.equal(
-      nameProblem('src/style-panel/Gap.tsx'),
-      "src/style-panel/Gap.tsx: folder 'style-panel' is not camelCase",
-    );
+    assert.equal(nameProblem('src/style-panel/Gap.tsx'), "src/style-panel/Gap.tsx: folder 'style-panel' is not camelCase");
   });
 
   it('parses the manifest and rejects a malformed move', () => {
@@ -266,10 +228,7 @@ describe('the tool’s own boundaries', () => {
       steps: [{ step: 'lib', moves: [['src/a.ts', 'src/lib/a.ts']] }],
     });
     assert.deepEqual(steps, [{ step: 'lib', moves: [{ from: 'src/a.ts', to: 'src/lib/a.ts' }] }]);
-    assert.throws(
-      () => parseManifest({ steps: [{ step: 'lib', moves: [['src/a.ts']] }] }),
-      /Assertion failed: lib: a move is a \[from, to\] pair/,
-    );
+    assert.throws(() => parseManifest({ steps: [{ step: 'lib', moves: [['src/a.ts']] }] }), /Assertion failed: lib: a move is a \[from, to\] pair/);
     assert.throws(() => parseManifest({ steps: 'lib' }), /steps must be an array/);
   });
 });

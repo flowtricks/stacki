@@ -1,15 +1,25 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { help as centralHelp } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
+import SegmentedControl, { type SegmentedOption } from '../../ui/SegmentedControl';
 import DragSlider from './components/DragSlider';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import FieldLabel from './components/FieldLabel';
+import VariableConnect from './VariableConnect';
+import { KeywordSegments } from './KeywordConnect';
 import { PropTip, useHoverTip } from './components/CssPropertyTip';
 import { useHighlight } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { parseOrigin, serializeOrigin, type Origin } from './model/transformSettings';
 import type { ResolvedProp } from './model/resolved';
+import { displayOf } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useLengthUnit } from './model/lengthUnit';
+import { formatPxLength, lengthUnitName, pxPerLengthUnit, type LengthUnit, type LengthUnitName } from '../../../shared/properties/lengthUnit';
 
 // The settings behind the transform list, opened from the ⋯ beside its +: where a
 // transform pivots, whether a turned element shows its back, and the two
@@ -24,9 +34,9 @@ type Read = (prop: string) => ResolvedProp | undefined;
 type SetProp = (prop: string, value: string, important: boolean) => void;
 type ClearProp = (prop: string | string[]) => void;
 
-const BACKFACE: ReadonlyArray<SegmentedOption<string>> = [
-  { value: 'visible', label: 'Visible' },
-  { value: 'hidden', label: 'Hidden' },
+const backfaceOptions = (translate: Translator): ReadonlyArray<SegmentedOption<string>> => [
+  { value: 'visible', label: translate('style.transformSettings.visible') },
+  { value: 'hidden', label: translate('style.transformSettings.hidden') },
 ];
 
 // Far enough for the flat-looking end of the range to be reachable; a perspective
@@ -38,16 +48,18 @@ const effectiveValue = (read: Read, prop: string): string => {
   if (!resolved) {
     return '';
   }
-  return (
-    resolved.source === 'selected' && resolved.selectedValue
-      ? resolved.selectedValue.value
-      : resolved.winner.value
-  ).trim();
+  return (resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value).trim();
 };
 
-const pxNumber = (value: string): number | undefined => {
-  const match = value.trim().match(/^(-?\d*\.?\d+)\s*px$/i);
-  return match ? parseFloat(match[1] ?? '') : undefined;
+// A px or rem distance in px (rem at the project's root font size), so the
+// slider sits right whichever unit the project writes.
+const pxNumber = (value: string, lengthUnit: LengthUnit): number | undefined => {
+  const match = value.trim().match(/^(-?\d*\.?\d+)\s*(px|rem)$/i);
+  if (!match) {
+    return undefined;
+  }
+  const perUnit = pxPerLengthUnit(match[2] ?? '', lengthUnit);
+  return perUnit === undefined ? undefined : parseFloat(match[1] ?? '') * perUnit;
 };
 
 /** A section heading, with the properties it writes on hover. */
@@ -66,9 +78,8 @@ function Heading({
   onClear: () => void;
   cleared: boolean;
 }) {
-  const help = useHoverTip<HTMLSpanElement>(
-    note ? <PropTip props={props} note={note} /> : undefined,
-  );
+  const translate = useTranslate();
+  const help = useHoverTip<HTMLSpanElement>(note ? <PropTip props={props} note={note} /> : undefined);
   return (
     <div className="embed-editor_tsettings-head">
       <FieldLabel
@@ -76,30 +87,15 @@ function Heading({
         active={cleared}
         disabled={busy}
         onReset={onClear}
-        resetLabel="Clear"
+        resetLabel={translate('style.transformSettings.clear')}
         tooltip={<PropTip props={props} />}
       >
         {title}
       </FieldLabel>
       {note ? (
         <>
-          <span
-            className="embed-editor_tsettings-help"
-            ref={help.ref}
-            {...help.hoverProps}
-            aria-label={note}
-            role="img"
-          >
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-              <path
-                d="M6.4 6.2a1.7 1.7 0 1 1 1.9 1.7v1"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-              <circle cx="8.3" cy="11.2" r=".7" fill="currentColor" />
-            </svg>
+          <span className="embed-editor_tsettings-help" ref={help.ref} {...help.hoverProps} aria-label={note} role="img">
+            <HelpIcon />
           </span>
           {help.tip}
         </>
@@ -122,17 +118,12 @@ function OriginRow({
   ariaLabel: string;
   onChange: (next: Origin, live: boolean) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row embed-editor_grad-pos-row">
       <span className="embed-editor_size-label embed-editor_bg-caption">{label}</span>
       <div className="embed-editor_grad-pos">
-        <PositionGrid
-          x={origin.x}
-          y={origin.y}
-          busy={busy}
-          ariaLabel={ariaLabel}
-          onPick={(px, py) => onChange({ ...origin, x: px, y: py }, false)}
-        />
+        <PositionGrid x={origin.x} y={origin.y} busy={busy} ariaLabel={ariaLabel} onPick={(px, py) => onChange({ ...origin, x: px, y: py }, false)} />
         <div className="embed-editor_grad-pos-fields">
           {/* A <div>, not a <label>: the field here is VariableConnect's contenteditable
               editor, and the plain input behind it is opacity:0 / pointer-events:none.
@@ -141,7 +132,7 @@ function OriginRow({
               into one you cannot. The caption is decorative; the input carries its
               own aria-label. */}
           <div className="embed-editor_grad-pos-field">
-            <span>Left</span>
+            <span>{translate('style.transformSettings.left')}</span>
             <NumberField
               value={origin.x}
               unit="%"
@@ -153,7 +144,7 @@ function OriginRow({
             />
           </div>
           <div className="embed-editor_grad-pos-field">
-            <span>Top</span>
+            <span>{translate('style.transformSettings.top')}</span>
             <NumberField
               value={origin.y}
               unit="%"
@@ -184,9 +175,12 @@ function DistanceRow({
   onLive: (value: string) => void;
   onCommit: (value: string) => void;
 }) {
+  const translate = useTranslate();
   // Undefined for a var()/calc(): the slider has no number to sit at, so it
   // disables while the field stays editable.
-  const distancePx = pxNumber(value);
+  const lengthUnit = useLengthUnit();
+  const distancePx = pxNumber(value, lengthUnit);
+  const written = (amountPx: number): string => formatPxLength(amountPx, lengthUnit);
   const [draft, setDraft] = useState(value || '0');
   const focused = useRef(false);
   useEffect(() => {
@@ -196,7 +190,7 @@ function DistanceRow({
   }, [value]);
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Distance</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transformSettings.distance')}</span>
       <div className="embed-editor_shadow-field">
         <DragSlider
           value={distancePx ?? 0}
@@ -206,48 +200,61 @@ function DistanceRow({
           ariaLabel={ariaLabel}
           onPreview={(amount) => {
             if (!focused.current) {
-              setDraft(`${amount}px`);
+              setDraft(written(amount));
             }
           }}
-          onInput={(amount) => onLive(`${amount}px`)}
-          onCommit={(amount) => onCommit(amount === 0 ? '' : `${amount}px`)}
+          onInput={(amount) => onLive(written(amount))}
+          onCommit={(amount) => onCommit(amount === 0 ? '' : written(amount))}
         />
-        <input
-          className="u-input embed-editor_size-input embed-editor_shadow-num"
-          value={draft}
-          spellCheck={false}
+        {/* Connected like every other single-value field, so a var() distance
+            reads as a chip and the dot can pick or swap one. */}
+        <VariableConnect
+          code
+          ariaLabel={translate('style.transformSettings.connect', { name: ariaLabel })}
           disabled={busy}
-          aria-label={ariaLabel}
-          placeholder="0"
-          onChange={(event) => setDraft(event.target.value)}
-          onFocus={() => {
-            focused.current = true;
-          }}
-          onBlur={() => {
-            focused.current = false;
-            onCommit(distanceText(draft));
-          }}
-          onKeyDown={(event) => {
-            const stepped = stepDistanceKey(event);
-            if (stepped !== undefined) {
-              setDraft(stepped);
-            }
-          }}
-        />
-        <span className="embed-editor_tsettings-unit">PX</span>
+          className="is-fill"
+          prop="perspective"
+          canvasProperty="perspective"
+          onPick={(binding) => onCommit(binding)}
+        >
+          <input
+            className="u-input embed-editor_size-input embed-editor_shadow-num"
+            value={draft}
+            spellCheck={false}
+            disabled={busy}
+            aria-label={ariaLabel}
+            placeholder="0"
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => {
+              focused.current = true;
+            }}
+            onBlur={() => {
+              focused.current = false;
+              onCommit(distanceText(draft, lengthUnitName(lengthUnit)));
+            }}
+            onKeyDown={(event) => {
+              const stepped = stepDistanceKey(event);
+              if (stepped !== undefined) {
+                setDraft(stepped);
+              }
+            }}
+          />
+        </VariableConnect>
+        <span className="embed-editor_tsettings-unit">{lengthUnitName(lengthUnit).toUpperCase()}</span>
       </div>
     </div>
   );
 }
 
 // The typed distance as written: blank or zero clears, a value with its own unit
-// (or a var()/calc()) passes through, and a bare number is read as px.
-function distanceText(draft: string): string {
+// (or a var()/calc()) passes through, and a bare number is read in the unit the
+// field shows (px, or rem in a rem project).
+function distanceText(draft: string, unit: LengthUnitName): string {
   const trimmed = draft.trim();
-  if (!trimmed || /^0(?:px)?$/i.test(trimmed)) {
+  if (!trimmed || /^0(?:px|rem)?$/i.test(trimmed)) {
     return '';
   }
-  return /[a-z%)]$/i.test(trimmed) ? trimmed : `${trimmed}px`;
+  return /[a-z%)]$/i.test(trimmed) ? trimmed : `${trimmed}${unit}`;
 }
 
 // Enter commits in place; an arrow key steps the number under the caret and
@@ -268,13 +275,7 @@ function stepDistanceKey(event: KeyboardEvent<HTMLInputElement>): string | undef
   return stepped.text;
 }
 
-// The explanatory notes under the two perspective headings.
-const SELF_PERSPECTIVE_NOTE =
-  "Depth for this element's own transform — written as perspective() at the front of " +
-  'the transform list.';
-const CHILDREN_PERSPECTIVE_NOTE =
-  "Depth for this element's CHILDREN, so they share one viewpoint. It does nothing to " +
-  'the element itself.';
+const HelpIcon = centralIcon(centralHelp);
 
 export default function TransformSettings({
   read,
@@ -292,6 +293,7 @@ export default function TransformSettings({
   selfPerspective: string;
   onSelfPerspective: (distance: string, live: boolean) => void;
 }) {
+  const translate = useTranslate();
   const writeOrigin = (prop: string, next: Origin) => {
     const value = serializeOrigin(next);
     // The centre IS the default, so writing `50% 50%` would leave a declaration
@@ -305,19 +307,13 @@ export default function TransformSettings({
 
   return (
     <div className="embed-editor_tsettings">
-      <TransformSection
-        read={read}
-        busy={busy}
-        setProp={setProp}
-        clearProp={clearProp}
-        writeOrigin={writeOrigin}
-      />
+      <TransformSection read={read} busy={busy} setProp={setProp} clearProp={clearProp} writeOrigin={writeOrigin} />
 
       <section className="embed-editor_tsettings-section">
         <Heading
-          title="Self perspective"
+          title={translate('style.transformSettings.selfPerspective')}
           props={['transform']}
-          note={SELF_PERSPECTIVE_NOTE}
+          note={translate('style.transformSettings.selfPerspectiveNote')}
           busy={busy}
           cleared={!!selfPerspective}
           onClear={() => onSelfPerspective('', false)}
@@ -325,19 +321,13 @@ export default function TransformSettings({
         <DistanceRow
           value={selfPerspective}
           busy={busy}
-          ariaLabel="Self perspective distance"
+          ariaLabel={translate('style.transformSettings.selfPerspectiveDistance')}
           onLive={(distance) => onSelfPerspective(distance, true)}
           onCommit={(distance) => onSelfPerspective(distance, false)}
         />
       </section>
 
-      <ChildrenPerspectiveSection
-        read={read}
-        busy={busy}
-        setProp={setProp}
-        clearProp={clearProp}
-        writeOrigin={writeOrigin}
-      />
+      <ChildrenPerspectiveSection read={read} busy={busy} setProp={setProp} clearProp={clearProp} writeOrigin={writeOrigin} />
     </div>
   );
 }
@@ -353,6 +343,7 @@ type SectionProps = {
 // Where the element's own transform pivots, and whether a turned element shows
 // its back.
 function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: SectionProps) {
+  const translate = useTranslate();
   const transformOrigin = parseOrigin(effectiveValue(read, 'transform-origin'));
   const backface = effectiveValue(read, 'backface-visibility').toLowerCase();
   // Nothing authored → highlight what the page actually computes for this element,
@@ -360,37 +351,46 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
   // this the control showed NEITHER segment lit, which reads as "no answer" when
   // the real answer is always one or the other — backface-visibility has no unset
   // state at render time, it is `visible` until something says otherwise.
-  const shownBackface = useHighlight(
-    backface,
-    'backface-visibility',
-    ['visible', 'hidden'],
-    'visible',
-  );
+  const shownBackface = useHighlight(backface, 'backface-visibility', ['visible', 'hidden'], 'visible');
+  // Two segments and no custom field: a flagged value is marked, and a pick keeps the flag.
+  const backfaceImportant = displayOf(read('backface-visibility')).important;
   return (
     <section className="embed-editor_tsettings-section">
       <Heading
-        title="Transform settings"
+        title={translate('style.transformSettings.transformSettings')}
         props={['transform-origin', 'backface-visibility']}
         busy={busy}
         cleared={!!effectiveValue(read, 'transform-origin') || !!backface}
         onClear={() => clearProp(['transform-origin', 'backface-visibility'])}
       />
       <OriginRow
-        label="Origin"
+        label={translate('style.transformSettings.origin')}
         origin={transformOrigin}
         busy={busy}
-        ariaLabel="Transform origin"
+        ariaLabel={translate('style.transformSettings.transformOrigin')}
         onChange={(next) => writeOrigin('transform-origin', next)}
       />
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Backface</span>
-        <SegmentedControl
-          value={shownBackface}
-          options={BACKFACE}
-          onChange={(value) => setProp('backface-visibility', value, false)}
-          ariaLabel="Backface visibility"
-          disabled={busy}
-        />
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transformSettings.backface')}</span>
+        <ImportantMark important={backfaceImportant}>
+          <KeywordSegments
+            prop="backface-visibility"
+            value={effectiveValue(read, 'backface-visibility')}
+            important={backfaceImportant}
+            ariaLabel={translate('style.transformSettings.backfaceVisibility')}
+            busy={busy}
+            onWrite={(value, important) => setProp('backface-visibility', value, important)}
+            onClear={() => clearProp('backface-visibility')}
+          >
+            <SegmentedControl
+              value={shownBackface}
+              options={backfaceOptions(translate)}
+              onChange={(value) => setProp('backface-visibility', value, backfaceImportant)}
+              ariaLabel={translate('style.transformSettings.backfaceVisibility')}
+              disabled={busy}
+            />
+          </KeywordSegments>
+        </ImportantMark>
       </div>
     </section>
   );
@@ -398,14 +398,15 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
 
 // The perspective this element gives its children, and where it looks from.
 function ChildrenPerspectiveSection({ read, busy, setProp, clearProp, writeOrigin }: SectionProps) {
+  const translate = useTranslate();
   const perspectiveOrigin = parseOrigin(effectiveValue(read, 'perspective-origin'));
   const childDistance = effectiveValue(read, 'perspective');
   return (
     <section className="embed-editor_tsettings-section">
       <Heading
-        title="Children perspective"
+        title={translate('style.transformSettings.childrenPerspective')}
         props={['perspective', 'perspective-origin']}
-        note={CHILDREN_PERSPECTIVE_NOTE}
+        note={translate('style.transformSettings.childrenPerspectiveNote')}
         busy={busy}
         cleared={!!childDistance || !!effectiveValue(read, 'perspective-origin')}
         onClear={() => clearProp(['perspective', 'perspective-origin'])}
@@ -413,7 +414,7 @@ function ChildrenPerspectiveSection({ read, busy, setProp, clearProp, writeOrigi
       <DistanceRow
         value={childDistance}
         busy={busy}
-        ariaLabel="Children perspective distance"
+        ariaLabel={translate('style.transformSettings.childrenPerspectiveDistance')}
         onLive={(distance) => {
           if (distance) {
             setProp('perspective', distance, false);
@@ -428,10 +429,10 @@ function ChildrenPerspectiveSection({ read, busy, setProp, clearProp, writeOrigi
         }}
       />
       <OriginRow
-        label="Origin"
+        label={translate('style.transformSettings.origin')}
         origin={perspectiveOrigin}
         busy={busy}
-        ariaLabel="Perspective origin"
+        ariaLabel={translate('style.transformSettings.perspectiveOrigin')}
         onChange={(next) => writeOrigin('perspective-origin', next)}
       />
     </section>

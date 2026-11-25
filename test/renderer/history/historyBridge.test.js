@@ -30,15 +30,10 @@ test('history parsers preserve complete renderer records', () => {
     commits: [commit],
     atEnd: true,
   });
-  assert.deepEqual(history.parseHistoryFiles([{ ...file, status: undefined, staged: false }]), [
-    { ...file, status: undefined, staged: false },
+  assert.deepEqual(history.parseHistoryFiles([{ ...file, status: undefined, staged: false }]), [{ ...file, status: undefined, staged: false }]);
+  assert.deepEqual(history.parseHistoryWorktrees([{ path: '/project', head: '0123456', branch: 'main', detached: false, bare: false }]), [
+    { path: '/project', head: '0123456', branch: 'main', detached: false, bare: false },
   ]);
-  assert.deepEqual(
-    history.parseHistoryWorktrees([
-      { path: '/project', head: '0123456', branch: 'main', detached: false, bare: false },
-    ]),
-    [{ path: '/project', head: '0123456', branch: 'main', detached: false, bare: false }],
-  );
 });
 
 test('history parsers reject incomplete, invalid, duplicate, and oversized data', () => {

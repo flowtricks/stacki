@@ -2,12 +2,14 @@
 // Methodology: mount the shared component in jsdom, emulate native dialog focus, and
 // exercise gestures, nested layers, keyboard dismissal, reduced motion and interrupted exits.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath, sourceSpecifier } = require('../../helpers/sources');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 test('shared popup motion, dismissal and nested focus', async () => {
   const directory = repoPath('node_modules/.stacki-test/popup');
@@ -62,23 +64,30 @@ test('shared popup motion, dismissal and nested focus', async () => {
       ),
     );
   const tick = (ms) => act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
+  // The opening motion ends on a timer; a loaded Windows runner ran it past a fixed 50 ms (Check on
+  // 9e0c1a7b read 'opening'). Wait for the phase itself, bounded (test/helpers/waitFor.js).
+  // Each poll flushes React inside act, then reads; the wait itself stays outside act, which would hold the update.
+  const phaseReaches = (read, phase) =>
+    waitFor({
+      what: `the popup phase ${phase}`,
+      read: async () => {
+        await act(async () => {});
+        return read();
+      },
+      until: (seen) => seen === phase,
+    });
   const gesture = (start, end) =>
     act(async () => {
       start.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true }));
       end.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     });
-  const escape = () =>
-    act(async () =>
-      document.dispatchEvent(
-        new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-      ),
-    );
+  const escape = () => act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
   const trigger = document.getElementById('trigger');
   try {
     trigger.focus();
     await render();
     assert.equal(document.querySelector('.popup-surface').dataset.popupPhase, 'opening');
-    await tick(50);
+    await phaseReaches(() => document.querySelector('.popup-surface').dataset.popupPhase, 'open');
     assert.equal(document.querySelector('.popup-surface').dataset.popupPhase, 'open');
     const input = document.querySelector('input');
     await gesture(input, document.body);
@@ -91,7 +100,7 @@ test('shared popup motion, dismissal and nested focus', async () => {
     await tick(180);
     assert.deepEqual(events, ['parent']);
     assert.equal(document.querySelector('dialog') === null, true);
-    assert.equal(document.activeElement, trigger);
+    assertSameElement(document.activeElement, trigger);
 
     await render({ open: false });
     await render({ open: true });
@@ -150,11 +159,38 @@ test('shared popup motion, dismissal and nested focus', async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
     await tick(180);
-    assert.equal(
-      document.querySelector('dialog') === null,
-      true,
-      'Opening cannot cancel dismissal',
+    assert.equal(document.querySelector('dialog') === null, true, 'Opening cannot cancel dismissal');
+
+    // A press during a menu's exit motion belongs to the control it lands on: Escape,
+    // then straight to another button, must not lose that button's click.
+    const menuContainer = document.createElement('div');
+    document.body.append(menuContainer);
+    const menuRoot = createRoot(menuContainer);
+    await act(async () =>
+      menuRoot.render(
+        React.createElement(
+          Popup,
+          { mode: 'popover', portal: false, label: 'Menu', role: 'dialog', onClose: () => events.push('menu') },
+          React.createElement('button', undefined, 'Option'),
+        ),
+      ),
     );
+    await phaseReaches(() => menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'open');
+    assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'open');
+    await escape();
+    assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'closing');
+    let clicked = 0;
+    trigger.addEventListener('click', () => (clicked += 1));
+    const press = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+    await act(async () => {
+      trigger.dispatchEvent(press);
+      trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    assert.equal(press.defaultPrevented, false, 'The closing menu does not take the press');
+    assert.equal(clicked, 1, 'The click reaches the control');
+    await tick(180);
+    assert.equal(events.at(-1), 'menu');
+    await act(async () => menuRoot.unmount());
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

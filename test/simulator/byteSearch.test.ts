@@ -12,8 +12,7 @@ import { countOccurrences } from '#dist/shared/engine/byteSearch.js';
 import { encodeUtf8, toByteString, type ByteString } from '#dist/shared/core/span.js';
 import { Prng } from './prng.ts';
 
-const count = (haystack: string, needle: string, countMax = 1_000) =>
-  countOccurrences(encodeUtf8(haystack), encodeUtf8(needle), countMax);
+const count = (haystack: string, needle: string, countMax = 1_000) => countOccurrences(encodeUtf8(haystack), encodeUtf8(needle), countMax);
 
 function naiveCount(haystack: ByteString, needle: ByteString): number {
   let found = 0;

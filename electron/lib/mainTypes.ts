@@ -12,10 +12,7 @@ export type AssetEntry = {
   readonly name: string;
   readonly parent: string;
   readonly root: string;
-} & (
-  | { readonly isDir: true; readonly isRoot?: true }
-  | { readonly isDir: false; readonly size: number; readonly abs: string }
-);
+} & ({ readonly isDir: true; readonly isRoot?: true } | { readonly isDir: false; readonly size: number; readonly abs: string; readonly modifiedMs?: number });
 export interface CmsFile {
   readonly rel: string;
   readonly name: string;
@@ -44,6 +41,7 @@ export interface GitInfo {
   head?: string | undefined;
   userEmail?: string | undefined;
   trunk?: string | undefined;
+  defaultBranch?: string | undefined;
   dirtyFiles?: string[];
   hasUpstream?: boolean;
 }

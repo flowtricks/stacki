@@ -2,6 +2,8 @@
 // group of hooks on the ones before it, then the property edits and the view
 // model (App.tsx).
 
+import { useMemo } from 'react';
+import { classNamesIn, classSourceKind } from '../../../shared/page/classNames';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -19,6 +21,8 @@ import {
   useContentEdits,
 } from './appPropertyEdits';
 import { useShortcuts } from './appPageOps';
+import { useAppInsert } from './appInsert';
+import { useLoopEdits } from './appLoopEdits';
 import {
   usePageOps,
   useScopeContext,
@@ -42,6 +46,7 @@ export function useAppScope() {
   const history = useHistory(coreState, lifecycle, navigation);
   const nodeEdits = useNodeEdits(coreState, lifecycle, history);
   const shortcuts = useShortcuts(coreState, lifecycle, navigation, history, nodeEdits);
+  const appInsert = useAppInsert(coreState, history);
   const propertyEdits = usePropertyEdits(coreState, lifecycle, history, nodeEdits);
   const pageOps = usePageOps(coreState, lifecycle, navigation, history, nodeEdits, shortcuts);
   const viewModel = useViewModel(coreState, lifecycle, shortcuts, pageOps);
@@ -52,6 +57,7 @@ export function useAppScope() {
     ...history,
     ...nodeEdits,
     ...shortcuts,
+    ...appInsert,
     ...propertyEdits,
     ...pageOps,
     ...viewModel,
@@ -73,6 +79,7 @@ export function usePropertyEdits(
   const elementTag = useElementTag(coreState, history);
   const nodeText = useNodeText(coreState, history);
   const branchEdits = useBranchEdits(coreState, history);
+  const loopEdits = useLoopEdits(coreState, history);
   const contentEdits = useContentEdits(coreState, history);
   return {
     ...comment,
@@ -83,6 +90,7 @@ export function usePropertyEdits(
     ...elementTag,
     ...nodeText,
     ...branchEdits,
+    ...loopEdits,
     ...contentEdits,
   };
 }
@@ -105,6 +113,7 @@ export function useViewModel(
   const canvasMarks = useCanvasMarks(coreState, shortcuts, pageOps, crumbLabels, canvasNotices);
   const selectionPaths = useSelectionPaths(shortcuts, pageOps, canvasNotices, coreState);
   const overlayInfoScope = useOverlayInfo(shortcuts, pageOps, crumbLabels);
+  const projectClasses = usePageClasses(coreState);
   return {
     ...scopeContext,
     ...tagOptionsScope,
@@ -116,5 +125,24 @@ export function useViewModel(
     ...canvasMarks,
     ...selectionPaths,
     ...overlayInfoScope,
+    projectClasses,
   };
+}
+
+// The class field's suggestions: the project's classes as last scanned, and
+// the open file's own as it reads now, so a class just written into the page
+// is offered at once rather than after the next scan.
+function usePageClasses(coreState: ReturnType<typeof useCoreState>): readonly string[] {
+  const { projectClasses, pageState, currentPage } = coreState;
+  const source = pageState?.source;
+  const file = currentPage?.path;
+  return useMemo(() => {
+    const kind = file === undefined ? undefined : classSourceKind(file);
+    if (source === undefined || kind === undefined) {
+      return projectClasses;
+    }
+    const known = new Set(projectClasses);
+    const own = classNamesIn(source, kind).filter((name) => !known.has(name));
+    return own.length === 0 ? projectClasses : [...projectClasses, ...own].sort();
+  }, [projectClasses, source, file]);
 }

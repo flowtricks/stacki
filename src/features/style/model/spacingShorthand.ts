@@ -31,13 +31,30 @@ const SHORTHANDS: ReadonlyMap<string, Shorthand> = new Map<string, Shorthand>([
   ['padding-left', { box: 'padding', sides: ['left'] }],
 ]);
 
+// Logical properties, read onto the same physical sides. The box draws a horizontal
+// writing mode (as the header says), so block is top/bottom and inline is left/right.
+// They are read-only here: a padding edit still rewrites the physical padding
+// properties above, and the margin box writes through the rule's own declarations.
+// Without this a `margin-block: 2rem` rule never reached the margin fields, so
+// an earlier `margin-top` from another rule kept showing as the winner.
+const LOGICAL: ReadonlyMap<string, Shorthand> = new Map<string, Shorthand>(
+  (['margin', 'padding'] as const).flatMap((box): Array<[string, Shorthand]> => [
+    [`${box}-block`, { box, sides: ['top', 'bottom'] }],
+    [`${box}-inline`, { box, sides: ['left', 'right'] }],
+    [`${box}-block-start`, { box, sides: ['top'] }],
+    [`${box}-block-end`, { box, sides: ['bottom'] }],
+    [`${box}-inline-start`, { box, sides: ['left'] }],
+    [`${box}-inline-end`, { box, sides: ['right'] }],
+  ]),
+);
+
 const NO_SIDES: ReadonlyMap<string, string> = new Map<string, string>();
 
 /** The side longhands `prop: value` sets, by property name (`padding-left` → its
  *  value). Empty for a property the spacing box does not read, and for a value
  *  with more parts than the property has sides. `prop` is lowercase. */
 export function spacingSides(prop: string, value: string): ReadonlyMap<string, string> {
-  const shorthand = SHORTHANDS.get(prop);
+  const shorthand = SHORTHANDS.get(prop) ?? LOGICAL.get(prop);
   if (shorthand === undefined) {
     return NO_SIDES;
   }
@@ -51,12 +68,7 @@ export function spacingSides(prop: string, value: string): ReadonlyMap<string, s
   }
   // CSS fills a missing part from the opposite side, two parts back in the
   // clockwise order, and from the first part when that one is missing too.
-  const sides = new Map(
-    shorthand.sides.map((side, index) => [
-      `${shorthand.box}-${side}`,
-      parts[index] ?? parts[index - 2] ?? first,
-    ]),
-  );
+  const sides = new Map(shorthand.sides.map((side, index) => [`${shorthand.box}-${side}`, parts[index] ?? parts[index - 2] ?? first]));
   assert(sides.size === shorthand.sides.length, 'spacingSides: one value per side');
   return sides;
 }
@@ -73,6 +85,18 @@ export function isPaddingProperty(prop: string): boolean {
 export function setPaddingDeclaration(node: Rule | AtRule, prop: string, declared: Declared): void {
   const key = prop.trim().toLowerCase();
   assert(isPaddingProperty(key), 'setPaddingDeclaration: the property is a padding property');
+  const paddingFirst = paddingDeclarations(node).length === 0;
+  // The same property, already the last padding written: its value changes where it stands. Moved
+  // to the rule's end, a rewrite of the same value reordered the rule. One written earlier is
+  // moved, so the new value is not overridden by a later padding.
+  const last = paddingDeclarations(node).at(-1);
+  if (last !== undefined && last.prop.toLowerCase() === key) {
+    last.assign({ value: declared.value, important: declared.important });
+    node.assign({ raws: { ...node.raws, semicolon: true } });
+    assert(paddingDeclarations(node).at(-1) === last, 'setPaddingDeclaration: the edited padding stays the last');
+    compactPadding(node);
+    return;
+  }
   for (const declaration of paddingDeclarations(node)) {
     if (declaration.prop.toLowerCase() === key) {
       declaration.remove();
@@ -85,10 +109,29 @@ export function setPaddingDeclaration(node: Rule | AtRule, prop: string, declare
     node.insertBefore(firstNested, added);
   } else {
     node.append(added);
+    // An edit of padding already there adds no line, so it leaves the blank one.
+    if (paddingFirst) {
+      fillTrailingBlankLine(node);
+    }
   }
   node.assign({ raws: { ...node.raws, semicolon: true } });
   assert(paddingDeclarations(node).includes(added), 'setPaddingDeclaration: the edit is written');
   compactPadding(node);
+}
+
+/**
+ * Takes the blank line before a block's closing brace, for a declaration just
+ * appended at the block's end: the new line fills it, as typing there would.
+ * Left in, the declaration landed above the line and the blank line stayed.
+ */
+export function fillTrailingBlankLine(node: Rule | AtRule): void {
+  const after = node.raws.after;
+  if (after === undefined) {
+    return;
+  }
+  const filled = after.replace(/^[ \t]*(\r?\n)[ \t]*\r?\n/, '$1');
+  assert(filled.length <= after.length, 'fillTrailingBlankLine: whitespace is only removed');
+  node.assign({ raws: { ...node.raws, after: filled } });
 }
 
 /** Reset the padding sides among `props` on `node`, also when an earlier edit
@@ -126,9 +169,7 @@ type SideValue = Declared & { readonly opaque: boolean };
 
 // The padding declarations written directly on `node`, never a nested rule's.
 function paddingDeclarations(node: Rule | AtRule): Declaration[] {
-  return (node.nodes ?? []).filter(
-    (child): child is Declaration => child.type === 'decl' && isPaddingProperty(child.prop),
-  );
+  return (node.nodes ?? []).filter((child): child is Declaration => child.type === 'decl' && isPaddingProperty(child.prop));
 }
 
 // A multi-side value with a var() or env() part: the function may substitute
@@ -145,12 +186,15 @@ function isOpaque(declaration: Declaration): boolean {
 // A var() or env() standing for a whole part of a value.
 const isSubstitution = (part: string): boolean => /^(var|env)\(/i.test(part);
 
+// A CSS-wide keyword is only valid as a declaration's whole value: beside other parts
+// (`padding: inherit inherit inherit 5px`) the browser drops the declaration. Sides that
+// all agree on one still write `padding: inherit`; unequal ones go as axes or longhands.
+const isWideKeyword = (part: string): boolean => /^(inherit|initial|unset|revert|revert-layer)$/i.test(part);
+
 // What each side resolves to within one node: a later declaration wins, unless
 // an earlier one is `!important` and it is not. Undefined when a declaration
 // cannot be read side by side, which leaves the node as written.
-function paddingSideValues(
-  declarations: readonly Declaration[],
-): ReadonlyMap<string, SideValue> | undefined {
+function paddingSideValues(declarations: readonly Declaration[]): ReadonlyMap<string, SideValue> | undefined {
   const values = new Map<string, SideValue>();
   for (const declaration of declarations) {
     const sides = spacingSides(declaration.prop.toLowerCase(), declaration.value);
@@ -196,13 +240,42 @@ function compactForm(values: ReadonlyMap<string, SideValue>): readonly Compact[]
   if (SIDES.every((side) => equal('top', side))) {
     return written('padding', 'top');
   }
-  const block = equal('top', 'bottom')
-    ? written('padding-block', 'top')
-    : [...written('padding-top', 'top'), ...written('padding-bottom', 'bottom')];
-  const inline = equal('left', 'right')
-    ? written('padding-inline', 'left')
-    : [...written('padding-right', 'right'), ...written('padding-left', 'left')];
+  // Every side set alike (same importance, no var() whose sides could not be
+  // read back apart): one `padding` in its shortest form, as it is written by
+  // hand: `padding: 0.2em 0.59em`, not `padding-block` and `padding-inline`.
+  const whole = shorthandOf(values);
+  if (whole !== undefined) {
+    return [whole];
+  }
+  const block = equal('top', 'bottom') ? written('padding-block', 'top') : [...written('padding-top', 'top'), ...written('padding-bottom', 'bottom')];
+  const inline = equal('left', 'right') ? written('padding-inline', 'left') : [...written('padding-right', 'right'), ...written('padding-left', 'left')];
   return [...block, ...inline];
+}
+
+function shorthandOf(values: ReadonlyMap<string, SideValue>): Compact | undefined {
+  const sides = SIDES.map((side) => values.get(`padding-${side}`));
+  const [top, right, bottom, left] = sides;
+  if (top === undefined || right === undefined || bottom === undefined || left === undefined) {
+    return undefined;
+  }
+  // A side read off a shorthand may carry no `important` at all: unset is not important.
+  const important = top.important === true;
+  if (sides.some((side) => side === undefined || (side.important === true) !== important || isSubstitution(side.value))) {
+    return undefined;
+  }
+  // SIDES is top, right, bottom, left: the shorthand's own order.
+  const parts = [top.value, right.value, bottom.value, left.value];
+  if (parts.some(isWideKeyword)) {
+    return parts.every((part) => part === top.value) ? { prop: 'padding', value: top.value, important } : undefined;
+  }
+  if (right.value === left.value) {
+    parts.pop();
+    if (top.value === bottom.value) {
+      parts.pop();
+    }
+  }
+  assert(parts.length >= 2, 'A shorthand of unequal sides names at least two');
+  return { prop: 'padding', value: parts.join(' '), important };
 }
 
 // Rewrite the node's own padding in its shortest form, where its first padding

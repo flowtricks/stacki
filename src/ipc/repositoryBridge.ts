@@ -1,8 +1,7 @@
 import { parseGitHubRepositories } from '../../shared/ipc/githubRepository';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import type { Parser } from '../../shared/core/boundary';
-import type { Result } from '../../shared/core/result';
-import { cleanError } from '../lib/cleanError';
+import { failureOf, type Failure } from '../lib/cleanError';
 import { parseCloneResult } from '../../shared/ipc/githubRepository';
 import { boolean, object, optional, text } from '../../shared/core/boundary';
 const parsePublication = object({ ok: boolean, url: optional(text), output: text });
@@ -19,9 +18,9 @@ async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknow
   try {
     response = await invoke();
   } catch (error: unknown) {
-    return { ok: false, error: cleanError(error) } satisfies Result<Value, string>;
+    return failureOf(error);
   }
-  return { ok: true, value: parse(response) } satisfies Result<Value, string>;
+  return { ok: true, value: parse(response) } satisfies { readonly ok: true; readonly value: Value } | Failure;
 }
 
 export function readRepositories() {

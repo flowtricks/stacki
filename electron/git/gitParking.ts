@@ -4,8 +4,11 @@
 
 import { definedFields } from '../../shared/core/boundary';
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
+import { described } from '../../shared/properties/i18n/messageRef';
 import * as gitHistory from './gitHistory';
 import { git } from '../lib/nodeTools';
+import { ensureExcluded } from '../lib/projectExclusions';
+import { readHead } from './gitState';
 
 // Work in progress, set aside under the branch it belongs to.
 //
@@ -42,6 +45,12 @@ export async function parkedRef(projectPath: string, branch: string | undefined)
 }
 
 export async function parkBranch(projectPath: string, branch: string | undefined) {
+  // A stash records the work against a commit; a repository with no commit yet has none, and git refuses. There is also nothing to
+  // protect from a switch there, since no other branch exists to carry the files over to.
+  if (!(await readHead(git, projectPath)).born) {
+    return false;
+  }
+  await preserveIgnoredPaths(projectPath);
   if (!(await isDirty(projectPath))) {
     return false;
   }
@@ -49,13 +58,35 @@ export async function parkBranch(projectPath: string, branch: string | undefined
   return true;
 }
 
+// Branches can disagree about .gitignore. Keep existing generated files ignored
+// locally so a return trip cannot stash the other branch's runtime dependencies.
+async function preserveIgnoredPaths(projectPath: string): Promise<void> {
+  const { stdout } = await git(projectPath, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z']);
+  const paths = stdout.split('\0').filter(Boolean);
+  if (paths.length > 4096) {
+    throw new Error('Too many ignored paths to preserve while switching branches');
+  }
+  // Shared Stacki metadata must remain versioned; only its known generated
+  // directories belong in the local exclusions maintained by ensureExcluded.
+  const ignoredPaths = paths.filter((entry) => !entry.startsWith('.stacki/'));
+  if (!ensureExcluded(projectPath, { ignoredPaths })) {
+    throw new Error('Could not preserve generated files before switching branches');
+  }
+}
+
 export async function unparkBranch(projectPath: string, branch: string | undefined) {
   const ref = await parkedRef(projectPath, branch);
   if (!ref) {
     return { restored: false };
   }
+  // Another tool may have edited the destination. Never apply or unwind a stash
+  // over those edits: the recovery below is only safe on an initially clean tree.
+  if (await isDirty(projectPath)) {
+    const dirty = described('git.error.unparkDirty', { branch: branch ?? 'HEAD' });
+    return { restored: false, error: dirty.message, errorRef: dirty.messageRef };
+  }
   try {
-    await git(projectPath, ['stash', 'pop', ref]);
+    await git(projectPath, ['stash', 'pop', '--index', ref]);
     return { restored: true };
   } catch {
     // A pop that cannot apply leaves conflict markers in the files. That is a
@@ -70,22 +101,18 @@ export async function unparkBranch(projectPath: string, branch: string | undefin
     } catch {
       /* nothing better to try */
     }
-    return {
-      restored: false,
-      error:
-        `Your work on "${branch}" is still parked — it could not be put back automatically ` +
-        'because the branch has changed underneath it. ' +
-        'It is safe: recover it with `git stash list` and `git stash pop`.',
-    };
+    const failed = described('git.error.unparkFailed', { branch: branch ?? 'HEAD' });
+    return { restored: false, error: failed.message, errorRef: failed.messageRef };
   }
 }
 
+/** The branch HEAD is on; "HEAD" when detached (git's own spelling, which callers already compare against); undefined before the first commit. */
 export async function currentBranch(projectPath: string) {
-  try {
-    return (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
-  } catch {
+  const head = await readHead(git, projectPath);
+  if (!head.born) {
     return undefined;
   }
+  return head.branch ?? 'HEAD';
 }
 
 // --- Reading history -------------------------------------------------------
@@ -110,11 +137,9 @@ export async function readGitIdentity(projectPath: string) {
     head: undefined,
     userEmail: undefined,
   };
-  try {
-    identity.branch = (await git(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim();
-  } catch {
-    identity.branch = '(no commits yet)';
-  }
+  // A repository with no commits yet keeps the sentinel the publish workflow looks for; a detached HEAD is spelled "HEAD".
+  const head = await readHead(git, projectPath);
+  identity.branch = head.born ? (head.branch ?? 'HEAD') : '(no commits yet)';
   try {
     // What HEAD actually points at. The history panel reloads when this moves,
     // which is how a commit made from the chip shows up in the timeline
@@ -127,8 +152,7 @@ export async function readGitIdentity(projectPath: string) {
     // Whose commits are "yours". Git records an author on every commit, and on
     // your own machine that is nearly always you — "Timothy Ricks changed the
     // hero" reads oddly about yourself.
-    identity.userEmail =
-      (await git(projectPath, ['config', 'user.email'])).stdout.trim() || undefined;
+    identity.userEmail = (await git(projectPath, ['config', 'user.email'])).stdout.trim() || undefined;
   } catch {
     identity.userEmail = undefined;
   }

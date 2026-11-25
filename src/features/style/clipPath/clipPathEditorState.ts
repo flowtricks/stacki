@@ -4,7 +4,8 @@
 // (ClipPath.tsx). Each stage takes the editor built so far and returns it with
 // its own fields added; ClipPath.tsx composes them in order.
 
-import { useMemo, useRef, useState } from 'react';
+import { type MutableRefObject, useMemo, useRef, useState } from 'react';
+import { assert } from '../../../../shared/core/assert';
 import { type CodeEditorTokenHighlight } from '../components/CssCodeEditor';
 import type { BreakpointId, StyleHandle } from './webflowDesigner';
 import {
@@ -35,7 +36,7 @@ import {
   NONE_PRESET,
   NONE_SHAPE,
 } from './clipPathConstants';
-import { normalizeSnapGuides } from './clipPathMeasure';
+import { normalizeSnapGuides, sanitizeShapeScaleVariableName, shapeVariableFieldText } from './clipPathMeasure';
 import {
   insetModifierModeFromKeys,
   shapesClose,
@@ -47,31 +48,17 @@ import {
   normalizePolygonPointColors,
   nextPolygonPointColor,
 } from './clipPathHandles';
-import {
-  shapeOffsetVariableNamesFromValue,
-  hasContainerQueryUnit,
-  shapeScaleVariableNameFromValue,
-} from './shapeFunctionPatterns';
+import { shapeOffsetVariableNamesFromValue, hasContainerQueryUnit, shapeScaleVariableNameFromValue } from './shapeFunctionPatterns';
 import { normalizeShapeFitCache } from './shapeFunctionModel';
 import { PRESET_NAMES, formatClipPath, formatCodeValue } from './clipPathFormat';
-import {
-  formatClipPathForPreview,
-  type ClipPathCodeHighlight,
-  buildClipPathCodeHighlights,
-} from './clipPathPreview';
+import { formatClipPathForPreview, type ClipPathCodeHighlight, buildClipPathCodeHighlights } from './clipPathPreview';
 import { parseSvgClipPathShape } from './svgContours';
 import { clipPathShortcutGroups, matchPreset } from './clipPathShortcuts';
 import { resolveCascadeWinnerClipPathStyle } from './clipPathStyleWrite';
 
 // A field the user types into: the canvas's keyboard shortcuts leave it alone.
 export function isEditableTarget(target: HTMLElement | undefined) {
-  return Boolean(
-    target &&
-    (target.tagName === 'INPUT' ||
-      target.tagName === 'SELECT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.isContentEditable),
-  );
+  return Boolean(target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA' || target.isContentEditable));
 }
 
 // The props of the editor when it is embedded in the Style panel.
@@ -83,6 +70,11 @@ export type ClipPathProps = {
   onApply?: (value: string) => void;
   onClear?: () => void;
   hideClassPicker?: boolean;
+  /** The clip-path the Style panel shows for its selected selector. Embedded, the
+      tool's own style lookup sees only native class styles, so a clip-path written
+      in a <style> or stylesheet read as none and the editor opened cleared: this
+      is what it opens on instead. */
+  initialValue?: string | undefined;
 };
 
 // The shape being edited, its code text, and the preset menu.
@@ -116,8 +108,7 @@ export function useHandleSelectionState() {
   const [selectedHandle, setSelectedHandle] = useState<HandleTarget | undefined>(undefined);
   const [selectedCodeHandles, setSelectedCodeHandles] = useState<HandleTarget[]>([]);
   const [isShapeTransformSelected, setIsShapeTransformSelected] = useState(false);
-  const [activeInsetModifierMode, setActiveInsetModifierMode] =
-    useState<InsetModifierMode>('single');
+  const [activeInsetModifierMode, setActiveInsetModifierMode] = useState<InsetModifierMode>('single');
   const [activePresetIndex, setActivePresetIndex] = useState(PRESET_NAMES.indexOf(NONE_PRESET));
   const [handleBounds, setHandleBounds] = useState<CanvasHandleBounds | undefined>(undefined);
   const [canvasSize, setCanvasSize] = useState<CanvasSize | undefined>(undefined);
@@ -142,22 +133,15 @@ export function useHandleSelectionState() {
   };
 }
 
-export type EditorAfterHandleSelectionState = EditorAfterShapeState &
-  ReturnType<typeof useHandleSelectionState>;
+export type EditorAfterHandleSelectionState = EditorAfterShapeState & ReturnType<typeof useHandleSelectionState>;
 
 // How a pasted shape fits the element, and the drag guides.
 export function useShapeFitState() {
   const [shapeFitMode, setShapeFitMode] = useState<ShapeFitMode>('contain');
   const [shapeScaleUseVariable, setShapeScaleUseVariable] = useState(false);
-  const [shapeScaleVariableName, setShapeScaleVariableName] = useState(
-    DEFAULT_SHAPE_SCALE_VARIABLE_NAME,
-  );
-  const [shapeOffsetLeftVariableName, setShapeOffsetLeftVariableName] = useState(
-    DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
-  );
-  const [shapeOffsetTopVariableName, setShapeOffsetTopVariableName] = useState(
-    DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
-  );
+  const [shapeScaleVariableName, setShapeScaleVariableName] = useState(DEFAULT_SHAPE_SCALE_VARIABLE_NAME);
+  const [shapeOffsetLeftVariableName, setShapeOffsetLeftVariableName] = useState(DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME);
+  const [shapeOffsetTopVariableName, setShapeOffsetTopVariableName] = useState(DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | undefined>(undefined);
   const [snapGuides, setSnapGuides] = useState<SnapGuides | undefined>(undefined);
   return {
@@ -178,8 +162,7 @@ export function useShapeFitState() {
   };
 }
 
-export type EditorAfterShapeFitState = EditorAfterHandleSelectionState &
-  ReturnType<typeof useShapeFitState>;
+export type EditorAfterShapeFitState = EditorAfterHandleSelectionState & ReturnType<typeof useShapeFitState>;
 
 // Where the clip-path is read from and written to, and the popovers over it.
 export function useStyleSourceState() {
@@ -190,14 +173,10 @@ export function useStyleSourceState() {
   // Where the rendered clip-path actually comes from (for the orange "inherited"
   // label's "Value comes from:" popover) — its selector classes and breakpoint.
   const [clipPathSourceSelector, setClipPathSourceSelector] = useState<string[]>([]);
-  const [clipPathSourceBreakpoint, setClipPathSourceBreakpoint] = useState<
-    BreakpointId | undefined
-  >(undefined);
+  const [clipPathSourceBreakpoint, setClipPathSourceBreakpoint] = useState<BreakpointId | undefined>(undefined);
   const [isClipPathLabelMenuOpen, setIsClipPathLabelMenuOpen] = useState(false);
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
-  const [shortcutHelpPortalTarget, setShortcutHelpPortalTarget] = useState<HTMLElement | undefined>(
-    undefined,
-  );
+  const [shortcutHelpPortalTarget, setShortcutHelpPortalTarget] = useState<HTMLElement | undefined>(undefined);
   return {
     clipPathStyleOrigin,
     setClipPathStyleOrigin,
@@ -220,8 +199,7 @@ export function useStyleSourceState() {
   };
 }
 
-export type EditorAfterStyleSourceState = EditorAfterShapeFitState &
-  ReturnType<typeof useStyleSourceState>;
+export type EditorAfterStyleSourceState = EditorAfterShapeFitState & ReturnType<typeof useStyleSourceState>;
 
 // Mutable state of the canvas: its elements, and the drags in flight.
 export function useCanvasRefs() {
@@ -270,11 +248,14 @@ export function useCanvasRefs() {
 
 export type EditorAfterCanvasRefs = EditorAfterStyleSourceState & ReturnType<typeof useCanvasRefs>;
 
-// Mutable state of the write path and of the keyboard.
-export function useWriteRefs() {
+// Mutable state of the write path and of the keyboard. `startingCss` is what
+// counts as already written when the editor opens: embedded in the Style panel,
+// the editor's own starting `none` is not a value to write, or opening it
+// cleared the selector's clip-path before its shape had loaded.
+export function useWriteRefs(startingCss: string | undefined) {
   const styleRef = useRef<StyleHandle | undefined>(undefined);
   const latestCssRef = useRef<string>('');
-  const lastWrittenRef = useRef<string | undefined>(undefined);
+  const lastWrittenRef = useRef<string | undefined>(startingCss);
   const writeTimerRef = useRef<number | undefined>(undefined);
   const localWritePendingRef = useRef(false);
   const selectedHandleRef = useRef<HandleTarget | undefined>(undefined);
@@ -329,9 +310,7 @@ export function useSelectionRefs() {
   // True while the selection is the auto-derived cascade winner (not a manual
   // click) — lets it keep following the winner as styles/classes change.
   const selectionIsDefaultRef = useRef(true);
-  const refreshSelectedElementRef = useRef<((options?: SelectionReadOptions) => void) | undefined>(
-    undefined,
-  );
+  const refreshSelectedElementRef = useRef<((options?: SelectionReadOptions) => void) | undefined>(undefined);
   return {
     keyboardMoveDelayTimerRef,
     keyboardMoveTimerRef,
@@ -394,20 +373,12 @@ export type EditorAfterShapeRefs = EditorAfterSelectionRefs & ReturnType<typeof 
 export function useCodeHighlights(editor: EditorAfterShapeRefs) {
   const { shape, canvasSize, codeValue, polygonPointColors } = editor;
   const css = useMemo(() => formatClipPath(shape), [shape]);
-  const previewCss = useMemo(
-    () => formatClipPathForPreview(shape, css, canvasSize),
-    [canvasSize, css, shape],
-  );
-  const codeTokenHighlights = useMemo(
-    () => buildClipPathCodeHighlights(shape, codeValue, polygonPointColors),
-    [shape, codeValue, polygonPointColors],
-  );
+  const previewCss = useMemo(() => formatClipPathForPreview(shape, css, canvasSize), [canvasSize, css, shape]);
+  const codeTokenHighlights = useMemo(() => buildClipPathCodeHighlights(shape, codeValue, polygonPointColors), [shape, codeValue, polygonPointColors]);
   const codeHandleColorClasses = useMemo(() => {
     const colorClasses = new Map<string, string>();
     codeTokenHighlights.forEach((highlight) => {
-      highlight.handles.forEach((handle) =>
-        colorClasses.set(handleKey(handle), highlight.colorClass),
-      );
+      highlight.handles.forEach((handle) => colorClasses.set(handleKey(handle), highlight.colorClass));
     });
     return colorClasses;
   }, [codeTokenHighlights]);
@@ -420,11 +391,7 @@ export type EditorAfterCodeHighlights = EditorAfterShapeRefs & ReturnType<typeof
 export function useSelectedCodeHighlights(editor: EditorAfterCodeHighlights) {
   const { selectedCodeHandles, selectedHandle, codeTokenHighlights, codeValue } = editor;
   const selectedCodeTokenHighlights = useMemo<CodeEditorTokenHighlight[]>(() => {
-    const selectedHandles = selectedCodeHandles.length
-      ? selectedCodeHandles
-      : selectedHandle
-        ? [selectedHandle]
-        : [];
+    const selectedHandles = selectedCodeHandles.length ? selectedCodeHandles : selectedHandle ? [selectedHandle] : [];
     if (!selectedHandles.length) {
       return codeTokenHighlights;
     }
@@ -474,8 +441,7 @@ export function useSelectedCodeHighlights(editor: EditorAfterCodeHighlights) {
   return { selectedCodeTokenHighlights };
 }
 
-export type EditorAfterSelectedCodeHighlights = EditorAfterCodeHighlights &
-  ReturnType<typeof useSelectedCodeHighlights>;
+export type EditorAfterSelectedCodeHighlights = EditorAfterCodeHighlights & ReturnType<typeof useSelectedCodeHighlights>;
 
 // The shortcut help, and the refs that mirror this render's state for the listeners
 // registered once.
@@ -487,10 +453,7 @@ export function useLatestMirrors(editor: EditorAfterSelectedCodeHighlights) {
   const { shapeOffsetTopVariableName, isShapeTransformSelectedRef } = editor;
   const { isShapeTransformSelected, handleBoundsRef, handleBounds, isPresetOpenRef } = editor;
   const { isPresetOpen, circleRadiusAngleRef, circleRadiusAngle } = editor;
-  const shortcutHelpGroups = useMemo(
-    () => clipPathShortcutGroups(shape, shapeFitMode),
-    [shape, shapeFitMode],
-  );
+  const shortcutHelpGroups = useMemo(() => clipPathShortcutGroups(shape, shapeFitMode), [shape, shapeFitMode]);
   latestCssRef.current = css;
   shapeRef.current = shape;
   shapeFitModeRef.current = shapeFitMode;
@@ -505,8 +468,7 @@ export function useLatestMirrors(editor: EditorAfterSelectedCodeHighlights) {
   return { shortcutHelpGroups };
 }
 
-export type EditorAfterLatestMirrors = EditorAfterSelectedCodeHighlights &
-  ReturnType<typeof useLatestMirrors>;
+export type EditorAfterLatestMirrors = EditorAfterSelectedCodeHighlights & ReturnType<typeof useLatestMirrors>;
 
 // Keeping presets, pending writes, and point colours in step with the shape.
 export function shapeSyncActions(editor: EditorAfterLatestMirrors) {
@@ -545,13 +507,8 @@ export function shapeSyncActions(editor: EditorAfterLatestMirrors) {
     setPolygonPointColors(colors);
   };
 
-  const syncPolygonPointColorsForShape = (
-    next: ClipShape,
-    colors = polygonPointColorsRef.current,
-  ) => {
-    syncPolygonPointColors(
-      next.kind === 'polygon' ? normalizePolygonPointColors(next.points.length, colors) : [],
-    );
+  const syncPolygonPointColorsForShape = (next: ClipShape, colors = polygonPointColorsRef.current) => {
+    syncPolygonPointColors(next.kind === 'polygon' ? normalizePolygonPointColors(next.points.length, colors) : []);
   };
   return {
     syncPresetForShape,
@@ -563,8 +520,7 @@ export function shapeSyncActions(editor: EditorAfterLatestMirrors) {
   };
 }
 
-export type EditorAfterShapeSyncActions = EditorAfterLatestMirrors &
-  ReturnType<typeof shapeSyncActions>;
+export type EditorAfterShapeSyncActions = EditorAfterLatestMirrors & ReturnType<typeof shapeSyncActions>;
 
 // Keeping the shape-scale options and fit mode in step with a loaded shape.
 export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
@@ -573,13 +529,10 @@ export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
   const { setShapeScaleUseVariable, setShapeScaleVariableName } = editor;
   const { setShapeOffsetLeftVariableName, setShapeOffsetTopVariableName, shapeFitModeRef } = editor;
   const { setShapeFitMode } = editor;
-  const currentShapeScaleOptions = (
-    overrides: ShapeScaleOptionOverrides = {},
-  ): ShapeScaleOptions => ({
+  const currentShapeScaleOptions = (overrides: ShapeScaleOptionOverrides = {}): ShapeScaleOptions => ({
     useVariable: overrides.useVariable ?? shapeScaleUseVariableRef.current,
     variableName: overrides.variableName ?? shapeScaleVariableNameRef.current,
-    offsetLeftVariableName:
-      overrides.offsetLeftVariableName ?? shapeOffsetLeftVariableNameRef.current,
+    offsetLeftVariableName: overrides.offsetLeftVariableName ?? shapeOffsetLeftVariableNameRef.current,
     offsetTopVariableName: overrides.offsetTopVariableName ?? shapeOffsetTopVariableNameRef.current,
   });
 
@@ -593,18 +546,24 @@ export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
     shapeScaleUseVariableRef.current = nextUseVariable;
     setShapeScaleUseVariable(nextUseVariable);
 
-    if (variableName) {
-      shapeScaleVariableNameRef.current = variableName;
-      setShapeScaleVariableName(variableName);
-    }
-    if (offsetNames?.offsetLeftVar) {
-      shapeOffsetLeftVariableNameRef.current = offsetNames.offsetLeftVar;
-      setShapeOffsetLeftVariableName(offsetNames.offsetLeftVar);
-    }
-    if (offsetNames?.offsetTopVar) {
-      shapeOffsetTopVariableNameRef.current = offsetNames.offsetTopVar;
-      setShapeOffsetTopVariableName(offsetNames.offsetTopVar);
-    }
+    // A loaded variable shows as a reference, so it draws as a chip the way the
+    // panel shows any other bound value. A field that already names it keeps its
+    // text: the shape being loaded may be the one the field's own typing just wrote.
+    const syncField = (ref: MutableRefObject<string>, name: string | undefined, set: (text: string) => void) => {
+      if (!name) {
+        return;
+      }
+      if (sanitizeShapeScaleVariableName(ref.current) === name) {
+        return;
+      }
+      const fieldText = shapeVariableFieldText(name);
+      assert(sanitizeShapeScaleVariableName(fieldText) === name, 'syncShapeScaleOptionsForLoadedShape: the field names the loaded variable');
+      ref.current = fieldText;
+      set(fieldText);
+    };
+    syncField(shapeScaleVariableNameRef, variableName, setShapeScaleVariableName);
+    syncField(shapeOffsetLeftVariableNameRef, offsetNames?.offsetLeftVar, setShapeOffsetLeftVariableName);
+    syncField(shapeOffsetTopVariableNameRef, offsetNames?.offsetTopVar, setShapeOffsetTopVariableName);
   };
 
   const syncShapeFitModeForLoadedShape = (next: ClipShape, fallbackMode?: ShapeFitMode) => {
@@ -614,8 +573,7 @@ export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
     if (fallbackMode !== 'stretch') {
       syncShapeScaleOptionsForLoadedShape(next);
     }
-    const nextMode: ShapeFitMode =
-      fallbackMode || (hasContainerQueryUnit(next.value) ? 'contain' : 'stretch');
+    const nextMode: ShapeFitMode = fallbackMode || (hasContainerQueryUnit(next.value) ? 'contain' : 'stretch');
     shapeFitModeRef.current = nextMode;
     setShapeFitMode(nextMode);
   };
@@ -626,8 +584,7 @@ export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
   };
 }
 
-export type EditorAfterShapeScaleSyncActions = EditorAfterShapeSyncActions &
-  ReturnType<typeof shapeScaleSyncActions>;
+export type EditorAfterShapeScaleSyncActions = EditorAfterShapeSyncActions & ReturnType<typeof shapeScaleSyncActions>;
 
 // The pasted-SVG cache, point colours, the keyboard move loop, and snap guides.
 export function pastedCacheActions(editor: EditorAfterShapeScaleSyncActions) {
@@ -639,26 +596,17 @@ export function pastedCacheActions(editor: EditorAfterShapeScaleSyncActions) {
   };
 
   const shapeMatchesPastedSvgCache = (next: ClipShape, cache = pastedShapeSvgCacheRef.current) =>
-    next.kind === 'shape' &&
-    Boolean(cache && (shapesClose(next, cache.stretch) || shapesClose(next, cache.contain)));
+    next.kind === 'shape' && Boolean(cache && (shapesClose(next, cache.stretch) || shapesClose(next, cache.contain)));
 
-  const matchingPastedSvgCacheForShape = (
-    next: ClipShape,
-    options: ShapeScaleOptions = currentShapeScaleOptions(),
-  ) => {
+  const matchingPastedSvgCacheForShape = (next: ClipShape, options: ShapeScaleOptions = currentShapeScaleOptions()) => {
     const cache = normalizeShapeFitCache(pastedShapeSvgCacheRef.current, options);
-    return next.kind === 'shape' && cache && shapeMatchesPastedSvgCache(next, cache)
-      ? cache
-      : undefined;
+    return next.kind === 'shape' && cache && shapeMatchesPastedSvgCache(next, cache) ? cache : undefined;
   };
 
   const cacheFromPastedShapeSvgSource = (source: string): PastedShapeSvgCache | undefined => {
     const stretch = parseSvgClipPathShape(source, 'stretch');
     const contain = parseSvgClipPathShape(source, 'contain', currentShapeScaleOptions());
-    return normalizeShapeFitCache(
-      stretch && contain ? { source, stretch, contain } : undefined,
-      currentShapeScaleOptions(),
-    );
+    return normalizeShapeFitCache(stretch && contain ? { source, stretch, contain } : undefined, currentShapeScaleOptions());
   };
 
   const insertPolygonPointColor = (insertIndex: number, pointCount: number) => {
@@ -709,8 +657,7 @@ export function pastedCacheActions(editor: EditorAfterShapeScaleSyncActions) {
   };
 }
 
-export type EditorAfterPastedCacheActions = EditorAfterShapeScaleSyncActions &
-  ReturnType<typeof pastedCacheActions>;
+export type EditorAfterPastedCacheActions = EditorAfterShapeScaleSyncActions & ReturnType<typeof pastedCacheActions>;
 
 // Selecting handles, and reading the polygon selection.
 export function handleSelectionActions(editor: EditorAfterPastedCacheActions) {
@@ -735,10 +682,7 @@ export function handleSelectionActions(editor: EditorAfterPastedCacheActions) {
     setActiveInsetModifierMode('single');
   };
 
-  const setHandleSelection = (
-    handle: HandleTarget | undefined,
-    handles = handle ? [handle] : [],
-  ) => {
+  const setHandleSelection = (handle: HandleTarget | undefined, handles = handle ? [handle] : []) => {
     if (isShapeTransformSelectedRef.current) {
       isShapeTransformSelectedRef.current = false;
       setIsShapeTransformSelected(false);
@@ -769,8 +713,7 @@ export function handleSelectionActions(editor: EditorAfterPastedCacheActions) {
     return handleListIncludes(selectedPolygonHandles, handle) ? selectedPolygonHandles : [handle];
   };
 
-  const getPolygonSelectionIndexes = (handle: HandleTarget) =>
-    getPolygonSelection(handle).map((selected) => selected.index);
+  const getPolygonSelectionIndexes = (handle: HandleTarget) => getPolygonSelection(handle).map((selected) => selected.index);
 
   const getActivePolygonSelection = () => {
     const selectedPolygonHandles = selectedHandlesRef.current.filter(isPolygonPointHandle);

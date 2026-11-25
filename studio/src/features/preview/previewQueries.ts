@@ -3,6 +3,8 @@ import { queryAuthoredStyles } from '../../../vendor/stacki/electron/preload/fra
 import { mapped } from '../../../vendor/stacki/electron/preload/frameRegions';
 import { ownClasses } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { styleElements, textStyleHost } from './styleQueryTargets';
+import { renderedPageImage, renderedPageType } from '../../../vendor/stacki/electron/preload/framePageMetadata';
+import { renderedPageText } from '../../../vendor/stacki/electron/preload/framePageText';
 
 function values(input: unknown): string[] {
   if (!Array.isArray(input) || input.length > 1000) {
@@ -16,12 +18,23 @@ export function answerPreviewQuery(input: unknown, selectionCursor?: CSSStyleShe
   if (typeof id !== 'number' || !Number.isSafeInteger(id)) {
     throw new Error('Invalid query');
   }
+  if (data['pageMetadata'] === true) {
+    return {
+      type: 'avb:query-result',
+      id,
+      found: true,
+      pageImage: renderedPageImage(document),
+      pageType: renderedPageType(document),
+    };
+  }
+  if (data['pageText'] === true) {
+    return { type: 'avb:query-result', id, found: true, pageText: renderedPageText(document) };
+  }
   const path = string(data['path'], 500);
   const elements = path ? styleElements(path) : [];
   const element = elements[0];
   const parent = data['textParentPath'];
-  const styleHost =
-    element ?? textStyleHost(path, parent === undefined ? undefined : string(parent, 500));
+  const styleHost = element ?? textStyleHost(path, parent === undefined ? undefined : string(parent, 500));
   const props = values(data['props']);
   const matched: Record<string, boolean> = {};
   for (const selector of values(data['selectors'])) {
@@ -41,11 +54,7 @@ export function answerPreviewQuery(input: unknown, selectionCursor?: CSSStyleShe
           tag: element.tagName.toLowerCase(),
           id: element.id,
           classes: ownClasses(element),
-          attributes: Object.fromEntries(
-            [...element.attributes]
-              .filter((attr) => !attr.name.startsWith('data-avb-'))
-              .map((attr) => [attr.name, attr.value]),
-          ),
+          attributes: Object.fromEntries([...element.attributes].filter((attr) => !attr.name.startsWith('data-avb-')).map((attr) => [attr.name, attr.value])),
         }
       : undefined,
     matched,
@@ -74,11 +83,7 @@ function resolveColors(host: Element, values: readonly string[]) {
   return result;
 }
 
-function computedProperties(
-  element: Element,
-  props: readonly string[],
-  selectionCursor?: CSSStyleSheet,
-) {
+function computedProperties(element: Element, props: readonly string[], selectionCursor?: CSSStyleSheet) {
   const design = document.getElementById('avb-design-style');
   const sheet = design instanceof HTMLStyleElement ? design : undefined;
   const disabled = sheet?.disabled ?? false;

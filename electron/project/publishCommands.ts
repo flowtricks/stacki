@@ -2,31 +2,55 @@ import { spawn } from 'node:child_process';
 import { PUBLISH_LIMITS } from '../../shared/properties/publishConfig';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 import { hostingCommand, scriptCommand } from '../../shared/properties/publishCommands';
-import type { PublishCommand } from '../../shared/properties/publishCommands';
-import { resolvePublishExecutable } from './publishExecutable';
+import { resolvePublishExecutable, type ExecutableCommand } from './publishExecutable';
+import { checkWorkerReady, withWorkerAccount } from './publishWorkerConfig';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { ok, type Result } from '../../shared/core/result';
+import { DescribedError } from '../../shared/properties/describedError';
 
-export async function runPublishScripts(
-  root: string,
-  scripts: readonly string[],
-  environment: Readonly<Record<string, string>> = {},
-): Promise<void> {
+export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
   if (scripts.length > PUBLISH_LIMITS.hooksMax) {
-    throw new Error('Publish hook exceeds eight scripts.');
+    throw new DescribedError(described('publish.command.hooksLimit'));
   }
   for (const script of scripts) {
     await runPublishCommand(root, { ...scriptCommand(script), environment });
   }
 }
 
-export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
-  if (config.hosting.provider === 'none') {
-    throw new Error('Choose a hosting provider in Publish settings.');
+/**
+ * Whether the saved hosting can deploy from this site right now, asked before Publish builds or pushes anything. A Worker
+ * uses checkWorkerReady, the same check Add Worker ends with, so setup and Publish cannot disagree about a site.
+ */
+export async function checkHostingReady(root: string, config: PublishConfig): Promise<Result<void, Described>> {
+  if (config.hosting.provider === 'cloudflare-workers') {
+    const ready = await checkWorkerReady(root);
+    return ready.ok ? ok(undefined) : ready;
   }
-  await runPublishCommand(root, hostingCommand(config.hosting));
+  return ok(undefined);
 }
 
-/** Run installed tools only: publishing must never implicitly download executable packages. */
-export async function runPublishCommand(root: string, command: PublishCommand): Promise<void> {
+export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
+  if (config.hosting.provider === 'none') {
+    throw new DescribedError(described('error.publish.chooseHosting'));
+  }
+  const command = hostingCommand(config.hosting);
+  if (config.hosting.provider === 'cloudflare-workers') {
+    await withWorkerAccount(root, config.hosting.accountId, (configuration) =>
+      runPublishCommand(root, {
+        ...command,
+        arguments: [...command.arguments, '--config', configuration],
+      }),
+    );
+  } else {
+    await runPublishCommand(root, command);
+  }
+}
+
+/**
+ * Run installed tools only: publishing must never implicitly download executable packages. A package manager may run
+ * here too, when Worker setup adds the deploy tool to the site as a development dependency.
+ */
+export async function runPublishCommand(root: string, command: ExecutableCommand): Promise<void> {
   const resolved = resolvePublishExecutable(root, command);
   const environment = {
     ...publishEnvironment(),
@@ -50,38 +74,31 @@ export async function runPublishCommand(root: string, command: PublishCommand): 
     });
     // Logs may contain credentials from third-party hooks. Keep them out of IPC and UI errors.
     let outputBytes = 0;
-    let failure = '';
-    const stop = (message: string) => {
-      failure = message;
-      stopCommand(child.pid);
+    let failure: Described | undefined;
+    const stop = (problem: Described) => {
+      failure = problem;
+      stopPublishProcess(child.pid);
       child.kill('SIGKILL');
     };
     const collect = (chunk: Buffer) => {
       outputBytes += chunk.length;
       if (outputBytes > PUBLISH_LIMITS.outputBytesMax) {
-        stop('Command exceeded the 1 MiB output limit.');
+        stop(described('publish.command.outputLimit'));
       }
     };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const timer = setTimeout(
-      () => stop('Command exceeded the ten-minute time limit.'),
-      PUBLISH_LIMITS.commandTimeoutMs,
-    );
+    const timer = setTimeout(() => stop(described('publish.command.timeLimit')), PUBLISH_LIMITS.commandTimeoutMs);
     child.once('error', () => {
       clearTimeout(timer);
-      reject(
-        new Error(`Could not start ${command.executable}. Install and authenticate it first.`),
-      );
+      reject(new DescribedError(described('publish.command.startFailed', { executable: command.executable })));
     });
     child.once('close', (code) => {
       clearTimeout(timer);
-      if (code === 0 && !failure) {
+      if (code === 0 && failure === undefined) {
         resolve();
       } else {
-        reject(
-          new Error(failure || `${command.executable} failed (exit ${code}). Check its setup.`),
-        );
+        reject(new DescribedError(failure ?? described('publish.command.exitFailed', { executable: command.executable, code: String(code) })));
       }
     });
   });
@@ -105,7 +122,7 @@ export function publishEnvironment(): NodeJS.ProcessEnv {
   return environment;
 }
 
-function stopCommand(pid: number | undefined): void {
+export function stopPublishProcess(pid: number | undefined): void {
   if (pid === undefined) {
     return;
   }

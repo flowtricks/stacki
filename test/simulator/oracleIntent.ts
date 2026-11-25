@@ -11,9 +11,7 @@ import type { OracleStep } from './oracles.ts';
 import type { Splice } from '#dist/shared/engine/planner.js';
 
 export function oracleSpans(step: OracleStep): readonly ByteSpan[] {
-  return step.splices.map((splice) =>
-    toByteSpan(splice.start, splice.start + utf8ByteLength(splice.expected)),
-  );
+  return step.splices.map((splice) => toByteSpan(splice.start, splice.start + utf8ByteLength(splice.expected)));
 }
 
 export function oracleSplices(step: OracleStep): readonly Splice[] {
@@ -33,11 +31,7 @@ export function oracleSplices(step: OracleStep): readonly Splice[] {
 export function anchorAt(snapshot: Snapshot, path: readonly number[]): AnchorRef {
   const projection = snapshot.projection;
   assert(projection.tag === 'valid', 'Oracle anchors come from a parsing file');
-  const node = projection.nodes.find(
-    (candidate) =>
-      candidate.path.length === path.length &&
-      candidate.path.every((step, index) => step === path[index]),
-  );
+  const node = projection.nodes.find((candidate) => candidate.path.length === path.length && candidate.path.every((step, index) => step === path[index]));
   assert(node !== undefined, `Oracle path ${JSON.stringify(path)} exists in the input`);
   return toAnchorRef({ span: node.span, path: path.map(toChildIndex), expectedKind: node.kind });
 }

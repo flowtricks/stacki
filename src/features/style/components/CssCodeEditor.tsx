@@ -1,13 +1,19 @@
 import ReactCodeMirror from '@uiw/react-codemirror';
 import { useMemo } from 'react';
-import { css } from '@codemirror/lang-css';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { Decoration, EditorView } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
+import { cssEditorIndentExtensions } from './cssEditorIndent';
+import { lockedEdgeExtensions, type CodeEditorLockedEdges } from '../../../ui/codeEditorLockedEdges';
+import { type CodeVariableScope } from '../model/codeVariableScope';
+import { useCodeVariables } from './CodeVariables';
+import { useCodeChips } from '../codeChips/CodeChips';
 import './CssCodeEditor.css';
 
 type CodeEditorLanguage = 'css';
+type CodeEditorLineOverflow = 'scroll' | 'wrap';
 export type CodeEditorTokenHighlight = {
   from: number;
   to: number;
@@ -20,12 +26,31 @@ type CodeEditorProps = {
   language?: CodeEditorLanguage;
   readOnly?: boolean;
   ariaLabel: string;
+  /**
+   * What the text is, for the variables typed into it: one property's value
+   * (the whole of it can be bound, from the purple dot) or a declaration list
+   * (`--` offers variables in each declaration's value). Required, so no CSS
+   * editor is added without them (CodeVariables.tsx).
+   */
+  variables: CodeVariableScope;
   className?: string;
   minHeight?: string;
   tokenHighlights?: CodeEditorTokenHighlight[];
+  /**
+   * What a line too long for the box does. A rule reads as one declaration per
+   * line, so the CSS Code box scrolls; a clip-path is one long value, so its
+   * short field wraps to show all of it.
+   */
+  lineOverflow?: CodeEditorLineOverflow;
+  /** Context at the ends of the text: shown, never editable. */
+  lockedEdges?: CodeEditorLockedEdges;
   onChange?: (value: string) => void;
   onSelectionChange?: (position: number) => void;
+  /** More editor behaviour, made once by the caller (an inline branch's atomic `${…}` tokens). */
+  extensions?: readonly Extension[];
 };
+
+const NO_EXTENSIONS: readonly Extension[] = [];
 
 const codeEditorHighlightStyle = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--color-info)' },
@@ -42,13 +67,13 @@ const codeEditorHighlightStyle = HighlightStyle.define([
 
 // CodeMirror paints its selection as its own layer; this selector covers both the unfocused
 // and the focused selection backgrounds.
-const SELECTION_BACKGROUND_SELECTOR =
-  '.cm-selectionBackground, ' +
-  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground';
+const SELECTION_BACKGROUND_SELECTOR = '.cm-selectionBackground, ' + '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground';
 
 const codeEditorTheme = EditorView.theme(
   {
     '&': {
+      // CSS reads left to right whatever the interface language, so the editor never mirrors.
+      direction: 'ltr',
       width: '100%',
       color: 'var(--color-text-primary)',
       backgroundColor: 'var(--color-bg-surface)',
@@ -60,7 +85,7 @@ const codeEditorTheme = EditorView.theme(
       caretColor: 'var(--color-text-primary)',
     },
     '.cm-cursor': {
-      borderLeftColor: 'var(--color-text-primary)',
+      borderLeftColor: 'var(--color-text-primary)', // physical: caret inside LTR code editor
     },
     // Matches the selection used everywhere else; CodeMirror paints its own
     // layer instead of using ::selection.
@@ -92,13 +117,7 @@ const codeEditorTheme = EditorView.theme(
 const codeEditorExtensions = {
   // ⌘F opens at the top: this editor is short, and a panel at the bottom covers
   // the end of the file — which is where a search that has run leaves you.
-  css: [
-    css(),
-    search({ top: true }),
-    EditorView.lineWrapping,
-    syntaxHighlighting(codeEditorHighlightStyle),
-    codeEditorTheme,
-  ],
+  css: [...cssEditorIndentExtensions(), search({ top: true }), syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
 };
 
 const codeEditorBasicSetup = {
@@ -108,6 +127,8 @@ const codeEditorBasicSetup = {
   highlightActiveLineGutter: false,
   highlightSelectionMatches: false,
   syntaxHighlighting: false,
+  // cssEditorIndentExtensions adds it with the indent unit it works to.
+  indentOnInput: false,
   searchKeymap: true,
   foldKeymap: false,
   completionKeymap: false,
@@ -146,9 +167,7 @@ function highlightDecorations(highlights: ReadonlyArray<CodeEditorTokenHighlight
     const documentLength = view.state.doc.length;
     const ranges = highlights
       .filter((highlight) => highlight.to <= documentLength)
-      .map((highlight) =>
-        Decoration.mark({ class: highlight.className }).range(highlight.from, highlight.to),
-      );
+      .map((highlight) => Decoration.mark({ class: highlight.className }).range(highlight.from, highlight.to));
     return Decoration.set(ranges, true);
   });
 }
@@ -159,46 +178,68 @@ export function CodeEditor({
   language = 'css',
   readOnly = false,
   ariaLabel,
+  variables,
   className,
   minHeight: heightMin = '124px',
   tokenHighlights = [],
+  lineOverflow = 'wrap',
+  lockedEdges,
   onChange,
   onSelectionChange,
+  extensions: extraExtensions = NO_EXTENSIONS,
 }: CodeEditorProps) {
+  const codeVariables = useCodeVariables(variables, { readOnly });
+  const variableExtension = codeVariables.extension;
+  // A rule or a declaration list is the CSS Code section's; it draws chips. A single value (the
+  // clip-path editor's own code) is already inside the editor a chip would open, and draws none.
+  // The typed chooser is this editor's own (useCodeVariables above), so the chips leave it out.
+  const codeChips = useCodeChips(variables.kind === 'declarations' ? 'stylesheet' : undefined, { typing: 'elsewhere' });
+  const chipExtension = codeChips.extension;
+  const prefixLength = lockedEdges?.prefixLength ?? 0;
+  const suffixLength = lockedEdges?.suffixLength ?? 0;
   const extensions = useMemo(() => {
     const highlights = tokenHighlights
-      .filter(
-        (highlight) =>
-          highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length,
-      )
+      .filter((highlight) => highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length)
       .sort((left, right) => left.from - right.from || left.to - right.to);
     const selectionExtensions = onSelectionChange ? selectionListeners(onSelectionChange) : [];
+    const locked = lockedEdgeExtensions({ prefixLength, suffixLength });
+    const wrapping = lineOverflow === 'wrap' ? [EditorView.lineWrapping] : [];
     if (!highlights.length) {
-      return [...codeEditorExtensions[language], ...selectionExtensions];
+      return [...codeEditorExtensions[language], ...wrapping, variableExtension, chipExtension, ...locked, ...selectionExtensions, ...extraExtensions];
     }
     return [
       ...codeEditorExtensions[language],
+      ...wrapping,
+      variableExtension,
+      chipExtension,
+      ...locked,
       highlightDecorations(highlights),
       ...selectionExtensions,
+      ...extraExtensions,
     ];
-  }, [language, onSelectionChange, tokenHighlights, value.length]);
+  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension, chipExtension, extraExtensions]);
 
+  // The frame holds the bind dot in the editor's top-left corner, shown on
+  // hover as it is over every value field (embed-editor_varconnect's rules).
   return (
-    <ReactCodeMirror
-      {...(id === undefined ? {} : { id })}
-      className={['code-editor', readOnly ? 'is-readonly' : '', className || '']
-        .filter(Boolean)
-        .join(' ')}
-      value={value}
-      extensions={extensions}
-      basicSetup={codeEditorBasicSetup}
-      theme="none"
-      minHeight={heightMin}
-      readOnly={readOnly}
-      editable={!readOnly}
-      indentWithTab={!readOnly}
-      {...(onChange === undefined ? {} : { onChange })}
-      aria-label={ariaLabel}
-    />
+    <div ref={codeVariables.frameRef} className="embed-editor_varconnect code-editor_frame">
+      <ReactCodeMirror
+        {...(id === undefined ? {} : { id })}
+        className={['code-editor', readOnly ? 'is-readonly' : '', className || ''].filter(Boolean).join(' ')}
+        value={value}
+        extensions={extensions}
+        basicSetup={codeEditorBasicSetup}
+        theme="none"
+        minHeight={heightMin}
+        readOnly={readOnly}
+        editable={!readOnly}
+        // cssEditorIndentExtensions binds the key: Tab inserts a tab at the caret.
+        indentWithTab={false}
+        {...(onChange === undefined ? {} : { onChange })}
+        aria-label={ariaLabel}
+      />
+      {codeVariables.overlay}
+      {codeChips.overlay}
+    </div>
   );
 }

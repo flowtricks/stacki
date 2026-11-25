@@ -2,16 +2,7 @@ import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { Result } from '../../../shared/core/result';
 import type { Parser } from '../../../shared/core/boundary';
 import type { DeclaredTypes } from './cmsTypes';
-import {
-  boolean,
-  data,
-  dictionary,
-  list,
-  object,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, data, dictionary, list, object, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cleanError } from '../../lib/cleanError';
 import { parseDeclaredTypes } from './cmsTypes';
@@ -38,10 +29,7 @@ export function parseCmsAsset(input: unknown) {
   }
   return { __expr: text(value['name']), __asset: pathText(value['asset']) };
 }
-async function cmsRequest<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function cmsRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();

@@ -1,4 +1,5 @@
-// The name a new branch is given.
+// Goal: branch names are sanitized and rejected before Git receives invalid input.
+// Methodology: exercise the pure name helpers; historyBranches tests the real editor.
 //
 //   node test/renderer/git/branchName.test.js
 //
@@ -40,27 +41,13 @@ const check = (what, condition, detail) => {
     platform: 'node',
     logLevel: 'silent',
   });
-  const { sanitizeBranchName: clean, branchNameError: why, isValidBranchName: ok } = require(
-    bundlePath,
-  );
+  const { sanitizeBranchName: clean, branchNameError: why, isValidBranchName: ok } = require(bundlePath);
 
   // --- what typing can produce ------------------------------------------------
-  check(
-    'a space becomes the separator it was meant as',
-    clean('my new branch') === 'my-new-branch',
-    clean('my new branch'),
-  );
+  check('a space becomes the separator it was meant as', clean('my new branch') === 'my-new-branch', clean('my new branch'));
   check('a tab too', clean('a\tb') === 'a-b', clean('a\tb'));
-  check(
-    "git's own syntax characters are refused",
-    clean('a~b^c:d?e*f[g\\h') === 'abcdefgh',
-    clean('a~b^c:d?e*f[g\\h'),
-  );
-  check(
-    'control codes are refused',
-    clean('a\x07b\x7fc') === 'abc',
-    JSON.stringify(clean('a\x07b\x7fc')),
-  );
+  check("git's own syntax characters are refused", clean('a~b^c:d?e*f[g\\h') === 'abcdefgh', clean('a~b^c:d?e*f[g\\h'));
+  check('control codes are refused', clean('a\x07b\x7fc') === 'abc', JSON.stringify(clean('a\x07b\x7fc')));
   check('`..` is a range, not a name', clean('a..b') === 'a.b', clean('a..b'));
   check('`@{` is the reflog', clean('main@{1}') === 'main1}', clean('main@{1}'));
   check('an empty path component closes up', clean('a//b') === 'a/b', clean('a//b'));
@@ -68,11 +55,7 @@ const check = (what, condition, detail) => {
   check('nor with a dot or a slash', clean('./x') === 'x', clean('./x'));
 
   // --- what typing is left alone to do ---------------------------------------
-  check(
-    "capitals are git's to accept, and it does",
-    clean('Feature/Login') === 'Feature/Login',
-    clean('Feature/Login'),
-  );
+  check("capitals are git's to accept, and it does", clean('Feature/Login') === 'Feature/Login', clean('Feature/Login'));
   check('a slash is how branches are grouped', clean('feat/login-form') === 'feat/login-form');
   check('dots inside a name are fine', clean('release/v1.2.x') === 'release/v1.2.x');
   check('so are digits and underscores', clean('fix_123') === 'fix_123');
@@ -88,48 +71,24 @@ const check = (what, condition, detail) => {
 
   // --- names already taken ----------------------------------------------------
   const existing = ['main', 'feature/login'];
-  check(
-    'an existing name says so',
-    /already exists/.test(why('main', existing) || ''),
-    why('main', existing),
-  );
-  check(
-    'and one that differs only in case says why that counts',
-    /same branch here/.test(why('Main', existing) || ''),
-    why('Main', existing),
-  );
+  check('an existing name says so', /already exists/.test(why('main', existing) || ''), why('main', existing));
+  check('and one that differs only in case says why that counts', /same branch here/.test(why('Main', existing) || ''), why('Main', existing));
   check('a free name is free', why('feature/logout', existing) === undefined);
 
+  // --- shapes git refuses that typing cannot prevent ------------------------------
+  check('a part of the name opening with a dot is refused', /“\.”/.test(why('a/.hidden', existing) || ''), why('a/.hidden', existing));
+  check('the sanitiser drops the dot a part opens with', clean('a/.b') === 'a/b', clean('a/.b'));
+  check('HEAD is reserved in any case', /HEAD/.test(why('head', existing) || '') && /HEAD/.test(why('HEAD', existing) || ''));
+  check('a name inside an existing branch is refused', /main/.test(why('main/inner', existing) || ''), why('main/inner', existing));
+  check('a name around an existing branch is refused', /feature\/login/.test(why('feature', ['feature/login']) || ''), why('feature', ['feature/login']));
+  check('unicode and slashes are fine', ok('área/ñandú', existing));
+
   // --- the answer the field acts on -------------------------------------------
-  check(
-    'valid is the absence of a reason',
-    ok('feature/logout', existing) && !ok('main', existing),
-  );
+  check('valid is the absence of a reason', ok('feature/logout', existing) && !ok('main', existing));
   check('and an empty field is never valid', !ok('', existing) && !ok('   ', existing));
 
-  // --- the field really asks ---------------------------------------------------
-  const chip = fs.readFileSync(repoPath('src/features/git/GitChipView.tsx'), 'utf8');
-  check(
-    'the field cleans what is typed',
-    /onChange=\{\(event\) => onNewBranch\(sanitizeBranchName\(/.test(chip),
-  );
-  check(
-    'and Enter waits for a name that works',
-    /event\.key === 'Enter' && name && !branchError/.test(chip),
-  );
-  check(
-    'with the reason shown while it waits',
-    /branchError && <div className="git-hint">/.test(chip),
-  );
-  check(
-    'checked against the branches that exist',
-    /branchNameError\(newBranch, info\.branches\)/.test(chip),
-  );
-
   if (failures.length) {
-    console.error(
-      `\nbranch-name: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\nbranch-name: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

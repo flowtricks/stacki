@@ -1,4 +1,6 @@
 import { LIMITS } from '../../../shared/core/limits';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 import { parser } from '@lezer/javascript';
 
@@ -37,6 +39,14 @@ function firstError(code: string): number {
   return at;
 }
 
+/** Whether `code` reads as a whole expression: `format(` and `-` are on their way to being one. */
+export function isExpression(code: string): boolean {
+  if (code.trim() === '' || code.length > LIMITS.attrCharsMax) {
+    return false;
+  }
+  return firstError(`(${code});`) < 0;
+}
+
 /** Where `position` falls, for a message that can be acted on. */
 function lineOf(code: string, position: number): number {
   return code.slice(0, position).split('\n').length;
@@ -55,13 +65,12 @@ function tokenAt(code: string, position: number): string {
  * Empty is ok: clearing the field is a thing to be allowed to do, and the
  * caller decides what an empty statement means.
  */
-export type StatementCheck =
-  { readonly ok: true } | { readonly ok: false; readonly message: string };
+export type StatementCheck = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
-export function checkStatement(code: unknown): StatementCheck {
+export function checkStatement(code: unknown, translate: Translator = ENGLISH_TRANSLATE): StatementCheck {
   const source = String(code ?? '');
   if (source.length > LIMITS.nodeValueCharsMax) {
-    return { ok: false, message: 'This statement exceeds the editor size limit.' };
+    return { ok: false, message: translate('props.jsCheck.tooLong') };
   }
   if (!source.trim()) {
     return { ok: true };
@@ -72,15 +81,15 @@ export function checkStatement(code: unknown): StatementCheck {
   }
   const token = tokenAt(source, at);
   const line = lineOf(source, at);
-  const where = source.split('\n').length > 1 ? ` on line ${line}` : '';
+  const multiline = source.split('\n').length > 1;
   // Past the end: the statement stops in the middle of itself, which reads
   // very differently from a stray character and is the commoner of the two
   // while typing.
   if (at >= source.trimEnd().length) {
-    return { ok: false, message: 'This looks unfinished — the statement stops early.' };
+    return { ok: false, message: translate('props.jsCheck.unfinished') };
   }
-  return {
-    ok: false,
-    message: token ? `Unexpected “${token}”${where}.` : `There's a mistake${where}.`,
-  };
+  if (token === '') {
+    return { ok: false, message: multiline ? translate('props.jsCheck.mistakeOnLine', { line }) : translate('props.jsCheck.mistake') };
+  }
+  return { ok: false, message: multiline ? translate('props.jsCheck.unexpectedOnLine', { token, line }) : translate('props.jsCheck.unexpected', { token }) };
 }

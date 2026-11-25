@@ -7,9 +7,7 @@ export type HSVA = { h: number; s: number; v: number; a: number }; // h 0–360,
 
 // The canvas is probed once; a failed probe is remembered so the fallback parser is used
 // without retrying the DOM on every call.
-type CanvasProbe =
-  | { readonly kind: 'unprobed' }
-  | { readonly kind: 'probed'; readonly context: CanvasRenderingContext2D | undefined };
+type CanvasProbe = { readonly kind: 'unprobed' } | { readonly kind: 'probed'; readonly context: CanvasRenderingContext2D | undefined };
 
 let canvasProbe: CanvasProbe = { kind: 'unprobed' };
 
@@ -177,9 +175,7 @@ export function formatRgba({ r: red, g: green, b: blue, a: alpha }: RGBA): strin
   const rn = round(red),
     gn = round(green),
     bn = round(blue);
-  return alpha < 1
-    ? `rgba(${rn}, ${gn}, ${bn}, ${round(alpha * 100) / 100})`
-    : `rgb(${rn}, ${gn}, ${bn})`;
+  return alpha < 1 ? `rgba(${rn}, ${gn}, ${bn}, ${round(alpha * 100) / 100})` : `rgb(${rn}, ${gn}, ${bn})`;
 }
 
 // The picker's four notations. `hsb` (= hue/sat/brightness, the HSVA the picker
@@ -227,9 +223,7 @@ export function rgbaToHsl({ r: red, g: green, b: blue }: RGBA): {
 
 function formatHsla(color: RGBA): string {
   const { h: hue, s: saturation, l: lightness } = rgbaToHsl(color);
-  return color.a < 1
-    ? `hsla(${hue}, ${saturation}%, ${lightness}%, ${round(color.a * 100) / 100})`
-    : `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  return color.a < 1 ? `hsla(${hue}, ${saturation}%, ${lightness}%, ${round(color.a * 100) / 100})` : `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
 /** Detect the notation a color string is written in (to keep output style stable). */

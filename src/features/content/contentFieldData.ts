@@ -67,9 +67,7 @@ export function blankFor(field: FieldDescriptor | undefined): Data {
 }
 
 export function blankObject(fields: readonly FieldDescriptor[]): DataRecord {
-  return Object.fromEntries(
-    fields.filter((field) => field.required).map((field) => [fieldKey(field), blankFor(field)]),
-  );
+  return Object.fromEntries(fields.filter((field) => field.required).map((field) => [fieldKey(field), blankFor(field)]));
 }
 
 export function blankUnion(field: FieldDescriptor): DataRecord {

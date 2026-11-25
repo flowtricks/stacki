@@ -6,8 +6,7 @@ import { mkdir } from 'node:fs/promises';
 import { parseMetadataFile } from '../vendor/stacki/shared/properties/projectMetadata';
 import { parseDefaultsSource } from '../vendor/stacki/shared/properties/componentDefaults';
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const first = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -49,15 +48,11 @@ async function edit(page: Page, label: string) {
 }
 async function close(page: Page) {
   await page.getByRole('button', { name: 'Close defaults', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Close defaults', exact: true })
-    .waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Close defaults', exact: true }).waitFor({ state: 'hidden' });
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
 }
 async function readDefaults(page: Page) {
-  const stored = parseMetadataFile(
-    await (await page.request.get(base + '/api/metadata?kind=components')).json(),
-  );
+  const stored = parseMetadataFile(await (await page.request.get(base + '/api/metadata?kind=components')).json());
   assert.ok(stored.source);
   const parsed = parseDefaultsSource(stored.source);
   assert.ok(parsed.ok);
@@ -67,10 +62,7 @@ try {
   await first.goto(base, { waitUntil: 'domcontentloaded' });
   await first.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   await first.getByLabel('Stacki account menu', { exact: true }).click();
-  assert.equal(
-    await first.getByRole('button', { name: 'Project settings', exact: true }).count(),
-    0,
-  );
+  assert.equal(await first.getByRole('button', { name: 'Project settings', exact: true }).count(), 0);
   await first.getByLabel('Stacki account menu', { exact: true }).click();
   await first.locator('[data-popup][aria-label="Stacki account"]').waitFor({ state: 'hidden' });
   const previewFrame = first.frames().find((frame) => frame.url().includes('#avb-design'));
@@ -115,20 +107,12 @@ try {
   await first.locator('.dd-option').filter({ hasText: /^h2$/ }).click();
   await first.locator('.dd-popup').waitFor({ state: 'hidden' });
   assert.equal(await tag.locator('.prop-label.set').count(), 1);
-  await first
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'Contextual default heading', exact: true })
-    .waitFor();
+  await first.frameLocator('iframe').getByRole('heading', { name: 'Contextual default heading', exact: true }).waitFor();
   await mkdir('test-results', { recursive: true });
   await first.screenshot({ path: 'test-results/component-defaults-context.png' });
   // A real click on a dimmed sibling must save and close the defaults session.
-  await first
-    .frameLocator('iframe')
-    .getByText('Desktop and hosted Studio', { exact: true })
-    .click();
-  await first
-    .getByRole('button', { name: 'Close defaults', exact: true })
-    .waitFor({ state: 'hidden' });
+  await first.frameLocator('iframe').getByText('Desktop and hosted Studio', { exact: true }).click();
+  await first.getByRole('button', { name: 'Close defaults', exact: true }).waitFor({ state: 'hidden' });
   assert.equal(await previewFrame.evaluate(() => performance.timeOrigin), lifetime);
   assert.match((await row(first, 'Heading').getAttribute('class')) ?? '', /selected/);
   const stored = await readDefaults(first);
@@ -136,18 +120,12 @@ try {
   assert.equal(stored.components[heading]?.props?.['maxWidth'], 37);
   assert.equal(stored.components[heading]?.props?.['render'], true);
   assert.equal(stored.components[heading]?.props?.['tag'], 'h2');
-  await first
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'A shared Stacki editor', exact: true })
-    .waitFor();
+  await first.frameLocator('iframe').getByRole('heading', { name: 'A shared Stacki editor', exact: true }).waitFor();
   // Reset removes authored slot content; this fixture's Astro fallback is empty.
   const contentLabel = first.locator('.prop-label').filter({ hasText: /^Content$/ });
   assert.equal(await contentLabel.getAttribute('class'), 'prop-label set');
   await contentLabel.click({ modifiers: ['Alt'] });
-  await first
-    .frameLocator('iframe')
-    .getByRole('heading', { name: 'A shared Stacki editor', exact: true })
-    .waitFor({ state: 'hidden' });
+  await first.frameLocator('iframe').getByRole('heading', { name: 'A shared Stacki editor', exact: true }).waitFor({ state: 'hidden' });
   assert.equal(await contentLabel.getAttribute('class'), 'prop-label');
   await first.locator('.rich-content').fill('A shared Stacki editor');
   await first.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
@@ -164,9 +142,7 @@ try {
     })
     .click();
   await first.keyboard.press('Escape');
-  await first
-    .getByRole('button', { name: 'Close defaults', exact: true })
-    .waitFor({ state: 'hidden' });
+  await first.getByRole('button', { name: 'Close defaults', exact: true }).waitFor({ state: 'hidden' });
   await edit(first, 'Heading');
   await second.goto(base, { waitUntil: 'domcontentloaded' });
   await second.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
@@ -175,13 +151,9 @@ try {
   await close(second);
   await first.locator('.rich-content').fill('Stale changes');
   await first.getByRole('button', { name: 'Close defaults', exact: true }).click();
-  await first
-    .getByText('Project settings changed. Reload before saving.', { exact: true })
-    .waitFor();
+  await first.getByText('Project settings changed. Reload before saving.', { exact: true }).waitFor();
   await first.getByRole('button', { name: 'Discard changes', exact: true }).click();
-  await first
-    .getByRole('button', { name: 'Close defaults', exact: true })
-    .waitFor({ state: 'hidden' });
+  await first.getByRole('button', { name: 'Close defaults', exact: true }).waitFor({ state: 'hidden' });
   await edit(first, 'ContentWrapper');
   await expand(first);
   const rootId = await row(first, 'ContentWrapper').getAttribute('data-node-id');
@@ -200,9 +172,7 @@ try {
   await first.mouse.up();
   await first.waitForFunction(
     ({ moving, remaining }) => {
-      const labels = [...document.querySelectorAll('.structure-node .label')].map(
-        (item) => item.textContent,
-      );
+      const labels = [...document.querySelectorAll('.structure-node .label')].map((item) => item.textContent);
       return labels.indexOf(moving) > labels.indexOf(remaining);
     },
     { moving, remaining },
@@ -215,10 +185,7 @@ try {
   await first.getByRole('menuitemradio', { name: 'Client', exact: true }).click();
   await expand(first);
   await row(first, 'Heading').click({ button: 'right' });
-  assert.equal(
-    await first.getByRole('menuitem', { name: 'Set component defaults' }).isDisabled(),
-    true,
-  );
+  assert.equal(await first.getByRole('menuitem', { name: 'Set component defaults' }).isDisabled(), true);
   await first.keyboard.press('Escape');
   assert.deepEqual(errors, []);
   console.log('Contextual component defaults and client mode browser checks passed.');

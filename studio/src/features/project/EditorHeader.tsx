@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { Peer } from '../collaboration/presence';
 import type { Session } from '../auth/useSession';
@@ -9,11 +10,14 @@ import type { SharedDocument } from '../collaboration/useDocument';
 import { presenceUsers } from '../collaboration/presenceUsers';
 import { presenceColor } from '../collaboration/presenceColors';
 import PageSwitcher from '../../../vendor/stacki/src/features/pages/PageSwitcher';
-import { routeFor } from './projectClient';
 import { useComponentBack } from './useComponentBack';
-import { useEditorRole } from '../roles/useEditorRole';
+import { TemplateEntryPicker } from '../pages/TemplateEntryPicker';
+import { useStudioRole } from '../roles/useEditorRole';
+import { projectPages } from './pageLabels';
+import { SaveStatus } from './SaveStatus';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
 interface HeaderProps {
+  readonly cursorChat: (() => void) | undefined;
   readonly defaultsMode: boolean;
   readonly closeDefaults: () => void;
   readonly interactivePreview: InteractivePreviewState;
@@ -28,6 +32,7 @@ interface HeaderProps {
 }
 
 export function EditorHeader({
+  cursorChat,
   project,
   file,
   previewFile,
@@ -40,42 +45,33 @@ export function EditorHeader({
   closeDefaults,
   defaultsMode,
 }: HeaderProps) {
-  const role = useEditorRole();
+  const studioRole = useStudioRole();
   const direct = session?.kind === 'local' && session.editing === 'source';
-  const pages = headerPages(project);
+  const pages = projectPages(project);
   const componentOpen = !isCanvasPage(file) && file.endsWith('.astro');
-  const back = defaultsMode
-    ? closeDefaults
-    : () => headerBack({ document, previewFile, open, report });
+  const back = defaultsMode ? closeDefaults : () => headerBack({ document, previewFile, open, report });
   useComponentBack((componentOpen || defaultsMode) && !interactivePreview.active, back);
+  // A template page's entry switcher stands beside the page switcher, as on Desktop.
   const switcher = (
-    <PageSwitcher
-      pages={pages}
-      currentPage={pages.find((page) => page.path === previewFile)}
-      onSelect={(page) => open(page.path)}
-    />
+    <>
+      <PageSwitcher pages={pages} currentPage={pages.find((page) => page.path === previewFile)} onSelect={(page) => open(page.path)} />
+      <TemplateEntryPicker file={previewFile} />
+    </>
   );
   return (
     <header className={`titlebar studio-titlebar ${componentOpen ? 'component-open' : ''}`}>
       <div className="studio-titlebar-start">
-        <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} />
+        <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} cursorChat={cursorChat} />
         <span className="project-name">{project.name}</span>
-        <span className="draft-chip">{direct ? 'Local files' : 'Draft'}</span>
-        {role === 'client' && <span className="client-role-badge">Client</span>}
+        <SaveStatus document={document} report={report} />
+        {!studioRole.isAdmin && <span className="client-role-badge">{studioRole.name}</span>}
         {componentOpen && switcher}
       </div>
       <div className="studio-titlebar-center">
-        <HeaderNavigation
-          defaultsMode={defaultsMode}
-          componentOpen={componentOpen}
-          back={back}
-          file={file}
-          switcher={switcher}
-        />
+        <HeaderNavigation defaultsMode={defaultsMode} componentOpen={componentOpen} back={back} file={file} switcher={switcher} />
       </div>
       <div className="studio-titlebar-end">
         <Collaborators document={document} session={session} follow={follow} />
-        <span className="save-state">{document?.status ?? 'Connecting'}</span>
         <PreviewButton preview={interactivePreview} />
         {!direct && <PublishButton report={report} />}
       </div>
@@ -83,12 +79,7 @@ export function EditorHeader({
   );
 }
 
-function headerBack({
-  document,
-  previewFile,
-  open,
-  report,
-}: Pick<HeaderProps, 'document' | 'previewFile' | 'open' | 'report'>) {
+function headerBack({ document, previewFile, open, report }: Pick<HeaderProps, 'document' | 'previewFile' | 'open' | 'report'>) {
   if (!document) {
     open(previewFile);
     return;
@@ -99,46 +90,25 @@ function headerBack({
     .catch(report);
 }
 
-function headerPages(project: Project) {
-  return project.pages.map((path) => ({
-    path,
-    name: path.replace(/^src\/pages\//, ''),
-    route: routeFor(path),
-  }));
-}
-
-function Collaborators({
-  document,
-  session,
-  follow,
-}: {
-  document: SharedDocument | undefined;
-  session: Session | undefined;
-  follow: (peer: Peer) => void;
-}) {
+function Collaborators({ document, session, follow }: { document: SharedDocument | undefined; session: Session | undefined; follow: (peer: Peer) => void }) {
+  const translate = useTranslate();
   return (
     <div className="collaborators">
       {presenceUsers(document?.peers ?? []).map((peer) => (
         <button
           type="button"
           onClick={() => follow(peer)}
-          aria-label={`Go to ${peer.name}’s selection`}
+          aria-label={translate('studio.header.goToSelection', { name: peer.name })}
           key={peer.githubId === undefined ? `connection:${peer.id}` : `github:${peer.githubId}`}
           title={`${peer.name} · ${peer.page}${peer.selection ? ' · ' + peer.selection : ''}`}
           style={
-            peer.id === document?.selfId ||
-            (session?.kind === 'github' && peer.githubId === session.id)
+            peer.id === document?.selfId || (session?.kind === 'github' && peer.githubId === session.id)
               ? undefined
               : { background: presenceColor(peer), borderColor: presenceColor(peer) }
           }
         >
           <Avatar
-            id={
-              peer.githubId ??
-              (session?.kind === 'github' && session.login.toLowerCase() === peer.name.toLowerCase()
-                ? session.id
-                : undefined)
-            }
+            id={peer.githubId ?? (session?.kind === 'github' && session.login.toLowerCase() === peer.name.toLowerCase() ? session.id : undefined)}
             name={peer.name}
           />
         </button>
@@ -160,26 +130,22 @@ function HeaderNavigation({
   readonly file: string;
   readonly switcher: React.ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <>
       {defaultsMode ? (
         <button
           className="page-switch-btn comp-back"
           onClick={back}
-          title="Close defaults"
-          aria-label="Close defaults"
+          title={translate('shell.titleBar.closeDefaults')}
+          aria-label={translate('shell.titleBar.closeDefaults')}
           aria-keyshortcuts="Escape"
         >
           <span>←</span>
-          <span>Close defaults</span>
+          <span>{translate('shell.titleBar.closeDefaults')}</span>
         </button>
       ) : componentOpen ? (
-        <button
-          className="page-switch-btn comp-back"
-          onClick={back}
-          title="Back to page"
-          aria-keyshortcuts="Escape"
-        >
+        <button className="page-switch-btn comp-back" onClick={back} title={translate('studio.header.backToPage')} aria-keyshortcuts="Escape">
           <span>←</span>
           <span className="page-switch-label">{file.split('/').at(-1)}</span>
         </button>

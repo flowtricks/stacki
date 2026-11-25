@@ -4,12 +4,7 @@ import type { usePreview } from '../preview/usePreview';
 import type { Session } from '../auth/useSession';
 import { parseCursorState, type CursorPacket } from './cursorPresence';
 
-export function useCursorPresence(
-  shared: SharedDocument | undefined,
-  page: string,
-  preview: ReturnType<typeof usePreview>,
-  session: Session | undefined,
-) {
+export function useCursorPresence(shared: SharedDocument | undefined, page: string, preview: ReturnType<typeof usePreview>, session: Session | undefined) {
   const { subscribeLoad } = preview;
   const current = useRef({ shared, preview, session });
   const chat = useRef({ text: '', typing: false });
@@ -21,9 +16,7 @@ export function useCursorPresence(
     const origin = new URL(preview.url, location.href).origin;
     const send = (packet: CursorPacket) => {
       const own =
-        packet.id === shared.selfId ||
-        (session?.kind === 'github' &&
-          shared.peers.some((peer) => peer.id === packet.id && peer.githubId === session.id));
+        packet.id === shared.selfId || (session?.kind === 'github' && shared.peers.some((peer) => peer.id === packet.id && peer.githubId === session.id));
       if (!own) {
         current.current.preview.send({
           type: 'studio:cursor-peer',

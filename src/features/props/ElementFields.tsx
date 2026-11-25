@@ -2,12 +2,16 @@
 // and extra fields, and the settings group — tag, class, style, attributes
 // and slot (PropsPanel.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { RichContext } from './RichContent';
+import { dataPickerPosition } from './dataPickerPosition';
 import { useState } from 'react';
-import { ResetMenu } from './PropFieldLabel';
+import { ResetMenu } from '../../ui/ResetLabel';
 import type { FieldPosition } from './propBindings';
 import { TagField } from './propNodeEditors';
 import PropField from './PropField';
+import { ListPropField } from './ListPropField';
+import type { ValueChange } from './bindingTypes';
 import { AttributesSection } from './propAttributes';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import AutoTextarea from '../../ui/AutoTextarea';
@@ -15,19 +19,16 @@ import RichContent, { isInlineOnly } from './RichContent';
 import { VariableTextSizeIcon, ChevronRightIcon } from '../../ui/Icons';
 import { noLabelActivation, CommentField } from './SourcePanels';
 import { type ElementState } from './elementState';
+import { canvasDraftProp, canvasDraftValue, useCanvasTextDraft } from '../../ui/canvasTextDraft';
+import { canvasDraftInline } from './canvasDraftInline';
+import { classListOfferOf } from './classListProp';
+import { assert } from '../../../shared/core/assert';
+import type { FieldFocus } from './fieldFocus';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    loopContext,
-    bindContext,
-    onSetInline,
-    showContentField,
-    isSlot,
-    contentPicker,
-    setContentPicker,
-    contentInsertRef,
-  } = state;
+  const translate = useTranslate();
+  const draft = useCanvasTextDraft(state);
+  const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
   return (
     <>
@@ -36,21 +37,18 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
           <label onClick={noLabelActivation}>
             <ContentLabel
               active={contentSet}
-              name={isSlot ? 'Fallback' : 'Content'}
+              name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}
               onReset={() => onSetInline([])}
             />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
                   field into a sentence means knowing to type
                   `{post.data.title}`. */}
-            <BindHandle
-              active={!!contentPicker}
-              onOpen={(host) => elementOpenContentPicker(state, host ?? undefined)}
-            />
+            <BindHandle active={!!contentPicker} onOpen={(host, focus) => elementOpenContentPicker(state, host ?? undefined, focus)} />
           </label>
           <RichContent
             key={node.id}
-            nodes={isInlineOnly(node.children) ? node.children : []}
+            nodes={canvasDraftInline(isInlineOnly(node.children) ? node.children : [], draft)}
             {...richContextProp(bindContext || loopContext)}
             insertRef={contentInsertRef}
             onChange={onSetInline}
@@ -59,9 +57,16 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             <FieldDataPicker
               pos={contentPicker}
               bindContext={bindContext || loopContext}
+              // i18n-ignore: the label seeds a prop name (text), written as code.
+              seed={{ fit: 'content', label: 'Text', value: plainContent(node.children) }}
+              // A new prop lands where a picked one would: its words are the prop's default.
+              onBindNew={(path) => {
+                setContentPicker(undefined);
+                elementPlaceContentChip(state, contentPicker.focus, path);
+              }}
               onPick={(path) => {
                 setContentPicker(undefined);
-                contentInsertRef.current?.insert(path);
+                elementPlaceContentChip(state, contentPicker.focus, path);
               }}
               onClose={() => setContentPicker(undefined)}
             />
@@ -75,7 +80,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
                 lineHeight: 1.5,
               }}
             >
-              Shown only when whatever uses this component passes nothing for the slot.
+              {translate('props.element.fallbackNote')}
             </div>
           )}
         </div>
@@ -84,17 +89,14 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   );
 }
 
-function ContentLabel(props: {
-  readonly active: boolean;
-  readonly name: string;
-  readonly onReset: () => void;
-}) {
+function ContentLabel(props: { readonly active: boolean; readonly name: string; readonly onReset: () => void }) {
+  const translate = useTranslate();
   const [position, setPosition] = useState<FieldPosition>();
   return (
     <>
       <span
         className={`prop-label${props.active ? ' set' : ''}`}
-        title={props.active ? '⌥-click to reset to default' : undefined}
+        title={props.active ? translate('props.element.resetHint') : undefined}
         onClick={(event) => {
           event.preventDefault();
           if (!props.active) {
@@ -134,19 +136,21 @@ export function richContextProp(context: RichContext | undefined): {
 }
 
 export function ElementLooseText({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
+  const draft = useCanvasTextDraft(state);
   const { node, onSetContent, showLooseTextField, looseText } = state;
   return (
     <>
       {showLooseTextField && (
         <div className="props-field" key="loose-text">
           <label onClick={noLabelActivation}>
-            <ContentLabel active={!!looseText} name="Content" onReset={() => onSetContent('')} />
+            <ContentLabel active={!!looseText} name={translate('props.element.content')} onReset={() => onSetContent('')} />
           </label>
           <AutoTextarea
             key={node.id}
-            minRows={2}
-            value={looseText ? looseText.value : ''}
-            placeholder="Text alongside the children below"
+            minRows={1}
+            value={looseText ? canvasDraftValue(looseText, draft) : ''}
+            placeholder={translate('props.element.looseText')}
             onChange={(event) => onSetContent(event.target.value)}
           />
         </div>
@@ -156,6 +160,9 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementSchemaFields({ state }: { readonly state: ElementState }) {
+  // Words typed on the canvas into text this instance's prop sets show here as
+  // they are typed; the attribute itself is written when typing ends.
+  const draft = useCanvasTextDraft(state);
   const {
     node,
     schema,
@@ -171,46 +178,56 @@ export function ElementSchemaFields({ state }: { readonly state: ElementState })
     setPropCascading,
     styleField,
     assetContext,
+    listProps,
+    projectPath,
   } = state;
   return (
     <>
       {schema
         .filter(appliesNow)
         .filter((field) => field.name !== 'class' && !(styleField && field.name === 'style'))
-        .map((field) => (
-          <PropField
-            key={field.name}
-            nodeKey={node.id}
-            bindContext={bindContext || loopContext}
-            field={narrowOptions(field)}
-            branchDefault={branchDefault(field.name)}
-            value={node.props?.[field.name]}
-            slotOptions={slotOptions}
-            projectClasses={projectClasses}
-            assetContext={assetContext}
-            linkContext={linkContext}
-            dataContext={dataContext}
-            onChange={(next, immediate) => setPropCascading(field.name, next, immediate)}
-          />
-        ))}
+        .map((field) => {
+          const value = canvasDraftProp(node.id, field.name, draft) ?? node.props?.[field.name];
+          const onChange: ValueChange = (next, immediate) => setPropCascading(field.name, next, immediate);
+          const plain = (
+            <PropField
+              key={field.name}
+              nodeKey={node.id}
+              bindContext={bindContext || loopContext}
+              field={narrowOptions(field)}
+              branchDefault={branchDefault(field.name)}
+              value={value}
+              slotOptions={slotOptions}
+              projectClasses={projectClasses}
+              assetContext={assetContext}
+              linkContext={linkContext}
+              dataContext={dataContext}
+              onChange={onChange}
+            />
+          );
+          // A prop the component's loop reads its filters, sort or picked items from
+          // is edited with the loop's own editor; Show and Skip are numbers.
+          const listProp = listProps?.get(field.name);
+          return listProp !== undefined && (listProp.setting === 'filter' || listProp.setting === 'sort' || listProp.setting === 'curated') ? (
+            <ListPropField
+              key={field.name}
+              name={field.name}
+              listProp={listProp}
+              value={value}
+              projectPath={projectPath}
+              fallback={plain}
+              onChange={onChange}
+            />
+          ) : (
+            plain
+          );
+        })}
     </>
   );
 }
 
 export function ElementExtraFields({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    onSetProp,
-    dataContext,
-    extraProps,
-    styleField,
-    assetContext,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, onSetProp, dataContext, extraProps, styleField, assetContext } = state;
   return (
     <>
       {extraProps
@@ -235,23 +252,17 @@ export function ElementExtraFields({ state }: { readonly state: ElementState }) 
 }
 
 export function ElementSettingsHeader({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
   const { settingsOpen, setSettingsOpen, hasSettings, settingsCount } = state;
   return (
     <>
       {hasSettings && (
         <div className={`props-group ${settingsOpen ? 'open' : ''}`}>
-          <button
-            type="button"
-            className="props-group-head"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            <span className="props-group-name">Settings</span>
+          <button type="button" className="props-group-head" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>
+            <span className="props-group-name">{translate('props.element.settings')}</span>
             {/* Something set in there is worth knowing about without opening
                   it — otherwise a class you gave the element looks lost. */}
-            {!settingsOpen && settingsCount > 0 && (
-              <span className="props-group-count">{settingsCount}</span>
-            )}
+            {!settingsOpen && settingsCount > 0 && <span className="props-group-count">{settingsCount}</span>}
             <ChevronRightIcon size={11} className="props-group-chevron" />
           </button>
         </div>
@@ -261,16 +272,7 @@ export function ElementSettingsHeader({ state }: { readonly state: ElementState 
 }
 
 export function ElementTag({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    layouts,
-    currentLayoutName,
-    tagOptions,
-    onChangeTag,
-    layoutTag,
-    changeToLayout,
-    showTagField,
-  } = state;
+  const { node, layouts, currentLayoutName, tagOptions, onChangeTag, layoutTag, changeToLayout, showTagField } = state;
   return (
     <>
       {showTagField && (
@@ -280,11 +282,7 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
           // local name the page imported it under — that name is a detail of
           // this page, while the file is what you're choosing between.
           tag={layoutTag ? currentLayoutName || node.name : node.name}
-          options={
-            layoutTag
-              ? layouts.map((option) => ({ name: option.name, kind: 'layout' }))
-              : tagOptions
-          }
+          options={layoutTag ? layouts.map((option) => ({ name: option.name, kind: 'layout' })) : tagOptions}
           onChangeTag={layoutTag ? changeToLayout : (name) => onChangeTag?.(name)}
         />
       )}
@@ -293,18 +291,8 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementClass({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    dataContext,
-    setPropCascading,
-    classField,
-    assetContext,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, classField, assetContext, onReplaceProps } =
+    state;
   return (
     <>
       {classField && (
@@ -319,6 +307,11 @@ export function ElementClass({ state }: { readonly state: ElementState }) {
           assetContext={assetContext}
           linkContext={linkContext}
           dataContext={dataContext}
+          classList={classListOfferOf(
+            { kind: node.kind, name: String(node.name), props: node.props },
+            bindContext?.newProp,
+            onReplaceProps === undefined ? undefined : (props) => onReplaceProps(node.id, props),
+          )}
           onChange={(next, immediate) => setPropCascading('class', next, immediate)}
         />
       )}
@@ -327,17 +320,7 @@ export function ElementClass({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementStyle({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    slotOptions,
-    projectClasses,
-    loopContext,
-    bindContext,
-    linkContext,
-    dataContext,
-    setPropCascading,
-    styleField,
-  } = state;
+  const { node, slotOptions, projectClasses, loopContext, bindContext, linkContext, dataContext, setPropCascading, styleField } = state;
   return (
     <>
       {styleField && (
@@ -372,7 +355,16 @@ export function ElementAttributes({ state }: { readonly state: ElementState }) {
     onRenameProp,
     projectPath,
     attrNames,
+    onReplaceProps,
+    onSetFrontmatter,
+    onRenameVariable,
+    schema,
+    attributesTag,
   } = state;
+  // An HTML element is checked against its tag and can be connected to the
+  // component's attributes prop; an instance's attributes would collide with
+  // the props its component declares.
+  const element = node.kind === 'element' && /^[a-z][a-z0-9-]*$/.test(String(node.name));
   return (
     <>
       {allowAttrs && (
@@ -380,6 +372,13 @@ export function ElementAttributes({ state }: { readonly state: ElementState }) {
           key="attrs"
           node={node}
           names={attrNames}
+          tag={element ? String(node.name) : undefined}
+          reservedNames={node.kind === 'component' ? schema.map((field) => field.name) : undefined}
+          passedTo={node.kind === 'component' ? attributesTag : undefined}
+          onRenameVariable={onRenameVariable}
+          onReplaceProps={onReplaceProps === undefined || !element ? undefined : (props) => onReplaceProps(node.id, props)}
+          onReplaceAttributes={onReplaceProps === undefined ? undefined : (props) => onReplaceProps(node.id, props)}
+          onSetFrontmatter={onSetFrontmatter}
           projectPath={projectPath}
           bindContext={bindContext || loopContext}
           onSetProp={onSetProp}
@@ -421,9 +420,7 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
           <ElementClass state={state} />
           <ElementStyle state={state} />
           <ElementAttributes state={state} />
-          {onSetComment && (node.kind === 'element' || node.kind === 'component') && (
-            <CommentField key="comment" value={comment} onCommit={onSetComment} />
-          )}
+          {onSetComment && (node.kind === 'element' || node.kind === 'component') && <CommentField key="comment" value={comment} onCommit={onSetComment} />}
           {/* `slot` is not a prop of this component — it tells the PARENT where to
             put it — so it sits apart from the component's own props, last of
             all, below even the comment. */}
@@ -434,7 +431,7 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
   );
 }
 
-export function elementOpenContentPicker(state: ElementState, host: Element | undefined): void {
+export function elementOpenContentPicker(state: ElementState, host: Element | undefined, focus: FieldFocus): void {
   if (state.contentPicker) {
     state.setContentPicker(undefined);
     return;
@@ -443,9 +440,39 @@ export function elementOpenContentPicker(state: ElementState, host: Element | un
   if (!rectangle) {
     return;
   }
-  state.setContentPicker({
-    left: rectangle.left,
-    top: Math.min(rectangle.bottom + 4, Math.max(60, window.innerHeight - 340)),
-    width: Math.max(rectangle.width, 240),
-  });
+  state.setContentPicker({ ...dataPickerPosition(rectangle), focus });
+}
+
+// A picked chip in the Content field: at the caret while the words are being
+// typed, the words around it kept; the whole of the content when the dot was
+// pressed from outside the field (fieldFocus.ts). A node's expression is
+// written with its braces — `{title}` — where an attribute's is not.
+export function elementPlaceContentChip(state: Pick<ElementState, 'contentInsertRef' | 'onSetInline'>, focus: FieldFocus, path: string): void {
+  assert(path.length > 0, 'A picked chip names a value');
+  switch (focus.kind) {
+    case 'focused': {
+      const insert = state.contentInsertRef.current;
+      assert(insert !== undefined, 'The Content field is mounted while its picker is open');
+      insert.insert(path);
+      return;
+    }
+    case 'unfocused':
+      state.onSetInline([{ kind: 'expr', value: `{${path}}` }]);
+      return;
+    default: {
+      const exhaustive: never = focus;
+      return exhaustive;
+    }
+  }
+}
+
+// The element's content as words, when it is only words; '' otherwise.
+function plainContent(children: ElementState['node']['children']): string {
+  const kids = children ?? [];
+  return kids.every((child) => child.kind === 'text')
+    ? kids
+        .map((child) => (child.kind === 'text' ? String(child.value ?? '') : ''))
+        .join('')
+        .trim()
+    : '';
 }

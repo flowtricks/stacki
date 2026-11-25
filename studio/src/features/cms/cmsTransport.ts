@@ -12,8 +12,14 @@ const mutations = new Set([
   'cms:assetRef',
   'content:writeEntry',
   'content:rename',
+  'content:remoteEdit',
 ]);
 function keyOf(operation: string, payload: unknown) {
+  // A content collection's reads and edits share one key: the versions a read
+  // returns are the ones the next edit is checked against.
+  if (operation === 'content:remoteRead' || operation === 'content:remoteEdit') {
+    return 'content:remote';
+  }
   const input = typeof payload === 'string' ? {} : record(payload);
   if (operation === 'cms:meta' || operation === 'cms:setMeta') {
     return 'meta';
@@ -44,9 +50,7 @@ async function performRequest(operation: string, payload: unknown, expectedData?
   if (Object.keys(incoming).length > 2000) {
     throw new Error('CMS version limit exceeded');
   }
-  const revision = Object.fromEntries(
-    Object.entries(incoming).map(([file, hash]) => [sourcePath(file), string(hash, 64)]),
-  );
+  const revision = Object.fromEntries(Object.entries(incoming).map(([file, hash]) => [sourcePath(file), string(hash, 64)]));
   if (operation === 'content:writeEntry') {
     const hash = revision[key];
     if (hash) {
@@ -91,8 +95,7 @@ export const cmsTransport = {
   listCms: invoke('cms:list'),
   readCms: invoke('cms:read'),
   cmsMeta: invoke('cms:meta'),
-  writeCms: (payload: unknown, expectedData?: unknown) =>
-    cmsRequest('cms:write', payload, expectedData),
+  writeCms: (payload: unknown, expectedData?: unknown) => cmsRequest('cms:write', payload, expectedData),
   createCms: invoke('cms:create'),
   setCmsMeta: invoke('cms:setMeta'),
   cmsUsage: invoke('cms:usage'),
@@ -100,9 +103,10 @@ export const cmsTransport = {
   cmsAssetRef: invoke('cms:assetRef'),
   contentCollections: invoke('content:collections'),
   contentEntries: invoke('content:entries'),
+  contentRemoteRead: invoke('content:remoteRead'),
+  contentRemoteEdit: invoke('content:remoteEdit'),
   contentTargets: invoke('content:targets'),
-  writeContentEntry: (payload: unknown, expected?: unknown) =>
-    cmsRequest('content:writeEntry', payload, expected),
+  writeContentEntry: (payload: unknown, expected?: unknown) => cmsRequest('content:writeEntry', payload, expected),
   validateContentEntry: invoke('content:validate'),
   contentRenamePlan: invoke('content:renamePlan'),
   renameContentEntry: invoke('content:rename'),

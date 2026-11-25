@@ -8,10 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { runStudioCommand } from '#dist/electron/project/studioCommand.js';
 import { createStudioProgress } from '#dist/electron/project/studioProgress.js';
-import {
-  STUDIO_LOG_CHARS_MAX,
-  type StudioInstallProgress,
-} from '#dist/shared/ipc/studioProgress.js';
+import { STUDIO_LOG_CHARS_MAX, type StudioInstallProgress } from '#dist/shared/ipc/studioProgress.js';
 
 setToolPathHome(os.homedir());
 const command = (script: string, timeoutMs = 2000) => ({
@@ -26,10 +23,7 @@ test('command streams stdout and stderr before resolving', async () => {
   const output: string[] = [];
   let complete = false;
   const result = await runStudioCommand(
-    command(
-      'process.stdout.write("Installing\\n");' +
-        'setTimeout(() => process.stderr.write("Checked\\n"), 120);',
-    ),
+    command('process.stdout.write("Installing\\n");' + 'setTimeout(() => process.stderr.write("Checked\\n"), 120);'),
     (chunk) => {
       assert.equal(complete, false);
       output.push(chunk);
@@ -42,12 +36,9 @@ test('command streams stdout and stderr before resolving', async () => {
 
 test('failed commands retain diagnostics and command time is bounded', async () => {
   let output = '';
-  const failed = await runStudioCommand(
-    command('process.stderr.write("Build failed\\n"); process.exitCode = 2;'),
-    (chunk) => {
-      output += chunk;
-    },
-  );
+  const failed = await runStudioCommand(command('process.stderr.write("Build failed\\n"); process.exitCode = 2;'), (chunk) => {
+    output += chunk;
+  });
   assert.equal(failed.ok, false);
   assert.match(output, /Build failed/);
   const timeout = await runStudioCommand(command('setTimeout(() => {}, 5000)', 100), () => {});
@@ -57,19 +48,13 @@ test('failed commands retain diagnostics and command time is bounded', async () 
 });
 
 test('excessive command output fails instead of buffering without a limit', async () => {
-  const result = await runStudioCommand(
-    command('process.stdout.write("x".repeat(3 * 1024 * 1024));'),
-    () => {},
-  );
+  const result = await runStudioCommand(command('process.stdout.write("x".repeat(3 * 1024 * 1024));'), () => {});
   assert.equal(result.ok, false);
 });
 
 test('progress batches bounded output, flushes on stages and stops after close', async () => {
   const snapshots: StudioInstallProgress[] = [];
-  const reporter = createStudioProgress(
-    { projectPath: '/site', requestId: 'test-install' },
-    (progress) => snapshots.push(progress),
-  );
+  const reporter = createStudioProgress({ projectPath: '/site', requestId: 'test-install' }, (progress) => snapshots.push(progress));
   reporter.update({ kind: 'stage', stage: 'dependencies' });
   reporter.update({ kind: 'output', text: '\u001b[32mInstalling\u001b[0m\n' });
   reporter.update({ kind: 'output', text: 'Packages\n' });

@@ -2,13 +2,15 @@
 // popover each opens, and the modal the grid settings open in
 // (GridSettings.tsx).
 
+import InfoHint from '../../ui/InfoHint';
 import { useState } from 'react';
-import Popup from '../../ui/Popup';
+import PanelSheet from './components/PanelSheet';
 import type { ReactNode } from 'react';
 import { GroupLabel } from './TypographySection';
 import { serializeTrackSize, trackLabel, type TrackSize } from './model/gridTemplate';
 import { type SetProp, type LabelProps, resolvedValue, CloseIcon } from './GridSettingsKit';
 import { TrackIcon, TrackSizeEditor, TrackPopover } from './TrackEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export interface TrackSectionProps {
   title: string;
@@ -22,6 +24,7 @@ export interface TrackSectionProps {
 // track: a single clickable row whose popup edits the value (grid-auto-columns/-rows).
 export function AutoSection({ title, prop, axis, setProp, labels }: TrackSectionProps) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = labels;
+  const translate = useTranslate();
   const current = resolvedValue(read, prop) || 'auto';
   const [open, setOpen] = useState(false);
   const [anchorElement, setAnchorElement] = useState<HTMLElement | undefined>(undefined);
@@ -46,7 +49,6 @@ export function AutoSection({ title, prop, axis, setProp, labels }: TrackSection
             onProvenance={onProvenance}
             onSelectSelector={onSelectSelector}
           />
-          <span className="embed-editor_grid-section-count">(0)</span>
         </span>
       </div>
       <div className="embed-editor_grid-track-list">
@@ -57,30 +59,20 @@ export function AutoSection({ title, prop, axis, setProp, labels }: TrackSection
               className="embed-editor_grid-track-main"
               onClick={(event) => {
                 setOpen((wasOpen) => !wasOpen);
-                setAnchorElement(
-                  event.currentTarget.closest<HTMLElement>('.embed-editor_grid-track-list') ??
-                    event.currentTarget,
-                );
+                setAnchorElement(event.currentTarget.closest<HTMLElement>('.embed-editor_grid-track-list') ?? event.currentTarget);
               }}
               disabled={busy}
             >
               <span className="embed-editor_grid-track-glyph" aria-hidden="true">
                 <TrackIcon track={current} axis={axis} />
               </span>
-              <span className="embed-editor_grid-track-label">{trackLabel(current)}</span>
+              <span className="embed-editor_grid-track-label">{trackLabel(current, translate)}</span>
             </button>
           </div>
         </div>
       </div>
       {open && anchorElement ? (
-        <AutoTrackPopover
-          anchorElement={anchorElement}
-          track={current}
-          axis={axis}
-          busy={busy}
-          onChange={setSize}
-          onClose={() => setOpen(false)}
-        />
+        <AutoTrackPopover anchorElement={anchorElement} track={current} axis={axis} busy={busy} onChange={setSize} onClose={() => setOpen(false)} />
       ) : undefined}
     </section>
   );
@@ -102,45 +94,41 @@ export function AutoTrackPopover({
   onChange: (size: TrackSize) => void;
   onClose: () => void;
 }) {
-  const note =
-    axis === 'column'
-      ? 'Define the sizing for all automatically created columns.'
-      : 'Define the sizing for all automatically created rows.';
+  const translate = useTranslate();
+  const note = axis === 'column' ? translate('style.gridAutoSection.noteColumns') : translate('style.gridAutoSection.noteRows');
   return (
     <TrackPopover anchorElement={anchorElement} onClose={onClose}>
       <TrackSizeEditor track={track} busy={busy} onChange={onChange} />
-      <div className="embed-editor_grid-popover-note">{note}</div>
-      <button type="button" className="embed-editor_grid-popover-ok" onClick={onClose}>
-        Ok, got it
-      </button>
+      {/* The explanation is the (i) beside the button, so the popover is as tall as its controls. */}
+      <div className="embed-editor_grid-popover-actions">
+        <button type="button" className="embed-editor_grid-popover-ok" onClick={onClose}>
+          {translate('style.gridAutoSection.okGotIt')}
+        </button>
+        <InfoHint text={note} />
+      </div>
     </TrackPopover>
   );
 }
 
 export function Modal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <Popup
+    <PanelSheet
       className="style-panel-surface embed-editor_grid-modal u-surface-surface"
-
-      label="Grid settings"
+      label={translate('style.gridAutoSection.gridSettings')}
       onClose={onClose}
     >
       {({ close }) => (
         <>
-          <div className="embed-editor_grid-modal-head">
-            <span className="embed-editor_grid-modal-title">Grid settings</span>
-            <button
-              type="button"
-              className="embed-editor_bg-modal-close"
-              onClick={close}
-              aria-label="Close"
-            >
+          <div className="embed-editor_grid-modal-head" data-floating-drag-handle="">
+            <span className="embed-editor_grid-modal-title">{translate('style.gridAutoSection.gridSettings')}</span>
+            <button type="button" className="embed-editor_bg-modal-close" onClick={close} aria-label={translate('ui.close')}>
               <CloseIcon />
             </button>
           </div>
           <div className="embed-editor_grid-modal-body">{children}</div>
         </>
       )}
-    </Popup>
+    </PanelSheet>
   );
 }

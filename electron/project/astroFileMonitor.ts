@@ -1,18 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  ASTRO_FILES_MAX,
-  diffAstroFiles,
-  type AstroFileChange,
-} from '../../shared/properties/astroFileChanges';
+import { ASTRO_FILES_MAX, diffAstroFiles, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import type { Result } from '../../shared/core/result';
 
 // A settled inventory distinguishes creation/deletion from an editor's atomic replacement.
 // Initial contents establish a silent baseline; unreadable scans never imply mass deletion.
-export function createAstroFileMonitor(
-  root: string,
-  report: (changes: readonly AstroFileChange[]) => void,
-) {
+export function createAstroFileMonitor(root: string, report: (changes: readonly AstroFileChange[]) => void) {
   const initial = readAstroFiles(root);
   let previous = initial.ok ? initial.value : undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -54,12 +47,14 @@ function readAstroFiles(root: string): Result<ReadonlySet<string>, string> {
     for (let index = 0; index < directories.length; index++) {
       const directory = directories[index];
       if (directory === undefined) {
+        // i18n-ignore: programmer diagnostic thrown by the file monitor; never shown to a person.
         return { ok: false, error: 'Missing scan directory' };
       }
       const absolute = path.join(root, directory);
       const entries = readAstroDirectory(absolute);
       entriesCount += entries.length;
       if (entriesCount > ASTRO_FILES_MAX) {
+        // i18n-ignore: programmer diagnostic thrown by the file monitor; never shown to a person.
         return { ok: false, error: 'Project file notification scan exceeds limit' };
       }
       for (const entry of entries) {

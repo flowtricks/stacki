@@ -10,11 +10,7 @@ import { assert } from '#dist/shared/core/assert.js';
 import { toDigest, type Digest, type FilePath } from '#dist/shared/core/brand.js';
 import { parsePageResult } from '#dist/shared/page/pageNode.js';
 import { createSnapshot, type Snapshot } from '#dist/shared/page/snapshot.js';
-import {
-  projectOpaqueDocument,
-  projectPage,
-  type Projection,
-} from '#dist/shared/page/sourceProjection.js';
+import { projectOpaqueDocument, projectPage, type Projection } from '#dist/shared/page/sourceProjection.js';
 import { decodeUtf8, type ByteString } from '#dist/shared/core/span.js';
 
 export function sha256(bytes: ByteString): Digest {

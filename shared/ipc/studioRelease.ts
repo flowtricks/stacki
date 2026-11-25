@@ -1,7 +1,9 @@
 import { record, string } from './studioValidation';
 
 export const RELEASE_BYTES_MAX = 32_000_000;
-export const RELEASE_FILES_MAX = 1500;
+// 1.1.0's Studio carries about 1,700 files once the shared Desktop sources it vendors are
+// counted; 3,000 leaves room to grow while the 32 MB byte bound still caps the release.
+export const RELEASE_FILES_MAX = 3000;
 export interface StudioRelease {
   readonly format: 1;
   readonly version: string;
@@ -31,10 +33,7 @@ export function isNewerRelease(candidate: string, current: string): boolean {
 }
 export function retainedPath(file: string): boolean {
   const first = file.split('/')[0] ?? '';
-  return (
-    ['.studio', '.wrangler', 'cloudflare', '.studio-state'].includes(first) ||
-    /^\.(env|dev\.vars)(\.|$)/.test(first)
-  );
+  return ['.studio', '.wrangler', 'cloudflare', '.studio-state'].includes(first) || /^\.(env|dev\.vars)(\.|$)/.test(first);
 }
 export function releasePath(value: unknown): string {
   const file = string(value, 500);
@@ -62,12 +61,7 @@ export function releasePath(value: unknown): string {
 }
 export function parseRelease(input: unknown): StudioRelease {
   const value = record(input);
-  if (
-    value['format'] !== 1 ||
-    !Array.isArray(value['files']) ||
-    value['files'].length === 0 ||
-    value['files'].length > RELEASE_FILES_MAX
-  ) {
+  if (value['format'] !== 1 || !Array.isArray(value['files']) || value['files'].length === 0 || value['files'].length > RELEASE_FILES_MAX) {
     throw new Error('Unsupported Studio release');
   }
   const version = releaseVersion(value['version']);
@@ -87,14 +81,7 @@ export function parseRelease(input: unknown): StudioRelease {
     }
     return { path: name, content };
   });
-  for (const required of [
-    'package.json',
-    'package-lock.json',
-    'Dockerfile',
-    'scripts/build.ts',
-    'src/shared/release.json',
-    'vendor/stacki/LICENSE',
-  ]) {
+  for (const required of ['package.json', 'package-lock.json', 'Dockerfile', 'scripts/build.ts', 'src/shared/release.json', 'vendor/stacki/LICENSE']) {
     if (!names.has(required.toLowerCase())) {
       throw new Error('Incomplete Studio release');
     }

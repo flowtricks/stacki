@@ -1,8 +1,10 @@
-// Goal: Keep the CMS panel useful when its current view contains no collections.
+// Goal: Keep the CMS panel useful when its current view contains no collections: the
+// project's content collections are always offered, and + still creates a collection.
 // Methodology: Mount with in-memory inventories, including collections hidden in
-// another Astro file, and exercise the empty state's creation and cancel controls.
+// another Astro file, and exercise the creation and cancel controls.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildSync } = require('esbuild');
@@ -64,21 +66,24 @@ async function mountPanel(files, collections = []) {
   return root;
 }
 
-test('empty and hidden collections offer creation and restore it on cancel', async () => {
+test('a panel with no collections offers content collections and creation', async () => {
   for (const files of [[], [hiddenCollection]]) {
     const root = await mountPanel(files);
     try {
-      assert.match(document.querySelector('.props-empty').textContent, /No collections to show/);
-      assert.equal(document.querySelectorAll('.cms-collection').length, 0);
-      await act(async () => document.querySelector('.props-empty button').click());
-      assert.ok(document.querySelector('.props-empty') === null);
+      const rows = [...document.querySelectorAll('.cms-collection')];
+      assert.deepEqual(
+        rows.map((row) => row.textContent),
+        ['Content Collections'],
+        'the content collections row is always there; a hidden file collection is not',
+      );
+      await act(async () => document.querySelector('button[title="New collection"]').click());
       const input = document.querySelector('input[placeholder="Collection name"]');
-      assert.equal(document.activeElement, input);
+      assertSameElement(document.activeElement, input);
       await act(async () => {
         input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
-      assert.ok(document.querySelector('.props-empty'));
       assert.ok(document.querySelector('input') === null);
+      assert.equal(document.querySelectorAll('.cms-collection').length, 1);
     } finally {
       await act(async () => root.unmount());
     }
@@ -103,4 +108,34 @@ test('visible file and content collections suppress the empty state', async () =
       await act(async () => root.unmount());
     }
   }
+});
+
+test('CMS reopens from cache and reports refresh failures', async () => {
+  const root = await mountPanel([{ ...hiddenCollection, dir: 'data', rel: 'data/posts.json' }]);
+  await act(async () => root.render(undefined));
+  let rejectRead;
+  window.avb.listCms = () =>
+    new Promise((resolve, reject) => {
+      rejectRead = reject;
+    });
+  await act(async () =>
+    root.render(
+      React.createElement(CmsPanel, {
+        project: { path: '/project' },
+        currentFile: 'pages/index.astro',
+        refreshKey: 0,
+        onSelect() {},
+        onSelectContent() {},
+        onOpenSettings() {},
+        showToast() {},
+      }),
+    ),
+  );
+  assert.ok(document.querySelector('.cms-collection'), 'Previous collections render before the read');
+  assert.doesNotMatch(document.body.textContent, /Loading collections|No collections to show/);
+  await act(async () => rejectRead(new Error('CMS unavailable')));
+  assert.match(document.body.textContent, /CMS unavailable/);
+  assert.doesNotMatch(document.body.textContent, /No collections to show/);
+  assert.equal(document.querySelector('[role="alert"] button').textContent, 'Retry');
+  await act(async () => root.unmount());
 });

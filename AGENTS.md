@@ -62,13 +62,13 @@ it.
 `eslint.config.mjs` is the source of truth; a copy here would drift from it.
 It holds, at minimum: `no-explicit-any`, the `no-unsafe-*` family, a ban on
 type-assertion syntax outside validated constructors, `prefer-readonly`,
-`switch-exhaustiveness-check`, `curly: all`, and `max-lines-per-function: 70`.
+`switch-exhaustiveness-check`, and `curly: all`.
 The rules below that stock ESLint cannot express live in the local plugin,
 `scripts/eslintPlugin/`.
 
-Formatting: Prettier with `printWidth: 100`. **100 columns is a hard limit,
-without exception** — nothing may hide behind a horizontal scrollbar. Use the
-full width; never go beyond.
+Formatting: Prettier with `printWidth: 160`. Prettier wraps what it can; a line it
+cannot wrap (a long string, URL or comment) may run past 160 columns. No check
+holds line width, function length or file length.
 
 ## Enforcement
 
@@ -81,8 +81,13 @@ the rules that remain for review.
   file before you finish. Fix what they report; do not work around them.
 - `npm run check:changed` runs the finish check by hand. Run it before you
   say you are done.
+- `npm run check:local` runs fast repository-wide checks before `npm run dev`.
+  All Desktop compiler targets and test source paths also run at agent finish,
+  because config changes and deleted files can break unchanged callers.
 - Git hooks check staged files, commit messages, and pushes. Never skip them
   (`--no-verify`); the agent hooks refuse it, and CI runs the same checks.
+- Pushes run the full clean-build and regression gate locally so passing
+  TypeScript alone cannot send a known test failure to GitHub.
 - The files that define the gates (this file, lint and compiler configs,
   `scripts/{eslintPlugin,policy,agent}/`, hook configs, `shared/core/limits.ts`)
   change only with a human's approval.
@@ -345,11 +350,10 @@ fast, near their cause.
 
 ### 11. Function shape and control flow
 
-There is a sharp discontinuity between a function that fits on a screen and one
-you must scroll through. Art is born of constraints.
+A function that fits on a screen is easier to read than one you must scroll
+through, but length is a judgement, not a rule: no check counts lines.
 
-- **Hard limit: 70 lines per function** (enforced by lint). When splitting,
-  don't chop arbitrarily — divide by responsibility:
+- **When a function grows long, split it by responsibility**, not arbitrarily:
   - **Centralize control flow.** Push `if`s up and `for`s down: the parent
     function keeps the `switch`/`if` branching and owns the state; helpers
     contain non-branchy logic and stay pure. All control flow is handled by one
@@ -550,6 +554,10 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - Where a state machine exists, property-based tests (e.g. fast-check) hunt the
   transitions you didn't think of. A fuzzer proves the presence of bugs, never
   their absence — the mental model and its assertions come first.
+- When a GitHub release or publishing workflow fails, reproduce the cause locally and add or
+  improve a regression test whenever possible before pushing again. This prevents the same
+  failure from recurring only in GitHub. Follow [publishing failure handling](docs/releases.md).
+  If local reproduction is impractical, document why and the verification that remains remote.
 
 ## Definition of done (checklist)
 
@@ -564,7 +572,7 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - [ ] Invariants are asserted: preconditions, postconditions, pairs on both
       sides of storage; ~2 assertions per function in core logic
 - [ ] Every loop, queue, retry, and collection has a stated upper bound
-- [ ] No function exceeds 70 lines; control flow is centralized, helpers pure
+- [ ] Control flow is centralized, helpers pure
 - [ ] Conditions are simple and positive; every `if` has its `else` handled or
       asserted
 - [ ] Names are unabbreviated; units and qualifiers last; one name, one meaning
@@ -572,6 +580,29 @@ ESLint, production builds, contract tests, and the complete regression suite.
       methodology
 - [ ] New dependencies carry a written justification
 - [ ] `npm run check:changed` passes (`tsc`, ESLint, Prettier, policy scan)
+
+## Code display
+
+Anywhere the UI shows code, it is syntax highlighted: read-only through `CodeBlock` or
+`CodeInline` (`src/ui/CodeBlock.tsx`), editable through a CodeMirror editor. Shell commands
+are code; logs and a name in a sentence are not.
+
+## Dropdowns
+
+A choice from a list is always the custom dropdown, `Dropdown` (`src/ui/Dropdown.tsx`),
+never a native `<select>`, in Desktop, Studio and the demo alike. Why: a native select draws
+the operating system's menu, which cannot be styled or themed, so it looks and behaves unlike
+every other menu; one component keeps the look, the keyboard and the check at the end of the
+row the same everywhere. `stacki/no-native-select` rejects `<select>` and `createElement('select')`.
+
+## Scroll containers
+
+Every element with `overflow` `auto`, `scroll` or `overlay` declares `scrollbar-gutter: stable`
+in the same rule (`scrollbarGutter: 'stable'` in a style object). Never as a universal `*` rule:
+it also narrows `overflow: hidden` boxes. Exceptions go in `test/helpers/scrollGutterAllowlist.json`
+with a reason (`docs/scroll-gutter.md`). Why: content jumping sideways when a scrollbar enters or
+leaves reads as a bug; one declared rule per container keeps the layout stable everywhere.
+`test/renderer/ui/scrollGutter.test.ts` rejects a scroll container without it.
 
 ## Project editor metadata
 

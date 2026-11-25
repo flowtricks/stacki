@@ -2,13 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePage } from '../src/features/source/source';
 import { parsePageModel } from '../vendor/stacki/shared/page/pageNode';
-import {
-  sourceRangeForSelection,
-  sourceNodeAtOffset,
-} from '../vendor/stacki/src/features/code/codePanelModel';
+import { sourceRangeForSelection, sourceNodeAtOffset } from '../vendor/stacki/src/features/code/codePanelModel';
 
-const source =
-  '---\r\nconst title = "🌱";\r\n---\r\n<main>\r\n  <Heading tag="h1">Hello 🌱</Heading>\r\n</main>\r\n';
+const source = '---\r\nconst title = "🌱";\r\n---\r\n<main>\r\n  <Heading tag="h1">Hello 🌱</Heading>\r\n</main>\r\n';
 
 test('located Studio models retain exact code ranges, including CRLF and Unicode', () => {
   const parsed = parsePage(source, { locs: true });

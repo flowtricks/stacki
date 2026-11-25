@@ -36,22 +36,15 @@ const NON_PROPERTIES = new Set([
 // prefixes (`-moz-`/`-ms-`/`-o-`/`-epub-`/`-internal-`/…) are dropped as noise — the
 // standard property name already covers those. Sorted + de-duped once at load.
 export const CSS_PROPERTIES: readonly string[] = Object.freeze(
-  [
-    ...new Set(
-      all.filter(
-        (prop) =>
-          !prop.startsWith('--') &&
-          !NON_PROPERTIES.has(prop) &&
-          (!prop.startsWith('-') || prop.startsWith('-webkit-')),
-      ),
-    ),
-  ].sort((left, right) => {
-    // Standard properties first (a leading `-` otherwise sorts the 260+ `-webkit-` names
-    // to the very top, burying accent-color/align-*); alphabetical within each group.
-    const av = left.startsWith('-') ? 1 : 0;
-    const bv = right.startsWith('-') ? 1 : 0;
-    return av - bv || left.localeCompare(right);
-  }),
+  [...new Set(all.filter((prop) => !prop.startsWith('--') && !NON_PROPERTIES.has(prop) && (!prop.startsWith('-') || prop.startsWith('-webkit-'))))].sort(
+    (left, right) => {
+      // Standard properties first (a leading `-` otherwise sorts the 260+ `-webkit-` names
+      // to the very top, burying accent-color/align-*); alphabetical within each group.
+      const av = left.startsWith('-') ? 1 : 0;
+      const bv = right.startsWith('-') ? 1 : 0;
+      return av - bv || left.localeCompare(right);
+    },
+  ),
 );
 
 // Filter the property list for a typed query: prefix matches first (they're what you
@@ -65,10 +58,7 @@ export const CSS_PROPERTIES: readonly string[] = Object.freeze(
 // starts with a dash: `-webkit-align-content` is a fine suggestion for someone
 // who typed `-webkit`, and a strange one for someone halfway through the name
 // of a variable they wrote themselves.
-export function filterCssProperties(
-  query: string,
-  custom: readonly string[] = [],
-): readonly string[] {
+export function filterCssProperties(query: string, custom: readonly string[] = []): readonly string[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
     return custom.length ? [...custom, ...CSS_PROPERTIES] : CSS_PROPERTIES;
@@ -94,9 +84,7 @@ export function filterCssProperties(
       substring.push(prop);
     }
   }
-  return dashed
-    ? [...customPrefix, ...prefix, ...customSubstring, ...substring]
-    : [...prefix, ...customPrefix, ...substring, ...customSubstring];
+  return dashed ? [...customPrefix, ...prefix, ...customSubstring, ...substring] : [...prefix, ...customPrefix, ...substring, ...customSubstring];
 }
 
 // ── Values a property cannot take ────────────────────────────────────────────

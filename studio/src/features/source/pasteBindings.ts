@@ -11,9 +11,7 @@ interface Binding {
 export function carriedBindings(source: string, destination: string, names: ReadonlySet<string>) {
   const bindings = readBindings(source);
   const existing = new Set(readBindings(destination).flatMap((binding) => binding.names));
-  const byName = new Map(
-    bindings.flatMap((binding) => binding.names.map((name) => [name, binding] as const)),
-  );
+  const byName = new Map(bindings.flatMap((binding) => binding.names.map((name) => [name, binding] as const)));
   const needed = new Set<Binding>();
   const queue = [...names];
   const visited = new Set<string>();
@@ -28,9 +26,7 @@ export function carriedBindings(source: string, destination: string, names: Read
       continue;
     }
     if (binding.names.some((declared) => existing.has(declared))) {
-      throw new Error(
-        `The copied declaration also defines an existing page binding: ${binding.names.join(', ')}`,
-      );
+      throw new Error(`The copied declaration also defines an existing page binding: ${binding.names.join(', ')}`);
     }
     needed.add(binding);
     queue.push(...binding.dependencies);
@@ -39,20 +35,13 @@ export function carriedBindings(source: string, destination: string, names: Read
 }
 
 function bindingNames(name: ts.BindingName): string[] {
-  return ts.isIdentifier(name)
-    ? [name.text]
-    : name.elements.flatMap((element) =>
-        ts.isOmittedExpression(element) ? [] : bindingNames(element.name),
-      );
+  return ts.isIdentifier(name) ? [name.text] : name.elements.flatMap((element) => (ts.isOmittedExpression(element) ? [] : bindingNames(element.name)));
 }
 
 function references(node: ts.Node) {
   const names = new Set<string>();
   const visit = (child: ts.Node) => {
-    if (
-      ts.isIdentifier(child) &&
-      !(ts.isPropertyAccessExpression(child.parent) && child.parent.name === child)
-    ) {
+    if (ts.isIdentifier(child) && !(ts.isPropertyAccessExpression(child.parent) && child.parent.name === child)) {
       names.add(child.text);
     }
     ts.forEachChild(child, visit);
@@ -69,12 +58,7 @@ function readBindings(source: string): Binding[] {
       bindings.push(...importBindings(statement, file));
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        const prefix =
-          statement.declarationList.flags & ts.NodeFlags.Const
-            ? 'const'
-            : statement.declarationList.flags & ts.NodeFlags.Let
-              ? 'let'
-              : 'var';
+        const prefix = statement.declarationList.flags & ts.NodeFlags.Const ? 'const' : statement.declarationList.flags & ts.NodeFlags.Let ? 'let' : 'var';
         bindings.push({
           names: bindingNames(declaration.name),
           statement: `${prefix} ${declaration.getText(file)};`,

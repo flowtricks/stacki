@@ -3,7 +3,7 @@
   align-items: center;
   flex-shrink: 0;
   gap: 0.5rem;
-  padding-right: 0.75rem;
+
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
@@ -11,11 +11,6 @@
   flex: 1;
   min-width: 0;
   border-bottom: 0;
-}
-.studio-cursor-chat {
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-size: 0.6875rem;
 }
 .preview-frame-wrap[data-preview-loading='true'] > .frame-sized,
 .preview-frame-wrap[data-preview-loading='true'] > .canvas-view {
@@ -56,17 +51,9 @@
 }
 
 @media (max-width: 700px) {
-  .studio-preview-toolbar {
-    min-height: 44px;
+  .studio-preview-toolbar > .preview-toolbar {
+    min-height: 48px;
     gap: 4px;
     padding: 0 6px;
-  }
-  .studio-preview-toolbar > .preview-toolbar {
-    gap: 0;
-    padding: 0 4px;
-  }
-  .studio-preview-toolbar .crumbs,
-  .studio-preview-toolbar .preview-size-controls {
-    display: none;
   }
 }

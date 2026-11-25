@@ -1,67 +1,71 @@
 // A prop field's label row: its pill, its menu, the picker it opens, and the
 // reset menu (PropField.tsx).
 
-import React, { useEffect, useRef } from 'react';
-import { partsFromValue, valueFromParts } from '../../editor/bindings';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import React, { useRef, useState } from 'react';
+import { dataPickerPosition } from './dataPickerPosition';
+import { ResetMenu } from '../../ui/ResetLabel';
+import { valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
-import {
-  ResetIcon,
-  FieldNumberIcon,
-  ComponentPropertiesIcon,
-  FieldSwitchIcon,
-  BracesIcon,
-  CodeIcon,
-  ElementSlotIcon,
-  VariableTextSizeIcon,
-  CornerIcon,
-} from '../../ui/Icons';
-import { type ResetMenuProps, controlWord, type PropState } from './propFieldModel';
+import { BracesIcon } from '../../ui/Icons';
+import { FieldTypeIcon } from './FieldTypeIcon';
+import { controlLabel, type PropState } from './propFieldModel';
+import { defaultForConnectedValue, fitOfFieldType, type NewPropSeed } from './newPropModel';
+import { fieldTooltip } from '../../editor/propDocumentation';
+import { isMediaName } from '../../editor/fieldNames';
+import { arrayItems } from './arrayValue';
+import { itemShapeOf } from './listItemShape';
+import { ConditionalEditor, useConditionCatalog } from './ConditionalValue';
+import { startingConditional, valueLanguageOf } from './conditionalModel';
 
-export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) =>
-  event.preventDefault();
+export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
-  const { name, type, isSet, showExpr, onLabelClick } = state;
+  const translate = useTranslate();
+  const { name, type, isSet, showExpr, onLabelClick, onLabelContextMenu, required, missingRequired, deprecated } = state;
+  // Set is the overridden state: the label takes the accent, as a value the
+  // instance gives rather than the component's default.
+  const classes = ['prop-label', ...(isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
 
   return (
     <span
-      className={`prop-label${isSet ? ' set' : ''}`}
-      title={isSet ? '⌥-click to reset to default' : showExpr ? 'Click for options' : undefined}
+      className={classes.join(' ')}
+      title={isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined}
       onClick={onLabelClick}
+      onContextMenu={onLabelContextMenu}
     >
-      {type === 'number' && <FieldNumberIcon size={12} className="prop-label-icon" />}
-      {type === 'boolean' && <FieldSwitchIcon size={12} className="prop-label-icon" />}
-      {type === 'enum' && <ComponentPropertiesIcon size={12} className="prop-label-icon" />}
-      {type === 'attrs' && <BracesIcon size={12} className="prop-label-icon" />}
-      {(type === 'code' || type === 'style') && <CodeIcon size={12} className="prop-label-icon" />}
-      {(type === 'slot' || name === 'slot') && (
-        <ElementSlotIcon size={12} className="prop-label-icon" />
-      )}
-      {(type === 'string' || type === 'other') && name !== 'slot' && (
-        <VariableTextSizeIcon size={12} className="prop-label-icon" />
-      )}
+      <FieldTypeIcon type={type} name={name} />
       {name}
+      {required && (
+        <span
+          className={`prop-required${missingRequired ? ' missing' : ''}`}
+          role="img"
+          aria-label={missingRequired ? translate('props.field.requiredNotSet') : translate('props.sections.required')}
+          title={missingRequired ? translate('props.field.requiredNeeds') : translate('props.sections.required')}
+        />
+      )}
     </span>
   );
 }
+
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
-  const { field, menuPosition, setMenuPosition, showExpr, reset, fromCustom } = state;
+  const { menuPosition, setMenuPosition, reset, resetRefusal } = state;
 
   return (
     menuPosition && (
       <ResetMenu
         position={menuPosition}
         onReset={reset}
-        // Only while the field is showing a value instead of its own control —
-        // it is the way back, and there is nothing to go back FROM otherwise.
-        {...(showExpr ? { onUnbind: fromCustom } : {})}
-        unbindLabel={`Use the ${controlWord(field)}`}
+        // The way back to the control is the {} button, one click; this menu only resets.
+        unbindLabel=""
+        resetDisabledReason={resetRefusal}
         onClose={() => setMenuPosition(undefined)}
       />
     )
   );
 }
 export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
+  const translate = useTranslate();
   const {
     field,
 
@@ -72,6 +76,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
     showExpr,
     reason,
     fromCustom,
+    normalBlockedText,
   } = state;
   const pill = <PropFieldPill state={state} />;
   const menu = <PropFieldMenu state={state} />;
@@ -80,10 +85,18 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}
-      <PropTip {...(field.doc === undefined ? {} : { text: field.doc })} />
+      <PropTip text={fieldTooltip(field.doc, state.deprecated, translate)} />
+      {state.deprecated !== undefined && (
+        <span
+          className="prop-deprecated"
+          title={state.deprecated === '' ? translate('props.field.deprecated') : translate('props.field.deprecatedNote', { note: state.deprecated })}
+        >
+          {translate('props.field.deprecated')}
+        </span>
+      )}
       {reason && (
         <span className="prop-inert" title={reason}>
-          ignored
+          {translate('props.field.ignored')}
         </span>
       )}
       {/* The way between the field's own control and an expression, both ways,
@@ -95,9 +108,10 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
         <button
           type="button"
           className={`prop-expr-toggle${showExpr ? ' on' : ''}`}
-          title={showExpr ? `Use the ${controlWord(field)}` : 'Write an expression'}
+          title={showExpr ? (normalBlockedText ?? controlLabel(field, translate)) : translate('props.field.writeExpression')}
+          aria-disabled={showExpr && normalBlockedText !== undefined}
           aria-pressed={showExpr}
-          aria-label="Write an expression"
+          aria-label={translate('props.field.writeExpression')}
           onClick={() => (showExpr ? fromCustom() : setCustom(true))}
         >
           <BracesIcon size={12} />
@@ -106,7 +120,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {bindable && (
         <BindHandle
           active={!!insertAt}
-          onOpen={(host) => {
+          onOpen={(host, focus) => {
             if (insertAt) {
               setInsertAt(undefined);
               return;
@@ -115,11 +129,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
             if (!bounds) {
               return;
             }
-            setInsertAt({
-              left: bounds.left,
-              top: Math.min(bounds.bottom + 4, Math.max(60, window.innerHeight - 340)),
-              width: Math.max(bounds.width, 240),
-            });
+            setInsertAt({ ...dataPickerPosition(bounds), focus });
           }}
         />
       )}
@@ -128,103 +138,98 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
   );
 }
 export function PropFieldPicker({ state }: { readonly state: PropState }) {
-  const {
-    field,
-    value,
-    bindContext,
-    onChange,
-    type,
-    setCustom,
-    insertAt,
-    setInsertAt,
-    bindApiRef,
-  } = state;
+  const { field, value, bindContext, onChange, type, setCustom, insertAt, setInsertAt, bindApiRef } = state;
+  // The Value conditions editor, opened from the picker's "Create conditional"
+  // and placed under the label row this sits beside.
+  const [conditional, setConditional] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const catalog = useConditionCatalog(bindContext);
+  const seed = seedOf(field, value, importsText(state.dataContext));
+  // Words only: a branch gives text or a prop, which a number or a switch field cannot hold as typed.
+  const wordy = seed?.fit === 'text' || seed?.fit === 'content';
+  const start = bindContext?.newProp !== undefined && wordy ? startingConditional(value, catalog) : undefined;
 
   return (
-    insertAt && (
-      <FieldDataPicker
-        pos={insertAt}
-        bindContext={bindContext}
-        onPick={(path) => {
-          setInsertAt(undefined);
-          // Into the value field's caret when there is one — so a chip can land
-          // beside text already typed. Otherwise this is the field's first
-          // binding, and choosing one is what turns the control into a value.
-          if (bindApiRef.current?.insert) {
-            bindApiRef.current.insert(path);
-            return;
+    <>
+      {/* Only while the editor is open, so the field's layout is untouched otherwise. */}
+      {conditional && <span ref={anchorRef} className="conditional-anchor" />}
+      {conditional && start !== undefined && (
+        <ConditionalEditor
+          anchorRef={anchorRef}
+          start={start}
+          model={undefined}
+          value={value}
+          bindContext={bindContext}
+          language={valueLanguageOf(type === 'style' ? 'style' : field.name)}
+          shapes="rich"
+          onApply={(next) => onChange(next, true)}
+          onClose={() => setConditional(false)}
+        />
+      )}
+      {insertAt && (
+        <FieldDataPicker
+          pos={insertAt}
+          bindContext={bindContext}
+          seed={seed}
+          classList={state.classList}
+          // A prop made for this field is the whole of its value, as a builder binds one.
+          onBindNew={(path) => {
+            setInsertAt(undefined);
+            setCustom(true);
+            const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
+            onChange(valueFromParts([{ expr: path }], { numeric }), true);
+          }}
+          onPick={(path) => {
+            setInsertAt(undefined);
+            // Into the value field's caret while it is being typed — so a chip
+            // lands beside the words around it (fieldFocus.ts).
+            if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
+              bindApiRef.current.insert(path);
+              return;
+            }
+            // The dot pressed outside the field connects the whole of it, as the
+            // Content field's does: the chip is the value, and choosing one is
+            // what turns a control into a value.
+            setCustom(true);
+            const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
+            onChange(valueFromParts([{ expr: path }], { numeric }), true);
+          }}
+          onConditional={
+            start === undefined
+              ? undefined
+              : () => {
+                  setInsertAt(undefined);
+                  setConditional(true);
+                }
           }
-          setCustom(true);
-          // Text already typed is kept and the chip goes after it — inserting
-          // data into "Read more about " should not throw the sentence away. A
-          // control's value can't be joined to anything (`true` and a binding is
-          // not a value), so those are replaced.
-          const numeric = !!(
-            type === 'number' ||
-            type === 'boolean' ||
-            (type === 'enum' && field.numeric)
-          );
-          const keep = numeric || type === 'enum' ? undefined : partsFromValue(value);
-          const next = keep?.length ? [...keep, { expr: path }] : [{ expr: path }];
-          onChange(valueFromParts(next, { numeric }), true);
-        }}
-        onClose={() => setInsertAt(undefined)}
-      />
-    )
+          onClose={() => setInsertAt(undefined)}
+        />
+      )}
+    </>
   );
 }
 
-export function ResetMenu({ position, onReset, onUnbind, unbindLabel, onClose }: ResetMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
+// What a new prop for this field starts from: its kind, its name and its value.
+// A media field (an <img> src, an image prop) offers an Image prop, and says
+// whether it takes an imported image's URL (typed string) or the image itself.
+// A list field of a child component offers a List prop with its items' fields,
+// starting from the items it holds.
+// The file's code the imports are read from, as the asset display reads it (assetImportOf).
+function importsText(context: PropState['dataContext']): string {
+  const imports = context?.imports;
+  return typeof imports === 'string' ? imports : (context?.frontmatter ?? '');
+}
 
-  useEffect(() => {
-    const onDown = (event: MouseEvent) => {
-      if (
-        ref.current &&
-        !(event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
-        onClose();
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const onScroll = (event: Event) => {
-      if (
-        ref.current &&
-        event.target instanceof window.Node &&
-        ref.current.contains(event.target)
-      ) {
-        return;
-      }
-      onClose();
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose]);
-
-  return (
-    <div ref={ref} className="prop-menu" style={{ left: position.left, top: position.top }}>
-      {onUnbind && (
-        <div className="prop-menu-item" onClick={onUnbind}>
-          <CornerIcon size={12} />
-          {unbindLabel}
-        </div>
-      )}
-      <div className="prop-menu-item" onClick={onReset}>
-        <ResetIcon size={12} />
-        Reset to default property value
-      </div>
-    </div>
-  );
+function seedOf(field: PropState['field'], value: PropState['value'], frontmatter: string): NewPropSeed | undefined {
+  const list = field.shapeIsList === true;
+  const fit = fitOfFieldType(field.type, { numeric: field.numeric, media: isMediaName(field.name), list });
+  if (fit === undefined) {
+    return undefined;
+  }
+  const reference = field.type === 'string' ? 'url' : 'module';
+  if (fit === 'list') {
+    const items = value?.type === 'expr' && arrayItems(value.value) !== undefined ? value.value : '';
+    return { fit, label: field.name, value: items, reference, itemFields: itemShapeOf(field.shape) };
+  }
+  return { fit, label: field.name, value: defaultForConnectedValue(value, fit, frontmatter), reference };
 }

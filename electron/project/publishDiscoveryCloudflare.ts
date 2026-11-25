@@ -21,18 +21,13 @@ export async function cloudflareAccounts(root: string): Promise<readonly Publish
   });
 }
 
-export async function cloudflareProjects(
-  root: string,
-  account: string,
-): Promise<readonly PublishProject[]> {
+export async function cloudflareProjects(root: string, account: string): Promise<readonly PublishProject[]> {
   const credentials = record(await discoveryCommand(root, 'wrangler', ['auth', 'token', '--json']));
   const headers = cloudflareHeaders(credentials);
   const projects: PublishProject[] = [];
   for (let page = 1; page <= PROJECT_PAGES_MAX; page++) {
     const endpoint = `https://api.cloudflare.com/client/v4/accounts/${account}/pages/projects`;
-    const result = record(
-      await cloudflareRequest(`${endpoint}?per_page=${PROJECTS_PER_PAGE}&page=${page}`, headers),
-    );
+    const result = record(await cloudflareRequest(`${endpoint}?per_page=${PROJECTS_PER_PAGE}&page=${page}`, headers));
     if (result['success'] !== true) {
       throw new Error('Cloudflare could not list Pages projects. Check account permissions.');
     }
@@ -69,7 +64,7 @@ export function parseCloudflareProject(input: unknown, account: string): Publish
   };
 }
 
-function cloudflareHeaders(credentials: Record<string, unknown>): Readonly<Record<string, string>> {
+export function cloudflareHeaders(credentials: Record<string, unknown>): Readonly<Record<string, string>> {
   if (credentials['type'] === 'api_key') {
     return {
       'X-Auth-Key': credential(credentials['key']),
@@ -79,6 +74,7 @@ function cloudflareHeaders(credentials: Record<string, unknown>): Readonly<Recor
   if (credentials['type'] !== 'oauth' && credentials['type'] !== 'api_token') {
     throw new Error('Unsupported Cloudflare authentication. Sign in with wrangler login.');
   }
+  // i18n-ignore: HTTP header value or request path, protocol text.
   return { Authorization: `Bearer ${credential(credentials['token'])}` };
 }
 function credential(input: unknown): string {
@@ -89,7 +85,7 @@ function credential(input: unknown): string {
   return value;
 }
 
-async function cloudflareRequest(url: string, headers: Readonly<Record<string, string>>) {
+export async function cloudflareRequest(url: string, headers: Readonly<Record<string, string>>) {
   const response = await fetch(url, {
     method: 'GET',
     headers,
@@ -125,17 +121,9 @@ async function cloudflareRequest(url: string, headers: Readonly<Record<string, s
   }
 }
 
-export async function cloudflareWorkers(
-  root: string,
-  account: string,
-): Promise<readonly PublishProject[]> {
+export async function cloudflareWorkers(root: string, account: string): Promise<readonly PublishProject[]> {
   const credentials = record(await discoveryCommand(root, 'wrangler', ['auth', 'token', '--json']));
-  const result = record(
-    await cloudflareRequest(
-      `https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`,
-      cloudflareHeaders(credentials),
-    ),
-  );
+  const result = record(await cloudflareRequest(`https://api.cloudflare.com/client/v4/accounts/${account}/workers/scripts`, cloudflareHeaders(credentials)));
   if (result['success'] !== true) {
     throw new Error('Cloudflare could not list Workers. Check account permissions.');
   }

@@ -1,0 +1,293 @@
+// Which attribute names an HTML tag takes, for the advisory note under an
+// attribute's Name field. A static table rather than a read of Astro's type
+// declarations: the editor never parses `.d.ts` files at run time, and the
+// HTML attribute set changes slowly. The note is advice and never blocks a
+// save, because custom elements and frameworks use attributes no table lists;
+// Stacki has never refused an attribute name, and still does not.
+//
+// Always valid on any tag: the global attributes, `data-*`, `aria-*`, `on*`
+// event handlers and `role`. A tag the table does not know (a custom element)
+// takes any name. Reserved names are the ones Astro gives a meaning of its own
+// (directives) and the component's declared props, which an instance's
+// attribute would collide with.
+
+import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
+import { LIMITS } from '../../shared/core/limits';
+
+const GLOBAL = [
+  'accesskey',
+  'autocapitalize',
+  'autofocus',
+  'class',
+  'contenteditable',
+  'dir',
+  'draggable',
+  'enterkeyhint',
+  'hidden',
+  'id',
+  'inert',
+  'inputmode',
+  'is',
+  'itemid',
+  'itemprop',
+  'itemref',
+  'itemscope',
+  'itemtype',
+  'lang',
+  'nonce',
+  'part',
+  'popover',
+  'slot',
+  'spellcheck',
+  'style',
+  'tabindex',
+  'title',
+  'translate',
+  'role',
+] as const;
+
+const FORM_CONTROL = ['disabled', 'form', 'name'] as const;
+
+// Each tag's own attributes, beyond the global ones. Bounded by being written out.
+const TAG_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = {
+  a: ['download', 'href', 'hreflang', 'ping', 'referrerpolicy', 'rel', 'target', 'type'],
+  area: ['alt', 'coords', 'download', 'href', 'ping', 'referrerpolicy', 'rel', 'shape', 'target'],
+  audio: ['autoplay', 'controls', 'crossorigin', 'loop', 'muted', 'preload', 'src'],
+  blockquote: ['cite'],
+  button: [...FORM_CONTROL, 'formaction', 'formenctype', 'formmethod', 'formnovalidate', 'formtarget', 'popovertarget', 'popovertargetaction', 'type', 'value'],
+  canvas: ['height', 'width'],
+  col: ['span'],
+  colgroup: ['span'],
+  data: ['value'],
+  del: ['cite', 'datetime'],
+  details: ['name', 'open'],
+  dialog: ['open'],
+  embed: ['height', 'src', 'type', 'width'],
+  fieldset: FORM_CONTROL,
+  form: ['accept-charset', 'action', 'autocomplete', 'enctype', 'method', 'name', 'novalidate', 'rel', 'target'],
+  iframe: ['allow', 'allowfullscreen', 'height', 'loading', 'name', 'referrerpolicy', 'sandbox', 'src', 'srcdoc', 'width'],
+  img: ['alt', 'crossorigin', 'decoding', 'fetchpriority', 'height', 'ismap', 'loading', 'referrerpolicy', 'sizes', 'src', 'srcset', 'usemap', 'width'],
+  input: [
+    ...FORM_CONTROL,
+    'accept',
+    'alt',
+    'autocomplete',
+    'checked',
+    'dirname',
+    'formaction',
+    'formenctype',
+    'formmethod',
+    'formnovalidate',
+    'formtarget',
+    'height',
+    'list',
+    'max',
+    'maxlength',
+    'min',
+    'minlength',
+    'multiple',
+    'pattern',
+    'placeholder',
+    'popovertarget',
+    'popovertargetaction',
+    'readonly',
+    'required',
+    'size',
+    'src',
+    'step',
+    'type',
+    'value',
+    'width',
+  ],
+  ins: ['cite', 'datetime'],
+  label: ['for'],
+  li: ['value'],
+  link: ['as', 'crossorigin', 'fetchpriority', 'href', 'hreflang', 'integrity', 'media', 'referrerpolicy', 'rel', 'sizes', 'type'],
+  map: ['name'],
+  meta: ['charset', 'content', 'http-equiv', 'media', 'name'],
+  meter: ['high', 'low', 'max', 'min', 'optimum', 'value'],
+  object: ['data', 'form', 'height', 'name', 'type', 'width'],
+  ol: ['reversed', 'start', 'type'],
+  optgroup: ['disabled', 'label'],
+  option: ['disabled', 'label', 'selected', 'value'],
+  output: ['for', 'form', 'name'],
+  progress: ['max', 'value'],
+  q: ['cite'],
+  script: ['async', 'crossorigin', 'defer', 'fetchpriority', 'integrity', 'nomodule', 'referrerpolicy', 'src', 'type'],
+  select: [...FORM_CONTROL, 'autocomplete', 'multiple', 'required', 'size'],
+  slot: ['name'],
+  source: ['height', 'media', 'sizes', 'src', 'srcset', 'type', 'width'],
+  style: ['media'],
+  td: ['colspan', 'headers', 'rowspan'],
+  template: ['shadowrootmode'],
+  textarea: [...FORM_CONTROL, 'autocomplete', 'cols', 'dirname', 'maxlength', 'minlength', 'placeholder', 'readonly', 'required', 'rows', 'wrap'],
+  th: ['abbr', 'colspan', 'headers', 'rowspan', 'scope'],
+  time: ['datetime'],
+  track: ['default', 'kind', 'label', 'src', 'srclang'],
+  video: ['autoplay', 'controls', 'crossorigin', 'height', 'loop', 'muted', 'playsinline', 'poster', 'preload', 'src', 'width'],
+};
+
+// Plain containers whose attributes are the global ones alone.
+const GLOBAL_ONLY = new Set([
+  'abbr',
+  'address',
+  'article',
+  'aside',
+  'b',
+  'bdi',
+  'bdo',
+  'body',
+  'br',
+  'caption',
+  'cite',
+  'code',
+  'dd',
+  'dfn',
+  'div',
+  'dl',
+  'dt',
+  'em',
+  'figcaption',
+  'figure',
+  'footer',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'head',
+  'header',
+  'hgroup',
+  'hr',
+  'html',
+  'i',
+  'kbd',
+  'legend',
+  'main',
+  'mark',
+  'menu',
+  'nav',
+  'noscript',
+  'p',
+  'picture',
+  'pre',
+  'rp',
+  'rt',
+  'ruby',
+  's',
+  'samp',
+  'search',
+  'section',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'summary',
+  'sup',
+  'table',
+  'tbody',
+  'tfoot',
+  'thead',
+  'title',
+  'tr',
+  'u',
+  'ul',
+  'var',
+  'wbr',
+]);
+
+// The tags `HTMLAttributes<Tag>` from astro/types accepts: the keys of
+// `astroHTML.JSX.DefinedIntrinsicElements` (astro-jsx.d.ts, Astro 7.3), the
+// lowercase ones, since an editor tag is lowercase. Any other tag (a custom
+// element, `template`, a typo) is a type error there, so an attributes prop on
+// one is typed by the tag-less `astroHTML.JSX.HTMLAttributes` instead
+// (propDeclaration.ts). Bounded by being written out.
+const ASTRO_TYPED_TAGS: ReadonlySet<string> = new Set(
+  (
+    'a abbr address area article aside audio b base bdi bdo big blockquote body br button canvas caption cite code col colgroup data datalist dd del ' +
+    'details dfn dialog div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins ' +
+    'kbd keygen label legend li link main map mark menu menuitem meta meter nav noindex noscript object ol optgroup option output p param picture pre ' +
+    'progress q rp rt ruby s samp slot script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead ' +
+    'time title tr track u ul var video wbr svg animate circle defs desc ellipse filter g image line marker mask metadata path pattern polygon ' +
+    'polyline rect stop switch symbol text tspan use view'
+  ).split(' '),
+);
+
+/** Whether astro/types' `HTMLAttributes<Tag>` takes `tag`: false for a custom element or a tag Astro does not type. */
+export function astroTypesTag(tag: string): boolean {
+  assert(tag.length <= LIMITS.attrCharsMax, 'astroTypesTag: a tag is bounded');
+  const typed = ASTRO_TYPED_TAGS.has(tag);
+  assert(!typed || !tag.includes('-'), 'astroTypesTag: a custom element is never an Astro typed tag');
+  return typed;
+}
+
+// Names Astro reads itself: an instance attribute by one of these is a directive, not an attribute.
+const RESERVED = /^(class:list|set:html|set:text|slot|define:vars)$|^(is|client|server|transition):/;
+
+const GLOBAL_SET: ReadonlySet<string> = new Set(GLOBAL);
+
+/** Whether `tag` takes an attribute called `name`: always for a tag the table does not know. */
+export function attributeValidOn(name: string, tag: string): boolean {
+  const lower = name.toLowerCase();
+  assert(lower.length <= LIMITS.attrCharsMax, 'attributeValidOn: attribute name is bounded');
+  if (GLOBAL_SET.has(lower) || /^(data|aria)-[\w.:-]+$/.test(lower) || /^on[a-z]+$/.test(lower)) {
+    return true;
+  }
+  const own = TAG_ATTRIBUTES[tag];
+  if (own !== undefined) {
+    return own.includes(lower);
+  }
+  return !GLOBAL_ONLY.has(tag);
+}
+
+/** What an attribute name is checked against. */
+export interface AttributeNameContext {
+  /** The element's tag; absent for an instance, which is checked against `passedTo` instead. */
+  readonly tag: string | undefined;
+  /**
+   * For an instance: the tag its component types its passed attributes by
+   * (`interface Props extends HTMLAttributes<"img">`), as Astro checks the
+   * instance's attributes. Absent when the component names no tag: any name goes.
+   */
+  readonly passedTo?: string | undefined;
+  /** The component's declared props, for an instance's attribute list. */
+  readonly reserved: readonly string[];
+  /** The name the attribute already has, when an existing one is being edited: it is never flagged. */
+  readonly own: string | undefined;
+  /** The names the element's other attributes already have. */
+  readonly taken: readonly string[];
+}
+
+/**
+ * The advisory note under an attribute's Name field, or undefined when the
+ * name is fine. Only a name being typed for a new or renamed attribute is
+ * noted: the name the attribute already has (`class:list` on an element that
+ * has one) is what the file says, and is never flagged.
+ */
+export function attributeNameNote(name: string, context: AttributeNameContext, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
+  const clean = name.trim();
+  if (clean === '' || clean === context.own) {
+    return undefined;
+  }
+  assert(context.reserved.length <= LIMITS.propSchemaFieldsMax, 'attributeNameNote: reserved names are bounded');
+  assert(context.taken.length <= LIMITS.attrsPerNodeMax, 'attributeNameNote: taken names are bounded');
+  // An element's classes have a field of their own, driven by the Style panel's selectors.
+  if (context.tag !== undefined && (clean === 'class' || clean === 'class:list')) {
+    return translate('editor.htmlAttributes.useStylePanel');
+  }
+  if (context.taken.includes(clean)) {
+    return translate('editor.htmlAttributes.taken', { name: clean });
+  }
+  if (RESERVED.test(clean) || context.reserved.includes(clean)) {
+    return translate('editor.htmlAttributes.reserved');
+  }
+  // An element is checked against its own tag, an instance against the tag its component passes attributes to.
+  const tag = context.tag ?? context.passedTo;
+  if (tag === undefined || clean.startsWith('{')) {
+    return undefined;
+  }
+  return attributeValidOn(clean, tag) ? undefined : translate('editor.htmlAttributes.notOnTag', { name: clean, tag });
+}

@@ -115,10 +115,7 @@ function decodeEntities(text: unknown): string {
   return String(text ?? '').replace(ENTITY, (whole: string, body: string): string => {
     if (body.charAt(0) === '#') {
       const second = body.charAt(1);
-      const code =
-        second === 'x' || second === 'X'
-          ? parseInt(body.slice(2), 16)
-          : parseInt(body.slice(1), 10);
+      const code = second === 'x' || second === 'X' ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
       if (!Number.isFinite(code) || code < 1 || code > 0x10ffff) {
         return whole;
       }
@@ -221,10 +218,7 @@ function textValueCanonical(value: string): string {
   }
   const canonical = textValue(written);
   assert(canonical.length <= value.length, 'Canonical text never grows');
-  assert(
-    textValue(encodeText(canonical)) === canonical,
-    'Canonical text is a fixed point of write-then-read',
-  );
+  assert(textValue(encodeText(canonical)) === canonical, 'Canonical text is a fixed point of write-then-read');
   return canonical;
 }
 

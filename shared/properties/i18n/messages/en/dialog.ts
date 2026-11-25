@@ -1,0 +1,53 @@
+// English `dialog` strings: the source of truth for every key beginning `dialog.` (docs/i18n.md). Alphabetical.
+// Each key is a stable dotted name; the other four locales hold exactly these keys, checked by the compiler and the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+
+export const messages = {
+  'dialog.open.apps.button': 'Choose',
+  'dialog.open.apps.filter': 'Stacki app',
+  'dialog.open.apps.title': 'Install an app',
+  'dialog.open.assets.title': 'Upload assets',
+  'dialog.open.cmsFile.title': 'Choose a file',
+  'dialog.open.cmsImage.filter': 'Images',
+  'dialog.open.cmsImage.title': 'Choose an image',
+  'dialog.open.mediaUpload.title': 'Upload media',
+  'dialog.open.project.title': 'Open an Astro project',
+  'dialog.open.projectFile.title': 'Choose a file in this project',
+  'dialog.open.projectFolder.title': 'Choose a folder in this project',
+  'dialog.open.replace.title': 'Replace {name}',
+  'dialog.open.repositoryTarget.title': 'Choose where to download the repository',
+  'dialog.open.siteTarget.title': 'Choose where the site should go',
+  'dialog.open.studioRelease.filter': 'Studio release',
+  'dialog.open.studioRelease.title': 'Choose a trusted Stacki Studio release bundle',
+  'dialog.privacy.notSaved.detail': 'The change applies for this session. Check available disk space and try again.',
+  'dialog.privacy.notSaved.message': 'Stacki could not save your usage-count preference.',
+  'dialog.privacy.notSaved.title': 'Privacy Setting Not Saved',
+  'dialog.update.available.detail': 'You’ll be asked whether to restart once it has finished.',
+  'dialog.update.check.alreadyChecking': 'Already checking for updates.',
+  'dialog.update.check.failed': 'Stacki could not check for updates.',
+  'dialog.update.check.latest': 'Stacki {version} is the latest version.',
+  'dialog.update.check.title': 'Check for Updates',
+  'dialog.update.development.detail': 'This is a development build ({version}), which updates when you rebuild it.',
+  'dialog.update.development.message': 'Updates are only checked in the installed app.',
+  'dialog.update.download.failed': 'The Stacki update could not be downloaded.',
+  'dialog.update.downloading.counter': '{transferred} of {total} MB',
+  'dialog.update.downloading.counterUnknown': '{transferred} MB downloaded',
+  'dialog.update.downloading.hide': 'Hide',
+  'dialog.update.downloading.percent': '{percent}%',
+  'dialog.update.downloading.progressLabel': 'Download progress',
+  'dialog.update.downloading.title': 'Downloading Stacki {version}',
+  'dialog.update.downloading.titleUnnamed': 'Downloading the Stacki update',
+  'dialog.update.ready.detail': 'Restart Stacki to install the update.',
+  'dialog.update.ready.heading': 'Stacki {version} is ready',
+  'dialog.update.ready.later': 'Later',
+  'dialog.update.ready.restartNow': 'Restart Now',
+  'dialog.update.upToDate.title': 'You’re up to date',
+  'dialog.usage.continue': 'Continue',
+  'dialog.usage.detail':
+    'Stacki sends one count on days you open a project. It sends no project names, file contents, device identifier, or activity history. Daily totals are kept on Cloudflare for up to 366 days; its network sees the connection IP, but the usage database does not store it. Turn this off any time in File → Settings.',
+  'dialog.usage.message': 'Help us understand how many Stacki installations are active.',
+  'dialog.usage.optOut': 'Turn off anonymous usage counts',
+  'dialog.usage.title': 'Anonymous Usage Counts',
+} as const satisfies CatalogOf<`dialog.${string}`>;
+
+export type MessageKey = keyof typeof messages;

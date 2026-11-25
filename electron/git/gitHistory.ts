@@ -2,7 +2,7 @@
 //
 // Everything else this app does to git changes something. This is the half
 // that only looks: the log, what a commit touched, what is changed right now,
-// a file as it was, and which worktrees exist. Nothing here writes.
+// and which worktrees exist. Nothing here writes.
 //
 // It is a separate module from gitBranches.js for the same reason that one
 // exists — so it can be tested against real repositories (test/electron/git/gitHistory.test.js)
@@ -14,7 +14,7 @@
 // each one is the kind that produces a plausible wrong answer rather than an
 // error:
 //
-//   - `git show --name-status` on a MERGE commit prints NOTHING. Not an error,
+//   - `--name-status` on a MERGE commit prints NOTHING. Not an error,
 //     not a diff — an empty list, because a diff against several parents is
 //     ambiguous and git declines to pick. A history panel reading it straight
 //     would draw every merge as a commit that changed no files.
@@ -27,8 +27,11 @@
 // "Home" needs the project's routing, which lives in project/ — so that
 // translation happens at the IPC edge, and this module stays about git.
 
-import { toRecord } from '../../shared/core/record';
+import { assert } from '../../shared/core/assert';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
+import { MAIN_LIMITS } from '../lib/mainLimits';
 import { gitErrorDetail } from './git';
+import { projectPrefix } from './gitState';
 import type { Git } from './git';
 
 // Field and record separators: git will happily put anything in a subject
@@ -59,10 +62,7 @@ const LOG_FORMAT = RS + ['%H', '%h', '%an', '%ae', '%aI', '%s', '%P', '%D'].join
 const DIFF_FLAGS = ['--diff-merges=first-parent', '-M'];
 
 /** True when the failure is "this repository has no commits yet". */
-const isEmptyRepo = (error: unknown): boolean =>
-  /does not have any commits yet|bad default revision|unknown revision/i.test(
-    gitErrorDetail(error),
-  );
+const isEmptyRepo = (error: unknown): boolean => /does not have any commits yet|bad default revision|unknown revision/i.test(gitErrorDetail(error));
 
 export interface FileChange {
   readonly status: string;
@@ -107,23 +107,25 @@ async function log(
 ): Promise<{ commits: CommitInfo[]; atEnd: boolean }> {
   // Topological order keeps every parent below its children even when clocks
   // disagree. Exclude stashes because their synthetic commits are not history.
-  const args = [
-    'log',
-    '--topo-order',
-    '--decorate=short',
-    `--format=${LOG_FORMAT}`,
-    `-n${limit}`,
-    `--skip=${skip}`,
-  ];
+  // A ref that starts with a dash would be read as an option (`--output=<file>` writes a file), so it never reaches git. The limit and
+  // skip are clamped: a page is a screenful, and a negative or fractional count is git's usage error rather than a history.
+  if (ref !== undefined && (ref.startsWith('-') || ref.includes('\0'))) {
+    throw new ReferencedError('git.error.refInvalid');
+  }
+  const pageSize = Math.min(Math.max(Math.trunc(limit), 1), MAIN_LIMITS.logPageMax);
+  const pageSkip = Math.max(Math.trunc(skip), 0);
+  // core.quotepath=off keeps accented file names as written; the default escapes them as octal and the panel would show the escape.
+  const args = ['-c', 'core.quotepath=off', 'log', '--topo-order', '--decorate=short', `--format=${LOG_FORMAT}`, `-n${pageSize}`, `--skip=${pageSkip}`];
   // One call for the whole page, files included. The alternative — a `git
   // show` per commit to find out what it touched — is fifty processes to draw
   // one screen, and the panel needs the files to say "you changed Home"
   // rather than just the subject line.
   if (withFiles) {
-    args.push('--name-status', ...DIFF_FLAGS);
+    // `--relative` reports paths from the project folder, and drops what a commit changed elsewhere in a larger repository.
+    args.push('--name-status', '--relative', ...DIFF_FLAGS);
   }
   if (ref) {
-    args.push(ref);
+    args.push(ref, '--');
   } else {
     args.push('--exclude=refs/stash', '--all');
   }
@@ -166,22 +168,7 @@ async function log(
   // `atEnd` is inferred from a short page, which costs nothing and is right
   // except when the history length is an exact multiple of the page size (one
   // extra empty fetch).
-  return { commits, atEnd: commits.length < limit };
-}
-
-/** What one commit changed: `{status, path, from}` per file. */
-async function commitFiles(
-  git: Git,
-  { projectPath, ref }: { readonly projectPath: string; readonly ref: string },
-): Promise<FileChange[]> {
-  const { stdout } = await git(projectPath, [
-    'show',
-    '--name-status',
-    '--format=',
-    ...DIFF_FLAGS,
-    ref,
-  ]);
-  return parseNameStatus(stdout);
+  return { commits, atEnd: commits.length < pageSize };
 }
 
 function parseNameStatus(stdout: string): FileChange[] {
@@ -217,38 +204,36 @@ export interface StatusFile {
 }
 
 /**
- * Everything changed right now, for the file picker — the whole list, with
- * what happened to each file. `git:info` keeps its own capped summary for the
- * chip; this is the one that has to be complete, because a file missing from
- * it is a file that silently cannot be committed.
+ * Reads `git status --porcelain=v1 -z` output: records are `XY path` separated by NUL, and a rename or copy is followed by one more
+ * record holding the old path. NUL-separated output is never quoted, so a path with spaces, accents, quotes or a leading dash arrives
+ * exactly as written on disk (the line form quotes and escapes such paths, which then cannot be passed back to git).
+ *
+ * Paths are reported from the repository root; `prefix` (the project's folder inside the repository, '' at the root) is removed so
+ * they are relative to the project, which is where every other command runs. `limit` bounds the list: past it the parse throws rather
+ * than returning a list with files silently missing.
  */
-async function status(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<StatusFile[]> {
-  const { stdout } = await git(projectPath, ['status', '--porcelain']);
+export function parseStatusRecords(stdout: string, prefix: string, limit: number): StatusFile[] {
+  assert(prefix === '' || prefix.endsWith('/'), 'parseStatusRecords: a folder prefix ends with a slash');
+  const records = stdout.split('\0');
   const files: StatusFile[] = [];
-  for (const line of stdout.split('\n')) {
-    if (!line.trim()) {
-      continue;
+  const relative = (entryPath: string): string => (prefix !== '' && entryPath.startsWith(prefix) ? entryPath.slice(prefix.length) : entryPath);
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === undefined || record.length < 4) {
+      continue; // The empty record after the final NUL.
     }
-    // Porcelain v1 is "XY path": two status columns, a space, then the path.
-    // Not trimmed before slicing — the first column is a space for changes
-    // that are only in the working tree, and trimming loses that distinction.
-    const code = line.slice(0, 2);
-    let entryPath = line.slice(3);
-    let from: string | undefined;
-    // "R  old -> new" — staged renames carry both names.
-    const arrow = entryPath.lastIndexOf(' -> ');
-    if (arrow !== -1) {
-      from = unquote(entryPath.slice(0, arrow));
-      entryPath = entryPath.slice(arrow + 4);
+    if (files.length >= limit) {
+      throw new ReferencedError('git.error.statusTooLarge', { count: limit });
     }
+    // "XY path": two status columns, a space, then the path. Never trimmed: the first column is a space for working-tree-only changes.
+    const code = record.slice(0, 2);
+    const entryPath = relative(record.slice(3));
+    const renamed = code.includes('R') || code.includes('C');
+    const from = renamed ? records[++index] : undefined;
     files.push({
-      path: unquote(entryPath),
-      from,
-      // The letter to show. `??` is git's "untracked", which to anyone who did
-      // not choose that spelling is simply a new file.
+      path: entryPath,
+      from: from === undefined ? undefined : relative(from),
+      // The letter to show. `??` is git's "untracked", which to anyone who did not choose that spelling is simply a new file.
       status: code === '??' ? 'A' : code.trim().charAt(0) || 'M',
       staged: code.charAt(0) !== ' ' && code !== '??',
       untracked: code === '??',
@@ -257,12 +242,16 @@ async function status(
   return files;
 }
 
-// Git quotes paths containing non-ASCII or control characters. Only the outer
-// quotes are undone here — a path that needed the full C-style unescaping is
-// rare enough that showing it slightly wrong beats getting the common case
-// wrong by hand-rolling an unescaper.
-const unquote = (text: string): string =>
-  text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text;
+/**
+ * Everything changed right now, for the file picker — the whole list, with what happened to each file. `git:info` keeps its own capped
+ * summary for the chip; this is the one that has to be complete, because a file missing from it is a file that silently cannot be
+ * committed. Untracked folders are listed file by file for the same reason: the picker commits files, not folders.
+ */
+async function status(git: Git, { projectPath }: { readonly projectPath: string }): Promise<StatusFile[]> {
+  const prefix = await projectPrefix(git, projectPath);
+  const { stdout } = await git(projectPath, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']);
+  return parseStatusRecords(stdout, prefix, MAIN_LIMITS.statusFilesMax);
+}
 
 export interface ProjectFile {
   readonly path: string;
@@ -283,30 +272,16 @@ export interface ProjectFile {
  * Status comes from the same porcelain the file picker reads, so a file cannot
  * appear as changed in one place and clean in another.
  */
-async function allFiles(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<ProjectFile[]> {
-  const { stdout } = await git(projectPath, [
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-  ]);
+async function allFiles(git: Git, { projectPath }: { readonly projectPath: string }): Promise<ProjectFile[]> {
+  const { stdout } = await git(projectPath, ['ls-files', '--cached', '--others', '--exclude-standard', '-z']);
   const changed = new Map((await status(git, { projectPath })).map((entry) => [entry.path, entry]));
-  const paths = [
-    ...new Set(
-      stdout
-        .split('\n')
-        .map((line) => unquote(line.trim()))
-        .filter(Boolean),
-    ),
-  ];
+  const paths = [...new Set(stdout.split('\0').filter(Boolean))];
   // A deleted file is gone from the working tree, so ls-files still lists it
   // from the index — but a file deleted and staged is not listed at all, and
   // it is exactly the one somebody may want to find and put back.
+  const listed = new Set(paths);
   for (const [changedPath] of changed) {
-    if (!paths.includes(changedPath)) {
+    if (!listed.has(changedPath)) {
       paths.push(changedPath);
     }
   }
@@ -320,32 +295,6 @@ async function allFiles(
   });
 }
 
-/** A file's contents as they were at `ref`, or undefined when it wasn't there. */
-async function fileAt(
-  git: Git,
-  {
-    projectPath,
-    ref,
-    path: filePath,
-  }: { readonly projectPath: string; readonly ref: string; readonly path: string },
-): Promise<string | undefined> {
-  try {
-    const { stdout } = await git(projectPath, ['show', `${ref}:${filePath}`]);
-    return stdout;
-  } catch (error: unknown) {
-    // Not an error worth raising: a file that did not exist yet is a normal
-    // answer to "what did this look like then", and the caller wants to say
-    // "this page didn't exist yet" rather than show a failure.
-    const stderr = toRecord(error)?.['stderr'];
-    if (
-      /does not exist|exists on disk, but not in/i.test(typeof stderr === 'string' ? stderr : '')
-    ) {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
 export interface WorktreeInfo {
   readonly path: string;
   readonly head: string | undefined;
@@ -355,10 +304,7 @@ export interface WorktreeInfo {
 }
 
 /** Every worktree of this repository, the main one first. */
-async function worktrees(
-  git: Git,
-  { projectPath }: { readonly projectPath: string },
-): Promise<WorktreeInfo[]> {
+async function worktrees(git: Git, { projectPath }: { readonly projectPath: string }): Promise<WorktreeInfo[]> {
   const { stdout } = await git(projectPath, ['worktree', 'list', '--porcelain']);
   // Blank-line-separated records of "key value" lines. `detached` and `bare`
   // are bare keys with no value.
@@ -411,20 +357,9 @@ async function worktrees(
 // convention (src/pages, src/components, src/layouts) rather than something
 // this has to go to disk to learn, which is what keeps it testable.
 
-const TITLE = (seg: string): string =>
-  seg.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
+const TITLE = (seg: string): string => seg.replace(/-/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 
-export type FileKind =
-  | 'page'
-  | 'component'
-  | 'layout'
-  | 'content'
-  | 'asset'
-  | 'style'
-  | 'config'
-  | 'script'
-  | 'doc'
-  | 'file';
+export type FileKind = 'page' | 'component' | 'layout' | 'content' | 'asset' | 'style' | 'config' | 'script' | 'doc' | 'file';
 
 export interface FileDescription {
   readonly path: string;
@@ -448,6 +383,7 @@ function describeFile(relPath: unknown): FileDescription {
   if (pageRoute !== undefined) {
     let route = pageRoute;
     if (route === 'index') {
+      // i18n-ignore: The wire label stays English for older readers; the History panel swaps the home page's label for ui.page.home (historyFileLabel).
       return { path: posixPath, kind: 'page', label: 'Home' };
     }
     // "about/index" is the same page as "about" — the folder is the route.
@@ -481,9 +417,7 @@ function describeFile(relPath: unknown): FileDescription {
     return { path: posixPath, kind: 'asset', label: base };
   }
   // Config and lockfiles are the ones a designer should not be asked to read.
-  if (
-    /^(package(-lock)?\.json|astro\.config\.[a-z]+|tsconfig\.json|\.gitignore)$/i.test(posixPath)
-  ) {
+  if (/^(package(-lock)?\.json|astro\.config\.[a-z]+|tsconfig\.json|\.gitignore)$/i.test(posixPath)) {
     return { path: posixPath, kind: 'config', label: base };
   }
   // Script and prose get named rather than falling into the catch-all. Both
@@ -503,17 +437,6 @@ function describeFile(relPath: unknown): FileDescription {
 /** Every file in a list, described. Renames keep where they came from. */
 const describeFiles = <T extends { readonly path: string; readonly from?: string | undefined }>(
   files: readonly T[] | undefined,
-): (T & FileDescription & { readonly from: string | undefined })[] =>
-  (files ?? []).map((file) => ({ ...file, ...describeFile(file.path), from: file.from }));
+): (T & FileDescription & { readonly from: string | undefined })[] => (files ?? []).map((file) => ({ ...file, ...describeFile(file.path), from: file.from }));
 
-export {
-  allFiles,
-  log,
-  commitFiles,
-  status,
-  fileAt,
-  worktrees,
-  parseNameStatus,
-  describeFile,
-  describeFiles,
-};
+export { allFiles, log, status, worktrees, parseNameStatus, describeFile, describeFiles };

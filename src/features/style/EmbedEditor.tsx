@@ -1,3 +1,4 @@
+import { ErrorToast } from '../../ui/ErrorToast';
 import { ProvenanceEmbedNav } from './ProvenanceList';
 import { type RuleModel } from './model/cascade';
 import { type ScanState, type Phase, SaveIndicator } from './embed/EditorBasics';
@@ -27,15 +28,9 @@ import {
   useChangeSubscriptions,
   useRefreshDerived,
 } from './embed/useEditorScanning';
-import {
-  useSplitForEdit,
-  useApplyEdit,
-  usePropEdits,
-  useLiveEdits,
-  useRuleActions,
-  useOpenEmbed,
-  useElementTokens,
-} from './embed/useEditorRuleEdits';
+import { getHost } from './model/host';
+import { elementSelectionKey, nodeById } from './model/webflowElement';
+import { useSplitForEdit, useApplyEdit, usePropEdits, useLiveEdits, useRuleActions, useOpenEmbed, useElementTokens } from './embed/useEditorRuleEdits';
 import {
   useTokenDefault,
   useCachedNative,
@@ -44,6 +39,7 @@ import {
   useSelectorPick,
   useTypedSelector,
   useFocusProp,
+  usePseudoRequest,
   useSourceDocument,
   useRenameQuery,
   useContextKeys,
@@ -52,6 +48,7 @@ import {
 import {
   useEmbedContexts,
   useStyleContexts,
+  useWrapperReach,
   useNativeTarget,
   useComponentSource,
   useResolved,
@@ -73,7 +70,9 @@ import {
   useNativeCreate,
   useAutoSelect,
 } from './embed/useEditorResolution';
+import { useInlineCard, useInlineState } from './embed/useInlineTarget';
 import './embedEditor.css';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import {
   useSetProp,
   useClearProp,
@@ -85,11 +84,16 @@ import {
   useSourceCard,
 } from './embed/useEditorWrites';
 
+import { useNewStyleTagSettings } from './embed/useNewStyleTagSettings';
+
 export { SelectorPicker } from './embed/SelectorPicker';
 
 export { useRemovedClasses, withoutClasses } from './embed/editorModel';
 
+const STYLE_TAG = '<style>'; // i18n-ignore: an HTML tag name shown as code.
+
 export default function EmbedEditor() {
+  useNewStyleTagSettings();
   const editorFoundation = useEditorFoundation();
   const editorScanning = useEditorScanning(editorFoundation);
   const editorSelection = useEditorSelection(editorFoundation, editorScanning);
@@ -97,21 +101,8 @@ export default function EmbedEditor() {
   const editorElement = useEditorElement(editorFoundation, editorRuleEdits);
   const editorContexts = useEditorContexts(editorFoundation, editorSelection, editorElement);
   const editorResolution = useEditorResolution(editorFoundation, editorElement, editorContexts);
-  const editorRuleWrites = useEditorRuleWrites(
-    editorFoundation,
-    editorSelection,
-    editorElement,
-    editorContexts,
-    editorResolution,
-  );
-  const editorNativeCalls = useEditorNativeCalls(
-    editorFoundation,
-    editorRuleEdits,
-    editorElement,
-    editorContexts,
-    editorResolution,
-    editorRuleWrites,
-  );
+  const editorRuleWrites = useEditorRuleWrites(editorFoundation, editorSelection, editorElement, editorContexts, editorResolution);
+  const editorNativeCalls = useEditorNativeCalls(editorFoundation, editorRuleEdits, editorElement, editorContexts, editorResolution, editorRuleWrites);
   const editorPropWrites = useEditorPropWrites(
     editorFoundation,
     editorRuleEdits,
@@ -121,13 +112,7 @@ export default function EmbedEditor() {
     editorRuleWrites,
     editorNativeCalls,
   );
-  const editorSources = useEditorSources(
-    editorFoundation,
-    editorRuleEdits,
-    editorElement,
-    editorContexts,
-    editorResolution,
-  );
+  const editorSources = useEditorSources(editorFoundation, editorRuleEdits, editorElement, editorContexts, editorResolution);
   const editorCardView = useEditorCardView(
     editorFoundation,
     editorSelection,
@@ -151,7 +136,8 @@ function useEditorFoundation() {
   const selectionState = useSelectionState();
   const nativeState = useNativeState(selectionState);
   const pendingWrites = usePendingWrites(editorRefs, busyState, scanState, nativeState);
-  return { busyState, editorRefs, nativeState, pendingWrites, scanState, selectionState };
+  const inlineState = useInlineState();
+  return { busyState, editorRefs, inlineState, nativeState, pendingWrites, scanState, selectionState };
 }
 
 // Scanning the embeds and resolving the element against them.
@@ -160,59 +146,43 @@ function useEditorScanning(editorFoundation: ReturnType<typeof useEditorFoundati
 
   const contentBuild = useContentBuild(editorRefs);
   const contentStore = useContentStore(editorRefs, contentBuild);
-  const contentRebuild = useContentRebuild(
-    editorRefs,
-    scanState,
-    nativeState,
-    contentBuild,
-    contentStore,
-  );
+  const contentRebuild = useContentRebuild(editorRefs, scanState, nativeState, contentBuild, contentStore);
   const applyResolveHook = useApplyResolve(editorRefs, scanState);
-  const backgroundRefreshHook = useBackgroundRefresh(
-    editorRefs,
-    scanState,
-    contentRebuild,
-    applyResolveHook,
-  );
+  const backgroundRefreshHook = useBackgroundRefresh(editorRefs, scanState, contentRebuild, applyResolveHook);
   const rematch = useRematch(editorRefs, scanState);
   const designerSync = useDesignerSync(editorRefs, nativeState, rematch);
   return { applyResolveHook, backgroundRefreshHook, contentRebuild, designerSync };
 }
 
 // Following the Designer's selection and keeping the panel in sync.
-function useEditorSelection(
-  editorFoundation: ReturnType<typeof useEditorFoundation>,
-  editorScanning: ReturnType<typeof useEditorScanning>,
-) {
+function useEditorSelection(editorFoundation: ReturnType<typeof useEditorFoundation>, editorScanning: ReturnType<typeof useEditorScanning>) {
   const { editorRefs, nativeState, scanState, selectionState } = editorFoundation;
   const { applyResolveHook, backgroundRefreshHook, contentRebuild, designerSync } = editorScanning;
 
   const elementReset = useElementReset(editorRefs, scanState, selectionState, nativeState);
+  // The selection is reset while rendering, not after the host's change reaches the
+  // subscription below: StylePanel publishes the selection in the render that receives it,
+  // and this render already draws from the host it published. Reset in an effect, the
+  // first frame drew the new element's header and hints over the previous element's chips
+  // and rows. Setting this component's state while rendering makes React render again
+  // before anything is painted; the key check makes it run once per element, and the
+  // subscription's own reset then finds nothing to do. The key names the document too:
+  // entering a component can select the node at the page selection's own path.
+  const hostElement = nodeById(getHost().selectedId);
+  if (elementSelectionKey(hostElement) !== editorRefs.selectedElementKeyRef.current) {
+    elementReset.resetForElement(hostElement);
+  }
   const scanWithoutSelectionHook = useScanWithoutSelection(editorRefs, scanState, contentRebuild);
-  const scanSelectionHook = useScanSelection(
-    editorRefs,
-    scanState,
-    contentRebuild,
-    applyResolveHook,
-    backgroundRefreshHook,
-  );
-  const refreshHook = useRefresh(
-    editorRefs,
-    elementReset,
-    scanWithoutSelectionHook,
-    scanSelectionHook,
-  );
-  useSelectionSubscriptions(editorRefs, scanState, nativeState, refreshHook);
+  const scanSelectionHook = useScanSelection(editorRefs, scanState, contentRebuild, applyResolveHook, backgroundRefreshHook);
+  const refreshHook = useRefresh(editorRefs, elementReset, scanWithoutSelectionHook, scanSelectionHook);
+  useSelectionSubscriptions(editorRefs, scanState, refreshHook);
   useChangeSubscriptions(scanState, backgroundRefreshHook, designerSync);
   const refreshDerivedHook = useRefreshDerived(editorRefs, scanState);
   return { refreshDerivedHook, refreshHook };
 }
 
 // Edits to embed rules.
-function useEditorRuleEdits(
-  editorFoundation: ReturnType<typeof useEditorFoundation>,
-  editorSelection: ReturnType<typeof useEditorSelection>,
-) {
+function useEditorRuleEdits(editorFoundation: ReturnType<typeof useEditorFoundation>, editorSelection: ReturnType<typeof useEditorSelection>) {
   const { busyState, editorRefs, nativeState, pendingWrites, scanState } = editorFoundation;
   const { refreshDerivedHook } = editorSelection;
 
@@ -220,23 +190,13 @@ function useEditorRuleEdits(
   const applyEditHook = useApplyEdit(busyState, scanState, pendingWrites, refreshDerivedHook);
   const propEdits = usePropEdits(splitForEditHook, applyEditHook);
   const liveEdits = useLiveEdits(editorRefs, pendingWrites, splitForEditHook);
-  const ruleActions = useRuleActions(
-    editorRefs,
-    busyState,
-    pendingWrites,
-    splitForEditHook,
-    applyEditHook,
-    liveEdits,
-  );
+  const ruleActions = useRuleActions(editorRefs, busyState, pendingWrites, splitForEditHook, applyEditHook, liveEdits);
   const openEmbed = useOpenEmbed(editorRefs, scanState, pendingWrites);
   return { applyEditHook, liveEdits, openEmbed, propEdits, ruleActions };
 }
 
 // The element's tokens, native styles, and picked selector.
-function useEditorElement(
-  editorFoundation: ReturnType<typeof useEditorFoundation>,
-  editorRuleEdits: ReturnType<typeof useEditorRuleEdits>,
-) {
+function useEditorElement(editorFoundation: ReturnType<typeof useEditorFoundation>, editorRuleEdits: ReturnType<typeof useEditorRuleEdits>) {
   const { editorRefs, nativeState, scanState, selectionState } = editorFoundation;
   const { applyEditHook } = editorRuleEdits;
 
@@ -244,15 +204,11 @@ function useEditorElement(
   const tokenDefault = useTokenDefault(scanState, selectionState, elementTokens);
   const cachedNative = useCachedNative(nativeState);
   useNativeRead(editorRefs, nativeState, tokenDefault, cachedNative);
-  const activeSelectorHook = useActiveSelector(
-    scanState,
-    selectionState,
-    nativeState,
-    elementTokens,
-  );
+  const activeSelectorHook = useActiveSelector(scanState, selectionState, nativeState, elementTokens);
   const selectorPick = useSelectorPick(editorRefs, selectionState, elementTokens);
   const typedSelector = useTypedSelector(editorRefs, selectionState, applyEditHook, selectorPick);
   const focusPropHook = useFocusProp(editorRefs, selectorPick);
+  usePseudoRequest(typedSelector, selectorPick, elementTokens, selectionState);
   return {
     activeSelectorHook,
     elementTokens,
@@ -269,39 +225,17 @@ function useEditorContexts(
   editorSelection: ReturnType<typeof useEditorSelection>,
   editorElement: ReturnType<typeof useEditorElement>,
 ) {
-  const { busyState, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
+  const { busyState, editorRefs, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
   const { refreshDerivedHook } = editorSelection;
   const { elementTokens, selectorPick } = editorElement;
 
   const sourceDocumentHook = useSourceDocument(nativeState, pendingWrites);
-  const renameQuery = useRenameQuery(
-    busyState,
-    scanState,
-    selectionState,
-    pendingWrites,
-    refreshDerivedHook,
-    selectorPick,
-    sourceDocumentHook,
-  );
-  const contextKeys = useContextKeys(
-    pendingWrites,
-    elementTokens,
-    selectorPick,
-    sourceDocumentHook,
-  );
+  const renameQuery = useRenameQuery(busyState, scanState, selectionState, pendingWrites, refreshDerivedHook, selectorPick, sourceDocumentHook);
+  const contextKeys = useContextKeys(pendingWrites, elementTokens, selectorPick, sourceDocumentHook);
   const querySuggestionsHook = useQuerySuggestions(pendingWrites);
-  const embedContexts = useEmbedContexts(
-    selectionState,
-    elementTokens,
-    sourceDocumentHook,
-    contextKeys,
-  );
-  const styleContextsHook = useStyleContexts(
-    selectionState,
-    nativeState,
-    contextKeys,
-    embedContexts,
-  );
+  const embedContexts = useEmbedContexts(selectionState, elementTokens, sourceDocumentHook, contextKeys);
+  const wrapperReachHook = useWrapperReach(editorRefs, elementTokens, contextKeys);
+  const styleContextsHook = useStyleContexts(selectionState, nativeState, contextKeys, embedContexts, wrapperReachHook);
   const nativeTarget = useNativeTarget(selectionState, nativeState, pendingWrites);
   const componentSource = useComponentSource(scanState, nativeState, nativeTarget);
   return {
@@ -320,7 +254,7 @@ function useEditorResolution(
   editorElement: ReturnType<typeof useEditorElement>,
   editorContexts: ReturnType<typeof useEditorContexts>,
 ) {
-  const { nativeState, scanState, selectionState } = editorFoundation;
+  const { inlineState, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
   const { activeSelectorHook, elementTokens, selectorPick, tokenDefault } = editorElement;
   const { componentSource, nativeTarget, styleContextsHook } = editorContexts;
 
@@ -333,6 +267,7 @@ function useEditorResolution(
     styleContextsHook,
     nativeTarget,
     componentSource,
+    inlineState,
   );
   const selectorChipsHook = useSelectorChips(
     scanState,
@@ -341,23 +276,11 @@ function useEditorResolution(
     elementTokens,
     activeSelectorHook,
     styleContextsHook,
-  );
-  const contextChange = useContextChange(
-    selectionState,
-    nativeState,
-    elementTokens,
-    activeSelectorHook,
+    pendingWrites,
     selectorPick,
-    styleContextsHook,
   );
-  useDefaultUpgrade(
-    selectionState,
-    nativeState,
-    elementTokens,
-    tokenDefault,
-    selectorPick,
-    styleContextsHook,
-  );
+  const contextChange = useContextChange(selectionState, nativeState, elementTokens, activeSelectorHook, selectorPick, styleContextsHook);
+  useDefaultUpgrade(selectionState, nativeState, elementTokens, tokenDefault, selectorPick, styleContextsHook);
   return { contextChange, resolvedHook, selectorChipsHook };
 }
 
@@ -378,31 +301,9 @@ function useEditorRuleWrites(
   const nativeRefresh = useNativeRefresh(editorRefs, nativeState);
   useFocusResync(editorRefs, refreshHook, nativeRefresh);
   const nativeOps = useNativeOps(editorRefs, busyState, scanState, nativeState, nativeRefresh);
-  const writeNewRuleHook = useWriteNewRule(
-    busyState,
-    scanState,
-    pendingWrites,
-    refreshDerivedHook,
-    selectorPick,
-    resolvedHook,
-  );
-  const createRule = useCreateRule(
-    scanState,
-    pendingWrites,
-    elementTokens,
-    activeSelectorHook,
-    styleContextsHook,
-    resolvedHook,
-    writeNewRuleHook,
-  );
-  const emptyContext = useEmptyContext(
-    busyState,
-    scanState,
-    pendingWrites,
-    refreshDerivedHook,
-    elementTokens,
-    resolvedHook,
-  );
+  const writeNewRuleHook = useWriteNewRule(busyState, scanState, pendingWrites, refreshDerivedHook, selectorPick, resolvedHook, editorRefs, nativeState);
+  const createRule = useCreateRule(busyState, scanState, pendingWrites, elementTokens, activeSelectorHook, styleContextsHook, resolvedHook, writeNewRuleHook);
+  const emptyContext = useEmptyContext(busyState, scanState, pendingWrites, refreshDerivedHook, elementTokens, resolvedHook);
   return { createRule, emptyContext, nativeOps, nativeRefresh, writeNewRuleHook };
 }
 
@@ -435,40 +336,10 @@ function useEditorNativeCalls(
     createRule,
     emptyContext,
   );
-  const nativeAttempt = useNativeAttempt(
-    editorRefs,
-    busyState,
-    scanState,
-    selectionState,
-    styleContextsHook,
-    nativeOps,
-  );
-  const nativeSet = useNativeSet(
-    editorRefs,
-    scanState,
-    selectionState,
-    styleContextsHook,
-    nativeRefresh,
-    nativeOps,
-    addQuery,
-    nativeAttempt,
-  );
-  const createNativeClassHook = useCreateNativeClass(
-    editorRefs,
-    selectionState,
-    nativeState,
-    styleContextsHook,
-    nativeRefresh,
-    nativeOps,
-  );
-  const nativeCreate = useNativeCreate(
-    scanState,
-    nativeRefresh,
-    nativeOps,
-    addQuery,
-    nativeAttempt,
-    createNativeClassHook,
-  );
+  const nativeAttempt = useNativeAttempt(editorRefs, busyState, scanState, selectionState, styleContextsHook, nativeOps);
+  const nativeSet = useNativeSet(editorRefs, scanState, selectionState, styleContextsHook, nativeRefresh, nativeOps, addQuery, nativeAttempt);
+  const createNativeClassHook = useCreateNativeClass(editorRefs, selectionState, nativeState, styleContextsHook, nativeRefresh, nativeOps);
+  const nativeCreate = useNativeCreate(scanState, nativeRefresh, nativeOps, addQuery, nativeAttempt, createNativeClassHook);
   return { addQuery, nativeCreate, nativeSet };
 }
 
@@ -503,17 +374,7 @@ function useEditorPropWrites(
     nativeCreate,
     autoSelect,
   );
-  const clearPropHook = useClearProp(
-    selectionState,
-    propEdits,
-    liveEdits,
-    ruleActions,
-    styleContextsHook,
-    resolvedHook,
-    nativeOps,
-    writeNewRuleHook,
-    addQuery,
-  );
+  const clearPropHook = useClearProp(selectionState, propEdits, liveEdits, ruleActions, styleContextsHook, resolvedHook, nativeOps, writeNewRuleHook, addQuery);
   const liveSetPropHook = useLiveSetProp(
     selectionState,
     nativeState,
@@ -525,6 +386,7 @@ function useEditorPropWrites(
     addQuery,
     autoSelect,
     clearPropHook,
+    createRule,
   );
   return { clearPropHook, liveSetPropHook, setPropHook };
 }
@@ -539,28 +401,13 @@ function useEditorSources(
 ) {
   const { nativeState, selectionState } = editorFoundation;
   const { openEmbed } = editorRuleEdits;
-  const { activeSelectorHook, elementTokens, focusPropHook, selectorPick, typedSelector } =
-    editorElement;
+  const { activeSelectorHook, elementTokens, focusPropHook, selectorPick, typedSelector } = editorElement;
   const { nativeTarget, styleContextsHook } = editorContexts;
   const { resolvedHook, selectorChipsHook } = editorResolution;
 
-  const sourceOptionsHook = useSourceOptions(
-    nativeState,
-    elementTokens,
-    styleContextsHook,
-    nativeTarget,
-    resolvedHook,
-  );
+  const sourceOptionsHook = useSourceOptions(nativeState, elementTokens, styleContextsHook, nativeTarget, resolvedHook);
   const embedNavHook = useEmbedNav(nativeState, openEmbed, sourceOptionsHook);
-  const selectionCard = useSelectionCard(
-    selectionState,
-    elementTokens,
-    activeSelectorHook,
-    selectorPick,
-    typedSelector,
-    focusPropHook,
-    selectorChipsHook,
-  );
+  const selectionCard = useSelectionCard(selectionState, elementTokens, activeSelectorHook, selectorPick, typedSelector, focusPropHook, selectorChipsHook);
   return { embedNavHook, selectionCard, sourceOptionsHook };
 }
 
@@ -580,9 +427,8 @@ function useEditorCardView(
   const { busyState, editorRefs, nativeState, scanState, selectionState } = editorFoundation;
   const { refreshHook } = editorSelection;
   const { ruleActions } = editorRuleEdits;
-  const { elementTokens } = editorElement;
-  const { nativeTarget, querySuggestionsHook, renameQuery, sourceDocumentHook, styleContextsHook } =
-    editorContexts;
+  const { elementTokens, typedSelector } = editorElement;
+  const { nativeTarget, querySuggestionsHook, renameQuery, sourceDocumentHook } = editorContexts;
   const { contextChange, resolvedHook, selectorChipsHook } = editorResolution;
   const { writeNewRuleHook } = editorRuleWrites;
   const { addQuery } = editorNativeCalls;
@@ -596,7 +442,6 @@ function useEditorCardView(
     sourceDocumentHook,
     renameQuery,
     querySuggestionsHook,
-    styleContextsHook,
     resolvedHook,
     selectorChipsHook,
     contextChange,
@@ -616,18 +461,9 @@ function useEditorCardView(
     liveSetPropHook,
     sourceOptionsHook,
   );
-  const editorView = useEditorView(
-    editorRefs,
-    busyState,
-    scanState,
-    nativeState,
-    elementTokens,
-    embedNavHook,
-    selectionCard,
-    contextCard,
-    sourceCard,
-  );
-  return { editorView };
+  const editorView = useEditorView(editorRefs, busyState, scanState, nativeState, elementTokens, embedNavHook, selectionCard, contextCard, sourceCard);
+  const card = useInlineCard(editorView.view.card, editorFoundation.inlineState, { deselect: typedSelector.deselect, setSaveError: busyState.setSaveError });
+  return { editorView: { view: { ...editorView.view, card } } };
 }
 
 // What the panel's root renders from.
@@ -644,7 +480,7 @@ function useEditorView(
 ) {
   const { rootRef } = editorRefs;
   const { busy, saveError } = busyState;
-  const { nativeFallback, phase, scan, scanningMore, setNativeFallback } = scanState;
+  const { nativeFallback, phase, scan, scanningMore } = scanState;
   const { pendingKeys } = nativeState;
   const { model } = elementTokens;
   const { embedNav, nativeHasAny } = embedNavHook;
@@ -660,7 +496,6 @@ function useEditorView(
     saveError,
     pendingCount: pendingKeys.size,
     nativeFallback,
-    dismissFallback: () => setNativeFallback(undefined),
     phase,
     card,
     scanningMore,
@@ -679,7 +514,6 @@ interface EditorView {
   saveError: string | undefined;
   pendingCount: number;
   nativeFallback: string | undefined;
-  dismissFallback: () => void;
   phase: Phase;
   card: StyleCardProps;
   scanningMore: boolean;
@@ -690,6 +524,7 @@ interface EditorView {
 
 function EditorRoot({ view }: { view: EditorView }) {
   const { phase, model, pendingCount } = view;
+  const translate = useTranslate();
   return (
     <ProvenanceEmbedNav.Provider value={view.embedNav}>
       <div className="embed-editor_root" ref={view.rootRef}>
@@ -698,17 +533,10 @@ function EditorRoot({ view }: { view: EditorView }) {
         <SaveIndicator
           busy={view.busy}
           error={view.saveError}
-          pending={
-            pendingCount
-              ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} ` +
-                "to the page's styles — not on the canvas until you leave this component"
-              : undefined
-          }
+          pending={pendingCount ? translate('style.embedEditor.pendingTooltip', { count: pendingCount }) : undefined}
         />
-        <PendingNote count={pendingCount} />
-        {view.nativeFallback ? (
-          <FallbackNote note={view.nativeFallback} onDismiss={view.dismissFallback} />
-        ) : undefined}
+        {/* Why a native write fell back to an embed is a toast, not a row: the panel does not shift when it happens. */}
+        <ErrorToast message={view.nativeFallback} />
 
         {/* The panel is always usable once Webflow responds, including when no canvas
           element is selected. Embeds and native class values fill in as they load. */}
@@ -720,11 +548,7 @@ function EditorRoot({ view }: { view: EditorView }) {
           </section>
         ) : undefined}
 
-        {phase === 'ready' &&
-        !view.scanningMore &&
-        model &&
-        model.matchedRuleCount === 0 &&
-        !view.nativeHasAny ? (
+        {phase === 'ready' && !view.scanningMore && model && model.matchedRuleCount === 0 && !view.nativeHasAny ? (
           <EmptyScanNote scan={view.scan} />
         ) : undefined}
       </div>
@@ -732,47 +556,11 @@ function EditorRoot({ view }: { view: EditorView }) {
   );
 }
 
-// Edits to the page's own <style> blocks held while a component is open.
-function PendingNote({ count }: { count: number }) {
-  if (!count) {
-    return undefined;
-  }
-  return (
-    <p className="embed-editor_pending-note">
-      {count} change{count === 1 ? '' : 's'} to the page's own &lt;style&gt; block
-      {count === 1 ? '' : 's'} {count === 1 ? 'is' : 'are'} held here — the canvas won't show{' '}
-      {count === 1 ? 'it' : 'them'} until you leave this component, and{' '}
-      {count === 1 ? 'it saves' : 'they save'} when you do.
-    </p>
-  );
-}
-
-// Why a native write fell back to an embed, until dismissed.
-function FallbackNote({ note, onDismiss }: { note: string; onDismiss: () => void }) {
-  return (
-    <p className="embed-editor_fallback-note" role="status">
-      {note}
-      <button
-        type="button"
-        className="embed-editor_fallback-dismiss"
-        aria-label="Dismiss"
-        onClick={onDismiss}
-      >
-        ✕
-      </button>
-    </p>
-  );
-}
-
 // Nothing targets the element: how many embeds were scanned, or that there were none.
 function EmptyScanNote({ scan }: { scan: ScanState | undefined }) {
-  return (
-    <div className="embed-editor_empty">
-      {scan?.embedCount
-        ? `Scanned ${scan.embedCount} embed${scan.embedCount === 1 ? '' : 's'}` +
-          (scan.componentEmbedCount ? ` (${scan.componentEmbedCount} in components)` : '') +
-          ', but none target this element.'
-        : 'No HTML embeds with <style> blocks were found on this page.'}
-    </div>
-  );
+  const translate = useTranslate();
+  const scannedMessage = scan?.componentEmbedCount
+    ? translate('style.embedEditor.scannedWithComponents', { count: scan.embedCount, components: scan.componentEmbedCount })
+    : translate('style.embedEditor.scanned', { count: scan?.embedCount ?? 0 });
+  return <div className="embed-editor_empty">{scan?.embedCount ? scannedMessage : translate('style.embedEditor.noEmbeds', { tag: STYLE_TAG })}</div>;
 }

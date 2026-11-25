@@ -4,27 +4,39 @@
 // them (App.tsx).
 
 import { usePropertySaveGuard } from '../usePropertySaveGuard';
+import type { RemoteCmsSelection } from '../../features/cms/remoteCmsShared';
+import type { CmsFileSettingsTarget } from '../../features/cms/CmsPanel';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { assert } from '../../../shared/core/assert';
+import type { PseudoLayer } from '../../../shared/page/pseudoPath';
+import { parsePseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
-import type { VariableSelection } from '../../features/variables/variablesBridge';
+import { usePreviewDimensions, type CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
+import type { VariableSelection } from '../../ipc/variablesBridge';
+import { bootSeed, bootSnapshotFor } from '../../lib/bootSeed';
+import { requestSettingsSection } from '../../lib/settingsSections';
+import { seededLeftTabOf, type SeededLeftTab } from '../model/seededLeftTab';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
+import { type CodeReveal } from '../../features/code/codePanelModel';
 import {
   type AssetPick,
   type CollectionSamples,
+  type ValueSamples,
   type DevStatus,
   type DynamicEntry,
   type GitInfo,
   type InjectedRoute,
-  type ItemIndexes,
+  type CanvasCopy,
+  type ItemPaging,
   type LeftTab,
   type NodeStates,
+  type PseudoPick,
   type PreviewCommitInfo,
   type ProjectIdentity,
   type RightTab,
-  type RightTabIndicator,
 } from '../appTypes';
 import {
   findEditorNodeById as findNodeById,
@@ -37,24 +49,31 @@ import {
 import { type EditorModel } from '../../editor/pageView';
 import { type AppCollection } from '../../ipc/appBridge';
 import { createLiveValue } from '../../ui/liveValue';
+import type { PendingSave } from '../model/nodeFactory';
 
 // The open project, its scan, and the page and selection being edited.
 export function useProjectState() {
   const propertySave = usePropertySaveGuard();
-  const [project, setProject] = useState<ProjectIdentity | undefined>(undefined);
+  // The project this window opens and what the last session knew of it (src/lib/bootSeed.ts), so the first
+  // render is the real shell with its real page list; the scan that follows replaces it in place.
+  const seeded = bootSeed();
+  const [project, setProject] = useState<ProjectIdentity | undefined>(seeded.project);
 
   // ----------------------------------------------------------------
   // Model operations
   // ----------------------------------------------------------------
 
-  const projectRef = useRef<ProjectIdentity | undefined>(undefined);
+  const projectRef = useRef<ProjectIdentity | undefined>(seeded.project);
   projectRef.current = project;
-  const [scan, setScan] = useState<ScanResult>({
-    pages: [],
-    pageFolders: [],
-    layouts: [],
-    components: [],
-  });
+  const [scan, setScan] = useState<ScanResult>(
+    () =>
+      (seeded.project === undefined ? undefined : bootSnapshotFor(seeded.project.path)?.scan) ?? {
+        pages: [],
+        pageFolders: [],
+        layouts: [],
+        components: [],
+      },
+  );
   const [projectClasses, setProjectClasses] = useState<readonly string[]>([]);
   const [currentPage, setCurrentPage] = useState<CurrentPage | undefined>(undefined);
   // Drill-down trail: [page, component, nested component, …]. The last entry
@@ -99,6 +118,8 @@ export function useCanvasReportState() {
   // The navigator row under the pointer: a live value, read by the canvas pane
   // alone, so crossing rows does not re-render the app (src/ui/liveValue.ts).
   const [hoverNode] = useState(() => createLiveValue<string | undefined>(undefined));
+  // The ::before or ::after row under the pointer, of the hovered node above.
+  const [hoverPseudo] = useState(() => createLiveValue<PseudoLayer | undefined>(undefined));
   // Paths the page reports as having actually rendered something. Null until
   // the page has said anything, which is not the same as "nothing rendered".
   const [renderedPaths, setRenderedPathsState] = useState<readonly string[] | undefined>(undefined);
@@ -107,34 +128,31 @@ export function useCanvasReportState() {
   const [nodeStates, setNodeStatesState] = useState<NodeStates | undefined>(undefined);
   // Path to the classes that node rendered with, for labelling rows whose
   // class is an expression the source can't resolve.
-  const [nodeClasses, setNodeClassesState] = useState<
-    Readonly<Record<string, readonly string[]>> | undefined
-  >(undefined);
+  const [nodeClasses, setNodeClassesState] = useState<Readonly<Record<string, readonly string[]>> | undefined>(undefined);
+  // The ::before or ::after last picked in the navigator (see PseudoPick).
+  const [pseudoPick, setPseudoPick] = useState<PseudoPick | undefined>(undefined);
+  // The same pick for the keys, which read it at keypress time (see AppKeys).
+  const pseudoPickRef = useRef<PseudoPick | undefined>(undefined);
+  pseudoPickRef.current = pseudoPick;
   // The canvas re-reports after every walk of the page, mostly with what it
   // said last time. A report equal to the one held keeps the held one, and
   // React skips the render a new array or object would have cost the app.
-  const setRenderedPaths = useCallback(
-    (next: readonly string[] | undefined) =>
-      setRenderedPathsState((held) => (sameReport(held, next) ? held : next)),
-    [],
-  );
-  const setNodeStates = useCallback(
-    (next: NodeStates | undefined) =>
-      setNodeStatesState((held) => (sameReport(held, next) ? held : next)),
-    [],
-  );
+  const setRenderedPaths = useCallback((next: readonly string[] | undefined) => setRenderedPathsState((held) => (sameReport(held, next) ? held : next)), []);
+  const setNodeStates = useCallback((next: NodeStates | undefined) => setNodeStatesState((held) => (sameReport(held, next) ? held : next)), []);
   const setNodeClasses = useCallback(
-    (next: Readonly<Record<string, readonly string[]>> | undefined) =>
-      setNodeClassesState((held) => (sameReport(held, next) ? held : next)),
+    (next: Readonly<Record<string, readonly string[]>> | undefined) => setNodeClassesState((held) => (sameReport(held, next) ? held : next)),
     [],
   );
   return {
     classesForRef,
     classesTick,
     hoverNode,
+    hoverPseudo,
     navigatorSelectionTick,
     nodeClasses,
     nodeStates,
+    pseudoPick,
+    pseudoPickRef,
     renderedPaths,
     selectedClasses,
     setClassesTick,
@@ -142,6 +160,7 @@ export function useCanvasReportState() {
     setNodeClasses,
     setNodeStates,
     setNavigatorSelectionTick,
+    setPseudoPick,
     setRenderedPaths,
     setSelectedClasses,
   };
@@ -204,15 +223,31 @@ export function useDataState() {
   // binding picker. Keyed by collection; a name present with no value has
   // been asked for and has no answer, which stops it being asked again.
   const [collectionSamples, setCollectionSamples] = useState<CollectionSamples>({});
+  // What the open file's calls to its imports returned (`await getCampusPastors()`),
+  // sampled by the dev server; a key present with no value has no answer.
+  const [valueSamples, setValueSamples] = useState<ValueSamples>({});
+  // What the open file's frontmatter values held on the canvas's last render,
+  // keyed as value samples are. Kept apart so they win over a value sampled
+  // some other way, whichever answer arrives last (scopeSamples.ts).
+  const [scopeSamples, setScopeSamples] = useState<ValueSamples>({});
   // Every collection the project has, so data anywhere in the site is
   // reachable from the picker — not only what this page already reads.
   const [collections, setCollections] = useState<readonly AppCollection[]>([]);
   const sampleAskedRef = useRef(new Set<string>());
   const [dynamicIndex, setDynamicIndex] = useState(0);
-  // Which item of each loop's list the data picker reads as `service`, `post`,
-  // … — keyed by the item's own name. See bindContext below.
-  const [itemIndex, setItemIndex] = useState<ItemIndexes>({});
+  // Which item of each loop's list the person stepped the data picker to, as
+  // `service`, `post`, … — keyed by the item's own name, and only for the
+  // selection it was done under: a new selection starts from the item the
+  // canvas copy is in again. See bindContext (ProjectWindow.tsx).
+  const [itemPaging, setItemPaging] = useState<ItemPaging>({ key: '', pages: {} });
+  // The copy of the selected node the last canvas click landed on, so the picker
+  // reads the loop item that copy was made from (editor/loopSelection.ts).
+  const [canvasCopy, setCanvasCopy] = useState<CanvasCopy | undefined>(undefined);
   const [dynamicError, setDynamicError] = useState<string | undefined>(undefined);
+  // The entry of a dynamic page a link in the canvas landed on (`/projects/p1` of
+  // `/projects/[slug]`), shown while that page's entries are read and kept until one
+  // of them is picked: the canvas stays where the visitor went (canvasLandingFor).
+  const [linkedEntry, setLinkedEntry] = useState<LinkedEntry | undefined>(undefined);
   return {
     collectionSamples,
     collections,
@@ -220,27 +255,50 @@ export function useDataState() {
     dynamicIndex,
     dynamicPaths,
     injectedRoutes,
-    itemIndex,
+    itemPaging,
+    canvasCopy,
+    linkedEntry,
     sampleAskedRef,
     setCollectionSamples,
     setCollections,
+    setValueSamples,
+    valueSamples,
+    scopeSamples,
+    setScopeSamples,
     setDynamicError,
     setDynamicIndex,
     setDynamicPaths,
     setInjectedRoutes,
-    setItemIndex,
+    setItemPaging,
+    setCanvasCopy,
+    setLinkedEntry,
   };
 }
 
+/** A dynamic page's entry a canvas link landed on: the page's file and the entry's route. */
+export interface LinkedEntry {
+  readonly pagePath: string;
+  readonly route: string;
+}
+
+// The panel the last session left open for the project this window opens (model/seededLeftTab.ts).
+function seededLeft(): SeededLeftTab {
+  const seeded = bootSeed().project;
+  return seededLeftTabOf(seeded === undefined ? undefined : bootSnapshotFor(seeded.path)?.leftTab);
+}
+
 // The left panel, the CMS views and the interactive preview.
-export function usePanelState(
-  canvasReportState: ReturnType<typeof useCanvasReportState>,
-  projectState: ReturnType<typeof useProjectState>,
-) {
+export function usePanelState(canvasReportState: ReturnType<typeof useCanvasReportState>, projectState: ReturnType<typeof useProjectState>) {
   const { setHoverNodeId } = canvasReportState;
   const { currentPage } = projectState;
 
-  const [leftTab, setLeftTab] = useState<LeftTab>('navigator');
+  const [seededPanel] = useState(seededLeft);
+  const [leftTab, setLeftTab] = useState<LeftTab>(seededPanel.tab);
+  useEffect(() => {
+    if (seededPanel.showInstructions) {
+      requestSettingsSection('instructions');
+    }
+  }, [seededPanel]);
   useEffect(() => {
     if (leftTab !== 'navigator') {
       setHoverNodeId(undefined);
@@ -256,13 +314,27 @@ export function usePanelState(
   // Content collection open in the schema-driven editor. Only one of the two
   // is ever open: they edit the same kind of thing in two different ways.
   const [contentName, setContentName] = useState<string | undefined>(undefined);
+  // A connected CMS's document open in the main view; never open beside the two above.
+  const [cmsRemote, setCmsRemote] = useState<RemoteCmsSelection | undefined>(undefined);
+  // A data file's settings (its variables) open in the main view; never open beside the three above.
+  const [cmsFileSettings, setCmsFileSettings] = useState<CmsFileSettingsTarget | undefined>(undefined);
   // Which stylesheet group the variables sheet is showing: { file, index }.
   const [varsGroup, setVarsGroup] = useState<VariableSelection | undefined>(undefined);
   const [cmsTick, setCmsTick] = useState(0); // bumped on save, refreshes counts
   const [cmsSettings, setCmsSettings] = useState(false); // editing that collection's fields
   const [inPreview, setInPreview] = useState(false); // interactive full-site preview
   const [previewSource, setPreviewSource] = useState<string | undefined>(undefined);
+  // A piece of code a refusal pointed at ('Show in code'): the Code panel shows it
+  // instead of the whole selected element, while that element stays selected and
+  // the source still holds that code there (CodeTab checks both).
+  const [codeReveal, setCodeReveal] = useState<CodeReveal | undefined>(undefined);
   return {
+    codeReveal,
+    setCodeReveal,
+    cmsRemote,
+    setCmsRemote,
+    cmsFileSettings,
+    setCmsFileSettings,
     cmsRel,
     cmsSettings,
     cmsTick,
@@ -289,6 +361,10 @@ export function useWindowState() {
   // derived at the bottom of this component (a dynamic page's entry is picked
   // there), long after the callbacks up here are defined.
   const livePathRef = useRef<string | undefined>(undefined);
+  // A node's path on the canvas, for the edits that show themselves there
+  // before the source rebuilds. Set where the page tree is (appCanvasModel.ts),
+  // which is built after the edit callbacks that read it.
+  const canvasPathForRef = useRef<(id: string) => string | undefined>(() => undefined);
   const [termOpen, setTermOpen] = useState(false); // bottom terminal dock
   const [codeWin, setCodeWin] = useState<CodeWindowState | undefined>(undefined);
   const openCodeWindowRef = useRef<(() => boolean) | undefined>(undefined);
@@ -298,6 +374,27 @@ export function useWindowState() {
   // not silently drop the user out of the view they picked (which would
   // reload every preview iframe and flash the canvas white).
   const [device, setDevice] = useState<PreviewDevice>('desktop');
+  // The custom width and height dragged or typed on the canvas, here beside the device for the
+  // same reason, and because the preview mode draws the page at that size too: a resize in
+  // either mode is the size the other opens on (AppShell PreviewModeView).
+  const previewDimensions = usePreviewDimensions();
+  // A width the style panel asks the canvas for (a picked media query, see
+  // features/style/model/queryWidth.ts). Counted, so asking for the same width
+  // twice still applies it after the canvas was resized by hand in between.
+  const [canvasWidthRequest, setCanvasWidthRequest] = useState<CanvasWidthRequest | undefined>(undefined);
+  // The width the canvas is actually drawn at (fit, device and custom alike), reported by the
+  // preview, which the style panel's context dropdown follows (style/embed/contextFollow.ts).
+  const [canvasWidthPx, setCanvasWidthPx] = useState<number | undefined>(undefined);
+  // The device moves to `custom` in the same update as the request, so the toolbar's
+  // active device, the readout and the frame change in one commit; the pane applies the
+  // width while rendering it (PreviewPane useCanvasWidthRequest), not an effect later.
+  const requestCanvasWidth = useCallback((widthPx: number) => {
+    setCanvasWidthRequest((previous) => ({ widthPx, serial: (previous?.serial ?? 0) + 1 }));
+    setDevice('custom');
+  }, []);
+  // The toolbar's desktop device, for the style panel's Base (model/baseWidth.ts): the
+  // same state update the device button makes, so the two can never land differently.
+  const showDesktopCanvas = useCallback(() => setDevice('desktop'), []);
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -318,8 +415,6 @@ export function useWindowState() {
   const [contentFocus, setContentFocus] = useState(0);
   // Sliding highlight behind the active Style/Settings tab, measured from the
   // buttons so it tracks their real geometry (and any panel resize).
-  const rightTabRefs = useRef<Record<string, HTMLButtonElement | undefined>>({});
-  const [rightTabInd, setRightTabInd] = useState<RightTabIndicator | undefined>(undefined);
   // The asset request a field is waiting on, and the tab to go back to once
   // it's answered — "Choose Image…" borrows the left panel rather than
   // opening a window over the canvas.
@@ -337,13 +432,13 @@ export function useWindowState() {
     fileText,
     gitInfo,
     livePathRef,
+    canvasPathForRef,
     openCodeWindowRef,
+    previewDimensions,
     previewInfo,
     previewRef,
     revealTick,
     rightTab,
-    rightTabInd,
-    rightTabRefs,
     selectionKeysRef,
     setAssetPick,
     setClassFocus,
@@ -351,13 +446,17 @@ export function useWindowState() {
     setContentFocus,
     setCreateRequest,
     setDevice,
+    canvasWidthRequest,
+    canvasWidthPx,
+    setCanvasWidthPx,
+    requestCanvasWidth,
+    showDesktopCanvas,
     setFileText,
     setGitInfo,
     setPreviewInfo,
     setPreviewRef,
     setRevealTick,
     setRightTab,
-    setRightTabInd,
     setTermOpen,
     tabBeforePick,
     termOpen,
@@ -373,12 +472,9 @@ export function useSessionRefs(projectState: ReturnType<typeof useProjectState>)
   // know about the component named X" has to search both lists, or a placed
   // layout would come back with no props, no slots and no rest support.
   // Components win a name collision: they're the more likely intent.
-  const insertables = useMemo(
-    () => [...scan.components, ...scan.layouts],
-    [scan.components, scan.layouts],
-  );
+  const insertables = useMemo(() => [...scan.components, ...scan.layouts], [scan.components, scan.layouts]);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveTimer = useRef<PendingSave | undefined>(undefined);
   const devLogRef = useRef('');
   const pageStateRef = useRef<PageStateSnapshot>({ currentPage: undefined, pageState: undefined });
   pageStateRef.current = { currentPage, pageState };
@@ -460,4 +556,40 @@ export function useTypedCodeRefs(
     typedCodeUnparsed,
     typedSourceRef,
   };
+}
+
+/**
+ * A ::before / ::after pick belongs to one selection. When the selection moves
+ * to another node the pick is dropped, so coming back to the element later
+ * selects the element, not its layer. The one move it survives is a remap: an
+ * edit gave the same element a new id (see the selection effect above), and
+ * its old id is gone from the page.
+ */
+export function usePseudoPickFollowsSelection(
+  state: Pick<ReturnType<typeof useProjectState>, 'pageState' | 'selectedId'> & Pick<ReturnType<typeof useCanvasReportState>, 'setPseudoPick'>,
+): void {
+  const { pageState, selectedId, setPseudoPick } = state;
+  useEffect(() => {
+    const nodes = pageState?.editable ? pageState.model.nodes : undefined;
+    setPseudoPick((held) => {
+      if (held === undefined || held.nodeId === selectedId) {
+        return held;
+      }
+      if (selectedId === undefined || nodes === undefined) {
+        return undefined;
+      }
+      if (findNodeById(nodes, held.nodeId)) {
+        return undefined; // The element is still there: the user moved on.
+      }
+      // The new node is asked again: an edit can hand the id to a loop or an
+      // instance, which owns no pseudo-element (shared/page/pseudoElements.ts).
+      const target = parsePseudoLayerTarget(findNodeById(nodes, selectedId), held.pseudo);
+      if (!target.ok) {
+        return undefined;
+      }
+      const moved = { ...held, nodeId: target.value.nodeId };
+      assert(moved.nodeId !== held.nodeId, 'usePseudoPickFollowsSelection: a remap changes the id');
+      return moved;
+    });
+  }, [pageState, selectedId, setPseudoPick]);
 }

@@ -82,7 +82,8 @@ async function evaluate(url: string, expression: string): Promise<void> {
   }
 }
 
-function rendererProbe(project: string): string {
+export function linuxSmokeRendererProbe(project: string): string {
+  const terminal = linuxSmokeTerminalStart(project);
   // The split printf argument prevents the terminal's command echo from being
   // mistaken for output: only a functioning native PTY can produce the marker.
   return `(async () => {
@@ -100,9 +101,7 @@ function rendererProbe(project: string): string {
       if (event.id === 'linux-smoke') output = (output + event.data).slice(-65536);
     });
     try {
-      const started = await window.avb.startTerminal({
-        id: 'linux-smoke', cwd: ${JSON.stringify(project)}
-      });
+      const started = await window.avb.startTerminal(${JSON.stringify(terminal)});
       if (!started.ok) throw new Error(JSON.stringify(started));
       window.avb.terminalInput('linux-smoke', "printf 'stacki-%s' 'linux-pty-ok'\\n");
       for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -115,6 +114,14 @@ function rendererProbe(project: string): string {
       await window.avb.closeTerminal({ id: 'linux-smoke' });
     }
   })()`;
+}
+
+export function linuxSmokeTerminalStart(project: string) {
+  assert.ok(project.length > 0, 'Smoke project path is required');
+  assert.ok(project.length <= 4096, 'Smoke project path exceeds limit');
+  // The probe has no xterm layout. Supply a fixed, valid grid so the native
+  // shell starts through the same measured-dimensions contract as the app.
+  return { id: 'linux-smoke', cwd: project, cols: 80, rows: 24 } as const;
 }
 
 async function main(): Promise<void> {
@@ -144,7 +151,7 @@ async function main(): Promise<void> {
   });
   try {
     await Promise.race([
-      rendererSocket().then((url) => evaluate(url, rendererProbe(project))),
+      rendererSocket().then((url) => evaluate(url, linuxSmokeRendererProbe(project))),
       exited.then(() => {
         throw new Error('Packaged Stacki exited before the smoke test');
       }),
@@ -162,7 +169,9 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  void main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

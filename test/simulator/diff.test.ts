@@ -1,6 +1,7 @@
 // Goal: shared/engine/diff.ts computes exact edit distances and a valid minimum edit
-// script, and stops with a typed `too-costly` outcome — never a partial or
-// approximate diff — when a budget runs out (plan §10, §14).
+// script, and, when a budget runs out, degrades to a typed `coarse` outcome:
+// the byte blocks proven equal and aligned, never an approximate script and
+// never a refusal, because Stacki has no size limit (plan §10, §14).
 // Method: (1) seeded random byte strings over tiny alphabets, where repeats and
 // tied scripts are the norm, checked against the brute-force full tables in
 // referenceDiff.ts: the total distance, the prefix and suffix distance at
@@ -12,13 +13,7 @@
 // (6) diffing leaves its inputs untouched, bytes read from disk included.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  diffBytes,
-  diffHunks,
-  DIFF_BUDGET,
-  type ByteDiff,
-  type DiffBudget,
-} from '#dist/shared/engine/diff.js';
+import { coarseHunks, diffBytes, diffHunks, DIFF_BUDGET, type ByteDiff, type DiffBudget } from '#dist/shared/engine/diff.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
 import { encodeUtf8, toByteString, type ByteString } from '#dist/shared/core/span.js';
 import { Prng } from './prng.ts';
@@ -31,11 +26,7 @@ function randomBytes(prng: Prng, lengthMax: number, alphabet: number): ByteStrin
   return toByteString(Uint8Array.from({ length }, () => 0x61 + prng.below(alphabet)));
 }
 
-function computed(
-  source: ByteString,
-  target: ByteString,
-  budget: DiffBudget = DIFF_BUDGET,
-): ByteDiff {
+function computed(source: ByteString, target: ByteString, budget: DiffBudget = DIFF_BUDGET): ByteDiff {
   const outcome = diffBytes(source, target, budget);
   assert.equal(outcome.tag, 'computed');
   if (outcome.tag !== 'computed') {
@@ -79,11 +70,7 @@ test('distances at every point agree with the full tables on seeded inputs', () 
         const before = tables.before(x, y);
         const after = tables.after(x, y);
         const beyond = (value: number) => (value <= tables.distance ? value : undefined);
-        assert.equal(
-          diff.distanceBefore(x, y),
-          beyond(before),
-          `seed ${seed}: before (${x}, ${y})`,
-        );
+        assert.equal(diff.distanceBefore(x, y), beyond(before), `seed ${seed}: before (${x}, ${y})`);
         assert.equal(diff.distanceAfter(x, y), beyond(after), `seed ${seed}: after (${x}, ${y})`);
       }
     }
@@ -103,12 +90,7 @@ test('edge cases: empty, identical, pure insertion, pure deletion', () => {
   const inserted = computed(empty, page);
   assert.equal(inserted.distance, page.length);
   assert.deepEqual(
-    diffHunks(inserted).map((hunk) => [
-      hunk.source.start,
-      hunk.source.end,
-      hunk.target.start,
-      hunk.target.end,
-    ]),
+    diffHunks(inserted).map((hunk) => [hunk.source.start, hunk.source.end, hunk.target.start, hunk.target.end]),
     [[0, 0, 0, page.length]],
   );
   const deleted = computed(page, empty);
@@ -121,31 +103,87 @@ test('edge cases: empty, identical, pure insertion, pure deletion', () => {
   assert.equal(rebuild(changed).cost, 2);
 });
 
-test('the distance budget: at the bound computes, one past it is too-costly', () => {
+// What a coarse outcome must prove: blocks ascend, are disjoint, and hold equal
+// bytes at equal relative places in both files.
+function coarseBlocks(source: ByteString, target: ByteString, budget: DiffBudget) {
+  const outcome = diffBytes(source, target, budget);
+  assert.equal(outcome.tag, 'coarse');
+  if (outcome.tag !== 'coarse') {
+    throw new Error('unreachable');
+  }
+  let sourceEnd = 0;
+  let targetEnd = 0;
+  for (const block of outcome.diff.blocks) {
+    assert.ok(block.length > 0);
+    assert.ok(block.sourceStart >= sourceEnd);
+    assert.ok(block.targetStart >= targetEnd);
+    assert.deepEqual(
+      source.subarray(block.sourceStart, block.sourceStart + block.length),
+      target.subarray(block.targetStart, block.targetStart + block.length),
+    );
+    sourceEnd = block.sourceStart + block.length;
+    targetEnd = block.targetStart + block.length;
+  }
+  return outcome.diff;
+}
+
+test('the distance budget: at the bound computes, one past it degrades to a coarse diff', () => {
   const source = encodeUtf8('abcdef');
   const target = encodeUtf8('abXYef'); // Two out, two in: distance 4.
-  assert.equal(
-    computed(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 4 }).distance,
-    4,
-  );
-  assert.deepEqual(diffBytes(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 3 }), {
-    tag: 'too-costly',
-  });
-  assert.deepEqual(diffBytes(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 0 }), {
-    tag: 'too-costly',
-  });
+  assert.equal(computed(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 4 }).distance, 4);
+  for (const distanceMax of [3, 0]) {
+    const coarse = coarseBlocks(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax });
+    // The shared prefix `ab` and suffix `ef` are proven; the middle is not.
+    assert.deepEqual(coarse.blocks, [
+      { sourceStart: 0, targetStart: 0, length: 2 },
+      { sourceStart: 4, targetStart: 4, length: 2 },
+    ]);
+    assert.deepEqual(
+      coarseHunks(coarse).map((hunk) => [hunk.source.start, hunk.source.end, hunk.target.start, hunk.target.end]),
+      [[2, 4, 2, 4]],
+    );
+  }
 });
 
-test('the work budget: exhausted in frontier cells or in a long snake is too-costly', () => {
-  const source = encodeUtf8('x'.repeat(1_000));
-  const target = encodeUtf8(`${'x'.repeat(1_000)}y`);
-  const spent = computed(source, target).workSpent;
-  assert.ok(spent > 2_000, 'both directions scan the shared run');
-  assert.equal(computed(source, target, { workMax: spent, distanceMax: 8 }).workSpent, spent);
-  // One unit short fails, whichever loop reaches the bound first.
-  for (const workMax of [spent - 1, 1_500, 500, 1, 0]) {
-    assert.deepEqual(diffBytes(source, target, { workMax, distanceMax: 8 }), { tag: 'too-costly' });
-  }
+test('the work budget: an exact search that costs more than the linear scans degrades to a coarse diff', () => {
+  // All `a` against all `a` but the last 200: the frontier cells alone are
+  // about D² = 160 000, far past four linear passes over 2 000 bytes.
+  const source = encodeUtf8('a'.repeat(1_000));
+  const target = encodeUtf8(`${'a'.repeat(800)}${'b'.repeat(200)}`);
+  const exact = computed(source, target, { workMax: DIFF_BUDGET.workMax, distanceMax: 1_000 });
+  assert.equal(exact.distance, 400);
+  assert.ok(exact.workSpent > 4 * (source.length + target.length), 'the exact search spent more than the linear allowance');
+  const coarse = coarseBlocks(source, target, { workMax: 0, distanceMax: 1_000 });
+  assert.deepEqual(coarse.blocks, [{ sourceStart: 0, targetStart: 0, length: 800 }]);
+});
+
+test('a small edit in a file of any size never trips the work budget by size alone', () => {
+  // The budget is spent beyond the linear scans, so even a zero budget computes
+  // an exact diff when the cost is just reading the file.
+  const page = encodeUtf8('line\n'.repeat(40_000));
+  const edited = encodeUtf8(`${'line\n'.repeat(20_000)}new\n${'line\n'.repeat(20_000)}`);
+  const diff = computed(page, edited, { workMax: 0, distanceMax: 16 });
+  assert.equal(diff.distance, 4);
+});
+
+test('a coarse diff aligns by unique lines: edits far apart in a big rewrite keep their islands', () => {
+  // Three thousand bytes changed at each end of a file with a long unchanged
+  // middle: the exact search cannot cross distance 2 048 + 2 048, but the unique
+  // lines of the middle anchor it, so the middle is proven equal and aligned.
+  const lines = Array.from({ length: 2_000 }, (_, index) => `<p id="row-${index}">content of row ${index}</p>\n`);
+  const head = (text: string) => text.repeat(100);
+  const source = encodeUtf8(`${head('old head ')}\n${lines.join('')}${head('old tail ')}\n`);
+  const target = encodeUtf8(`${head('new HEAD 12 ')}\n${lines.join('')}${head('new TAIL 12 ')}\n`);
+  const coarse = coarseBlocks(source, target, DIFF_BUDGET);
+  const middleStart = lines.join('').length;
+  const covered = coarse.blocks.reduce((total, block) => total + block.length, 0);
+  assert.ok(covered >= middleStart, `${covered} bytes proven of ${middleStart}`);
+  // A byte in the middle maps through, shifted by the change in the head.
+  const shift = encodeUtf8(head('new HEAD 12 ')).length - encodeUtf8(head('old head ')).length;
+  const inside = encodeUtf8(`${head('old head ')}\n`).length + 1_000;
+  const block = coarse.blocks.find((candidate) => candidate.sourceStart <= inside && inside < candidate.sourceStart + candidate.length);
+  assert.ok(block !== undefined, 'the middle byte lies in a proven block');
+  assert.equal(block.targetStart - block.sourceStart, shift);
 });
 
 test('preconditions assert with pinned messages', () => {
@@ -159,27 +197,14 @@ test('preconditions assert with pinned messages', () => {
     /Assertion failed: The diff budget stays inside the distance/,
   );
   const diff = computed(bytes, encodeUtf8('abd'));
-  assert.throws(
-    () => diff.distanceBefore(4, 0),
-    /Assertion failed: A diff point lies inside the source/,
-  );
-  assert.throws(
-    () => diff.distanceAfter(0, 4),
-    /Assertion failed: A diff point lies inside the target/,
-  );
-  assert.throws(
-    () => diff.distanceBefore(-1, 0),
-    /Assertion failed: A diff point lies right of the grid start/,
-  );
-  assert.throws(
-    () => diff.distanceBefore(0.5, 0),
-    /Assertion failed: A diff point has an integer x/,
-  );
+  assert.throws(() => diff.distanceBefore(4, 0), /Assertion failed: A diff point lies inside the source/);
+  assert.throws(() => diff.distanceAfter(0, 4), /Assertion failed: A diff point lies inside the target/);
+  assert.throws(() => diff.distanceBefore(-1, 0), /Assertion failed: A diff point lies right of the grid start/);
+  assert.throws(() => diff.distanceBefore(0.5, 0), /Assertion failed: A diff point has an integer x/);
 });
 
 test('a 1 MB page with a small edit stays far inside the budget', () => {
-  const block =
-    '<section class="card">\n  <h2 title="Old">Heading</h2>\n  <p>Body text.</p>\n</section>\n';
+  const block = '<section class="card">\n  <h2 title="Old">Heading</h2>\n  <p>Body text.</p>\n</section>\n';
   const page = block.repeat(Math.ceil(1_000_000 / block.length));
   const middle = Math.floor(page.length / 2);
   const edited = `${page.slice(0, middle)}<!-- external -->${page.slice(middle)}`;

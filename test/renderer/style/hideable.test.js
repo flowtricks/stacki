@@ -39,10 +39,7 @@ const check = (what, condition, detail) => {
     ['{ parseBoxShadows, serializeBoxShadows }', 'src/features/style/model/boxShadow.ts'],
     ['{ parseShadows, serializeShadows }', 'src/features/style/model/textShadow.ts'],
   ];
-  fs.writeFileSync(
-    entry,
-    reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''),
-  );
+  fs.writeFileSync(entry, reexports.map(([names, file]) => `export ${names} from ${sourceSpecifier(file)};\n`).join(''));
   const bundlePath = path.join(buildDirectory, 'hideable.bundle.js');
   await esbuild.build({
     entryPoints: [entry],
@@ -95,11 +92,7 @@ const check = (what, condition, detail) => {
     );
 
     const off = textOf('filter', setHidden(rows, 1, true));
-    check(
-      'hiding one comments it out',
-      off === 'blur(5px) /* invert(100%) */',
-      JSON.stringify(off),
-    );
+    check('hiding one comments it out', off === 'blur(5px) /* invert(100%) */', JSON.stringify(off));
     // The whole point: the layer is still in the text, character for character.
     check('and its text is still there', off.includes('invert(100%)'), off);
 
@@ -128,11 +121,7 @@ const check = (what, condition, detail) => {
     // nobody added.
     check('reading it back finds one layer, not two', back.length === 1, JSON.stringify(back));
     check('and it is the hidden one', back[0].hidden === true, JSON.stringify(back));
-    check(
-      'restoring it drops the placeholder',
-      textOf('filter', setHidden(back, 0, false)) === 'blur(5px)',
-      textOf('filter', setHidden(back, 0, false)),
-    );
+    check('restoring it drops the placeholder', textOf('filter', setHidden(back, 0, false)) === 'blur(5px)', textOf('filter', setHidden(back, 0, false)));
     check('allHidden agrees', allHidden(rows.map((row) => ({ ...row, hidden: true }))) === true);
     check('and says no when one is showing', allHidden(rows) === false);
   }
@@ -144,20 +133,12 @@ const check = (what, condition, detail) => {
     // as garbage layers.
     const value = 'drop-shadow(0 0 2px rgba(0, 0, 0, 0.5)) blur(2px)';
     const rows = rowsOf('filter', value);
-    check(
-      'a filter with spaces and commas inside stays one layer',
-      rows.length === 2,
-      JSON.stringify(rows.map((row) => row.item)),
-    );
+    check('a filter with spaces and commas inside stays one layer', rows.length === 2, JSON.stringify(rows.map((row) => row.item)));
     const off = textOf('filter', setHidden(rows, 0, true));
     check('and survives being hidden', off.includes('rgba(0, 0, 0, 0.5)'), off);
     check('with the comment around the whole thing', /^\/\* drop-shadow\(.*\) \*\//.test(off), off);
     const back = rowsOf('filter', off);
-    check(
-      'and reads back as one hidden layer plus one showing',
-      back.length === 2 && back[0].hidden && !back[1].hidden,
-      JSON.stringify(back),
-    );
+    check('and reads back as one hidden layer plus one showing', back.length === 2 && back[0].hidden && !back[1].hidden, JSON.stringify(back));
   }
 
   // --- A layer that is several CSS functions --------------------------------
@@ -169,46 +150,22 @@ const check = (what, condition, detail) => {
   // value came back with four layers in it — and every one of them would have
   // been written back to the stylesheet.
   {
-    const rows = rowsOf(
-      'transform',
-      'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)',
-    );
-    check(
-      'a rotate stays one layer',
-      rows.length === 2,
-      JSON.stringify(rows.map((row) => row.item.type)),
-    );
-    check(
-      'a move and a rotate',
-      rows.map((row) => row.item.type).join(',') === 'move,rotate',
-      JSON.stringify(rows.map((row) => row.item.type)),
-    );
+    const rows = rowsOf('transform', 'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)');
+    check('a rotate stays one layer', rows.length === 2, JSON.stringify(rows.map((row) => row.item.type)));
+    check('a move and a rotate', rows.map((row) => row.item.type).join(',') === 'move,rotate', JSON.stringify(rows.map((row) => row.item.type)));
 
     // Hidden, the rotate's three functions live inside one comment — and have
     // to come back out as one layer, not three.
     const off = textOf('transform', setHidden(rows, 1, true));
-    check(
-      'hiding it wraps all three functions in one comment',
-      (off.match(/\/\*/g) || []).length === 1,
-      off,
-    );
+    check('hiding it wraps all three functions in one comment', (off.match(/\/\*/g) || []).length === 1, off);
     const back = rowsOf('transform', off);
-    check(
-      'and it reads back as one hidden layer',
-      back.length === 2,
-      JSON.stringify(back.map((row) => row.item.type)),
-    );
-    check(
-      'still a rotate',
-      back[1].item.type === 'rotate' && back[1].hidden === true,
-      JSON.stringify(back[1]),
-    );
+    check('and it reads back as one hidden layer', back.length === 2, JSON.stringify(back.map((row) => row.item.type)));
+    check('still a rotate', back[1].item.type === 'rotate' && back[1].hidden === true, JSON.stringify(back[1]));
     check('with its angle intact', back[1].item.z === '45deg', JSON.stringify(back[1].item));
     // And turning it back on gives exactly what we started from.
     check(
       'showing it again restores the value',
-      textOf('transform', setHidden(back, 1, false)) ===
-        'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)',
+      textOf('transform', setHidden(back, 1, false)) === 'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg)',
       textOf('transform', setHidden(back, 1, false)),
     );
   }
@@ -216,43 +173,23 @@ const check = (what, condition, detail) => {
   // --- Transform: space-separated -------------------------------------------
   {
     const rows = rowsOf('transform', 'translate(10px, 20px) rotate(45deg)');
-    check(
-      'two transforms are read',
-      rows.length === 2,
-      JSON.stringify(rows.map((row) => row.item)),
-    );
+    check('two transforms are read', rows.length === 2, JSON.stringify(rows.map((row) => row.item)));
     const off = textOf('transform', setHidden(rows, 0, true));
-    check(
-      'hiding the first comments only that one',
-      /^\/\*/.test(off) && off.includes('rotate'),
-      off,
-    );
+    check('hiding the first comments only that one', /^\/\*/.test(off) && off.includes('rotate'), off);
     const back = rowsOf('transform', off);
-    check(
-      'and it round-trips',
-      back.length === 2 && back[0].hidden && !back[1].hidden,
-      JSON.stringify(back),
-    );
+    check('and it round-trips', back.length === 2 && back[0].hidden && !back[1].hidden, JSON.stringify(back));
   }
 
   // --- Transition: comma-separated ------------------------------------------
   {
     const rows = rowsOf('transition', 'opacity 200ms ease, transform 300ms linear');
-    check(
-      'two transitions are read',
-      rows.length === 2,
-      JSON.stringify(rows.map((row) => row.item)),
-    );
+    check('two transitions are read', rows.length === 2, JSON.stringify(rows.map((row) => row.item)));
     const off = textOf('transition', setHidden(rows, 1, true));
     // Comma-joined, so the comment sits after a comma rather than a space.
     check('the hidden one is commented', off.includes('/*') && off.includes('transform'), off);
     check('and the list is still comma-separated', off.includes(', '), off);
     const back = rowsOf('transition', off);
-    check(
-      'and it round-trips',
-      back.length === 2 && !back[0].hidden && back[1].hidden,
-      JSON.stringify(back),
-    );
+    check('and it round-trips', back.length === 2 && !back[0].hidden && back[1].hidden, JSON.stringify(back));
   }
 
   // --- Nothing, and nonsense -------------------------------------------------
@@ -261,16 +198,9 @@ const check = (what, condition, detail) => {
     check('and serializes back to empty', textOf('filter', []) === '');
     // A value this property's parser cannot read is left out of the model
     // rather than turned into a broken layer.
-    check(
-      'an unreadable layer is skipped',
-      rowsOf('filter', 'blur(5px) wat(1)').length === 1,
-      JSON.stringify(rowsOf('filter', 'blur(5px) wat(1)')),
-    );
+    check('an unreadable layer is skipped', rowsOf('filter', 'blur(5px) wat(1)').length === 1, JSON.stringify(rowsOf('filter', 'blur(5px) wat(1)')));
     // An unterminated comment must not swallow the rest silently as a layer.
-    check(
-      'an unterminated comment does not crash',
-      Array.isArray(rowsOf('filter', 'blur(5px) /* invert(1)')),
-    );
+    check('an unterminated comment does not crash', Array.isArray(rowsOf('filter', 'blur(5px) /* invert(1)')));
   }
 
   // --- Does the browser still accept it -------------------------------------
@@ -304,17 +234,12 @@ const check = (what, condition, detail) => {
     'box-shadow': '0 1px 2px red, 0 2px 4px blue, 0 3px 6px green',
     'text-shadow': '0 1px 2px red, 0 2px 4px blue, 0 3px 6px green',
     filter: 'blur(5px) invert(100%) grayscale(50%)',
-    transform:
-      'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg) scale3d(2, 2, 1)',
+    transform: 'translate3d(10px, 20px, 0px) rotateX(0deg) rotateY(0deg) rotateZ(45deg) scale3d(2, 2, 1)',
   };
   const cases = [];
   for (const [prop, start] of Object.entries(STARTS)) {
     const rows = rowsOf(prop, start);
-    check(
-      `${prop}: three layers to work with`,
-      rows.length === 3,
-      JSON.stringify(rows.map((row) => row.item)),
-    );
+    check(`${prop}: three layers to work with`, rows.length === 3, JSON.stringify(rows.map((row) => row.item)));
     for (const hide of HIDE_SETS) {
       cases.push({
         prop,
@@ -329,10 +254,7 @@ const check = (what, condition, detail) => {
   }
 
   if (typeof electronPath !== 'string') {
-    console.log(
-      `hideable: ${checked} passed  ` +
-        `[the browser check needs a Chromium — see test/renderer/style/computedColor.test.js]`,
-    );
+    console.log(`hideable: ${checked} passed  ` + `[the browser check needs a Chromium — see test/renderer/style/computedColor.test.js]`);
     if (failures.length) {
       console.error(`hideable: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
       process.exit(1);
@@ -380,17 +302,10 @@ const check = (what, condition, detail) => {
       const hiddenLayers = result.hide === 'none' ? 'nothing' : result.hide;
       const where = `${result.prop} with ${hiddenLayers} hidden`;
       // The declaration surviving at all is the half that was broken.
-      check(
-        `${where}: the browser keeps the declaration`,
-        result.shown === 0 || result.kept !== '',
-        `dropped — "${result.computed}"`,
-      );
+      check(`${where}: the browser keeps the declaration`, result.shown === 0 || result.kept !== '', `dropped — "${result.computed}"`);
       // And it applies exactly the layers still showing, no more and no fewer.
       const applied =
-        result.kept === '' ||
-        result.computed === 'none' ||
-        result.computed === 'all' ||
-        result.computed === 'matrix(1, 0, 0, 1, 0, 0)'
+        result.kept === '' || result.computed === 'none' || result.computed === 'all' || result.computed === 'matrix(1, 0, 0, 1, 0, 0)'
           ? 0
           : result.prop === 'filter' || result.prop === 'transform'
             ? result.computed.split(/\s+(?![^(]*\))/).filter(Boolean).length
@@ -398,11 +313,7 @@ const check = (what, condition, detail) => {
       const want = result.prop === 'transform' ? Math.min(result.shown, 1) : result.shown;
       check(
         `${where}: it applies the ${result.shown} still showing`,
-        result.prop === 'transform'
-          ? result.shown === 0
-            ? applied === 0
-            : applied >= 1
-          : applied === want,
+        result.prop === 'transform' ? (result.shown === 0 ? applied === 0 : applied >= 1) : applied === want,
         `applied ${applied}, computed "${result.computed}"`,
       );
     }

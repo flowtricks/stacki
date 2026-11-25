@@ -1,0 +1,10 @@
+---
+// Shaped exactly like Stacki's filter and sort settings, but no list reads
+// them: these are ordinary object props and must not become list editors.
+interface Props {
+  filters?: { filterFor: 'ALL' | 'ANY'; fields: { fieldPath: string; operatorName: string; value?: unknown }[] };
+  sort?: { field: string; direction: 'asc' | 'desc' }[];
+}
+const { filters = { filterFor: 'ALL', fields: [] }, sort = [] } = Astro.props;
+---
+<pre class="list-lookalike">{JSON.stringify({ filters, sort })}</pre>

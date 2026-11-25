@@ -14,6 +14,8 @@
 }
 
 .clip-path_canvas-wrap {
+  /* The canvas edits clip-path points in physical x/y. */
+  direction: ltr;
   position: relative;
   z-index: 0;
   width: 100%;
@@ -30,20 +32,8 @@
   aspect-ratio: 1 / 1;
   background-color: var(--color-bg-surface-raised);
   background-image:
-    linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.06) 25%,
-      transparent 25%,
-      transparent 75%,
-      rgba(255, 255, 255, 0.06) 75%
-    ),
-    linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.06) 25%,
-      transparent 25%,
-      transparent 75%,
-      rgba(255, 255, 255, 0.06) 75%
-    );
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.06) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.06) 75%);
   background-position:
     0 0,
     8px 8px;
@@ -69,7 +59,7 @@
   z-index: 2;
   width: 12px;
   height: 12px;
-  margin: -6px 0 0 -6px;
+  margin: -6px 0 0 -6px; /* physical: handle centred on LTR canvas */
   border-radius: 50%;
   background: var(--color-text-primary);
   border: var(--border-width-thick) solid var(--clip-path_handle-color);
@@ -101,16 +91,15 @@
   transform: translateX(-0.5px);
 }
 .clip-path_snap-guide.is-y {
-  left: 0;
-  right: 0;
+  left: 0; /* physical: snap guide on LTR canvas */
+  right: 0; /* physical: snap guide on LTR canvas */
   height: 1px;
   transform: translateY(-0.5px);
 }
 .clip-path_shape-bounds {
   position: absolute;
   z-index: 1;
-  border: var(--border-width-default) dashed
-    color-mix(in srgb, var(--color-text-primary) 55%, transparent);
+  border: var(--border-width-default) dashed color-mix(in srgb, var(--color-text-primary) 55%, transparent);
   pointer-events: none;
 }
 .clip-path_shape-bounds.is-selected {
@@ -130,7 +119,7 @@
   z-index: 3;
   width: 12px;
   height: 12px;
-  margin: -6px 0 0 -6px;
+  margin: -6px 0 0 -6px; /* physical: handle centred on LTR canvas */
   padding: 0;
   border: var(--border-width-thick) solid var(--color-text-primary);
   border-radius: 2px;
@@ -172,7 +161,7 @@
   outline: none;
   width: 16px;
   height: 16px;
-  margin: -8px 0 0 -8px;
+  margin: -8px 0 0 -8px; /* physical: handle centred on LTR canvas */
   background: var(--clip-path_handle-color);
   border-color: var(--color-text-primary);
   box-shadow: none;
@@ -235,7 +224,7 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-tight);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   opacity: 0.5;
   overflow-wrap: anywhere;
@@ -312,7 +301,7 @@
   padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
@@ -344,7 +333,7 @@
   position: absolute;
   z-index: calc(var(--z-modal) + 1);
   top: calc(100% + var(--space-2));
-  left: 0;
+  inset-inline-start: 0;
   width: min(270px, calc(100vw - var(--space-5) - var(--space-5)));
   max-width: calc(100vw - var(--space-5) - var(--space-5));
   overflow: hidden;
@@ -369,7 +358,7 @@
   cursor: pointer;
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
-  text-align: left;
+  text-align: start;
 }
 
 .clip-path_label-menu-item:hover,
@@ -431,10 +420,6 @@
   flex: 0 0 auto;
   width: var(--size-icon-md);
   height: var(--size-icon-md);
-}
-
-.clip-path_source-icon path {
-  fill: currentColor;
 }
 
 .clip-path_source-class {
@@ -540,7 +525,7 @@
   position: absolute;
   z-index: var(--z-tooltip);
   top: calc(100% + var(--space-2));
-  left: 0;
+  inset-inline-start: 0;
   width: max-content;
   max-width: 100%;
   padding: var(--space-3) var(--space-4);
@@ -607,6 +592,14 @@
 .clip-path_preset-button:hover {
   background: var(--color-bg-surface-raised);
 }
+/* In the Style panel's layer popover, which is itself the surface colour, the
+   button takes the raised fill so it still reads as a control. */
+.embed-editor_layer-popover .clip-path_preset-button {
+  background: var(--color-bg-surface-raised);
+}
+.embed-editor_layer-popover .clip-path_preset-button:hover {
+  background: var(--color-bg-surface-high);
+}
 .clip-path_preset-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 var(--border-width-default) var(--color-border-focus);
@@ -663,14 +656,14 @@
   position: absolute;
   z-index: var(--z-modal);
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   max-height: 268px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: var(--space-3);
   border-radius: var(--radius-xl);
@@ -764,7 +757,7 @@
   position: absolute;
   z-index: calc(var(--z-modal) + 2);
   top: calc(100% + var(--space-2));
-  right: 0;
+  inset-inline-end: 0;
   display: flex;
   flex-direction: column;
   width: min(520px, calc(100vw - var(--space-7) - var(--space-7)));
@@ -792,6 +785,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0 var(--space-5) var(--space-5);
 }
 
@@ -906,4 +900,10 @@
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+}
+/* The code takes the inset fill, not the popover's own surface grey, so it
+   reads as a field. Three classes: the editor's theme sets its background with
+   two, and is injected after this sheet. */
+.clip-path_code.code-editor .cm-editor {
+  background-color: var(--color-bg-inset);
 }

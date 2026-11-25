@@ -4,11 +4,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  parsePage,
-  serializePage,
-  serializePageMarked,
-} = require('#dist/electron/parse/astroParser.js');
+const { parsePage, serializePage, serializePageMarked } = require('#dist/electron/parse/astroParser.js');
 
 const navigation = `<nav>
   {settings.mainNav.map((item) =>
@@ -73,9 +69,7 @@ test('conditional map branches and nested links are editable with source locatio
 });
 
 test('parenthesized conditional callback also stays structural', () => {
-  const source =
-    '{items.map((item) => (item.featured ? (<strong>{item.name}</strong>) : ' +
-    '(<span>{item.name}</span>)))}\n';
+  const source = '{items.map((item) => (item.featured ? (<strong>{item.name}</strong>) : ' + '(<span>{item.name}</span>)))}\n';
   const result = parsePage(source);
   assert.equal(result.editable, true, result.reason);
   assert.equal(result.model.nodes[0]?.kind, 'map');
@@ -90,9 +84,7 @@ test('conditional map preview compiles with editable branch markers', async () =
   for (const compilerName of ['@astrojs/compiler', '@astrojs/compiler-rs']) {
     const { transform } = await import(compilerName);
     const result = await transform(marked, { filename: '/Nav.astro' });
-    const errors = (result.diagnostics || []).filter(
-      (diagnostic) => diagnostic.severity === 'error' || diagnostic.severity === 1,
-    );
+    const errors = (result.diagnostics || []).filter((diagnostic) => diagnostic.severity === 'error' || diagnostic.severity === 1);
     assert.deepEqual(errors, [], compilerName);
   }
 });

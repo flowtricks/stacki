@@ -1,14 +1,12 @@
 import { useCallback } from 'react';
-import { canWrapNode, wrapNodeGesture, type WrapperTag } from '../../editor/wrapNode';
+import { canConvertText, canWrapNode, textWrapGesture, wrapNodeGesture, type TextTag, type WrapperTag } from '../../editor/wrapNode';
+import { showWrapOnCanvas } from '../../editor/canvasInsertShow';
 import { newId } from '../model/nodeFactory';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
-export function useWrapNode(
-  coreState: ReturnType<typeof useCoreState>,
-  history: ReturnType<typeof useHistory>,
-) {
-  const { pageStateRef, setSelectedId } = coreState;
+export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
+  const { canvasPathForRef, pageStateRef, setSelectedId } = coreState;
   const { commitEdit } = history;
   const wrapNode = useCallback(
     (nodeId: string, name: WrapperTag): void => {
@@ -20,10 +18,28 @@ export function useWrapNode(
         return;
       }
       const wrapper = { id: newId(), name };
-      commitEdit(wrapNodeGesture(state.model, nodeId, wrapper));
+      if (commitEdit(wrapNodeGesture(state.model, nodeId, wrapper))) {
+        // The wrapper stands around the node on the canvas at once (framePendingInsert.ts).
+        showWrapOnCanvas(state.model, nodeId, name, (id) => canvasPathForRef.current(id));
+      }
+      setSelectedId(wrapper.id);
+    },
+    [canvasPathForRef, commitEdit, pageStateRef, setSelectedId],
+  );
+  const convertText = useCallback(
+    (nodeId: string, name: TextTag): void => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) {
+        return;
+      }
+      if (!canConvertText(state.model.nodes, nodeId, name)) {
+        return;
+      }
+      const wrapper = { id: newId(), name };
+      commitEdit(textWrapGesture(state.model, nodeId, wrapper));
       setSelectedId(wrapper.id);
     },
     [commitEdit, pageStateRef, setSelectedId],
   );
-  return { wrapNode };
+  return { convertText, wrapNode };
 }

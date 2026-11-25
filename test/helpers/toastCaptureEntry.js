@@ -7,8 +7,6 @@ subscribeErrorToasts(
     globalThis.stackiCapturedToasts = [notice, ...globalThis.stackiCapturedToasts].slice(0, 5);
   },
   (id) => {
-    globalThis.stackiCapturedToasts = globalThis.stackiCapturedToasts.filter(
-      (item) => item.id !== id,
-    );
+    globalThis.stackiCapturedToasts = globalThis.stackiCapturedToasts.filter((item) => item.id !== id);
   },
 );

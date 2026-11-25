@@ -12,9 +12,7 @@ test('deployment confirmation requires the exact live revision and survives tran
     transport: async (_url, options) => {
       assert.equal(options?.cache, 'no-store');
       calls++;
-      return calls === 1
-        ? new Response('Restarting', { status: 503 })
-        : Response.json({ sha: calls === 2 ? 'b'.repeat(40) : sha });
+      return calls === 1 ? new Response('Restarting', { status: 503 }) : Response.json({ sha: calls === 2 ? 'b'.repeat(40) : sha });
     },
   });
   assert.equal(result, 'live');

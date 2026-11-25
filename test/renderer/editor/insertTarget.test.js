@@ -78,11 +78,7 @@ const check = (what, condition, detail) => {
   const at = (selectionId, item = DIV) => insertTargetFor(model, selectionId, item, insertables);
 
   // ── The report ────────────────────────────────────────────────────────────
-  check(
-    'a div inserted with the Section selected goes inside it',
-    at('sec').parentId === 'sec',
-    JSON.stringify(at('sec')),
-  );
+  check('a div inserted with the Section selected goes inside it', at('sec').parentId === 'sec', JSON.stringify(at('sec')));
   check('at the end of what it already holds', at('sec').index === 2, JSON.stringify(at('sec')));
   // And the reason it used to land outside — a component with no default slot
   // still can't hold anything.
@@ -93,22 +89,11 @@ const check = (what, condition, detail) => {
   );
 
   // ── The tags still decide ─────────────────────────────────────────────────
-  check(
-    'a void element never holds anything',
-    JSON.stringify(at('hr')) === JSON.stringify({ parentId: undefined, index: 4 }),
-    JSON.stringify(at('hr')),
-  );
-  check(
-    'and a <div> inside a <p> lands after the <p>',
-    JSON.stringify(at('p')) === JSON.stringify({ parentId: undefined, index: 2 }),
-    JSON.stringify(at('p')),
-  );
+  check('a void element never holds anything', JSON.stringify(at('hr')) === JSON.stringify({ parentId: undefined, index: 4 }), JSON.stringify(at('hr')));
+  check('and a <div> inside a <p> lands after the <p>', JSON.stringify(at('p')) === JSON.stringify({ parentId: undefined, index: 2 }), JSON.stringify(at('p')));
   // A component is judged by what it renders, not by being a component.
   const heading = { id: 'h', kind: 'component', name: 'Heading', props: {}, children: [] };
-  check(
-    'a <p> is refused by a component that renders a heading',
-    acceptsChildren(heading, 'p', insertables) === false,
-  );
+  check('a <p> is refused by a component that renders a heading', acceptsChildren(heading, 'p', insertables) === false);
   check('while a <span> is fine there', acceptsChildren(heading, 'span', insertables) === true);
   check(
     "and the instance's own tag wins over the component's default",
@@ -134,10 +119,7 @@ const check = (what, condition, detail) => {
     JSON.stringify(at(undefined)) === JSON.stringify({ parentId: undefined, index: 4 }),
     JSON.stringify(at(undefined)),
   );
-  check(
-    'and the frontmatter row is not a place',
-    JSON.stringify(at('frontmatter')) === JSON.stringify({ parentId: undefined, index: 4 }),
-  );
+  check('and the frontmatter row is not a place', JSON.stringify(at('frontmatter')) === JSON.stringify({ parentId: undefined, index: 4 }));
 
   const condition = {
     id: 'condition',
@@ -198,19 +180,13 @@ const check = (what, condition, detail) => {
         JSON.stringify(parseSlots(source)),
       );
       if (tag) {
-        check(
-          `and renders a <${tag}>`,
-          (rootTag(source) || {}).tag === tag,
-          JSON.stringify(rootTag(source)),
-        );
+        check(`and renders a <${tag}>`, (rootTag(source) || {}).tag === tag, JSON.stringify(rootTag(source)));
       }
     }
   }
 
   if (failures.length) {
-    console.error(
-      `\ninsert-target: ${failures.length} failed, ${checked - failures.length} passed\n`,
-    );
+    console.error(`\ninsert-target: ${failures.length} failed, ${checked - failures.length} passed\n`);
     console.error(failures.join('\n') + '\n');
     process.exit(1);
   }

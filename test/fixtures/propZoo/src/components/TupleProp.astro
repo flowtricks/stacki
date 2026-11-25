@@ -1,0 +1,8 @@
+---
+interface Props {
+  point: [number, number];
+  range?: readonly [min: number, max: number];
+}
+const { point, range = [0, 10] } = Astro.props;
+---
+<p class="tuple-prop">({point[0]}, {point[1]}) in [{range[0]}..{range[1]}]</p>

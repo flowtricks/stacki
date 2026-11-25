@@ -83,9 +83,7 @@ export function isPseudoElement(value: string): boolean {
     return true;
   }
   // Legacy single-colon pseudo-elements.
-  return /^:(before|after|first-line|first-letter|placeholder|selection|marker|backdrop)$/i.test(
-    value,
-  );
+  return /^:(before|after|first-line|first-letter|placeholder|selection|marker|backdrop)$/i.test(value);
 }
 
 /** Parse a full selector list (comma-separated) into display + match info. */
@@ -198,6 +196,9 @@ export type CanonicalCompound = {
   splittable: boolean;
   /** True when the subject compound is the universal `*` (with no tag/class/attr). */
   universal: boolean;
+  /** True when the subject is narrowed by `:is()`, `:not()`, `:has()` or `:global()`,
+   *  which leave no token but keep `:is(.a, .b)::after` from being a bare `::after`. */
+  functional: boolean;
 };
 
 // Pseudo-classes representable as a Webflow class STATE (a chip / native-editable
@@ -218,26 +219,18 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
       pseudoElement: '',
       splittable: false,
       universal: false,
+      functional: false,
     };
   }
 
   const pseudoClasses = subject.pseudoClasses;
   const pseudoElement = normalizePseudoElement(first.pseudoElement);
   const oneCompound = first.compounds.length === 1 && first.combinators.length === 0;
-  const noFunctionalPseudo =
-    subject.negations.length === 0 &&
-    subject.requireAny.length === 0 &&
-    subject.hasGroups.length === 0;
+  const noFunctionalPseudo = subject.negations.length === 0 && subject.requireAny.length === 0 && subject.hasGroups.length === 0;
   // Only bare state pseudos keep a compound "simple"; a structural pseudo (:nth-child …)
   // isn't a Webflow class state, so it must read as complex to keep its full text.
   const stateOnly = pseudoClasses.every((pseudo) => STATE_PSEUDO_CLASSES.has(pseudo));
-  const simple =
-    oneCompound &&
-    !pseudoElement &&
-    !subject.universal &&
-    subject.id === undefined &&
-    noFunctionalPseudo &&
-    stateOnly;
+  const simple = oneCompound && !pseudoElement && !subject.universal && subject.id === undefined && noFunctionalPseudo && stateOnly;
   // Like `simple`, but a pseudo-element is allowed (it's the whole point of splitting
   // `.a::before`). A bare universal (`::before`) is never splittable — it's hidden.
   const splittable = oneCompound && !subject.universal && noFunctionalPseudo;
@@ -250,11 +243,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
   subject.attrs.forEach((attr) => {
     // Presence `[data-x]` → `attr:data-x` (matches a chip); a valued/operator
     // form `[data-x="y"]` gets a distinct token so it stays orange-only.
-    tokens.push(
-      attr.operator && attr.value !== undefined
-        ? `attr:${attr.name}${attr.operator}"${attr.value}"`
-        : `attr:${attr.name}`,
-    );
+    tokens.push(attr.operator && attr.value !== undefined ? `attr:${attr.name}${attr.operator}"${attr.value}"` : `attr:${attr.name}`);
   });
   return {
     simple,
@@ -264,15 +253,60 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
     pseudoElement,
     splittable,
     universal: subject.universal,
+    functional: !noFunctionalPseudo,
   };
 }
 
 /** True when the selector's subject is qualified by a parent or ancestor. */
 export function selectorDependsOnAncestor(selectorText: string): boolean {
   const selectors = compileSelectorList(selectorText);
-  return selectors.some((selector) =>
-    selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'),
-  );
+  return selectors.some((selector) => selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'));
+}
+
+/**
+ * What a selector is built from, for the well's colour. `class`: a class, id or
+ * attribute in any compound, including inside `:is()`, `:where()`, `:not()` and
+ * `:has()`; the chip is blue, because it names this element's identity. `plain`:
+ * only tags, `*` and pseudos; the chip is grey, because it describes a project-wide
+ * group. Text that does not parse falls back to looking for `.`, `#` or `[`.
+ */
+export type SelectorKind = 'class' | 'plain';
+
+/**
+ * Past this many characters a selector is not parsed, only scanned: the chip's colour is
+ * decided on the first paint, so its cost is bounded and never waits on a long rule.
+ */
+export const SELECTOR_KIND_PARSE_MAX = 2048;
+
+export function selectorKind(text: string): SelectorKind {
+  assert(typeof text === 'string', 'selectorKind: the selector is text');
+  if (text.length > SELECTOR_KIND_PARSE_MAX) {
+    return /[.#[]/.test(text) ? 'class' : 'plain';
+  }
+  let root: selectorParser.Root;
+  try {
+    root = selectorParser().astSync(text);
+  } catch {
+    return /[.#[]/.test(text) ? 'class' : 'plain';
+  }
+  let named = false;
+  root.walk((node) => {
+    if (node.type === 'class' || node.type === 'id' || node.type === 'attribute') {
+      named = true;
+      return false;
+    }
+    return undefined;
+  });
+  const kind: SelectorKind = named ? 'class' : 'plain';
+  assert(kind === 'class' || !/^[.#[]/.test(text.trim()), 'selectorKind: a selector led by a class, id or attribute is a class chip');
+  return kind;
+}
+
+// A selector made only from tags, universal selectors, and pseudos describes a
+// project-wide group rather than this element's identity (selectorKind). The well
+// colours these chips grey and reads them before the element's classes (wellOrder).
+export function isGlobalSelector(text: string): boolean {
+  return selectorKind(text) === 'plain';
 }
 
 /** Normalize a pseudo-element to its `::name` form (handles legacy `:before`), or ''. */
@@ -281,6 +315,26 @@ export function normalizePseudoElement(pseudoElement: string | undefined): strin
     return '';
   }
   return `::${pseudoElement.replace(/^::?/, '').toLowerCase()}`;
+}
+
+/**
+ * The box a selector styles, as the navigator lists boxes: the element ('') or
+ * one of its ::before and ::after rows. Other pseudo-elements (`::marker`,
+ * `::placeholder`) have no row, so they stay with the element.
+ */
+export type SelectorLayer = '' | '::before' | '::after';
+
+/** The layer of a parsed selector, from the pseudo-element on its subject. */
+export function selectorLayerOf(pseudoElement: string | undefined): SelectorLayer {
+  const normalized = normalizePseudoElement(pseudoElement);
+  return normalized === '::before' || normalized === '::after' ? normalized : '';
+}
+
+/** The layer each member of a selector list styles, in list order. */
+export function selectorListLayers(selectorText: string): readonly SelectorLayer[] {
+  const layers = compileSelectorList(selectorText).map((selector) => selectorLayerOf(selector.pseudoElement));
+  assert(layers.length <= selectorText.length + 1, 'selectorListLayers: one layer per member');
+  return layers;
 }
 
 export const compileCache = new Map<string, CompiledSelector[]>();
@@ -340,7 +394,6 @@ export class SelectorBuilder {
   private classCount = 0;
   private typeCount = 0;
   private hasPseudoClass = false;
-  private pseudoElement: string | undefined;
 
   add(node: selectorParser.Node): void {
     switch (node.type) {
@@ -403,7 +456,6 @@ export class SelectorBuilder {
     const value = node.value;
     if (isPseudoElement(value)) {
       this.current.pseudoElement = value;
-      this.pseudoElement = value;
       this.typeCount += 1;
     } else if (value === ':not') {
       // Negation: compile inner, negate at match time; specificity = the
@@ -411,6 +463,18 @@ export class SelectorBuilder {
       const inner = compileFunctionalArg(node);
       this.current.negations.push(...inner);
       this.addSpecificity(mostSpecific(inner));
+    } else if (value === ':global') {
+      // Astro's `:global(.button)` is `.button` with the file's scope left off
+      // (how a user lets a page's rules reach markup it renders through a
+      // component): it matches what its argument matches, at its argument's
+      // weight.
+      const inner = compileFunctionalArg(node);
+      if (inner.length) {
+        this.current.requireAny.push(inner);
+      }
+      this.addSpecificity(mostSpecific(inner));
+      // `:global(.a::after)` styles what its argument styles, a generated box included.
+      this.current.pseudoElement ??= sharedPseudoElement(inner);
     } else if (value === ':is' || value === ':matches' || value === ':where') {
       // :is()/:where() are static structural matchers, NOT state pseudo-
       // classes — the element must match one of their arguments. :where
@@ -460,19 +524,23 @@ export class SelectorBuilder {
     if (this.started) {
       this.pushCurrent();
     }
-    assert(
-      this.combinators.length <= Math.max(0, this.compounds.length - 1),
-      'SelectorBuilder: a combinator sits between two compounds',
-    );
+    assert(this.combinators.length <= Math.max(0, this.compounds.length - 1), 'SelectorBuilder: a combinator sits between two compounds');
     return {
       text,
       compounds: this.compounds,
       combinators: this.combinators,
       specificity: [this.idCount, this.classCount, this.typeCount],
       hasPseudoClass: this.hasPseudoClass,
-      pseudoElement: this.pseudoElement,
+      // Only the subject's: a pseudo-element on any other compound styles nothing here.
+      pseudoElement: this.compounds[this.compounds.length - 1]?.pseudoElement,
     };
   }
+}
+
+// The pseudo-element every argument styles, or undefined when they do not agree.
+function sharedPseudoElement(selectors: readonly CompiledSelector[]): string | undefined {
+  const first = selectors[0]?.pseudoElement;
+  return selectors.every((selector) => normalizePseudoElement(selector.pseudoElement) === normalizePseudoElement(first)) ? first : undefined;
 }
 
 export function compileFunctionalArg(node: selectorParser.Pseudo): CompiledSelector[] {
@@ -507,8 +575,7 @@ export function compileHasArg(node: selectorParser.Pseudo): HasCond[] {
       return;
     }
     const first = child.nodes[0];
-    const axis: HasAxis =
-      first && first.type === 'combinator' ? axisFromCombinator(first.value) : 'descendant';
+    const axis: HasAxis = first && first.type === 'combinator' ? axisFromCombinator(first.value) : 'descendant';
     // compileSelector ignores a leading combinator, so `sel` is the arg minus it.
     out.push({ axis, sel: compileSelector(child) });
   });
@@ -524,6 +591,25 @@ export function mostSpecific(selectors: CompiledSelector[]): Specificity | undef
     }
   }
   return best;
+}
+
+/**
+ * The (a, b, c) specificity of a selector text, by the parser above: `:is()`, `:not()`
+ * and `:has()` count their most specific argument, `:where()` counts nothing, and a
+ * pseudo-element counts as a type. A list is as specific as its strongest member; text
+ * that does not parse counts (0, 0, 0), as its stub rule does.
+ */
+export function selectorSpecificity(selectorText: string): Specificity {
+  const strongest = mostSpecific(compileSelectorList(selectorText)) ?? [0, 0, 0];
+  assert(
+    strongest.every((count) => Number.isSafeInteger(count)),
+    'selectorSpecificity: counts are integers',
+  );
+  assert(
+    strongest.every((count) => count >= 0),
+    'selectorSpecificity: counts are never negative',
+  );
+  return strongest;
 }
 
 // Pseudo-classes decided by position among siblings rather than runtime state.

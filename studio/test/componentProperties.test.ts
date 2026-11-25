@@ -5,10 +5,7 @@ import path from 'node:path';
 import { propertyFixture, component, consumer, source, instance } from './propertyFixture';
 import { record, string } from '../src/shared/validation';
 import { scanProject } from '../src/features/project/projectServer';
-import {
-  editPropertyDefinition,
-  readComponentProperties,
-} from '../vendor/stacki/electron/properties/propertyDefinitions';
+import { editPropertyDefinition, readComponentProperties } from '../vendor/stacki/electron/properties/propertyDefinitions';
 
 const added = {
   name: 'count',
@@ -39,9 +36,7 @@ test('Stacki property definitions add, edit, reorder and remove while preserving
   );
   const remove = editPropertyDefinition(order.value, { kind: 'remove', name: 'count' });
   assert.ok(remove.ok);
-  assert.ok(
-    !readComponentProperties(remove.value).properties.some((property) => property.name === 'count'),
-  );
+  assert.ok(!readComponentProperties(remove.value).properties.some((property) => property.name === 'count'));
 });
 
 test('property API renames definition and aliased instances, persists drafts and supports undo/redo', async () => {
@@ -57,8 +52,8 @@ test('property API renames definition and aliased instances, persists drafts and
     });
     assert.equal(saved['ok'], true, JSON.stringify(saved));
     const changed = await fixture.rooms.read(component);
-    assert.match(changed, /heading: title = 'Hello'/);
-    assert.match(changed, /\{title\}/);
+    assert.match(changed, /const \{ heading = 'Hello',/);
+    assert.match(changed, /\{heading\}/);
     assert.equal(await fixture.rooms.read(consumer), instance.replace('title=', 'heading='));
     assert.equal(await readFile(path.join(fixture.root, component), 'utf8'), changed);
     const undo = await fixture.post({ undo: string(record(saved['value'])['undo']) });
@@ -73,7 +68,7 @@ test('property API renames definition and aliased instances, persists drafts and
   }
 });
 
-test('property API renames option values and rejects deletion of an in-use prop', async () => {
+test('property API renames option values, and deleting a prop the template reads keeps it as a constant', async () => {
   const fixture = await propertyFixture();
   try {
     const data = await fixture.get();
@@ -97,8 +92,13 @@ test('property API renames option values and rejects deletion of an in-use prop'
       source: current,
       change: { kind: 'remove', name: 'title' },
     });
-    assert.equal(removed['ok'], false);
-    assert.equal(await fixture.rooms.read(component), current);
+    // The template still reads `title`, so the deletion keeps a constant of that name holding its default,
+    // typed as the prop was (53541c7e), and the page keeps rendering.
+    assert.equal(removed['ok'], true, JSON.stringify(removed));
+    const after = await fixture.rooms.read(component);
+    assert.match(after, /const title = 'Hello' as string;/);
+    assert.doesNotMatch(after, /title\?: string/);
+    assert.match(after, /\{title\}/);
   } finally {
     await fixture.close();
   }
@@ -115,9 +115,7 @@ test('stale saves and undo preserve collaborator edits; paths cannot escape the 
     assert.equal(saved['ok'], true);
     const current = await fixture.rooms.read(component);
     const remote = current + '<!-- collaborator -->';
-    await fixture.rooms.coordinator.run(async () =>
-      (await fixture.rooms.get(component)).setSource(remote),
-    );
+    await fixture.rooms.coordinator.run(async () => (await fixture.rooms.get(component)).setSource(remote));
     const refused = await fixture.post({ undo: record(saved['value'])['undo'] });
     assert.ok(refused['error']);
     const stale = await fixture.post({
@@ -182,10 +180,7 @@ const extra = await slotContent(Astro.slots, 'aside');
 <Fragment set:html={content} /><Fragment set:html={extra} />`),
     );
     const project = await scanProject(fixture.root);
-    assert.deepEqual(project.components.find((item) => item.file === component)?.slots, [
-      'default',
-      'aside',
-    ]);
+    assert.deepEqual(project.components.find((item) => item.file === component)?.slots, ['default', 'aside']);
   } finally {
     await fixture.close();
   }

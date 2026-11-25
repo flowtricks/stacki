@@ -41,11 +41,7 @@ function load(source: string): DiffImplementation {
   }
   // The diff charges a per-patch work budget (spendMorphWork) in revisions
   // that have one; the report measures the diff, so the budget is a no-op.
-  const factoryInput: unknown = Reflect.construct(Function, [
-    'Int32Array',
-    'spendMorphWork',
-    `${source.slice(startIndex, endIndex)}\nreturn diffChildren;`,
-  ]);
+  const factoryInput: unknown = Reflect.construct(Function, ['Int32Array', 'spendMorphWork', `${source.slice(startIndex, endIndex)}\nreturn diffChildren;`]);
   if (typeof factoryInput !== 'function') {
     throw new Error('Preview diff source did not produce a factory');
   }
@@ -86,9 +82,7 @@ function measure(
 
 // The working tree's source rather than the build: the shipped client is a
 // bundle, whose text keeps none of the comments the diff is found by.
-const current = load(
-  asJavaScript(fs.readFileSync(path.join(root, SOURCE_PATH), 'utf8'), SOURCE_PATH),
-);
+const current = load(asJavaScript(fs.readFileSync(path.join(root, SOURCE_PATH), 'utf8'), SOURCE_PATH));
 const reference = process.argv[2];
 const before = reference ? load(referenceSource(reference, process.argv[3])) : undefined;
 
@@ -121,27 +115,17 @@ function asJavaScript(source: string, file: string): string {
   return ts.transpileModule(source, options).outputText;
 }
 const keys = Array.from({ length: 2_000 }, (_, index) => `node:${index}`);
-const cases: ReadonlyArray<
-  readonly [label: string, oldKeys: readonly string[], newKeys: readonly string[]]
-> = [
+const cases: ReadonlyArray<readonly [label: string, oldKeys: readonly string[], newKeys: readonly string[]]> = [
   ['Unchanged siblings', keys, keys],
   ['Append one sibling', keys, [...keys, 'new']],
   ['Remove last sibling', keys, keys.slice(0, -1)],
-  [
-    'Swap first two siblings',
-    keys.slice(0, 200),
-    [keys[1] ?? '', keys[0] ?? '', ...keys.slice(2, 200)],
-  ],
+  ['Swap first two siblings', keys.slice(0, 200), [keys[1] ?? '', keys[0] ?? '', ...keys.slice(2, 200)]],
 ];
 
 console.log('Preview sibling diff; mean of 5 warm runs. Matrix bytes exclude inputs.');
 for (const [label, oldKeys, newKeys] of cases) {
   if (before) {
-    assert.deepEqual(
-      current.diff(oldKeys, newKeys),
-      before.diff(oldKeys, newKeys),
-      `${label} preserves exact edit operations`,
-    );
+    assert.deepEqual(current.diff(oldKeys, newKeys), before.diff(oldKeys, newKeys), `${label} preserves exact edit operations`);
   }
   console.log(
     JSON.stringify({

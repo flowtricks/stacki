@@ -9,6 +9,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { DesktopPublisher } from '#dist/electron/project/publisher.js';
+import { DEFAULT_PUBLISH_CONFIG } from '#dist/shared/properties/publishConfig.js';
 
 setToolPathHome(homedir());
 
@@ -16,6 +17,14 @@ test('failed build leaves Git untouched and duplicate starts share the job', asy
   const root = await mkdtemp(path.join(tmpdir(), 'stacki-publisher-test-'));
   context.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'node_modules'));
+  await mkdir(path.join(root, '.stacki'));
+  await writeFile(
+    path.join(root, '.stacki/publish.json'),
+    JSON.stringify({
+      ...DEFAULT_PUBLISH_CONFIG,
+      hosting: { provider: 'cloudflare-workers', accountId: 'account', project: 'site' },
+    }),
+  );
   await writeFile(path.join(root, '.gitignore'), 'node_modules/\n');
   await writeFile(
     path.join(root, 'package.json'),
@@ -24,6 +33,10 @@ test('failed build leaves Git untouched and duplicate starts share the job', asy
     }),
   );
   await writeFile(path.join(root, 'fail.cjs'), 'process.exit(7);');
+  // A site ready for Workers, so the failure under test is the build's and not the readiness check before it.
+  await writeFile(path.join(root, 'wrangler.json'), JSON.stringify({ name: 'site', assets: { directory: './dist' } }));
+  await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+  await writeFile(path.join(root, 'node_modules/.bin/wrangler'), '');
   await git(root, ['init', '--initial-branch=main']);
   await git(root, ['config', 'user.name', 'Publishing Test']);
   await git(root, ['config', 'user.email', 'publishing@example.test']);
@@ -33,7 +46,7 @@ test('failed build leaves Git untouched and duplicate starts share the job', asy
   const head = (await git(root, ['rev-parse', 'HEAD'])).stdout;
   await writeFile(path.join(root, 'page.txt'), 'Unpublished edit');
   const publisher = new DesktopPublisher();
-  const started = publisher.start(root, 'all');
+  const started = publisher.start(root, 'all', 'Update the page');
   assert.equal(started.kind, 'running');
   assert.deepEqual(publisher.start(root, 'all'), started);
   assert.throws(() => publisher.start('/other-project', 'all'), /Another project/);

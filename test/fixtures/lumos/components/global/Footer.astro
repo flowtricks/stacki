@@ -1,0 +1,123 @@
+---
+import Icon from "@/components/media/Icon.astro";
+import logo from "@/assets/logo/logo.svg";
+import { SITE_NAME } from "@/consts.ts";
+
+interface Props {
+  /** Set to `false` to omit the component. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+---
+
+{render && (
+  <footer class="footer_wrap">
+    <div class="footer_inner">
+      <div class="footer_top">
+        <a class="footer_logo" href="/" aria-label={SITE_NAME}>
+          <Icon src={logo} variant="full-width" />
+        </a>
+        <nav aria-label="Footer">
+          <ul class="footer_links">
+            <li>
+              <a class="footer_link" href="/">
+                Home
+              </a>
+            </li>
+            <li>
+              <a class="footer_link" href="/example-components">
+                Example Components
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer_bottom">
+        <p class="footer_copyright text-style-small">
+          &copy; <span id="year">{new Date().getFullYear()}</span>&#160;
+          {SITE_NAME}
+        </p>
+      </div>
+    </div>
+  </footer>
+)}
+
+<script>
+  const year = document.querySelector<HTMLSpanElement>("#year");
+
+  if (year) {
+    year.textContent = new Date().getFullYear().toString();
+  }
+</script>
+
+<style is:global>
+  @layer components {
+    .footer_wrap {
+      display: flex;
+      justify-content: center;
+      padding-block: var(--section-space-small);
+      padding-inline: var(--site-margin);
+      background-color: var(--background);
+      color: var(--text);
+      border-top: var(--border-width) solid var(--border);
+    }
+
+    .footer_inner {
+      width: 100%;
+      max-width: var(--max-width-main);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .footer_top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4) var(--space-6);
+    }
+
+    .footer_logo {
+      display: block;
+      width: 7.5rem;
+      max-width: 100%;
+      transition: opacity var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          opacity: 0.6;
+        }
+      }
+    }
+
+    .footer_links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4);
+      font-size: var(--text-small);
+      font-weight: var(--primary-medium);
+    }
+
+    .footer_link {
+      color: var(--text-2);
+      text-decoration: none;
+      transition: color var(--hover-duration) var(--hover-ease);
+      @media (hover: hover) {
+        &:hover {
+          color: var(--text);
+        }
+      }
+    }
+
+    .footer_bottom {
+      padding-top: var(--space-4);
+      border-top: var(--border-width) solid var(--border);
+    }
+
+    .footer_copyright {
+      color: var(--text-2);
+    }
+  }
+</style>

@@ -4,8 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -40,19 +39,23 @@ try {
     .filter({ hasText: /^render$/ })
     .waitFor();
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
+  // No Save button: committing the name creates the prop, the other fields save themselves, and closing saves what is pending.
   await page.getByLabel('Name', { exact: true }).fill('studioTestLabel');
+  await page.getByLabel('Name', { exact: true }).press('Enter');
+  await propertyRow(page).waitFor();
   await page.getByLabel('Default text', { exact: true }).fill('Default label');
   await page.getByLabel('Tooltip', { exact: true }).fill('Property manager browser verification');
-  await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await propertyRow(page).waitFor();
+  await page.getByRole('button', { name: 'Close property settings', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('.property-saving-overlay'));
   await propertyRow(peer).waitFor();
   assert.match(await readSource(page), /studioTestLabel\?: string/);
+  // Closing the form saves the pending tooltip; give that save a bounded moment to land.
+  for (let attempt = 0; attempt < 50 && !/Property manager browser verification/.test(await readSource(page)); attempt++) {
+    await page.waitForTimeout(100);
+  }
   assert.match(await readSource(page), /Property manager browser verification/);
   await propertyRow(page).click();
-  assert.equal(
-    await page.getByLabel('Default text', { exact: true }).inputValue(),
-    'Default label',
-  );
+  assert.equal(await page.getByLabel('Default text', { exact: true }).inputValue(), 'Default label');
   await page.getByRole('button', { name: 'Close property settings', exact: true }).click();
   const before = await page.locator('.property-row-main').allTextContents();
   await page.getByRole('button', { name: 'Reorder studioTestLabel', exact: true }).press('ArrowUp');
@@ -73,14 +76,9 @@ try {
   await saved(page);
   assert.equal(await page.getByRole('button', { name: 'Properties', exact: true }).count(), 0);
   await page.locator('.structure-node').first().waitFor();
-  assert.equal(
-    await page.getByRole('button', { name: 'Navigator', exact: true }).getAttribute('aria-pressed'),
-    'true',
-  );
+  assert.equal(await page.getByRole('button', { name: 'Navigator', exact: true }).getAttribute('aria-pressed'), 'true');
   assert.deepEqual(errors, []);
-  console.log(
-    'Component entry exposes Stacki Properties; K, add/default/tooltip, reorder, delete, collaboration, undo/redo and return-to-page passed.',
-  );
+  console.log('Component entry exposes Stacki Properties; K, add/default/tooltip, reorder, delete, collaboration, undo/redo and return-to-page passed.');
 } catch (error) {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/component-properties-failure.png' });
@@ -107,17 +105,12 @@ async function enter(page: Page) {
   await saved(page);
 }
 async function readSource(page: Page) {
-  const response = await page.request.get(
-    new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href,
-  );
+  const response = await page.request.get(new URL('/studio/api/file?file=' + encodeURIComponent(file), url).href);
   return string(record(await response.json())['source']);
 }
 async function waitForOrder(page: Page, position: number) {
   await page.waitForFunction(
-    (position) =>
-      [...document.querySelectorAll('.property-row-main')].findIndex((element) =>
-        element.textContent?.endsWith('studioTestLabel'),
-      ) === position,
+    (position) => [...document.querySelectorAll('.property-row-main')].findIndex((element) => element.textContent?.endsWith('studioTestLabel')) === position,
     position,
   );
 }

@@ -11,11 +11,7 @@ import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { withPrunedImports } from './pageGestures';
 
 // Which nodes put nothing on the page, as ids: see emptyNodeIds in App.
-export function emptyNodeIdsOf(
-  renderedPaths: readonly string[],
-  nodes: readonly EditorNode[],
-  editedRel: string | undefined,
-): ReadonlySet<string> {
+export function emptyNodeIdsOf(renderedPaths: readonly string[], nodes: readonly EditorNode[], editedRel: string | undefined): ReadonlySet<string> {
   const prefix = editedRel ? `${editedRel}|` : '';
   const live = new Set<string>();
   for (const path of renderedPaths) {
@@ -42,11 +38,7 @@ export function emptyNodeIdsOf(
   // there carries one. The page therefore says nothing about those nodes,
   // which is not the same as saying they rendered nothing: `unmarked` keeps
   // a link sitting in a sentence from being reported as invisible.
-  const walk = (
-    list: readonly EditorNode[],
-    trail: readonly number[],
-    { unmarked }: { readonly unmarked: boolean },
-  ): void => {
+  const walk = (list: readonly EditorNode[], trail: readonly number[], { unmarked }: { readonly unmarked: boolean }): void => {
     const depth = trail.length;
     assert(depth <= LIMITS.treeDepthMax, 'emptyNodeIdsOf: depth exceeds the tree cap');
     list.forEach((node, i) => {

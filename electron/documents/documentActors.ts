@@ -20,6 +20,14 @@
 // in sorted canonical order, each file witnessed by its `before` checksum. With
 // one thread two batches cannot interleave today; the sorted order is what
 // keeps them from deadlocking once acquisition can wait.
+//
+// No size limit (owner requirement). A batch may name any number of files (a
+// rename that touches every page of a large site), a document may be of any
+// size, and the actor count and retained bytes are a CACHE: when a bound is
+// passed, the least recently used idle actors are dropped and re-read the disk
+// on their next intent, never refused. Eviction is amortized (a quarter of the
+// cache at a time) so a walk over a hundred thousand files does not sort the
+// cache once per file.
 import { assert } from '../../shared/core/assert';
 import { toIntentId, type Digest } from '../../shared/core/brand';
 import {
@@ -34,19 +42,8 @@ import {
   type ActorEffect,
   type ActorState,
 } from '../../shared/engine/documentActor';
-import {
-  describeRejection,
-  intentPayloadBytes,
-  toIntent,
-  type Intent,
-  type RejectionReason,
-} from '../../shared/engine/intent';
-import {
-  commitChain,
-  minimalSplices,
-  rebaseIntent,
-  type CommitRecord,
-} from '../../shared/engine/rebase';
+import { describeRejection, toIntent, type Intent, type RejectionReason } from '../../shared/engine/intent';
+import { commitChain, minimalSplices, rebaseIntent, type CommitRecord } from '../../shared/engine/rebase';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { inverseEdits } from '../../shared/engine/splice';
 import { LIMITS } from '../../shared/core/limits';
@@ -55,6 +52,7 @@ import { encodeUtf8, toByteSpan } from '../../shared/core/span';
 import { planIntent } from '../../shared/engine/planner';
 import { NODE_PROJECTOR, NodeDocumentDisk, type CreateError } from './documentDisk';
 import { createDocumentTelemetry } from './documentTelemetry';
+import { createDocumentPreflight } from './documentPreflight';
 import {
   type WriteReport,
   type EditReport,
@@ -65,17 +63,8 @@ import {
   type DiskState,
   type CurrentError,
 } from './documentReports';
-import {
-  Entry,
-  type Settled,
-  STEPS_PER_INTENT,
-  type Rewrite,
-  UNCHANGED,
-  rewriteHunks,
-  editHistory,
-  entryBytes,
-  compareKeys,
-} from './documentEntry';
+import { translateMain } from '../lib/mainLocale';
+import { Entry, type Settled, STEPS_PER_INTENT, type Rewrite, UNCHANGED, rewriteHunks, editHistory, entryBytes, compareKeys } from './documentEntry';
 
 export {
   type WriteReport,
@@ -92,19 +81,22 @@ export {
 
 /** The app's host: the real disk, the shipping planner, the real parser, and
  * one structured telemetry line per outcome on `log`. */
-export function createNodeDocumentActors(input: {
-  readonly log: (line: string) => void;
-  readonly schedule: (task: () => void) => void;
-}): DocumentActors {
+export function createNodeDocumentActors(input: { readonly log: (line: string) => void; readonly schedule: (task: () => void) => void }): DocumentActors {
   return new DocumentActors({
     disk: new NodeDocumentDisk(),
     projector: NODE_PROJECTOR,
     planner: planIntent,
+    preflight: createDocumentPreflight({ log: input.log }),
     telemetry: createDocumentTelemetry(input.log),
     drain: 'immediate',
     schedule: input.schedule,
   });
 }
+
+/** Snapshot bytes one refresh slice may re-read before it hands the thread
+ * back: a quarter of a typical large page per slice keeps a turn near a few
+ * milliseconds, and one file bigger than it takes a slice of its own. */
+const REFRESH_SLICE_BYTES = 4 * 1024 * 1024;
 
 export class DocumentActors {
   readonly #options: DocumentActorsOptions;
@@ -122,6 +114,7 @@ export class DocumentActors {
       disk: options.disk,
       planner: options.planner,
       projector: options.projector,
+      ...(options.preflight === undefined ? {} : { preflight: options.preflight }),
     };
   }
 
@@ -129,8 +122,8 @@ export class DocumentActors {
    * the file should read, computed from the bytes of `baseChecksum`. Written
    * as the hunks where the two differ — a `rewrite-text`, never a whole-file
    * replacement — and only while the file holds exactly those bytes; anything
-   * else is refused, never merged. Text that equals the file's is written
-   * again unchanged. */
+   * else is refused, never merged. Text that equals the file's is applied
+   * without a write: the file, its mtime and the watchers are left alone. */
   writeText(file: string, text: string, baseChecksum: Digest): WriteReport {
     const entry = this.#entry(file);
     if (!entry.ok) {
@@ -150,11 +143,7 @@ export class DocumentActors {
    * rebased through them exactly; one authored before an outside write is
    * submitted with its authored snapshot and mapped through the diff by the
    * planner. Without the authored bytes, it is refused: never guessed. */
-  submitEdit(
-    file: string,
-    stated: EditStatement,
-    build: (base: EditBase) => Result<BuiltEdit, RejectionReason>,
-  ): EditReport {
+  submitEdit(file: string, stated: EditStatement, build: (base: EditBase) => Result<BuiltEdit, RejectionReason>): EditReport {
     assert(this.#options.drain === 'immediate', 'A deferred host takes submitDeferred');
     const entry = this.#entry(file);
     if (!entry.ok) {
@@ -192,7 +181,13 @@ export class DocumentActors {
     assert(settled !== undefined, 'A settled actor reported the intent it accepted');
     if (settled.outcome.tag === 'applied') {
       const commit = settled.committed;
-      assert(commit !== undefined, 'An applied intent was committed');
+      if (commit === undefined) {
+        // Applied without a write: the plan left the bytes as they were.
+        const snapshot = entry.value.state.snapshot;
+        assert(snapshot !== undefined, 'An unchanged edit leaves the actor its snapshot');
+        assert(snapshot.checksum === settled.outcome.checksum, 'An unchanged edit names the bytes on disk');
+        return { tag: 'applied', checksum: snapshot.checksum, bytes: snapshot.bytes, inverse: [] };
+      }
       return {
         tag: 'applied',
         checksum: settled.outcome.checksum,
@@ -268,7 +263,7 @@ export class DocumentActors {
         });
       case 'uncertain':
       case 'backpressured':
-        return err({ code: 'failed', message: `Could not create ${file}` });
+        return err({ code: 'failed', message: translateMain('error.documents.createFailed', { file }) });
       default: {
         const exhaustive: never = created;
         return exhaustive;
@@ -279,11 +274,7 @@ export class DocumentActors {
   /** Lease the actors of `items`' files in sorted canonical order and run
    * `run` with the items in that order; every write inside goes through those
    * actors, and no other intent reaches them until `run` returns. */
-  withLeases<Item extends { readonly file: string }, T>(
-    items: readonly Item[],
-    run: (ordered: readonly Item[]) => T,
-  ): Result<T, string> {
-    assert(items.length <= LIMITS.documentActorsMax, 'A batch fits in the actor bound');
+  withLeases<Item extends { readonly file: string }, T>(items: readonly Item[], run: (ordered: readonly Item[]) => T): Result<T, string> {
     const named: { readonly item: Item; readonly key: string }[] = [];
     for (const item of items) {
       const document = this.#options.disk.canonical(item.file);
@@ -295,8 +286,9 @@ export class DocumentActors {
     const ordered = named.sort((left, right) => compareKeys(left.key, right.key));
     const keys = ordered.map((lease) => lease.key);
     assert(new Set(keys).size === keys.length, 'A batch names each file once');
-    // Each actor is leased as it is taken, so taking the next one can never
-    // evict one already held (eviction skips leased actors).
+    // A lease is a claim on the file, not a pin on its snapshot: an idle leased
+    // actor may be evicted like any other (it only holds a cache), so a batch of
+    // any size never holds more than the cache bounds in memory.
     for (const { item, key } of ordered) {
       const entry = this.#entry(item.file);
       if (!entry.ok) {
@@ -324,7 +316,7 @@ export class DocumentActors {
    * (plan §11.9): the file holds exactly the bytes its actor last wrote. One
    * read per tick, no clock — an outside write a millisecond later holds other
    * bytes, and a file gone since holds none. A file whose actor was dropped
-   * (LIMITS.documentActorsMax) is answered `false`: the tick is then treated
+   * (evicted from the cache, LIMITS.documentActorsMax) is answered `false`: the tick is then treated
    * as an outside change, whose one read finds the bytes the app already has. */
   echoes(file: string): boolean {
     const document = this.#options.disk.canonical(file);
@@ -354,9 +346,10 @@ export class DocumentActors {
       return; // No actor, no snapshot to refresh.
     }
     entry.setState(markDirty(entry.state));
-    if (this.#dirty.size < LIMITS.watcherFilesPerTickMax) {
-      this.#dirty.add(document.value.key);
-    }
+    // Only keys of actors the host holds are dirty, so the set is bounded by the
+    // cache, however many files a burst such as `git checkout` touches.
+    this.#dirty.add(document.value.key);
+    assert(this.#dirty.size <= this.#entries.size, 'Only a held actor is dirty');
     if (!this.#refreshScheduled) {
       this.#refreshScheduled = true;
       this.#options.schedule(() => this.#refreshDirty());
@@ -428,15 +421,11 @@ export class DocumentActors {
     const { authoredChecksum } = stated;
     const current = entry.state.snapshot;
     assert(current !== undefined, 'A refreshed actor holds a snapshot');
-    const authored =
-      current.checksum === authoredChecksum
-        ? current
-        : entry.retained.find((snapshot) => snapshot.checksum === authoredChecksum);
+    const authored = current.checksum === authoredChecksum ? current : entry.retained.find((snapshot) => snapshot.checksum === authoredChecksum);
     if (authored === undefined) {
       return err(stated.gone); // The authored bytes are gone: re-read, never guess.
     }
-    const chain =
-      authored === current ? [] : commitChain(entry.log, authoredChecksum, current.checksum);
+    const chain = authored === current ? [] : commitChain(entry.log, authoredChecksum, current.checksum);
     const history = editHistory(authored, current, chain);
     const built = build({ authored, current, history });
     if (!built.ok) {
@@ -444,12 +433,9 @@ export class DocumentActors {
     }
     this.#intents += 1;
     assert(Number.isSafeInteger(this.#intents), 'Intent ids stay safe integers');
-    // The payload bound (plan §8) is an expected failure here, not a throw:
-    // a code patch as large as a file is the user's input, never truncated.
-    const payloadBytes = intentPayloadBytes(built.value.draft.operation);
-    if (payloadBytes > LIMITS.intentPayloadBytesMax) {
-      return err('resource-limit');
-    }
+    // A code patch as large as a file is the user's input: its size is never a
+    // reason to refuse it (the platform's string ceiling is checked where the
+    // bytes are built).
     const basis = built.value.basis === 'current' ? current : authored;
     const intent = toIntent({
       id: toIntentId(`main-${this.#intents}`),
@@ -468,11 +454,7 @@ export class DocumentActors {
     return rebased.ok ? ok({ intent: rebased.value, authored: undefined }) : rebased;
   }
 
-  #enqueue(
-    entry: Entry,
-    intent: Intent,
-    authored: Snapshot | undefined = undefined,
-  ): 'accepted' | 'backpressured' {
+  #enqueue(entry: Entry, intent: Intent, authored: Snapshot | undefined = undefined): 'accepted' | 'backpressured' {
     const submitted = submitIntent(entry.state, { intent, authored });
     entry.setState(submitted.state);
     if (submitted.result.tag === 'backpressured') {
@@ -560,6 +542,7 @@ export class DocumentActors {
         return;
       }
       case 'disk-error':
+      case 'preflight-refused':
         seen.messages.set(effect.intentId, effect.message);
         return;
       case 'lock-leaked':
@@ -570,6 +553,7 @@ export class DocumentActors {
         this.#logCommit(entry, effect);
         return;
       case 'refreshed':
+      case 'unchanged': // Nothing was written: the outcome that follows says applied, and no commit is logged.
         return;
       default: {
         const exhaustive: never = effect;
@@ -584,11 +568,13 @@ export class DocumentActors {
       case 'applied': {
         assert(entry.state.snapshot?.checksum === outcome.checksum, 'The commit is the snapshot');
         const commit = settled.committed;
-        assert(commit !== undefined, 'An applied intent was committed');
+        if (commit === undefined) {
+          // Applied without a write: the text was the file's (documentActor.ts `unchanged`).
+          assert(outcome.changedRanges.length === 0, 'An unwritten intent changed no range');
+          return { tag: 'applied', checksum: outcome.checksum, inverse: [] };
+        }
         // A replacement of bytes with the same bytes changes nothing: no hunk.
-        const changed = minimalSplices(commit.plan.splices).filter(
-          (splice) => splice.range.start < splice.range.end || splice.replacementBytes.length > 0,
-        );
+        const changed = minimalSplices(commit.plan.splices).filter((splice) => splice.range.start < splice.range.end || splice.replacementBytes.length > 0);
         return { tag: 'applied', checksum: outcome.checksum, inverse: inverseEdits(changed) };
       }
       case 'rejected': {
@@ -632,8 +618,7 @@ export class DocumentActors {
     const bytes = encodeUtf8(text);
     const created = this.#options.disk.create(entry.document.path, bytes);
     if (!created.ok) {
-      const reason =
-        created.error.code === 'exists' ? 'region-externally-modified' : 'write-failed';
+      const reason = created.error.code === 'exists' ? 'region-externally-modified' : 'write-failed';
       return { tag: 'rejected', reason, message: created.error.message, diskChecksum: undefined };
     }
     const current = this.#current(entry);
@@ -650,7 +635,7 @@ export class DocumentActors {
       return {
         tag: 'rejected',
         reason: 'write-race',
-        message: `${entry.document.path} changed as it was created`,
+        message: translateMain('error.documents.createRaced', { file: entry.document.path }),
         diskChecksum: current.value,
       };
     }
@@ -680,31 +665,42 @@ export class DocumentActors {
     this.#evict();
     const entry = new Entry(document.value, createActor(document.value.path), this.#clock);
     this.#entries.set(document.value.key, entry);
-    assert(
-      this.#entries.size <= LIMITS.documentActorsMax,
-      'The actor count stays inside its bound',
-    );
     return ok(entry);
   }
 
-  // Drop the least recently used idle actors until one more fits both bounds.
-  // An actor holds nothing but its snapshot between intents, so dropping one
-  // loses no state: it re-reads the disk on its next intent.
+  // The cache bounds. When one more actor would pass either, drop the least
+  // recently used idle actors down to three quarters of both, so the next
+  // quarter-cache of inserts evicts nothing. An actor holds nothing but its
+  // snapshot between intents, so dropping one loses no state: it re-reads the
+  // disk on its next intent. Actors that are not idle (an intent in flight) stay
+  // whatever the bound says; the bound is a cache size, never a refusal, so the
+  // map may hold more than the bound while they run.
   #evict(): void {
-    const idle = [...this.#entries.entries()]
-      .filter(([key, entry]) => actorQuiescent(entry.state) && !this.#leased.has(key))
-      .sort(([, left], [, right]) => left.used - right.used);
-    let retained = this.#retainedBytes();
-    for (const [key, entry] of idle) {
-      const underCount = this.#entries.size < LIMITS.documentActorsMax;
-      if (underCount && retained <= LIMITS.documentBytesRetainedMax) {
+    const retainedStart = this.#retainedBytes();
+    const overCount = this.#entries.size + 1 > LIMITS.documentActorsMax;
+    const overBytes = retainedStart > LIMITS.documentBytesRetainedMax;
+    if (!overCount) {
+      if (!overBytes) {
         return;
       }
+    }
+    const countTarget = Math.floor((LIMITS.documentActorsMax * 3) / 4);
+    const bytesTarget = Math.floor((LIMITS.documentBytesRetainedMax * 3) / 4);
+    const idle = [...this.#entries.entries()].filter(([, entry]) => actorQuiescent(entry.state)).sort(([, left], [, right]) => left.used - right.used);
+    let retained = retainedStart;
+    let count = this.#entries.size;
+    for (const [key, entry] of idle) {
+      const countDone = !overCount || count < countTarget;
+      const bytesDone = !overBytes || retained <= bytesTarget;
+      if (countDone && bytesDone) {
+        break;
+      }
       retained -= entryBytes(entry);
+      count -= 1;
       this.#entries.delete(key);
       this.#dirty.delete(key);
     }
-    assert(this.#entries.size < LIMITS.documentActorsMax, 'Eviction makes room for one actor');
+    assert(count === this.#entries.size, 'The eviction count matches the cache');
   }
 
   #retainedBytes(): number {
@@ -726,14 +722,13 @@ export class DocumentActors {
     if (previous.checksum === next.snapshot?.checksum) {
       return;
     }
-    const retained = [
-      ...entry.retained.filter((snapshot) => snapshot.checksum !== previous.checksum),
-      previous,
-    ].slice(-LIMITS.authoredSnapshotsMax);
-    // Oldest first out, until the bytes fit too; the loop ends because each
-    // pass drops one snapshot.
+    const retained = [...entry.retained.filter((snapshot) => snapshot.checksum !== previous.checksum), previous].slice(-LIMITS.authoredSnapshotsMax);
+    // Oldest first out, until the bytes fit too, but the newest snapshot always
+    // stays: a single document larger than the cache is still edited, and the
+    // one edit authored just before a save must find its bytes. The loop ends
+    // because each pass drops one snapshot.
     let bytes = retained.reduce((total, snapshot) => total + snapshot.bytes.length, 0);
-    while (bytes > LIMITS.authoredBytesRetainedMax) {
+    while (bytes > LIMITS.authoredBytesRetainedMax && retained.length > 1) {
       const oldest = retained.shift();
       assert(oldest !== undefined, 'Bytes over the bound come from some snapshot');
       bytes -= oldest.bytes.length;
@@ -754,10 +749,21 @@ export class DocumentActors {
     assert(entry.state.snapshot?.checksum === record.to, 'The commit is the actor snapshot');
   }
 
+  // Re-read the dirty actors, a slice at a time: each slice stops after the
+  // actor that took it past REFRESH_SLICE_BYTES of snapshot, and the rest wait
+  // for the next scheduled turn, so a burst that dirties many large files
+  // shows up as time, never as a frozen main thread. The slice is counted in
+  // bytes, not milliseconds, because the host sees no clock.
   #refreshDirty(): void {
     this.#refreshScheduled = false;
-    assert(this.#dirty.size <= LIMITS.watcherFilesPerTickMax, 'Watcher work per tick is bounded');
-    for (const key of this.#dirty) {
+    let bytesRead = 0;
+    const keys = [...this.#dirty];
+    assert(keys.length <= this.#entries.size, 'Only held actors are dirty');
+    for (const key of keys) {
+      if (bytesRead >= REFRESH_SLICE_BYTES) {
+        break;
+      }
+      this.#dirty.delete(key);
       const entry = this.#entries.get(key);
       if (entry !== undefined) {
         if (actorQuiescent(entry.state)) {
@@ -765,10 +771,14 @@ export class DocumentActors {
           const refreshed = refreshActor(entry.state, this.#dependencies);
           if (refreshed.ok) {
             this.#adopt(entry, refreshed.value.state);
+            bytesRead += entry.state.snapshot?.bytes.length ?? 0;
           }
         }
       }
     }
-    this.#dirty.clear();
+    if (this.#dirty.size > 0) {
+      this.#refreshScheduled = true;
+      this.#options.schedule(() => this.#refreshDirty());
+    }
   }
 }

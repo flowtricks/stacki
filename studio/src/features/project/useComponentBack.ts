@@ -14,13 +14,8 @@ export function useComponentBack(enabled: boolean, back: () => void) {
         event.ctrlKey ||
         event.altKey ||
         event.shiftKey ||
-        (event.target instanceof Element &&
-          event.target.closest(
-            '.page-menu, [role="dialog"], [role="menu"], [role="listbox"], select',
-          )) ||
-        document.querySelector(
-          '[role="dialog"], dialog[open], [role="listbox"], [role="menu"], .account-menu[open]',
-        )
+        (event.target instanceof Element && event.target.closest('.page-menu, [role="dialog"], [role="menu"], [role="listbox"], select')) ||
+        document.querySelector('[role="dialog"], dialog[open], [role="listbox"], [role="menu"], .account-menu[open]')
       ) {
         return;
       }

@@ -24,10 +24,7 @@ export function patchSigningSource(source: string): string {
     return source;
   }
   if (digest !== ORIGINAL_HASH) {
-    throw new Error(
-      'Unrecognized electron-builder signing source; ' +
-        'review the signing backport before installing.',
-    );
+    throw new Error('Unrecognized electron-builder signing source; ' + 'review the signing backport before installing.');
   }
   const patched = source
     .replace(
@@ -40,8 +37,7 @@ export function patchSigningSource(source: string): string {
     )
     .replace(
       '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", password, keychainFile]',
-      '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ' +
-        'keychainPassword, keychainFile]',
+      '["set-key-partition-list", "-S", "apple-tool:,apple:", "-s", "-k", ' + 'keychainPassword, keychainFile]',
     );
   if (sourceHash(patched) !== PATCHED_HASH) {
     throw new Error('Electron-builder signing backport failed validation.');
@@ -78,9 +74,7 @@ export function fixElectronBuilderSigning(projectDirectory = repositoryRoot()): 
   const libraryPackage = createRequire(builderPackage).resolve('app-builder-lib/package.json');
   const version = packageVersion(libraryPackage);
   if (version !== BUILDER_VERSION) {
-    throw new Error(
-      `Unsupported app-builder-lib ${version}; review the signing backport before upgrading.`,
-    );
+    throw new Error(`Unsupported app-builder-lib ${version}; review the signing backport before upgrading.`);
   }
   const filePath = path.join(path.dirname(libraryPackage), 'out/codeSign/macCodeSign.js');
   const source = fs.readFileSync(filePath, 'utf8');

@@ -15,6 +15,7 @@ const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { parseMarkdownPage } = require('#dist/electron/parse/markdownParser.js');
 const { createNodeDocumentActors } = require('#dist/electron/documents/documentActors.js');
 const { buildEdit } = require('#dist/electron/documents/editRequests.js');
+const { previewEdits } = require('#dist/electron/documents/editPreview.js');
 const { decodeUtf8 } = require('#dist/shared/core/span.js');
 const { repoPath, stubPanels } = require('./sources.js');
 
@@ -67,16 +68,7 @@ async function mountApp(root, files, build, options = {}) {
     pretendToBeVisual: true,
   });
   const { window } = dom;
-  for (const key of [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-    'KeyboardEvent',
-  ]) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'KeyboardEvent']) {
     global[key] = key === 'window' ? window : window[key];
   }
   global.getComputedStyle = window.getComputedStyle;
@@ -103,18 +95,11 @@ async function mountApp(root, files, build, options = {}) {
   const bridge = new Proxy(
     {
       pendingProject: async () => undefined,
+      // As main answers a project with no "Move styles" journal (styleMove:pending).
+      pendingStyleMove: async () => ({ pending: undefined }),
       scanProject: async () => files.scan,
-      projectMetadata: async (input) =>
-        require('#dist/electron/project/projectMetadata.js').readProjectMetadata(
-          input.projectPath,
-          input.kind,
-        ),
-      writeProjectMetadata: async (input) =>
-        require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(
-          input.projectPath,
-          input.write,
-        ),
-      hasNodeModules: async () => true,
+      projectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').readProjectMetadata(input.projectPath, input.kind),
+      writeProjectMetadata: async (input) => require('#dist/electron/project/projectMetadata.js').writeProjectMetadata(input.projectPath, input.write),
       startDevServer: async () => ({ url: 'http://localhost:4321' }),
       listProjectClasses: async () => [],
       readPage: async (file) => read(file),
@@ -138,23 +123,39 @@ async function mountApp(root, files, build, options = {}) {
         assert.ok(decoded.ok);
         return { ok: true, ...read(pagePath), inverse: report.inverse };
       },
+      // As main's page:editBatch: planned in memory, written once.
+      editPageBatch: async ({ pagePath, authoredChecksum, edits }) => {
+        calls.edits.push(...edits.map((edit) => edit.tag));
+        const disk = documents.current(pagePath);
+        assert.ok(disk.ok);
+        const rejected = (reason, diskChecksum) => ({ ok: false, error: { code: 'rejected', reason, message: reason, diskChecksum } });
+        if (disk.value.checksum !== authoredChecksum) {
+          return rejected('anchor-moved', disk.value.checksum);
+        }
+        const planned = previewEdits(pagePath, disk.value.bytes, authoredChecksum, edits);
+        if (!planned.ok) {
+          return rejected(planned.error, authoredChecksum);
+        }
+        const decoded = decodeUtf8(planned.value.bytes);
+        assert.ok(decoded.ok);
+        const report = documents.writeText(pagePath, decoded.value, authoredChecksum);
+        if (report.tag !== 'applied') {
+          return { ok: false, error: { code: 'filesystem', message: report.tag } };
+        }
+        return { ok: true, ...read(pagePath), inverse: report.inverse };
+      },
       importPathFor: async ({ targetPath }) => ({
-        relative:
-          '../' + path.relative(path.join(root, 'src'), targetPath).split(path.sep).join('/'),
+        relative: '../' + path.relative(path.join(root, 'src'), targetPath).split(path.sep).join('/'),
         srcRelative: undefined,
       }),
       onFsChanged: () => () => {},
       gitInfo: async () => ({ isRepo: false }),
+      publishAvailability: async () => ({ github: 'unknown', hosting: 'unconfigured' }),
       onCssChanged: () => () => {},
       ...options.bridge,
     },
     {
-      get: (target, key) =>
-        key in target
-          ? target[key]
-          : String(key).startsWith('on')
-            ? () => () => {}
-            : async () => undefined,
+      get: (target, key) => (key in target ? target[key] : String(key).startsWith('on') ? () => () => {} : async () => undefined),
     },
   );
   window.avb = bridge;
@@ -205,9 +206,7 @@ async function gesture(app, run) {
 
 async function undo(app) {
   await gesture(app, async () => {
-    document.dispatchEvent(
-      new app.window.KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }),
-    );
+    document.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true }));
   });
 }
 

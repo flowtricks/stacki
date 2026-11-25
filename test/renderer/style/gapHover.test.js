@@ -63,7 +63,10 @@ const check = (what, condition, detail) => {
     unobserve() {}
     disconnect() {}
   };
-  dom.window.avb = {};
+  // A value holding a var() asks for the project's variables, which starts by
+  // listening for changes to them. No variables arrive here: the chip is drawn
+  // from the var() in the value itself, which is all this test needs.
+  dom.window.avb = { onCssChanged: () => () => {} };
 
   const React = require('react');
   const { createRoot } = require('react-dom/client');
@@ -113,11 +116,7 @@ const check = (what, condition, detail) => {
 
   // The syntax-highlighted editor is what the pointer actually meets.
   const wrap = field?.closest('.embed-editor_varconnect');
-  check(
-    'the field wears the code editor',
-    wrap?.className.includes('is-token') === true,
-    wrap?.className,
-  );
+  check('the field wears the code editor', wrap?.className.includes('is-token') === true, wrap?.className);
 
   // React synthesises enter/leave from mouseover/mouseout, so that is what a
   // pointer arriving is.
@@ -136,16 +135,8 @@ const check = (what, condition, detail) => {
 
   await point('mouseover', editor, document.body);
   check('pointing at it asks for the bands', hover !== undefined, JSON.stringify(hover));
-  check(
-    'on both axes, since one field owns both',
-    hover?.sides?.join(',') === 'row,column',
-    JSON.stringify(hover?.sides),
-  );
-  check(
-    'labelled with the value it holds',
-    hover?.labels?.row === '2rem',
-    JSON.stringify(hover?.labels),
-  );
+  check('on both axes, since one field owns both', hover?.sides?.join(',') === 'row,column', JSON.stringify(hover?.sides));
+  check('labelled with the value it holds', hover?.labels?.row === '2rem', JSON.stringify(hover?.labels));
   check('and named as a gap, not a padding', hover?.kind === 'gap', hover?.kind);
 
   await point('mouseout', editor, document.body);
@@ -158,11 +149,7 @@ const check = (what, condition, detail) => {
   });
   check('clicking in while hovering keeps them up', hover !== undefined);
   await point('mouseout', editor, document.body);
-  check(
-    'and the pointer leaving does not take them from the caret',
-    hover !== undefined,
-    JSON.stringify(hover),
-  );
+  check('and the pointer leaving does not take them from the caret', hover !== undefined, JSON.stringify(hover));
   await act(async () => {
     field.blur();
   });
@@ -172,18 +159,46 @@ const check = (what, condition, detail) => {
   // that was there when the pointer arrived.
   await point('mouseover', editor, document.body);
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(
-      dom.window.HTMLInputElement.prototype,
-      'value',
-    ).set;
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
     setter.call(field, '3rem');
     field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
-  check(
-    'typing relabels them as it goes',
-    hover?.labels?.row === '3rem',
-    JSON.stringify(hover?.labels),
-  );
+  check('typing relabels them as it goes', hover?.labels?.row === '3rem', JSON.stringify(hover?.labels));
+  await point('mouseout', editor, document.body);
+  await act(async () => {
+    root.unmount();
+  });
+
+  // A gap connected to a variable, or written as a calc(), lights its bands
+  // exactly as `2rem` does. The field shows a chip instead of the text, and the
+  // pointer lands on the chip; the hover must still reach the field's handlers.
+  // (Where the bands go for such a value is the canvas's half of the same fix:
+  // test/electron/preload/gapBands.test.js, "a gap the computed style leaves unresolved".)
+  for (const { authored, pointAt } of [
+    { authored: 'var(--site-gutter)', pointAt: '[data-chip]' },
+    { authored: 'calc(var(--space-8) * 2)', pointAt: '[data-chip]' },
+    { authored: 'calc(2% + 4px)', pointAt: '[contenteditable]' },
+  ]) {
+    const held = { source: 'selected', selectedValue: { value: authored, important: false }, winner: { value: authored, important: false }, contributors: [] };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const valueRoot = createRoot(container);
+    await act(async () => {
+      valueRoot.render(React.createElement(GapControl, { ...props, read: (prop) => (prop === 'gap' ? held : undefined) }));
+    });
+    const target = container.querySelector(`.embed-editor_varconnect ${pointAt}`);
+    check(`${authored}: the field shows it as ${pointAt === '[data-chip]' ? 'a chip' : 'code'}`, target !== null, container.innerHTML.slice(0, 200));
+    hover = undefined;
+    await point('mouseover', target ?? container, document.body);
+    check(`${authored}: pointing at it asks for the bands`, hover?.kind === 'gap', JSON.stringify(hover));
+    check(`${authored}: on both axes`, hover?.sides?.join(',') === 'row,column', JSON.stringify(hover?.sides));
+    check(`${authored}: labelled with what is written`, hover?.labels?.row === authored, JSON.stringify(hover?.labels));
+    await point('mouseout', target ?? container, document.body);
+    check(`${authored}: and leaving takes them down`, hover === undefined, JSON.stringify(hover));
+    await act(async () => {
+      valueRoot.unmount();
+    });
+  }
 
   if (failures.length) {
     console.error(`gap-hover: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

@@ -10,3 +10,4 @@ cloudflare/test-results
 # Project-specific secrets and draft state.
 .dev.vars*
 .studio-state/
+.stacki/studio/

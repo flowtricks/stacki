@@ -126,7 +126,7 @@ export const ORACLE_SCENARIOS: readonly OracleScenario[] = [
         }),
         splices: [
           { start: 90, expected: '\n      <p>{item.title}</p>', replacement: '' },
-          { start: 147, expected: '</aside>', replacement: '<p>content</p></aside>' },
+          { start: 147, expected: '</aside>', replacement: '\n    <p>content</p>\n  </aside>' },
         ],
         postKinds: [
           { path: [0, 1, 0], kind: 'element' },
@@ -197,6 +197,24 @@ export const ORACLE_SCENARIOS: readonly OracleScenario[] = [
           { path: [1], kind: 'component' },
         ],
         reference: 'agrees',
+      },
+    ],
+  },
+  {
+    name: 'add a block to an empty section: it stands on its own line, the closing tag on the next',
+    intentClass: 'multi-span',
+    steps: [
+      {
+        file: 'empty-section.astro',
+        expectedFile: 'empty-section.expected.astro',
+        anchor: { path: [0, 0], kind: 'element' },
+        operation: () => ({ tag: 'insert-node', placement: 'last-child', source: '<div class="container"></div>' }),
+        splices: [{ start: 59, expected: '</section>', replacement: '\n    <div class="container"></div>\n  </section>' }],
+        postKinds: [
+          { path: [0, 0], kind: 'element' },
+          { path: [0, 0, 0], kind: 'element' },
+        ],
+        reference: 'unsupported-operation',
       },
     ],
   },

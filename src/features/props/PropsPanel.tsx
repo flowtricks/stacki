@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PropValuePolicyContext } from './propValuePolicy';
 import type { PropValues } from './propRules';
 import { isFragmentNode } from '../../editor/liveClasses';
@@ -21,14 +22,8 @@ import {
   TextPanel,
 } from './SourcePanels';
 import { useElementProps, type ElementState } from './elementState';
-import {
-  ElementContent,
-  ElementLooseText,
-  ElementSchemaFields,
-  ElementExtraFields,
-  ElementSettingsHeader,
-  ElementSettings,
-} from './ElementFields';
+import { isTextConnection } from './TextConnectField';
+import { ElementContent, ElementLooseText, ElementSchemaFields, ElementExtraFields, ElementSettingsHeader, ElementSettings } from './ElementFields';
 
 export { type PropsPanelProps } from './propsPanelTypes';
 
@@ -37,16 +32,9 @@ export { BindField } from './propBindings';
 export default function PropsPanel(props: PropsPanelProps) {
   // Held union values survive selections of text, loops, and other special nodes.
   const stashRef = useRef(new Map<string, PropValues>());
-  return (
-    <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>
-      {renderPropsPanel(props, stashRef)}
-    </PropValuePolicyContext.Provider>
-  );
+  return <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>{renderPropsPanel(props, stashRef)}</PropValuePolicyContext.Provider>;
 }
-function renderPropsPanel(
-  props: PropsPanelProps,
-  stashRef: React.MutableRefObject<Map<string, PropValues>>,
-) {
+function renderPropsPanel(props: PropsPanelProps, stashRef: React.MutableRefObject<Map<string, PropValues>>) {
   const { node } = props;
   if (!node) {
     return <EmptyPanel {...props} />;
@@ -55,7 +43,13 @@ function renderPropsPanel(
     case 'frontmatter':
       return <FrontmatterPanel {...props} node={node} />;
     case 'expr':
-      return <ExprPanel {...props} node={node} />;
+      // `{label}` in the markup is a text connected to data, and keeps the Text
+      // panel it had as words, where it can be disconnected; other code is code.
+      return props.onSetTextPieces !== undefined && isTextConnection(node.value, props.bindContext || props.loopContext) ? (
+        <TextPanel {...props} node={{ kind: 'expr', id: node.id, value: node.value }} />
+      ) : (
+        <ExprPanel {...props} node={node} />
+      );
     case 'raw-line':
       return <RawLinePanel {...props} node={node} />;
     case 'map':
@@ -69,39 +63,50 @@ function renderPropsPanel(
     case 'raw':
       return <RawPanel {...props} node={node} />;
     case 'text':
-      return <TextPanel {...props} node={node} />;
+      // The node's own kind, restated: a value node's type spans every value kind.
+      return <TextPanel {...props} node={{ kind: 'text', id: node.id, value: node.value }} />;
     case 'element':
     case 'component':
     case 'chunk-group':
-      return (
-        <ElementPropsPanel
-          {...props}
-          node={node}
-          dataContext={panelDataContext(props)}
-          stashRef={stashRef}
-        />
-      );
+      return <ElementPropsPanel {...props} node={node} dataContext={panelDataContext(props)} stashRef={stashRef} />;
     default: {
       const exhaustive: never = node;
       return exhaustive;
     }
   }
 }
+/**
+ * Only an instance's own props, drawn by the same editors and written through the same handlers as the Properties
+ * panel: the Page settings dialog shows its layout's props this way, so a field there is the panel's field.
+ */
+export function InstancePropFields(props: Omit<PropsPanelProps, 'node'> & { readonly node: ElementPropsPanelProps['node'] }) {
+  const stashRef = useRef(new Map<string, PropValues>());
+  return (
+    <PropValuePolicyContext.Provider value={props.valuePolicy ?? 'instance'}>
+      <InstancePropFieldsView {...props} dataContext={panelDataContext(props)} stashRef={stashRef} />
+    </PropValuePolicyContext.Provider>
+  );
+}
+function InstancePropFieldsView(props: ElementPropsPanelProps) {
+  const state = useElementProps(props);
+  return (
+    <SoundHere>
+      <div className="panel-section" ref={state.rootRef}>
+        <div className="panel-body" style={{ padding: 0 }}>
+          <ElementSchemaFields state={state} />
+          <ElementExtraFields state={state} />
+        </div>
+      </div>
+    </SoundHere>
+  );
+}
 function ElementPropsPanel(props: ElementPropsPanelProps) {
   const state = useElementProps(props);
   return <ElementPanelView state={state} />;
 }
 function ElementPanelView({ state }: { readonly state: ElementState }) {
-  const {
-    node,
-    isLayout,
-    currentLayoutName,
-    schema,
-    allowAttrs,
-    extraProps,
-    showContentField,
-    rootRef,
-  } = state;
+  const translate = useTranslate();
+  const { node, isLayout, currentLayoutName, schema, allowAttrs, extraProps, showContentField, rootRef } = state;
 
   return (
     // Every button in the panel taps, and every dropdown under it sounds its
@@ -117,8 +122,7 @@ function ElementPanelView({ state }: { readonly state: ElementState }) {
         ref={rootRef}
         style={{ flex: '1 1 50%', overflow: 'hidden' }}
         onClick={(event) => {
-          const button =
-            event.target instanceof Element ? event.target.closest('button') : undefined;
+          const button = event.target instanceof Element ? event.target.closest('button') : undefined;
           if (button && !button.disabled) {
             clickNote();
           }
@@ -151,18 +155,9 @@ function ElementPanelView({ state }: { readonly state: ElementState }) {
             opens on. Shut by default; the choice sticks while the app is up. */}
           <ElementSettingsHeader state={state} />
           <ElementSettings state={state} />
-          {!isLayout &&
-            !allowAttrs &&
-            schema.length === 0 &&
-            extraProps.length === 0 &&
-            !showContentField && (
-              <div className="props-empty">
-                {node.kind === 'element'
-                  ? 'This HTML element has no attributes set.'
-                  : 'This component declares no props (add an interface Props or ' +
-                    'an Astro.props destructure to expose some).'}
-              </div>
-            )}
+          {!isLayout && !allowAttrs && schema.length === 0 && extraProps.length === 0 && !showContentField && (
+            <div className="props-empty">{node.kind === 'element' ? translate('props.panel.noAttributes') : translate('props.panel.noProps')}</div>
+          )}
         </div>
       </div>
     </SoundHere>

@@ -25,21 +25,8 @@ import {
   KEYBOARD_REPEAT_MS,
   ARROW_KEYS,
 } from './clipPathConstants';
-import {
-  sanitizeShapeScaleVariableName,
-  emptySnapGuides,
-  pointAlignmentGuides,
-  mergeSnapGuides,
-  shapeSnapGuidesForBounds,
-  insetBox,
-} from './clipPathMeasure';
-import {
-  isInsetHandle,
-  shapesClose,
-  shapesEqual,
-  isPolygonPointHandle,
-  handleFromDragTarget,
-} from './clipPathHandles';
+import { sanitizeShapeScaleVariableName, emptySnapGuides, pointAlignmentGuides, mergeSnapGuides, shapeSnapGuidesForBounds, insetBox } from './clipPathMeasure';
+import { isInsetHandle, shapesClose, shapesEqual, isPolygonPointHandle, handleFromDragTarget } from './clipPathHandles';
 import { hasContainerQueryUnit } from './shapeFunctionPatterns';
 import {
   shapeCssBounds,
@@ -58,8 +45,7 @@ import { insetRadiusToCanvas, rawEditableHandlePoint } from './clipPathCanvasUni
 import { isArrowKey, arrowDelta, updateShapeForKeyboard } from './shapeKeyboard';
 import { type EditorAfterBreakpointActions, codeEditActions } from './clipPathEditActions';
 
-export type EditorAfterCodeEditActions = EditorAfterBreakpointActions &
-  ReturnType<typeof codeEditActions>;
+export type EditorAfterCodeEditActions = EditorAfterBreakpointActions & ReturnType<typeof codeEditActions>;
 
 // Selecting in the code, and applying a pasted SVG.
 export function codeSelectionActions(editor: EditorAfterCodeEditActions) {
@@ -77,9 +63,7 @@ export function codeSelectionActions(editor: EditorAfterCodeEditActions) {
       return;
     }
 
-    const match = codeTokenHighlights.find(
-      (highlight) => position >= highlight.from && position <= highlight.to,
-    );
+    const match = codeTokenHighlights.find((highlight) => position >= highlight.from && position <= highlight.to);
     if (!match) {
       selectHandle(undefined);
       return;
@@ -99,10 +83,7 @@ export function codeSelectionActions(editor: EditorAfterCodeEditActions) {
     } = {},
   ) => {
     if (options.cacheUpdate !== undefined) {
-      pastedShapeSvgCacheRef.current = normalizeShapeFitCache(
-        options.cacheUpdate.cache,
-        currentShapeScaleOptions(),
-      );
+      pastedShapeSvgCacheRef.current = normalizeShapeFitCache(options.cacheUpdate.cache, currentShapeScaleOptions());
     }
     syncShapeFitModeForLoadedShape(next, options.shapeFitMode);
 
@@ -125,8 +106,7 @@ export function codeSelectionActions(editor: EditorAfterCodeEditActions) {
   return { onCodeSelectionChange, applyPastedSvgClipPath };
 }
 
-export type EditorAfterCodeSelectionActions = EditorAfterCodeEditActions &
-  ReturnType<typeof codeSelectionActions>;
+export type EditorAfterCodeSelectionActions = EditorAfterCodeEditActions & ReturnType<typeof codeSelectionActions>;
 
 // Reading a pasted SVG, and switching how a shape fits.
 export function shapeFitActions(editor: EditorAfterCodeSelectionActions) {
@@ -140,9 +120,7 @@ export function shapeFitActions(editor: EditorAfterCodeSelectionActions) {
     }
 
     const htmlCache = cacheFromPastedShapeSvgSource(html);
-    return htmlCache
-      ? { shape: shapeFromPastedSvgCache(htmlCache, fitMode), cache: htmlCache }
-      : undefined;
+    return htmlCache ? { shape: shapeFromPastedSvgCache(htmlCache, fitMode), cache: htmlCache } : undefined;
   };
 
   const setShapeFitModeFromControl = (nextMode: ShapeFitMode) => {
@@ -155,12 +133,8 @@ export function shapeFitActions(editor: EditorAfterCodeSelectionActions) {
     }
 
     const shapeScaleOptions = currentShapeScaleOptions();
-    const cache =
-      matchingPastedSvgCacheForShape(currentShape) ||
-      cacheFromShapeFitVariants(currentShape, shapeScaleOptions);
-    const nextShape = cache
-      ? shapeFromPastedSvgCache(cache, nextMode)
-      : convertShapeFitMode(currentShape, nextMode, shapeScaleOptions);
+    const cache = matchingPastedSvgCacheForShape(currentShape) || cacheFromShapeFitVariants(currentShape, shapeScaleOptions);
+    const nextShape = cache ? shapeFromPastedSvgCache(cache, nextMode) : convertShapeFitMode(currentShape, nextMode, shapeScaleOptions);
     if (!nextShape) {
       return;
     }
@@ -176,8 +150,7 @@ export function shapeFitActions(editor: EditorAfterCodeSelectionActions) {
   return { parseClipboardSvgShape, setShapeFitModeFromControl };
 }
 
-export type EditorAfterShapeFitActions = EditorAfterCodeSelectionActions &
-  ReturnType<typeof shapeFitActions>;
+export type EditorAfterShapeFitActions = EditorAfterCodeSelectionActions & ReturnType<typeof shapeFitActions>;
 
 // The shape-scale variables, and moving through the presets.
 export function shapeScaleActions(editor: EditorAfterShapeFitActions) {
@@ -198,10 +171,8 @@ export function shapeScaleActions(editor: EditorAfterShapeFitActions) {
     const normalizedOptions: ShapeScaleOptions = {
       useVariable: true,
       variableName: sanitizeShapeScaleVariableName(rawSize) || DEFAULT_SHAPE_SCALE_VARIABLE_NAME,
-      offsetLeftVariableName:
-        sanitizeShapeScaleVariableName(rawLeft) || DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
-      offsetTopVariableName:
-        sanitizeShapeScaleVariableName(rawTop) || DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
+      offsetLeftVariableName: sanitizeShapeScaleVariableName(rawLeft) || DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
+      offsetTopVariableName: sanitizeShapeScaleVariableName(rawTop) || DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
     };
 
     shapeScaleUseVariableRef.current = true;
@@ -217,12 +188,8 @@ export function shapeScaleActions(editor: EditorAfterShapeFitActions) {
       return;
     }
 
-    const currentCache =
-      matchingPastedSvgCacheForShape(currentShape, previousOptions) ||
-      cacheFromShapeFitVariants(currentShape, previousOptions);
-    const nextCache = currentCache
-      ? normalizeShapeFitCache(currentCache, normalizedOptions)
-      : undefined;
+    const currentCache = matchingPastedSvgCacheForShape(currentShape, previousOptions) || cacheFromShapeFitVariants(currentShape, previousOptions);
+    const nextCache = currentCache ? normalizeShapeFitCache(currentCache, normalizedOptions) : undefined;
     if (nextCache) {
       pastedShapeSvgCacheRef.current = nextCache;
     }
@@ -231,8 +198,7 @@ export function shapeScaleActions(editor: EditorAfterShapeFitActions) {
       return;
     }
 
-    const nextShape =
-      nextCache?.contain || normalizeContainShapeCoordinates(currentShape, normalizedOptions);
+    const nextShape = nextCache?.contain || normalizeContainShapeCoordinates(currentShape, normalizedOptions);
     applyPastedSvgClipPath(nextShape, {
       cacheUpdate: { cache: nextCache },
       shapeFitMode: 'contain',
@@ -246,17 +212,12 @@ export function shapeScaleActions(editor: EditorAfterShapeFitActions) {
   return { setShapeScaleOptionsFromControl, moveActivePreset };
 }
 
-export type EditorAfterShapeScaleActions = EditorAfterShapeFitActions &
-  ReturnType<typeof shapeScaleActions>;
+export type EditorAfterShapeScaleActions = EditorAfterShapeFitActions & ReturnType<typeof shapeScaleActions>;
 
 // The alignment guide a handle snaps to.
 export function guideActions(editor: EditorAfterShapeScaleActions) {
   const { circleRadiusAngleRef, canvasRef } = editor;
-  const guidePointForHandle = (
-    targetShape: ClipShape,
-    handle: HandleTarget,
-    circleAngle = circleRadiusAngleRef.current,
-  ): Point | undefined => {
+  const guidePointForHandle = (targetShape: ClipShape, handle: HandleTarget, circleAngle = circleRadiusAngleRef.current): Point | undefined => {
     if (targetShape.kind === 'raw' && targetShape.editable && canvasRef.current) {
       return rawEditableHandlePoint(targetShape.editable, handle, canvasRef.current);
     }
@@ -326,8 +287,7 @@ export function guideActions(editor: EditorAfterShapeScaleActions) {
   return { guidePointForHandle };
 }
 
-export type EditorAfterGuideActions = EditorAfterShapeScaleActions &
-  ReturnType<typeof guideActions>;
+export type EditorAfterGuideActions = EditorAfterShapeScaleActions & ReturnType<typeof guideActions>;
 
 // Where a drag puts its handle, and the guides a keyboard move shows.
 export function dragPointActions(editor: EditorAfterGuideActions) {
@@ -349,11 +309,7 @@ export function dragPointActions(editor: EditorAfterGuideActions) {
     };
   };
 
-  const keyboardGuidesForHandles = (
-    targetShape: ClipShape,
-    handles: HandleTarget[],
-    circleAngle = circleRadiusAngleRef.current,
-  ) => {
+  const keyboardGuidesForHandles = (targetShape: ClipShape, handles: HandleTarget[], circleAngle = circleRadiusAngleRef.current) => {
     const guides = handles.map((handle) => {
       const point = guidePointForHandle(targetShape, handle, circleAngle);
       if (!point) {
@@ -362,11 +318,7 @@ export function dragPointActions(editor: EditorAfterGuideActions) {
 
       if (targetShape.kind === 'inset' && handle.kind === 'inset-radius') {
         const { x0, y0, x1, y1, width, height } = insetBox(targetShape);
-        return pointAlignmentGuides(
-          point,
-          [0, x0, x0 + width / 2, 50, x1, 100],
-          [0, y0, y0 + height / 2, 50, y1, 100],
-        );
+        return pointAlignmentGuides(point, [0, x0, x0 + width / 2, 50, x1, 100], [0, y0, y0 + height / 2, 50, y1, 100]);
       }
 
       return pointAlignmentGuides(point, [0, 50, 100], [0, 50, 100]);
@@ -377,8 +329,7 @@ export function dragPointActions(editor: EditorAfterGuideActions) {
   return { targetWithDragOrigin, dragPointForTarget, keyboardGuidesForHandles };
 }
 
-export type EditorAfterDragPointActions = EditorAfterGuideActions &
-  ReturnType<typeof dragPointActions>;
+export type EditorAfterDragPointActions = EditorAfterGuideActions & ReturnType<typeof dragPointActions>;
 
 // Typing a preset's name to jump to it.
 export function presetTypeaheadActions(editor: EditorAfterDragPointActions) {
@@ -413,8 +364,7 @@ export function presetTypeaheadActions(editor: EditorAfterDragPointActions) {
   return { handlePresetTypeahead };
 }
 
-export type EditorAfterPresetTypeaheadActions = EditorAfterDragPointActions &
-  ReturnType<typeof presetTypeaheadActions>;
+export type EditorAfterPresetTypeaheadActions = EditorAfterDragPointActions & ReturnType<typeof presetTypeaheadActions>;
 
 // The preset button's keys.
 export function presetButtonActions(editor: EditorAfterPresetTypeaheadActions) {
@@ -463,8 +413,7 @@ export function presetButtonActions(editor: EditorAfterPresetTypeaheadActions) {
   return { onPresetButtonKeyDown };
 }
 
-export type EditorAfterPresetButtonActions = EditorAfterPresetTypeaheadActions &
-  ReturnType<typeof presetButtonActions>;
+export type EditorAfterPresetButtonActions = EditorAfterPresetTypeaheadActions & ReturnType<typeof presetButtonActions>;
 
 // The preset list's keys.
 export function presetListActions(editor: EditorAfterPresetButtonActions) {
@@ -523,8 +472,7 @@ export function presetListActions(editor: EditorAfterPresetButtonActions) {
   return { onPresetListKeyDown };
 }
 
-export type EditorAfterPresetListActions = EditorAfterPresetButtonActions &
-  ReturnType<typeof presetListActions>;
+export type EditorAfterPresetListActions = EditorAfterPresetButtonActions & ReturnType<typeof presetListActions>;
 
 // Moving a handle with the keyboard.
 export function handleKeyboardActions(editor: EditorAfterPresetListActions) {
@@ -533,11 +481,7 @@ export function handleKeyboardActions(editor: EditorAfterPresetListActions) {
   const { spaceKeyPressedRef, markLocalShapeChange, cancelPendingSelectionRead } = editor;
   const { setCircleRadiusAngle, setShape, commit, syncPresetForShape, showSnapGuides } = editor;
   const { keyboardGuidesForHandles } = editor;
-  const moveHandleWithKeyboard = (
-    handle: HandleTarget,
-    key: string,
-    modifiers: KeyboardModifiers,
-  ) => {
+  const moveHandleWithKeyboard = (handle: HandleTarget, key: string, modifiers: KeyboardModifiers) => {
     if (!isArrowKey(key)) {
       return false;
     }
@@ -560,9 +504,7 @@ export function handleKeyboardActions(editor: EditorAfterPresetListActions) {
       step: spaceKeyPressedRef.current ? KEYBOARD_FAST_STEP : KEYBOARD_STEP,
     });
     const shapeChanged = !shapesEqual(currentShape, result.shape);
-    const angleChanged =
-      typeof result.circleRadiusAngle === 'number' &&
-      Math.abs(result.circleRadiusAngle - circleRadiusAngleRef.current) > 0.0001;
+    const angleChanged = typeof result.circleRadiusAngle === 'number' && Math.abs(result.circleRadiusAngle - circleRadiusAngleRef.current) > 0.0001;
 
     if (!shapeChanged && !angleChanged) {
       return false;
@@ -585,17 +527,14 @@ export function handleKeyboardActions(editor: EditorAfterPresetListActions) {
     }
     const nextCircleAngle = result.circleRadiusAngle ?? circleRadiusAngleRef.current;
     const guideHandles =
-      isPolygonPointHandle(handle) && polygonPointIndexes.length
-        ? polygonPointIndexes.map((index) => ({ kind: 'polygon-point' as const, index }))
-        : [handle];
+      isPolygonPointHandle(handle) && polygonPointIndexes.length ? polygonPointIndexes.map((index) => ({ kind: 'polygon-point' as const, index })) : [handle];
     showSnapGuides(keyboardGuidesForHandles(result.shape, guideHandles, nextCircleAngle));
     return true;
   };
   return { moveHandleWithKeyboard };
 }
 
-export type EditorAfterHandleKeyboardActions = EditorAfterPresetListActions &
-  ReturnType<typeof handleKeyboardActions>;
+export type EditorAfterHandleKeyboardActions = EditorAfterPresetListActions & ReturnType<typeof handleKeyboardActions>;
 
 // Moving the whole shape with the keyboard.
 export function shapeKeyboardActions(editor: EditorAfterHandleKeyboardActions) {
@@ -618,10 +557,7 @@ export function shapeKeyboardActions(editor: EditorAfterHandleKeyboardActions) {
       return false;
     }
 
-    const fitMode: ShapeFitMode =
-      shapeFitModeRef.current === 'contain' || hasContainerQueryUnit(currentShape.value)
-        ? 'contain'
-        : 'stretch';
+    const fitMode: ShapeFitMode = shapeFitModeRef.current === 'contain' || hasContainerQueryUnit(currentShape.value) ? 'contain' : 'stretch';
     const containModel = fitMode === 'contain' ? containModelFromShape(currentShape) : undefined;
     const next = containModel
       ? shapeFromContainModel(currentShape, moveContainModel(containModel, delta.x, delta.y))
@@ -646,8 +582,7 @@ export function shapeKeyboardActions(editor: EditorAfterHandleKeyboardActions) {
   return { moveShapeWithKeyboard };
 }
 
-export type EditorAfterShapeKeyboardActions = EditorAfterHandleKeyboardActions &
-  ReturnType<typeof shapeKeyboardActions>;
+export type EditorAfterShapeKeyboardActions = EditorAfterHandleKeyboardActions & ReturnType<typeof shapeKeyboardActions>;
 
 // The repeating keyboard move and the modifier refs it reads.
 export function keyboardLoopActions(editor: EditorAfterShapeKeyboardActions) {
@@ -679,10 +614,7 @@ export function keyboardLoopActions(editor: EditorAfterShapeKeyboardActions) {
   };
 
   const startKeyboardMoveLoop = () => {
-    if (
-      keyboardMoveDelayTimerRef.current !== undefined ||
-      keyboardMoveTimerRef.current !== undefined
-    ) {
+    if (keyboardMoveDelayTimerRef.current !== undefined || keyboardMoveTimerRef.current !== undefined) {
       return;
     }
     keyboardMoveDelayTimerRef.current = window.setTimeout(() => {
@@ -705,8 +637,7 @@ export function keyboardLoopActions(editor: EditorAfterShapeKeyboardActions) {
   return { runKeyboardMoveTick, startKeyboardMoveLoop, updateKeyboardModifierRefs };
 }
 
-export type EditorAfterKeyboardLoopActions = EditorAfterShapeKeyboardActions &
-  ReturnType<typeof keyboardLoopActions>;
+export type EditorAfterKeyboardLoopActions = EditorAfterShapeKeyboardActions & ReturnType<typeof keyboardLoopActions>;
 
 // Pressing and releasing move keys, and following a shape drag.
 export function keyboardKeyActions(editor: EditorAfterKeyboardLoopActions) {
@@ -715,11 +646,7 @@ export function keyboardKeyActions(editor: EditorAfterKeyboardLoopActions) {
   const { setShapeTransformSelection, moveShapeWithKeyboard, stopKeyboardMoveLoop } = editor;
   const { shapeTransformDragRef, canvasPointFromClient, shapeFromTransformDrag, shapeRef } = editor;
   const { markLocalShapeChange, setShape, setActivePreset } = editor;
-  const pressKeyboardMoveKey = (
-    handle: HandleTarget,
-    key: ArrowKey,
-    modifiers: KeyboardModifiers,
-  ) => {
+  const pressKeyboardMoveKey = (handle: HandleTarget, key: ArrowKey, modifiers: KeyboardModifiers) => {
     updateKeyboardModifierRefs(modifiers);
     selectHandleForKeyboard(handle);
     const wasPressed = pressedArrowKeysRef.current.has(key);

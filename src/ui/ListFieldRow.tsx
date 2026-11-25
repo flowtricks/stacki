@@ -1,5 +1,6 @@
 import type { HTMLAttributes, MouseEventHandler, ReactNode, Ref } from 'react';
 import { DragIcon, TrashIcon } from './Icons';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 interface ListFieldRowProps {
   readonly children: ReactNode;
@@ -14,10 +15,13 @@ interface ListFieldRowProps {
   readonly removeLabel: string;
   readonly onOpen: MouseEventHandler<HTMLButtonElement>;
   readonly onRemove: () => void;
+  /** What closes the row after its remove button: a property's warning. */
+  readonly trailing?: ReactNode;
 }
 
 // Property definitions and option values share one row so their sizing cannot drift apart.
 export default function ListFieldRow(props: ListFieldRowProps) {
+  const translate = useTranslate();
   return (
     <div {...props.rowProps} className={`list-field-row ${props.className ?? ''}`}>
       {props.grip ?? (
@@ -42,13 +46,14 @@ export default function ListFieldRow(props: ListFieldRowProps) {
       <button
         type="button"
         className="ghost list-field-remove"
-        title="Remove"
+        title={translate('ui.remove')}
         aria-label={props.removeLabel}
         disabled={props.removeDisabled}
         onClick={props.onRemove}
       >
         <TrashIcon size={12} />
       </button>
+      {props.trailing}
     </div>
   );
 }

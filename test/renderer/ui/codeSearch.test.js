@@ -34,10 +34,7 @@ const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\r\
 // ── What CodeMirror actually renders ────────────────────────────────────────
 // The SearchPanel constructor, straight from the installed package.
 const searchSource = read('node_modules/@codemirror/search/dist/index.js');
-const panelSource = searchSource.slice(
-  searchSource.indexOf('class SearchPanel'),
-  searchSource.indexOf('commit()', searchSource.indexOf('class SearchPanel')),
-);
+const panelSource = searchSource.slice(searchSource.indexOf('class SearchPanel'), searchSource.indexOf('commit()', searchSource.indexOf('class SearchPanel')));
 // Fields name themselves in their element spec; buttons are made by a helper
 // that takes the name as its first argument.
 const controlNames = [
@@ -47,11 +44,7 @@ const controlNames = [
   ]),
 ];
 
-check(
-  'the panel is still built out of named controls',
-  controlNames.length >= 8,
-  controlNames.join(', '),
-);
+check('the panel is still built out of named controls', controlNames.length >= 8, controlNames.join(', '));
 
 // The shape we style. Every name above must appear here — if CodeMirror grows a
 // control, this list stops matching and the test says so rather than the panel
@@ -69,11 +62,7 @@ const MIRROR = {
   close: '<button name="close">×</button>',
 };
 const missing = controlNames.filter((name) => !(name in MIRROR));
-check(
-  'and every one of them is a control this styling knows about',
-  missing.length === 0,
-  `unstyled: ${missing.join(', ')}`,
-);
+check('and every one of them is a control this styling knows about', missing.length === 0, `unstyled: ${missing.join(', ')}`);
 
 const { JSDOM } = require('jsdom');
 const dom = new JSDOM(`<!doctype html><div class="cm-editor cm-dark">
@@ -110,11 +99,7 @@ sheet.walkRules((rule) => {
 });
 
 check('the panel has styling of its own', panelRules.length > 10, `${panelRules.length} rules`);
-check(
-  'including a compact form for narrow editors',
-  narrowRules.length > 0,
-  `${narrowRules.length} rules`,
-);
+check('including a compact form for narrow editors', narrowRules.length > 0, `${narrowRules.length} rules`);
 
 // Every rule must hit something. A selector that matches nothing is styling
 // written against a panel that no longer exists.
@@ -139,11 +124,7 @@ for (const rule of [...panelRules, ...narrowRules]) {
     }
   }
 }
-check(
-  'and no rule is written against a panel that no longer exists',
-  dead.length === 0,
-  dead.join('\n    '),
-);
+check('and no rule is written against a panel that no longer exists', dead.length === 0, dead.join('\n    '));
 
 // Every control is covered by at least one rule.
 const covered = (element) =>
@@ -177,30 +158,18 @@ for (const [what, selector] of [
 // The panel's own line break is what puts replace on its own row; flexbox only
 // honours it when it's given the full width.
 const brRule = panelRules.find((rule) => /\bbr\b/.test(rule.selector));
-check(
-  'the row break is given a row to break',
-  !!brRule && /flex-basis:\s*100%/.test(brRule.toString()),
-  brRule?.toString(),
-);
+check('the row break is given a row to break', !!brRule && /flex-basis:\s*100%/.test(brRule.toString()), brRule?.toString());
 
 // The magnifier in the query field is a background IMAGE, so anything setting
 // the `background` shorthand on that field — including on :focus, where this
 // went wrong once — wipes it.
 // Prettier quotes attribute values, so `[name=search]` may be `[name='search']`.
-const fieldRules = panelRules.filter((rule) =>
-  /input(\.cm-textfield|\[name=(search|'search'|"search")\])/.test(rule.selector),
-);
+const fieldRules = panelRules.filter((rule) => /input(\.cm-textfield|\[name=(search|'search'|"search")\])/.test(rule.selector));
 const shorthand = fieldRules.filter((rule) => rule.some((decl) => decl.prop === 'background'));
-check(
-  'nothing paints over the query field with the background shorthand',
-  shorthand.length === 0,
-  shorthand.map((rule) => rule.selector).join(', '),
-);
+check('nothing paints over the query field with the background shorthand', shorthand.length === 0, shorthand.map((rule) => rule.selector).join(', '));
 check(
   'and the field carries a magnifier',
-  fieldRules.some((rule) =>
-    rule.some((decl) => decl.prop === 'background-image' && /svg/.test(decl.value)),
-  ),
+  fieldRules.some((rule) => rule.some((decl) => decl.prop === 'background-image' && /svg/.test(decl.value))),
   fieldRules.map((rule) => rule.selector).join(', '),
 );
 
@@ -215,9 +184,7 @@ for (const [what, file] of [
 }
 check(
   'and the top panel is the one the divider goes under',
-  panelRules.some(
-    (rule) => /cm-panels-top/.test(rule.selector) && /border-bottom/.test(rule.toString()),
-  ),
+  panelRules.some((rule) => /cm-panels-top/.test(rule.selector) && /border-bottom/.test(rule.toString())),
   'a panel at the top needs its line below it, not above',
 );
 

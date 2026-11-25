@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useEditorRole } from '../roles/useEditorRole';
+import { useStudioRole } from '../roles/useEditorRole';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { codeWindowEdit, codeWindowSource } from './codeWindowSource';
 
-export function useCodeWindow(
-  document: SharedDocument | undefined,
-  selected: string,
-  report: (error: unknown) => void,
-) {
-  const role = useEditorRole();
+export function useCodeWindow(document: SharedDocument | undefined, selected: string, report: (error: unknown) => void) {
+  // The code window is raw source: it needs `code:edit` (shared/properties/projectRoles.ts).
+  const role = can(useStudioRole(), 'code:edit') ? 'admin' : 'client';
   const [target, setTarget] = useState<{
     readonly document: SharedDocument;
     readonly id: string;
@@ -19,8 +17,7 @@ export function useCodeWindow(
     }
   }, [role]);
   const source = document?.text.toString() ?? '';
-  const current =
-    target?.document === document && target ? codeWindowSource(source, target.id) : undefined;
+  const current = target?.document === document && target ? codeWindowSource(source, target.id) : undefined;
   const open = (id = selected) => {
     if (role === 'client') {
       return false;
@@ -51,9 +48,7 @@ export function useCodeWindow(
         return;
       }
       try {
-        document.replaceSource(
-          codeWindowEdit(document.text.toString(), target.id, current.value, value),
-        );
+        document.replaceSource(codeWindowEdit(document.text.toString(), target.id, current.value, value));
       } catch (error) {
         report(error);
       }
@@ -64,23 +59,10 @@ export function useCodeWindow(
 function useCodeWindowKeys(open: () => boolean) {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.key !== 'Enter' ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey ||
-        event.isComposing
-      ) {
+      if (event.defaultPrevented || event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) {
         return;
       }
-      if (
-        event.target instanceof Element &&
-        event.target.closest(
-          'input, textarea, select, [contenteditable=true], .cm-editor, button, a, [role="button"]',
-        )
-      ) {
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor, button, a, [role="button"]')) {
         return;
       }
       if (open()) {

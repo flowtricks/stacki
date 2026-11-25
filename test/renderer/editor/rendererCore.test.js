@@ -27,9 +27,7 @@ esbuild.buildSync({
 });
 const tree = require(path.join(buildDirectory, 'editorTree.js'));
 const loops = require(path.join(buildDirectory, 'loopBindings.js'));
-const { createPageSaver, scanContainsFile } = require(
-  path.join(buildDirectory, 'pagePersistence.js'),
-);
+const { createPageSaver, scanContainsFile } = require(path.join(buildDirectory, 'pagePersistence.js'));
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => {

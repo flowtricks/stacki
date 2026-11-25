@@ -1,3 +1,105 @@
+import { centralIcon, centralIconSize } from './central/CentralIcon';
+import {
+  add as centralAdd,
+  arrowDown as centralArrowDown,
+  arrowLeftRight as centralArrowLeftRight,
+  arrowRotateClockwise as centralArrowRotateClockwise,
+  asterisk as centralAsterisk,
+  audio as centralAudio,
+  braces as centralBraces,
+  branch as centralBranch,
+  bucket as centralBucket,
+  calendar as centralCalendar,
+  canvas as centralCanvas,
+  devices as centralDevices,
+  check as centralCheck,
+  chevronDown as centralChevronDown,
+  chevronLeft as centralChevronLeft,
+  chevronRight as centralChevronRight,
+  clock as centralClock,
+  close as centralClose,
+  code as centralCode,
+  collapse as centralCollapse,
+  collapseVertical as centralCollapseVertical,
+  collection as centralCollection,
+  comment as centralComment,
+  cube as centralCube,
+  marketplace as centralMarketplace,
+  componentAdd as centralComponentAdd,
+  componentEdit as centralComponentEdit,
+  copy as centralCopy,
+  corner as centralCorner,
+  database as centralDatabase,
+  macbookAir as centralMacbookAir,
+  smartwatch1 as centralSmartwatch,
+  studioDisplayXdr as centralStudioDisplayXdr,
+  television as centralTelevision,
+  studioDisplay as centralStudioDisplay,
+  drag as centralDrag,
+  droplet as centralDroplet,
+  ease as centralEase,
+  edit as centralEdit,
+  expand as centralExpand,
+  expandVertical as centralExpandVertical,
+  external as centralExternal,
+  eye as centralEye,
+  eyeOff as centralEyeOff,
+  file as centralFile,
+  filter as centralFilter,
+  folder as centralFolder,
+  folderAdd as centralFolderAdd,
+  folderOpen as centralFolderOpen,
+  microphone as centralMicrophone,
+  guide as centralGuide,
+  help as centralHelp,
+  history as centralHistory,
+  image as centralImage,
+  layers as centralLayers,
+  layout as centralLayout,
+  lock as centralLock,
+  plug as centralPlug,
+  barsThree as centralBarsThree,
+  mail as centralMail,
+  mapPin as centralMapPin,
+  merge as centralMerge,
+  more as centralMore,
+  number as centralNumber,
+  panelRight as centralPanelRight,
+  paperclip as centralPaperclip,
+  paragraph as centralParagraph,
+  fileText as centralFileText,
+  robot as centralRobot,
+  phone as centralPhone,
+  phoneCall as centralPhoneCall,
+  pin as centralPin,
+  play as centralPlay,
+  properties as centralProperties,
+  repeat as centralRepeat,
+  search as centralSearch,
+  moveFolder as centralMoveFolder,
+  roles as centralRoles,
+  settings as centralSettings,
+  target as centralTarget,
+  sort as centralSort,
+  layoutGridTwo as centralLayoutGridTwo,
+  listMenu as centralListMenu,
+  textBlock as centralTextBlock,
+  sparkle as centralSparkle,
+  sync as centralSync,
+  tablet as centralTablet,
+  terminal as centralTerminal,
+  text as centralText,
+  textSize as centralTextSize,
+  toggle as centralToggle,
+  trashCanSimple as centralTrashCanSimple,
+  undo as centralUndo,
+  unlink as centralUnlink,
+  upload as centralUpload,
+  styles as centralStyles,
+  variables as centralVariables,
+  warning as centralWarning,
+  documentSparkle as centralDocumentSparkle,
+} from './central/centralGeometry';
 import { type IconProps, ASTRO_ASSET_ACCENT, I, I24 } from './IconBase';
 import * as paths from './iconPaths';
 export {
@@ -16,7 +118,6 @@ export {
   ElementHeading4Icon,
   ElementHeading5Icon,
   ElementHeading6Icon,
-  ElementParagraphIcon,
   ElementVideoIcon,
   ElementFormBlockIcon,
   ElementInputIcon,
@@ -28,628 +129,386 @@ export {
 
 export { type IconProps, ASTRO_ASSET_ACCENT } from './IconBase';
 
-export const FileIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={fileIconPath1} />
-    <path d="M8.9 1.9v3h3" />
-  </I>
+export const ComponentEditIcon = centralIcon(centralComponentEdit);
+
+export const GitHubIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.githubIconPath} />
+  </I24>
 );
+
+export const GoogleIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.googleIconPath} />
+  </I24>
+);
+
+export const SanityIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.sanityIconPath} />
+  </I24>
+);
+
+export const PayloadIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d={paths.payloadIconPath} />
+  </I24>
+);
+
+// The EmDash mark, drawn on its own 118-unit grid and scaled into the 24-unit frame the other CMS marks share, so it
+// takes the same size and colour as Payload's and Sanity's.
+export const EmDashIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <g fill="currentColor" transform={`scale(${24 / paths.EMDASH_GRID_UNITS})`}>
+      <path d={paths.emDashFramePath} />
+      <path d={paths.emDashDashPath} />
+    </g>
+  </I24>
+);
+
+// Media hosts in the Assets panel's sources. Simplified marks drawn here, never
+// loaded from the hosts: the cloud for Cloudflare R2, the rabbit for Bunny, and a
+// plain bucket for any other S3-compatible host.
+export const CloudflareIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d="M16.9 18.5H6.6a4.1 4.1 0 0 1-.7-8.15 5.9 5.9 0 0 1 11.2-1.6 4.9 4.9 0 0 1-.2 9.75Z" />
+  </I24>
+);
+
+export const BunnyIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <g fill="currentColor">
+      <ellipse cx="8.8" cy="6.6" rx="2" ry="4.9" transform="rotate(-12 8.8 6.6)" />
+      <ellipse cx="15.2" cy="6.6" rx="2" ry="4.9" transform="rotate(12 15.2 6.6)" />
+      <circle cx="12" cy="15.4" r="6.1" />
+    </g>
+  </I24>
+);
+
+export const BucketIcon = centralIcon(centralBucket);
+
+export const AudioFileIcon = centralIcon(centralAudio);
+
+// Brand marks inherit the label colour to stay legible on both white and dark buttons.
+export const LumosIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 123 120"
+    fill="currentColor"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
+    aria-hidden="true"
+  >
+    <path d={paths.lumosIconPath} />
+  </svg>
+);
+
+export const AstroIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 370 467"
+    fill="currentColor"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
+    aria-hidden="true"
+  >
+    <path d={paths.astroIconFlamePath} />
+    <path d={paths.astroIconLetterPath} />
+  </svg>
+);
+
+export const FileIcon = centralIcon(centralFile);
+
+// A document with text lines: the Instructions panel holds the project's Markdown files.
+export const InstructionsIcon = centralIcon(centralFileText);
+
+// A robot: an agent definition, the persona a coding agent runs as (Settings > Agents).
+export const AgentIcon = centralIcon(centralRobot);
+
+// A document with a sparkle: a skill is a written playbook an agent picks up when a task calls for it.
+export const SkillIcon = centralIcon(centralDocumentSparkle);
 
 // An easing curve: what the editor behind it edits.
-export const EaseIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2 13c5.5 0 5-10 12-10" />
-  </I>
-);
+export const EaseIcon = centralIcon(centralEase);
 
-export const ComponentIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="5.2" y="5.2" width="5.6" height="5.6" rx="0.8" transform="rotate(45 8 8)" />
-  </I>
-);
+export const ComponentIcon = centralIcon(centralCube);
 
 // Three tall columns represent the preview's column guide.
-export const GuideIcon = (props: IconProps) => (
+export const GuideIcon = centralIcon(centralGuide);
+
+export const LayoutIcon = centralIcon(centralLayout);
+
+// The class `:root[dir='rtl'] .icon-mirror-rtl` (controls.css) flips: a chevron that means back, next or "opens to this side"
+// points the other way in a right-to-left language, where reading runs from right to left. The drawing itself never changes.
+function mirroredInRightToLeft(Icon: ReturnType<typeof centralIcon>): ReturnType<typeof centralIcon> {
+  return function MirroredIcon(props: IconProps & { readonly title?: string }) {
+    const className = props.className === undefined ? 'icon-mirror-rtl' : `icon-mirror-rtl ${props.className}`;
+    return <Icon {...props} className={className} />;
+  };
+}
+
+// A window with its right-hand column marked: the Style and Settings panel. It toggles the inspector, which sits at the inline end: on the left in a right-to-left language.
+export const PanelRightIcon = mirroredInRightToLeft(centralIcon(centralPanelRight));
+
+export const TextIcon = centralIcon(centralText);
+
+export const CommentIcon = centralIcon(centralComment);
+
+export const CodeIcon = centralIcon(centralCode);
+
+// A ::before / ::after layer: the two colons that name a pseudo-element.
+export const PseudoElementIcon = (props: IconProps) => (
   <I {...props}>
-    <rect x="1" y="2" width="2" height="12" rx="0.5" />
-    <rect x="7" y="2" width="2" height="12" rx="0.5" />
-    <rect x="13" y="2" width="2" height="12" rx="0.5" />
+    <path d="M5.5 5.25h.01M5.5 10.75h.01M10.5 5.25h.01M10.5 10.75h.01" strokeWidth={2.4} />
   </I>
 );
 
-export const LayoutIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
-    <path d="M2 6h12M6 6v7.5" />
-  </I>
-);
+export const PencilIcon = centralIcon(centralEdit);
 
-export const TextIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3.5 4.5V3.5h9v1M8 3.5v9M6.3 12.5h3.4" />
-  </I>
-);
+export const TagIcon = centralIcon(centralCode);
 
-export const CommentIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={commentIconPath1} />
-  </I>
-);
+export const ChevronLeftIcon = mirroredInRightToLeft(centralIcon(centralChevronLeft));
 
-export const CodeIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m5.5 5-3 3 3 3M10.5 5l3 3-3 3" />
-  </I>
-);
+export const ChevronRightIcon = mirroredInRightToLeft(centralIcon(centralChevronRight));
 
-export const PencilIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M11.2 2.6a1.3 1.3 0 0 1 1.85 1.85L5.6 11.9l-2.45.6.6-2.45Z" />
-    <path d="m10.1 3.7 2.2 2.2" />
-  </I>
-);
+/** A pushpin: what a table pins as its columns. */
+export const PinIcon = centralIcon(centralPin);
 
-export const TagIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m6 3.5-4 4.5 4 4.5M10 3.5l4 4.5-4 4.5" />
-  </I>
-);
+export const ChevronDownIcon = centralIcon(centralChevronDown);
 
-export const ChevronLeftIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m10 4-4 4 4 4" />
-  </I>
-);
+export const PlusIcon = centralIcon(centralAdd);
 
-export const ChevronRightIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m6 4 4 4-4 4" />
-  </I>
-);
+// Central's clockwise rotate arrow: reload, refresh, rescan and update.
+export const RefreshIcon = centralIcon(centralArrowRotateClockwise);
 
-export const ChevronDownIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m4 6 4 4 4-4" />
-  </I>
-);
+// Two arrows chasing each other: a field kept in step with another.
+export const SyncIcon = centralIcon(centralSync);
 
-export const PlusIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 3v10M3 8h10" />
-  </I>
-);
+export const CloseIcon = centralIcon(centralClose);
 
-export const RefreshIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M13 8a5 5 0 1 1-1.47-3.54" />
-    <path d="M13.2 2.6v2.6h-2.6" />
-  </I>
-);
+export const ComponentPropertiesIcon = centralIcon(centralProperties);
 
-export const CloseIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m4 4 8 8M12 4l-8 8" />
-  </I>
-);
+export const VariableTextSizeIcon = centralIcon(centralTextSize);
 
-export const ComponentPropertiesIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={componentPropertiesIconPath1} />
-  </I>
-);
-
-export const VariableTextSizeIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d="M5 5H2V4H9V5H6V12H5V5Z" />
-    <path fillRule="evenodd" clipRule="evenodd" d="M11 8H9V7H14V8H12V12H11V8Z" />
-  </I>
-);
-
-export const FieldNumberIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.fieldNumberIconPath1} />
-  </I>
-);
+export const FieldNumberIcon = centralIcon(centralNumber);
 
 // Make a component out of what's selected — the component cube with a plus.
-export const ComponentPlusIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentPlusIconPath1} />
-    <path d="M13 10.9999H15V11.9999H13V13.9999H12V11.9999H10V10.9999H12V8.99988H13V10.9999Z" />
-  </I>
-);
+export const ComponentPlusIcon = centralIcon(centralComponentAdd);
 
-export const ExpandVerticalIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.expandVerticalIconPath1} />
-    <path d={paths.expandVerticalIconPath2} />
-  </I>
-);
+export const ExpandVerticalIcon = centralIcon(centralExpandVertical);
 
-export const CollapseVerticalIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.collapseVerticalIconPath1} />
-  </I>
-);
+export const CollapseVerticalIcon = centralIcon(centralCollapseVertical);
 
-export const RepeatIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3 6.5V6a2.5 2.5 0 0 1 2.5-2.5H13" />
-    <path d="m11 1.5 2 2-2 2" />
-    <path d="M13 9.5v.5a2.5 2.5 0 0 1-2.5 2.5H3" />
-    <path d="m5 10.5-2 2 2 2" />
-  </I>
-);
+export const RepeatIcon = centralIcon(centralRepeat);
 
-export const PreviewIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.previewIconPath1} />
-  </I>
-);
+export const PreviewIcon = centralIcon(centralEye);
 
-export const FolderIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.folderIconPath1} />
-  </I>
-);
+// A padlock: the Settings panel's Secrets tab, and the secret rows' hidden values.
+export const LockIcon = centralIcon(centralLock);
+export const PlugIcon = centralIcon(centralPlug);
 
-// Webflow's folder glyph — a filled evenodd path, so it opts into `filled`
-// rather than the stroked default the other icons use.
-export const FolderDefaultIcon = (props: IconProps) => (
-  <I filled {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.folderDefaultIconPath1} />
-  </I>
-);
+// A play triangle: the titlebar button runs the site, so it reads as "run" rather than "look".
+export const PlayIcon = centralIcon(centralPlay);
 
-// Webflow's CMS glyph — a page Astro generates from a collection entry rather
-// than one someone wrote. Filled evenodd, like the rest of the Webflow set.
-export const CollectionIcon = (props: IconProps) => (
-  <I filled {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.collectionIconPath1} />
-  </I>
-);
+export const FolderIcon = centralIcon(centralFolder);
 
-export const FolderPlusIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.folderPlusIconPath1} />
-    <path d="M8 6.8v3.4M6.3 8.5h3.4" />
-  </I>
-);
+export const FolderDefaultIcon = centralIcon(centralFolder);
 
-export const UploadCloudIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 10.5V4M4.8 7.2 8 4l3.2 3.2" />
-    <path d="M2.5 13h11" />
-  </I>
-);
+export const CollectionIcon = centralIcon(centralCollection);
 
-export const BracesIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.bracesIconPath1} />
-    <path d={paths.bracesIconPath2} />
-  </I>
-);
+export const FolderPlusIcon = centralIcon(centralFolderAdd);
 
-export const ResetIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M6.5 3.5 3.5 6.5l3 3" />
-    <path d="M3.5 6.5h5.25a3.75 3.75 0 0 1 3.75 3.75v2.25" />
-  </I>
-);
+export const UploadCloudIcon = centralIcon(centralUpload);
 
-export const DragIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <circle cx="6" cy="4" r="1" />
-    <circle cx="10" cy="4" r="1" />
-    <circle cx="6" cy="8" r="1" />
-    <circle cx="10" cy="8" r="1" />
-    <circle cx="6" cy="12" r="1" />
-    <circle cx="10" cy="12" r="1" />
-  </I>
-);
+export const BracesIcon = centralIcon(centralBraces);
 
-// Struck-through eye: this node put nothing on the page. Filled paths, so it
-// takes `filled` rather than the stroked default the rest of the set uses.
-export const HideIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.hideIconPath1} />
-    <path d={paths.hideIconPath2} />
-  </I>
-);
+export const ResetIcon = centralIcon(centralUndo);
 
-// Struck-through pointer: this node is drawn but takes no clicks
-// (`pointer-events: none`). Filled, like the eye above it.
+export const DragIcon = centralIcon(centralDrag);
+
+// An eye with a slash distinguishes hidden nodes in the Navigator.
+export const HideIcon = centralIcon(centralEyeOff);
+
+// The asterisk a required prop is marked with: a Visibility of Required.
+export const RequiredIcon = centralIcon(centralAsterisk);
+
+// The slash crosses the cursor with gaps so both shapes read at Navigator size.
 export const PointerEventsNoneIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.pointerEventsNoneIconPath1} />
-    <path d={paths.pointerEventsNoneIconPath2} />
+  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={1}>
+    <path d="M8.6 5.3 3 3l2.3 5.6m5.5-2.4 2.7 1.1-4.8 1.4-1.4 4.8-1.1-2.7M2.5 13.5l11-11" />
   </I>
 );
 
-export const CheckIcon = (props: IconProps) => (
-  <I {...props} strokeWidth={1.6}>
-    <path d="m3.5 8.5 3 3 6-7" />
-  </I>
-);
+export const CheckIcon = centralIcon(centralCheck);
+/** The microphone of the composer's dictation button, also the Dictation tab's mark in Settings. */
+export const MicrophoneIcon = centralIcon(centralMicrophone);
 
 // The "goes here" elbow: one side of a condition, in the navigator.
-export const CornerIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M4.5 3v6.5a1 1 0 0 0 1 1h6" />
-    <path d="m9.3 8.2 2.4 2.3-2.4 2.3" />
-  </I>
-);
+export const CornerIcon = centralIcon(centralCorner);
 
-export const BranchIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="4.5" cy="3.5" r="1.6" />
-    <circle cx="4.5" cy="12.5" r="1.6" />
-    <circle cx="11.5" cy="5" r="1.6" />
-    <path d="M4.5 5.1v5.8" />
-    <path d="M11.5 6.6c0 2.6-3.2 2.8-5.2 3.6" />
-  </I>
-);
+export const BranchIcon = centralIcon(centralBranch);
 
 // The reverse of BranchIcon: a side branch curving back into the trunk. The
 // arrowhead is what tells the two apart at 12px — without it a merge and a
 // branch are the same three dots and a curve.
 // A clock turned back — the panel is about what the project looked like
 // before, and a plain clock would read as "scheduled".
-export const HistoryIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.6 7.2a5.6 5.6 0 1 1 .9 3.9" />
-    <path d="M2.2 4.3v2.9h2.9" />
-    <path d="M8 5.1v3.1l2.2 1.3" />
-  </I>
-);
+export const HistoryIcon = centralIcon(centralHistory);
 
-export const MergeIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="4.5" cy="3.5" r="1.6" />
-    <circle cx="4.5" cy="12.5" r="1.6" />
-    <circle cx="11.5" cy="3.5" r="1.6" />
-    <path d="M4.5 5.1v5.8" />
-    <path d="M11.5 5.1c0 2.6-2.6 3.4-5.4 4.1" />
-    <path d="M8.2 9.8 6.1 9.2l1.6-1.5" />
-  </I>
-);
+export const MergeIcon = centralIcon(centralMerge);
 
-export const ExternalIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M12.5 9.5v3.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5H7" />
-    <path d="M9.5 2.5h4v4M13.2 2.8 7.8 8.2" />
-  </I>
-);
+export const ExternalIcon = centralIcon(centralExternal);
 
-export const MaximizeIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" />
-  </I>
-);
+export const MaximizeIcon = centralIcon(centralExpand);
 
-export const DesktopIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2" y="3" width="12" height="8.5" rx="1.2" />
-    <path d="M6 14h4M8 11.5V14" />
-  </I>
-);
+export const MinimizeIcon = centralIcon(centralCollapse);
 
-export const TabletIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="3.5" y="2" width="9" height="12" rx="1.5" />
-    <path d="M7 12h2" />
-  </I>
-);
+export const DesktopIcon = centralIcon(centralStudioDisplay);
 
-export const PhoneIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="4.5" y="1.75" width="7" height="12.5" rx="1.5" />
-    <path d="M7 12.25h2" />
-  </I>
-);
+// Central's macbook-air: the Laptop device in the preview bar and in Settings > Breakpoints.
+export const LaptopIcon = centralIcon(centralMacbookAir);
 
-export const AssetManagerIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path d={paths.assetManagerIconPath1} fill="currentColor" />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.assetManagerIconPath2}
-      fill="currentColor"
-    />
-    <g opacity="0.4">
-      <path d={paths.assetManagerIconPath3} fill="currentColor" />
-      <path d={paths.assetManagerIconPath4} fill="currentColor" />
-      <path
-        d="M12.5 18.9999H8L11.6464 15.3535C11.9614 15.0385 12.5 15.2616 12.5 15.707V18.9999Z"
-        fill="currentColor"
-      />
-    </g>
-  </I24>
-);
+// Central's studio-display (xdr, imac): the breakpoint just wider than Desktop.
+export const StudioDisplayXdrIcon = centralIcon(centralStudioDisplayXdr);
+
+// Central's smartwatch-1: a breakpoint narrower than the Phone.
+export const SmartwatchIcon = centralIcon(centralSmartwatch);
+
+// Central's television: each breakpoint wider than the first one past Desktop (Settings > Breakpoints, the preview bar).
+export const TelevisionIcon = centralIcon(centralTelevision);
+
+export const TabletIcon = centralIcon(centralTablet);
+
+export const PhoneIcon = centralIcon(centralPhone);
+
+export const AssetManagerIcon = centralIcon(centralImage, 20);
 
 // Webflow's CMS icon, drawn on a 16px grid — scaled up for the rail.
-export const CmsIcon = ({ size = 24, className, style }: IconProps) => (
+export const CmsIcon = centralIcon(centralDatabase, 20);
+
+// The Apps rail icon. Central has no grid-with-plus glyph, so the collection stack stands in until it does.
+// A storefront: apps are installed from the marketplace, and the grid it replaced read as a table.
+export const AppsIcon = centralIcon(centralMarketplace, 20);
+
+// The Stacki mark from the wordmark (welcome/StackiLogo.tsx), in `currentColor`
+// so it takes the colour of the row it sits in.
+export const StackiMarkIcon = ({ size = 16, className, style }: IconProps) => (
   <svg
     width={size}
     height={size}
-    viewBox="0 0 16 16"
+    viewBox="0 0 458 458"
     fill="none"
     className={className}
     style={{ display: 'block', flexShrink: 0, ...style }}
     aria-hidden="true"
   >
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.cmsIconPath1} fill="currentColor" />
+    <path d={paths.stackiMarkPath} fill="currentColor" />
   </svg>
 );
 
-export const PagePanelIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.pagePanelIconPath1} fill="currentColor" />
-    <path opacity="0.4" d={paths.pagePanelIconPath2} fill="currentColor" />
-  </I24>
-);
+export const PagePanelIcon = centralIcon(centralFile, 20);
 
-export const NavigatorIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path d="M2 7H17V6H2V7Z" fill="currentColor" />
-    <path d="M22 12H7V11H22V12Z" fill="currentColor" />
-    <path d="M22 17H7V16H22V17Z" fill="currentColor" />
-  </I24>
-);
+// Indented menu rows: the Navigator's tree, apart from Git's branch and merge symbols.
+export const NavigatorIcon = centralIcon(centralBarsThree, 20);
 
-export const ComponentFillIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.componentFillIconPath1}
-      fill="currentColor"
-    />
-    <g opacity="0.4">
-      <path d={paths.componentFillIconPath2} fill="currentColor" />
-      <path d={paths.componentFillIconPath3} fill="currentColor" />
-    </g>
-  </I24>
-);
+export const ComponentFillIcon = centralIcon(centralCube, 20);
 
-export const LayersIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m8 1.8 6 3.2-6 3.2-6-3.2 6-3.2Z" />
-    <path d="m2.5 8.2 5.5 3 5.5-3" />
-    <path d="m2.5 11.2 5.5 3 5.5-3" />
-  </I>
-);
+export const LayersIcon = centralIcon(centralLayers);
 
-export const CanvasIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="3" width="7" height="10" rx="1" />
-    <rect x="10.75" y="4.75" width="3.5" height="6.5" rx="0.8" />
-  </I>
-);
+export const CanvasIcon = centralIcon(centralCanvas);
+
+// A laptop with a phone: the canvas that shows every breakpoint at once.
+export const AllBreakpointsIcon = centralIcon(centralDevices);
 
 // Three dots: the row's own menu, shown on hover.
-export const MoreIcon = (props: IconProps) => (
-  <svg
-    viewBox="0 0 16 16"
-    width={props?.size || 14}
-    height={props?.size || 14}
-    fill="currentColor"
-    aria-hidden="true"
-  >
-    <circle cx="3.5" cy="8" r="1.3" />
-    <circle cx="8" cy="8" r="1.3" />
-    <circle cx="12.5" cy="8" r="1.3" />
-  </svg>
-);
+export const MoreIcon = centralIcon(centralMore);
 
-export const CopyIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="5.75" y="5.75" width="8.5" height="8.5" rx="1.5" />
-    <path d={paths.copyIconPath1} />
-  </I>
-);
+export const CopyIcon = centralIcon(centralCopy);
 
 // --- CMS field types -------------------------------------------------------
 
-export const ParagraphIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7" />
-  </I>
-);
+export const ParagraphIcon = centralIcon(centralParagraph);
 
-export const SwitchIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="4.75" width="12.5" height="6.5" rx="3.25" />
-    <circle cx="11" cy="8" r="1.6" fill="currentColor" stroke="none" />
-  </I>
-);
+export const SwitchIcon = centralIcon(centralToggle);
 
-export const CalendarIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5" />
-    <path d="M2.25 6.5h11.5M5.5 1.75v2.5M10.5 1.75v2.5" />
-  </I>
-);
+export const CalendarIcon = centralIcon(centralCalendar);
 
-export const MailIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="3.75" width="12.5" height="8.5" rx="1.5" />
-    <path d="m2.5 5 5.5 4 5.5-4" />
-  </I>
-);
+// A time of day: the picker's time tab.
+export const ClockIcon = centralIcon(centralClock);
 
-export const PhoneCallIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.phoneCallIconPath1} />
-  </I>
-);
+// A place on a map: a CMS location field.
+export const MapPinIcon = centralIcon(centralMapPin);
 
-export const DropletIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 2.2s4 4 4 6.6a4 4 0 0 1-8 0C4 6.2 8 2.2 8 2.2Z" />
-  </I>
-);
+// An attached file: a CMS file field.
+export const PaperclipIcon = centralIcon(centralPaperclip);
 
-export const HelpCircleIcon = ({ size = 16, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 16 16"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path d={paths.helpCircleIconPath1} fill="currentColor" />
-    <path d={paths.helpCircleIconPath2} fill="currentColor" />
-    <path
-      opacity="0.4"
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d={paths.helpCircleIconPath3}
-      fill="currentColor"
-    />
-  </svg>
-);
+export const MailIcon = centralIcon(centralMail);
 
-export const GearIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="8" cy="8" r="2.15" />
-    <path d={paths.gearIconPath1} />
-  </I>
-);
+export const PhoneCallIcon = centralIcon(centralPhoneCall);
 
-export const TrashIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3 4.5h10M6.5 2.5h3M5.5 4.5l.5 9h4l.5-9" />
-  </I>
-);
+export const DropletIcon = centralIcon(centralDroplet);
 
-export const FolderOpenIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2 12.5V3.8a.8.8 0 0 1 .8-.8h3.4l1.5 1.8h5.5a.8.8 0 0 1 .8.8v1" />
-    <path d="M2 12.5 3.8 7h10.7l-1.8 5.5H2Z" />
-  </I>
-);
+export const HelpCircleIcon = centralIcon(centralHelp);
 
-export const SparkleIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.sparkleIconPath1} />
-  </I>
-);
+// A warning: a triangle with an exclamation mark, the triangle at 40% so the mark reads first.
+export const WarningTriangleIcon = centralIcon(centralWarning);
 
-export const UploadIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2" />
-    <path d="M2.5 13h11" />
-  </I>
-);
+export const GearIcon = centralIcon(centralSettings);
+// A crosshair: "Show instances" finds where a component sits. Two people: the Roles submenu, as on the Roles tab.
+// A folder with an arrow leaving it: "Move to folder…" (Figma move-folder).
+export const MoveFolderIcon = centralIcon(centralMoveFolder);
+export const TargetIcon = centralIcon(centralTarget);
+export const UsersIcon = centralIcon(centralRoles);
 
-export const SearchIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="7" cy="7" r="4.5" />
-    <path d="m10.5 10.5 3 3" />
-  </I>
-);
+export const TrashIcon = centralIcon(centralTrashCanSimple);
 
-export const TerminalIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
-    <path d="m4.75 6.5 2 1.75-2 1.75M8.5 10.25h3" />
-  </I>
-);
+export const FolderOpenIcon = centralIcon(centralFolderOpen);
 
-export const ArrowDownIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 3v10M4.25 9.25 8 13l3.75-3.75" />
-  </I>
-);
+export const SparkleIcon = centralIcon(centralSparkle);
 
-// astro:assets <Image> / <Picture>. The glyph is the element they render, so
-// the row still reads as an image, tinted with Astro's accent and carrying a
-// small mark — a plain <img> is grey, a project component is green, and this
-// is neither.
-export function astroAssetIcon(name: unknown, size = 14, className?: string) {
-  const stack = name === 'Picture';
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-      style={{ display: 'block', flexShrink: 0, color: ASTRO_ASSET_ACCENT }}
-    >
-      {/* A second frame behind the first says "more than one source". */}
-      {stack && (
-        <path
-          d="M4.5 3.5H2.75A.75.75 0 0 0 2 4.25v8a.75.75 0 0 0 .75.75H10"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          opacity="0.55"
-        />
-      )}
-      <rect
-        x={stack ? 5 : 2.6}
-        y={stack ? 2 : 3}
-        width={stack ? 9 : 10.8}
-        height={stack ? 9 : 10}
-        rx="1.1"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <circle cx={stack ? 7.6 : 5.6} cy={stack ? 4.7 : 5.9} r="1" fill="currentColor" />
-      <path
-        d={stack ? 'M5.4 10.2 8.2 7.6l5.2 4.6' : 'M3 12.2l3.4-3.2 6.6 5.5'}
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+export const UploadIcon = centralIcon(centralUpload);
+
+export const SearchIcon = centralIcon(centralSearch);
+
+// A list's filters: a funnel, as a builder's collection list settings draw them.
+export const FilterIcon = centralIcon(centralFilter);
+
+// A list's sort: an up-and-down arrow beside the lines it orders.
+export const SortIcon = centralIcon(centralSort);
+
+// The Assets panel's views: tiles in a grid, rows with a thumbnail and two lines, and compact rows.
+export const GridViewIcon = centralIcon(centralLayoutGridTwo);
+export const ListViewIcon = centralIcon(centralTextBlock);
+export const CompactListViewIcon = centralIcon(centralListMenu);
+
+// Disconnecting a setting from a property: a chain link broken in two.
+// A link broken in two: what disconnecting a value from what it was bound to does.
+export const UnlinkIcon = centralIcon(centralUnlink);
+
+export const TerminalIcon = centralIcon(centralTerminal);
+
+export const ArrowDownIcon = centralIcon(centralArrowDown);
+/** Replace: Central's arrow-left-right (Figma 5579:2309), the file's swap glyph; it has no dedicated replace icon. */
+export const ReplaceIcon = centralIcon(centralArrowLeftRight);
+
+const AstroImageIcon = centralIcon(centralImage);
+const AstroPictureIcon = centralIcon(centralLayers);
+
+// Astro's accent distinguishes optimized images from plain HTML images in the
+// palette, props and navigator. `tint: 'inherit'` keeps currentColor for a
+// surface that colours its own icons (the canvas tag, whose text and outline
+// are one colour; an orange glyph there read as an error).
+export function astroAssetIcon(name: unknown, size = 16, className?: string, tint: 'astro' | 'inherit' = 'astro') {
+  const Icon = name === 'Picture' ? AstroPictureIcon : AstroImageIcon;
+  return <Icon size={size} className={className} style={tint === 'astro' ? { color: ASTRO_ASSET_ACCENT } : undefined} />;
 }
 
 // Boolean prop — a switch, matching the True/False control the field renders.
-export const FieldSwitchIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.fieldSwitchIconPath1} />
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.fieldSwitchIconPath2} />
-  </I>
-);
+export const FieldSwitchIcon = centralIcon(centralToggle);
 
 // Variables — the panel that reads a project's CSS custom properties.
-export const VariableIcon = ({ size = 24, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path opacity="0.4" d={paths.variableIconPath1} fill="currentColor" />
-    <path d={paths.variableIconPath2} fill="currentColor" />
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.variableIconPath3} fill="currentColor" />
-  </svg>
-);
-
-// Original vector paths, split only for source readability.
-const fileIconPath1 =
-  'M4.5 1.75h4.4l3.1 3.1v9.15a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V2.25a.5.5 0 ' + '0 1 .5-.5Z';
-
-const commentIconPath1 =
-  'M13.5 7.6c0 2.8-2.5 5-5.5 5-.7 0-1.4-.1-2-.35L2.8 13l.6-2.5A4.7 4.7 0 0 1 2' +
-  '.5 7.6c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5Z';
-
-const componentPropertiesIconPath1 =
-  'M8.47885 1.69162C8.18037 1.52882 7.81963 1.52882 7.52115 1.69162L2.52115 4.' +
-  '4189C2.19989 4.59413 2 4.93085 2 5.29679V10.7032C2 11.0691 2.19989 11.4058 ' +
-  '2.52115 11.5811L7.52115 14.3083C7.81963 14.4711 8.18037 14.4711 8.47885 14.' +
-  '3083L13.4789 11.5811C13.8001 11.4058 14 11.0691 14 10.7032V5.29679C14 4.930' +
-  '85 13.8001 4.59413 13.4789 4.4189L8.47885 1.69162ZM3.54416 4.99998L8 2.5695' +
-  '2L12.4558 4.99998L8 7.43043L3.54416 4.99998ZM3 5.84225L3 10.7032L7.5 13.157' +
-  '7V8.29679L3 5.84225Z';
+export const VariableIcon = centralIcon(centralVariables, 20);
+/** The paint brush the Style selectors rail draws (central `styles`): a CSS class. */
+export const PaintBrushIcon = centralIcon(centralStyles, 20);

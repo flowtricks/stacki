@@ -3,6 +3,7 @@
 // Method: render the real panel in JSDOM and exercise pointer/keyboard actions;
 // inspect the pure wrapping gesture and its edit requests for valid and invalid trees.
 const assert = require('node:assert/strict');
+const { assertSameElement } = require('../../helpers/domIdentity.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
@@ -44,14 +45,8 @@ function checkWrap({ canWrapNode, wrapNodeGesture }) {
   assert.equal(canWrapNode([table], 'n0.0', 'div'), false);
   const link = element('n0', 'div', [element('n0.0', 'a')]);
   assert.equal(canWrapNode([link], 'n0', 'a'), false);
-  assert.throws(
-    () => wrapNodeGesture({ nodes: [link] }, 'n0', { id: 'n2', name: 'a' }),
-    /The node accepts this wrapper/,
-  );
-  assert.throws(
-    () => wrapNodeGesture(model, 'n0', { id: 'n0', name: 'div' }),
-    /A wrapper has its own identity/,
-  );
+  assert.throws(() => wrapNodeGesture({ nodes: [link] }, 'n0', { id: 'n2', name: 'a' }), /The node accepts this wrapper/);
+  assert.throws(() => wrapNodeGesture(model, 'n0', { id: 'n0', name: 'div' }), /A wrapper has its own identity/);
   const gesture = wrapNodeGesture(model, 'n0', { id: 'n2', name: 'div' });
   const target = { id: 'n0' };
   assert.deepEqual(
@@ -75,6 +70,77 @@ function checkWrap({ canWrapNode, wrapNodeGesture }) {
   assert.equal(wrapped.children[0].props.slot, undefined);
   assert.equal(slotted.nodes[0].props.slot, slot);
   assert.equal(slottedGesture.request(() => target)[0].tag, 'replace-node');
+}
+
+// A ::before or ::after is the selection: its element's menu changes nothing, a
+// click on the disabled items included. An item the menu showed
+// enabled is asked again when clicked, as the selection can move while it is open.
+// Its row has no menu.
+async function checkPseudoMenu({ render, open, item, click, calls, act, dom }) {
+  await render({ canChangeStructure: () => false });
+  await open('n0');
+  for (const label of ['Delete', 'Cut', 'Copy', 'Duplicate', 'Wrap in']) {
+    assert.equal(item(label).disabled, true, `${label} is disabled`);
+  }
+  const before = calls.length;
+  await click('Delete');
+  await click('Cut');
+  await click('Copy');
+  await click('Duplicate');
+  await click('Wrap in');
+  assert.equal(item('div'), undefined, 'a disabled Wrap in opens nothing');
+  assert.deepEqual(calls.slice(before), [], 'a disabled item does nothing');
+
+  let allowed = true;
+  await render({ canChangeStructure: () => allowed });
+  await open('n0');
+  const opened = calls.length;
+  allowed = false;
+  await click('Duplicate');
+  allowed = true;
+  await open('n0');
+  allowed = false;
+  await click('Copy');
+  allowed = true;
+  await open('n0');
+  await click('Wrap in');
+  allowed = false;
+  await click('div');
+  allowed = true;
+  await open('n0');
+  await click('Wrap in');
+  allowed = false;
+  await click('<a>');
+  const acted = calls.slice(opened).filter((call) => call[0] !== 'select');
+  assert.deepEqual(acted, [], 'the menu checks again when an item is clicked');
+
+  await render({
+    canChangeStructure: (id) => id !== 'n0',
+    pseudoNodeIds: { before: new Set(['n0']), after: new Set() },
+    selectedPseudo: 'before',
+  });
+  await open('n1');
+  assert.equal(item('Duplicate').disabled, false, 'another element still duplicates');
+  await click('Duplicate');
+  assert.deepEqual(calls.at(-1), ['duplicate', 'n1']);
+  await open('n1');
+  assert.equal(item('Copy').disabled, false, 'another element still copies');
+  await click('Copy');
+  assert.deepEqual(calls.at(-1), ['copy', 'n1']);
+  await open('n1');
+  await click('Wrap in');
+  await click('div');
+  assert.deepEqual(calls.at(-1), ['wrap', 'n1', 'div']);
+  await open('n1');
+  assert.equal(item('Delete').disabled, false, 'another element still deletes');
+  await click('Delete');
+  assert.deepEqual(calls.at(-1), ['delete', 'n1']);
+  await act(() => {
+    document
+      .querySelector('[data-pseudo-of="n0"]')
+      .dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+  });
+  assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined, 'a pseudo-element row has no menu');
 }
 
 async function checkMenu(StructurePanel) {
@@ -122,12 +188,9 @@ async function checkMenu(StructurePanel) {
     onCodeChange: () => {},
     onOpenCodePanel: () => {},
   };
-  const render = (overrides = {}) =>
-    act(() => root.render(React.createElement(StructurePanel, { ...props, ...overrides })));
+  const render = (overrides = {}) => act(() => root.render(React.createElement(StructurePanel, { ...props, ...overrides })));
   const item = (label) =>
-    [...document.querySelectorAll('[role="menuitem"]')].find(
-      (entry) => entry.textContent === label || entry.firstElementChild?.textContent === label,
-    );
+    [...document.querySelectorAll('[role="menuitem"]')].find((entry) => entry.textContent === label || entry.firstElementChild?.textContent === label);
   const open = (id) =>
     act(() => {
       document.querySelector(`[data-node-id="${id}"]`).dispatchEvent(
@@ -140,12 +203,7 @@ async function checkMenu(StructurePanel) {
       );
     });
   const click = (label) => act(() => item(label).click());
-  const key = (target, name) =>
-    act(() =>
-      target.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }),
-      ),
-    );
+  const key = (target, name) => act(() => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true })));
   await render();
   await open('n1');
   assert.ok(item('Open component'));
@@ -157,15 +215,12 @@ async function checkMenu(StructurePanel) {
   const menu = document.querySelector('[aria-label="Element actions"]');
   assert.equal(menu.style.left, '796px');
   assert.equal(menu.style.top, '460px');
-  assert.equal(document.activeElement, menu, 'right-click does not preselect an action');
+  assertSameElement(document.activeElement, menu, 'right-click does not preselect an action');
   await click('Open component');
   assert.deepEqual(calls.at(-1), ['open', 'Card', 'n1']);
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
   await open('n1');
-  assert.equal(
-    document.querySelector('[aria-label="Element actions"] > button:last-child').textContent,
-    'Set component defaults',
-  );
+  assert.equal(document.querySelector('[aria-label="Element actions"] > button:last-child').textContent, 'Set component defaults');
   await click('Set component defaults');
   assert.deepEqual(calls.at(-1), ['defaults', 'Card', 'n1']);
   await open('n1');
@@ -187,11 +242,11 @@ async function checkMenu(StructurePanel) {
   await open('n0');
   const selected = calls.filter((call) => call[0] === 'select').length;
   await key(document.activeElement, 'ArrowUp');
-  assert.equal(document.activeElement, item('Delete'));
+  assertSameElement(document.activeElement, item('Delete'));
   await key(document.activeElement, 'ArrowDown');
-  assert.equal(document.activeElement, item('Wrap in'));
+  assertSameElement(document.activeElement, item('Wrap in'));
   await key(document.activeElement, 'ArrowDown');
-  assert.equal(document.activeElement, item('Cut'));
+  assertSameElement(document.activeElement, item('Cut'));
   assert.equal(calls.filter((call) => call[0] === 'select').length, selected);
   await key(document.activeElement, 'Escape');
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
@@ -201,15 +256,7 @@ async function checkMenu(StructurePanel) {
   assert.equal(item('Open component').disabled, true);
   await render({ clientMode: true, hasClipboard: false });
   await open('layout');
-  for (const label of [
-    'Cut',
-    'Copy',
-    'Duplicate',
-    'Delete',
-    'Wrap in',
-    'Paste',
-    'Set component defaults',
-  ]) {
+  for (const label of ['Cut', 'Copy', 'Duplicate', 'Delete', 'Wrap in', 'Paste', 'Set component defaults']) {
     assert.equal(item(label).disabled, true, label);
   }
   await key(document.activeElement, 'Escape');
@@ -219,16 +266,15 @@ async function checkMenu(StructurePanel) {
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
   await open('n1');
   assert.equal(item('Delete').disabled, true);
+  await key(document.activeElement, 'Escape');
+  await checkPseudoMenu({ render, open, item, click, calls, act, dom });
   await act(() => root.unmount());
   dom.window.close();
 }
 
 (async () => {
   checkWrap(await bundle('src/editor/wrapNode.ts', 'wrap.cjs'));
-  const { default: StructurePanel } = await bundle(
-    'src/features/structure/StructurePanel.tsx',
-    'panel.cjs',
-  );
+  const { default: StructurePanel } = await bundle('src/features/structure/StructurePanel.tsx', 'panel.cjs');
   await checkMenu(StructurePanel);
   console.log('navigator-context-menu: all checks passed');
 })().catch((error) => {

@@ -1,0 +1,10 @@
+---
+interface Props {
+  href: string;
+  label?: string;
+  target?: '_blank' | '_self';
+  url?: string;
+}
+const { href, label = 'Read more', target = '_self', url } = Astro.props;
+---
+<a class="href-prop" href={href} target={target} data-url={url}>{label}</a>

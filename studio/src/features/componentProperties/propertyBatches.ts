@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FileChange } from '../../../vendor/stacki/electron/properties/propertyPlan';
 import type { createRooms } from '../collaboration/rooms';
 import { sourcePath, string } from '../../shared/validation';
+import { ReferencedError } from '../../shared/referencedError';
 
 export class PropertyBatches {
   private readonly entries = new Map<string, readonly FileChange[]>();
@@ -15,10 +16,7 @@ export class PropertyBatches {
     let count = 0;
     for (const [key, batch] of [...this.entries].reverse()) {
       count++;
-      size += batch.reduce(
-        (total, change) => total + change.before.length + change.after.length,
-        0,
-      );
+      size += batch.reduce((total, change) => total + change.before.length + change.after.length, 0);
       if (size > 64 * 1024 * 1024 || count > 200) {
         this.entries.delete(key);
       }
@@ -28,7 +26,7 @@ export class PropertyBatches {
   get(token: string) {
     const changes = this.entries.get(token);
     if (!changes) {
-      throw new Error('This property change can no longer be undone.');
+      throw new ReferencedError('props.edit.expired');
     }
     return changes;
   }
@@ -37,18 +35,15 @@ export class PropertyBatches {
   }
 }
 
-export async function commitProperties(
-  rooms: ReturnType<typeof createRooms>,
-  changes: readonly FileChange[],
-) {
+export async function commitProperties(rooms: ReturnType<typeof createRooms>, changes: readonly FileChange[]) {
   if (changes.length > 100 || new Set(changes.map(({ file }) => file)).size !== changes.length) {
-    throw new Error('Property batch exceeds the shared document limit');
+    throw new ReferencedError('props.edit.batchLimit');
   }
   for (const change of changes) {
     sourcePath(change.file);
     string(change.after);
     if ((await rooms.read(change.file)) !== change.before) {
-      throw new Error(`${change.file} changed. Refresh before saving properties.`);
+      throw new ReferencedError('props.edit.changedRefresh', { file: change.file });
     }
   }
   const targets = await Promise.all(
@@ -73,9 +68,7 @@ export async function commitProperties(
       }
     }
     if (failures.length) {
-      throw new Error(
-        `Property save failed; recovery failed for ${failures.join(', ')}. ${String(error)}`,
-      );
+      throw new ReferencedError('props.edit.studioRecoveryFailed', { files: failures.join(', '), detail: String(error) });
     }
     throw error;
   }

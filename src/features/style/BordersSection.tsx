@@ -1,30 +1,39 @@
 import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
-import type { SegmentedOption } from './components/SegmentedControl';
+import type { SegmentedOption } from '../../ui/SegmentedControl';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import { useHighlight } from './model/computedStyle';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { displayOf, displayText, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { type Read, type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';
 import { RadiusControl } from './RadiusControl';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 
 export { LiveInput } from './BordersKit';
 
 // ─────────────────────────── Border side + style/width/color ───────────────────────────
 
 type Side = 'all' | 'top' | 'right' | 'bottom' | 'left';
+// The side names as they read inside a sentence ("top border color"), unlike the capitalised button labels.
+const SIDE_NAME_KEYS: Record<Side, MessageKey> = {
+  all: 'style.bordersSection.sideNameAll',
+  top: 'style.bordersSection.sideNameTop',
+  right: 'style.bordersSection.sideNameRight',
+  bottom: 'style.bordersSection.sideNameBottom',
+  left: 'style.bordersSection.sideNameLeft',
+};
 type Facet = 'style' | 'width' | 'color';
 const EDGES = ['top', 'right', 'bottom', 'left'] as const;
 
 // Props the label clears — for 'all', all four edges plus any leftover shorthand.
 const facetClear = (facet: Facet, side: Side): string[] =>
-  side === 'all'
-    ? [`border-${facet}`, ...EDGES.map((edge) => `border-${edge}-${facet}`)]
-    : [`border-${side}-${facet}`];
+  side === 'all' ? [`border-${facet}`, ...EDGES.map((edge) => `border-${edge}-${facet}`)] : [`border-${side}-${facet}`];
 // Representative property to read / label. A single side owns its edge longhand;
 // "all" owns only the border facet shorthand. It must not borrow a side value — doing
 // so makes the center selector show (and edit) Bottom when only Bottom is configured.
@@ -32,8 +41,6 @@ function facetRead(facet: Facet, side: Side, read: Read): { d: Display; prop: st
   const prop = side === 'all' ? `border-${facet}` : `border-${side}-${facet}`;
   return { d: displayOf(read(prop)), prop };
 }
-const facetExternal = (display: Display) =>
-  display.present ? (display.important ? `${display.value} !important` : display.value) : '';
 // How a facet write lands: live while typing or dragging, or committed.
 interface WriteOptions {
   readonly live: boolean;
@@ -60,9 +67,7 @@ function facetWrite(facet: Facet, side: Side, props: Props): FacetWrite {
       // On commit, drop any stray per-side longhands so the shorthand stays the source
       // — but only when some exist, so a plain "all" edit stays a single write.
       if (!live) {
-        const strays = EDGES.map((edge) => `border-${edge}-${facet}`).filter(
-          (prop) => displayOf(props.read(prop)).present,
-        );
+        const strays = EDGES.map((edge) => `border-${edge}-${facet}`).filter((prop) => displayOf(props.read(prop)).present);
         if (strays.length) {
           props.clearProp(strays);
         }
@@ -83,75 +88,59 @@ function appliedBorderSides(read: Read): Set<Side> {
     applied.add('all');
   }
   for (const side of EDGES) {
-    if (
-      [
-        `border-${side}`,
-        `border-${side}-style`,
-        `border-${side}-width`,
-        `border-${side}-color`,
-      ].some(owns)
-    ) {
+    if ([`border-${side}`, `border-${side}-style`, `border-${side}-width`, `border-${side}-color`].some(owns)) {
       applied.add(side);
     }
   }
   return applied;
 }
 
-function SideSelector({
-  side,
-  applied,
-  onPick,
-}: {
-  side: Side;
-  applied: ReadonlySet<Side>;
-  onPick: (s: Side) => void;
-}) {
+function SideSelector({ side, applied, onPick }: { side: Side; applied: ReadonlySet<Side>; onPick: (s: Side) => void }) {
+  const translate = useTranslate();
   const sideButton = (option: Side, label: string) => (
     <button
       type="button"
-      className={
-        `embed-editor_border-side is-${option} ${side === option ? 'is-active' : ''} ` +
-        (applied.has(option) ? 'is-applied' : '')
-      }
+      className={`embed-editor_border-side is-${option} ${side === option ? 'is-active' : ''} ` + (applied.has(option) ? 'is-applied' : '')}
       aria-pressed={side === option}
-      aria-label={option === 'all' ? 'All borders' : `${label} border`}
+      aria-label={option === 'all' ? translate('style.bordersSection.allBorders') : translate('style.bordersSection.sideBorder', { side: label })}
       onClick={() => onPick(option)}
     >
       <span className="embed-editor_border-side-mark" />
     </button>
   );
   return (
-    <div className="embed-editor_border-sides" role="group" aria-label="Border side">
-      {sideButton('top', 'Top')}
+    <div className="embed-editor_border-sides" role="group" aria-label={translate('style.bordersSection.borderSide')}>
+      {sideButton('top', translate('style.bordersSection.top'))}
       <div className="embed-editor_border-sides-mid">
-        {sideButton('left', 'Left')}
-        {sideButton('all', 'All')}
-        {sideButton('right', 'Right')}
+        {sideButton('left', translate('style.bordersSection.left'))}
+        {sideButton('all', translate('style.bordersSection.all'))}
+        {sideButton('right', translate('style.bordersSection.right'))}
       </div>
-      {sideButton('bottom', 'Bottom')}
+      {sideButton('bottom', translate('style.bordersSection.bottom'))}
     </div>
   );
 }
 
-const STYLE_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
-  { value: 'none', label: '✕', ariaLabel: 'None' },
+const styleOptions = (translate: Translator): ReadonlyArray<SegmentedOption<string>> => [
+  { value: 'none', label: '✕', ariaLabel: translate('style.bordersSection.styleNone') },
   {
     value: 'solid',
     label: <span className="embed-editor_border-style-line is-solid" />,
-    ariaLabel: 'Solid',
+    ariaLabel: translate('style.bordersSection.styleSolid'),
   },
   {
     value: 'dashed',
     label: <span className="embed-editor_border-style-line is-dashed" />,
-    ariaLabel: 'Dashed',
+    ariaLabel: translate('style.bordersSection.styleDashed'),
   },
   {
     value: 'dotted',
     label: <span className="embed-editor_border-style-line is-dotted" />,
-    ariaLabel: 'Dotted',
+    ariaLabel: translate('style.bordersSection.styleDotted'),
   },
 ];
-const STYLE_VALUES = new Set(STYLE_OPTIONS.map((option) => option.value));
+// The values only: no wording is needed to know whether a style is one of the presets.
+const STYLE_VALUES = new Set(['none', 'solid', 'dashed', 'dotted']);
 
 // The border-style segmented bar (None / Solid / Dashed / Dotted) + a chevron menu
 // whose Custom item enters a free-value mode (double / groove / var()…) and offers
@@ -160,12 +149,15 @@ const STYLE_VALUES = new Set(STYLE_OPTIONS.map((option) => option.value));
 // "all" vs a per-side longhand).
 function StyleControl({
   value,
+  important,
   prop,
   busy,
   write,
   clear,
 }: {
   value: string;
+  /** Whether the style is written `!important`: the custom field shows it. */
+  important: boolean;
   /** The property this bar edits (side-aware) — its computed value highlights an
    *  unset control, so an inherited or UA style shows instead of an empty bar. */
   prop: string;
@@ -173,24 +165,26 @@ function StyleControl({
   write: FacetWrite;
   clear: () => void;
 }) {
+  const translate = useTranslate();
   const lower = value.trim().toLowerCase();
   // Unset → what the page draws: its computed border style, or `none` (the initial
   // value) when there's no canvas to ask.
-  const shown = useHighlight(
-    lower,
-    prop,
-    STYLE_OPTIONS.map((option) => option.value),
-    'none',
-  );
-  const customMode = !!lower && !STYLE_VALUES.has(lower);
+  const shown = useHighlight(lower, prop, [...STYLE_VALUES], 'none');
+  // The bar shows a listed style without `!important`, the convention every
+  // segmented bar in the panel follows (DisplayControl, SegmentedField): a
+  // flagged style opens the custom field, whose text shows the flag and lets it
+  // be deleted. Before, the bar drew `solid !important` as plain Solid.
+  const customMode = important || (!!lower && !STYLE_VALUES.has(lower));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestFocus = useFocusOnceReady({ customMode, busy, inputRef });
 
+  // A pick returns to the bar, which shows no flag, so it writes the preset
+  // plain — the same as DisplayControl's pick.
   const pick = (next: string) => {
     setOpen(false);
-    if (next !== lower) {
+    if (next !== lower || important) {
       write(next, { live: false });
     }
   };
@@ -201,48 +195,44 @@ function StyleControl({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label="Border style"
+    <KeywordConnect
+      prop="border-style"
+      value={value}
+      ariaLabel={translate('style.bordersSection.borderStyle')}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => write(binding, { live: false })}
     >
-      <SegmentPill />
-      {customMode ? (
-        <StyleCustomField
-          value={value}
+      <div
+        ref={rootRef}
+        className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`}
+        role="group"
+        aria-label={translate('style.bordersSection.borderStyle')}
+      >
+        <SegmentPill />
+        {customMode ? (
+          <StyleCustomField value={withImportant({ value, important })} busy={busy} inputRef={inputRef} write={write} clear={clear} />
+        ) : (
+          <StyleSegments shown={shown} busy={busy} pick={pick} />
+        )}
+        <StyleMenu
+          open={open}
+          customMode={customMode}
+          shown={shown}
           busy={busy}
-          inputRef={inputRef}
-          write={write}
-          clear={clear}
+          onToggle={() => setOpen((wasOpen) => !wasOpen)}
+          pick={pick}
+          enterCustom={enterCustom}
         />
-      ) : (
-        <StyleSegments shown={shown} busy={busy} pick={pick} />
-      )}
-      <StyleMenu
-        open={open}
-        customMode={customMode}
-        shown={shown}
-        busy={busy}
-        onToggle={() => setOpen((wasOpen) => !wasOpen)}
-        pick={pick}
-        enterCustom={enterCustom}
-      />
-    </div>
+      </div>
+    </KeywordConnect>
   );
 }
 
 // None / Solid / Dashed / Dotted.
-function StyleSegments({
-  shown,
-  busy,
-  pick,
-}: {
-  shown: string;
-  busy: boolean;
-  pick: (next: string) => void;
-}) {
-  return STYLE_OPTIONS.map((seg) => (
+function StyleSegments({ shown, busy, pick }: { shown: string; busy: boolean; pick: (next: string) => void }) {
+  const translate = useTranslate();
+  return styleOptions(translate).map((seg) => (
     <button
       key={seg.value}
       type="button"
@@ -261,15 +251,7 @@ function StyleSegments({
 
 // Focus the custom field once its `unset` write settles (the input is disabled
 // mid-save). Returns the request to make when entering custom mode.
-function useFocusOnceReady({
-  customMode,
-  busy,
-  inputRef,
-}: {
-  customMode: boolean;
-  busy: boolean;
-  inputRef: React.RefObject<HTMLInputElement>;
-}) {
+function useFocusOnceReady({ customMode, busy, inputRef }: { customMode: boolean; busy: boolean; inputRef: React.RefObject<HTMLInputElement> }) {
   const wantFocus = useRef(false);
   useEffect(() => {
     if (customMode && wantFocus.current && !busy) {
@@ -299,6 +281,7 @@ function StyleCustomField({
   write: FacetWrite;
   clear: () => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -312,21 +295,21 @@ function StyleCustomField({
       clear();
       return;
     }
-    const { value: styleValue, important } = parseImportant(trimmed);
-    write(important ? `${styleValue} !important` : styleValue, { live: false });
+    write(withImportant(parseImportant(trimmed)), { live: false });
   };
   return (
     <VariableConnect
-      ariaLabel="Connect border style to a variable"
+      ariaLabel={translate('style.bordersSection.connectBorderStyle')}
       disabled={busy}
       prop="border-style"
+      canvasProperty="border-style"
       onPick={(binding) => write(binding, { live: false })}
     >
       <input
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
-        placeholder="custom value"
+        placeholder={translate('style.bordersSection.customValuePlaceholder')}
         spellCheck={false}
         disabled={busy}
         onChange={(event) => {
@@ -348,7 +331,7 @@ function StyleCustomField({
             commitInPlace(event.currentTarget);
           }
         }}
-        aria-label="Border style value"
+        aria-label={translate('style.bordersSection.borderStyleValue')}
       />
     </VariableConnect>
   );
@@ -372,6 +355,7 @@ function StyleMenu({
   pick: (next: string) => void;
   enterCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -379,31 +363,21 @@ function StyleMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="More border style options"
+        aria-label={translate('style.bordersSection.moreStyleOptions')}
         disabled={busy}
         onClick={onToggle}
       >
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {customMode ? (
-            STYLE_OPTIONS.map((seg) => (
-              <MenuItem
-                key={seg.value}
-                label={seg.ariaLabel ?? seg.value}
-                selected={shown === seg.value}
-                onClick={() => pick(seg.value)}
-              />
+            styleOptions(translate).map((seg) => (
+              <MenuItem key={seg.value} label={seg.ariaLabel ?? seg.value} selected={shown === seg.value} onClick={() => pick(seg.value)} />
             ))
           ) : (
-            <MenuItem label="Custom" selected={false} onClick={enterCustom} />
+            <MenuItem label={translate('style.bordersSection.custom')} selected={false} onClick={enterCustom} />
           )}
         </Popup>
       ) : undefined}
@@ -433,6 +407,9 @@ export function ColorVariableInput({
   // A live drag writes to the canvas, not to the model this field reads — so the
   // value it emitted is what both show until the model catches up.
   const [shown, noteLive] = useLiveColor(value);
+  // The swatch picks a colour, not the flag: a colour written `!important`
+  // stays so, and the field beside it keeps showing it through the drag.
+  const { important } = parseImportant(value);
   return (
     <div className="embed-editor_border-color">
       <ColorSwatch
@@ -440,11 +417,12 @@ export function ColorVariableInput({
         busy={busy}
         ariaLabel={ariaLabel}
         onChange={(color, live) => {
-          noteLive(live ? color : undefined);
+          const emitted = withImportant({ value: color, important });
+          noteLive(live ? emitted : undefined);
           if (live) {
-            onLive(color);
+            onLive(emitted);
           } else {
-            onCommit(color);
+            onCommit(emitted);
           }
         }}
       />
@@ -463,13 +441,14 @@ export function ColorVariableInput({
 }
 
 function ColorField({ side, props }: { side: Side; props: Props }) {
-  const value = facetExternal(facetRead('color', side, props.read).d);
+  const translate = useTranslate();
+  const value = displayText(facetRead('color', side, props.read).d);
   const write = facetWrite('color', side, props);
   return (
     <ColorVariableInput
       value={value}
       busy={props.busy}
-      ariaLabel={`${side} border color`}
+      ariaLabel={translate('style.bordersSection.sideBorderColor', { side: translate(SIDE_NAME_KEYS[side]) })}
       prop="border-color"
       onLive={(next) => write(next, { live: true })}
       onCommit={(next) => write(next, { live: false })}
@@ -479,6 +458,7 @@ function ColorField({ side, props }: { side: Side; props: Props }) {
 
 function BorderControl(props: Props) {
   const { busy } = props;
+  const translate = useTranslate();
   const [side, setSide] = useState<Side>('all');
   const applied = appliedBorderSides(props.read);
   const styleFacet = facetRead('style', side, props.read);
@@ -492,14 +472,10 @@ function BorderControl(props: Props) {
       <SideSelector side={side} applied={applied} onPick={setSide} />
       <div className="embed-editor_border-fields">
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Style"
-            prop={styleFacet.prop}
-            clearProps={facetClear('style', side)}
-            {...props}
-          />
+          <PropLabel label={translate('style.bordersSection.style')} prop={styleFacet.prop} clearProps={facetClear('style', side)} {...props} />
           <StyleControl
             value={styleFacet.d.present ? styleFacet.d.value.trim() : ''}
+            important={styleFacet.d.important}
             prop={styleFacet.prop}
             busy={busy}
             write={writeStyle}
@@ -507,28 +483,18 @@ function BorderControl(props: Props) {
           />
         </div>
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Width"
-            prop={widthFacet.prop}
-            clearProps={facetClear('width', side)}
-            {...props}
-          />
+          <PropLabel label={translate('style.bordersSection.width')} prop={widthFacet.prop} clearProps={facetClear('width', side)} {...props} />
           <LiveInput
-            value={facetExternal(widthFacet.d)}
+            value={displayText(widthFacet.d)}
             busy={busy}
-            ariaLabel={`${side} border width`}
+            ariaLabel={translate('style.bordersSection.sideBorderWidth', { side: translate(SIDE_NAME_KEYS[side]) })}
             prop="border-width"
             onLive={(next) => writeWidth(next, { live: true })}
             onCommit={(next) => writeWidth(next, { live: false })}
           />
         </div>
         <div className="embed-editor_size-row">
-          <PropLabel
-            label="Color"
-            prop={colorFacet.prop}
-            clearProps={facetClear('color', side)}
-            {...props}
-          />
+          <PropLabel label={translate('style.bordersSection.color')} prop={colorFacet.prop} clearProps={facetClear('color', side)} {...props} />
           <ColorField side={side} props={props} />
         </div>
       </div>
@@ -537,10 +503,11 @@ function BorderControl(props: Props) {
 }
 
 export default function BordersSection(props: Props) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_borders">
       <RadiusControl {...props} />
-      <div className="embed-editor_border-heading">Borders</div>
+      <div className="embed-editor_border-heading">{translate('style.bordersSection.borders')}</div>
       <BorderControl {...props} />
     </div>
   );

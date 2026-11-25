@@ -14,9 +14,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function deferredRuns() {
   const runs = [];
-  const coalesced = createCoalescedRun(
-    () => new Promise((resolve, reject) => runs.push({ resolve, reject })),
-  );
+  const coalesced = createCoalescedRun(() => new Promise((resolve, reject) => runs.push({ resolve, reject })));
   return { runs, coalesced };
 }
 

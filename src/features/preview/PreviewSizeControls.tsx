@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PREVIEW_WIDTH_LIMITS, parsePreviewWidth } from './previewViewport';
 
 export interface PreviewSizeControlsProps {
@@ -9,46 +10,59 @@ export interface PreviewSizeControlsProps {
 }
 
 export function PreviewSizeControls({ width, scale, onWidth, onFit }: PreviewSizeControlsProps) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(String(Math.round(width)));
-  useEffect(() => setDraft(String(Math.round(width))), [width]);
+  // Whether the person has typed since the field last showed the canvas width. Asking for a width takes the
+  // canvas off Desktop or a breakpoint, so leaving a field that was only looked at must ask for nothing.
+  const edited = useRef(false);
+  const revert = (): void => {
+    edited.current = false;
+    setDraft(String(Math.round(width)));
+  };
+  useEffect(revert, [width]);
   const commit = (): void => {
+    if (!edited.current) {
+      return;
+    }
+    edited.current = false;
     const value = parsePreviewWidth(draft);
     if (value !== undefined) {
       onWidth(value);
     } else {
-      setDraft(String(Math.round(width)));
+      revert();
     }
   };
   return (
     <div className="preview-size-controls">
-      <label className="preview-width-field" title="Canvas width in pixels">
+      <label className="preview-width-field" data-tooltip={translate('preview.size.widthTip')}>
         <input
           type="text"
           inputMode="numeric"
-          aria-label="Canvas width"
+          aria-label={translate('preview.size.width')}
           maxLength={4}
           value={draft}
-          onChange={(event) => setDraft(event.currentTarget.value)}
+          onChange={(event) => {
+            edited.current = true;
+            setDraft(event.currentTarget.value);
+          }}
           onFocus={(event) => event.currentTarget.select()}
           onBlur={commit}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.currentTarget.blur();
             } else if (event.key === 'Escape') {
-              setDraft(String(Math.round(width)));
+              revert();
             }
           }}
-          aria-description={
-            `Enter ${PREVIEW_WIDTH_LIMITS.minimum}–` + `${PREVIEW_WIDTH_LIMITS.maximum}px`
-          }
+          aria-description={translate('preview.size.widthHint', { minimum: PREVIEW_WIDTH_LIMITS.minimum, maximum: PREVIEW_WIDTH_LIMITS.maximum })}
         />
         <span>px</span>
       </label>
-      <output aria-label="Canvas scale" title="Preview scaled to fit the available space">
+      <output aria-label={translate('preview.size.scale')} data-tooltip={translate('preview.size.scaleTip')}>
         {Math.round(scale * 100)}%
       </output>
-      <button type="button" title="Reset canvas to available width" onClick={onFit}>
-        Fit
+      <button type="button" data-tooltip={translate('preview.size.fitTip')} onClick={onFit}>
+        {translate('preview.canvas.fit')}
       </button>
     </div>
   );

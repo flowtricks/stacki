@@ -6,24 +6,54 @@ on:
 permissions:
   contents: read
   id-token: write
+  # The test plan reads check.yml's result for this commit.
+  actions: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check npm trusted publishing before the long test run
+        # Why: a missing or mismatched npm trusted publisher surfaces only as a bare E404 after ten
+        # minutes of tests. This exchanges the job's OIDC identity for a publish token, fails in
+        # seconds with npm's own message, and never prints the token it receives.
+        run: |
+          set -euo pipefail
+          jwt="$(curl -sS --fail-with-body -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)"
+          echo "::add-mask::${jwt}"
+          response="$(mktemp)"
+          status="$(curl -sS -o "${response}" -w '%{http_code}' -X POST -H "Authorization: Bearer ${jwt}" https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/create-stacki)"
+          # Why: npm answers 201 Created when it issues the publish token; 200 alone refused a working setup.
+          if [ "${status}" = "200" ] || [ "${status}" = "201" ]; then
+            echo "npm accepted the trusted publisher for this workflow"
+          else
+            echo "npm refused the OIDC exchange (HTTP ${status}):"
+            cat "${response}"
+            exit 1
+          fi
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      # The suite already passed this exact commit in check.yml on every platform
+      # (release.yml waited for that before it published), so it runs here only
+      # when that cannot be shown (scripts/release/releasePlan.mts). The package
+      # build and the pack check below always run.
+      - id: plan
+        run: node --experimental-strip-types scripts/release/releasePlan.mts --sha="$GITHUB_SHA" --wait-minutes=30 --force-tests=false
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: npm install --global npm@11
       - run: npm ci
       - run: npm --prefix studio ci
-      - run: |
+      - if: steps.plan.outputs.run_tests == 'true'
+        run: |
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-      - run: xvfb-run --auto-servernum npm test
+      - if: steps.plan.outputs.run_tests == 'true'
+        run: xvfb-run --auto-servernum npm test
       - run: npm run create-stacki:build
       - run: npm pack --dry-run
         working-directory: packages/create-stacki

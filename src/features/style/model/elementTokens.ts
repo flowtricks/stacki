@@ -5,6 +5,7 @@
 import type { ClassToken } from '../components/ClassPicker';
 import type { ElementSnapshot } from './styleTypes';
 import { webflowClassToCss } from './webflow';
+import { isInternalAttribute } from '../../../../shared/core/internalAttributes';
 
 /** Build ordered tokens (tag → classes → data attributes) from a snapshot. */
 export function snapshotTokens(snapshot: ElementSnapshot | undefined): ClassToken[] {
@@ -42,6 +43,7 @@ export function snapshotTokens(snapshot: ElementSnapshot | undefined): ClassToke
   Object.keys(snapshot.attributes)
     .filter((key) => key.startsWith('data-'))
     .filter((key) => !isAstroGeneratedAttribute(key))
+    .filter((key) => !isInternalAttribute(key))
     .sort()
     .forEach((key) => tokens.push({ name: `attr:${key}`, label: key, kind: 'attribute' }));
 
@@ -62,19 +64,14 @@ export function isAstroGeneratedAttribute(name: string): boolean {
  * when the selector isn't a plain class chain on this element (has a class the
  * element lacks, or no classes at all), so the caller can leave the pick alone.
  */
-export function selectorToClassTokens(
-  selectorText: string,
-  tokens: ClassToken[],
-): string[] | undefined {
+export function selectorToClassTokens(selectorText: string, tokens: ClassToken[]): string[] | undefined {
   // The subject is the last compound (after any descendant / combinator).
   const subject =
     selectorText
       .split(/\s+|[>+~]/)
       .filter(Boolean)
       .pop() ?? '';
-  const wanted = new Set(
-    [...subject.matchAll(/\.([\w-]+)/g)].map((match) => (match[1] ?? '').toLowerCase()),
-  );
+  const wanted = new Set([...subject.matchAll(/\.([\w-]+)/g)].map((match) => (match[1] ?? '').toLowerCase()));
   if (!wanted.size) {
     return undefined;
   }

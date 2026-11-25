@@ -18,45 +18,17 @@ Each entry answers three questions: **Does** (what it does for Stacki), **Why no
 parser; this is the reference implementation. **Cost:** WASM payload; its AST shape is a contract we
 pin with round-trip tests.
 
-### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
-
-**Does:** the code editor panels (source, CSS, frontmatter). **Why not the platform:** a
-`<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
-renderer dependency family; split per language so only what is used ships.
-
 ### `@lezer/highlight`, `@lezer/javascript`
 
 **Does:** syntax-highlight tags for the editors, and the JavaScript parser behind `src/features/props/jsCheck.ts`.
 **Why not the platform:** no incremental JS parser exists in the browser. **Cost:** small; already
 a transitive dependency of CodeMirror, declared because we import it directly.
 
-### `@shikijs/core`, `@shikijs/engine-javascript`, `@shikijs/langs`, `@shikijs/themes`
-
-**Does:** read-only Astro highlighting (`src/ui/astroHighlight.ts`) matching Astro's own output.
-**Why not the platform:** TextMate grammars need an engine; the JavaScript engine avoids WASM.
-**Cost:** grammar and theme payloads; imported per language.
-
-### `@uiw/react-codemirror`
-
-**Does:** the React binding for CodeMirror. **Why not the platform:** lifecycle glue between React
-state and CodeMirror transactions. **Cost:** thin wrapper; replaceable by a local hook if it lags.
-
-### `@xterm/addon-fit`, `@xterm/xterm`
-
-**Does:** the integrated terminal renderer. **Why not the platform:** no terminal emulator exists in
-the browser. **Cost:** renderer weight; paired with `node-pty`.
-
 ### `electron-updater`
 
 **Does:** in-app updates from GitHub releases. **Why not the platform:** Electron's `autoUpdater`
 lacks the GitHub provider and differential downloads. **Cost:** runs with network access in main;
 its inputs are release metadata we publish.
-
-### `known-css-properties`
-
-**Does:** the list of valid CSS property names for the style panel. **Why not the platform:**
-`CSS.supports` answers per value, not "list every property", and differs by engine. **Cost:** a
-data file; no code.
 
 ### `node-pty`
 
@@ -68,11 +40,6 @@ has no PTY. **Cost:** native module — the reason for `fix:install` and `afterP
 **Does:** parses and rewrites stylesheets and selectors for the style panel. **Why not the
 platform:** CSSOM drops comments and formatting, and edits must preserve the author's source.
 **Cost:** moderate; parsing happens in the renderer on user-sized files.
-
-### `react`, `react-dom`
-
-**Does:** the renderer UI. **Why not the platform:** the whole UI is built on it. **Cost:** the
-framework choice; pinned to the 18 line.
 
 ### `smol-toml`
 
@@ -91,6 +58,78 @@ stays in `dependencies`.
 **Does:** frontmatter and YAML content files, keeping comments and formatting on round trip. **Why
 not the platform:** no YAML parser in Node. **Cost:** moderate; its document API is what makes
 lossless edits possible.
+
+## Renderer, bundled at build time (`devDependencies`)
+
+Vite bundles these into `dist/renderer`, and neither the main process nor the preload loads
+them at run time, so they are `devDependencies`: electron-builder copies only `dependencies`
+into the packaged app, and a copy there would be about 30 MB that nothing reads. A package
+the main process starts to import belongs back under Runtime.
+
+### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
+
+**Does:** the code editor panels (source, CSS, frontmatter). **Why not the platform:** a
+`<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
+renderer dependency family; split per language so only what is used ships.
+
+### `@huggingface/transformers`
+
+**Does:** runs OpenAI's Whisper on this computer for composer dictation, in a Web Worker
+(`src/features/ai/voice/whisperWorker.ts`): audio features, tokenizer, the decoder loop, and ONNX
+inference through its `onnxruntime-web` dependency (MIT). Pinned exactly (4.3.2, Apache-2.0).
+**Why not the platform:** no browser or Electron API turns speech into text offline; Chromium's Web
+Speech API needs Google's online service, which Electron lacks (docs/voice-engine.md). **Cost:** a
+599 kB lazy chunk plus the 26.9 MB ONNX Runtime WebAssembly (6.7 MB gzipped), both fetched only when
+a dictation session starts; a one-time model download to the app data folder (568.5 MB for the default Best tier, 338.4 MB Balanced, 100.0 MB Fast); about one core
+for 2.5 s per decode. `npm install` also fetches `onnxruntime-node` (about 300 MB unpacked), which
+Stacki never loads or packages.
+
+### `onnxruntime-web`
+
+**Does:** runs Silero VAD, the neural voice detector that decides which audio Whisper may hear
+(`src/features/ai/voice/vadWorker.ts`), so dictation never writes words for silence, a fan or a
+keyboard. Pinned to the exact build `@huggingface/transformers` depends on (MIT), so npm installs
+one copy and the worker reuses the WebAssembly file Whisper already ships. **Why not the platform:**
+no browser API runs an ONNX model; Transformers.js does not expose its runtime's sessions and has no
+Silero pipeline. **Cost:** nothing new shipped beyond a small worker chunk; the 2.2 MB model is
+downloaded and verified with the Whisper model.
+
+### `@sanity/icons`
+
+**Does:** draws the icon a site's Sanity schema gives each document type (`icon: UserIcon`) in
+the CMS panel's collection list, reference rows and image-less list rows
+(`src/features/cms/SanityTypeIcon.tsx`), so a connected Sanity reads as its own Studio does.
+**Why not the platform:** the icons are Sanity's own drawings; the schema names them, it does not
+contain them, and redrawing them by hand would drift. **Cost:** MIT, no dependencies of its own
+(React is a peer); a 12 KB index whose icons each load lazily, so only the icons a schema names
+are ever fetched. Pinned to the version Sanity Studio ships with.
+
+### `@shikijs/core`, `@shikijs/engine-javascript`, `@shikijs/langs`, `@shikijs/themes`
+
+**Does:** read-only Astro highlighting (`src/ui/astroHighlight.ts`) matching Astro's own output.
+**Why not the platform:** TextMate grammars need an engine; the JavaScript engine avoids WASM.
+**Cost:** grammar and theme payloads; imported per language.
+
+### `@uiw/react-codemirror`
+
+**Does:** the React binding for CodeMirror. **Why not the platform:** lifecycle glue between React
+state and CodeMirror transactions. **Cost:** thin wrapper; replaceable by a local hook if it lags.
+
+### `@xterm/addon-fit`, `@xterm/xterm`
+
+**Does:** the integrated terminal renderer. **Why not the platform:** no terminal emulator exists in
+the browser. **Cost:** renderer weight; paired with `node-pty`.
+
+### `known-css-properties`
+
+**Does:** the list of valid CSS property names for the style panel. **Why not the platform:**
+`CSS.supports` answers per value, not "list every property", and differs by engine. **Cost:** a
+data file; no code.
+
+### `react`, `react-dom`
+
+**Does:** the renderer UI. **Why not the platform:** the whole UI is built on it. **Cost:** the
+framework choice; pinned to the 18 line.
 
 ## Development (`devDependencies`)
 
@@ -143,9 +182,9 @@ packager. **Cost:** large tree; release-time only.
 Pinned to 26.15.3 to fix the AppImage search-path vulnerability
 [GHSA-7g7r-gx96-252g](https://github.com/advisories/GHSA-7g7r-gx96-252g).
 The signing password backport still applies to this upstream version; exact source hashes and
-real signing-function regression tests protect it. Universal Mac builds preserve node-pty's
-architecture-specific prebuilds using a narrowly scoped `x64ArchFiles` rule. Both architectures
-and executable helpers are verified before signing; node-pty chooses them using `process.arch`.
+real signing-function regression tests protect it. Separate Apple Silicon and Intel Mac builds
+avoid recompressing both Electron architectures when a code signature changes. Each package's
+node-pty bindings and executable helper are verified for its target CPU before signing.
 
 The build-time `@electron/get` dependency overrides `global-agent` to 4.1.3. Its compatible
 `bootstrap` API preserves proxy downloads while removing the obsolete logging dependency that
@@ -178,7 +217,7 @@ large tree; tests only.
 
 ### `prettier`
 
-**Does:** the formatter (AGENTS.md §17: one formatter; `printWidth: 100`). **Why not the
+**Does:** the formatter (AGENTS.md §17: one formatter; `printWidth: 160`). **Why not the
 platform:** no formatter ships with Node or TypeScript. **Cost:** dependency-free; pinned to an
 exact version because a formatter upgrade reformats code, and that must be a deliberate commit.
 
@@ -196,8 +235,59 @@ with pixel, byte and processing-time limits. See `docs/image-conversion.md`.
 
 ### `@img/sharp-wasm32`
 
-**Does:** portable sharp codecs, including both architectures of the universal
-Mac app. **Why not the platform:** a native codec binary cannot run on another
+**Does:** portable sharp codecs, including the Apple Silicon and Intel
+Mac apps. **Why not the platform:** a native codec binary cannot run on another
 CPU architecture. **Cost:** a bundled WASM codec and its runtime; slower than
 native encoding but bounded by the same conversion limits. Bundled licenses
 are retained; Mac packages exclude architecture-specific sharp binaries.
+
+## Vendored paths, no package
+
+Copied source with no entry in `package.json`, so nothing is installed or updated by npm.
+
+**Central Icon System v1.35** by Iconists supplies rounded outline glyphs. Stacki includes only
+the drawings it renders, as local SVG geometry, so the editor can use its own theme colors and
+work offline without loading a whole icon library. See [asset terms](central-icons.md).
+
+## Evaluated, not adopted
+
+These were weighed and declined; the paragraph says why, so the question is not reopened without new facts.
+
+**axe-core** (MPL-2.0), for the Audits panel's rendered accessibility checks. **Would do:** run its
+rule set over the rendered page. **Why not:** it must run inside the audited document with its
+scripts, which means executing the page's code in a frame the editor owns; its results name CSS
+selectors, which do not map back to the `.astro` source element or to a deterministic fix, so
+every result would need a second, hand-written mapping anyway; and most of its rules repeat checks
+the static pass already makes on the source with a source location and a fix. The rendered checks
+Stacki needs (computed contrast, the final heading outline, names that arrive through slots,
+page-wide duplicate ids, the final head) are small, pure functions over a plain tree
+(`shared/page/auditRendered.ts`, `shared/page/auditContrast.ts`), tested like the rest of
+`shared/`, with no runtime dependency and no third-party code in the renderer. **Cost of
+declining:** fewer rule families (for example ARIA attribute-value checks beyond role names);
+those can be added as hand-rolled checks one at a time.
+
+## Installed on demand, outside `package.json`
+
+These are not dependencies of Stacki's build: nothing installs them until a person asks the AI chat
+panel to connect an agent, and then only into `userData/agents/<agent>-<version>/`. They are recorded
+here (as bold entries, not `###` headings, which the gate holds to `package.json`) because they are
+third-party code Stacki runs. `electron/handlers/ai/agentRegistry.ts` pins each one: an exact
+version, the lockfile Stacki ships in `resources/agents/` with its SHA-256, and the SHA-256 of the
+installed entry file. `npm ci --omit=optional --ignore-scripts` verifies every tarball against the
+lockfile's integrity; install scripts never run.
+
+**`@agentclientprotocol/claude-agent-acp` 0.105.0.** **Does:** speaks the Agent Client Protocol on
+stdio for Claude, by driving the Claude Agent SDK, which runs the person's own `claude` binary
+(`CLAUDE_CODE_EXECUTABLE`) with their own sign-in. **Why not the platform:** the agent's session
+handling, tools, permissions and streaming live in Anthropic's SDK; reimplementing them would mean
+reimplementing Claude Code. Stacki's side, the ACP client, is hand-written (`shared/properties/ai/acpWire.ts`).
+**Cost:** about 75 MB on disk once connected (the SDK's own platform binary is left out); a new
+version is a deliberate pin bump. Runs as Electron-as-Node, so no Node install is needed.
+
+**`@agentclientprotocol/codex-acp` 2.6.0.** **Does:** the same for Codex, driving the person's own
+`codex` CLI (`CODEX_PATH`, signed in with `codex login`). **Why not the platform:** as above, for
+OpenAI's app server protocol. **Cost:** about 21 MB on disk; the bundled Codex binary is left out.
+
+`@agentclientprotocol/sdk` (the protocol's reference library) is not used at run time. Its
+`schema.json` was the reference for the hand-written parsers and the recorded fixtures in
+`test/fixtures/ai/acpTrace.jsonl`.

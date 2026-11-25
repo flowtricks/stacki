@@ -141,7 +141,8 @@ test('a failed text write keeps the visible edit queued until a later save succe
   await assert.rejects(saver.flush(), /EPERM/);
   assert.equal(disk.text, PAGE);
   assert.deepEqual(box.state.model, predicted, 'the typed text remains visible');
-  assert.equal(box.state.save.tag, 'dirty');
+  assert.equal(box.state.save.tag, 'failed');
+  assert.match(box.state.save.message, /EPERM/);
   assert.equal(queue.entries(PATH).length, 1);
   assert.equal(record.outcome.tag, 'pending', 'the undo record is retained');
   assert.deepEqual(box.notices, [], 'a write failure is not an unsupported visual edit');
@@ -228,20 +229,10 @@ test('edits queued during a move keep the moved element and child selected', asy
   const [main, aside] = box.state.model.nodes;
   const target = main.children[0];
   const child = target.children[0];
-  const move = editGestures.moveGesture(
-    box.state.model,
-    target.id,
-    { parentId: aside.id, index: 0 },
-    { keepsSlot: () => true },
-    { urgency: true },
-  );
+  const move = editGestures.moveGesture(box.state.model, target.id, { parentId: aside.id, index: 0 }, { keepsSlot: () => true }, { urgency: true });
   assert.ok(move);
   const options = { coalesceKey: undefined, urgency: true };
-  const gestures = [
-    move,
-    editGestures.propsGesture(target.id, titled('Moved'), options),
-    editGestures.propsGesture(child.id, titled('Child'), options),
-  ];
+  const gestures = [move, editGestures.propsGesture(target.id, titled('Moved'), options), editGestures.propsGesture(child.id, titled('Child'), options)];
   for (const gesture of gestures) {
     queue.addGesture(PATH, gesture, step());
     box.state = { ...box.state, model: gesture.apply(box.state.model) };
@@ -249,11 +240,7 @@ test('edits queued during a move keep the moved element and child selected', asy
   for (const _gesture of gestures) {
     assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
   }
-  assert.equal(
-    disk.text,
-    `<main>${card}</main><aside><article title="Moved">` +
-      '<p title="Child">Same</p></article></aside>',
-  );
+  assert.equal(disk.text, `<main>${card}</main><aside>\n\t<article title="Moved">` + '<p title="Child">Same</p></article>\n</aside>');
   const moved = box.state.model.nodes[1].children[0];
   assert.equal(moved.id, target.id, 'selection follows the moved element');
   assert.equal(moved.children[0].id, child.id, 'selection also follows its child');
@@ -325,10 +312,8 @@ test('a failed request preserves undo for earlier writes in the same gesture', a
   });
   assert.ok(undone.ok);
   assert.equal(disk.text, PAGE, 'undo restores the bytes before the partial save');
-  assert.deepEqual(box.notices, [
-    'Stacki couldn’t apply this edit. ' +
-      'Stacki encountered an editor error while applying the change.',
-  ]);
+  // The notice is the refusal's reason; the app words it ('shell.rejection.couldntApply' with REJECTION_KEYS) in the person's language.
+  assert.deepEqual(box.notices, ['unsupported-operation']);
 });
 
 test('refused over changed bytes: the conflict notice with the reason', async () => {
@@ -377,11 +362,7 @@ test('a preview plans every queued gesture as splices, chained, and writes nothi
     request: () => undefined,
     apply: (model) => model,
   };
-  const queued = [
-    editGestures.propsGesture(heading.id, titled('a'), options),
-    unchanged,
-    editGestures.propsGesture(paragraph.id, titled('b'), options),
-  ];
+  const queued = [editGestures.propsGesture(heading.id, titled('a'), options), unchanged, editGestures.propsGesture(paragraph.id, titled('b'), options)];
   const planned = [];
   const preview = async (request, source) => {
     planned.push(request.authoredChecksum);
@@ -428,4 +409,43 @@ test('a failed preview never presents a version with a queued edit missing', asy
   });
   assert.deepEqual(previews, ['set-attribute', 'replace-node', 'replace-page']);
   assert.equal(origin.source, PAGE, 'review cannot mutate the baseline');
+});
+
+test('a live gesture refused again and again for one reason is reported once per drag', async () => {
+  // A drag sends a write per pointer move; when the engine refuses each of them for the
+  // same reason, the page says so once, not once per move. A committed gesture, or a
+  // write of the stream that applies, makes the next refusal news again.
+  let refusing = true;
+  const fixture = harness(PAGE, {
+    edit: async (request) => {
+      if (refusing) {
+        const error = pageEditError(PATH, { tag: 'rejected', reason: 'unsupported-operation', message: 'x', diskChecksum: sha256(fixture.disk.text) });
+        return { ok: false, error };
+      }
+      return engine(fixture.disk)(request);
+    },
+  });
+  const { box, queue, send } = fixture;
+  const sendText = async (value, urgency) => {
+    const text = box.state.model.nodes[0].children[0].children[0];
+    const gesture = editGestures.nodeGesture(text.id, { ...text, value }, { coalesceKey: `text:${text.id}`, urgency });
+    queue.addGesture(PATH, gesture, step());
+    const entry = queue.shift(PATH);
+    assert.equal(entry?.tag, 'gesture');
+    box.state = { ...box.state, save: { tag: 'dirty', baseChecksum: box.state.origin.checksum } };
+    return send(PATH, entry);
+  };
+  for (const value of ['A', 'B', 'C']) {
+    assert.deepEqual(await sendText(value, 'live'), { tag: 'sent' });
+  }
+  assert.deepEqual(box.notices, ['unsupported-operation'], 'three refused moves of one drag: one notice');
+  await sendText('D', true);
+  assert.equal(box.notices.length, 2, 'a committed gesture is always reported');
+  await sendText('E', 'live');
+  assert.equal(box.notices.length, 3, 'a new drag after a commit is reported');
+  refusing = false;
+  await sendText('F', 'live');
+  refusing = true;
+  await sendText('G', 'live');
+  assert.equal(box.notices.length, 4, 'after a write of the stream applied, a refusal is news again');
 });

@@ -3,6 +3,7 @@
 // (ipcResults.ts).
 
 import type { Data } from '../core/boundary';
+import type { MessageRef } from '../core/i18n/messageReference';
 
 export type WireAssetEntry =
   | ({
@@ -23,6 +24,8 @@ export type WireAssetEntry =
       readonly isDir: false;
       readonly size: number;
       readonly abs: string;
+      /** When the file last changed, whole milliseconds since 1970 (`stat.mtimeMs`); absent when the host cannot tell. */
+      readonly modifiedMs?: number;
     });
 
 export type WireCmsFile = {
@@ -71,6 +74,8 @@ export type WireEntry = {
   readonly hasBody?: boolean;
   readonly error?: string;
   readonly keyed?: boolean;
+  /** Its picture: the project file its collection's first image field names. */
+  readonly imageFile?: string;
 };
 
 export type WireCollection = {
@@ -90,10 +95,12 @@ export type WireMove =
   | {
       readonly kind: 'generated';
       readonly note: string;
+      readonly noteRef?: undefined | MessageRef;
     }
   | {
       readonly kind: 'unknown';
       readonly note: string;
+      readonly noteRef?: undefined | MessageRef;
     }
   | {
       readonly kind: 'file';
@@ -141,6 +148,7 @@ export type WireFileModel = {
   readonly name: string;
   readonly groups: ReadonlyArray<WireGroup>;
   readonly error?: string;
+  readonly errorRef?: MessageRef | undefined;
   readonly count?: number;
   readonly declarations?: ReadonlyArray<WireRule>;
 };
@@ -171,6 +179,7 @@ export type WireDeleteOutcome =
       readonly ok: false;
       readonly unmerged: true;
       readonly message: string;
+      readonly messageRef?: MessageRef | undefined;
     };
 
 export type WireGitInfo = {
@@ -184,14 +193,14 @@ export type WireGitInfo = {
   readonly head?: undefined | string;
   readonly userEmail?: undefined | string;
   readonly trunk?: undefined | string;
+  /** The remote's default branch (origin/HEAD), else main or master: what publishing is expected to send. */
+  readonly defaultBranch?: undefined | string;
   readonly dirtyFiles?: ReadonlyArray<string>;
   readonly hasUpstream?: boolean;
 };
 
 export type WireCommitInfo = {
-  readonly files:
-    | undefined
-    | ReadonlyArray<WireFileChange & WireFileDescription & { readonly from: undefined | string }>;
+  readonly files: undefined | ReadonlyArray<WireFileChange & WireFileDescription & { readonly from: undefined | string }>;
   readonly hash: undefined | string;
   readonly shortHash: undefined | string;
   readonly author: undefined | string;
@@ -294,15 +303,14 @@ export type WireSchemaField = {
   readonly optional: boolean;
   readonly default: undefined | string | number | boolean;
   readonly defaultExpr?: boolean;
+  readonly defaultAsset?: string;
   readonly hint?: string;
   readonly options?: undefined | ReadonlyArray<string>;
   readonly numeric?: undefined | boolean;
   readonly doc?: undefined | string;
-  readonly shape?: ReadonlyArray<{
-    readonly name: string;
-    readonly type: string;
-  }>;
+  readonly shape?: ReadonlyArray<WirePropShapeField>;
   readonly shapeIsList?: boolean;
+  readonly itemKind?: 'text' | 'number' | 'switch' | 'choice';
   readonly unions?: undefined | ReadonlyArray<WirePropUnion>;
   readonly min?: number;
   readonly max?: number;
@@ -331,6 +339,13 @@ export type WireGroup = {
   readonly label: string;
   readonly columns: ReadonlyArray<WireColumn>;
   readonly blocks: ReadonlyArray<WireBlock>;
+  readonly scope?: WireVariableScope;
+};
+
+/** Who a `<style>` block's variables reach, and how the block was written. */
+export type WireVariableScope = {
+  readonly reach: 'page' | 'rendered' | 'scoped';
+  readonly written: 'global' | 'inline' | 'scoped';
 };
 
 export type WireRule = {
@@ -341,17 +356,7 @@ export type WireRule = {
   readonly entries: ReadonlyArray<WireCssEntry>;
 };
 
-export type WireFileKind =
-  | 'content'
-  | 'asset'
-  | 'layout'
-  | 'page'
-  | 'component'
-  | 'file'
-  | 'style'
-  | 'config'
-  | 'script'
-  | 'doc';
+export type WireFileKind = 'content' | 'asset' | 'layout' | 'page' | 'component' | 'file' | 'style' | 'config' | 'script' | 'doc';
 
 export type WireConflictPart =
   | { readonly kind: 'same'; readonly text: string }
@@ -567,6 +572,16 @@ export type WireFrontmatterLayout = {
   readonly slots: ReadonlyArray<WireImportSlot>;
 };
 
+/** One member of a prop's object or list-of-objects shape; nested members carry their own (propSchema.ts PropShapeField). */
+export interface WirePropShapeField {
+  readonly name: string;
+  readonly type: string;
+  readonly format?: string;
+  readonly options?: ReadonlyArray<string>;
+  readonly shape?: ReadonlyArray<WirePropShapeField>;
+  readonly shapeIsList?: boolean;
+}
+
 export type WirePropUnion = {
   readonly names: ReadonlyArray<string>;
   readonly branches: ReadonlyArray<WireUnionBranch>;
@@ -585,6 +600,7 @@ export type WireBlock = {
   readonly title: undefined | string;
   readonly titleStart?: number;
   readonly titleEnd?: number;
+  readonly description?: string;
   readonly rows: ReadonlyArray<WireRow>;
   readonly columns?: ReadonlyArray<WireColumn>;
 };
@@ -675,6 +691,7 @@ export type WireCommentEntry = {
   readonly text: string;
   readonly textStart: number;
   readonly textEnd: number;
+  readonly description?: string;
 };
 
 export type WirePropValue = {

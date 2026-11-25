@@ -1,18 +1,15 @@
-import type {
-  WireMergeClash,
-  WireConflictPart,
-  WireMergeOutcome,
-} from '../../../shared/ipc/ipcResults';
+import type { WireMergeClash, WireConflictPart, WireMergeOutcome } from '../../../shared/ipc/ipcResults';
+import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 
 export type Conflict = Extract<WireMergeOutcome, { readonly conflicted: true }>;
 export type Clash = Extract<WireConflictPart, { readonly kind: 'clash' }>;
 export type ConflictChoice = 'ours' | 'theirs' | 'both' | 'merged';
 export type ConflictPicks = Readonly<Record<string, readonly ConflictChoice[]>>;
-export type ConflictChoices = Readonly<
-  Record<string, 'ours' | 'theirs' | readonly ConflictChoice[]>
->;
+export type ConflictChoices = Readonly<Record<string, MergeResolution>>;
 export interface ConflictHunk {
   readonly clash: Clash;
   readonly index: number;
@@ -29,15 +26,12 @@ export function defaultChoice(clash: Clash): ConflictChoice {
   return clash.merged !== undefined ? 'merged' : clash.changedBy === 'theirs' ? 'theirs' : 'ours';
 }
 export function contestedIn(file: WireMergeClash): number {
-  return clashesOf(file).filter((clash) => clash.changedBy === 'both' && clash.merged === undefined)
-    .length;
+  return clashesOf(file).filter((clash) => clash.changedBy === 'both' && clash.merged === undefined).length;
 }
 export function initialConflictPicks(conflict: Conflict): ConflictPicks {
   assert(conflict.files.length > 0, 'Merge conflict: at least one file is required');
   assert(conflict.files.length <= BOUNDARY_LIMITS.itemsMax, 'Merge conflict: file limit exceeded');
-  return Object.fromEntries(
-    conflict.files.map((file) => [file.path, clashesOf(file).map(defaultChoice)]),
-  );
+  return Object.fromEntries(conflict.files.map((file) => [file.path, clashesOf(file).map(defaultChoice)]));
 }
 export function choicesForSend(conflict: Conflict, picks: ConflictPicks): ConflictChoices {
   assert(conflict.files.length > 0, 'Merge conflict: at least one file is required');
@@ -69,19 +63,18 @@ export function conflictHunks(parts: readonly WireConflictPart[]): readonly Conf
     hunks.push({
       clash: part,
       index: hunks.length,
-      before:
-        previous?.kind === 'same' ? previous.text.split('\n').filter(Boolean).at(-1) : undefined,
+      before: previous?.kind === 'same' ? previous.text.split('\n').filter(Boolean).at(-1) : undefined,
       after: next?.kind === 'same' ? next.text.split('\n').find(Boolean) : undefined,
     });
   }
   return hunks;
 }
-export function conflictLabel(conflict: Conflict, clash: Clash): string {
+export function conflictLabel(conflict: Conflict, clash: Clash, translate: Translator = ENGLISH_TRANSLATE): string {
   if (clash.merged !== undefined) {
-    return 'Both branches changed this line, in different places';
+    return translate('git.conflict.label.bothDifferent');
   }
   if (clash.changedBy === 'both') {
-    return 'Both branches changed this';
+    return translate('git.conflict.label.both');
   }
-  return `Only ${clash.changedBy === 'theirs' ? conflict.branch : conflict.from} changed this`;
+  return translate('git.conflict.label.only', { branch: clash.changedBy === 'theirs' ? conflict.branch : (conflict.from ?? '') });
 }

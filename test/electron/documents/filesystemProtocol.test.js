@@ -15,18 +15,18 @@
 // crash are in processesProtocol.test.js.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { execFile } = require('node:child_process');
+const { once } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {
-  protocolLeftovers,
-  realHost,
-  scratch,
-  sha256,
-} = require('../../helpers/platformSupport.js');
+const { setImmediate: nextTurn } = require('node:timers/promises');
+const { promisify } = require('node:util');
+const { protocolLeftovers, realHost, scratch, sha256 } = require('../../helpers/platformSupport.js');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'POSIX permissions and links' : false };
+const versionCount = 60;
+const readerWaitMsMax = 30_000;
 
 test('permission bits and ownership survive a save, whatever the umask', posixOnly, async () => {
   await scratch(os.tmpdir(), (root) => {
@@ -76,102 +76,148 @@ test('flush: the staged file is fsynced before the rename, the folder after it',
       fs.fsyncSync = fsync;
       fs.renameSync = rename;
     }
-    const expected =
-      process.platform === 'win32'
-        ? ['fsync file', 'rename']
-        : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
+    const expected = process.platform === 'win32' ? ['fsync file', 'rename'] : ['fsync file', 'rename', 'fsync folder', 'fsync folder'];
     assert.deepEqual(events, expected);
     const entries = fs.readdirSync(root);
-    assert.deepEqual(
-      entries.sort(),
-      ['.stacki-io', 'page.astro'],
-      'the save directory stays stable',
-    );
+    assert.deepEqual(entries.sort(), ['.stacki', 'page.astro'], 'the save directory stays stable');
     assert.deepEqual(protocolLeftovers(root), [], 'no temporary or lock file remains');
   });
 });
 
-test(
-  'a symlink is written through; a symlinked folder reaches the same actor',
-  posixOnly,
-  async () => {
-    await scratch(os.tmpdir(), (root) => {
-      fs.mkdirSync(path.join(root, 'real'));
-      fs.mkdirSync(path.join(root, 'other'));
-      const target = path.join(root, 'other', 'page.astro');
-      fs.writeFileSync(target, 'old\n');
-      const link = path.join(root, 'real', 'page.astro');
-      fs.symlinkSync(target, link);
-      fs.symlinkSync(path.join(root, 'real'), path.join(root, 'alias'));
-      const documents = realHost();
-      assert.equal(documents.writeText(link, 'new\n', sha256('old\n')).tag, 'applied');
-      assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link is still a link');
-      assert.equal(fs.readFileSync(target, 'utf8'), 'new\n', 'the file it names was written');
-      assert.deepEqual(protocolLeftovers(path.join(root, 'other')), [], 'staged beside the target');
-      const viaAlias = documents.current(path.join(root, 'alias', 'page.astro'));
-      assert.equal(viaAlias.ok, true);
-      assert.equal(documents.actorCount(), 1, 'one file, one actor');
-      const dangling = path.join(root, 'real', 'gone.astro');
-      fs.symlinkSync(path.join(root, 'nowhere.astro'), dangling);
-      const refused = documents.writeCurrent(dangling, 'x\n');
-      assert.equal(refused.tag, 'rejected');
-      assert.equal(fs.existsSync(path.join(root, 'nowhere.astro')), false, 'no guessed target');
-    });
-  },
-);
+test('a symlink is written through; a symlinked folder reaches the same actor', posixOnly, async () => {
+  await scratch(os.tmpdir(), (root) => {
+    fs.mkdirSync(path.join(root, 'real'));
+    fs.mkdirSync(path.join(root, 'other'));
+    const target = path.join(root, 'other', 'page.astro');
+    fs.writeFileSync(target, 'old\n');
+    const link = path.join(root, 'real', 'page.astro');
+    fs.symlinkSync(target, link);
+    fs.symlinkSync(path.join(root, 'real'), path.join(root, 'alias'));
+    const documents = realHost();
+    assert.equal(documents.writeText(link, 'new\n', sha256('old\n')).tag, 'applied');
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link is still a link');
+    assert.equal(fs.readFileSync(target, 'utf8'), 'new\n', 'the file it names was written');
+    assert.deepEqual(protocolLeftovers(path.join(root, 'other')), [], 'staged beside the target');
+    const viaAlias = documents.current(path.join(root, 'alias', 'page.astro'));
+    assert.equal(viaAlias.ok, true);
+    assert.equal(documents.actorCount(), 1, 'one file, one actor');
+    const dangling = path.join(root, 'real', 'gone.astro');
+    fs.symlinkSync(path.join(root, 'nowhere.astro'), dangling);
+    const refused = documents.writeCurrent(dangling, 'x\n');
+    assert.equal(refused.tag, 'rejected');
+    assert.equal(fs.existsSync(path.join(root, 'nowhere.astro')), false, 'no guessed target');
+  });
+});
 
-// An indexer or antivirus scanner opens and reads files as they change. A real
-// second process reads the page in a tight loop while this one saves it many
-// times; every read it makes must be a whole version, never torn or empty.
+// The document actor contract (docs/contracts.md) allows an NTFS sharing failure
+// at rename (see windowsProtocol.test.js). The reader must still see whole versions.
 test('continuous readers see whole versions only, never a torn or empty file', async () => {
   await scratch(os.tmpdir(), async (root) => {
     const file = path.join(root, 'page.astro');
-    const versions = Array.from(
-      { length: 60 },
-      (_, index) => `<p>${String(index).repeat(4096)}</p>\n`,
-    );
-    fs.writeFileSync(file, versions[0]);
-    const reader = spawn(process.execPath, ['-e', READER, file], {
-      stdio: ['pipe', 'pipe', 'inherit'],
-    });
-    let seen = '';
-    reader.stdout.on('data', (chunk) => {
-      seen += String(chunk);
-    });
-    await new Promise((resolve) => reader.stdout.once('data', resolve));
+    const versions = Array.from({ length: versionCount }, (_, index) => `<p>${String(index).repeat(4096)}</p>\n`);
+    let currentVersion = versions[0];
+    fs.writeFileSync(file, currentVersion);
+    const initialChecksum = sha256(currentVersion);
+    const known = new Set([initialChecksum]);
     const documents = realHost();
-    let base = sha256(versions[0]);
-    for (const version of versions.slice(1)) {
-      const report = documents.writeText(file, version, base);
-      assert.equal(report.tag, 'applied');
-      base = report.checksum;
+    // The hard deadline covers the whole run. Startup and shutdown have their own deadlines.
+    const completion = promisify(execFile)(process.execPath, ['-e', READER, file], {
+      encoding: 'utf8',
+      timeout: 300_000,
+      killSignal: 'SIGKILL',
+      maxBuffer: 16 * 1024,
+    });
+    const reader = completion.child;
+    let rejectedVersion;
+    let output;
+    try {
+      await Promise.race([
+        once(reader.stdout, 'data', { signal: AbortSignal.timeout(readerWaitMsMax) }),
+        completion.then(() => assert.fail('the reader exited before its first read')),
+      ]);
+      for (const version of versions.slice(1)) {
+        const base = sha256(currentVersion);
+        const report = documents.writeText(file, version, base);
+        if (report.tag === 'applied') {
+          assert.equal(report.checksum, sha256(version));
+          known.add(report.checksum);
+          currentVersion = version;
+        } else {
+          const diagnostic = JSON.stringify(report);
+          assert.equal(process.platform, 'win32', diagnostic);
+          assert.equal(report.tag, 'rejected', diagnostic);
+          assert.equal(report.reason, 'write-failed', diagnostic);
+          assert.match(report.message, /\b(?:EACCES|EPERM|EBUSY): [^\r\n]*, rename '/);
+          assert.equal(report.diskChecksum, base, 'a rejected rename reports the original checksum');
+          assert.equal(fs.readFileSync(file, 'utf8'), currentVersion, 'a rejected rename preserves the original bytes');
+          assert.deepEqual(protocolLeftovers(root), [], 'a rejected rename removes the temporary and lock files');
+          rejectedVersion = version;
+        }
+        // Observe reader exit between saves and drain its output as it arrives.
+        await nextTurn();
+        assert.ok(reader.exitCode === null, 'the reader stays alive through the saves');
+      }
+    } finally {
+      const shutdown = setTimeout(() => reader.kill('SIGKILL'), readerWaitMsMax);
+      reader.stdin.destroy();
+      try {
+        ({ stdout: output } = await completion);
+      } finally {
+        clearTimeout(shutdown);
+      }
     }
-    reader.stdin.end();
-    await new Promise((resolve) => reader.on('exit', resolve));
-    const known = new Set(versions.map(sha256));
-    const reads = seen.split('\n').filter((line) => line.length === 64);
-    assert.ok(reads.length > 20, `the reader read throughout (${reads.length} reads)`);
+
+    const reads = output.split('\n');
+    assert.equal(reads.pop(), '', 'the reader output ends with a complete line');
+    const summary = reads.pop() ?? '';
+    assert.match(summary, /^[1-9]\d*$/, 'the reader returned its sample count at shutdown');
+    const sampleCount = Number(summary);
+    assert.ok(Number.isSafeInteger(sampleCount), 'the sample count is a safe integer');
+    assert.ok(sampleCount > 20, `the reader sampled throughout (${sampleCount} reads)`);
+    assert.equal(reads[0], initialChecksum, 'the reader saw the initial bytes before any save');
     for (const digest of reads) {
-      assert.ok(known.has(digest), 'every read is one whole version');
+      assert.ok(known.has(digest), `unexpected reader output ${JSON.stringify(digest)}`);
+    }
+    assert.equal(fs.readFileSync(file, 'utf8'), currentVersion, 'the file holds the last applied version');
+    if (rejectedVersion !== undefined) {
+      // Resubmit after the reader releases its handle, using the latest applied bytes as the base.
+      const retry = documents.writeText(file, rejectedVersion, sha256(currentVersion));
+      assert.equal(retry.tag, 'applied', JSON.stringify(retry));
+      assert.equal(retry.checksum, sha256(rejectedVersion));
+      assert.equal(fs.readFileSync(file, 'utf8'), rejectedVersion);
     }
     assert.deepEqual(protocolLeftovers(root), []);
   });
 });
 
-// The reader: print the SHA-256 of every read until stdin closes. A file it
-// cannot open for an instant would print "missing" and fail the test.
+// Report each distinct read result and the total count. The parent checks every
+// result, including read errors, without buffering repeated copies of one digest.
 const READER = `
 const fs = require('node:fs'); const { createHash } = require('node:crypto');
-const file = process.argv[1]; let open = true;
-process.stdin.on('end', () => { open = false; }); process.stdin.resume();
+const file = process.argv[1];
+const reported = new Set();
+let open = true;
+let sampleCount = 0;
+process.stdin.on('end', () => {
+  open = false;
+  process.stdout.write(String(sampleCount) + '\\n');
+});
+process.stdin.resume();
 const loop = () => {
+  if (!open) { return; }
   for (let i = 0; i < 50; i++) {
     let line;
     try { line = createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
     catch (error) { line = 'missing ' + error.code; }
-    process.stdout.write(line + '\\n');
+    sampleCount += 1;
+    if (!reported.has(line)) {
+      // Keep one extra result so the parent can report an invalid read after all versions were seen.
+      if (reported.size > ${versionCount}) { throw new Error('Too many distinct reader results: ' + line); }
+      reported.add(line);
+      process.stdout.write(line + '\\n');
+    }
   }
-  if (open) { setImmediate(loop); }
+  setImmediate(loop);
 };
 loop();
 `;
@@ -180,21 +226,13 @@ test('two names that differ in case are two files on a case-sensitive disk', asy
   await scratch(os.tmpdir(), (root) => {
     fs.writeFileSync(path.join(root, 'Page.astro'), 'upper\n');
     if (fs.existsSync(path.join(root, 'page.astro'))) {
-      context.skip(
-        'the OS temp folder is case-insensitive here; windowsProtocol.test.js covers it',
-      );
+      context.skip('the OS temp folder is case-insensitive here; windowsProtocol.test.js covers it');
       return;
     }
     fs.writeFileSync(path.join(root, 'page.astro'), 'lower\n');
     const documents = realHost();
-    assert.equal(
-      documents.current(path.join(root, 'Page.astro')).value.checksum,
-      sha256('upper\n'),
-    );
-    assert.equal(
-      documents.current(path.join(root, 'page.astro')).value.checksum,
-      sha256('lower\n'),
-    );
+    assert.equal(documents.current(path.join(root, 'Page.astro')).value.checksum, sha256('upper\n'));
+    assert.equal(documents.current(path.join(root, 'page.astro')).value.checksum, sha256('lower\n'));
     assert.equal(documents.actorCount(), 2);
   });
 });

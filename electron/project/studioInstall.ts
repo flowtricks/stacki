@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { retainedPath, type StudioRelease } from '../../shared/ipc/studioRelease';
+import { STUDIO_LEGACY_DIRECTORIES, STUDIO_LOCAL_DIRECTORY, STUDIO_UPDATES_DIRECTORY } from '../../shared/properties/studioLocal';
 
 export async function writeRelease(directory: string, release: StudioRelease) {
   for (const file of release.files) {
@@ -43,11 +44,7 @@ export async function validateInstallation(directory: string, project: string): 
 
 // Only the Studio directory is exchanged. Website source never enters the
 // transaction; runtime state is moved, not copied or reset by an update.
-export function installRelease(
-  target: string,
-  release: StudioRelease,
-  validate: (directory: string, project: string) => Promise<void> = validateInstallation,
-) {
+export function installRelease(target: string, release: StudioRelease, validate: (directory: string, project: string) => Promise<void> = validateInstallation) {
   return installReleaseWithMode(target, release, { mode: 'replace' }, validate);
 }
 
@@ -69,8 +66,7 @@ async function installReleaseWithMode(
   if (path.basename(directory) !== 'studio') {
     throw new Error('Updates target a project’s studio directory');
   }
-  const metadata = path.join(path.dirname(directory), '.stacki-studio');
-  await mkdir(metadata, { recursive: true });
+  const metadata = await updateStorage(path.dirname(directory));
   if ((await lstat(metadata)).isSymbolicLink()) {
     throw new Error('Update storage must not be a symlink');
   }
@@ -114,6 +110,36 @@ async function installReleaseWithMode(
   }
 }
 
+// Puts a kept backup back as the Studio folder: the same swap an update does, with the backup as the incoming
+// folder and the current one set aside under a new name, so the restore can itself be undone by hand. Retained
+// paths (settings, secrets, state) stay with the project, exactly as in an update.
+export async function restoreBackup(target: string, backupName: string) {
+  const directory = path.resolve(target);
+  if (path.basename(directory) !== 'studio') {
+    throw new Error('Restores target a project’s studio directory');
+  }
+  if (!/^backup-[0-9A-Za-z.-]+$/.test(backupName)) {
+    throw new Error('A backup is a folder named backup-…');
+  }
+  const metadata = await updateStorage(path.dirname(directory));
+  const source = path.join(metadata, backupName);
+  const kept = await lstat(source);
+  if (!kept.isDirectory() || kept.isSymbolicLink()) {
+    throw new Error('The backup must be a real directory');
+  }
+  const current = await lstat(directory);
+  if (!current.isDirectory() || current.isSymbolicLink()) {
+    throw new Error('Studio must be a real directory');
+  }
+  const lock = await open(path.join(metadata, 'update.lock'), 'wx');
+  try {
+    await activate(directory, source, path.join(metadata, `backup-replaced-${randomUUID()}`));
+  } finally {
+    await lock.close();
+    await rm(path.join(metadata, 'update.lock'), { force: true });
+  }
+}
+
 async function activate(directory: string, staging: string, backup: string) {
   const preserved = (await readdir(directory)).filter(retainedPath);
   const moved: string[] = [];
@@ -131,4 +157,26 @@ async function activate(directory: string, staging: string, backup: string) {
     await rename(backup, directory);
     throw error;
   }
+}
+
+// The updater's staging, backups and lock, under `.stacki/studio/`, which
+// ignores its own contents. An older site's `.stacki-studio` moves in whole,
+// once, so earlier backups stay where recovery looks for them.
+async function updateStorage(site: string): Promise<string> {
+  const local = path.join(site, STUDIO_LOCAL_DIRECTORY);
+  const metadata = path.join(site, STUDIO_UPDATES_DIRECTORY);
+  const legacyName = STUDIO_LEGACY_DIRECTORIES[STUDIO_UPDATES_DIRECTORY];
+  if (legacyName === undefined || legacyName === '') {
+    throw new Error('The older update folder must be named');
+  }
+  const legacy = path.join(site, legacyName);
+  await mkdir(local, { recursive: true });
+  await writeFile(path.join(local, '.gitignore'), '*\n');
+  const moved = await lstat(metadata).catch(() => undefined);
+  const older = await lstat(legacy).catch(() => undefined);
+  if (!moved && older?.isDirectory()) {
+    await rename(legacy, metadata);
+  }
+  await mkdir(metadata, { recursive: true });
+  return metadata;
 }

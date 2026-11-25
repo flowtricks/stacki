@@ -1,5 +1,5 @@
 import Popup from '../../ui/Popup';
-import { collectionDeletionMessage } from '../../ipc/editorEnvironment';
+import InfoHint from '../../ui/InfoHint';
 import React, { useState } from 'react';
 import type { Collection, CmsField, FieldType } from './cmsSchema';
 import type { DeclaredTypes } from './cmsTypes';
@@ -9,31 +9,12 @@ import { contentFieldsAt, fieldsAt, keyFor } from './cmsSchema';
 import { withDeclaredTypes } from './cmsTypes';
 import { readCmsUsage, deleteCms } from './cmsBridge';
 import { cleanError } from '../../lib/cleanError';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import useListReorder from '../../ui/useListReorder';
-import {
-  PlusIcon,
-  CloseIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  TrashIcon,
-  DragIcon,
-  CheckIcon,
-  VariableTextSizeIcon,
-  ParagraphIcon,
-  FieldNumberIcon,
-  SwitchIcon,
-  ElementImageIcon,
-  CalendarIcon,
-  ElementLinkIcon,
-  MailIcon,
-  PhoneCallIcon,
-  DropletIcon,
-  ElementListDefaultIcon,
-  BracesIcon,
-  RepeatIcon,
-  CodeIcon,
-} from '../../ui/Icons';
+import { FIELD_TYPES } from './cmsFieldTypes';
+import { PlusIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, TrashIcon, DragIcon, CheckIcon } from '../../ui/Icons';
 
 export interface SchemaOperations {
   readonly onAddField: (path: readonly string[], key: string, type: FieldType) => void;
@@ -57,30 +38,15 @@ export interface CmsSettingsProps extends SchemaOperations {
   readonly onDone?: (() => void) | undefined;
 }
 
-const FIELD_TYPES = [
-  { value: 'text', label: 'Text', Icon: VariableTextSizeIcon, hint: 'A short line' },
-  { value: 'longtext', label: 'Long text', Icon: ParagraphIcon, hint: 'A paragraph' },
-  { value: 'number', label: 'Number', Icon: FieldNumberIcon, hint: 'A figure' },
-  { value: 'boolean', label: 'Toggle', Icon: SwitchIcon, hint: 'On or off' },
-  { value: 'image', label: 'Image', Icon: ElementImageIcon, hint: 'From your assets' },
-  { value: 'date', label: 'Date', Icon: CalendarIcon, hint: 'A calendar date' },
-  { value: 'link', label: 'Link', Icon: ElementLinkIcon, hint: 'A web address' },
-  { value: 'email', label: 'Email', Icon: MailIcon, hint: 'An address' },
-  { value: 'phone', label: 'Phone', Icon: PhoneCallIcon, hint: 'A number to call' },
-  { value: 'color', label: 'Color', Icon: DropletIcon, hint: 'A hex value' },
-  { value: 'list', label: 'List of text', Icon: ElementListDefaultIcon, hint: 'Tags, bullets' },
-  { value: 'object', label: 'Group', Icon: BracesIcon, hint: 'Fields kept together' },
-  { value: 'objects', label: 'Repeating items', Icon: RepeatIcon, hint: 'A list of entries' },
-  // Not offered when creating a field: a value is code because the file says
-  // so, never because someone picked it from a list.
-  { value: 'code', label: 'Code', Icon: CodeIcon, hint: 'A computed value' },
-] as const;
-
 // The types you can choose for a new field.
 const CREATABLE_TYPES = FIELD_TYPES.filter((entry) => entry.value !== 'code');
 
-const typeInfo = (type: FieldType) =>
-  FIELD_TYPES.find((entry) => entry.value === type) ?? FIELD_TYPES[0];
+function typeInfo(type: FieldType): (typeof FIELD_TYPES)[number] {
+  const found = FIELD_TYPES.find((entry) => entry.value === type);
+  const fallback = FIELD_TYPES[0];
+  assert(fallback !== undefined, 'CMS field types: the list is not empty');
+  return found ?? fallback;
+}
 
 export default function CmsSettings({
   collection,
@@ -96,30 +62,29 @@ export default function CmsSettings({
   onReorderFields,
   onDone,
 }: CmsSettingsProps) {
+  const translate = useTranslate();
   return (
     <div className="cms-settings">
       <div className="cms-detail-head">
-        <button className="ghost cms-back" title="Back to items" onClick={onDone}>
+        <button className="ghost cms-back" title={translate('cms.settings.back')} onClick={onDone}>
           <ChevronLeftIcon size={14} />
         </button>
-        <span className="cms-detail-title">{collection.label} Settings</span>
+        <span className="cms-detail-title">{translate('cms.settings.title', { name: collection.label })}</span>
         <span className={`cms-saved ${saved ? 'on' : ''}`}>
-          <CheckIcon size={11} /> Saved
+          <CheckIcon size={11} /> {translate('cms.saved')}
         </span>
         <span className="cms-detail-path">src/{collection.rel}</span>
         <button className="primary" onClick={onDone}>
-          Done
+          {translate('cms.settings.done')}
         </button>
       </div>
 
       <div className="cms-detail-body">
         <div className="cms-card">
-          <h3>Collection fields</h3>
-          <p className="cms-note">
-            {collection.single
-              ? 'This file holds one set of fields.'
-              : `Shared by all ${items.length} ${items.length === 1 ? 'item' : 'items'}.`}
-          </p>
+          <h3>
+            {translate('cms.settings.fieldsTitle')}
+            <InfoHint text={collection.single ? translate('cms.settings.fieldsSingle') : translate('cms.settings.fieldsShared', { count: items.length })} />
+          </h3>
           <FieldSchema
             items={items}
             declared={declared}
@@ -131,39 +96,27 @@ export default function CmsSettings({
           />
         </div>
 
-        <DeleteCollectionCard
-          collection={collection}
-          project={project}
-          showToast={showToast}
-          onDeleted={onDeleted}
-        />
+        <DeleteCollectionCard collection={collection} project={project} showToast={showToast} onDeleted={onDeleted} />
       </div>
     </div>
   );
 }
 
-function DeleteCollectionCard({
-  collection,
-  project,
-  showToast,
-  onDeleted,
-}: Pick<CmsSettingsProps, 'collection' | 'project' | 'showToast' | 'onDeleted'>) {
+function DeleteCollectionCard({ collection, project, showToast, onDeleted }: Pick<CmsSettingsProps, 'collection' | 'project' | 'showToast' | 'onDeleted'>) {
+  const translate = useTranslate();
   return (
     <div className="cms-card cms-danger">
-      <h3>Delete collection</h3>
-      <p className="cms-note">
-        {collectionDeletionMessage} Pages that import src/{collection.rel} keep working — they
-        switch to an empty list.
-      </p>
+      <h3>
+        {translate('cms.settings.deleteCollection')}
+        <InfoHint text={translate('cms.settings.deleteNote', { path: collection.rel })} />
+      </h3>
       <button
         className="ghost danger"
         onClick={() => {
-          void deleteCollection(collection, project, showToast, onDeleted).catch((error: unknown) =>
-            showToast(cleanError(error), 'error'),
-          );
+          void deleteCollection(collection, project, showToast, onDeleted, translate).catch((error: unknown) => showToast(cleanError(error), 'error'));
         }}
       >
-        <TrashIcon size={12} /> Delete {collection.label}
+        <TrashIcon size={12} /> {translate('cms.settings.deleteNamed', { name: collection.label })}
       </button>
     </div>
   );
@@ -174,6 +127,7 @@ async function deleteCollection(
   project: CmsSettingsProps['project'],
   showToast: CmsSettingsProps['showToast'],
   onDeleted: CmsSettingsProps['onDeleted'],
+  translate: Translator,
 ) {
   const usage = await readCmsUsage(project.path, collection.rel);
   if (!usage.ok) {
@@ -181,18 +135,14 @@ async function deleteCollection(
     return;
   }
   const used = usage.value.files;
-  const where =
-    used.length === 0
-      ? 'No page uses it.'
-      : `${used.length === 1 ? '1 page uses' : `${used.length} pages use`} it (${used
-          .slice(0, 3)
-          .join(', ')}${used.length > 3 ? `, +${used.length - 3} more` : ''}). ` +
-        'They will keep working, showing nothing, until you point them at other data.';
+  const shown = used.slice(0, 3).join(', ');
+  const files = used.length > 3 ? translate('cms.settings.usageMore', { files: shown, count: used.length - 3 }) : shown;
+  const where = used.length === 0 ? translate('cms.settings.usageNone') : translate('cms.settings.usagePages', { count: used.length, files });
   if (
     !(await confirmDialog({
-      title: `Delete the ${collection.label} collection?`,
+      title: translate('cms.settings.deleteConfirmTitle', { name: collection.label }),
       body: where,
-      confirmLabel: 'Delete collection',
+      confirmLabel: translate('cms.settings.deleteCollection'),
       danger: true,
     }))
   ) {
@@ -207,6 +157,7 @@ async function deleteCollection(
 }
 
 function FieldSchema({ items, declared, path, ...operations }: SchemaProps) {
+  const translate = useTranslate();
   assert(path.length <= BOUNDARY_LIMITS.depthMax, 'CMS schema: nesting limit exceeded');
   const fields = withDeclaredTypes(contentFieldsAt(items, path), declared, path);
   const move = (from: number, to: number) => {
@@ -236,22 +187,10 @@ function FieldSchema({ items, declared, path, ...operations }: SchemaProps) {
   return (
     <div className="cms-schema">
       {fields.map((field, index) => (
-        <SchemaRow
-          key={field.key}
-          field={field}
-          index={index}
-          reorder={reorder}
-          items={items}
-          declared={declared}
-          path={path}
-          {...operations}
-        />
+        <SchemaRow key={field.key} field={field} index={index} reorder={reorder} items={items} declared={declared} path={path} {...operations} />
       ))}
-      {fields.length === 0 && <div className="cms-empty-inline">No fields yet.</div>}
-      <AddFieldRow
-        compact={path.length > 0}
-        onAdd={(key, type) => operations.onAddField(path, key, type)}
-      />
+      {fields.length === 0 && <div className="cms-empty-inline">{translate('cms.settings.noFields')}</div>}
+      <AddFieldRow compact={path.length > 0} onAdd={(key, type) => operations.onAddField(path, key, type)} />
     </div>
   );
 }
@@ -261,6 +200,7 @@ interface SchemaRowProps extends SchemaProps {
   readonly reorder: ReturnType<typeof useListReorder>;
 }
 function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
+  const translate = useTranslate();
   // Each keyed row owns one expansion flag; deleted fields cannot accumulate
   // stale keys in a collection-wide set.
   const [open, setOpen] = useState(false);
@@ -276,7 +216,7 @@ function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
         {nested ? (
           <button
             className="ghost cms-schema-expand"
-            title={open ? 'Hide its fields' : 'Show its fields'}
+            title={open ? translate('cms.settings.hideFields') : translate('cms.settings.showFields')}
             onClick={() => setOpen(!open)}
           >
             <ChevronRightIcon size={10} className={open ? 'rotated' : ''} />
@@ -285,9 +225,9 @@ function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
           <span className="cms-schema-expand" />
         )}
         <SchemaName field={field} path={props.path} onRenameField={props.onRenameField} />
-        <span className="cms-schema-type" title="A field's type is set when it's created">
+        <span className="cms-schema-type" title={translate('cms.settings.typeFixed')}>
           <Icon size={13} />
-          {info.label}
+          {translate(info.label)}
         </span>
         <SchemaDelete field={field} path={props.path} onRemoveField={props.onRemoveField} />
       </div>
@@ -299,11 +239,7 @@ function SchemaRow({ field, index, reorder, ...props }: SchemaRowProps) {
     </div>
   );
 }
-function SchemaName({
-  field,
-  path,
-  onRenameField,
-}: Pick<SchemaRowProps, 'field' | 'path' | 'onRenameField'>) {
+function SchemaName({ field, path, onRenameField }: Pick<SchemaRowProps, 'field' | 'path' | 'onRenameField'>) {
   return (
     <input
       key={field.key}
@@ -334,21 +270,18 @@ function setInputText(inputElement: HTMLInputElement, text: string): void {
   inputElement.value = text;
 }
 
-function SchemaDelete({
-  field,
-  path,
-  onRemoveField,
-}: Pick<SchemaRowProps, 'field' | 'path' | 'onRemoveField'>) {
+function SchemaDelete({ field, path, onRemoveField }: Pick<SchemaRowProps, 'field' | 'path' | 'onRemoveField'>) {
+  const translate = useTranslate();
   return (
     <button
       className="ghost danger"
-      title="Delete field"
+      title={translate('cms.settings.deleteField')}
       onClick={() => {
         // The confirm dialog answers yes or no; it never rejects.
         void confirmDialog({
-          title: `Delete the “${field.label}” field?`,
-          body: 'Its content is removed from every item in this collection.',
-          confirmLabel: 'Delete field',
+          title: translate('cms.settings.deleteFieldTitle', { name: field.label }),
+          body: translate('cms.settings.deleteFieldBody'),
+          confirmLabel: translate('cms.settings.deleteField'),
           danger: true,
         }).then((confirmed) => {
           if (confirmed) {
@@ -364,11 +297,12 @@ function SchemaDelete({
 
 type AddField = (key: string, type: FieldType) => void;
 function AddFieldRow({ onAdd, compact }: { readonly onAdd: AddField; readonly compact: boolean }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   return (
     <>
       <button className={`cms-add ${compact ? 'compact' : ''}`} onClick={() => setOpen(true)}>
-        <PlusIcon size={11} /> Add field
+        <PlusIcon size={11} /> {translate('cms.addField')}
       </button>
       {open && (
         <NewFieldDialog
@@ -389,6 +323,7 @@ interface NewFieldProps {
 function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
   const [type, setType] = useState<FieldType | undefined>();
   const [name, setName] = useState('');
+  const translate = useTranslate();
   const info = type === undefined ? undefined : typeInfo(type);
   return (
     <Popup className="modal cms-modal cms-type-modal" onClose={onClose} dismissible={true}>
@@ -396,16 +331,12 @@ function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
         <>
           <div className="modal-header cms-modal-header">
             {type && (
-              <button
-                className="ghost"
-                title="Back to field types"
-                onClick={() => setType(undefined)}
-              >
+              <button className="ghost" title={translate('cms.settings.backToTypes')} onClick={() => setType(undefined)}>
                 <ChevronLeftIcon size={13} />
               </button>
             )}
-            <span>{info ? `New ${info.label} field` : 'Choose a field type'}</span>
-            <button className="ghost" title="Close" onClick={close}>
+            <span>{info ? translate('cms.settings.newField', { type: translate(info.label) }) : translate('cms.settings.chooseType')}</span>
+            <button className="ghost" title={translate('ui.close')} onClick={close}>
               <CloseIcon size={12} />
             </button>
           </div>
@@ -414,8 +345,8 @@ function NewFieldDialog({ onAdd, onClose }: NewFieldProps) {
               {CREATABLE_TYPES.map(({ value, label, Icon, hint }) => (
                 <button key={value} className="cms-type-tile" onClick={() => setType(value)}>
                   <Icon size={18} />
-                  <span className="cms-type-name">{label}</span>
-                  <span className="cms-type-hint">{hint}</span>
+                  <span className="cms-type-name">{translate(label)}</span>
+                  <span className="cms-type-description">{translate(hint)}</span>
                 </button>
               ))}
             </div>
@@ -433,6 +364,7 @@ interface NewFieldNameProps extends NewFieldProps {
   readonly setName: (name: string) => void;
 }
 function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps) {
+  const translate = useTranslate();
   const info = typeInfo(type);
   const submit = () => {
     const key = keyFor(name);
@@ -444,12 +376,17 @@ function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps
     <>
       <div className="modal-body">
         <div>
-          <label>Name</label>
+          <label>
+            {translate('cms.settings.nameLabel')}
+            {keyFor(name) && <InfoHint text={translate('cms.settings.codeKey', { key: keyFor(name) })} />}
+          </label>
           <input
             autoFocus
             value={name}
             maxLength={BOUNDARY_LIMITS.pathLengthMax}
-            placeholder={`e.g. ${info.label === 'Text' ? 'Subtitle' : info.label}`}
+            placeholder={translate('cms.settings.nameExample', {
+              name: info.value === 'text' ? translate('cms.settings.nameExampleText') : translate(info.label),
+            })}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -458,18 +395,13 @@ function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps
             }}
           />
         </div>
-        {keyFor(name) && (
-          <div className="cms-note" style={{ margin: 0 }}>
-            Your code reads this as <code>{keyFor(name)}</code>.
-          </div>
-        )}
       </div>
       <div className="modal-footer">
         <button className="ghost" onClick={onClose}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
         <button className="primary" onClick={submit} disabled={!keyFor(name)}>
-          Add field
+          {translate('cms.addField')}
         </button>
       </div>
     </>

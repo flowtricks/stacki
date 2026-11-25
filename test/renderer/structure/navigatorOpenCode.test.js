@@ -45,7 +45,12 @@ const element = (id, name, children = []) => ({
 });
 const component = (id, name) => ({ id, kind: 'component', name, props: {}, children: [] });
 
-function checkCodeWindowRule({ codeWindowFor }) {
+function checkCodeWindowRule({ codeWindowFor, fileWindowIndentation }) {
+  // A project file's window: YAML forbids tabs, so a Tab there must write spaces.
+  assert.deepEqual(fileWindowIndentation('public/admin/config.yml'), { indentation: 'spaces' });
+  assert.deepEqual(fileWindowIndentation('data/site.YAML'), { indentation: 'spaces' });
+  assert.deepEqual(fileWindowIndentation('src/styles/site.css'), {});
+  assert.throws(() => fileWindowIndentation(''), /a file window has a path/);
   assert.deepEqual(codeWindowFor({ id: 'frontmatter', kind: 'frontmatter' }), {
     targetId: 'frontmatter',
     title: 'Frontmatter',
@@ -55,27 +60,27 @@ function checkCodeWindowRule({ codeWindowFor }) {
     targetId: 's1',
     title: '<style>',
     language: 'css',
+    indentation: 'block',
   });
   assert.deepEqual(codeWindowFor(raw('j1', 'script')), {
     targetId: 'j1',
     title: '<script>',
     language: 'javascript',
+    indentation: 'block',
   });
   // The parser keeps a tag as written, so a capitalised one must still open.
   assert.deepEqual(codeWindowFor(raw('s2', 'STYLE')), {
     targetId: 's2',
     title: '<STYLE>',
     language: 'css',
+    indentation: 'block',
   });
   // Markup has no code editor of its own: Enter on it must stay unhandled.
   assert.equal(codeWindowFor(element('e1', 'div')), undefined);
   assert.equal(codeWindowFor(component('c1', 'Card')), undefined);
   // The parser only ever makes <style> and <script> raw. Any other name is a
   // broken invariant, not a language to guess.
-  assert.throws(
-    () => codeWindowFor(raw('t1', 'template')),
-    /Assertion failed: raw node <template> has no code language/,
-  );
+  assert.throws(() => codeWindowFor(raw('t1', 'template')), /Assertion failed: raw node <template> has no code language/);
   assert.throws(() => codeWindowFor(raw('', 'style')), /Assertion failed: raw node has an id/);
 }
 
@@ -101,10 +106,7 @@ async function checkNavigator(StructurePanel) {
   const container = dom.window.document.getElementById('root');
   const reactRoot = createRoot(container);
   const opened = { code: [], component: [] };
-  const nodes = [
-    element('page', 'main', [raw('s1', 'style'), element('e1', 'div'), component('c1', 'Card')]),
-    raw('j1', 'script'),
-  ];
+  const nodes = [element('page', 'main', [raw('s1', 'style'), element('e1', 'div'), component('c1', 'Card')]), raw('j1', 'script')];
   await act(async () => {
     reactRoot.render(
       React.createElement(StructurePanel, {
@@ -158,13 +160,8 @@ async function checkNavigator(StructurePanel) {
 
 (async () => {
   fs.mkdirSync(buildDirectory, { recursive: true });
-  checkCodeWindowRule(
-    await bundle('src/features/code/codeWindowTarget.ts', 'code-window-target.cjs'),
-  );
-  const { default: StructurePanel } = await bundle(
-    'src/features/structure/StructurePanel.tsx',
-    'navigator-open-code.cjs',
-  );
+  checkCodeWindowRule(await bundle('src/features/code/codeWindowTarget.ts', 'code-window-target.cjs'));
+  const { default: StructurePanel } = await bundle('src/features/structure/StructurePanel.tsx', 'navigator-open-code.cjs');
   await checkNavigator(StructurePanel);
   console.log('navigator-open-code: all checks passed');
 })().catch((error) => {

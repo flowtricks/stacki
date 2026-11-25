@@ -9,9 +9,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources');
 const loadRenderer = require('../../helpers/rendererModule');
-const { GUIDE_DEFAULTS, guideVariableNames, resolveGuide } = loadRenderer(
-  'src/features/preview/guideModel.ts',
-);
+const { GUIDE_DEFAULTS, guideVariableNames, resolveGuide } = loadRenderer('src/features/preview/guideModel.ts');
 const { parsePreviewMessage } = loadRenderer('src/features/preview/previewMessages.ts');
 
 function guideFrame() {

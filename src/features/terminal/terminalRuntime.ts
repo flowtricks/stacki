@@ -1,14 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { assert } from '../../../shared/core/assert';
-import {
-  acknowledgeTerminalData,
-  onTerminalData,
-  onTerminalExit,
-  resizeTerminal,
-  sendTerminalInput,
-  startTerminal,
-} from './terminalBridge';
+import { acknowledgeTerminalData, onTerminalData, onTerminalExit, resizeTerminal, sendTerminalInput, startTerminal } from './terminalBridge';
 import { installTerminalInteractions } from './terminalInteractions';
 
 const SCROLLBACK_LINES_MAX = 10_000;
@@ -43,6 +36,8 @@ interface TerminalDimensions {
   readonly rows: number;
 }
 
+type ProcessState = { readonly kind: 'idle' | 'starting' | 'failed' } | { readonly kind: 'ready'; readonly size: TerminalDimensions };
+
 interface TerminalRuntimeOptions {
   readonly host: HTMLDivElement;
   readonly terminalId: string;
@@ -57,7 +52,7 @@ export class TerminalRuntime {
   private fitAddon: FitAddon | undefined;
   private ready = false;
   private disposed = false;
-  private lastSize: TerminalDimensions | undefined;
+  private process: ProcessState = { kind: 'idle' };
   private removeBridgeListeners: () => void = () => undefined;
 
   public constructor(private readonly options: TerminalRuntimeOptions) {}
@@ -85,7 +80,6 @@ export class TerminalRuntime {
     return () => {
       this.disposed = true;
       this.ready = false;
-      this.lastSize = undefined;
       observer.disconnect();
       window.removeEventListener('resize', resize);
       removeInteractions();
@@ -106,21 +100,42 @@ export class TerminalRuntime {
     if (this.options.host.offsetWidth === 0 || this.options.host.offsetHeight === 0) {
       return;
     }
+    let dimensions: TerminalDimensions | undefined;
     try {
       fitAddon.fit();
-      const dimensions = fitAddon.proposeDimensions();
-      if (!dimensions || !dimensions.cols || !dimensions.rows) {
-        return;
-      }
-      assert(Number.isSafeInteger(dimensions.cols), 'Terminal column count must be an integer');
-      assert(Number.isSafeInteger(dimensions.rows), 'Terminal row count must be an integer');
-      if (dimensions.cols === this.lastSize?.cols && dimensions.rows === this.lastSize.rows) {
-        return;
-      }
-      this.lastSize = dimensions;
-      void resizeTerminal(this.options.terminalId, dimensions.cols, dimensions.rows);
+      dimensions = fitAddon.proposeDimensions();
     } catch {
       // Xterm can reject a fit between layout and paint; its observer retries.
+      return;
+    }
+    if (!dimensions) {
+      return;
+    }
+    if (dimensions.cols <= 0 || dimensions.rows <= 0) {
+      return;
+    }
+    assert(Number.isSafeInteger(dimensions.cols), 'Terminal column count must be an integer');
+    assert(Number.isSafeInteger(dimensions.rows), 'Terminal row count must be an integer');
+    this.synchronizeSize(terminal, dimensions);
+  }
+
+  private synchronizeSize(terminal: Terminal, dimensions: TerminalDimensions): void {
+    switch (this.process.kind) {
+      case 'idle':
+        this.startProcess(terminal, dimensions);
+        return;
+      case 'starting':
+      case 'failed':
+        return;
+      case 'ready':
+        if (dimensions.cols === this.process.size.cols) {
+          if (dimensions.rows === this.process.size.rows) {
+            return;
+          }
+        }
+        this.process = { kind: 'ready', size: dimensions };
+        void resizeTerminal(this.options.terminalId, dimensions.cols, dimensions.rows);
+        return;
     }
   }
 
@@ -154,7 +169,6 @@ export class TerminalRuntime {
     this.open(terminal, host);
     this.installTerminalCallbacks(terminal);
     this.installBridgeListeners(terminal);
-    this.startProcess(terminal);
   }
 
   private open(terminal: Terminal, host: HTMLDivElement): void {
@@ -171,7 +185,7 @@ export class TerminalRuntime {
         });
       });
     } catch {
-      // The startup request below reports the actionable process failure.
+      // A failed renderer must not start a shell with unmeasured dimensions.
     }
   }
 
@@ -212,19 +226,32 @@ export class TerminalRuntime {
     };
   }
 
-  private startProcess(terminal: Terminal): void {
-    void startTerminal(
-      this.options.terminalId,
-      this.options.projectPath,
-      this.options.autoLaunch(),
-    ).then((result) => {
+  private startProcess(terminal: Terminal, dimensions: TerminalDimensions): void {
+    assert(this.process.kind === 'idle', 'A terminal process can start only once');
+    assert(this.ready, 'The terminal must be laid out before starting its process');
+    this.process = { kind: 'starting' };
+    // The shell must draw its first prompt using the same grid as xterm. A resize
+    // sent before native startup completes can otherwise be rejected and lost.
+    void startTerminal({
+      id: this.options.terminalId,
+      cwd: this.options.projectPath,
+      autoLaunch: this.options.autoLaunch(),
+      ...dimensions,
+    }).then((result) => {
       if (this.disposed) {
         return;
       }
       if (!result.ok) {
+        this.process = { kind: 'failed' };
         terminal.writeln(`\r\n\x1b[31mFailed to start terminal: ${result.error}\x1b[0m\r\n`);
       } else if (!result.value.ok) {
+        this.process = { kind: 'failed' };
         terminal.writeln(`\r\n\x1b[31m${result.value.error}\x1b[0m\r\n`);
+      } else {
+        this.process = { kind: 'ready', size: dimensions };
+        // Layout may change during native startup. Reconcile it without waiting
+        // for the user to resize the window again.
+        this.fit();
       }
     });
   }

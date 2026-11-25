@@ -6,28 +6,20 @@ import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import VariableConnect from './VariableConnect';
+import KeywordConnect, { VariableMenuItem } from './KeywordConnect';
 import type { ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
-import { parseImportant } from './model/styleDisplay';
-import {
-  CloseIcon,
-  FloatLeftIcon,
-  FloatRightIcon,
-  ClearLeftIcon,
-  ClearRightIcon,
-  ClearBothIcon,
-} from './PositionIcons';
+import { keepImportant, parseImportant } from './model/styleDisplay';
+import { CloseIcon, FloatLeftIcon, FloatRightIcon, ClearLeftIcon, ClearRightIcon, ClearBothIcon } from './PositionIcons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
-export type LiveSetProp = (
-  prop: string | readonly string[],
-  value: string | undefined,
-  important: boolean,
-) => void;
+export type LiveSetProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 export type Read = (prop: string) => ResolvedProp | undefined;
 
 export type Props = {
@@ -54,18 +46,10 @@ export type SegmentedIconControlProps = {
   current: string;
 } & Props & { read?: Read };
 
-export function SegmentedIconControl({
-  prop,
-  ariaLabel,
-  segments,
-  current,
-  busy,
-  setProp,
-  liveSetProp,
-  clearProp,
-}: SegmentedIconControlProps) {
+export function SegmentedIconControl({ prop, ariaLabel, segments, current, busy, setProp, liveSetProp, clearProp }: SegmentedIconControlProps) {
   const supported = new Set(segments.map((segment) => segment.value));
-  const customMode = !supported.has(current);
+  // No value (a code chip's create chip) is the bar with nothing selected, not the custom field.
+  const customMode = current !== '' && !supported.has(current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { inputRef, requestFocus } = useCustomFocus({ customMode, busy });
@@ -83,39 +67,43 @@ export function SegmentedIconControl({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
-      role="group"
-      aria-label={ariaLabel}
+    <KeywordConnect
+      prop={prop}
+      value={current}
+      ariaLabel={ariaLabel}
+      disabled={busy}
+      dot={customMode ? 'field' : 'wrapper'}
+      onPick={(binding) => setProp(prop, binding, false)}
     >
-      <SegmentPill />
-      {customMode ? (
-        <SegmentCustomInput
-          prop={prop}
+      <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label={ariaLabel}>
+        <SegmentPill />
+        {customMode ? (
+          <SegmentCustomInput
+            prop={prop}
+            ariaLabel={ariaLabel}
+            current={current}
+            busy={busy}
+            inputRef={inputRef}
+            setProp={setProp}
+            liveSetProp={liveSetProp}
+            clearProp={clearProp}
+          />
+        ) : (
+          <SegmentButtons segments={segments} current={current} busy={busy} onPick={pick} />
+        )}
+        <SegmentMenu
+          open={open}
           ariaLabel={ariaLabel}
-          current={current}
           busy={busy}
-          inputRef={inputRef}
-          setProp={setProp}
-          liveSetProp={liveSetProp}
-          clearProp={clearProp}
+          customMode={customMode}
+          current={current}
+          segments={segments}
+          onToggle={() => setOpen((value) => !value)}
+          onPick={pick}
+          onEnterCustom={enterCustom}
         />
-      ) : (
-        <SegmentButtons segments={segments} current={current} busy={busy} onPick={pick} />
-      )}
-      <SegmentMenu
-        open={open}
-        ariaLabel={ariaLabel}
-        busy={busy}
-        customMode={customMode}
-        current={current}
-        segments={segments}
-        onToggle={() => setOpen((value) => !value)}
-        onPick={pick}
-        onEnterCustom={enterCustom}
-      />
-    </div>
+      </div>
+    </KeywordConnect>
   );
 }
 
@@ -130,10 +118,10 @@ export function SegmentCustomInput({
   setProp,
   liveSetProp,
   clearProp,
-}: Pick<
-  SegmentedIconControlProps,
-  'prop' | 'ariaLabel' | 'current' | 'busy' | 'setProp' | 'liveSetProp' | 'clearProp'
-> & { inputRef: React.RefObject<HTMLInputElement> }) {
+}: Pick<SegmentedIconControlProps, 'prop' | 'ariaLabel' | 'current' | 'busy' | 'setProp' | 'liveSetProp' | 'clearProp'> & {
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(current);
   const focused = useRef(false);
   useEffect(() => {
@@ -153,16 +141,21 @@ export function SegmentCustomInput({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.positionSegments.connect', { name: ariaLabel })}
       disabled={busy}
       prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
+      canvasProperty={prop}
+      onPick={(binding) => {
+        // `current` is the field's text, flag and all: a pick keeps the flag.
+        const kept = keepImportant(binding, parseImportant(current));
+        setProp(prop, kept.value, kept.important);
+      }}
     >
       <input
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
-        placeholder="custom value"
+        placeholder={translate('style.positionSegments.customValuePlaceholder')}
         spellCheck={false}
         disabled={busy}
         onChange={(event) => {
@@ -243,6 +236,7 @@ export function SegmentMenu({
   onPick: (value: string) => void;
   onEnterCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -250,31 +244,21 @@ export function SegmentMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`More ${ariaLabel} options`}
+        aria-label={translate('style.positionSegments.moreOptions', { name: ariaLabel })}
         disabled={busy}
         onClick={onToggle}
       >
         <ChevronIcon />
       </button>
       {open ? (
-        <Popup
-          mode="popover"
-          portal={false}
-          onClose={onToggle}
-          className="embed-editor_display-menu"
-          role="menu"
-        >
+        <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
+          <VariableMenuItem onClose={onToggle} />
           {customMode ? (
             segments.map((segment) => (
-              <MenuItem
-                key={segment.value}
-                label={segment.label}
-                selected={current === segment.value}
-                onClick={() => onPick(segment.value)}
-              />
+              <MenuItem key={segment.value} label={segment.label} selected={current === segment.value} onClick={() => onPick(segment.value)} />
             ))
           ) : (
-            <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
+            <MenuItem label={translate('style.positionSegments.custom')} selected={false} onClick={onEnterCustom} />
           )}
         </Popup>
       ) : undefined}
@@ -282,14 +266,18 @@ export function SegmentMenu({
   );
 }
 
-export const FLOAT_SEGS: readonly Seg[] = [
-  { value: 'none', icon: <CloseIcon />, label: 'None' },
-  { value: 'left', icon: <FloatLeftIcon />, label: 'Float left' },
-  { value: 'right', icon: <FloatRightIcon />, label: 'Float right' },
-];
-export const CLEAR_SEGS: readonly Seg[] = [
-  { value: 'none', icon: <CloseIcon />, label: 'None' },
-  { value: 'left', icon: <ClearLeftIcon />, label: 'Clear left' },
-  { value: 'right', icon: <ClearRightIcon />, label: 'Clear right' },
-  { value: 'both', icon: <ClearBothIcon />, label: 'Clear both' },
-];
+export function floatSegments(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'none', icon: <CloseIcon />, label: translate('style.positionSegments.floatNone') },
+    { value: 'left', icon: <FloatLeftIcon />, label: translate('style.positionSegments.floatLeft') },
+    { value: 'right', icon: <FloatRightIcon />, label: translate('style.positionSegments.floatRight') },
+  ];
+}
+export function clearSegments(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'none', icon: <CloseIcon />, label: translate('style.positionSegments.clearNone') },
+    { value: 'left', icon: <ClearLeftIcon />, label: translate('style.positionSegments.clearLeft') },
+    { value: 'right', icon: <ClearRightIcon />, label: translate('style.positionSegments.clearRight') },
+    { value: 'both', icon: <ClearBothIcon />, label: translate('style.positionSegments.clearBoth') },
+  ];
+}

@@ -23,12 +23,7 @@ const check = (what, condition, detail) => {
     failures.push(`  ${what}${detail ? `\n    ${detail}` : ''}`);
   }
 };
-const same = (what, got, want) =>
-  check(
-    what,
-    JSON.stringify(got) === JSON.stringify(want),
-    `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`,
-  );
+const same = (what, got, want) => check(what, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 
 (async () => {
   const esbuild = require('esbuild');
@@ -50,15 +45,7 @@ const same = (what, got, want) =>
     platform: 'node',
     logLevel: 'silent',
   });
-  const {
-    buildCssRuleView,
-    cssTokens,
-    highlightCss,
-    stepNumberAt,
-    stepSize,
-    caretOffset,
-    setCaretOffset,
-  } = require(bundlePath);
+  const { buildCssRuleView, cssTokens, highlightCss, stepNumberAt, stepSize, caretOffset, setCaretOffset } = require(bundlePath);
 
   // --- colouring ------------------------------------------------------------
   //
@@ -112,15 +99,7 @@ const same = (what, got, want) =>
   check('markup escapes', !highlightCss('a < b & c').includes('<b'), highlightCss('a < b & c'));
 
   // --- matched-rule view ----------------------------------------------------
-  const matchedRule = ({
-    selector,
-    specificity,
-    order,
-    value,
-    winning,
-    atContext = [],
-    matchedSelector = selector,
-  }) => ({
+  const matchedRule = ({ selector, specificity, order, value, winning, atContext = [], matchedSelector = selector }) => ({
     rule: {
       ruleId: selector,
       selectorText: selector,
@@ -156,7 +135,7 @@ const same = (what, got, want) =>
   check('the most specific selector is shown first', ruleView.code.startsWith('.specific {'));
   check('every matching selector remains in the code view', ruleView.code.includes('.general {'));
   const struckText = ruleView.highlights.map((range) => ruleView.code.slice(range.from, range.to));
-  same('overridden declarations are highlighted for strikethrough', struckText, ['  color: red;']);
+  same('overridden declarations are highlighted for strikethrough', struckText, ['\tcolor: red;']);
 
   const headingGroup = 'p,\nh1,\nh2,\nh3,\nh4,\nh5,\nh6';
   const headingView = buildCssRuleView([
@@ -190,10 +169,7 @@ const same = (what, got, want) =>
       atContext: ['@media (width > 40rem)'],
     }),
   ]);
-  check(
-    'query context is preserved around its rule',
-    queryView.code === '@media (width > 40rem) {\n  .card {\n    color: green;\n  }\n}',
-  );
+  check('query context is preserved around its rule', queryView.code === '@media (width > 40rem) {\n\t.card {\n\t\tcolor: green;\n\t}\n}');
 
   // --- stepping -------------------------------------------------------------
   same('alt is a tenth', stepSize({ altKey: true }), 0.1);
@@ -218,6 +194,14 @@ const same = (what, got, want) =>
     text: 'calc(100% - 3px)',
     caret: 13,
   });
+  // The caret ends up after the unit whenever a value is typed or clicked at its end.
+  same('the caret after the unit', stepNumberAt('1rem', 4, -1, 0), { text: '0rem', caret: 4 });
+  same('the caret inside the unit stays there', stepNumberAt('12px', 3, 1), { text: '13px', caret: 3 });
+  same('a percent is a unit', stepNumberAt('50%', 3, 1), { text: '51%', caret: 3 });
+  same('the floor holds', stepNumberAt('0rem', 4, -1, 0), { text: '0rem', caret: 4 });
+  same('past the unit is not the number', stepNumberAt('1rem solid', 5, 1), undefined);
+  same('hex letters are not a unit', stepNumberAt('#3366ff', 7, 1), undefined);
+  same('a name ending in letters is not a unit', stepNumberAt('translate3d', 11, 1), undefined);
   same('nothing to step', stepNumberAt('none', 2, 1), undefined);
   same('nothing to step in an empty field', stepNumberAt('', 0, 1), undefined);
 

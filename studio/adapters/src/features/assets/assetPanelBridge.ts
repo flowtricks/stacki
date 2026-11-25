@@ -1,21 +1,10 @@
 import type { ImageFormat } from '../../../shared/ipc/assetConversion';
 import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
+import type { MessageRef } from '../../../shared/properties/i18n/messageRef';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
-import {
-  BOUNDARY_LIMITS,
-  boolean,
-  count,
-  list,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
-import {
-  assetOperation,
-  chooseUploads,
-  uploadFiles,
-} from '../../../../../src/features/assets/assetPanelClient';
+import { BOUNDARY_LIMITS, boolean, count, list, pathText, record, text } from '../../../shared/core/boundary';
+import { assetOperation, chooseReplacement, chooseUploads, uploadFiles } from '../../../../../src/features/assets/assetPanelClient';
 import { request as studioRequest } from '../../../../../src/features/project/projectClient';
 
 import { cleanError } from '../../lib/cleanError';
@@ -40,9 +29,7 @@ export function parseAssetListing(input: unknown): AssetListing {
     seen.add(entry.rel);
   }
   const missing = boolean(value['missing']);
-  const hasPublicRoot = entries.some(
-    (entry) => entry.isDir && entry.isRoot === true && entry.root === 'public',
-  );
+  const hasPublicRoot = entries.some((entry) => entry.isDir && entry.isRoot === true && entry.root === 'public');
   if (missing === hasPublicRoot) {
     throw new Error('Asset listing: missing state contradicts public root');
   }
@@ -77,9 +64,15 @@ export function renameAsset(_projectPath: string, rel: string, newName: string) 
   );
 }
 export function deleteAsset(_projectPath: string, rel: string) {
-  return request(parseOutcome, () =>
-    assetOperation({ kind: 'delete', rel: parseAssetRelativePath(rel) }),
-  );
+  return request(parseOutcome, () => assetOperation({ kind: 'delete', rel: parseAssetRelativePath(rel) }));
+}
+/** Asks for a file in the browser and writes it over the asset, keeping its path; false when cancelled. */
+export async function replaceAsset(
+  _projectPath: string,
+  rel: string,
+): Promise<{ readonly ok: true; readonly value: boolean } | { readonly ok: false; readonly error: string; readonly messageRef?: MessageRef | undefined }> {
+  // Studio's server words its own failures, so none carries a message reference.
+  return request(boolean, () => chooseReplacement(parseAssetRelativePath(rel)));
 }
 export function makeAssetDirectory(_projectPath: string, parentRel: string, name: string) {
   return request(parseSuccess, () =>
@@ -128,10 +121,7 @@ function assetSegments(rel: string): readonly string[] {
   if (segments.length > BOUNDARY_LIMITS.depthMax) {
     throw new Error('Asset listing: path depth exceeds limit');
   }
-  if (
-    segments.length === 0 ||
-    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
-  ) {
+  if (segments.length === 0 || segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
     throw new Error('Asset listing: invalid relative path');
   }
   return segments;
@@ -183,10 +173,7 @@ function parseSuccess(input: unknown): void {
   }
 }
 
-async function request<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();
@@ -197,10 +184,6 @@ async function request<Value>(
 }
 
 // Encoding currently belongs to the desktop host, not the Cloudflare worker.
-export function convertAsset(
-  _projectPath: string,
-  _rel: string,
-  _format: ImageFormat,
-): Promise<Result<never, string>> {
+export function convertAsset(_projectPath: string, _rel: string, _format: ImageFormat): Promise<Result<never, string>> {
   return Promise.resolve({ ok: false, error: 'Image conversion requires the desktop app.' });
 }

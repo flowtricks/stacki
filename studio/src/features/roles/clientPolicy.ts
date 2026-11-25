@@ -4,7 +4,7 @@ import { frontmatterRange } from '../source/frontmatter';
 export function clientLayout(source: string) {
   const layout = nodesOf(source).find((node) => node.id === 'layout' && node.kind === 'component');
   if (!layout) {
-    throw new Error('Client editing requires a page layout. Ask a designer to set one up.');
+    throw new Error('Client editing requires a page layout. Ask an admin to set one up.');
   }
   return layout;
 }
@@ -15,8 +15,7 @@ export function assertClientAction(source: string, action: TreeAction) {
     throw new Error('Client mode keeps the page layout and everything outside it protected.');
   }
   if ('target' in action) {
-    const insideLayout =
-      action.target === layout.id && (!action.placement || action.placement === 'inside');
+    const insideLayout = action.target === layout.id && (!action.placement || action.placement === 'inside');
     if (!insideLayout && !children.has(action.target)) {
       throw new Error('Add and move elements inside the page layout in Client mode.');
     }

@@ -1,9 +1,77 @@
-// Verify subscription boundaries and bounded render coalescing with explicit client inputs.
+// Goal: every subscribed editor receives current renders without unbounded work.
+// Method: hold renders in flight to exercise coalescing, fair scheduling, navigation,
+// shutdown and failures independently of Astro or network timing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout } from 'node:timers/promises';
 import { RenderPush } from '../src/features/preview/renderPush';
 import { renderPath } from '../src/features/preview/renderPushServer';
+
+test('duplicate subscriptions and joining editors share the current pending render', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const deliveries: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)));
+  const first = {
+    send: (event: string, data: unknown) => {
+      if (event === 'studio:render') {
+        deliveries.push(data);
+      }
+    },
+  };
+  const second = { send: first.send };
+  try {
+    push.subscribe('/', first);
+    await setTimeout(10);
+    push.subscribe('/', first);
+    push.subscribe('/', second);
+    await setTimeout(10);
+    assert.equal(waiting.length, 1, 'Subscribing is not a source edit');
+    waiting[0]?.('<h1>current</h1>');
+    await setTimeout(10);
+    assert.deepEqual(deliveries, [
+      { path: '/', html: '<h1>current</h1>' },
+      { path: '/', html: '<h1>current</h1>' },
+    ]);
+    push.subscribe('/', first);
+    await setTimeout(10);
+    assert.equal(waiting.length, 1, 'An already connected frame does not restart rendering');
+    push.invalidate();
+    await setTimeout(10);
+    assert.equal(waiting.length, 2, 'A real source change still starts a new render');
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+test('a resumed subscription catches up without waiting for another source edit', async () => {
+  const delivered: unknown[] = [];
+  let html = '<section>before sleep</section>';
+  const push = new RenderPush(async () => html);
+  const target = {
+    send: (event: string, data: unknown) => {
+      if (event === 'studio:render') {
+        delivered.push(data);
+      }
+    },
+  };
+  try {
+    push.subscribe('/', target);
+    await setTimeout(10);
+    push.unsubscribe(target);
+    html = '<section class="theme-dark">after resume</section>';
+    push.invalidate();
+    await setTimeout(10);
+    delivered.length = 0;
+    push.subscribe('/', target);
+    await setTimeout(10);
+    assert.deepEqual(delivered, [{ path: '/', html }]);
+  } finally {
+    push.close();
+  }
+});
 
 test('preview subscriptions reject external and internal URLs', () => {
   for (const path of [
@@ -73,7 +141,7 @@ test('render failures tell the client to use the normal fetch fallback', async (
     push.subscribe('/404', { send: (event) => events.push(event) });
     push.invalidate();
     await setTimeout(10);
-    assert.deepEqual(events, ['studio:render-ready', 'studio:render-failed']);
+    assert.deepEqual(events, ['studio:render-ready', 'studio:render-pending', 'studio:render-failed']);
   } finally {
     push.close();
   }
@@ -108,4 +176,140 @@ test('push rendering bounds concurrency and does not deliver an old page after s
   } finally {
     push.close();
   }
+});
+
+test('continuous edits cannot starve a third subscribed page', async () => {
+  const waiting: { readonly path: string; readonly resolve: (html: string) => void }[] = [];
+  const push = new RenderPush((path) => new Promise((resolve) => waiting.push({ path, resolve })));
+  try {
+    for (const path of ['/first', '/second', '/third']) {
+      push.subscribe(path, { send: () => {} });
+    }
+    await setTimeout(10);
+    assert.deepEqual(
+      waiting.map((item) => item.path),
+      ['/first', '/second'],
+    );
+    // A new edit supersedes both running renders, but the third editor is still owed work.
+    push.invalidate();
+    waiting[0]?.resolve('superseded');
+    await setTimeout(10);
+    assert.equal(waiting[2]?.path, '/third', 'Already-waiting pages get the next free slot');
+    assert.equal(waiting.length, 3, 'The second slot is still occupied');
+  } finally {
+    push.close();
+    for (const item of waiting) {
+      item.resolve('shutdown');
+    }
+  }
+});
+
+test('closing the server discards an in-flight render and pending work', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const events: string[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)));
+  push.subscribe('/', { send: (event) => events.push(event) });
+  await setTimeout(10);
+  push.close();
+  waiting[0]?.('<h1>After shutdown</h1>');
+  await setTimeout(10);
+  assert.deepEqual(events, ['studio:render-ready', 'studio:render-pending']);
+  assert.equal(waiting.length, 1);
+});
+
+test('a sustained drag bounds the backlog, not the total number of renders', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const delivered: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)));
+  try {
+    push.subscribe('/', {
+      send: (event, data) => {
+        if (event === 'studio:render') {
+          delivered.push(data);
+        }
+      },
+    });
+    await setTimeout(10);
+    // Twenty inputs arrive over a long drag, each before the running render ends.
+    for (let index = 0; index < 20; index++) {
+      push.invalidate();
+      waiting[index]?.('superseded');
+      await setTimeout(10);
+      assert.equal(waiting.length, index + 2, 'Exactly one replacement starts per completion');
+      assert.deepEqual(delivered, [], 'Superseded results never reach an editor');
+    }
+    waiting[20]?.('latest');
+    await setTimeout(10);
+    assert.deepEqual(delivered, [{ path: '/', html: 'latest' }]);
+    assert.equal(waiting.length, 21, 'A bounded backlog still permits sustained rendering');
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+// A render that started before a write renders a file the room has since replaced. Delivered,
+// it showed an older page than the edits the canvas already showed: a second delete came back
+// for a whole render (framePendingDelete.ts). Method: hold the render, write during it, and read
+// what reaches the frame; bounded waits on what was delivered, no fixed pauses.
+async function until(condition: () => boolean, label: string): Promise<void> {
+  const deadline = performance.now() + 5_000;
+  while (!condition()) {
+    assert.ok(performance.now() < deadline, label);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+test('a render outdated by a write never reaches the frame; the write’s invalidation renders the page again', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const delivered: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)), { watcherWaitMsMax: 60_000 });
+  const target = { send: (event: string, data: unknown) => (event === 'studio:render' ? delivered.push(data) : undefined) };
+  try {
+    push.subscribe('/', target);
+    await until(() => waiting.length === 1, 'The subscription starts a render');
+    push.sourceWritten('immediate');
+    waiting[0]?.('<p>before the write</p>');
+    await until(() => !push.busy(), 'The outdated render finishes');
+    assert.deepEqual(delivered, [], 'An outdated render is dropped');
+    push.invalidate();
+    await until(() => waiting.length === 2, 'The invalidation renders again');
+    waiting[1]?.('<p>after the write</p>');
+    await until(() => delivered.length === 1, 'The current render is delivered');
+    assert.deepEqual(delivered, [{ path: '/', html: '<p>after the write</p>' }]);
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+test('a dropped render is rendered again after its bound when no invalidation follows the write', async () => {
+  const waiting: ((html: string) => void)[] = [];
+  const delivered: unknown[] = [];
+  const push = new RenderPush(() => new Promise((resolve) => waiting.push(resolve)), { watcherWaitMsMax: 0 });
+  const target = { send: (event: string, data: unknown) => (event === 'studio:render' ? delivered.push(data) : undefined) };
+  try {
+    push.subscribe('/', target);
+    await until(() => waiting.length === 1, 'The subscription starts a render');
+    push.sourceWritten('immediate');
+    waiting[0]?.('<p>dropped</p>');
+    await until(() => waiting.length === 2, 'The page renders again without an invalidation');
+    waiting[1]?.('<p>rendered again</p>');
+    await until(() => delivered.length === 1, 'The repeated render is delivered');
+    assert.deepEqual(delivered, [{ path: '/', html: '<p>rendered again</p>' }]);
+  } finally {
+    push.close();
+    for (const resolve of waiting) {
+      resolve('shutdown');
+    }
+  }
+});
+
+test('the watcher bound is whole, non-negative milliseconds', () => {
+  assert.throws(() => new RenderPush(async () => '', { watcherWaitMsMax: -1 }), /The watcher wait is not negative/);
+  assert.throws(() => new RenderPush(async () => '', { watcherWaitMsMax: 0.5 }), /The watcher wait is whole milliseconds/);
 });

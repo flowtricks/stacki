@@ -33,10 +33,7 @@ function registerPreviewAtCommitHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>):
     const bin = isWin ? 'astro.cmd' : 'astro';
     const localBin = path.join(projectPath, 'node_modules', '.bin', bin);
     if (!fs.existsSync(localBin)) {
-      throw new Error(
-        'This project’s packages aren’t installed, so an older version can’t be shown. ' +
-          'Install them and try again.',
-      );
+      throw new Error('This project’s packages aren’t installed, so an older version can’t be shown. ' + 'Install them and try again.');
     }
     const port = await findFreePort(4500);
     if (previewServers.size >= MAIN_LIMITS.previewServersMax) {
@@ -44,13 +41,7 @@ function registerPreviewAtCommitHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>):
         throw new Error('Preview server limit');
       }
     }
-    const proc = spawnAstroServer(directory, localBin, [
-      'dev',
-      '--port',
-      String(port),
-      '--host',
-      '127.0.0.1',
-    ]);
+    const proc = spawnAstroServer(directory, localBin, ['dev', '--port', String(port), '--host', '127.0.0.1']);
 
     const url = `http://127.0.0.1:${port}`;
     let log = '';
@@ -86,8 +77,7 @@ function registerPreviewAtCommitHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>):
     const missing = /Cannot find (?:module|package) ['"]?([^'"\s]+)/i.exec(log);
     throw new Error(
       missing
-        ? `That version needs ${missing[1]}, which isn’t installed here. ` +
-            'It can’t be shown without it.'
+        ? `That version needs ${missing[1]}, which isn’t installed here. ` + 'It can’t be shown without it.'
         : 'That version wouldn’t start. It may need packages that aren’t installed any more.',
     );
   });
@@ -97,9 +87,7 @@ function registerPreviewCheckHandlers({ ipcMain }: Pick<MainHost, 'ipcMain'>): v
   // The canvas's preview token (plan §9, step 7): a click on the canvas selects
   // a node only while every file its rendering came from still holds the bytes
   // the rendering's stamps name. Read from disk here, never from the watcher.
-  ipcMain.handle('preview:check', (_event, { projectPath, render }) =>
-    checkPreviewRender(projectPath, render),
-  );
+  ipcMain.handle('preview:check', (_event, { projectPath, render }) => checkPreviewRender(projectPath, render));
 
   ipcMain.handle('preview:stop', async (_event, { projectPath }) => {
     await stopPreview(projectPath);

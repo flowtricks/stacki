@@ -1,0 +1,20 @@
+/* The provider tile: a tinted square, so a list of providers has a shape to scan without brand artwork. */
+.provider-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--bg-hover);
+}
+.provider-logo.monogram {
+  background: hsl(var(--provider-hue) 55% 50% / 0.2);
+  color: hsl(var(--provider-hue) 70% 66%);
+  font-weight: 600;
+  line-height: 1;
+}
+.provider-logo > svg {
+  width: 70%;
+  height: 70%;
+}

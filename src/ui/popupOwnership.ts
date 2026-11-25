@@ -88,3 +88,25 @@ export function isTopPopupLayer(element: HTMLElement | undefined): boolean {
   }
   return top !== undefined && top.element === element;
 }
+
+/**
+ * Is the topmost popup one this popup opened (a submenu, a picker)? An outside press then belongs to
+ * the whole stack: each layer that does not contain the press closes in the same gesture, so the user
+ * never needs one press per level. Escape stays with the top layer alone (isTopPopupLayer).
+ */
+export function ownsTopPopupLayer(element: HTMLElement | undefined): boolean {
+  if (!element) {
+    return false;
+  }
+  const root = layers.at(-1)?.root;
+  let top: Layer | undefined;
+  for (const layer of layers) {
+    if (layer.root === root && (!top || layer.depth >= top.depth)) {
+      top = layer;
+    }
+  }
+  if (top === undefined || top.element === element) {
+    return false;
+  }
+  return inOwnedPopup(top.element, element);
+}

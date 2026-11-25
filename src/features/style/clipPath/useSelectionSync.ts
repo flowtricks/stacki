@@ -6,12 +6,7 @@ import type { MutableRefObject } from 'react';
 import type { BreakpointId, WebflowApi } from './webflowDesigner';
 import { type SelectionReadOptions } from './clipPathTypes';
 import { readWebflowApi, STYLE_REFRESH_MS } from './clipPathConstants';
-import {
-  type EditorAfterWindowKeyListeners,
-  type SelectionSession,
-  loadNoneIfChanged,
-  readSelectedElement,
-} from './clipPathSelectionRead';
+import { type EditorAfterWindowKeyListeners, type SelectionSession, loadNoneIfChanged, readSelectedElement } from './clipPathSelectionRead';
 
 // Reading the Webflow selection.
 export function useSelectionSync(editor: EditorAfterWindowKeyListeners) {
@@ -43,9 +38,7 @@ export function useSelectionSync(editor: EditorAfterWindowKeyListeners) {
       void readCurrentSelectedElement(session);
     }, STYLE_REFRESH_MS);
 
-    void syncCurrentBreakpoint(webflowApi, activeBreakpointRef).then(() =>
-      readCurrentSelectedElement(session, { force: true, resetStyle: true }),
-    );
+    void syncCurrentBreakpoint(webflowApi, activeBreakpointRef).then(() => readCurrentSelectedElement(session, { force: true, resetStyle: true }));
 
     return () => {
       session.cancelled = true;
@@ -60,20 +53,10 @@ export function useSelectionSync(editor: EditorAfterWindowKeyListeners) {
       unsubscribeMediaQuery?.();
       refreshSelectedElementRef.current = undefined;
     };
-  }, [
-    selectionReadInProgressRef,
-    selectionReadSeqRef,
-    selectionReadTimerRef,
-    activeBreakpointRef,
-    setIsClipPathLabelMenuOpen,
-    refreshSelectedElementRef,
-  ]);
+  }, [selectionReadInProgressRef, selectionReadSeqRef, selectionReadTimerRef, activeBreakpointRef, setIsClipPathLabelMenuOpen, refreshSelectedElementRef]);
 }
 
-export async function syncCurrentBreakpoint(
-  webflowApi: WebflowApi,
-  activeBreakpointRef: MutableRefObject<BreakpointId>,
-): Promise<void> {
+export async function syncCurrentBreakpoint(webflowApi: WebflowApi, activeBreakpointRef: MutableRefObject<BreakpointId>): Promise<void> {
   try {
     activeBreakpointRef.current = (await webflowApi.getMediaQuery?.()) || 'main';
   } catch {
@@ -82,10 +65,7 @@ export async function syncCurrentBreakpoint(
 }
 
 // A selection change reads the new element a beat later, once the Designer settles.
-export function scheduleCurrentSelectedElementRead(
-  session: SelectionSession,
-  selectionReadTimerRef: MutableRefObject<number | undefined>,
-): void {
+export function scheduleCurrentSelectedElementRead(session: SelectionSession, selectionReadTimerRef: MutableRefObject<number | undefined>): void {
   if (selectionReadTimerRef.current !== undefined) {
     window.clearTimeout(selectionReadTimerRef.current);
   }
@@ -95,10 +75,7 @@ export function scheduleCurrentSelectedElementRead(
   }, 120);
 }
 
-export async function readCurrentSelectedElement(
-  session: SelectionSession,
-  options: SelectionReadOptions = {},
-): Promise<void> {
+export async function readCurrentSelectedElement(session: SelectionSession, options: SelectionReadOptions = {}): Promise<void> {
   try {
     await readSelectedElement(session, await session.webflowApi.getSelectedElement?.(), options);
   } catch {

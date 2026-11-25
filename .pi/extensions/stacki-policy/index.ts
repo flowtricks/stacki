@@ -12,12 +12,7 @@
 // dependency: the few API members used are declared structurally below.
 
 import path from 'node:path';
-import {
-  commandVerdict,
-  pathVerdict,
-  repositoryPath,
-  type Verdict,
-} from '../../../scripts/agent/core.mts';
+import { commandVerdict, pathVerdict, repositoryPath, type Verdict } from '../../../scripts/agent/core.mts';
 import { field } from '../../../scripts/agent/payload.mts';
 import { checkChanged, checkFiles, repositoryRoot } from '../../../scripts/policy/checks.mts';
 import { POLICY_LIMITS } from '../../../scripts/policy/limits.mts';
@@ -86,17 +81,13 @@ export default function stackiPolicy(pi: PiApi): void {
     refusals += 1;
     if (refusals > POLICY_LIMITS.stopContinuationsMax) {
       refusals = 0;
-      context.ui.notify(
-        'stacki: stopped with failing checks; run `npm run check:changed`.',
-        'warning',
-      );
+      context.ui.notify('stacki: stopped with failing checks; run `npm run check:changed`.', 'warning');
       return undefined;
     }
     const existing: unknown = Reflect.get(asObject(event), 'entries');
     const entries: readonly unknown[] = Array.isArray(existing) ? existing : [];
     const heading =
-      `The changes do not pass the repository checks yet (attempt ${refusals} of ` +
-      `${POLICY_LIMITS.stopContinuationsMax}). Fix these, then finish:`;
+      `The changes do not pass the repository checks yet (attempt ${refusals} of ` + `${POLICY_LIMITS.stopContinuationsMax}). Fix these, then finish:`;
     const message = {
       type: 'custom_message',
       customType: 'stacki-policy',

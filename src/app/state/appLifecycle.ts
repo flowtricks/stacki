@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useErrorToasts } from '../../ui/errorNotices';
 import { usePageTitles } from '../../features/pages/usePageTitles';
 import { astroChangeMessages } from '../../../shared/properties/astroFileChanges';
@@ -8,7 +9,8 @@ import { astroChangeMessages } from '../../../shared/properties/astroFileChanges
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToastStack, type ToastNotice } from '../../features/notifications/useToastStack';
 import type { ScanResult } from '../../../shared/properties/projectScan';
-import { createPreviewWatch } from '../../features/preview/previewRecovery';
+import { createCanvasRecovery, isCurrentPageFailure, type CanvasRecovery } from '../../features/preview/canvasRecovery';
+import { onFrameOverlay, publishCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { readPage, scanProject } from '../../ipc/bridge';
 import { assert } from '../../../shared/core/assert';
@@ -18,9 +20,10 @@ import { createEntrySender } from '../../editor/pageSender';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { EditDrafts } from '../../editor/pageEdits';
 import { type RejectionReason } from '../../../shared/engine/intent';
+import { REJECTION_KEYS } from '../rejectionMessages';
 import { cleanError, stripAnsi } from '../../lib/cleanError';
 import { type AppHistory, type ProjectScans, type ToastKind } from '../appTypes';
-import { toEditorPageState, type EditorPageState, type OpenFile } from '../../editor/pageState';
+import { toEditorPageState, type CurrentPage, type EditorPageState, type OpenFile } from '../../editor/pageState';
 import {
   closeProject,
   onFilesChanged,
@@ -30,14 +33,17 @@ import {
   onPreviewFailed,
   onDevLog,
   onPageMaybeChanged,
-  probeProjectPreview,
+  inspectProjectPreview,
   readProjectClasses,
   startProjectPreview,
+  stopProjectPreview,
   editProjectPage,
+  editProjectPageBatch,
 } from '../../ipc/appBridge';
 import { type OpenFileOptions, openFileSelection, parseTrailingSlash } from '../model/nodeFactory';
 import { savedForNavigation } from '../model/appKeys';
 import { keepsAcrossPages } from '../model/pageQueries';
+import { scanBegin, scanRecord } from '../model/scanSequence';
 import {
   useProjectState,
   useCanvasReportState,
@@ -47,6 +53,7 @@ import {
   useWindowState,
   useSessionRefs,
   useTypedCodeRefs,
+  usePseudoPickFollowsSelection,
 } from './appState';
 
 // The app’s state.
@@ -59,6 +66,7 @@ export function useCoreState() {
   const windowState = useWindowState();
   const sessionRefs = useSessionRefs(projectState);
   const typedCodeRefs = useTypedCodeRefs(sessionRefs, projectState, canvasReportState, panelState);
+  usePseudoPickFollowsSelection({ ...projectState, ...canvasReportState });
   return {
     ...projectState,
     ...canvasReportState,
@@ -133,7 +141,19 @@ export function useAssetPick(coreState: ReturnType<typeof useCoreState>) {
           request.onPick(rel, entry);
           endAssetPick(true);
         },
+        ...(request.onPickURL === undefined
+          ? {}
+          : {
+              onPickURL: (url: string) => {
+                request.onPickURL?.(url);
+                endAssetPick(true);
+              },
+            }),
       });
+      // An overlay pick leaves the panels as they are: the pop-up answers it.
+      if (request.presentation === 'overlay') {
+        return;
+      }
       setLeftTab((tab) => {
         if (tab !== 'assets') {
           tabBeforePick.current = tab;
@@ -155,10 +175,7 @@ export function useToasts() {
     },
     [push],
   );
-  const reportFailure = useCallback(
-    (error: unknown) => showToast(cleanError(error), 'error'),
-    [showToast],
-  );
+  const reportFailure = useCallback((error: unknown) => showToast(cleanError(error), 'error'), [showToast]);
   useEffect(
     () =>
       onFilesChanged(({ astroChanges }) => {
@@ -172,10 +189,7 @@ export function useToasts() {
 }
 
 // Progress, dev server output, and recovering the preview after an error.
-export function useDevEvents(
-  coreState: ReturnType<typeof useCoreState>,
-  assetPickScope: ReturnType<typeof useAssetPick>,
-) {
+export function useDevEvents(coreState: ReturnType<typeof useCoreState>, assetPickScope: ReturnType<typeof useAssetPick>) {
   const { devLogRef, setBusy, setDevLog, setDevStatus, setDevUrl } = coreState;
   const { diagnose } = assetPickScope;
   const recovery = usePreviewRecovery(coreState);
@@ -204,55 +218,81 @@ export function useDevEvents(
   return recovery;
 }
 
-// Recovering the preview after a compile error. The frame load seeds a check,
-// so startup and navigation errors recover even when no file watcher fires.
+// Getting the canvas back from an error page by itself (src/features/preview/canvasRecovery.ts, docs/canvas-recovery.md).
+// Everything that could have fixed the page is a trigger: the app's own writes (apply, undo, redo), a change made
+// outside the app, a dev server that came back, the window coming back to the front, and a bounded poll.
 function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
   const { devUrl, livePathRef, setRefreshKey } = coreState;
-  const previewWatchRef = useRef<ReturnType<typeof createPreviewWatch> | undefined>(undefined);
+  const recoveryRef = useRef<CanvasRecovery | undefined>(undefined);
   const previewLoadPendingRef = useRef(false);
+  const shownPathRef = useRef<string | undefined>(undefined);
   const previewLoaded = useCallback((): void => {
-    const watch = previewWatchRef.current;
-    if (watch === undefined) {
+    const recovery = recoveryRef.current;
+    if (recovery === undefined) {
       previewLoadPendingRef.current = true;
       return;
     }
-    watch.poke();
-  }, []);
-  // See src/features/preview/previewRecovery.ts for what this is for and why it asks the server
-  // rather than reading the error screen or the log.
+    // A load of another page is a new page: nothing is known about it yet.
+    const path = livePathRef.current || '/';
+    if (shownPathRef.current !== undefined && shownPathRef.current !== path) {
+      recovery.pageChanged();
+    }
+    shownPathRef.current = path;
+    recovery.loaded();
+  }, [livePathRef]);
   // The route is read through `livePathRef` rather than named as a dependency:
   // it is assigned far below this hook, so a dep array mentioning it reads it
   // before its declaration and the whole app throws (see test/renderer/app/appRenders.test.js,
   // which is here because that has happened before). The ref is current by the
-  // time a probe actually runs, and the watch has no reason to be rebuilt just
+  // time a check actually runs, and the controller has no reason to be rebuilt just
   // because the route changed.
   useEffect(() => {
     if (!devUrl) {
       return undefined;
     }
-    // Both of these arrive with the main process, which does not reload when the
+    // These arrive with the main process, which does not reload when the
     // renderer does (see VITE_DEV_SERVER_URL): a renderer newer than the bridge
     // would call undefined and take the app down with it. Absent means there is
     // nothing to ask, which is the same answer as having no dev server.
-    if (
-      typeof window.avb.probeDevPage !== 'function' ||
-      typeof window.avb.onPageMaybeChanged !== 'function'
-    ) {
+    if (typeof window.avb.inspectDevPage !== 'function' || typeof window.avb.onPageMaybeChanged !== 'function') {
       return undefined;
     }
-    const watch = createPreviewWatch({
-      probe: () => probeProjectPreview(devUrl + (livePathRef.current || '/')),
-      onRecover: () => setRefreshKey((count) => count + 1),
+    const pageUrl = (): string => new URL(livePathRef.current || '/', devUrl).href;
+    const recovery = createCanvasRecovery({
+      pageUrl,
+      inspect: inspectProjectPreview,
+      reload: () => setRefreshKey((count) => count + 1),
+      visible: () => document.visibilityState === 'visible',
+      onEvent: publishCanvasRecovery,
     });
-    previewWatchRef.current = watch;
+    recoveryRef.current = recovery;
+    // A dev server that has just started (or restarted) may be serving an error the canvas was never told of.
+    recovery.trigger('restart');
     if (previewLoadPendingRef.current) {
       previewLoadPendingRef.current = false;
-      watch.poke();
+      recovery.loaded();
     }
-    const offFailure = subscribePreviewFailure(devUrl, livePathRef, watch);
+    const offFailure = subscribePreviewFailure(recovery, pageUrl);
+    // The dev server's error overlay over a page that loaded: an error the page's answer does not show.
+    const offOverlay = onFrameOverlay((report) => {
+      switch (report.kind) {
+        case 'shown': {
+          recovery.overlayShown(pageUrl(), report.message);
+          return;
+        }
+        case 'cleared': {
+          recovery.overlayCleared();
+          return;
+        }
+        default: {
+          const unreachable: never = report;
+          return unreachable;
+        }
+      }
+    });
     // Every write the app makes, plus every change made outside it.
     const offWrite = onPageMaybeChanged((event) => {
-      watch.poke();
+      recovery.trigger(event.external ? 'external' : 'write');
       // A change from outside the app — an editor, a script, a checkout. The
       // canvas normally hears about it over the dev server's HMR socket, and
       // when that socket has gone quiet (a dev server restarted under a canvas
@@ -263,31 +303,33 @@ function usePreviewRecovery(coreState: ReturnType<typeof useCoreState>) {
         tellCanvas({ type: 'avb:patch-now' });
       }
     });
+    const onVisible = (): void => recovery.visibilityChanged();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
       offWrite();
       offFailure();
-      watch.stop();
-      if (previewWatchRef.current === watch) {
-        previewWatchRef.current = undefined;
+      offOverlay();
+      recovery.stop();
+      if (recoveryRef.current === recovery) {
+        recoveryRef.current = undefined;
       }
     };
   }, [devUrl, livePathRef, setRefreshKey]);
   return { previewLoaded };
 }
 
-// Only the currently displayed page may trigger recovery; a late failure from
+// Only the currently displayed page may start recovery; a late failure from
 // a previous page or another iframe must not interrupt the user's navigation.
-function subscribePreviewFailure(
-  origin: string,
-  path: { readonly current: string | undefined },
-  watch: ReturnType<typeof createPreviewWatch>,
-): () => void {
+function subscribePreviewFailure(recovery: CanvasRecovery, pageUrl: () => string): () => void {
   if (typeof window.avb.onPreviewFailed !== 'function') {
     return () => {};
   }
   return onPreviewFailed((failedURL) => {
-    if (failedURL === new URL(path.current || '/', origin).href) {
-      watch.failed();
+    if (isCurrentPageFailure(failedURL, pageUrl())) {
+      recovery.failed(failedURL);
     }
   });
 }
@@ -316,7 +358,9 @@ export function useScans(coreState: ReturnType<typeof useCoreState>) {
           // The bridge parses the payload against the scan contract before any of
           // this code sees it.
           scans: createCoalescedRun(async () => {
+            const sequence = scanBegin();
             const result = await scanProject(projectPath);
+            scanRecord(result.components, sequence);
             if (projectScansRef.current === opened && !opened.scans.superseded()) {
               setScan(result);
               if (result.trailingSlash) {
@@ -354,10 +398,12 @@ export function usePreviewStart(
   const { setTrailingSlash } = coreState;
   const { showToast } = toasts;
   const { diagnose } = assetPickScope;
+  const translate = useTranslate();
 
   const startPreview = useCallback(
     async (projectPath: string) => {
       setDevStatus('starting');
+      setDevUrl(undefined);
       try {
         const started = await startProjectPreview(projectPath);
         const { url, trailingSlash: resolved } = started;
@@ -368,44 +414,56 @@ export function usePreviewStart(
         setDevStatus('on');
         setDevDiag(undefined);
         if ('external' in started && started.external) {
-          showToast(
-            `Reusing the dev server already running for this project (${url}) — ` +
-              "canvas outlines need the app's own server, so stop that one to enable them.",
-            'info',
-          );
+          showToast(translate('shell.preview.reusing', { url }), 'info');
         }
       } catch (error: unknown) {
         setDevStatus('off');
+        setDevUrl(undefined);
         setBusy(undefined);
         const message = cleanError(error);
-        showToast(`Preview failed to start: ${message}`, 'error');
+        showToast(translate('shell.preview.failedToStart', { message }), 'error');
         devLogRef.current = message;
         setDevLog(message);
         diagnose();
       }
     },
-    [
-      showToast,
-      diagnose,
-      devLogRef,
-      setBusy,
-      setDevDiag,
-      setDevLog,
-      setDevStatus,
-      setDevUrl,
-      setTrailingSlash,
-    ],
+    [showToast, diagnose, devLogRef, setBusy, setDevDiag, setDevLog, setDevStatus, setDevUrl, setTrailingSlash, translate],
   );
   return { startPreview };
 }
 
+// A checkout temporarily removes drafts and may replace the Astro configuration.
+// Keep the iframe and dev watcher out of that intermediate filesystem state.
+export function useBranchPreview(coreState: ReturnType<typeof useCoreState>, startPreview: (projectPath: string) => Promise<void>) {
+  const { projectRef, setDevStatus, setDevUrl } = coreState;
+  return useCallback(
+    async <Value>(work: () => Promise<Value>): Promise<Value> => {
+      const project = projectRef.current;
+      assert(project !== undefined, 'Switching branches requires an open project');
+      setDevUrl(undefined);
+      setDevStatus('starting');
+      try {
+        await stopProjectPreview();
+        return await work();
+      } finally {
+        // A failed checkout still needs the original branch's preview back.
+        if (projectRef.current?.path === project.path) {
+          await startPreview(project.path);
+        }
+      }
+    },
+    [projectRef, setDevStatus, setDevUrl, startPreview],
+  );
+}
+
 // The page and file savers, and the page’s unsent edit requests.
-export function useSavers(
-  toasts: ReturnType<typeof useToasts>,
-  coreState: ReturnType<typeof useCoreState>,
-) {
+export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: ReturnType<typeof useCoreState>) {
   const { showToast } = toasts;
   const { pageStateRef, setPageState } = coreState;
+  // The file saver is built once, so it reads the language through a ref rather than closing over the first render's.
+  const translate = useTranslate();
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
 
   // ----------------------------------------------------------------
   // Page loading & saving
@@ -414,7 +472,7 @@ export function useSavers(
   const fileSaverRef = useRef<ReturnType<typeof createFileSaver> | undefined>(undefined);
   if (!fileSaverRef.current) {
     fileSaverRef.current = createFileSaver({
-      onError: (error) => showToast(`Save failed: ${cleanError(error)}`, 'error'),
+      onError: (error) => showToast(translateRef.current('shell.save.failed', { message: cleanError(error) }), 'error'),
     });
   }
   // The open page's unsent edit requests (step 6, pageEdits.ts).
@@ -428,10 +486,7 @@ export function useSavers(
     // A change to the open page's state from the saver: seen at once through
     // the ref (the next entry is stated against the origin it installs), and
     // applied to whatever React holds by then.
-    const updatePage = (
-      path: string,
-      change: (current: EditorPageState) => EditorPageState,
-    ): void => {
+    const updatePage = (path: string, change: (current: EditorPageState) => EditorPageState): void => {
       const now = pageStateRef.current;
       if (now.currentPage?.path !== path || !now.pageState) {
         return; // Another page opened meanwhile: this one's outcome is not shown.
@@ -448,11 +503,16 @@ export function useSavers(
         state: () => pageStateRef.current.pageState,
         update: updatePage,
         conflict: (reason) => setConflictReason(reason),
-        notice: (message) => showToast(message, 'error'),
+        notice: (reason) => showToast(translateRef.current('shell.rejection.couldntApply', { reason: translateRef.current(REJECTION_KEYS[reason]) }), 'error'),
         onAppliedUrgentEdit: () => {
           tellCanvas({ type: 'avb:patch-now' });
         },
+        onRefusedGesture: () => {
+          tellCanvas({ type: 'avb:move-revert' });
+          tellCanvas({ type: 'avb:insert-revert' });
+        },
         edit: editProjectPage,
+        editBatch: editProjectPageBatch,
         read: readPage,
       }),
     });
@@ -471,35 +531,27 @@ export function useSavers(
 }
 
 // Saving before moving on, the page history’s owner, and leaving the project.
-export function useFlushing(
-  savers: ReturnType<typeof useSavers>,
-  coreState: ReturnType<typeof useCoreState>,
-  toasts: ReturnType<typeof useToasts>,
-) {
+export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: ReturnType<typeof useCoreState>, toasts: ReturnType<typeof useToasts>) {
   const { fileSaver, pageSaver } = savers;
   const { pageStateRef, saveTimer } = coreState;
   const { showToast } = toasts;
+  const translate = useTranslate();
 
   // Autosave: a conflicted page simply stays unsaved (plan §7).
-  const autosave = useCallback(
-    () => Promise.all([pageSaver.flush(), fileSaver.flush()]),
-    [fileSaver, pageSaver],
-  );
+  const autosave = useCallback(() => Promise.all([pageSaver.flush(), fileSaver.flush()]), [fileSaver, pageSaver]);
   // Everything else that flushes needs the edits on disk before it goes on:
   // navigating away, committing, reading lines back off the file. A conflicted
   // page's edits are not there, so the caller must stop rather than discard or
   // ignore them — they are only ever given up by "Reload from disk".
   const flushSave = useCallback(async () => {
-    clearTimeout(saveTimer.current);
+    clearTimeout(saveTimer.current?.handle);
+    saveTimer.current = undefined; // Flushed now: nothing is pending for a live request to keep.
     const [page] = await autosave();
     if (page === 'conflicted') {
-      const name = pageStateRef.current.currentPage?.name ?? 'This page';
-      throw new Error(
-        `${name} has unsaved edits that conflict with a change on disk. ` +
-          'Reload it or review it in code first.',
-      );
+      const name = pageStateRef.current.currentPage?.name;
+      throw new Error(name === undefined ? translate('shell.flush.conflictPage') : translate('shell.flush.conflictNamed', { name }));
     }
-  }, [autosave, pageStateRef, saveTimer]);
+  }, [autosave, pageStateRef, saveTimer, translate]);
 
   // Only the most recent navigation is allowed to install its read result.
   // The latest navigation, as an identity token: a read that finds another
@@ -532,12 +584,12 @@ export function useFlushing(
       try {
         await flushSave();
       } catch (error: unknown) {
-        showToast(`Couldn’t close the project: ${cleanError(error)}`, 'error');
+        showToast(translate('shell.project.closeFailed', { message: cleanError(error) }), 'error');
         return;
       }
       await closeProject(next);
     },
-    [flushSave, showToast],
+    [flushSave, showToast, translate],
   );
   return { autosave, dropPageHistory, flushSave, historyRef, leaveProject, pageLoadRef };
 }
@@ -547,11 +599,17 @@ export function useOpenFile(
   flushing: ReturnType<typeof useFlushing>,
   toasts: ReturnType<typeof useToasts>,
   coreState: ReturnType<typeof useCoreState>,
+  scans: ReturnType<typeof useScans>,
 ) {
   const { dropPageHistory, flushSave, pageLoadRef } = flushing;
   const { showToast } = toasts;
-  const { pageStateRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
+  const translate = useTranslate();
+  const { pageStateRef, projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
+  const { rescan } = scans;
+  // The text of the file as it was opened, so leaving it can tell whether the
+  // app changed it (componentEditedSince).
+  const openedSourceRef = useRef<OpenedSource | undefined>(undefined);
 
   // Opens any .astro file for editing — a page, or a component drilled into.
   // `currentPage` is simply whatever is being edited, so saving, undo, the
@@ -561,7 +619,7 @@ export function useOpenFile(
       const request = {};
       pageLoadRef.current = request;
       const latestRequest = () => request === pageLoadRef.current;
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
       }
       const beforeRead = pageStateRef.current;
@@ -571,7 +629,7 @@ export function useOpenFile(
         result = toEditorPageState(read);
       } catch (error: unknown) {
         if (request === pageLoadRef.current) {
-          showToast(`Couldn’t open ${entry.name}: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.project.openFailed', { name: entry.name, message: cleanError(error) }), 'error');
         }
         return;
       }
@@ -580,17 +638,31 @@ export function useOpenFile(
       }
       // The existing editor stays mounted while reading. Save anything typed
       // in that interval before handing the editor to the destination file.
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
+      }
+      // The scan is what every instance of a component reads its props and
+      // slots from, and the app's own saves never reach it: the watcher drops
+      // a write it hears coming back (projectWatcher.ts). A component file
+      // edited while open — a <slot> typed in code — would leave the page's
+      // instances offering the old settings until some unrelated event
+      // rescanned. Leaving the file is when those instances come back into
+      // view, so the scan is brought up to date, after the last save, first —
+      // only when the app changed the file while it was open. A change from
+      // outside the app (an editor, an AI) reaches the scan through the
+      // watcher, so leaving an untouched component costs nothing.
+      if (leavesComponentFile(beforeRead.currentPage, entry) && componentEditedSince(openedSourceRef.current, beforeRead)) {
+        const project = projectRef.current;
+        assert(project !== undefined, 'A component is open only inside a project');
+        await rescanBeforeOpen(project.path, rescan);
+        if (!latestRequest()) {
+          return;
+        }
       }
       const latest = pageStateRef.current;
       // Reopening the same file must not replace an edit made during the read
       // with the older snapshot that read returned.
-      if (
-        latest.currentPage?.path === entry.path &&
-        latest.pageState &&
-        latest.pageState !== beforeRead.pageState
-      ) {
+      if (latest.currentPage?.path === entry.path && latest.pageState && latest.pageState !== beforeRead.pageState) {
         result = latest.pageState;
       }
       const nextState = result;
@@ -600,6 +672,7 @@ export function useOpenFile(
       setEditStack(options.nextStack);
       setCurrentPage(entry);
       setPageState(nextState);
+      openedSourceRef.current = { path: entry.path, source: nextState.source };
       setHoverNodeId(undefined);
       const start = openFileSelection(entry, result, options.selectionPath);
       setSelectedId(start?.id ?? undefined);
@@ -611,12 +684,73 @@ export function useOpenFile(
       dropPageHistory,
       pageLoadRef,
       pageStateRef,
+      projectRef,
+      rescan,
       setCurrentPage,
       setEditStack,
       setHoverNodeId,
       setPageState,
       setSelectedId,
+      translate,
     ],
   );
   return { openFile };
+}
+
+// Whether a navigation leaves a component (or layout) file for another file:
+// the one case whose own saves can change what the scan says about it.
+export function leavesComponentFile(from: CurrentPage | undefined, to: OpenFile): boolean {
+  assert(to.path.length > 0, 'A navigation names the file it opens');
+  if (from === undefined) {
+    return false;
+  }
+  switch (from.kind) {
+    case 'component':
+      assert(from.path.length > 0, 'An open component has a path');
+      return from.path !== to.path;
+    case 'page':
+    case 'route':
+      return false;
+    default: {
+      const exhaustive: never = from;
+      return exhaustive;
+    }
+  }
+}
+
+/** A file's text as it was opened for editing. */
+export interface OpenedSource {
+  readonly path: string;
+  readonly source: string;
+}
+
+// Whether the open file's text differs from the text it was opened with: the
+// app saved a change to it (typed code or a gesture), which the watcher does
+// not report. Unknown (nothing recorded for this file) counts as changed, so
+// a missed record costs a scan rather than stale settings.
+export function componentEditedSince(
+  opened: OpenedSource | undefined,
+  now: { readonly currentPage: CurrentPage | undefined; readonly pageState: EditorPageState | undefined },
+): boolean {
+  const path = now.currentPage?.path;
+  if (path === undefined || now.pageState === undefined) {
+    return false;
+  }
+  if (opened === undefined || opened.path !== path) {
+    return true;
+  }
+  assert(opened.path.length > 0, 'An opened file has a path');
+  return opened.source !== now.pageState.source;
+}
+
+// A failed scan must not trap the user inside the component: the file is
+// saved, and the next scan (any watcher event, the window regaining focus)
+// brings the settings up to date. The navigation goes on without it.
+async function rescanBeforeOpen(projectPath: string, rescan: (projectPath: string) => Promise<ScanResult>): Promise<void> {
+  assert(projectPath.length > 0, 'A rescan names its project');
+  try {
+    await rescan(projectPath);
+  } catch (error: unknown) {
+    console.warn(`Scan after leaving a component failed: ${String(error)}`);
+  }
 }

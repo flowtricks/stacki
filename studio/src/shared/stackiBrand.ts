@@ -14,3 +14,8 @@ export const stackiMarkPath =
 export const stackiFavicon = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 458 458"><style>path{fill:#191919}@media(prefers-color-scheme:dark){path{fill:#fff}}</style><path d="${stackiMarkPath}"/></svg>`,
 )}`;
+
+// Keep the publishing badge at the lower left so the Stacki mark stays recognizable.
+export const stackiPublishingFavicon = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 458 458"><style>path{fill:#191919}@media(prefers-color-scheme:dark){path{fill:#fff}}</style><path d="${stackiMarkPath}"/><circle cx="72" cy="386" r="62" fill="#22c55e" stroke="#191919" stroke-width="20"/></svg>`,
+)}`;

@@ -1,9 +1,8 @@
-import {
-  isCanvasPage,
-  isDefaultsCanvas,
-} from '../../../vendor/stacki/shared/properties/defaultsCanvas';
+import { studioTranslate } from '../../shared/studioTranslate';
+import { isCanvasPage, isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { SharedDocument } from '../collaboration/useDocument';
-import { getEditorRole } from '../roles/roleStore';
+import { getStudioRole } from '../roles/roleStore';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { flatten, type parsePage } from '../source/source';
 import { resolveImport } from '../source/imports';
 import type { Project } from './projectClient';
@@ -11,19 +10,13 @@ import type { ComponentFocus, OpenFile } from './editorNavigation';
 import { pathFor } from './previewSelection';
 
 type Parsed = ReturnType<typeof parsePage> | undefined;
-export function componentAt(
-  project: Project,
-  file: string,
-  parsed: Parsed,
-  id: string,
-  name?: string,
-) {
+export function componentAt(project: Project, file: string, parsed: Parsed, id: string, name?: string) {
   if (!parsed?.editable) {
     return undefined;
   }
   const node = flatten(parsed.model.nodes).find((node) => node.id === id);
   const spec = parsed.model.imports.find((item) => item.name === (node?.name ?? name))?.path;
-  return project.components.find((item) => item.file === resolveImport(file, spec));
+  return project.components.find((item) => item.file === resolveImport(file, spec, project.components));
 }
 interface Context {
   readonly project: Project;
@@ -39,11 +32,15 @@ export function componentEntry(context: Context) {
     if (isDefaultsCanvas(context.file)) {
       return;
     }
-    if (getEditorRole() === 'client') {
+    if (!can(getStudioRole(), 'component:edit')) {
       return;
     }
     const component = componentAt(context.project, context.file, context.parsed, id, name);
     if (!component || !context.document?.ready) {
+      return;
+    }
+    if (component.origin?.kind === 'package') {
+      context.report(new Error(studioTranslate('studio.component.packageReadOnly')));
       return;
     }
     const focus =

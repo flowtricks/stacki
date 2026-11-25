@@ -10,10 +10,7 @@ import {
 // One pending snapshot bounds IPC traffic and memory independently of npm output volume.
 const PROGRESS_INTERVAL_MS = 150;
 
-export function createStudioProgress(
-  identity: Pick<StudioInstallProgress, 'projectPath' | 'requestId'>,
-  send: (progress: StudioInstallProgress) => void,
-) {
+export function createStudioProgress(identity: Pick<StudioInstallProgress, 'projectPath' | 'requestId'>, send: (progress: StudioInstallProgress) => void) {
   let stage: StudioInstallStage = 'release';
   let output = '';
   let timer: ReturnType<typeof setTimeout> | undefined;

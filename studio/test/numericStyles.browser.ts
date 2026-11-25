@@ -4,8 +4,7 @@ import { record, string } from '../src/shared/validation';
 import { flatten, nodesOf } from '../src/features/source/source';
 import { setAttributes } from '../src/features/settings/settingsEdits';
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const auth = process.env['STUDIO_STORAGE_STATE'];
@@ -36,11 +35,7 @@ await page.routeWebSocket('**/*', (socket) => {
   });
 });
 await page.route('**/*', async (route) => {
-  if (
-    hold &&
-    route.request().resourceType() === 'fetch' &&
-    new URL(route.request().url()).pathname === '/'
-  ) {
+  if (hold && route.request().resourceType() === 'fetch' && new URL(route.request().url()).pathname === '/') {
     await gate;
   }
   await route.continue();
@@ -49,18 +44,13 @@ try {
   await page.goto(url);
   await page.locator('.save-state').filter({ hasText: 'Saved' }).waitFor();
   original = await readSource();
-  const id = flatten(nodesOf(original)).find(
-    (node) =>
-      node.name === 'Heading' && node.children?.some((child) => child.value === headingText),
-  )?.id;
+  const id = flatten(nodesOf(original)).find((node) => node.name === 'Heading' && node.children?.some((child) => child.value === headingText))?.id;
   assert.ok(id);
   expected.add(original);
   for (const value of [20, 21, 22]) {
     expected.add(setAttributes(original, id, { maxWidth: { type: 'expr', value: String(value) } }));
   }
-  const heading = page
-    .frameLocator('iframe[title="Site preview"]')
-    .getByRole('heading', { name: headingText, exact: true });
+  const heading = page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: headingText, exact: true });
   await heading.click();
   await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
   const input = page
@@ -89,9 +79,7 @@ try {
   await waitStyle('22ch');
   await input.press('ArrowDown');
   await waitStyle('21ch');
-  console.log(
-    `Numeric arrow preview: ${elapsed}ms while server renders/fetches are held; stale HTML cannot undo the latest width.`,
-  );
+  console.log(`Numeric arrow preview: ${elapsed}ms while server renders/fetches are held; stale HTML cannot undo the latest width.`);
 } finally {
   hold = false;
   release();
@@ -112,15 +100,9 @@ async function readSource() {
   return string(record(await (await page.request.get(endpoint)).json())['source']);
 }
 async function waitStyle(value: string) {
-  const heading = page
-    .frameLocator('iframe[title="Site preview"]')
-    .getByRole('heading', { name: headingText, exact: true });
+  const heading = page.frameLocator('iframe[title="Site preview"]').getByRole('heading', { name: headingText, exact: true });
   const deadline = Date.now() + 2000;
-  while (
-    (await heading.evaluate((element) =>
-      element instanceof HTMLElement ? element.style.getPropertyValue('--_mw').trim() : '',
-    )) !== value
-  ) {
+  while ((await heading.evaluate((element) => (element instanceof HTMLElement ? element.style.getPropertyValue('--_mw').trim() : ''))) !== value) {
     assert.ok(Date.now() < deadline, `Expected width ${value}`);
     await page.waitForTimeout(10);
   }

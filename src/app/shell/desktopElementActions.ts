@@ -1,5 +1,6 @@
 import type { ShellView } from '../App';
 import type { ElementActionProps } from '../../features/structure/ElementContextMenu';
+import { structuralSelection } from '../model/selectionStructure';
 
 export function desktopElementActions(app: ShellView): Omit<ElementActionProps, 'nodes'> {
   return {
@@ -15,6 +16,9 @@ export function desktopElementActions(app: ShellView): Omit<ElementActionProps, 
         }
       : {}),
     onWrapNode: app.wrapNode,
+    // Markdown writes no tag around its words, so its text has nothing to convert to.
+    ...(app.openEditableFile?.path.endsWith('.astro') ? { onConvertText: app.convertText } : {}),
+    canChangeStructure: (id) => structuralSelection(app.selectedId, app.pseudoPick) === id,
     onRemoveNode: app.removeNode,
     onCopyNode: app.copyNode,
     onCutNode: (id) => {

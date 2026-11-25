@@ -1,0 +1,490 @@
+/* CMS connections, in Settings (Desktop) and the Studio menu. Matches the
+   Settings cards: 13px headings, #aaa body text, white primary actions. */
+/* Settings gives CMS connections a tab of its own, and Studio a dialog of its
+   own, so the section needs no rule or spacing to set it off from a neighbour. */
+.cms-connections {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cms-connections p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.6;
+}
+/* No connection yet: a soft fill that says so, above the ways to connect. */
+.cms-connections .cms-connections-empty {
+  padding: 24px 16px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  text-align: center;
+}
+.cms-connections .cms-connections-alert {
+  color: #ff9b92;
+}
+.cms-connection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.cms-connection-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding-block: 8px;
+  padding-inline: 12px 8px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  font-size: 12px;
+}
+.cms-connection-label {
+  font-weight: 600;
+}
+.cms-connection-detail {
+  flex: 1;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cms-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-connect-control {
+  position: relative;
+  display: inline-block;
+}
+/* The Publish split button's shape (publishing.css), in the plain button colours. */
+.cms-connect-split {
+  display: flex;
+}
+.cms-connect-split > button:first-child {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+.cms-connect-split > .cms-connect-arrow {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start: 1px solid #1b1b1b;
+  width: 24px;
+  min-width: 24px;
+  padding-inline: 0;
+}
+.cms-connect-arrow > svg {
+  /* Lower the top-heavy triangle so its visual weight sits at the button's center. */
+  transform: translateY(0.5px);
+}
+.cms-connect-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-start: 0;
+  z-index: 100;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  min-width: 220px;
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  background: var(--panel, #242424);
+  box-shadow: 0 8px 24px #0004;
+}
+.cms-connect-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: start;
+}
+.cms-sanity-sign-in .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A saved Payload connection: the row wraps so its status sits under the name, in fills like the rest. */
+.cms-connection-row {
+  flex-wrap: wrap;
+}
+.cms-payload-status {
+  flex-basis: 100%;
+  display: grid;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.cms-payload-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-payload-spacer {
+  flex: 1;
+}
+.cms-payload-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-panel, #2b2b2b);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.cms-payload-chip.is-ok {
+  background: #1f3a2a;
+  color: #8fe0a8;
+}
+.cms-payload-chip.is-failed {
+  background: #4a2420;
+  color: #ff9b92;
+}
+.cms-payload-time {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.cms-payload-snippet {
+  display: grid;
+  gap: 8px;
+}
+.cms-form-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-detected {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* EmDash: a card per project, in the Settings rows' soft fill; content types list their fields as plain rows. */
+/* The connected mark on an EmDash button: a dot over the icon's corner, out of flow so the button never changes size. */
+.cms-connect-icon {
+  position: relative;
+  display: inline-flex;
+}
+.cms-connect-status {
+  position: absolute;
+  top: -3px;
+  inset-inline-end: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+/* What a project that has EmDash shows: one quiet status line, the content types as compact cards, the rest behind Details. */
+.emdash-dialog-body .emdash-status-line {
+  color: var(--text-faint);
+}
+.emdash-problems {
+  display: grid;
+  gap: var(--emdash-gap-small);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #e6c76a;
+}
+.emdash-problems > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--emdash-gap-small);
+}
+.emdash-problems > li > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.emdash-collections {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--emdash-gap-small);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-collection {
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.emdash-collection > summary {
+  display: grid;
+  gap: 2px;
+  padding: var(--emdash-gap-small) var(--emdash-gap);
+  cursor: pointer;
+  font-weight: 600;
+}
+.emdash-collection > summary > span {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.emdash-fields {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 var(--emdash-gap) var(--emdash-gap-small);
+  list-style: none;
+}
+.emdash-field {
+  display: flex;
+  gap: var(--emdash-gap-small);
+  align-items: baseline;
+}
+.emdash-field code {
+  color: var(--text-dim);
+}
+.emdash-field .emdash-field-kind {
+  margin-inline-start: auto;
+  color: var(--text-faint);
+}
+.emdash-guide {
+  display: grid;
+  gap: var(--emdash-gap-small);
+}
+.emdash-guide pre {
+  margin: 0;
+}
+
+/* The EmDash dialog (EmDashDialog.tsx): the shared modal, filled instead of lined.
+   One grid for every state: the header, the heading, the status row, the cards and the buttons all start at the same left
+   edge and end at the same right edge (--emdash-pad), and spacing comes from three steps (16, 12, 8). Nothing scrolls
+   sideways: every flex and grid child may shrink (min-width 0), code wraps, file names are cut with an ellipsis, and only
+   the body scrolls, vertically, inside the dialog's own height. */
+.modal.emdash-dialog {
+  --emdash-pad: 16px;
+  --emdash-gap: 12px;
+  --emdash-gap-small: 8px;
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100dvh - 64px);
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  overflow: hidden;
+}
+.emdash-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: var(--emdash-gap-small);
+  padding: var(--emdash-pad) var(--emdash-pad) 0;
+}
+.emdash-dialog-header h4 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+}
+.emdash-dialog-header .emdash-dialog-close {
+  /* The icon, not its padding, meets the content's right edge. */
+  margin-inline-end: -6px;
+}
+.modal-body.emdash-dialog-body {
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  gap: var(--emdash-gap);
+  /* The stable gutter holds the scrollbar's 8px, so the right padding gives that much back: the content keeps the edges
+     the header and the cards were laid out on, with or without a bar. */
+  padding-block: var(--emdash-gap) var(--emdash-pad);
+  padding-inline: var(--emdash-pad) calc(var(--emdash-pad) - 8px);
+  font-size: 12px;
+}
+.emdash-dialog-body * {
+  min-width: 0;
+}
+.emdash-dialog-body p {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.emdash-dialog-body p > strong,
+.emdash-install-heading {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.emdash-install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--emdash-gap);
+}
+.emdash-install-heading {
+  margin: 0;
+  line-height: 1.4;
+}
+.emdash-dialog-body .emdash-install-summary {
+  color: var(--text-faint);
+}
+/* A disclosure is a plain row at the content edge; what opens under it is flush with it, and cards carry their own fill. */
+.emdash-more > summary {
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.emdash-more[open] > summary {
+  margin-bottom: var(--emdash-gap-small);
+}
+.emdash-more-body {
+  display: grid;
+  gap: var(--emdash-gap-small);
+}
+.emdash-more-body h6 {
+  margin: var(--emdash-gap-small) 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.emdash-more-body h6:first-child {
+  margin-top: 0;
+}
+/* Code in a card of its own: the same inner padding on every side, the copy button in a reserved corner. */
+/* Commands and code read left to right in every language. */
+.emdash-code {
+  direction: ltr;
+  position: relative;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.emdash-code pre {
+  margin: 0;
+  padding-block: var(--emdash-gap-small);
+  padding-inline: var(--emdash-gap) 36px;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  text-align: start;
+}
+/* Words: break at spaces, never inside a highlighted token (react-dom, --no-audit stay whole). */
+.emdash-code[data-wrap='words'] pre {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.emdash-code[data-wrap='words'] pre code span {
+  white-space: nowrap;
+}
+/* Anywhere: output with no spaces at all still wraps, so nothing scrolls sideways. */
+.emdash-code[data-wrap='anywhere'] pre {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.emdash-code .emdash-code-copy {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+}
+.emdash-install-files,
+.emdash-install-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-install-files > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--emdash-gap-small);
+  align-items: center;
+}
+.emdash-install-files code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--text-dim);
+}
+.emdash-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-active, rgba(255, 255, 255, 0.1));
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.emdash-pill[data-change='create'] {
+  color: var(--green);
+}
+/* The status row: ring and text on the left, Cancel on the right, all on one centre line. */
+.emdash-install-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--emdash-gap-small);
+}
+.emdash-install-status > span:not(.progress-ring) {
+  flex: 1;
+  text-align: start;
+  color: var(--text-dim);
+}
+.emdash-install-status > button {
+  flex: none;
+}
+.emdash-install-log {
+  border-radius: 6px;
+}
+/* The log scrolls inside its own card, so the card keeps the content's edges whether or not a scrollbar shows. */
+.emdash-install-log pre {
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.emdash-install-log .emdash-code-copy {
+  inset-inline-end: 12px;
+}
+.emdash-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--emdash-gap-small);
+}
+.emdash-checklist {
+  display: grid;
+  gap: var(--emdash-gap-small);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-checklist > li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--emdash-gap-small);
+  align-items: start;
+  color: var(--text-dim);
+}
+.emdash-checklist > li[data-done='true'] {
+  color: var(--text);
+}
+.emdash-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-active, rgba(255, 255, 255, 0.1));
+}
+.emdash-checklist > li[data-done='true'] .emdash-check-mark {
+  background: var(--green);
+  color: #0b0b0b;
+}
+.emdash-checklist summary {
+  cursor: pointer;
+}
+.emdash-checklist details[open] > summary {
+  margin-bottom: var(--emdash-gap-small);
+}
+/* The success checklist is a tight block in small type. */
+.emdash-checklist[data-size='small'] {
+  gap: 6px;
+  font-size: 11px;
+}
+.emdash-checklist[data-size='small'] .emdash-check-mark {
+  width: 14px;
+  height: 14px;
+}
+.emdash-checklist[data-size='small'] > li {
+  grid-template-columns: 14px minmax(0, 1fr);
+}

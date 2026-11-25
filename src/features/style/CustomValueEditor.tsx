@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { popupBox } from '../../ui/Dropdown';
+import { usePopupScrollLock } from '../../ui/popupScrollLock';
 
 // The whole value, in a box big enough to read it.
 //
@@ -15,18 +17,23 @@ import { popupBox } from '../../ui/Dropdown';
 // for it. Both open it the same two ways: pressing a field whose value does not
 // fit, and `=` in any field at all.
 
+/** Asks an open variable picker to put back what it is previewing (VariablePicker.tsx listens). */
+export const PICKER_RESTORE_EVENT = 'stacki:picker-restore';
+
 const LONG_VALUE = 34;
 const isLong = (value: string) => String(value).length > LONG_VALUE || String(value).includes('\n');
 
 /** Is the value wider than the field showing it? */
 function doesNotFit(container: Element, value: string) {
+  // Nothing typed, nothing to fit: what overflows then is the placeholder, which
+  // the field's scrollWidth counts the same as a value.
+  if (value === '') {
+    return false;
+  }
   // The token editor first, and only then the plain input: with a code field
   // the input is always in the DOM, hidden behind the editor, and a selector
   // that took either would have measured the invisible one.
-  const field =
-    container.querySelector('.embed-editor_varconnect-editor') ||
-    container.querySelector('.var-input') ||
-    container.querySelector('input');
+  const field = container.querySelector('.embed-editor_varconnect-editor') || container.querySelector('.var-input') || container.querySelector('input');
   // clientWidth is 0 before layout (and in jsdom); fall back to the count.
   if (!field || !field.clientWidth) {
     return isLong(value);
@@ -57,6 +64,8 @@ let closeOpenCustom: (() => void) | undefined;
 interface CustomValueProps {
   readonly value: string;
   readonly label?: string;
+  /** The CSS property being edited, so the chooser offers only variables that fit it. */
+  readonly prop?: string | undefined;
   readonly anchor?: DOMRect | undefined;
   readonly anchorEl?: HTMLElement | undefined;
   readonly onCancel: () => void;
@@ -66,10 +75,19 @@ interface CustomValueProps {
    * connectCustomField). Passed in rather than imported: the picker opens this
    * editor, so importing it back would make the two modules a cycle.
    */
-  readonly connectField: (field: ReactElement, onDraft: (value: string) => void) => ReactNode;
+  readonly connectField: (
+    field: ReactElement,
+    prop: string | undefined,
+    openChip: { readonly index: number; readonly binding: string } | undefined,
+    trigger: DOMRect | undefined,
+    onDraft: (value: string) => void,
+  ) => ReactNode;
+  /** The chip whose press opened this editor: its field opens the chooser for it at once. */
+  readonly openChip?: { readonly index: number; readonly binding: string };
 }
 function CustomValue(props: CustomValueProps) {
   const state = useCustomValue(props);
+  const translate = useTranslate();
   const { label } = props;
   return (
     <Popup
@@ -93,7 +111,7 @@ function CustomValue(props: CustomValueProps) {
       }}
     >
       <div className="var-custom-head">
-        <span>Custom value</span>
+        <span>{translate('style.customValueEditor.customValue')}</span>
         <span className="var-custom-name">{label}</span>
       </div>
       {props.connectField(
@@ -108,21 +126,30 @@ function CustomValue(props: CustomValueProps) {
              CSS value has no need for a line break, and the field that actually
              has focus is usually the rich one in front of this. */
         />,
+        props.prop,
+        props.openChip,
+        // The field this editor opened from: its chooser never covers it (soak SP-10).
+        props.anchor,
         state.setDraft,
       )}
       <div className="var-custom-foot">
-        <span>Enter to save · Escape to cancel</span>
+        <span>{translate('style.customValueEditor.hint')}</span>
       </div>
     </Popup>
   );
 }
 
 function useCustomValue({ value, anchor, onSave }: CustomValueProps) {
-  const [draft, setDraft] = useState(value);
+  const [draft, setDraftState] = useState(value);
   const boxRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  // The ref follows at once, so a commit right after a restore reads the restored value, not the last render's.
+  const setDraft = useCallback((next: string): void => {
+    draftRef.current = next;
+    setDraftState(next);
+  }, []);
   const position = useCustomPosition(boxRef, anchor);
   const commit = useCallback((): string => {
     const rich = boxRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
@@ -133,6 +160,7 @@ function useCustomValue({ value, anchor, onSave }: CustomValueProps) {
     return draftRef.current;
   }, []);
   useCustomClose(boxRef, commit, onSave);
+  useOutsidePressWithChooser(boxRef, commit, onSave);
   useCustomFocus(boxRef, fieldRef);
   return { draft, setDraft, boxRef, fieldRef, position, commit };
 }
@@ -155,11 +183,7 @@ function useCustomPosition(boxRef: RefObject<HTMLDivElement>, anchor: DOMRect | 
   return position;
 }
 
-function useCustomClose(
-  boxRef: RefObject<HTMLDivElement>,
-  commit: () => string,
-  onSave: (value: string) => void,
-): void {
+function useCustomClose(boxRef: RefObject<HTMLDivElement>, commit: () => string, onSave: (value: string) => void): void {
   const saveRef = useRef(onSave);
   saveRef.current = onSave;
   useEffect(() => {
@@ -173,39 +197,38 @@ function useCustomClose(
       }
     };
   }, [commit]);
-  useCustomScrollLock(boxRef);
+  usePopupScrollLock(boxRef);
 }
 
-function customContains(box: HTMLElement | undefined, target: unknown): boolean {
-  const NodeType = box?.ownerDocument.defaultView?.Node;
-  return !!box && !!NodeType && target instanceof NodeType && box.contains(target);
-}
-
-function useCustomScrollLock(boxRef: RefObject<HTMLDivElement>): void {
+// A press outside both the editor and its open chooser closes the two together. The popups' own
+// dismissal only takes the topmost one (popupDismiss.ts), which would leave the editor behind the
+// chooser the press just closed. Without a chooser open the editor's own dismissal handles it.
+function useOutsidePressWithChooser(boxRef: RefObject<HTMLDivElement>, commit: () => string, onSave: (value: string) => void): void {
+  const latest = useRef({ commit, onSave });
+  latest.current = { commit, onSave };
   useEffect(() => {
-    // Refuse scrolling outside the box so the anchored field cannot move underneath it.
-    const onWheel = (event: Event): void => {
-      if (!customContains(boxRef.current ?? undefined, event.target)) {
-        event.preventDefault();
+    const press = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Node) || boxRef.current === null || boxRef.current.contains(target)) {
+        return;
       }
+      const chooser = document.querySelector('.embed-editor_varpicker');
+      if (chooser === null || chooser.contains(target)) {
+        return;
+      }
+      // What the chooser is previewing goes back first, so the commit below reads the value the
+      // editor held, never a variable that was only being hovered.
+      chooser.dispatchEvent(new window.Event(PICKER_RESTORE_EVENT));
+      latest.current.onSave(latest.current.commit());
     };
-    document.addEventListener('wheel', onWheel, { passive: false, capture: true });
-    document.addEventListener('touchmove', onWheel, { passive: false, capture: true });
-    return () => {
-      document.removeEventListener('wheel', onWheel, { capture: true });
-      document.removeEventListener('touchmove', onWheel, { capture: true });
-    };
+    document.addEventListener('mousedown', press, true);
+    return () => document.removeEventListener('mousedown', press, true);
   }, [boxRef]);
 }
 
-function useCustomFocus(
-  boxRef: RefObject<HTMLDivElement>,
-  fieldRef: RefObject<HTMLTextAreaElement>,
-) {
+function useCustomFocus(boxRef: RefObject<HTMLDivElement>, fieldRef: RefObject<HTMLTextAreaElement>) {
   useEffect(() => {
-    const settled = (): boolean =>
-      !!boxRef.current?.contains(document.activeElement) ||
-      !!document.activeElement?.closest('.embed-editor_varpicker');
+    const settled = (): boolean => !!boxRef.current?.contains(document.activeElement) || !!document.activeElement?.closest('.embed-editor_varpicker');
     if (settled()) {
       return;
     }

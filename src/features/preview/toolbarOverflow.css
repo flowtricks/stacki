@@ -1,0 +1,61 @@
+.preview-toolbar {
+  position: relative;
+  min-width: 0;
+}
+.preview-toolbar-item {
+  display: flex;
+  flex: 0 0 auto;
+}
+/* Keep intrinsic widths measurable without exposing duplicate controls to focus or touch. */
+.preview-toolbar .is-overflow {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.preview-toolbar-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  /* As tall as the button groups beside it (.device-btns, about 28px), never taller. Stretching it to the
+     row made it the toolbar's whole 44px height, taller than the groups it sits beside, so it is centred
+     and sized to match them instead. */
+  align-self: center;
+  box-sizing: border-box;
+  height: 28px;
+  gap: 8px;
+  min-width: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.preview-toolbar-menu {
+  z-index: 300;
+  /* Overflowed actions keep their toolbar look: the same controls, in a row that wraps. */
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 12px 40px #0005;
+}
+/* A clipped single letter conveys no location; reveal crumbs when they have usable space. */
+.preview-toolbar .crumbs {
+  container-type: inline-size;
+}
+@container (max-width: 64px) {
+  .preview-toolbar .crumb,
+  .preview-toolbar .crumb-sep {
+    visibility: hidden;
+  }
+}

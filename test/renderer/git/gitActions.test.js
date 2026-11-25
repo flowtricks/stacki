@@ -56,8 +56,7 @@ async function main() {
     plugins: [
       stubSources('script-confirmations', {
         'src/ui/ConfirmDialog.tsx': () => ({
-          contents:
-            'export const confirmDialog = (question) => globalThis.confirmQuestion(question);',
+          contents: 'export const confirmDialog = (question) => globalThis.confirmQuestion(question);',
         }),
       }),
     ],
@@ -103,12 +102,7 @@ async function main() {
     gitDeleteBranch: [{ ok: true }],
   });
   assert.deepEqual(names(merged), ['gitMerge', 'gitDeleteBranch']);
-  const trunk = await scenario(
-    'mergeBranchAction',
-    [true],
-    { gitMerge: [success] },
-    { branch: 'main' },
-  );
+  const trunk = await scenario('mergeBranchAction', [true], { gitMerge: [success] }, { branch: 'main' });
   assert.deepEqual(names(trunk), ['gitMerge']);
   assert.equal(trunk[0].checkbox, undefined);
   const parked = await scenario('mergeBranchAction', [{ checked: true }, true], {
@@ -118,6 +112,22 @@ async function main() {
   });
   assert.deepEqual(names(parked), ['gitMerge', 'gitPark', 'gitMerge', 'gitUnpark']);
   assert.equal(parked.at(-1).conflict.deleteAfter, true);
+  // A second merge that throws (a hook refusing the merge commit) must not leave the work parked, unseen.
+  const hookRefused = [];
+  await assert.rejects(
+    scenario('mergeBranchAction', [{ checked: true }, true], {
+      gitMerge: [dirty, { then: (_resolve, reject) => reject(new Error('commit-msg hook refused the merge')) }],
+      gitPark: [{ ok: true, parked: true, branch: 'main' }],
+      gitUnpark: {
+        shift: () => {
+          hookRefused.push('gitUnpark');
+          return { restored: true };
+        },
+      },
+    }),
+    /hook refused/,
+  );
+  assert.deepEqual(hookRefused, ['gitUnpark']);
   const refusal = { ok: false, unmerged: true, message: 'Unmerged commits' };
   const cancelled = await scenario('deleteBranchAction', [true, false], {
     gitDeleteBranch: [refusal],

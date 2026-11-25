@@ -8,6 +8,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const directory = repoPath('node_modules/.stacki-test/preview-lifecycle');
 fs.mkdirSync(directory, { recursive: true });
@@ -17,6 +18,7 @@ esbuild.buildSync({
       'export { default as PreviewPane, deviceForWidth }',
       "  from './src/features/preview/PreviewPane.tsx';",
       "export { hasCanvas, queryCanvas } from './src/editor/canvasQuery.ts';",
+      "export { useCanvasMessages } from './src/app/state/appNodeEdits.ts';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'jsx',
@@ -31,6 +33,44 @@ esbuild.buildSync({
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+test('starting and failed previews never show an iframe with a stale URL', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  let retries = 0;
+  const props = {
+    ...hoverPreviewProps(),
+    onRestart: () => {
+      retries += 1;
+    },
+  };
+  try {
+    for (const device of ['desktop', 'canvas']) {
+      await React.act(async () => {
+        root.render(React.createElement(PreviewPane, { ...props, device, devStatus: 'starting' }));
+      });
+      assert.equal(document.querySelector('iframe') === null, true);
+      assert.match(document.body.textContent, /Starting Astro/);
+      await React.act(async () => {
+        root.render(React.createElement(PreviewPane, { ...props, device, devStatus: 'off' }));
+      });
+      assert.equal(document.querySelector('iframe') === null, true);
+      assert.match(document.body.textContent, /Preview is offline/);
+      const retry = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Start dev server');
+      assert.ok(retry);
+      await React.act(async () => retry.click());
+    }
+    assert.equal(retries, 2);
+    await React.act(async () => root.render(React.createElement(PreviewPane, props)));
+    assert.ok(document.querySelector('iframe'));
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
 
 test('iframe load requests the verified render again after listeners mount', async () => {
   const dom = installHoverDOM();
@@ -81,8 +121,7 @@ test('canvas hover measures and outlines the active copy, then clears on leave',
         tracked.push(message.paths);
       }
     };
-    const send = (data, source = frame) =>
-      act(() => window.dispatchEvent(new window.MessageEvent('message', { source, data })));
+    const send = (data, source = frame) => act(() => window.dispatchEvent(new window.MessageEvent('message', { source, data })));
     const boxes = [
       { x: 10, y: 30, w: 80, h: 40 },
       { x: 10, y: 90, w: 80, h: 40 },
@@ -159,8 +198,7 @@ test('navigator selection uses the first loop item; canvas clicks keep their ite
     const frame = document.querySelector('iframe').contentWindow;
     const posted = [];
     frame.postMessage = (message) => posted.push(message);
-    const send = (data) =>
-      act(() => window.dispatchEvent(new window.MessageEvent('message', { source: frame, data })));
+    const send = (data) => act(() => window.dispatchEvent(new window.MessageEvent('message', { source: frame, data })));
     const token = 'a'.repeat(64);
     await send({ type: 'avb:render', token, stamps: [] });
     await send({
@@ -216,7 +254,7 @@ test('a loaded preview frame announces that recovery should be checked', async (
       await settle();
     });
     const designFrame = document.querySelector('iframe');
-    designFrame.dispatchEvent(new window.Event('load'));
+    await React.act(async () => designFrame.dispatchEvent(new window.Event('load')));
     assert.equal(loaded, 1, 'the design frame starts a recovery check');
 
     props.device = 'canvas';
@@ -225,7 +263,7 @@ test('a loaded preview frame announces that recovery should be checked', async (
       await settle();
     });
     const canvasFrame = document.querySelector('iframe');
-    canvasFrame.dispatchEvent(new window.Event('load'));
+    await React.act(async () => canvasFrame.dispatchEvent(new window.Event('load')));
     assert.equal(loaded, 2, 'a canvas overview frame starts the same recovery check');
   } finally {
     await React.act(async () => root.unmount());
@@ -265,14 +303,9 @@ test('wide preview keeps outline labels outside the scaled frame', async () => {
     const frame = document.querySelector('.frame-sized');
     const layer = document.querySelector('.preview-overlay-layer');
     assert.equal(frame.parentElement, layer.parentElement);
-    assert.match(frame.style.transform, /scale\(0\.48958/);
+    assert.match(frame.style.transform, /scale\(0\.4902/);
     assert.equal(layer.style.width, '376px');
-    const send = (data) =>
-      act(() =>
-        window.dispatchEvent(
-          new window.MessageEvent('message', { source: iframe.contentWindow, data }),
-        ),
-      );
+    const send = (data) => act(() => window.dispatchEvent(new window.MessageEvent('message', { source: iframe.contentWindow, data })));
     await send({ type: 'avb:render', token: 'a'.repeat(64), stamps: [] });
     await send({
       type: 'avb:rects',
@@ -282,9 +315,9 @@ test('wide preview keeps outline labels outside the scaled frame', async () => {
     });
     const outline = layer.querySelector('.node-outline.sel');
     assert.ok(outline);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.left) - 48.958) < 0.01);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.top) - 19.583) < 0.01);
-    assert.ok(Math.abs(Number.parseFloat(outline.style.width) - 146.875) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.left) - 49.022) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.top) - 19.609) < 0.01);
+    assert.ok(Math.abs(Number.parseFloat(outline.style.width) - 147.067) < 0.01);
     assert.ok(layer.contains(outline.querySelector('.node-outline-tag')));
     assert.equal(frame.contains(outline), false);
   } finally {
@@ -293,7 +326,7 @@ test('wide preview keeps outline labels outside the scaled frame', async () => {
   }
 });
 
-test('hovering or selecting a map outlines its parent box', async () => {
+test('hovering or selecting a map outlines its first child box in the map colour', async () => {
   const dom = installHoverDOM();
   const React = require('react');
   const { createRoot } = require('react-dom/client');
@@ -309,6 +342,7 @@ test('hovering or selecting a map outlines its parent box', async () => {
       kind: 'map',
       tag: undefined,
       nodeKind: 'map',
+      childCount: 1,
       astroAsset: false,
       dynamicTag: false,
       isLayout: false,
@@ -331,9 +365,8 @@ test('hovering or selecting a map outlines its parent box', async () => {
     };
     props.navHoverPath = '0.2';
     await act(() => root.render(React.createElement(PreviewPane, props)));
-    assert.deepEqual(tracked.at(-1), ['0.1', '0.2', '0']);
-    const send = (data) =>
-      act(() => window.dispatchEvent(new window.MessageEvent('message', { source: frame, data })));
+    assert.deepEqual(tracked.at(-1), ['0.1', '0.2', '0.1.0', '0.2.0']);
+    const send = (data) => act(() => window.dispatchEvent(new window.MessageEvent('message', { source: frame, data })));
     await send({ type: 'avb:render', token: 'a'.repeat(64), stamps: [] });
     await send({
       type: 'avb:rects',
@@ -341,17 +374,16 @@ test('hovering or selecting a map outlines its parent box', async () => {
       spacing: {},
       rects: {
         0: [{ x: 10, y: 20, w: 400, h: 300 }],
-        0.1: [{ x: 40, y: 50, w: 80, h: 60 }],
-        0.2: [{ x: 200, y: 150, w: 80, h: 60 }],
+        '0.1.0': [{ x: 40, y: 50, w: 80, h: 60 }],
+        '0.2.0': [{ x: 200, y: 150, w: 90, h: 70 }],
       },
     });
+    const expected = { sel: ['40px', '50px', '80px', '60px'], hover: ['200px', '150px', '90px', '70px'] };
     for (const kind of ['sel', 'hover']) {
       const outline = document.querySelector(`.node-outline.${kind}`);
       assert.ok(outline);
-      assert.deepEqual(
-        [outline.style.left, outline.style.top, outline.style.width, outline.style.height],
-        ['10px', '20px', '400px', '300px'],
-      );
+      assert.ok(outline.classList.contains('map'));
+      assert.deepEqual([outline.style.left, outline.style.top, outline.style.width, outline.style.height], expected[kind]);
     }
   } finally {
     await act(() => root.unmount());
@@ -367,6 +399,8 @@ function installHoverDOM() {
   for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
   }
+  global.KeyboardEvent = dom.window.KeyboardEvent;
+  global.CustomEvent = dom.window.CustomEvent;
   global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
   global.cancelAnimationFrame = clearTimeout;
   global.ResizeObserver = class {
@@ -389,12 +423,13 @@ function hoverPreviewProps() {
     crumbs: [],
     onDevice() {},
     judgeEvent: async () => ({ tag: 'current' }),
-    onStaleEvent() {},
+    onCanvasNotice() {},
     overlayInfo: () => ({
       label: 'Card',
       kind: 'element',
       tag: 'div',
       nodeKind: 'element',
+      childCount: 0,
       astroAsset: false,
       dynamicTag: false,
       isLayout: false,
@@ -409,15 +444,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
     pretendToBeVisual: true,
   });
   const { window } = dom;
-  for (const key of [
-    'window',
-    'document',
-    'navigator',
-    'HTMLElement',
-    'Element',
-    'Node',
-    'MutationObserver',
-  ]) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'CustomEvent']) {
     global[key] = key === 'window' ? window : window[key];
   }
   global.getComputedStyle = window.getComputedStyle;
@@ -432,9 +459,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   const React = require('react');
   const { createRoot } = require('react-dom/client');
   const { act } = React;
-  const { PreviewPane, deviceForWidth, hasCanvas, queryCanvas } = require(
-    path.join(directory, 'preview.js'),
-  );
+  const { PreviewPane, deviceForWidth, hasCanvas, queryCanvas } = require(path.join(directory, 'preview.js'));
   const root = createRoot(document.getElementById('root'));
   let selected = [];
   const props = {
@@ -477,11 +502,15 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   oldFrame.postMessage = (message) => navigationMessages.push(message);
   const scrolls = () => navigationMessages.filter((message) => message.type === 'avb:scroll-to');
   await render({ selPath: '0.1', pathScope: '', focusPath: undefined });
-  assert.equal(
-    scrolls().at(-1)?.path,
-    '0.1',
-    'ordinary selections still reveal the selected element',
-  );
+  assert.equal(scrolls().at(-1)?.path, '0.1', 'ordinary selections still reveal the selected element');
+  navigationMessages.length = 0;
+  await render({ selPseudo: 'before', navigatorSelectionTick: 1 });
+  assert.equal(scrolls().at(-1)?.path, '0.1::before', 'a ::before row reveals the pseudo-element, not the element that draws it');
+  navigationMessages.length = 0;
+  await render({ selPseudo: 'after' });
+  assert.equal(scrolls().length, 0, 'a pick that no selection came with does not move the page');
+  await render({ selPseudo: undefined, navigatorSelectionTick: 2 });
+  assert.equal(scrolls().at(-1)?.path, '0.1', 'the element row reveals the element again');
   navigationMessages.length = 0;
   await render({
     selPath: 'src/components/Card.astro|0',
@@ -494,11 +523,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
     pathScope: 'src/components/Button.astro|',
     focusPath: '0.1',
   });
-  assert.equal(
-    scrolls().length,
-    0,
-    'entering a nested component retains scroll even when the outer focus is unchanged',
-  );
+  assert.equal(scrolls().length, 0, 'entering a nested component retains scroll even when the outer focus is unchanged');
   await render({
     selPath: 'src/components/Card.astro|0',
     pathScope: 'src/components/Card.astro|',
@@ -506,36 +531,40 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   });
   assert.equal(scrolls().length, 0, 'closing a nested component retains scroll');
   await render({ selPath: 'src/components/Card.astro|0.1' });
-  assert.equal(
-    scrolls().at(-1)?.path,
-    'src/components/Card.astro|0.1',
-    'selections within the open component still reveal elements',
-  );
+  assert.equal(scrolls().at(-1)?.path, 'src/components/Card.astro|0.1', 'selections within the open component still reveal elements');
   navigationMessages.length = 0;
   await render({ selPath: '0', pathScope: '', focusPath: undefined });
   assert.equal(scrolls().length, 0, 'closing the component retains scroll');
-  assert.equal(
-    document.querySelector('iframe').contentWindow,
-    oldFrame,
-    'component navigation retains the same loaded frame',
-  );
+  assert.equal(document.querySelector('iframe').contentWindow, oldFrame, 'component navigation retains the same loaded frame');
   const pendingQuery = queryCanvas('0');
   await render({ device: 'canvas' });
   assert.equal(hasCanvas(), false);
   assert.equal(await pendingQuery, undefined);
-  assert.equal(document.querySelectorAll('iframe').length, 3);
+  assert.equal(document.querySelectorAll('iframe').length, 4, 'the all-breakpoints canvas draws Desktop, Laptop, Tablet and Phone');
   const canvasFrame = document.querySelector('iframe').contentWindow;
+  const viewportMessages = [];
+  canvasFrame.postMessage = (message) => viewportMessages.push(message);
+  for (const type of ['studio:preview-ready', 'avb:canvas-ready']) {
+    await send(canvasFrame, { type });
+    assert.deepEqual(viewportMessages.at(-1), { type: 'avb:set-vh', px: 900 });
+  }
+  window.dispatchEvent(new window.CustomEvent('studio:source-updated', { detail: 'structure' }));
+  assert.deepEqual(viewportMessages.at(-1), { type: 'avb:patch-now', immediate: true });
   await send(canvasFrame, { type: 'avb:page-height', height: NaN });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await send(canvasFrame, { type: 'avb:page-height', height: Infinity });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
+  await send(canvasFrame, { type: 'avb:page-height', height: 4200 });
+  assert.equal(document.querySelector('.canvas-frame').style.height, '4200px');
   await send(canvasFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
+  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
   await send(oldFrame, { type: 'avb:page-height', height: 1000 });
-  assert.equal(document.querySelector('.canvas-frame').style.height, '1125px');
-  const phoneFrame = document.querySelectorAll('iframe')[2].contentWindow;
+  assert.equal(document.querySelector('.canvas-frame').style.height, '30000px');
+  await send(canvasFrame, { type: 'avb:page-height', height: 600 });
+  assert.equal(document.querySelector('.canvas-frame').style.height, '600px');
+  const phoneFrame = document.querySelectorAll('iframe')[3].contentWindow;
   await send(phoneFrame, { type: 'avb:page-height', height: 80000 });
-  assert.equal(document.querySelectorAll('.canvas-frame')[2].style.height, '1015px');
+  assert.equal(document.querySelectorAll('.canvas-frame')[3].style.height, '30000px');
   await render({ refreshKey: 1 });
   assert.equal(document.querySelector('.canvas-frame').style.height, '900px');
   await act(async () => {
@@ -553,7 +582,7 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   const replacementCalls = [];
   await render({ onDevice: (key) => replacementCalls.push(key) });
   await act(async () => {
-    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '3' }));
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '4' }));
     await settle();
   });
   assert.deepEqual(replacementCalls, ['phone']);
@@ -577,116 +606,111 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await act(async () => root.unmount());
   assert.equal(document.body.style.cursor, 'crosshair');
   assert.equal(hasCanvas(), false);
-  assert.deepEqual([767, 768, 1023, 1024, NaN, 0].map(deviceForWidth), [
-    'phone',
-    'tablet',
-    'tablet',
-    'desktop',
-    undefined,
-    undefined,
-  ]);
+  const lumos = [
+    { id: 'laptop', direction: 'down', widthPx: 1023 },
+    { id: 'tablet', direction: 'down', widthPx: 767 },
+    { id: 'phone', direction: 'down', widthPx: 479 },
+  ];
+  const withUps = [{ id: 'bp-2', direction: 'up', widthPx: 1920 }, { id: 'bp-1', direction: 'up', widthPx: 1600 }, ...lumos];
+  assert.deepEqual(
+    [479, 480, 767, 768, 1023, 1024, NaN, 0].map((px) => deviceForWidth(px, lumos)),
+    ['phone', 'tablet', 'tablet', 'laptop', 'laptop', 'desktop', undefined, undefined],
+  );
+  assert.deepEqual(
+    [1599, 1600, 1919, 1920, 3000, 1023, 1024].map((px) => deviceForWidth(px, withUps)),
+    ['desktop', 'bp-1', 'bp-1', 'bp-2', 'bp-2', 'laptop', 'desktop'],
+  );
   dom.window.close();
 });
 
-test(
-  'custom widths preserve layout size, scale ' + 'to fit, and reset with device controls',
-  async () => {
-    const dom = installHoverDOM();
-    const React = require('react');
-    const { createRoot } = require('react-dom/client');
-    const { Simulate } = require('react-dom/test-utils');
-    const { PreviewPane } = require(path.join(directory, 'preview.js'));
-    const observers = [];
-    let containerWidth = 1_024;
-    global.ResizeObserver = class {
-      constructor(callback) {
-        observers.push(callback);
-      }
-      observe() {}
-      disconnect() {}
-    };
-    Object.defineProperties(dom.window.HTMLElement.prototype, {
-      clientWidth: { configurable: true, get: () => containerWidth },
-      clientHeight: { configurable: true, get: () => 700 },
+test('custom widths preserve layout size, scale ' + 'to fit, and reset with device controls', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { Simulate } = require('react-dom/test-utils');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const observers = [];
+  let containerWidth = 1_024;
+  global.ResizeObserver = class {
+    constructor(callback) {
+      observers.push(callback);
+    }
+    observe() {}
+    disconnect() {}
+  };
+  Object.defineProperties(dom.window.HTMLElement.prototype, {
+    clientWidth: { configurable: true, get: () => containerWidth },
+    clientHeight: { configurable: true, get: () => 700 },
+  });
+  const root = createRoot(document.getElementById('root'));
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await settle();
     });
-    const root = createRoot(document.getElementById('root'));
-    const act = (action) =>
-      React.act(async () => {
-        await action();
-        await settle();
-      });
-    function Preview() {
-      const [device, onDevice] = React.useState('desktop');
-      return React.createElement(PreviewPane, { ...hoverPreviewProps(), device, onDevice });
-    }
-    const widthInput = () => document.querySelector('[aria-label="Canvas width"]');
-    const setWidth = async (value) => {
-      await act(() => {
-        widthInput().value = value;
-        Simulate.change(widthInput());
-      });
-      await act(() => Simulate.blur(widthInput()));
-    };
-    try {
-      await act(() => root.render(React.createElement(Preview)));
-      const frame = document.querySelector('iframe');
-      await setWidth('2000');
-      const sized = document.querySelector('.frame-sized');
+  function Preview() {
+    const [device, onDevice] = React.useState('desktop');
+    return React.createElement(PreviewPane, { ...hoverPreviewProps(), device, onDevice });
+  }
+  const widthInput = () => document.querySelector('[aria-label="Canvas width"]');
+  const setWidth = async (value) => {
+    await act(() => {
+      widthInput().value = value;
+      Simulate.change(widthInput());
+    });
+    await act(() => Simulate.blur(widthInput()));
+  };
+  try {
+    await act(() => root.render(React.createElement(Preview)));
+    const frame = document.querySelector('iframe');
+    await setWidth('2000');
+    const sized = document.querySelector('.frame-sized');
+    assert.equal(sized.style.width, '2000px');
+    assert.equal(sized.style.height, '1336px');
+    assert.match(sized.style.transform, /scale\(0\.5\)/);
+    assert.equal(document.querySelector('[aria-label="Canvas scale"]').textContent, '50%');
+    assert.equal(document.querySelector('.device-btns button[aria-pressed="true"]').getAttribute('aria-label'), 'Desktop — 1');
+    assert.equal(document.querySelector('iframe'), frame, 'Changing width retains the loaded page');
+    containerWidth = 824;
+    await act(() => observers.forEach((callback) => callback()));
+    assert.equal(sized.style.width, '2000px', 'Panel resize preserves the requested viewport');
+    assert.match(sized.style.transform, /scale\(0\.4\)/);
+    for (const invalid of ['', '279', '7681', 'NaN', 'Infinity', '-100', '2e3', '400.5']) {
+      await setWidth(invalid);
       assert.equal(sized.style.width, '2000px');
-      assert.equal(sized.style.height, '1336px');
-      assert.match(sized.style.transform, /scale\(0\.5\)/);
-      assert.equal(document.querySelector('[aria-label="Canvas scale"]').textContent, '50%');
-      assert.equal(document.querySelector('.device-btns button.on').title, 'Desktop — 1');
-      assert.equal(
-        document.querySelector('iframe'),
-        frame,
-        'Changing width retains the loaded page',
-      );
-      containerWidth = 824;
-      await act(() => observers.forEach((callback) => callback()));
-      assert.equal(sized.style.width, '2000px', 'Panel resize preserves the requested viewport');
-      assert.match(sized.style.transform, /scale\(0\.4\)/);
-      for (const invalid of ['', '279', '7681', 'NaN', 'Infinity', '-100', '2e3', '400.5']) {
-        await setWidth(invalid);
-        assert.equal(sized.style.width, '2000px');
-        assert.equal(widthInput().value, '2000');
-      }
-      Object.defineProperties(sized, {
-        offsetWidth: { get: () => Number.parseFloat(sized.style.width) },
-        offsetHeight: { get: () => Number.parseFloat(sized.style.height) },
-      });
-      await act(() =>
-        document
-          .querySelector('.rz-e')
-          .dispatchEvent(
-            new window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 800 }),
-          ),
-      );
-      await act(() =>
-        window.dispatchEvent(
-          new window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 880 }),
-        ),
-      );
-      assert.equal(
-        sized.style.width,
-        '2400px',
-        'Dragging accounts for scale without capping at the panel',
-      );
-      await act(() => document.querySelector('[title="Phone (375px) — 3"]').click());
-      assert.equal(sized.style.width, '375px');
-      assert.match(sized.style.transform, /scale\(1\)/);
-      await setWidth('7680');
-      assert.equal(sized.style.width, '7680px');
-      await act(() => document.querySelector('[title="Reset canvas to available width"]').click());
-      assert.equal(sized.style.width, '824px');
-      assert.equal(sized.style.height, '700px');
-      assert.equal(document.querySelector('iframe'), frame);
-    } finally {
-      await act(() => root.unmount());
-      dom.window.close();
+      assert.equal(widthInput().value, '2000');
     }
-  },
-);
+    Object.defineProperties(sized, {
+      offsetWidth: { get: () => Number.parseFloat(sized.style.width) },
+      offsetHeight: { get: () => Number.parseFloat(sized.style.height) },
+    });
+    await act(() => document.querySelector('.rz-e').dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 800 })));
+    await act(() => window.dispatchEvent(new window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 880 })));
+    assert.equal(sized.style.width, '2400px', 'Dragging accounts for scale without capping at the panel');
+    await act(() => document.querySelector('[aria-label="Phone (479px) — 4"]').click());
+    assert.equal(sized.style.width, '479px');
+    assert.match(sized.style.transform, /scale\(1\)/);
+    await setWidth('7680');
+    assert.equal(sized.style.width, '7680px');
+    await act(() => document.querySelector('[data-tooltip="Reset canvas to available width"]').click());
+    // An 824px pane: Desktop fills it less the scrollbar's two 9px gutters, never scaled, so the page's media queries see 806px.
+    assert.equal(sized.style.width, 'calc(100% - 18px)');
+    assert.equal(sized.style.height, '100%');
+    assert.doesNotMatch(sized.style.transform, /scale/);
+    // The outlines and the column guides are drawn in their own layer, centred like the frame: same width, or they slide off the page.
+    assert.equal(document.querySelector('.preview-overlay-layer').style.width, sized.style.width, 'the overlay layer covers exactly the fluid frame');
+    containerWidth = 2000;
+    await act(() => observers.forEach((callback) => callback()));
+    // A wider pane: the fluid frame fills the canvas by CSS too, so it follows a side-panel drag without a render.
+    assert.equal(sized.style.width, 'calc(100% - 18px)');
+    assert.equal(sized.style.height, '100%');
+    assert.doesNotMatch(sized.style.transform, /scale/);
+    assert.equal(document.querySelector('iframe'), frame);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
 
 test('context events use the gate and translate zoomed frame coordinates', async () => {
   const dom = installHoverDOM();
@@ -703,12 +727,10 @@ test('context events use the gate and translate zoomed frame coordinates', async
     focusPath: undefined,
     judgeEvent: async (value, render, request) => {
       calls.push(['gate', request]);
-      return value === render?.token
-        ? { tag: 'current' }
-        : { tag: 'stale', reason: 'no-render', file: undefined };
+      return value === render?.token ? { tag: 'current' } : { tag: 'stale', reason: 'no-render', file: undefined };
     },
     onContextPath: (path, point) => calls.push(['context', path, point]),
-    onStaleEvent: (verdict) => verdicts.push(verdict),
+    onCanvasNotice: (notice) => verdicts.push(notice),
   };
   const act = (action) =>
     React.act(async () => {
@@ -737,7 +759,7 @@ test('context events use the gate and translate zoomed frame coordinates', async
     await send(event, window);
     assert.equal(calls.length, 0, 'another window cannot open the menu');
     await send({ ...event, token: 'b'.repeat(64) });
-    assert.equal(verdicts.length, 1, 'a stale right-click is reported');
+    assert.equal(verdicts.length, 0, 'a right-click on a rendering that moved on is a moment, not a notice');
     assert.equal(calls.filter(([kind]) => kind === 'context').length, 0);
     await send(event);
     assert.deepEqual(calls.at(-2), ['gate', { kind: 'open' }]);
@@ -749,8 +771,11 @@ test('context events use the gate and translate zoomed frame coordinates', async
         top: 160,
         occurrence: 1,
         outside: false,
+        pseudo: undefined,
       },
     ]);
+    await send({ ...event, pseudo: 'before' });
+    assert.equal(calls.at(-1)[2].pseudo, 'before', 'a right-click on a ::before names it, as a click does');
     await send({
       type: 'avb:rects',
       classes: {},
@@ -765,6 +790,373 @@ test('context events use the gate and translate zoomed frame coordinates', async
     assert.equal(document.querySelectorAll('.node-outline.sel').length, 1);
   } finally {
     await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('navigation keeps a loaded page visible while isolating its replacement', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane, queryCanvas } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const props = hoverPreviewProps();
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = (patch) =>
+    act(() => {
+      Object.assign(props, patch);
+      root.render(React.createElement(PreviewPane, props));
+    });
+  const load = (frame) => act(() => frame.dispatchEvent(new window.Event('load')));
+  const current = () => document.querySelector('iframe[title="Site preview"]');
+  try {
+    await render({});
+    const first = current();
+    await load(first);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    const pending = queryCanvas('0');
+    await render({ route: '/about' });
+    const next = current();
+    assert.notEqual(next, first);
+    assert.equal(await pending, undefined, 'Navigation cancels old-page queries immediately');
+    assert.equal(first.isConnected, true, 'The last loaded document remains on screen');
+    assert.equal(first.style.visibility, 'visible');
+    assert.equal(first.style.pointerEvents, 'none', 'The retained page cannot receive edits');
+    assert.equal(first.tabIndex, -1);
+    assert.equal(next.style.visibility, 'hidden', 'An unfinished document cannot flash white');
+    assert.ok(document.querySelector('[role="status"]') === null, 'No text announces the load: the address bar draws a line instead');
+    const sent = [];
+    next.contentWindow.postMessage = (message) => sent.push(message);
+    const query = queryCanvas('0');
+    assert.ok(sent.some((message) => message.type === 'avb:query'));
+    await act(() =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source: first.contentWindow,
+          data: {
+            type: 'avb:rects',
+            classes: {},
+            spacing: {},
+            rects: { 0: [{ x: 10, y: 10, w: 80, h: 40 }] },
+          },
+        }),
+      ),
+    );
+    assert.equal(document.querySelectorAll('.node-outline.sel').length, 0);
+    await render({ route: '/contact' });
+    assert.equal(await query, undefined);
+    assert.equal(next.isConnected, false, 'Abandoned loads are removed');
+    assert.equal(document.querySelectorAll('iframe').length, 2, 'Retention is bounded');
+    await load(next);
+    assert.equal(current().style.visibility, 'hidden', 'An abandoned load cannot reveal a page');
+    await load(current());
+    assert.equal(first.isConnected, false);
+    assert.equal(document.querySelectorAll('iframe').length, 1);
+    assert.equal(current().style.visibility, 'visible');
+    assert.ok(document.querySelector('[role="status"]') === null);
+    const loaded = current();
+    await render({ refreshKey: 1 });
+    assert.notEqual(current(), loaded, 'Explicit refresh still creates a new document');
+    assert.equal(loaded.isConnected, true);
+    await load(current());
+    assert.equal(loaded.isConnected, false);
+    const defaultsFrame = current();
+    const messages = [];
+    defaultsFrame.contentWindow.postMessage = (message) => messages.push(message);
+    const defaultsRoute = '/__avb/preview?defaults=11111111-1111-1111-1111-111111111111';
+    await render({ route: defaultsRoute });
+    assert.equal(current(), defaultsFrame, 'Defaults continue to morph the existing document');
+    assert.ok(messages.some((message) => message.type === 'avb:preview-route'));
+    await render({ route: '/contact' });
+    assert.equal(current(), defaultsFrame, 'Leaving defaults retains the same document');
+    assert.ok(document.querySelector('[role="status"]') === null);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('canvas retains one loaded page per breakpoint until replacements load', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const props = { ...hoverPreviewProps(), device: 'canvas' };
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = () => act(() => root.render(React.createElement(PreviewPane, props)));
+  const load = (frame) => act(() => frame.dispatchEvent(new window.Event('load')));
+  try {
+    await render();
+    const previous = [...document.querySelectorAll('iframe')];
+    assert.equal(previous.length, 4);
+    for (const frame of previous) {
+      await load(frame);
+    }
+    props.route = '/about';
+    await render();
+    assert.equal(document.querySelectorAll('iframe').length, 8);
+    assert.ok(previous.every((frame) => frame.isConnected));
+    const replacements = [...document.querySelectorAll('iframe[aria-hidden="false"]')];
+    assert.ok(replacements.every((frame) => frame.style.visibility === 'hidden'));
+    for (const frame of replacements) {
+      await load(frame);
+    }
+    assert.equal(document.querySelectorAll('iframe').length, 4);
+    assert.ok(previous.every((frame) => !frame.isConnected));
+    assert.ok(document.querySelector('[role="status"]') === null);
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('retained preview pages cannot replay queued editing shortcuts', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { useCanvasMessages } = require(path.join(directory, 'preview.js'));
+  window.avb = { onMenu: () => () => {} };
+  const root = createRoot(document.getElementById('root'));
+  const keys = [];
+  document.addEventListener('keydown', (event) => keys.push(event.key));
+  function Shortcuts() {
+    useCanvasMessages(
+      {
+        inPreviewRef: React.useRef(false),
+        pageStateRef: React.useRef({ pageState: { editable: true } }),
+      },
+      { setInsertOpen() {} },
+    );
+    return React.createElement(
+      React.Fragment,
+      undefined,
+      React.createElement('iframe', { title: 'Retained', 'aria-hidden': 'true' }),
+      React.createElement('iframe', { title: 'Current', 'aria-hidden': 'false' }),
+    );
+  }
+  try {
+    await React.act(async () => root.render(React.createElement(Shortcuts)));
+    const send = (title) =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source: document.querySelector(`iframe[title="${title}"]`).contentWindow,
+          data: { type: 'avb:shortcut', name: 'key', key: 'Delete', meta: false },
+        }),
+      );
+    send('Retained');
+    assert.deepEqual(keys, [], 'An old document cannot delete the new selection');
+    send('Current');
+    assert.deepEqual(keys, ['Delete'], 'Current canvas shortcuts still work');
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('parsed pages become visible before slow resources finish loading', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  let loads = 0;
+  const props = {
+    ...hoverPreviewProps(),
+    onPreviewLoaded: () => {
+      loads++;
+    },
+  };
+  const act = (action) =>
+    React.act(async () => {
+      action();
+      await settle();
+    });
+  const render = () => act(() => root.render(React.createElement(PreviewPane, props)));
+  const current = () => document.querySelector('iframe[title="Site preview"]');
+  const ready = (source) =>
+    act(() =>
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          source,
+          data: { type: 'avb:canvas-ready' },
+        }),
+      ),
+    );
+  try {
+    await render();
+    const first = current();
+    await ready(first.contentWindow);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    props.route = '/about';
+    await render();
+    const next = current();
+    assert.equal(next.style.visibility, 'hidden');
+    await ready(first.contentWindow);
+    await ready(window);
+    assert.equal(next.style.visibility, 'hidden', 'Only the destination can announce readiness');
+    // Withhold load, as happens while an image, video, or embed is still downloading.
+    await ready(next.contentWindow);
+    assert.equal(loads, 0, 'The full resource load has not finished');
+    assert.equal(next.style.visibility, 'visible', 'Parsed content appears without that wait');
+    assert.equal(first.isConnected, false);
+    assert.ok(document.querySelector('[role="status"]') === null);
+    await act(() => next.dispatchEvent(new window.Event('load')));
+    assert.equal(loads, 1, 'The later load still performs the recovery handshake');
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('clicks follow handles and cancel when the frame changes during checking', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const selected = [];
+  const token = 'a'.repeat(64);
+  let answer;
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await settle();
+    });
+  try {
+    await act(() =>
+      root.render(
+        React.createElement(PreviewPane, {
+          ...hoverPreviewProps(),
+          onSelectPath: (path) => selected.push(path),
+          judgeEvent: () =>
+            new Promise((resolve) => {
+              answer = resolve;
+            }),
+        }),
+      ),
+    );
+    const frame = document.querySelector('iframe');
+    const send = (data) =>
+      act(() =>
+        window.dispatchEvent(
+          new window.MessageEvent('message', {
+            source: frame.contentWindow,
+            data,
+          }),
+        ),
+      );
+    const click = { type: 'avb:click-node', path: '0.1', outside: false, occurrence: 0, token };
+    await send({ type: 'avb:render', token, stamps: [] });
+    await send(click);
+    await act(() => answer({ tag: 'current', path: '0.2' }));
+    assert.deepEqual(selected, ['0.2'], 'the moved node is selected at its new path');
+    await send(click);
+    await send({ type: 'avb:render', token: 'b'.repeat(64), stamps: [] });
+    await act(() => answer({ tag: 'current', path: '0.3' }));
+    assert.deepEqual(selected, ['0.2'], 'a verdict for a superseded frame cannot select');
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('canvas navigation keeps the editor and interaction mode in sync', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  const routes = [];
+  const props = { ...hoverPreviewProps(), onEditRoute: (route) => routes.push(route) };
+  try {
+    await React.act(async () => root.render(React.createElement(PreviewPane, props)));
+    const button = document.querySelector('[aria-label="Interact with canvas"]');
+    const frame = document.querySelector('iframe');
+    const messages = [];
+    frame.contentWindow.postMessage = (message) => messages.push(message);
+    assert.equal(button.getAttribute('aria-pressed'), 'false');
+    await React.act(async () => button.click());
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(messages.at(-1), { type: 'avb:interaction', mode: 'interact' });
+    await React.act(async () => frame.dispatchEvent(new dom.window.Event('load')));
+    assert.ok(messages.some((message) => message.type === 'avb:interaction' && message.mode === 'interact'));
+    await React.act(async () => {
+      window.dispatchEvent(
+        new dom.window.MessageEvent('message', {
+          source: frame.contentWindow,
+          origin: 'http://localhost:4321',
+          data: { type: 'avb:navigated', path: '/campuses/' },
+        }),
+      );
+    });
+    assert.deepEqual(routes, ['/campuses']);
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    await React.act(async () =>
+      root.render(
+        React.createElement(PreviewPane, {
+          ...props,
+          route: '/campuses/',
+        }),
+      ),
+    );
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    await React.act(async () => button.click());
+    assert.equal(button.getAttribute('aria-pressed'), 'false');
+    assert.deepEqual(routes, ['/campuses']);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('toolbar tooltips wait for hover and dismiss without native titles', async () => {
+  const dom = installHoverDOM();
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const { PreviewPane } = require(path.join(directory, 'preview.js'));
+  const root = createRoot(document.getElementById('root'));
+  try {
+    await React.act(async () => root.render(React.createElement(PreviewPane, hoverPreviewProps())));
+    const button = document.querySelector('[aria-label="Interact with canvas"]');
+    assert.equal(button.hasAttribute('title'), false);
+    await React.act(async () =>
+      button.dispatchEvent(
+        new dom.window.MouseEvent('mouseover', {
+          bubbles: true,
+        }),
+      ),
+    );
+    assert.equal(document.querySelector('[role="tooltip"]') ?? undefined, undefined);
+    // The tooltip shows after its hover delay: waited for, bounded, not paused for.
+    await React.act(async () => {
+      await waitFor({
+        what: 'the canvas tooltip shown',
+        read: () => document.querySelector('[role="tooltip"]')?.textContent ?? '',
+        until: (text) => text.length > 0,
+      }).catch(() => undefined);
+    });
+    assert.match(document.querySelector('[role="tooltip"]').textContent, /Interact with canvas/);
+    assert.ok(button.getAttribute('aria-describedby'));
+    await React.act(async () =>
+      button.dispatchEvent(
+        new dom.window.MouseEvent('mouseout', {
+          bubbles: true,
+        }),
+      ),
+    );
+    assert.equal(document.querySelector('[role="tooltip"]') ?? undefined, undefined);
+    assert.equal(button.hasAttribute('aria-describedby'), false);
+  } finally {
+    await React.act(async () => root.unmount());
     dom.window.close();
   }
 });

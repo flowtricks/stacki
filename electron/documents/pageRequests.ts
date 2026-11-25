@@ -6,16 +6,14 @@ import { type EditReport, type WriteReport } from './documentActors';
 import { describeWriteReport } from './documentWrites';
 import { isPathWithin } from '../lib/platform';
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
-import type {
-  IpcResults,
-  WirePageEditError,
-  WirePageWriteFailure,
-} from '../../shared/ipc/ipcResults';
+import type { IpcResults, WirePageEditError, WirePageWriteFailure } from '../../shared/ipc/ipcResults';
 import { describeRejection } from '../../shared/engine/intent';
 import * as path from 'path';
 import { parsePage, locateSelection, resolveChunks } from '../parse/astroParser';
 import { parseMarkdownPage } from '../parse/markdownParser';
 import { toPosix } from '../lib/mainHelpers';
+import { pagesDirectoryOf } from '../lib/astroConfig';
+import { translateMain } from '../lib/mainLocale';
 
 // The page formats Astro routes from a file: .astro, plus markdown when the
 // project has the integration for it (.md always, .mdx via @astrojs/mdx).
@@ -49,16 +47,13 @@ export function parsePageSource(pagePath: string, source: string): IpcResults['p
 
 // What a write that did not happen, or may have, means to the renderer's save
 // state (plan §7). A refusal is the edit's own (`rejected`, pageEditError).
-export function pageWriteFailure(
-  file: string,
-  report: Extract<WriteReport, { readonly tag: 'uncertain' | 'backpressured' }>,
-): WirePageWriteFailure {
+export function pageWriteFailure(file: string, report: Extract<WriteReport, { readonly tag: 'uncertain' | 'backpressured' }>): WirePageWriteFailure {
   const name = path.basename(file);
   switch (report.tag) {
     case 'uncertain':
       return {
         code: 'uncertain',
-        message: `${name} may not have been saved (${report.reconciliation ?? 'unreadable'}).`,
+        message: translateMain('error.documents.saveUncertainCheck', { file: name, check: report.reconciliation ?? 'unreadable' }),
       };
     case 'backpressured':
       return { code: 'backpressured', message: describeWriteReport(name, report) };
@@ -69,10 +64,7 @@ export function pageWriteFailure(
   }
 }
 
-export function pageEditError(
-  file: string,
-  report: Exclude<EditReport, { readonly tag: 'applied' }>,
-): WirePageEditError {
+export function pageEditError(file: string, report: Exclude<EditReport, { readonly tag: 'applied' }>): WirePageEditError {
   if (report.tag === 'rejected') {
     const { reason, diskChecksum } = report;
     const message = report.message === '' ? describeRejection(reason) : report.message;
@@ -92,7 +84,7 @@ export function pageEditError(
 // Folder management under src/pages. Renames are same-parent only (from the
 // UI), so contained files keep their relative-import depth.
 export const resolvePagesDirectory = (projectPath: string, rel: string) => {
-  const pagesDirectory = path.join(projectPath, 'src', 'pages');
+  const pagesDirectory = pagesDirectoryOf(projectPath);
   const full = path.resolve(pagesDirectory, rel);
   if (!isPathWithin(pagesDirectory, full)) {
     throw new Error('Invalid folder.');
@@ -104,23 +96,20 @@ export const resolvePagesDirectory = (projectPath: string, rel: string) => {
 // → /posts/a. A rest param ([...path]) holds a whole segment run, and an
 // undefined one collapses rather than writing "undefined" into the URL.
 export function fillRoute(pattern: string, params: Readonly<Record<string, unknown>>) {
-  const filled = pattern.replace(
-    /\[(\.\.\.)?([^\]]+)\]/g,
-    (_match: string, _rest: string | undefined, name: string) => {
-      // Dev-server JSON writes null for a missing param, as absent as undefined.
-      const value = params?.[name];
-      if (value === undefined) {
-        return '';
-      }
-      if (value === null) {
-        return '';
-      }
-      return String(value)
-        .split('/')
-        .map((segment) => encodeURIComponent(segment))
-        .join('/');
-    },
-  );
+  const filled = pattern.replace(/\[(\.\.\.)?([^\]]+)\]/g, (_match: string, _rest: string | undefined, name: string) => {
+    // Dev-server JSON writes null for a missing param, as absent as undefined.
+    const value = params?.[name];
+    if (value === undefined) {
+      return '';
+    }
+    if (value === null) {
+      return '';
+    }
+    return String(value)
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  });
   // A dropped rest param leaves a double slash or a trailing one behind.
   return filled.replace(/\/{2,}/g, '/').replace(/(.)\/$/, '$1');
 }

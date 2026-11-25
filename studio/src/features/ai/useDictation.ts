@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { studioTranslate } from './studioWords';
 
 interface Recognition {
   continuous: boolean;
@@ -51,7 +52,7 @@ export function useDictation(append: (text: string) => void) {
       return;
     }
     if (!Constructor) {
-      setError('Voice input is unavailable in this browser. Try Chrome or Safari.');
+      setError(studioTranslate()('ai.studio.dictation.unavailable'));
       return;
     }
     setError('');
@@ -89,14 +90,12 @@ export function useDictation(append: (text: string) => void) {
       current.start();
       setListening(true);
     } catch {
-      setError('Could not start the microphone. Try again.');
+      setError(studioTranslate()('ai.dictation.startFailed'));
     }
   }
   return { listening, interim, error, supported: !!Constructor, toggle };
 }
 
 function dictationError(code: string) {
-  return code === 'not-allowed'
-    ? 'Microphone access was denied. Allow it in your browser settings and try again.'
-    : `Voice input failed (${code}). Try again or type your message.`;
+  return code === 'not-allowed' ? studioTranslate()('ai.studio.dictation.denied') : studioTranslate()('ai.studio.dictation.failed', { code });
 }

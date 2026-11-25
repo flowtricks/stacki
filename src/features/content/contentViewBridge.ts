@@ -1,39 +1,19 @@
+import { parseOptionalMessageRef } from '../../../shared/core/i18n/messageReference';
 import { cmsTransport } from '../../ipc/editorEnvironment';
-import type {
-  IpcResults,
-  WireCollection,
-  WireEntry,
-  WireImageEdit,
-  WireMove,
-  WirePointer,
-  WireValidationIssue,
-} from '../../../shared/ipc/ipcResults';
+import type { IpcResults, WireCollection, WireEntry, WireImageEdit, WireMove, WirePointer, WireValidationIssue } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
 import type { Data } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
-import {
-  boolean,
-  count,
-  data,
-  list,
-  object,
-  optional,
-  pathText,
-  record,
-  text,
-} from '../../../shared/core/boundary';
+import { boolean, count, data, list, object, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cleanError } from '../../lib/cleanError';
 
-const locatorPart = (input: unknown): string | number =>
-  typeof input === 'string' ? text(input) : count(input);
+const locatorPart = (input: unknown): string | number => (typeof input === 'string' ? text(input) : count(input));
 const schemaPath = list(locatorPart);
 const loader = object({
   kind: optional(text),
   base: optional(pathText),
-  pattern: optional((input: unknown) =>
-    typeof input === 'string' ? text(input) : list(text)(input),
-  ),
+  pattern: optional((input: unknown) => (typeof input === 'string' ? text(input) : list(text)(input))),
   file: optional(pathText),
 });
 
@@ -86,11 +66,14 @@ export function parseContentEntries(input: unknown): ContentEntries {
     collection: parseContentCollection(value['collection']),
     ...optionalFields({
       reason: optional(text)(value['reason']),
+      reasonRef: parseOptionalMessageRef(value['reasonRef']),
       idsAreGuesses: optional(boolean)(value['idsAreGuesses']),
       idNote: optional(text)(value['idNote']),
+      idNoteRef: parseOptionalMessageRef(value['idNoteRef']),
       shape: optional(text)(value['shape']),
       parsed: optional(boolean)(value['parsed']),
       parserNote: optional(text)(value['parserNote']),
+      parserNoteRef: parseOptionalMessageRef(value['parserNoteRef']),
     }),
   };
 }
@@ -112,7 +95,7 @@ function parseMove(input: unknown): WireMove {
   switch (value['kind']) {
     case 'generated':
     case 'unknown':
-      return { kind: value['kind'], note: text(value['note']) };
+      return { kind: value['kind'], note: text(value['note']), noteRef: parseOptionalMessageRef(value['noteRef']) };
     case 'file':
       return { kind: 'file', from: pathText(value['from']), to: pathText(value['to']) };
     case 'key':
@@ -176,10 +159,7 @@ function parseRename(input: unknown): void {
   list(pathText)(value['files']);
 }
 
-async function request<Value>(
-  parse: Parser<Value>,
-  invoke: () => Promise<unknown>,
-): Promise<Result<Value, string>> {
+async function request<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
   let response: unknown;
   try {
     response = await invoke();
@@ -209,8 +189,7 @@ export function writeContentEntry(
   body: string | undefined,
   expected?: { readonly data: unknown; readonly body: string | undefined },
 ) {
-  const input =
-    body === undefined ? { projectPath, entry, edits } : { projectPath, entry, edits, body };
+  const input = body === undefined ? { projectPath, entry, edits } : { projectPath, entry, edits, body };
   const payload = parseIpcPayload('content:writeEntry', input);
   return request(parseWrite, () => cmsTransport.writeContentEntry(payload, expected));
 }

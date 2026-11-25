@@ -3,11 +3,7 @@ import { parse as frontmatter } from '../../../vendor/stacki/electron/content/fo
 import { parseIpcPayload } from '../../../vendor/stacki/shared/ipc/ipcPayloads';
 import { record } from '../../shared/validation';
 
-export function checkContentExpected(
-  sources: ReadonlyMap<string, string>,
-  payload: unknown,
-  expected: unknown,
-) {
+export function checkContentExpected(sources: ReadonlyMap<string, string>, payload: unknown, expected: unknown) {
   const input = parseIpcPayload('content:writeEntry', payload);
   const source = sources.get(input.entry.file);
   const format = formatFor(input.entry.file);
@@ -16,8 +12,7 @@ export function checkContentExpected(
   }
   let current: unknown = format.parseData(source) ?? {};
   for (const part of input.entry.locator ?? []) {
-    current =
-      typeof part === 'number' && Array.isArray(current) ? current[part] : record(current)[part];
+    current = typeof part === 'number' && Array.isArray(current) ? current[part] : record(current)[part];
   }
   const before = record(expected);
   const sameData = JSON.stringify(current) === JSON.stringify(before['data']);

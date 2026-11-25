@@ -1,0 +1,146 @@
+/* The popup a double click on a canvas image opens (CanvasImagePopup.tsx). Surfaces are fills, never borders. */
+.canvas-image-popup {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 16px);
+  border-radius: 10px;
+  /* The surface menus and context menus use: one solid colour for header and body, lighter than the canvas behind. */
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.canvas-image-popup:focus {
+  outline: none;
+}
+.canvas-image-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 30px;
+  padding-block: 0;
+  padding-inline: 12px 4px;
+  /* The same surface as the body: one solid background, no seam. */
+  background: transparent;
+}
+.canvas-image-head {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.canvas-image-head.is-dragging {
+  cursor: grabbing;
+}
+.canvas-image-head button {
+  cursor: default;
+}
+/* The (i) with the alt text's explanation sits right after the title; the close button keeps the far end. */
+.canvas-image-head .settings-info {
+  margin-inline-end: auto;
+}
+/* Over the canvas frame while the header is dragged, so the page under the pointer sees none of it. */
+.canvas-image-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  cursor: grabbing;
+  background: transparent;
+}
+.canvas-image-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+.canvas-image-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  line-height: 0;
+  background: transparent;
+}
+.canvas-image-head button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.canvas-image-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 12px 10px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.canvas-image-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The Properties panel's fields, drawn tighter for a popup. */
+.canvas-image-popup .props-field {
+  margin: 0;
+}
+.canvas-image-popup .props-field label,
+.canvas-image-popup .props-field .props-label-row {
+  margin-bottom: 3px;
+}
+.canvas-image-popup .props-field:has(> .asset-field) > label {
+  min-height: 18px;
+}
+.canvas-image-popup .af-card {
+  gap: 8px;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.canvas-image-popup .af-thumb {
+  width: 40px;
+  height: 40px;
+}
+.canvas-image-popup .af-name {
+  font-size: 11px;
+}
+.canvas-image-popup .af-sub {
+  margin-top: 0;
+  font-size: 10px;
+}
+.canvas-image-popup .af-choose {
+  background: var(--bg-input);
+  min-height: 24px;
+  height: 24px;
+  margin-top: 4px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 11px;
+}
+.canvas-image-popup input,
+.canvas-image-popup textarea {
+  background: var(--bg-input);
+  min-height: 26px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 11px;
+}
+.canvas-image-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--bg-input);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-dim, inherit);
+  overflow-wrap: anywhere;
+}
+/* While the asset chooser is open over the page the popup steps aside, still mounted so it is there when the pick is made. */
+body:has(.asset-pick-overlay) .canvas-image-popup {
+  visibility: hidden;
+}

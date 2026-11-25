@@ -1,0 +1,79 @@
+/* The Create component dialog's folder field and its warning. Fills, not borders; the field sits under the name with a step of air. */
+.modal.create-component .create-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.modal.create-component .create-folder label {
+  margin-bottom: 0;
+}
+/* A name or folder the dialog cannot take: the error tint behind the text, no border; the reason is a toast when Create is tried. */
+.modal.create-component input[aria-invalid='true'] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+/* "Move styles": the value list's rows, with a checkbox first and where the CSS is at the end.
+   The file names give way first (ellipsis, full list in the tooltip); the class and its tag keep their size. */
+.modal.create-component .move-styles {
+  margin-top: 12px;
+}
+/* The head holds only the title here (no bulk control), so the title sits as close to its box as every field label
+   does to its field: the label's own 5px, without the head's extra 6px. */
+.modal.create-component .move-styles .extract-values-head {
+  margin-bottom: 0;
+}
+/* A few classes as a rule: one plain fill, which also covers the scrollbar's reserved gutter (the value list's
+   scroll shadows left it as a darker strip here). The list's 4px and the row's 4px put each checkbox 8px in from
+   the box's edge, where the Name and Folder fields above start their text, so the dialog reads as one column. */
+.modal.create-component .move-styles {
+  --move-style-row: 32px;
+  --move-style-gap: 2px;
+  --move-style-pad: 4px;
+}
+/* A long list stops at five and a half rows, so the sixth is cut through its middle and the cut says there is more:
+   the height comes from the row's own height and gap (five rows, their five gaps, the top padding, half a row), so
+   it holds at any zoom and a short list, under that height, simply shows whole with no scroll. The cut row is the
+   cue; the plain fill stays (scroll shadows left a darker strip in the gutter). No snapping: a snap would pull the
+   cut back onto a row boundary. */
+.modal.create-component .move-styles .extract-value-list {
+  gap: var(--move-style-gap);
+  padding: var(--move-style-pad);
+  scroll-padding: var(--move-style-pad) 0;
+  scroll-snap-type: none;
+  max-height: calc(var(--move-style-row) * 5.5 + var(--move-style-gap) * 5 + var(--move-style-pad));
+  background: var(--extract-list-fill);
+}
+.modal.create-component .move-styles .extract-value {
+  min-height: var(--move-style-row);
+  scroll-snap-align: none;
+}
+/* The class is a label in the dialog's ordinary text colour; the file it is in is the dim one. */
+.modal.create-component .move-styles .move-style-name {
+  color: var(--text);
+}
+/* Each row is a <label>, so a click anywhere on it toggles its checkbox; it undoes the dialog's field-label look
+   (.modal-body label: a block of small dim text) the way .modal-body label.check-row does. */
+.modal-body .move-styles label.extract-value {
+  display: flex;
+  padding-inline-start: 4px;
+  margin-bottom: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+.modal.create-component .move-styles .extract-value > input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.modal.create-component .move-style-home {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-inline-start: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}

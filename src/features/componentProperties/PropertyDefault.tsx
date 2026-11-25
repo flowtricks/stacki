@@ -1,30 +1,114 @@
+// The Default value of a prop: a control for its kind, the `{}` code switch,
+// and, for a prop of words or options, the purple + its field shows on hover,
+// whose Create conditional sets it by conditions on other props in the Value
+// conditions editor the attribute fields use (ConditionalDefaultField.tsx).
+// Set by conditions, its title is the blue reset label (PropertyFieldHead.tsx). A default the component computes per option
+// from a lookup table (`label ?? named[variant]`) is shown and edited the same
+// way and written back into that table; one computed by other code shows its
+// code, read-only (docs/props-conditional-values.md).
 import { useState } from 'react';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
+import type { VariantDefault, VariantDefaultEntry } from '../../../shared/properties/variantRules';
+import type { ConditionalValue } from '../../editor/conditionalValue';
+import { quoteOf } from '../../editor/conditionalValue';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import { BracesIcon } from '../../ui/Icons';
-import { ExpressionBindingField } from '../props/propBindings';
+import {
+  ComputedDefault,
+  ConditionalDefaultField,
+  ConditionalDefaultStart,
+  ExpressionBindingField,
+  conditionalOfDefault,
+  defaultOfConditional,
+  tableConditional,
+  tableEntries,
+  useDefaultConditionContext,
+  type EditPace,
+  type TableDefault,
+} from '../props/propBindings';
+import { PropertyCodeToggle, PropertyCodeView, PropertyFieldHead } from './PropertyFieldHead';
+
+/** What the Default value needs to set a default by conditions: the component's props, its computed defaults, and where a table edit goes. */
+export interface DefaultConditions {
+  readonly properties: readonly ComponentProperty[];
+  readonly computed: VariantDefault | undefined;
+  readonly onTable: (table: TableDefault, entries: readonly VariantDefaultEntry[]) => void;
+  readonly onProblem: (message: string) => void;
+}
 
 interface DefaultProps {
   readonly property: ComponentProperty;
   readonly frontmatter: string;
-  readonly onChange: (value: string) => void;
+  readonly onChange: (value: string, pace: EditPace) => void;
+  /** Absent where conditions are not offered (a new prop, a list). */
+  readonly conditions?: DefaultConditions | undefined;
 }
-export function PropertyDefault({ property, frontmatter, onChange }: DefaultProps) {
-  const simple =
-    ['string', 'number', 'boolean'].includes(property.type) ||
-    literalOptions(property.type) !== undefined;
+export function PropertyDefault({ property, frontmatter, onChange, conditions }: DefaultProps) {
+  const translate = useTranslate();
+  const simple = ['string', 'number', 'boolean'].includes(property.type) || literalOptions(property.type) !== undefined;
+  // A default set by conditions opens on its pill, as a literal one opens on its control; `{}` switches either to its code.
   const [mode, setMode] = useState<'value' | 'expression'>(
-    simple && isLiteralDefault(property) ? 'value' : 'expression',
+    simple && (isLiteralDefault(property) || conditionalOfDefault(property.defaultValue) !== undefined) ? 'value' : 'expression',
   );
+  const [tableCodeOpen, setTableCodeOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const context = useDefaultConditionContext(frontmatter, conditions?.properties ?? NO_PROPERTIES);
+  const quote = quoteOf(frontmatter) ?? '"';
+  const computed = conditions?.computed;
+  const table = computed?.kind === 'table' ? computed : undefined;
+  const tableModel = table === undefined ? undefined : tableConditional(table);
+  const chain = table === undefined ? conditionalOfDefault(property.defaultValue) : undefined;
+  // Conditions give words: a prop of text or of options can be set by them, a number or a switch cannot.
+  const wordy = property.type.trim() === 'string' || literalOptions(property.type.trim()) !== undefined;
+  const writeDefault = (model: ConditionalValue): void => onChange(defaultOfConditional(model, { quote }), 'at-once');
+  const writeTable = (model: ConditionalValue): void => {
+    if (conditions === undefined || table === undefined) {
+      return;
+    }
+    const entries = tableEntries(model, table, { quote });
+    if (entries.ok) {
+      conditions.onTable(table, entries.value);
+    } else {
+      conditions.onProblem(translate('componentProps.defaults.perOption', { controller: table.controller }));
+    }
+  };
+  if (conditions !== undefined && table !== undefined) {
+    return (
+      <div className="property-default property-field" role="group" aria-label={translate('componentProps.default.value')}>
+        {/* Set per option, the default is set, so its title is the blue label; the table is the component's own code, so
+            its Reset says where the default is changed instead of deleting that code. Its {} shows the table. */}
+        <PropertyFieldHead
+          title={translate('componentProps.default.value')}
+          onReset={undefined}
+          resetRefusal={translate('componentProps.defaults.tableReset')}
+          onConditional={undefined}
+        >
+          <PropertyCodeToggle open={tableCodeOpen} onToggle={() => setTableCodeOpen((current) => !current)} />
+        </PropertyFieldHead>
+        {tableCodeOpen ? (
+          <PropertyCodeView code={`${property.name} ?? ${table.table}[${table.key}]\n\n${tableCode(table)}`} />
+        ) : tableModel === undefined ? (
+          <ComputedDefault code={tableCode(table)} />
+        ) : (
+          <ConditionalDefaultField model={tableModel} context={context} quote={quote} onApply={writeTable} />
+        )}
+      </div>
+    );
+  }
   const expression = mode === 'expression';
-  const action = expression ? 'Use the default value control' : 'Write a default expression';
+  const action = expression ? translate('componentProps.default.useControl') : translate('componentProps.default.writeExpression');
   return (
-    <div className="property-default" role="group" aria-label="Default value">
-      <div className="property-default-title">
-        <span>Default value</span>
-        {simple && (
+    <div className="property-default property-field" role="group" aria-label={translate('componentProps.default.value')}>
+      <PropertyFieldHead
+        title={translate('componentProps.default.value')}
+        // Any default given here, a value or conditions, is set: Reset clears it, so the prop has no default again.
+        onReset={property.defaultValue.trim() === '' ? undefined : () => onChange('', 'at-once')}
+        onConditional={conditions !== undefined && wordy && chain === undefined ? () => setStarting(true) : undefined}
+      >
+        {(simple || chain !== undefined) && (
           <button
             type="button"
             className={`prop-expr-toggle${expression ? ' on' : ''}`}
@@ -36,8 +120,18 @@ export function PropertyDefault({ property, frontmatter, onChange }: DefaultProp
             <BracesIcon size={12} />
           </button>
         )}
-      </div>
-      {mode === 'value' && simple ? (
+      </PropertyFieldHead>
+      {starting && chain === undefined && conditions !== undefined && (
+        <ConditionalDefaultStart
+          defaultResult={defaultAttrOf(property.defaultValue)}
+          context={context}
+          onApply={writeDefault}
+          onClose={() => setStarting(false)}
+        />
+      )}
+      {chain !== undefined && conditions !== undefined && !expression ? (
+        <ConditionalDefaultField model={chain} context={context} quote={quote} onApply={writeDefault} />
+      ) : mode === 'value' && simple ? (
         <DefaultControl property={property} frontmatter={frontmatter} onChange={onChange} />
       ) : (
         <ExpressionBindingField
@@ -46,15 +140,37 @@ export function PropertyDefault({ property, frontmatter, onChange }: DefaultProp
           placeholder={'"Hello", 42, true, [], {…}'}
           onChange={(value) => {
             if (value.length <= PROPERTY_LIMITS.textCharsMax) {
-              onChange(value);
+              onChange(value, 'typing');
             }
           }}
         />
       )}
+      {computed?.kind === 'computed' && <ComputedDefault code={`${property.name} ?? ${computed.code}`} />}
     </div>
   );
 }
+
+const NO_PROPERTIES: readonly ComponentProperty[] = [];
+
+// A plain default as the attribute a branch's Else starts from: words, or code.
+function defaultAttrOf(
+  defaultValue: string,
+): { readonly type: 'string'; readonly value: string } | { readonly type: 'expr'; readonly value: string } | undefined {
+  const code = defaultValue.trim();
+  if (code === '') {
+    return undefined;
+  }
+  const words = propertyDefaultText(code);
+  return words === undefined ? { type: 'expr', value: code } : { type: 'string', value: words };
+}
+
+// A table that holds code the conditions cannot show, as its lines.
+function tableCode(table: TableDefault): string {
+  return table.entries.map((entry) => `${entry.option}: ${entry.code}`).join('\n');
+}
+
 function DefaultControl({ property, onChange }: DefaultProps) {
+  const translate = useTranslate();
   const options = literalOptions(property.type);
   if (options || property.type === 'boolean') {
     const choices = [...new Set(options ?? ['true', 'false'])];
@@ -62,36 +178,36 @@ function DefaultControl({ property, onChange }: DefaultProps) {
       <Dropdown
         value={defaultChoice(choices, property.defaultValue)}
         options={[
-          { value: '', label: 'No default' },
+          { value: '', label: translate('componentProps.default.none') },
           ...choices.map((choice) => ({
             value: choice,
             label: propertyDefaultText(choice) ?? choice,
           })),
         ]}
-        onChange={onChange}
+        onChange={(value) => onChange(value, 'at-once')}
         livePreview={false}
         searchable
-        searchPlaceholder="Search defaults…"
+        searchPlaceholder={translate('componentProps.default.search')}
       />
     );
   }
   if (property.type === 'number') {
     return (
       <input
-        aria-label="Default number"
+        aria-label={translate('componentProps.default.number')}
         type="number"
         step="any"
         value={Number.isFinite(Number(property.defaultValue)) ? property.defaultValue : ''}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value, 'typing')}
       />
     );
   }
   return (
     <input
-      aria-label="Default text"
+      aria-label={translate('componentProps.default.text')}
       value={propertyDefaultText(property.defaultValue) ?? ''}
       maxLength={PROPERTY_LIMITS.textCharsMax - 2}
-      onChange={(event) => onChange(JSON.stringify(event.target.value))}
+      onChange={(event) => onChange(JSON.stringify(event.target.value), 'typing')}
     />
   );
 }
@@ -113,10 +229,7 @@ export function propertyDefaultText(expression: string): string | undefined {
 function defaultChoice(choices: readonly string[], expression: string): string {
   return (
     choices.find(
-      (choice) =>
-        choice === expression ||
-        (propertyDefaultText(choice) !== undefined &&
-          propertyDefaultText(choice) === propertyDefaultText(expression)),
+      (choice) => choice === expression || (propertyDefaultText(choice) !== undefined && propertyDefaultText(choice) === propertyDefaultText(expression)),
     ) ?? ''
   );
 }

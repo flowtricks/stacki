@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import type { ReactNode, RefObject } from 'react';
 import { panelSpan } from './model/panelBox';
+import { assert } from '../../../shared/core/assert';
 
 // A layer editor anchored directly below the row it edits (flips above when there's no
 // room to drop down), spanning the panel's full width — measured, since the panel is a
@@ -40,7 +41,7 @@ export default function LayerPopover({
   const scrolls = usePopoverOverflow(boxRef);
   // Read once, at mount, so the popover has its real width for the very first
   // layout — the flip decision below measures a height that depends on it.
-  const [span] = useState(() => placedSpan ?? panelSpan(anchorElement));
+  const [span] = useState(() => placedSpan ?? openerSpan(anchorElement) ?? panelSpan(anchorElement));
   const top = usePopoverTop(ref, anchorElement);
   return (
     <Popup
@@ -59,37 +60,66 @@ export default function LayerPopover({
         visibility: top === undefined ? 'hidden' : 'visible',
       }}
     >
-      <div
-        ref={boxRef}
-        className={
-          'embed-editor_layer-popover-box u-surface-surface' + (scrolls ? ' is-scrolling' : '')
-        }
-      >
+      {/* `style-panel-surface` gives everything in here the panel's control reset (styles.css): a
+          popover portals to <body>, past the panel host's reset, and the app's global button rule
+          (centred inline-flex) centred each layer row's icon and label in a code chip's list. */}
+      <div ref={boxRef} className={'embed-editor_layer-popover-box style-panel-surface u-surface-surface' + (scrolls ? ' is-scrolling' : '')}>
         {children}
       </div>
     </Popup>
   );
 }
 
+// The span of the layer popover the anchor sits in, when it sits in one: a row's editor opened from a
+// list that is itself in a popover (a code chip's Transitions list) opens over that list, where the
+// person is looking, rather than over the Style panel's column somewhere else in the window.
+function openerSpan(anchorElement: HTMLElement): { readonly left: number; readonly width: number } | undefined {
+  const opener = anchorElement.closest<HTMLElement>('.embed-editor_layer-popover');
+  if (opener === null) {
+    return undefined;
+  }
+  const bounds = opener.getBoundingClientRect();
+  return bounds.width > 0 ? { left: bounds.left, width: bounds.width } : undefined;
+}
+
 // The popover's top edge: directly below the anchor row, or flipped above it
 // when there is no room to drop down. Undefined until the first measurement.
-function usePopoverTop(
-  ref: RefObject<HTMLDivElement>,
-  anchorElement: HTMLElement,
-): number | undefined {
+// Measured again whenever the popover's size changes: an editor that loads
+// lazily (clip path) is a one-line "Loading" box at mount, which fits below,
+// and kept that place once the full editor arrived and ran off the bottom.
+function usePopoverTop(ref: RefObject<HTMLDivElement>, anchorElement: HTMLElement): number | undefined {
   const [top, setTop] = useState<number | undefined>(undefined);
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
-      return;
+      return undefined;
     }
-    const anchorRect = anchorElement.getBoundingClientRect();
-    const gap = 6;
-    // Rendered height (the zoomed content already collapsed it).
-    const height = element.offsetHeight;
-    const below = anchorRect.bottom + gap + height <= window.innerHeight;
-    setTop(below ? anchorRect.bottom + gap : Math.max(gap, anchorRect.top - gap - height));
+    const place = (): void => setTop(popoverTopFor(anchorElement.getBoundingClientRect(), element.offsetHeight, window.innerHeight));
+    place();
+    const resize = new ResizeObserver(place);
+    resize.observe(element);
+    return () => resize.disconnect();
   }, [ref, anchorElement]);
+  return top;
+}
+
+const POPOVER_GAP_PX = 6;
+
+/** Below the anchor when the popover fits there, else above it; with room for
+ *  neither, as low as the window lets it sit whole (taller than the window, it
+ *  starts at the top and scrolls), so none of it is out of reach. */
+export function popoverTopFor(anchor: Pick<DOMRect, 'top' | 'bottom'>, heightPx: number, windowHeightPx: number): number {
+  assert(heightPx >= 0, 'popoverTopFor: a height is not negative');
+  const roomBelowPx = windowHeightPx - anchor.bottom - POPOVER_GAP_PX;
+  const roomAbovePx = anchor.top - POPOVER_GAP_PX;
+  if (heightPx <= roomBelowPx) {
+    return anchor.bottom + POPOVER_GAP_PX;
+  }
+  if (heightPx <= roomAbovePx) {
+    return anchor.top - POPOVER_GAP_PX - heightPx;
+  }
+  const top = Math.max(POPOVER_GAP_PX, windowHeightPx - POPOVER_GAP_PX - heightPx);
+  assert(top >= POPOVER_GAP_PX, 'popoverTopFor: the popover starts inside the window');
   return top;
 }
 
@@ -106,8 +136,7 @@ function usePopoverOverflow(boxRef: RefObject<HTMLDivElement>): boolean {
     resize.observe(box);
     // A max-height box can keep the same border size while its contents grow,
     // so ResizeObserver alone misses the exact change that makes it scroll.
-    const mutations =
-      typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(measure);
+    const mutations = typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(measure);
     mutations?.observe(box, { attributes: true, childList: true, subtree: true });
     window.addEventListener('resize', measure);
     return () => {

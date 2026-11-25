@@ -80,10 +80,7 @@ test('App bridge rejects malformed replies and event values', async () => {
   };
 
   await assert.rejects(bridgeModule.readAppSettings(), /Expected boolean/);
-  await assert.rejects(
-    bridgeModule.readDynamicPaths('/project', '/project/src/pages/[id].astro', ''),
-    /Dynamic route props have an invalid value/,
-  );
+  await assert.rejects(bridgeModule.readDynamicPaths('/project', '/project/src/pages/[id].astro', ''), /Dynamic route props have an invalid value/);
   // A code save (step 8) is an edit request: a malformed reply is refused...
   const hunk = { span: { start: 0, end: 5 }, expected: 'Hello', text: 'Hi' };
   const codeSave = (authoredChecksum, hunks) =>
@@ -94,10 +91,7 @@ test('App bridge rejects malformed replies and event values', async () => {
     });
   await assert.rejects(codeSave('a'.repeat(64), [hunk]), /PageEditError: expected object/);
   // ...and a malformed checksum or patch is caught before anything crosses to main.
-  assert.throws(
-    () => codeSave('A'.repeat(64), [hunk]),
-    /Digest: expected 64 lowercase hex characters/,
-  );
+  assert.throws(() => codeSave('A'.repeat(64), [hunk]), /Digest: expected 64 lowercase hex characters/);
   assert.throws(() => codeSave('a'.repeat(64), [hunk, hunk]), /ascending disjoint spans/);
 
   let external = false;

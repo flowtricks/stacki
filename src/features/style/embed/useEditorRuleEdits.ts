@@ -2,59 +2,36 @@
 // through the class gate, prop edits, live edits, rule actions, opening an
 // embed, and the selected element's tokens (EmbedEditor.tsx).
 
+import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { snapshotTokens } from '../model/elementTokens';
-import { selectorsMatch } from '../model/resolved';
+import { groupMemberToSplit } from '../model/resolved';
 import type { Declaration } from 'postcss';
-import {
-  addDeclaration,
-  appendDecl,
-  directDecls,
-  removeRule,
-  removeRuleIfEmpty,
-  replaceRuleCss,
-  splitRuleSelectorAt,
-} from '../model/css';
-import { canonicalCompound, parseSelectorList } from '../model/selectors';
-import {
-  clearPaddingSides,
-  isPaddingProperty,
-  setPaddingDeclaration,
-} from '../model/spacingShorthand';
+import { addDeclaration, appendDecl, directDecls, removeRule, removeRuleIfEmpty, replaceRuleCss, splitRuleSelectorAt } from '../model/css';
+import { parseSelectorList } from '../model/selectors';
+import { clearPaddingSides, isPaddingProperty, setPaddingDeclaration } from '../model/spacingShorthand';
 import { getHost, type ClassOutcome } from '../model/host';
+import { liveRules, liveRuleTargetOf, type LiveRulePreview } from '../model/liveRuleEdits';
+import type { LiveRuleEdit, LiveRuleTarget } from '../../../../shared/properties/liveRules';
+import { selectedComponentMarkup, selectedInstanceClasses } from '../model/webflowElement';
 import { type EmbedDocument, navigateToEmbed, writeEmbedDocument } from '../model/webflow';
 import type { ParsedDeclaration, ParsedRule } from '../model/styleTypes';
 import { declsFor, lastDeclFor, editorSession, withoutClasses } from './editorModel';
 import { type SelectorSuggestion } from './LayoutRows';
-import {
-  useEditorRefs,
-  useBusyState,
-  useScanState,
-  useNativeState,
-  usePendingWrites,
-} from './useEditorFoundation';
+import { useEditorRefs, useBusyState, useScanState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useRefreshDerived } from './useEditorScanning';
 
 // Scope an edit of a grouped rule to the active selector alone.
 export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) {
   const { activeSelectorRef } = nativeState;
 
-  // True when the active selector is ONE splittable member of a grouped rule
+  // True when the active selector is ONE member of a grouped rule to edit on its own
   // (`.a::before, .b::after { … }`) — i.e. an edit should be scoped to just that
   // selector rather than the whole comma-separated group. Complex grouped
   // selectors (shown as a single full-group chip) don't match any lone member and
   // so return false — they edit the whole rule.
   const isGroupedSplittable = useCallback(
-    (rule: ParsedRule): boolean => {
-      const selectors = rule.node.selectors;
-      const active = activeSelectorRef.current;
-      if (!selectors || selectors.length <= 1 || !active) {
-        return false;
-      }
-      return selectors.some(
-        (selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable,
-      );
-    },
+    (rule: ParsedRule): boolean => groupMemberToSplit(rule, activeSelectorRef.current) !== undefined,
     [activeSelectorRef],
   );
   // Isolate the active selector out of a grouped rule before editing so the change
@@ -70,29 +47,18 @@ export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) 
       remap: (decl: ParsedDeclaration) => ParsedDeclaration;
     } => {
       const identity = { rule, remap: (declaration: ParsedDeclaration) => declaration };
-      const selectors = rule.node.selectors;
-      const active = activeSelectorRef.current;
-      if (!selectors || selectors.length <= 1 || !active) {
+      const index = groupMemberToSplit(rule, activeSelectorRef.current);
+      if (index === undefined) {
         return identity;
       }
-      const index = selectors.findIndex(
-        (selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable,
-      );
-      if (index < 0) {
-        return identity;
-      }
-      const origNodes: Declaration[] = [];
-      rule.node.walkDecls((declaration) => {
-        origNodes.push(declaration);
-      });
+      // The rule's own declarations, as `rule.declarations` lists them. A walk of the whole
+      // subtree counted nested rules' too, so an index could land on a nested declaration.
+      const origNodes = directDecls(rule.node);
       const clone = splitRuleSelectorAt(rule.node, index);
       if (!clone) {
         return identity;
       }
-      const cloneNodes: Declaration[] = [];
-      clone.walkDecls((declaration) => {
-        cloneNodes.push(declaration);
-      });
+      const cloneNodes = directDecls(clone);
       const editRule: ParsedRule = {
         ...rule,
         node: clone,
@@ -121,6 +87,8 @@ export function useApplyEdit(
   pendingWrites: ReturnType<typeof usePendingWrites>,
   refreshDerivedHook: ReturnType<typeof useRefreshDerived>,
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { setBusyBoth, setSaveError } = busyState;
   const { setStatus } = scanState;
   const { documentByKey, settleEmbedWrite } = pendingWrites;
@@ -145,33 +113,34 @@ export function useApplyEdit(
       if (outcome.tag !== 'refused') {
         return true;
       }
-      const why = `${rule.selectorText} is not on the element (${outcome.message})`;
-      setSaveError(`${why}, so its rule was not written.`);
+      setSaveError(translate('styleModel.embed.hook.classNotOnElement', { selector: rule.selectorText, reason: translateDescribed(outcome) }));
       return false;
     },
-    [setSaveError],
+    [setSaveError, translate, translateDescribed],
   );
 
   // Run a synchronous AST mutation, refresh the model, then persist the embed.
+  // Resolves whether the write landed, so a canvas preview of the edit knows to
+  // wait for the page or to put the page's own value back.
   const applyEdit = useCallback(
-    async (rule: ParsedRule, mutate: () => boolean | void) => {
+    async (rule: ParsedRule, mutate: () => boolean | void): Promise<boolean> => {
       const embedDocument = documentByKey.get(rule.embedKey);
       if (!embedDocument) {
-        setStatus('Lost track of the source embed — try Rescan.');
-        return;
+        setStatus('Lost track of the source embed — try Rescan.'); // i18n-ignore: write-only status, never rendered.
+        return false;
       }
       if (!(await passesClassGate(rule))) {
-        return;
+        return false;
       }
       setBusyBoth(true);
-      setStatus('Saving…');
+      setStatus('Saving…'); // i18n-ignore: write-only status, never rendered.
       // try/finally so `busy` ALWAYS clears — a throw here (e.g. materializing a complex
       // nested selector) must not leave the panel stuck busy, which disables every button.
       try {
         const result = mutate();
         if (result === false) {
-          setStatus('Nothing to save.');
-          return;
+          setStatus('Nothing to save.'); // i18n-ignore: write-only status, never rendered.
+          return false;
         }
         // Persist FIRST, then rebuild the panel's own model. The write is what the canvas
         // sees, and refreshDerived re-resolves every rule against the element — running it
@@ -180,30 +149,48 @@ export function useApplyEdit(
         const writeResult = await writeEmbedDocument(embedDocument);
         await refreshDerived();
         if (!settleEmbedWrite(embedDocument, writeResult, 'rule')) {
-          return;
+          return false;
         }
-        setStatus(
-          rule.fromComponent
-            ? 'Saved. This embed is shared by every instance of ' +
-                `${rule.componentName ?? 'the component'}.`
-            : 'Saved to embed.',
-        );
+        setStatus(rule.fromComponent ? 'Saved. This embed is shared by every instance of ' + `${rule.componentName ?? 'the component'}.` : 'Saved to embed.'); // i18n-ignore: write-only status, never rendered.
+        return true;
       } finally {
         setBusyBoth(false);
       }
     },
     [documentByKey, passesClassGate, refreshDerived, setBusyBoth, settleEmbedWrite, setStatus],
   );
-  return { applyEdit, classGatesRef };
+  // The declaration the canvas can preview for an edit of `rule`, or undefined when it can't.
+  const liveTargetOf = useCallback(
+    (rule: ParsedRule, prop: string): LiveRuleTarget | undefined => {
+      const embedDocument = documentByKey.get(rule.embedKey);
+      if (!embedDocument) {
+        return undefined;
+      }
+      return liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+    },
+    [documentByKey],
+  );
+  return { applyEdit, classGatesRef, liveTargetOf };
 }
 
 // Set and clear a property on an embed rule.
-export function usePropEdits(
-  splitForEditHook: ReturnType<typeof useSplitForEdit>,
-  applyEditHook: ReturnType<typeof useApplyEdit>,
-) {
-  const { splitForEdit } = splitForEditHook;
-  const { applyEdit } = applyEditHook;
+export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit>, applyEditHook: ReturnType<typeof useApplyEdit>) {
+  const { isGroupedSplittable, splitForEdit } = splitForEditHook;
+  const { applyEdit, liveTargetOf } = applyEditHook;
+
+  // The canvas shows an edit before its save lands (model/liveRuleEdits.ts). A grouped
+  // rule's member is split out of its group by the save, so its edit is not previewed:
+  // on the canvas the group's other selectors would change with it.
+  const previewEdit = useCallback(
+    (rule: ParsedRule, prop: string, edit: LiveRuleEdit): LiveRulePreview | undefined => {
+      if (isGroupedSplittable(rule)) {
+        return undefined;
+      }
+      const target = liveTargetOf(rule, prop);
+      return target === undefined ? undefined : liveRules.show(target, edit);
+    },
+    [isGroupedSplittable, liveTargetOf],
+  );
 
   // Property-addressed writes for always-rendered controls. We look up nodes in
   // the live postcss AST (not rule.declarations) so these stay correct after a
@@ -211,7 +198,9 @@ export function usePropEdits(
   // commit would double-add. Update-or-add on set; remove every match on clear.
   const onSetProp = useCallback(
     (rule: ParsedRule, prop: string, value: string, important: boolean) => {
-      void applyEdit(rule, () => {
+      const edit: LiveRuleEdit = { kind: 'value', value, important };
+      const preview = previewEdit(rule, prop, edit);
+      const saving = applyEdit(rule, () => {
         const { rule: editRule } = splitForEdit(rule);
         if (isPaddingProperty(prop)) {
           setPaddingDeclaration(editRule.node, prop, { value, important });
@@ -225,13 +214,21 @@ export function usePropEdits(
         }
         return addDeclaration(editRule, prop, { value, important });
       });
+      settlePreviews(saving, preview === undefined ? [] : [{ preview, edit }]);
+      // Settles once the save and the model refresh behind it are done: the panel holds the
+      // committed look until then (useOptimisticEdits.ts).
+      return saving;
     },
-    [applyEdit, splitForEdit],
+    [applyEdit, previewEdit, splitForEdit],
   );
   const onClearProp = useCallback(
     (rule: ParsedRule, prop: string | string[]) => {
       const props = Array.isArray(prop) ? prop : [prop];
-      void applyEdit(rule, () => {
+      // A padding side grouped into a shorthand is rewritten, not removed, so only a
+      // property's own declaration is previewed.
+      const removed: LiveRuleEdit = { kind: 'removed' };
+      const previews = props.filter((name) => !isPaddingProperty(name)).map((name) => previewEdit(rule, name, removed));
+      const saving = applyEdit(rule, () => {
         const { rule: editRule } = splitForEdit(rule);
         // A side grouped into `padding` or an axis has no declaration of its own.
         const clearedPadding = clearPaddingSides(editRule.node, props);
@@ -248,8 +245,15 @@ export function usePropEdits(
         removeRuleIfEmpty(editRule);
         return;
       });
+      settlePreviews(
+        saving,
+        previews.filter((preview) => preview !== undefined).map((preview) => ({ preview, edit: removed })),
+      );
+      // Settles once the save and the model refresh behind it are done: the panel holds
+      // the cleared look until then (useOptimisticEdits.ts).
+      return saving;
     },
-    [applyEdit, splitForEdit],
+    [applyEdit, previewEdit, splitForEdit],
   );
   return { onClearProp, onSetProp };
 }
@@ -267,9 +271,7 @@ export function useLiveEdits(
   // What a live write overwrote, per property — captured on the FIRST live write since
   // the last commit, so onRevertProp can put it back if the edit is abandoned (scrubbing
   // out of a dropdown without picking). `undefined` records "the property wasn't there".
-  const liveOriginRef = useRef(
-    new Map<string, { value: string; important: boolean } | undefined>(),
-  );
+  const liveOriginRef = useRef(new Map<string, { value: string; important: boolean } | undefined>());
   // Live set while typing: mutate (or append) the AST node and write straight to
   // the embed so the canvas updates in real time — no busy flag, no model rebuild
   // (blur runs the authoritative onSetProp). Mirrors onLiveCommitValue.
@@ -282,7 +284,7 @@ export function useLiveEdits(
         readonly important: boolean;
       }[],
     ) => {
-      const documents = new Set<EmbedDocument>();
+      const documents = new Map<EmbedDocument, { preview: LiveRulePreview; edit: LiveRuleEdit }[]>();
       for (const { rule, prop, value, important } of writes) {
         // Defer grouped-splittable edits to the blur commit (onSetProp splits first).
         if (isGroupedSplittable(rule)) {
@@ -292,28 +294,33 @@ export function useLiveEdits(
         if (!embedDocument) {
           continue;
         }
-        const matches = declsFor(rule, prop);
-        const target = matches[matches.length - 1];
-        if (!liveOriginRef.current.has(prop)) {
-          liveOriginRef.current.set(
-            prop,
-            target ? { value: target.value, important: !!target.important } : undefined,
-          );
+        const edit: LiveRuleEdit = { kind: 'value', value, important };
+        const target = liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+        const previews = documents.get(embedDocument) ?? [];
+        if (target !== undefined) {
+          previews.push({ preview: liveRules.show(target, edit), edit });
         }
-        if (target) {
-          target.value = value;
-          target.important = important;
+        const matches = declsFor(rule, prop);
+        const last = matches[matches.length - 1];
+        if (!liveOriginRef.current.has(prop)) {
+          liveOriginRef.current.set(prop, last ? { value: last.value, important: !!last.important } : undefined);
+        }
+        if (last) {
+          last.value = value;
+          last.important = important;
         } else {
           appendDecl(rule.node, prop, { value, important });
         }
-        documents.add(embedDocument);
+        documents.set(embedDocument, previews);
       }
-      for (const embedDocument of documents) {
-        void writeEmbedDocument(embedDocument, true).then((result) => {
+      for (const [embedDocument, previews] of documents) {
+        const saving = writeEmbedDocument(embedDocument, true).then((result) => {
           if (!result.ok && inComponentRef.current && !embedDocument.source.fromComponent) {
             markPending(embedDocument.source.key);
           }
+          return result.ok;
         });
+        settlePreviews(saving, previews);
       }
     },
     [documentByKey, markPending, isGroupedSplittable, inComponentRef],
@@ -330,6 +337,8 @@ export function useRuleActions(
   applyEditHook: ReturnType<typeof useApplyEdit>,
   liveEdits: ReturnType<typeof useLiveEdits>,
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { inComponentRef } = editorRefs;
   const { setSaveError } = busyState;
   const { documentByKey, markPending } = pendingWrites;
@@ -351,23 +360,29 @@ export function useRuleActions(
       if (!embedDocument) {
         return;
       }
+      // The canvas shows the reverted value at once, as it showed the live writes.
+      const edit: LiveRuleEdit = origin ? { kind: 'value', value: origin.value, important: origin.important } : { kind: 'removed' };
+      const liveTarget = liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+      const preview = liveTarget === undefined ? undefined : liveRules.show(liveTarget, edit);
       const matches = declsFor(rule, prop);
-      const target = matches[matches.length - 1];
+      const last = matches[matches.length - 1];
       if (origin) {
-        if (target) {
-          target.value = origin.value;
-          target.important = origin.important;
+        if (last) {
+          last.value = origin.value;
+          last.important = origin.important;
         } else {
           appendDecl(rule.node, prop, { value: origin.value, important: origin.important });
         }
-      } else if (target) {
-        target.remove();
+      } else if (last) {
+        last.remove();
       }
-      void writeEmbedDocument(embedDocument, true).then((result) => {
+      const saving = writeEmbedDocument(embedDocument, true).then((result) => {
         if (!result.ok && inComponentRef.current && !embedDocument.source.fromComponent) {
           markPending(embedDocument.source.key);
         }
+        return result.ok;
       });
+      settlePreviews(saving, preview === undefined ? [] : [{ preview, edit }]);
     },
     [documentByKey, markPending, inComponentRef, liveOriginRef],
   );
@@ -382,13 +397,13 @@ export function useRuleActions(
       void applyEdit(rule, () => {
         const result = replaceRuleCss(rule, css);
         if (!result.ok) {
-          setSaveError(`Invalid CSS: ${result.error}`);
+          setSaveError(translate('styleModel.embed.hook.invalidCss', { reason: translateDescribed({ message: result.error, messageRef: result.errorRef }) }));
           return false;
         }
         return true;
       });
     },
-    [applyEdit, setSaveError],
+    [applyEdit, setSaveError, translate, translateDescribed],
   );
   return { onRemoveRule, onRevertProp, onSaveCssRule };
 }
@@ -410,12 +425,12 @@ export function useOpenEmbed(
     (embedKey: string) => {
       const embedDocument = documentByKey.get(embedKey);
       if (!embedDocument) {
-        setStatus('Lost track of the source embed — try Rescan.');
+        setStatus('Lost track of the source embed — try Rescan.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       void navigateToEmbed(embedDocument.source, pageInstancesRef.current).then((result) => {
         if (!result.ok) {
-          setStatus(`Couldn't open it on the canvas: ${result.error}`);
+          setStatus(`Couldn't open it on the canvas: ${result.error}`); // i18n-ignore: write-only status, never rendered.
         }
       });
     },
@@ -449,10 +464,7 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
   // the chips show while the scan is still running. Either can still carry a class
   // the element has just lost (both union in what the preview last reported), so
   // those are taken out here rather than waited out.
-  const snapshot = useMemo(
-    () => withoutClasses(scan?.rootSnapshot ?? quickSnapshot ?? undefined, removedClasses),
-    [scan, quickSnapshot, removedClasses],
-  );
+  const snapshot = useMemo(() => withoutClasses(scan?.rootSnapshot ?? quickSnapshot ?? undefined, removedClasses), [scan, quickSnapshot, removedClasses]);
 
   const model = scan?.model;
   const tokens = useMemo(() => snapshotTokens(snapshot), [snapshot]);
@@ -466,15 +478,11 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
     if (tagTok) {
       out.push({ selector: tagTok.label ?? tagTok.name, kind: 'tag' });
     }
-    const classNames = tokens
-      .filter((token) => token.kind === 'class')
-      .map((token) => token.label ?? token.name.slice('class:'.length));
+    const classNames = tokens.filter((token) => token.kind === 'class').map((token) => token.label ?? token.name.slice('class:'.length));
     for (const cls of classNames) {
       out.push({ selector: `.${cls}`, kind: 'class' });
     }
-    const attrNames = tokens
-      .filter((token) => token.kind === 'attribute')
-      .map((token) => token.label ?? token.name.slice('attr:'.length));
+    const attrNames = tokens.filter((token) => token.kind === 'attribute').map((token) => token.label ?? token.name.slice('attr:'.length));
     for (const name of attrNames) {
       out.push({ selector: `[${name}]`, kind: 'attribute' });
     }
@@ -495,5 +503,37 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
     }
     return out;
   }, [tokens, snapshot]);
-  return { model, selectorSuggestions, snapshot, tokens };
+  // The classes this instance passed to the open component (model/instanceClasses.ts).
+  // The snapshot is rebuilt on every selection and every class the canvas reports,
+  // and opening or leaving a component rescans, so it is the memo's whole input.
+  const instanceClasses = useMemo(() => selectedInstanceClasses(snapshot?.classList ?? []), [snapshot]);
+  // What the element's node writes in the open component, which makes a chip green
+  // (model/componentMarkup.ts). Read on the same rebuilds as the instance classes:
+  // a class written into the markup changes the snapshot too.
+  const componentMarkup = useMemo(() => (snapshot === undefined ? undefined : selectedComponentMarkup()), [snapshot]);
+  return { componentMarkup, instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
+}
+
+// Report a save's outcome to the canvas previews it carried: kept until the page holds
+// the edit when it landed, put back now when it did not. A save that throws is reported
+// as not landed and still rejects, so the error stays as loud as before.
+function settlePreviews(saving: Promise<boolean>, previews: readonly { readonly preview: LiveRulePreview; readonly edit: LiveRuleEdit }[]): void {
+  if (previews.length === 0) {
+    void saving;
+    return;
+  }
+  let landed = false;
+  void saving
+    .then((outcome) => {
+      landed = outcome;
+    })
+    .finally(() => {
+      for (const { preview, edit } of previews) {
+        if (landed) {
+          liveRules.landed(preview, edit);
+        } else {
+          liveRules.failed(preview);
+        }
+      }
+    });
 }

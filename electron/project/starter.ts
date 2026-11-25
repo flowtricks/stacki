@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 
 import { toRecord } from '../../shared/core/record';
 import { commandNeedsShell } from '../lib/platform';
+import { stopProcessTree } from '../lib/nodeTools';
 
 // Starting a site from a starter.
 //
@@ -26,6 +27,7 @@ interface Starter {
 
 const STARTERS: Record<string, Starter> = {
   lumos: {
+    // i18n-ignore: starter template name: a product term.
     label: 'Lumos',
     // Pinned to `@latest` rather than a version: the scaffolder is downloaded
     // per run, and a site started today should be started from today's.
@@ -39,7 +41,23 @@ const NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 type OnLog = (text: string) => void;
 
-const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): Promise<string> =>
+// A scaffolder only downloads a template, so a run this long has stalled, and the wizard
+// cannot be closed while it waits.
+const RUN_TIMEOUT_MS = 5 * 60 * 1000;
+/** The message of the error a stopped run rejects with, so a caller can tell a cancel from a failure. */
+export const RUN_CANCELLED = 'The command was cancelled.';
+
+/** A caller that must be able to stop a run, or give it more (or less) time than a scaffolder needs. */
+interface RunOptions {
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+  readonly stdoutOnly?: true;
+  readonly environment?: Readonly<NodeJS.ProcessEnv>;
+  readonly waitForStop?: true;
+  readonly outputBytesMax?: number;
+}
+
+const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, options: RunOptions = {}): Promise<string> =>
   new Promise((resolve, reject) => {
     let proc;
     try {
@@ -47,8 +65,10 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
         cwd,
         // On Windows npm is a .cmd shim, which needs a shell to be found.
         shell: commandNeedsShell(cmd),
+        // Its own process group, so a stalled run is stopped with what it started.
+        detached: !isWin,
         env: {
-          ...process.env,
+          ...(options.environment ?? process.env),
           GIT_TERMINAL_PROMPT: '0',
           FORCE_COLOR: '0',
           NO_COLOR: '1',
@@ -56,15 +76,59 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
         },
       });
     } catch (error: unknown) {
-      reject(
-        new Error(
-          `Could not run ${cmd}: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      );
+      reject(new Error(`Could not run ${cmd}: ${error instanceof Error ? error.message : String(error)}`));
       return;
     }
+    const child = proc;
+    const timeoutMs = options.timeoutMs ?? RUN_TIMEOUT_MS;
+    let stopped: Error | undefined;
+    const stop = (error: Error): void => {
+      if (stopped !== undefined) {
+        return;
+      }
+      stopped = error;
+      if (options.waitForStop === true) {
+        // The staging folder can only be removed once the process group is done writing to it.
+        if (!isWin && child.pid !== undefined) {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+            return;
+          } catch {
+            // Fall back to the usual process-tree stop when the group is already gone.
+          }
+        }
+      }
+      stopProcessTree(child);
+      if (options.waitForStop !== true) {
+        reject(error);
+      }
+    };
+    const timer = setTimeout(() => {
+      stop(new Error(`${path.basename(cmd)} ${args[0] ?? ''} took over ${Math.round(timeoutMs / 60000)} minutes and was stopped.`));
+    }, timeoutMs);
+    const cancel = (): void => {
+      clearTimeout(timer);
+      stop(new Error(RUN_CANCELLED));
+    };
+    if (options.signal?.aborted === true) {
+      cancel();
+    } else {
+      options.signal?.addEventListener('abort', cancel, { once: true });
+    }
     let tail = '';
-    const onOut = (chunk: { toString(): string }): void => {
+    let stdout = '';
+    let outputBytes = 0;
+    const onOut = (chunk: Buffer): string => {
+      if (stopped !== undefined) {
+        return '';
+      }
+      if (options.outputBytesMax !== undefined) {
+        outputBytes += chunk.byteLength;
+        if (outputBytes > options.outputBytesMax) {
+          stop(new Error(`${path.basename(cmd)} exceeded its command output limit and was stopped.`));
+          return '';
+        }
+      }
       // Progress spinners are drawn with cursor moves and line clears; strip
       // them so the log pane reads as the plain text it renders.
       const text = chunk
@@ -73,10 +137,17 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
         .replace(/\r/g, '\n');
       tail = (tail + text).slice(-4000);
       onLog?.(text);
+      return text;
     };
-    proc.stdout.on('data', onOut);
+    proc.stdout.on('data', (chunk: Buffer) => {
+      const text = onOut(chunk);
+      if (options.stdoutOnly === true) {
+        stdout = (stdout + text).slice(-4000);
+      }
+    });
     proc.stderr.on('data', onOut);
     proc.on('error', (error: Error) => {
+      clearTimeout(timer);
       const code = toRecord(error)?.['code'];
       reject(
         new Error(
@@ -88,11 +159,19 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
         ),
       );
     });
-    proc.on('exit', (code) =>
-      code === 0
-        ? resolve(tail)
-        : reject(new Error(`${cmd} ${args[0] ?? ''} exited with code ${code}.\n\n${tail}`)),
-    );
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', cancel);
+      if (stopped !== undefined) {
+        reject(stopped);
+        return;
+      }
+      if (code === 0) {
+        resolve(options.stdoutOnly === true ? stdout : tail);
+      } else {
+        reject(new Error(`${cmd} ${args[0] ?? ''} exited with code ${code}.\n\n${tail}`));
+      }
+    });
   });
 
 interface CreateStarterOptions {
@@ -105,43 +184,24 @@ interface CreateStarterOptions {
 }
 
 /**
- * Runs a starter's scaffolder in `parentPath` to make `parentPath/name`, then
- * gives the site a history of its own. Installing what it needs is the
+ * Runs a starter's scaffolder in `parentPath` to make `parentPath/name`.
+ * Installing what it needs and its first commit (`startSiteHistory`) are the
  * caller's — this is the part that has to be right before anything is
  * installed into it.
  */
-async function createStarter({
-  starter = 'lumos',
-  parentPath,
-  name,
-  npm,
-  onLog,
-}: CreateStarterOptions = {}): Promise<{ ok: boolean; projectPath: string }> {
+async function createStarter({ starter = 'lumos', parentPath, name, npm, onLog }: CreateStarterOptions = {}): Promise<{ ok: boolean; projectPath: string }> {
   const template = STARTERS[starter];
   if (!template) {
     throw new Error(`${starter} is not a starter this app knows.`);
   }
-  if (!parentPath || !fs.existsSync(parentPath)) {
-    throw new Error('Choose where the site should go first.');
-  }
-
-  const folder = String(name || '').trim();
-  if (!folder) {
-    throw new Error('Give the site a name.');
-  }
-  if (!NAME_RE.test(folder)) {
-    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name.');
-  }
-  const directory = path.join(parentPath, folder);
-  if (fs.existsSync(directory)) {
-    throw new Error(`${folder} already exists in that folder.`);
-  }
+  const directory = newSiteDirectory(parentPath, name);
+  const folder = path.basename(directory);
 
   // `--no-install`: the app installs afterwards, where a failure is an error
   // the wizard can show rather than a line in a log that scrolled past.
   const args = ['create', template.create, folder, '--yes', '--', '--no-install'];
   onLog?.(`> npm create ${template.create} ${folder}\n\n`);
-  await run(npm || (isWin ? 'npm.cmd' : 'npm'), args, parentPath, onLog);
+  await run(npm || (isWin ? 'npm.cmd' : 'npm'), args, path.dirname(directory), onLog);
 
   if (!fs.existsSync(path.join(directory, 'package.json'))) {
     throw new Error('The starter finished but there is no package.json in it.');
@@ -162,37 +222,61 @@ async function createStarter({
     /* an unusual package.json is not worth failing the site over */
   }
 
-  // A scaffolder that started a history of its own has already done this, and
-  // its first commit is the one to keep.
-  if (!fs.existsSync(path.join(directory, '.git'))) {
-    onLog?.('\n> starting a history for this site\n');
-    try {
-      await run('git', ['init', '-b', 'main'], directory);
-      await run('git', ['add', '-A'], directory);
-      // A first-time Git installation has no author configured yet. Give only
-      // this generated commit a neutral identity; do not change the user's
-      // repository or global configuration behind their back.
-      await run(
-        'git',
-        [
-          '-c',
-          'user.name=Stacki',
-          '-c',
-          'user.email=stacki@local.invalid',
-          'commit',
-          '-m',
-          `Start ${folder} from ${template.label}`,
-        ],
-        directory,
-      );
-    } catch (error: unknown) {
-      // A site with no git still runs; say so rather than throwing it away.
-      const reason = error instanceof Error ? error.message : String(error);
-      onLog?.(`\n(could not start a git history: ${reason})\n`);
-    }
-  }
-
   return { ok: true, projectPath: directory };
 }
 
-export { createStarter, STARTERS };
+/**
+ * Gives a new site a history of its own: one commit of the site as it stands.
+ * The caller runs it after the install, so the lockfile is part of that commit.
+ */
+async function startSiteHistory(directory: string, label: string, onLog?: OnLog, runOptions?: RunOptions): Promise<void> {
+  // A scaffolder that started a history of its own has already done this, and
+  // its first commit is the one to keep.
+  if (fs.existsSync(path.join(directory, '.git'))) {
+    return;
+  }
+  onLog?.('\n> starting a history for this site\n');
+  try {
+    await run('git', ['init', '-b', 'main'], directory, undefined, runOptions);
+    await run('git', ['add', '-A'], directory, undefined, runOptions);
+    // A first-time Git installation has no author configured yet. Give only
+    // this generated commit a neutral identity; do not change the user's
+    // repository or global configuration behind their back.
+    await run(
+      'git',
+      ['-c', 'user.name=Stacki', '-c', 'user.email=stacki@local.invalid', 'commit', '-m', `Start ${path.basename(directory)} from ${label}`],
+      directory,
+      undefined,
+      runOptions,
+    );
+  } catch (error: unknown) {
+    // A site with no git still runs; say so rather than throwing it away.
+    const reason = error instanceof Error ? error.message : String(error);
+    onLog?.(`\n(could not start a git history: ${reason})\n`);
+  }
+}
+
+/**
+ * The folder a new site gets, `parentPath/name`, which must not exist yet. The
+ * starter and the Astro wizard both use it, so the name rules and their
+ * messages are the same in either flow.
+ */
+function newSiteDirectory(parentPath: string | undefined, name: string | undefined): string {
+  if (!parentPath || !fs.existsSync(parentPath)) {
+    throw new Error('Choose where the site should go first.');
+  }
+  const folder = String(name || '').trim();
+  if (!folder) {
+    throw new Error('Give the site a name.');
+  }
+  if (!NAME_RE.test(folder)) {
+    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name.');
+  }
+  const directory = path.join(parentPath, folder);
+  if (fs.existsSync(directory)) {
+    throw new Error(`${folder} already exists in that folder.`);
+  }
+  return directory;
+}
+
+export { createStarter, newSiteDirectory, run as runCreateCommand, startSiteHistory, STARTERS };

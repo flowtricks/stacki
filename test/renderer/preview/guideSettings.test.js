@@ -10,16 +10,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 globalThis.CSS = {
-  supports: (property, value) =>
-    property === 'color' && /^(#[0-9a-f]{3,8}|rgba?\([^()]*\)|red)$/i.test(value),
+  supports: (property, value) => property === 'color' && /^(#[0-9a-f]{3,8}|rgba?\([^()]*\)|red)$/i.test(value),
 };
 
-const { parseGuideColor, parseGuideSettings } = require('../../helpers/rendererModule')(
-  'src/features/preview/guideSettings.ts',
-);
-const { GUIDE_DEFAULTS, GUIDE_LIMITS } = require('../../helpers/rendererModule')(
-  'src/features/preview/guideModel.ts',
-);
+const { parseGuideColor, parseGuideSettings } = require('../../helpers/rendererModule')('src/features/preview/guideSettings.ts');
+const { GUIDE_DEFAULTS, GUIDE_LIMITS } = require('../../helpers/rendererModule')('src/features/preview/guideModel.ts');
 
 const STORED = {
   visible: true,

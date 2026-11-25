@@ -16,7 +16,8 @@
 // has none, and would report every one of these as fine. It mounts the actual
 // LayerPopover with a real Select inside it, opens the menu, and asks the page
 // the only question that matters: at the option's own coordinates, is the
-// option what you would hit?
+// option what you would hit? Each step waits, bounded, on the state it reads next
+// (test/helpers/waitFor.js), including the popover's and the menu's opening motion.
 
 const fs = require('fs');
 const path = require('path');
@@ -104,10 +105,7 @@ const check = (what, condition, detail) => {
     }
   })();
   if (typeof electronPath !== 'string') {
-    console.log(
-      'popover-dropdown: skipped — no Electron to lay it out in ' +
-        '(see test/electron/preload/gapBands.test.js for the pattern)',
-    );
+    console.log('popover-dropdown: skipped — no Electron to lay it out in ' + '(see test/electron/preload/gapBands.test.js for the pattern)');
     return;
   }
 
@@ -121,15 +119,23 @@ const check = (what, condition, detail) => {
        const win = new BrowserWindow({ show: false, width: 900, height: 700 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
+       // Bounded waits on what the next step reads (test/helpers/waitFor.js), not fixed sleeps.
+       const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
        // A real press, from the browser's own input pipeline — a dispatched event
        // would be delivered to the element it is dispatched ON, which is exactly
        // the question being asked here.
        const clickAt = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-         await new Promise((r) => setTimeout(r, 60));
        };
-       await new Promise((r) => setTimeout(r, 400));
+       // The popover scales open: its trigger is measured once it is drawn and still.
+       await pollUntil({
+         what: 'the popover and its trigger drawn',
+         read: () => js("document.querySelector('.embed-editor_layer-popover-box') !== null && document.querySelector('.u-select-button') !== null"),
+         until: (drawn) => drawn,
+       });
+       await settled('the popover opened');
 
        const out = {};
        out.box = await js("(() => { const b = " +
@@ -146,8 +152,24 @@ const check = (what, condition, detail) => {
          "(inside)' : ' (OUTSIDE)')), true); window.addEventListener('scroll', " +
          "(e) => window.__why.push('scroll from ' + String(e.target.className || " +
          "e.target.nodeName).slice(0, 30)), true); true");
-       await clickAt(trigger.x, trigger.y);
+       // A hidden window on GitHub's older Linux runner can drop the first press while it
+       // is still settling; press again until the list opens, a bounded number of times.
+       for (let attempt = 0; attempt < 20; attempt += 1) {
+         await clickAt(trigger.x, trigger.y);
+         const listed = await pollUntil({ what: 'the list open', read: () => js("!!document.querySelector('.u-select-list')"), until: (open) => open, pollCountMax: 10 });
+         if (listed.kind === 'reached') {
+           break;
+         }
+       }
+       // The menu scales open too; hit-test its option once it is still.
+       await settled('the menu opened');
        out.opened = await js("!!document.querySelector('.u-select-list')");
+       if (!out.opened) {
+         // Report at once rather than throwing below and leaving the probe to time out.
+         console.log(JSON.stringify(out));
+         app.quit();
+         return;
+       }
        out.dropUp = await js("!!document.querySelector('.u-select-list.is-up')");
        out.menu = await js("(() => { const l = document.querySelector('.u-select-list'); " +
          "const b = document.querySelector('.embed-editor_layer-popover-box'); " +
@@ -164,6 +186,8 @@ const check = (what, condition, detail) => {
        // And pressing there must not shut the popover. Record what any close is
        // actually reacting to, so a failure here names its own cause.
        await clickAt(out.hit.x, out.hit.y);
+       // The pick closes the menu; read what happened once it has.
+       await pollUntil({ what: 'the menu closed by the pick', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
        out.why = await js('window.__why');
        out.afterPick = await js("({ popover: " +
          "!!document.querySelector('.embed-editor_layer-popover'), " +
@@ -172,7 +196,11 @@ const check = (what, condition, detail) => {
        // A box that really does outgrow the screen still scrolls — the reason the
        // overflow was there in the first place.
        await js('window.__setTall(true)');
-       await new Promise((r) => setTimeout(r, 200));
+       await pollUntil({
+         what: 'the tall box marked as scrolling',
+         read: () => js("document.querySelector('.embed-editor_layer-popover-box').className.includes('is-scrolling')"),
+         until: (scrolling) => scrolling,
+       });
        out.tall = await js("(() => { const b = " +
          "document.querySelector('.embed-editor_layer-popover-box'); " +
          "return { overflow: getComputedStyle(b).overflowY, scrollingClass: " +
@@ -193,30 +221,21 @@ const check = (what, condition, detail) => {
     check('the popover does not clip by default', out.box.overflow === 'visible', out.box.overflow);
     check('and is not marked as scrolling', out.box.scrollingClass === false);
     check('the menu opens', out.opened === true);
+    if (out.opened !== true) {
+      // The probe stopped at the first failure; the checks below need an open menu.
+      console.error(`popover-dropdown: the menu never opened\n${failures.join('\n')}`);
+      process.exit(1);
+    }
     check('upward, having no room below', out.dropUp === true);
-    check(
-      'so it hangs outside the popover box',
-      out.menu?.above === true,
-      JSON.stringify(out.menu),
-    );
+    check('so it hangs outside the popover box', out.menu?.above === true, JSON.stringify(out.menu));
     check('and the option is what is at the option', out.hit.isTheOption === true, out.hit.hit);
     check('pressing it leaves the popover open', out.afterPick.popover === true);
-    check(
-      'and asks nobody to close it',
-      out.afterPick.closes === 0,
-      `${out.afterPick.closes} close calls — ${JSON.stringify(out.why)}`,
-    );
-    check(
-      'a box taller than the screen still scrolls',
-      out.tall.scrollingClass === true && out.tall.overflow === 'auto',
-      JSON.stringify(out.tall),
-    );
+    check('and asks nobody to close it', out.afterPick.closes === 0, `${out.afterPick.closes} close calls — ${JSON.stringify(out.why)}`);
+    check('a box taller than the screen still scrolls', out.tall.scrollingClass === true && out.tall.overflow === 'auto', JSON.stringify(out.tall));
   }
 
   if (failures.length) {
-    console.error(
-      `popover-dropdown: ${failures.length} of ${checked} failed\n${failures.join('\n')}`,
-    );
+    console.error(`popover-dropdown: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
   console.log(`popover-dropdown: ${checked} passed  [real layout, real press]`);

@@ -1,7 +1,6 @@
 import { filePath, record } from '../../shared/validation';
 
-export const MEDIA_EXT =
-  /\.(svg|png|jpe?g|gif|webp|avif|ico|bmp|tiff?|mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot|pdf)$/i;
+export const MEDIA_EXT = /\.(svg|png|jpe?g|gif|webp|avif|ico|bmp|tiff?|mp4|webm|mov|m4v|ogv|mp3|wav|ogg|m4a|flac|aac|woff2?|ttf|otf|eot|pdf)$/i;
 export interface AssetState {
   readonly deleted: readonly string[];
   readonly directories: readonly string[];

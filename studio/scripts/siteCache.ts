@@ -9,10 +9,7 @@ export async function prepareSiteCache() {
   try {
     await readFile(path.join(root, 'package-lock.json'));
     await copyFile(path.join(root, 'package.json'), path.join(destination, 'package.json'));
-    await copyFile(
-      path.join(root, 'package-lock.json'),
-      path.join(destination, 'package-lock.json'),
-    );
+    await copyFile(path.join(root, 'package-lock.json'), path.join(destination, 'package-lock.json'));
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
       throw error;

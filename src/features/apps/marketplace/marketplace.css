@@ -1,0 +1,217 @@
+/* The Apps panel's Marketplace tab, the Auto-update setting and the rail's
+   update dot. Background fills, never borders, like every Stacki panel. */
+/* The Installed / Marketplace switch: the shared segmented tabs
+   (src/ui/segmentedTabs.css, `.ui-tabs`), set into the panel's gutter. The
+   `apps-view-tab*` classes stay on the elements as this panel's hooks. */
+.apps-view-tabs {
+  margin: 0 12px 10px;
+}
+/* The tab's calm states: the marketplace could not be read, or lists nothing yet. */
+.apps-market-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  text-align: start;
+}
+.apps-market-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 9px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.apps-market-state p {
+  margin: 0;
+  max-width: 240px;
+}
+.apps-market-state-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.apps-market-state-text {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.apps-market-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.apps-market-state-detail {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+.apps-market-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-top: 4px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+.apps-market-submit:hover {
+  background: var(--bg-active);
+}
+.apps-market-row {
+  /* The row is the query container, so its action can shrink to the icon when the panel is narrow. */
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  /* The icon sits well clear of the name: 10px read as crowded beside a 32px tile, and installed rows use 18px. */
+  gap: 6px 16px;
+  padding: 8px;
+  border-radius: 8px;
+}
+.apps-market-row:hover,
+.apps-market-row.focused {
+  background: var(--bg-hover);
+}
+.apps-market-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg-input);
+}
+.apps-market-byline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.apps-market-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The version follows the author after a dot, and keeps its width so a long login is what truncates. */
+.apps-market-version {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.apps-market-version::before {
+  content: '·';
+  margin-inline-end: 5px;
+}
+/* A row's name gets the line to itself: it wraps rather than cut to "Feed…". */
+.apps-market-row .apps-row-title {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.apps-market-row .apps-row-text {
+  gap: 4px;
+}
+.apps-market-description {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.apps-market-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+/* The ⋯ sits beside Install, so the app's details are one tap away without a second line of chrome. */
+.apps-market-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rail-btn {
+  position: relative;
+}
+.apps-rail-badge {
+  position: absolute;
+  top: 5px;
+  inset-inline-end: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+}
+.apps-row-description.apps-row-update {
+  color: var(--accent);
+}
+/* Auto-update is on but the version asks for more: it waits for a person, in the amber the details use for "look at this". */
+.apps-row-description.apps-row-update[data-needs-ok='true'] {
+  color: var(--amber);
+}
+/* The tab's first line: who answers for a community app. Short and muted, never a banner. */
+.apps-market-disclaimer {
+  margin: 0 12px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+/* The list's last row while more results remain: the infinite scroll's sentinel, and a quiet note that the next page is coming. */
+.apps-market-more {
+  padding: 10px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: center;
+}
+/* Placeholder rows for the index's first read and the next page: the tile and two lines, fill only. */
+.apps-market-skeletons {
+  padding: 0 4px;
+}
+.apps-market-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+}
+.apps-market-skeleton-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Below 360px of row the label would squeeze the name to a sliver: Install keeps only its icon, a 26px square, as tall as the
+   labelled button. The label stays in the page, clipped, so assistive tech still reads it and the title still names it. */
+@container (max-width: 360px) {
+  .apps-market-install {
+    position: relative;
+    width: 26px;
+    padding: 0;
+  }
+  .apps-market-install .apps-header-actions {
+    justify-content: center;
+  }
+  .apps-market-install-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

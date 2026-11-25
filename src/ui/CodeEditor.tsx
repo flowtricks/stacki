@@ -1,26 +1,34 @@
 import { useCodeAccess, ManagedValue } from './CodeAccess';
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import { basicSetup, EditorView } from 'codemirror';
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { basicSetup, EditorView, minimalSetup } from 'codemirror';
 import type { MutableRefObject } from 'react';
-import type { LanguageSupport } from '@codemirror/language';
+import { LanguageSupport } from '@codemirror/language';
 import { assert } from '../../shared/core/assert';
-import { Annotation, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
-import { Decoration, keymap } from '@codemirror/view';
-import { indentWithTab } from '@codemirror/commands';
+import { Annotation, EditorState, StateEffect, StateField, Transaction, type Extension } from '@codemirror/state';
+import { Decoration } from '@codemirror/view';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { html } from '@codemirror/lang-html';
-import { syntaxHighlighting, HighlightStyle, LanguageDescription } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, indentOnInput, LanguageDescription } from '@codemirror/language';
 import { search } from '@codemirror/search';
-import { tags as t } from '@lezer/highlight';
 import { astroHighlight } from './astroHighlight';
+import { codeIndentExtensions } from './codeEditorIndent';
+import { codeSourceOffset, codeViewOffset, editCodeView, openCodeView, sourceCodeView, type CodeExtent, type CodeView } from './codeIndentView';
+import { codeLineClassifier } from './codeLineRoles';
+import { CODE_TOKEN_RULES } from './codeHighlight';
+import { codeStickyScroll } from './codeStickyScroll';
+import { tomlLanguage } from './tomlSyntax';
 
 // CodeMirror 6 wrapper themed to match the app. Controlled-ish: `value` in,
 // `onChange(text)` out; external value changes replace the doc only when
 // they differ from the editor's current text (so typing doesn't loop).
 // Key the component by node id at the call site so switching nodes resets
 // history and selection.
+//
+// `value` is always the source. What the editor holds is a view of it with
+// tab indentation (codeIndentView.ts), and every offset and text crossing this
+// component's props is in source terms, so no caller knows the two differ.
 
 const externalValue = Annotation.define<boolean>();
 
@@ -37,14 +45,13 @@ export const appTheme = EditorView.theme(
       lineHeight: '1.55',
     },
     '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
-    '.cm-line': { paddingRight: '16px' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
+    '.cm-line': { paddingRight: '16px' }, // physical: code is forced left to right
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' }, // physical: CodeMirror draws its caret as a left border
     '&.cm-focused': { outline: 'none' },
     // The same selection as the rest of the app. CodeMirror paints its own
     // layer rather than using ::selection, so it has to be told separately or
     // code is the one place a selection looks different.
-    ['&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, ' +
-    '.cm-selectionBackground']: { backgroundColor: 'var(--selection)' },
+    ['&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, ' + '.cm-selectionBackground']: { backgroundColor: 'var(--selection)' },
     '.cm-content ::selection': {
       backgroundColor: 'var(--selection)',
       color: 'var(--selection-text)',
@@ -92,42 +99,12 @@ export const appTheme = EditorView.theme(
   { dark: true },
 );
 
+// A code field's text starts where a field's text does, with no gutter to the left of it.
+const fieldTheme = EditorView.theme({ '.cm-content': { padding: '10px 0' }, '.cm-line': { padding: '0 12px' } });
+
 export const appHighlight = syntaxHighlighting(
   HighlightStyle.define(
-    [
-      { tag: [t.keyword, t.modifier], color: '#c792ea' },
-      { tag: [t.propertyName], color: '#80cbc4' },
-      { tag: [t.className, t.tagName], color: '#ffcb6b' },
-      { tag: [t.string, t.special(t.string)], color: '#c3e88d' },
-      { tag: [t.number, t.unit, t.bool, t.null, t.atom], color: '#f78c6c' },
-      {
-        tag: [t.function(t.variableName), t.function(t.propertyName)],
-        color: '#82aaff',
-      },
-      { tag: [t.variableName, t.definition(t.variableName)], color: '#e0e0e0' },
-      {
-        tag: [t.comment, t.blockComment, t.lineComment],
-        color: '#616161',
-        fontStyle: 'italic',
-      },
-      { tag: [t.operator, t.punctuation, t.separator], color: '#89ddff' },
-      { tag: [t.labelName, t.attributeName], color: '#80cbc4' },
-      {
-        tag: [t.color, t.constant(t.name), t.standard(t.name)],
-        color: '#f78c6c',
-      },
-      // Markdown: the structure of a document rather than of code. Headings
-      // lead, code and links pick up the colours their kind already has
-      // elsewhere in this theme, and the marks (#, *, `) stay quiet.
-      { tag: [t.heading], color: '#f5f5f5', fontWeight: '600' },
-      { tag: [t.emphasis], fontStyle: 'italic' },
-      { tag: [t.strong], fontWeight: '600', color: '#f5f5f5' },
-      { tag: [t.link, t.url], color: '#82aaff', textDecoration: 'underline' },
-      { tag: [t.monospace], color: '#c3e88d' },
-      { tag: [t.quote], color: '#999999', fontStyle: 'italic' },
-      { tag: [t.list], color: '#89ddff' },
-      { tag: [t.processingInstruction], color: '#616161' },
-    ],
+    CODE_TOKEN_RULES.map(({ tag, style }) => ({ tag, ...style })),
     { themeType: 'dark' },
   ),
 );
@@ -135,13 +112,40 @@ export const appHighlight = syntaxHighlighting(
 export interface CodeEditorProps {
   readonly value?: string | undefined;
   readonly language?: string | undefined;
+  /**
+   * How the source is shown. A block is the inside of a tag, dedented; a document
+   * (the default) is shown from column 0; `spaces` is a format that forbids tabs,
+   * shown byte for byte.
+   */
+  readonly indentation?: CodeEditorIndentation | undefined;
+  /**
+   * Pin the opening lines of the blocks around the top of the view. Each editor asks
+   * for this: it reads well on CSS and scripts, and was tried and turned off for page
+   * markup, where every wrapper element pins and the stack says little.
+   */
+  readonly stickyHeaders?: boolean | undefined;
   readonly onChange?: ((text: string, position: number) => void) | undefined;
   readonly revealLine?: number | undefined;
+  /** A new value reveals `revealLine` again, even when the line is unchanged: a second go-to to the same declaration. */
+  readonly revealSerial?: number | undefined;
   readonly activeRange?: CodeEditorRange | undefined;
   readonly componentRanges?: readonly CodeEditorComponentRange[] | undefined;
   readonly onPositionChange?: ((position: number) => void) | undefined;
   readonly onOpenComponent?: ((name: string, id: string) => void) | undefined;
+  /**
+   * More CodeMirror extensions, read when the editor is made (as `language` is): a caller's own
+   * rules about what may be typed, such as the locked delimiters of Settings' style tag block.
+   */
+  readonly extensions?: Extension | undefined;
+  /**
+   * `minimal` is a code field rather than a code window: no line numbers, no fold gutter, no
+   * active-line band and no search, one uniform fill, as a short field in Settings needs. Read when the
+   * editor is made. Default `full`.
+   */
+  readonly chrome?: 'full' | 'minimal' | undefined;
 }
+
+export type CodeEditorIndentation = CodeExtent | 'spaces';
 
 export interface CodeEditorRange {
   readonly from: number;
@@ -163,9 +167,7 @@ const codeDecorationField = StateField.define({
   create: () => Decoration.none,
   update: (decorations, transaction) => {
     const changed = transaction.effects.find((effect) => effect.is(codeDecorations));
-    return changed
-      ? codeEditorDecorations(transaction.state.doc.length, changed.value)
-      : decorations.map(transaction.changes);
+    return changed ? codeEditorDecorations(transaction.state.doc.length, changed.value) : decorations.map(transaction.changes);
   },
   provide: (field) => EditorView.decorations.from(field),
 });
@@ -174,17 +176,27 @@ export default function CodeEditor(props: CodeEditorProps) {
   return useCodeAccess() ? <EditableCodeEditor {...props} /> : <ManagedValue />;
 }
 function EditableCodeEditor(props: CodeEditorProps) {
-  const { value, language, revealLine, activeRange, componentRanges } = props;
+  const { value, language, indentation, revealLine, revealSerial } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
   // These values change without replacing the editor, preserving history and selection.
   const latest = useRef(props);
   latest.current = props;
+  // The view opened from the source, advanced by each edit made here. A value
+  // that is not the source this view stands for came from outside: undo, a save,
+  // a collaborator. It starts a new view, and the edit it replaces is over.
+  const codeViewRef = useRef<CodeView | undefined>(undefined);
+  if (codeViewRef.current?.source !== (value ?? '')) {
+    codeViewRef.current = codeViewOf(value ?? '', language, indentation);
+  }
+  const codeView = codeViewRef.current;
+  const activeRange = useShownRange(props.activeRange, codeView);
+  const componentRanges = useShownRanges(props.componentRanges, codeView);
   useLayoutEffect(() => {
     const parent = hostRef.current;
     assert(parent !== null, 'CodeEditor: mounted host exists');
     assert(viewRef.current === undefined, 'CodeEditor: only one editor owns the host');
-    const view = codeEditorCreate(parent, language, latest);
+    const view = codeEditorCreate(parent, language, { latest, codeViewRef });
     viewRef.current = view;
     return () => {
       view.destroy();
@@ -203,14 +215,14 @@ function EditableCodeEditor(props: CodeEditorProps) {
     if (!view) {
       return;
     }
-    const change = externalChange(view.state.doc.toString(), value ?? '');
+    const change = externalChange(view.state.doc.toString(), codeView.text);
     if (change !== undefined) {
       view.dispatch({
         changes: change,
         annotations: [externalValue.of(true), Transaction.addToHistory.of(false)],
       });
     }
-  }, [value]);
+  }, [codeView]);
   useCodeDecorations(viewRef, activeRange, componentRanges);
   useEffect(() => {
     const view = viewRef.current;
@@ -218,22 +230,23 @@ function EditableCodeEditor(props: CodeEditorProps) {
       return;
     }
     assert(Number.isSafeInteger(revealLine), 'CodeEditor: reveal line is a safe integer');
-    const line = view.state.doc.line(Math.max(1, Math.min(revealLine, view.state.doc.lines)));
+    const shownLine = revealLine - (codeViewRef.current?.headLineCount ?? 0);
+    const line = view.state.doc.line(Math.max(1, Math.min(shownLine, view.state.doc.lines)));
+    // The line's text is selected, its indent left out: the selection is the highlight, and the cursor sits on the declaration.
+    const indent = /^\s*/.exec(line.text)?.[0].length ?? 0;
+    assert(indent <= line.length, 'CodeEditor: the indent is inside its line');
     view.dispatch({
-      selection: { anchor: line.from },
+      selection: { anchor: line.from + indent, head: line.to },
       effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
     });
     view.focus();
-  }, [revealLine, language]);
+  }, [revealLine, revealSerial, language]);
   return <div ref={hostRef} className="cm-host" />;
 }
 
 /** The one change that turns `current` into `next`: the region between their
  * common prefix and suffix, or undefined when they are equal. */
-export function externalChange(
-  current: string,
-  next: string,
-): { readonly from: number; readonly to: number; readonly insert: string } | undefined {
+export function externalChange(current: string, next: string): { readonly from: number; readonly to: number; readonly insert: string } | undefined {
   if (current === next) {
     return undefined;
   }
@@ -243,10 +256,7 @@ export function externalChange(
     prefix++;
   }
   let suffix = 0;
-  while (
-    suffix < shorter - prefix &&
-    current.charCodeAt(current.length - 1 - suffix) === next.charCodeAt(next.length - 1 - suffix)
-  ) {
+  while (suffix < shorter - prefix && current.charCodeAt(current.length - 1 - suffix) === next.charCodeAt(next.length - 1 - suffix)) {
     suffix++;
   }
   const change = {
@@ -255,10 +265,7 @@ export function externalChange(
     insert: next.slice(prefix, next.length - suffix),
   };
   assert(change.from <= change.to, 'The changed region keeps its order');
-  assert(
-    current.slice(0, change.from) + change.insert + current.slice(change.to) === next,
-    'The change turns the document into the value',
-  );
+  assert(current.slice(0, change.from) + change.insert + current.slice(change.to) === next, 'The change turns the document into the value');
   return change;
 }
 
@@ -295,11 +302,7 @@ function useCodeDecorations(
       read: (editor) => {
         const start = editor.lineBlockAt(range.from);
         const end = editor.lineBlockAt(Math.max(range.from, range.to - 1));
-        return selectedCodeScrollTop(
-          start.top,
-          end.top + end.height,
-          editor.scrollDOM.clientHeight,
-        );
+        return selectedCodeScrollTop(start.top, end.top + end.height, editor.scrollDOM.clientHeight);
       },
       write: (top, editor) => {
         if (top !== undefined) {
@@ -311,11 +314,7 @@ function useCodeDecorations(
   }, [activeRange, viewRef]);
 }
 
-export function selectedCodeScrollTop(
-  startTop: number,
-  endBottom: number,
-  viewportHeight: number,
-): number | undefined {
+export function selectedCodeScrollTop(startTop: number, endBottom: number, viewportHeight: number): number | undefined {
   if (viewportHeight <= 0 || !Number.isFinite(viewportHeight)) {
     return undefined;
   }
@@ -327,32 +326,60 @@ export function selectedCodeScrollTop(
   return Math.max(0, startTop - offset);
 }
 
-function codeEditorCreate(
-  parent: HTMLDivElement,
-  language: string | undefined,
-  latest: MutableRefObject<CodeEditorProps>,
-): EditorView {
+function codeViewOf(source: string, language: string | undefined, indentation: CodeEditorIndentation | undefined): CodeView {
+  if (indentation === 'spaces') {
+    return sourceCodeView(source);
+  }
+  return openCodeView(source, { extent: indentation ?? 'document', classify: codeLineClassifier(language) });
+}
+
+function useShownRange(range: CodeEditorRange | undefined, codeView: CodeView): CodeEditorRange | undefined {
+  return useMemo(() => (range === undefined ? undefined : shownRange(range, codeView)), [range, codeView]);
+}
+
+function useShownRanges(ranges: readonly CodeEditorComponentRange[] | undefined, codeView: CodeView): readonly CodeEditorComponentRange[] | undefined {
+  return useMemo(() => ranges?.map((range) => ({ ...range, ...shownRange(range, codeView) })), [ranges, codeView]);
+}
+
+function shownRange(range: CodeEditorRange, codeView: CodeView): CodeEditorRange {
+  const shown = { from: codeViewOffset(codeView, range.from), to: codeViewOffset(codeView, range.to) };
+  assert(shown.from <= shown.to, 'shownRange: the shown range keeps its order');
+  return shown;
+}
+
+interface CodeEditorRefs {
+  readonly latest: MutableRefObject<CodeEditorProps>;
+  readonly codeViewRef: MutableRefObject<CodeView | undefined>;
+}
+
+function codeEditorCreate(parent: HTMLDivElement, language: string | undefined, refs: CodeEditorRefs): EditorView {
+  const { latest, codeViewRef } = refs;
+  const opened = codeViewRef.current;
+  assert(opened !== undefined, 'codeEditorCreate: the code view opens before the editor');
   const view = new EditorView({
     parent,
     state: EditorState.create({
-      doc: latest.current.value ?? '',
+      doc: opened.text,
       extensions: [
-        basicSetup,
-        keymap.of([indentWithTab]),
+        latest.current.chrome === 'minimal' ? [minimalSetup, indentOnInput(), fieldTheme] : basicSetup,
+        codeIndentExtensions(latest.current.indentation === 'spaces' ? 'spaces' : 'tabs'),
         // Search stays above the document so it cannot cover the final match.
-        search({ top: true }),
+        latest.current.chrome === 'minimal' ? [] : search({ top: true }),
         codeEditorLanguage(language),
         appTheme,
         language === 'astro' ? astroHighlight : appHighlight,
         codeDecorationField,
-        codeEditorInteractions(latest),
+        latest.current.stickyHeaders === true ? codeStickyScroll() : [],
+        codeEditorInteractions(refs),
+        latest.current.extensions ?? [],
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             if (!update.transactions.some((transaction) => transaction.annotation(externalValue))) {
-              latest.current.onChange?.(
-                update.state.doc.toString(),
-                update.state.selection.main.head,
-              );
+              const current = codeViewRef.current;
+              assert(current !== undefined, 'CodeEditor: an edit has a code view');
+              const next = editCodeView(current, update.state.doc.toString());
+              codeViewRef.current = next;
+              latest.current.onChange?.(next.source, codeSourceOffset(next, update.state.selection.main.head));
             }
           }
         }),
@@ -368,9 +395,9 @@ function codeEditorCreate(
   return view;
 }
 
-function codeEditorInteractions(latest: MutableRefObject<CodeEditorProps>) {
+function codeEditorInteractions(refs: CodeEditorRefs) {
   return EditorView.domEventHandlers({
-    click: (event, view) => codeEditorClick(event, view, latest),
+    click: (event, view) => codeEditorClick(event, view, refs),
     keydown: (event, view) => codeEditorModifier(view, { metaHeld: event.metaKey }),
     keyup: (event, view) => codeEditorModifier(view, { metaHeld: event.metaKey }),
     mousemove: (event, view) => codeEditorModifier(view, { metaHeld: event.metaKey }),
@@ -378,18 +405,16 @@ function codeEditorInteractions(latest: MutableRefObject<CodeEditorProps>) {
   });
 }
 
-function codeEditorClick(
-  event: MouseEvent,
-  view: EditorView,
-  latest: MutableRefObject<CodeEditorProps>,
-): boolean {
-  const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
-  if (position === null) {
+function codeEditorClick(event: MouseEvent, view: EditorView, refs: CodeEditorRefs): boolean {
+  const { latest, codeViewRef } = refs;
+  const shownPosition = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (shownPosition === null) {
     return false;
   }
-  const component = latest.current.componentRanges?.find(
-    (range) => range.from <= position && position <= range.to,
-  );
+  const current = codeViewRef.current;
+  assert(current !== undefined, 'CodeEditor: a click has a code view');
+  const position = codeSourceOffset(current, shownPosition);
+  const component = latest.current.componentRanges?.find((range) => range.from <= position && position <= range.to);
   if (event.metaKey && component) {
     event.preventDefault();
     latest.current.onOpenComponent?.(component.name, component.id);
@@ -424,24 +449,24 @@ function codeEditorDecorations(length: number, state: CodeDecorations) {
   return Decoration.set(ranges, true);
 }
 
-function codeEditorRangeWithin(
-  range: CodeEditorRange | undefined,
-  length: number,
-): CodeEditorRange | undefined {
+function codeEditorRangeWithin(range: CodeEditorRange | undefined, length: number): CodeEditorRange | undefined {
   if (!range || range.from < 0 || range.to < range.from || range.to > length) {
     return undefined;
   }
   return range;
 }
 
-function codeEditorLanguage(language: string | undefined): LanguageSupport {
-  if (language === 'astro') {
+export function codeEditorLanguage(language: string | undefined): LanguageSupport {
+  if (language === 'astro' || language === 'html') {
     // HTML supplies structural editing while the official Astro TextMate
     // grammar supplies the colors, including embedded expressions and scripts.
     return html();
   }
   if (language === 'css') {
     return css();
+  }
+  if (language === 'toml') {
+    return new LanguageSupport(tomlLanguage);
   }
   if (language === 'markdown') {
     // MDX is mostly prose: highlight headings and fences instead of parsing it all as JS.
@@ -451,13 +476,15 @@ function codeEditorLanguage(language: string | undefined): LanguageSupport {
         LanguageDescription.of({
           name: 'css',
           extensions: ['css'],
-          load: async () => css(),
+          // Given, not loaded: a loaded fence language arrives a tick after the
+          // first paint, so its block would paint grey and then recolour.
+          support: css(),
         }),
         LanguageDescription.of({
           name: 'javascript',
           alias: ['js', 'jsx', 'ts', 'tsx', 'typescript'],
           extensions: ['js', 'ts'],
-          load: async () => javascript({ typescript: true, jsx: true }),
+          support: javascript({ typescript: true, jsx: true }),
         }),
       ],
     });

@@ -7,7 +7,7 @@ export function useIdleSession(canPause: boolean) {
   const safe = useRef(canPause);
   safe.current = canPause;
   useEffect(() => {
-    if (canPause && document.hidden && !hasPendingOperations()) {
+    if (canPause && mayPause(lastActivity.current, Date.now(), hasPendingOperations())) {
       setPaused(true);
     }
   }, [canPause]);
@@ -23,23 +23,24 @@ export function useIdleSession(canPause: boolean) {
       if (!safe.current || hasPendingOperations()) {
         return;
       }
-      // Hidden tabs can freeze their timers while proxy sockets stay alive.
-      // Release connections before freezing, but only after work is saved.
-      if (document.hidden) {
-        setPaused(true);
-        return;
-      }
       if (mayPause(lastActivity.current, Date.now(), !safe.current || hasPendingOperations())) {
         setPaused(true);
       }
     };
-    document.addEventListener('visibilitychange', check);
+    // Switching tabs is not inactivity. Returning to the editor starts a fresh idle window.
+    const visibility = () => {
+      if (!document.hidden) {
+        activity();
+      }
+      check();
+    };
+    document.addEventListener('visibilitychange', visibility);
     const stopSettled = onOperationsSettled(check);
     const timer = setInterval(check, 10_000);
     return () => {
       clearInterval(timer);
       stopSettled();
-      document.removeEventListener('visibilitychange', check);
+      document.removeEventListener('visibilitychange', visibility);
       for (const event of events) {
         window.removeEventListener(event, activity);
       }

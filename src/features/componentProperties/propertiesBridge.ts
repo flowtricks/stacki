@@ -1,19 +1,11 @@
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import {
-  parseComponentProperties,
-  parsePropertiesResult,
-} from '../../../shared/properties/propertyEditing';
-import type {
-  ComponentProperties,
-  PropertyChange,
-} from '../../../shared/properties/propertyEditing';
+import { parseComponentProperties, parsePropertiesResult } from '../../../shared/properties/propertyEditing';
+import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { toRecord } from '../../../shared/core/record';
-import type { Result } from '../../../shared/core/result';
+import type { PropertyResult } from '../../../shared/properties/propertyErrors';
+import { parsePropertyRemovalPreview, type PropertyRemovalPreview } from '../../../shared/properties/propertyRemoval';
 
-export async function readComponentProperties(
-  projectPath: string,
-  file: string,
-): Promise<Result<ComponentProperties>> {
+export async function readComponentProperties(projectPath: string, file: string): Promise<PropertyResult<ComponentProperties>> {
   const payload = parseIpcPayload('component:properties', { projectPath, file });
   const result: unknown = await window.avb.componentProperties(payload);
   return parsePropertiesResult(result, parseComponentProperties);
@@ -26,7 +18,7 @@ export async function editComponentProperties(
   file: string,
   source: string,
   change: PropertyChange,
-): Promise<Result<EditedProperties>> {
+): Promise<PropertyResult<EditedProperties>> {
   const payload = parseIpcPayload('component:editProperties', {
     projectPath,
     file,
@@ -40,10 +32,15 @@ export async function editComponentProperties(
   }));
 }
 
+/** What deleting `name` would do across the site, for its confirmation; nothing is written (propertyRemoval.ts). */
+export async function previewPropertyRemoval(projectPath: string, file: string, name: string): Promise<PropertyResult<PropertyRemovalPreview>> {
+  const payload = parseIpcPayload('component:previewPropertyRemoval', { projectPath, file, name });
+  const result: unknown = await window.avb.previewPropertyRemoval(payload);
+  return parsePropertiesResult(result, parsePropertyRemovalPreview);
+}
+
 /** Apply a property batch's inverse; the result names the batch that redoes it. */
-export async function revertComponentProperties(
-  token: string,
-): Promise<Result<{ readonly undo: string }>> {
+export async function revertComponentProperties(token: string): Promise<PropertyResult<{ readonly undo: string }>> {
   const payload = parseIpcPayload('component:revertProperties', { token });
   const result: unknown = await window.avb.revertComponentProperties(payload);
   return parsePropertiesResult(result, (value) => ({ undo: undoToken(value) }));

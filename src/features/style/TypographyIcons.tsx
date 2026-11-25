@@ -1,76 +1,27 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import {
+  alignCenter as centralAlignCenter,
+  alignJustify as centralAlignJustify,
+  alignLeft as centralAlignLeft,
+  alignRight as centralAlignRight,
+  clearFormat as centralClearFormat,
+  italic as centralItalic,
+  strike as centralStrike,
+  text as centralText,
+  underline as centralUnderline,
+} from '../../ui/central/centralGeometry';
 // The typography section's glyphs: alignment, decoration, font style,
 // capitalization and direction (TypographySection.tsx).
 
 // ─────────────────────────── Icons ───────────────────────────
 
-export function AlignLeftIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M1 7H9V8H1V7Z" fill="currentColor" />
-      <path d="M11 11H1V12H11V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignCenterIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M4 7H12V8H4V7Z" fill="currentColor" />
-      <path d="M13 11H3V12H13V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignRightIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M7 7H15V8H7V7Z" fill="currentColor" />
-      <path d="M15 11H5V12H15V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignJustifyIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M1 7H15V8H1V7Z" fill="currentColor" />
-      <path d="M15 11H1V12H15V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export const DECORATION_NONE_ICON_PATH =
-  'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293' +
-  'L4.35353 3.64648L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536' +
-  'L7.99998 8.70714L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
-
-export function DecorNoneIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DECORATION_NONE_ICON_PATH}
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-export function DecorStrikeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M9 12H8V9H9V12Z" fill="currentColor" />
-      <path d="M12 5H9V7H14V8H3V7H8V5H5V4H12V5Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function DecorUnderlineIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M5 4.5H8.5M8.5 4.5H12M8.5 4.5V12M3 14.5H14" stroke="currentColor" />
-    </svg>
-  );
-}
+export const AlignLeftIcon = centralIcon(centralAlignLeft);
+export const AlignCenterIcon = centralIcon(centralAlignCenter);
+export const AlignRightIcon = centralIcon(centralAlignRight);
+export const AlignJustifyIcon = centralIcon(centralAlignJustify);
+export const DecorNoneIcon = centralIcon(centralClearFormat);
+export const DecorStrikeIcon = centralIcon(centralStrike);
+export const DecorUnderlineIcon = centralIcon(centralUnderline);
 export function DecorOverlineIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -80,23 +31,8 @@ export function DecorOverlineIcon() {
   );
 }
 // Italicize (font-style)
-export function FontStyleRegularIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M10.5 4H9V12H10.5V13H6.5V12H8V4H6.5V3H10.5V4Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function FontStyleItalicIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M8.80629 4H7V3H12V4H9.86038L7.19371 12H9V13H4V12H6.13962L8.80629 4Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
+export const FontStyleRegularIcon = centralIcon(centralText);
+export const FontStyleItalicIcon = centralIcon(centralItalic);
 export const TRANSFORM_CAPS_ICON_PATH =
   'M4.12583 4H5.87413L8.00003 11.2279L10.1258 4H11.8741L14.2271 12H13.1848' +
   'L12.5965 9.99994H9.40354L8.8153 12H7.18477L6.5965 9.99994H3.40354L2.8153 12' +
@@ -107,12 +43,7 @@ export const TRANSFORM_CAPS_ICON_PATH =
 export function TransformCapsIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPS_ICON_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPS_ICON_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -128,18 +59,8 @@ export const TRANSFORM_CAPITALIZE_LOWER_PATH =
 export function TransformCapitalizeIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPITALIZE_UPPER_PATH}
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_CAPITALIZE_LOWER_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPITALIZE_UPPER_PATH} fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_CAPITALIZE_LOWER_PATH} fill="currentColor" />
     </svg>
   );
 }
@@ -156,24 +77,13 @@ export const TRANSFORM_LOWERCASE_RIGHT_PATH =
 export function TransformLowercaseIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_LOWERCASE_LEFT_PATH}
-        fill="currentColor"
-      />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={TRANSFORM_LOWERCASE_RIGHT_PATH}
-        fill="currentColor"
-      />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_LOWERCASE_LEFT_PATH} fill="currentColor" />
+      <path fillRule="evenodd" clipRule="evenodd" d={TRANSFORM_LOWERCASE_RIGHT_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const DIRECTION_LTR_ARROW_PATH =
-  'M5 12L12.3111 12L10.6484 10.3555L11.3516 9.64453L14.2071 12.4688' +
-  'L11.3555 15.3516L10.6445 14.6484L12.2751 13L5 13L5 12Z';
+  'M5 12L12.3111 12L10.6484 10.3555L11.3516 9.64453L14.2071 12.4688' + 'L11.3555 15.3516L10.6445 14.6484L12.2751 13L5 13L5 12Z';
 export const DIRECTION_LTR_MARK_PATH =
   'M4.23463 2.15224C4.47728 2.05173 4.73736 2 5 2L5 6C4.73736 6 4.47728 5.94827 ' +
   '4.23463 5.84776C3.99198 5.74725 3.7715 5.59993 3.58579 5.41421C3.40007 5.2285 ' +
@@ -186,19 +96,12 @@ export function DirectionLTRIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={DIRECTION_LTR_ARROW_PATH} fill="currentColor" />
-      <path
-        opacity="0.6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DIRECTION_LTR_MARK_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.6" fillRule="evenodd" clipRule="evenodd" d={DIRECTION_LTR_MARK_PATH} fill="currentColor" />
     </svg>
   );
 }
 export const DIRECTION_RTL_ARROW_PATH =
-  'M11.0001 12L3.689 12L5.35169 10.3555L4.64848 9.64453L1.79297 12.4688' +
-  'L4.64462 15.3516L5.35556 14.6484L3.72502 13L11.0001 13V12Z';
+  'M11.0001 12L3.689 12L5.35169 10.3555L4.64848 9.64453L1.79297 12.4688' + 'L4.64462 15.3516L5.35556 14.6484L3.72502 13L11.0001 13V12Z';
 export const DIRECTION_RTL_MARK_PATH =
   'M6.23463 2.15224C6.47728 2.05173 6.73736 2 7 2L7 6C6.73736 6 6.47728 5.94827 ' +
   '6.23463 5.84776C5.99198 5.74725 5.7715 5.59993 5.58579 5.41421C5.40007 5.2285 ' +
@@ -210,13 +113,7 @@ export function DirectionRTLIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d={DIRECTION_RTL_ARROW_PATH} fill="currentColor" />
-      <path
-        opacity="0.6"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d={DIRECTION_RTL_MARK_PATH}
-        fill="currentColor"
-      />
+      <path opacity="0.6" fillRule="evenodd" clipRule="evenodd" d={DIRECTION_RTL_MARK_PATH} fill="currentColor" />
     </svg>
   );
 }

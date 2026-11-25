@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import LiveInput from './LiveInput';
 
 // Two controls that turn up wherever a point on a box is being set: the gradient
@@ -9,7 +10,7 @@ export function PositionGrid({
   x,
   y,
   busy,
-  ariaLabel = 'Position',
+  ariaLabel,
   onPick,
 }: {
   x: string;
@@ -18,11 +19,12 @@ export function PositionGrid({
   ariaLabel?: string;
   onPick: (px: string, py: string) => void;
 }) {
+  const translate = useTranslate();
   const cells = ['0%', '50%', '100%'];
   const activeX = cells.indexOf(x);
   const activeY = cells.indexOf(y);
   return (
-    <div className="embed-editor_grad-grid" role="group" aria-label={ariaLabel}>
+    <div className="embed-editor_grad-grid" role="group" aria-label={ariaLabel ?? translate('styleModel.components.position.group')}>
       {cells.map((py, yi) =>
         cells.map((px, xi) => {
           const active = xi === activeX && yi === activeY;
@@ -32,7 +34,7 @@ export function PositionGrid({
               type="button"
               className={`embed-editor_grad-grid-cell ${active ? 'is-active' : ''}`}
               disabled={busy}
-              aria-label={`Position ${px} ${py}`}
+              aria-label={translate('styleModel.components.position.cell', { x: px, y: py })}
               aria-pressed={active}
               onClick={() => onPick(px, py)}
             >

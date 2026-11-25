@@ -44,13 +44,7 @@ function Rows() {
   return React.createElement(
     'div',
     undefined,
-    [0, 1].map((index) =>
-      React.createElement(
-        'div',
-        { ...reorder.rowProps(index), key: index, 'data-row': index },
-        index,
-      ),
-    ),
+    [0, 1].map((index) => React.createElement('div', { ...reorder.rowProps(index), key: index, 'data-row': index }, index)),
   );
 }
 const root = createRoot(document.getElementById('root'));
@@ -83,9 +77,7 @@ async function main() {
   assert.equal(moves.length, 1);
   await pointer(rows[0], 'pointerdown', 5);
   await pointer(window, 'pointermove', 25);
-  await act(async () =>
-    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })),
-  );
+  await act(async () => window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' })));
   await pointer(window, 'pointerup', 45);
   assert.equal(moves.length, 1);
   assert.equal(document.body.style.cursor, '');

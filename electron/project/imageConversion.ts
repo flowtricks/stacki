@@ -7,8 +7,9 @@ import { documentHost } from '../documents/documentWrites';
 import { assetAbs } from './assetFiles';
 import { isPathWithin } from '../lib/platform';
 import { encodeImage, IMAGE_BYTES_MAX } from './imageEncoder';
-import { planImageReferences, imageReferenceDigest } from './imageReferences';
+import { planImageReferencesSliced, imageReferenceDigest } from './imageReferences';
 import type { ImageReferenceEdit, ImageAliases } from './imageReferences';
+import { translateMain } from '../lib/mainLocale';
 
 export async function convertImage(options: {
   readonly projectPath: string;
@@ -27,7 +28,7 @@ export async function convertImage(options: {
   if (!encoded.ok) {
     return encoded;
   }
-  const staged = stageImage(options.projectPath, from, to, encoded.value, options.aliases ?? []);
+  const staged = await stageImage(options.projectPath, from, to, encoded.value, options.aliases ?? []);
   if (!staged.ok) {
     return staged;
   }
@@ -49,7 +50,7 @@ export async function convertImage(options: {
     }
     await options.trash(from);
   } catch (error: unknown) {
-    return { ok: false, error: `References updated, but the original was kept: ${String(error)}` };
+    return { ok: false, error: translateMain('error.images.referencesKept', { reason: String(error) }) };
   }
   return {
     ok: true,
@@ -68,35 +69,29 @@ function prepareImage(projectPath: string, rel: string, format: ImageFormat) {
     const to = from.replace(/\.[^.]+$/, `.${format}`);
     const root = fs.realpathSync(projectPath);
     if (!isPathWithin(root, fs.realpathSync(from)) || fs.lstatSync(from).isSymbolicLink()) {
-      throw new Error('Linked images outside the project cannot be converted.');
+      throw new Error(translateMain('error.images.outsideProject'));
     }
     if (fs.existsSync(to)) {
-      throw new Error(`${path.basename(to)} already exists; nothing was changed.`);
+      throw new Error(translateMain('error.images.targetExists', { name: path.basename(to) }));
     }
     if (fs.statSync(from).size > IMAGE_BYTES_MAX) {
-      throw new Error('Choose an image smaller than 50 MB.');
+      throw new Error(translateMain('error.images.tooLarge'));
     }
     return { ok: true as const, value: { from, to, bytes: fs.readFileSync(from) } };
   } catch (error: unknown) {
     return { ok: false as const, error: String(error) };
   }
 }
-function stageImage(
-  projectPath: string,
-  from: string,
-  to: string,
-  bytes: Buffer,
-  aliases: ImageAliases,
-) {
+async function stageImage(projectPath: string, from: string, to: string, bytes: Buffer, aliases: ImageAliases) {
   try {
-    const edits = planImageReferences(projectPath, from, to, aliases);
+    const edits = await planImageReferencesSliced(projectPath, from, to, aliases);
     // Exclusive binary creation never overwrites an asset; text uses actors below.
     if (!isPathWithin(fs.realpathSync(projectPath), fs.realpathSync(path.dirname(to)))) {
-      throw new Error('The image directory moved outside the project.');
+      throw new Error(translateMain('error.images.directoryMoved'));
     }
     fs.writeFileSync(to, bytes, { flag: 'wx', mode: fs.statSync(from).mode & 0o777 });
     if (!fs.readFileSync(to).equals(bytes)) {
-      throw new Error('Converted image verification failed.');
+      throw new Error(translateMain('error.images.verificationFailed'));
     }
     return { ok: true as const, value: edits };
   } catch (error: unknown) {
@@ -108,28 +103,18 @@ function applyReferences(edits: readonly ImageReferenceEdit[]): Result<void, str
   const result = host.documents.withLeases(edits, (ordered): Result<void, string> => {
     const applied: ImageReferenceEdit[] = [];
     for (const edit of ordered) {
-      const report = host.documents.writeText(
-        edit.file,
-        edit.after,
-        imageReferenceDigest(edit.before),
-      );
+      const report = host.documents.writeText(edit.file, edit.after, imageReferenceDigest(edit.before));
       if (report.tag !== 'applied') {
         let rollbackFailures = 0;
         for (const previous of [...applied].reverse()) {
-          const rollback = host.documents.writeText(
-            previous.file,
-            previous.before,
-            imageReferenceDigest(previous.after),
-          );
+          const rollback = host.documents.writeText(previous.file, previous.before, imageReferenceDigest(previous.after));
           if (rollback.tag !== 'applied') {
             rollbackFailures += 1;
           }
         }
         return {
           ok: false,
-          error:
-            `Could not update ${edit.file}: ${report.tag}. ` +
-            `${rollbackFailures} rollback failures.`,
+          error: translateMain('error.images.rollbackFailed', { file: edit.file, reason: report.tag, count: rollbackFailures }),
         };
       }
       host.noteWrite(edit.file);
@@ -140,26 +125,21 @@ function applyReferences(edits: readonly ImageReferenceEdit[]): Result<void, str
   return result.ok ? result.value : result;
 }
 
-function verifyImages(
-  from: string,
-  before: Buffer,
-  to: string,
-  after: Buffer,
-): Result<void, string> {
+function verifyImages(from: string, before: Buffer, to: string, after: Buffer): Result<void, string> {
   try {
     for (const [file, bytes] of [
       [from, before],
       [to, after],
     ] as const) {
       if (fs.statSync(file).size !== bytes.length || !fs.readFileSync(file).equals(bytes)) {
-        return { ok: false, error: 'An image changed during conversion. Both images were kept.' };
+        return { ok: false, error: translateMain('error.images.changedDuringConversion') };
       }
     }
     return { ok: true, value: undefined };
   } catch (error: unknown) {
     return {
       ok: false,
-      error: `Could not verify images; originals were not removed: ${String(error)}`,
+      error: translateMain('error.images.verifyFailed', { reason: String(error) }),
     };
   }
 }

@@ -3,11 +3,8 @@ import test from 'node:test';
 import { withRenderBaseline } from '../src/features/preview/previewMiddleware';
 
 test('preview embeds the exact server baseline without allowing script breakout', async () => {
-  const html =
-    '<html><body><h1>Before</h1><script>window.example = "</script>";</script></body></html>';
-  const response = await withRenderBaseline(
-    new Response(html, { headers: { 'content-type': 'text/html', 'content-length': '20' } }),
-  );
+  const html = '<html><body><h1>Before</h1><script>window.example = "</script>";</script></body></html>';
+  const response = await withRenderBaseline(new Response(html, { headers: { 'content-type': 'text/html', 'content-length': '20' } }));
   const output = await response.text();
   assert.ok(output.startsWith(html));
   const encoded = output.slice(html.length).match(/type="application\/json">(.*)<\/script>/)?.[1];

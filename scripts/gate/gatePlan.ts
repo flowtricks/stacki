@@ -12,15 +12,11 @@
 // suite started.
 
 import type { Suite } from './testDiscovery';
+import type { Shard } from './testShard';
 
-export type BuildStage =
-  | 'build:contracts'
-  | 'build:electron'
-  | 'build:scripts'
-  | 'build:morph'
-  | 'build:preload'
-  | 'stage:runtime'
-  | 'build:web';
+export type ChecksPart = 'checks-all' | 'checks-desktop' | 'checks-studio';
+
+export type BuildStage = 'build:contracts' | 'build:electron' | 'build:scripts' | 'build:morph' | 'build:preload' | 'stage:runtime' | 'build:web';
 
 export interface GatePlan {
   // `full`: clean the output tree first, then every static check after the
@@ -34,38 +30,48 @@ export interface GatePlan {
   // it. The renderer bundle (vite) reads src/ and shared/ sources and writes
   // only dist/renderer.
   readonly beside: readonly BuildStage[];
+  // `run` for the full gate and for the checks-only runs (CI's `static` and `studio` jobs); `skip` for every
+  // shard and for named suites. The checks-only runs plus the n shards are the full gate (testShard.ts).
+  readonly staticChecks: 'run' | 'skip';
 }
 
-const CHAIN_FULL: readonly BuildStage[] = [
-  'build:contracts',
-  'build:electron',
-  'build:scripts',
-  'build:morph',
-  'build:preload',
-  'stage:runtime',
-];
+const CHAIN_FULL: readonly BuildStage[] = ['build:contracts', 'build:electron', 'build:scripts', 'build:morph', 'build:preload', 'stage:runtime'];
 
 // `npm test` builds the scripts before the runner starts (package.json), and a
 // targeted run keeps the tree, so the scripts are already current.
-const CHAIN_TARGETED: readonly BuildStage[] = CHAIN_FULL.filter(
-  (stage) => stage !== 'build:scripts',
-);
+const CHAIN_TARGETED: readonly BuildStage[] = CHAIN_FULL.filter((stage) => stage !== 'build:scripts');
 
 export function gatePlanFor(input: {
   readonly queries: readonly string[];
   readonly selected: readonly Suite[];
+  readonly shard?: Shard;
+  // A checks-only run: the builds and the static checks, no suites (CI runs the suites in
+  // shards). `checks-all` is every check; CI splits them into `checks-desktop` (everything but
+  // Studio's verify) and `checks-studio` (Studio's verify alone, its own long job).
+  readonly part?: ChecksPart;
 }): GatePlan {
   if (input.selected.length === 0) {
     throw new Error('gatePlanFor: no suite is selected');
   }
+  if (input.shard !== undefined && input.queries.length > 0) {
+    throw new Error('gatePlanFor: a shard splits the full gate; it cannot be combined with named suites');
+  }
+  if (input.shard !== undefined && input.part !== undefined) {
+    throw new Error('gatePlanFor: a run is a shard of the suites or the checks, not both');
+  }
+  if (input.part !== undefined && input.queries.length > 0) {
+    throw new Error('gatePlanFor: a checks-only run names no suites');
+  }
   if (input.queries.length === 0) {
-    return { kind: 'full', chain: CHAIN_FULL, beside: ['build:web'] };
+    const staticChecks = input.shard === undefined ? 'run' : 'skip';
+    return { kind: 'full', chain: CHAIN_FULL, beside: ['build:web'], staticChecks };
   }
   const renderer = input.selected.some((suite) => suite.options.build === 'renderer');
   const plan: GatePlan = {
     kind: 'targeted',
     chain: CHAIN_TARGETED,
     beside: renderer ? ['build:web'] : [],
+    staticChecks: 'skip',
   };
   if (plan.chain.includes('build:web')) {
     throw new Error('gatePlanFor: the renderer bundle never runs in the chain');
@@ -84,6 +90,6 @@ export function targetedNotice(plan: GatePlan): string {
   const renderer = plan.beside.includes('build:web') ? '' : ', the renderer bundle';
   return (
     `[gate] Named suites only: skipping the clean, tsc, ESLint, Prettier, the policy ` +
-    `scan, adapter-surface${renderer}. \`npm test\` with no suite runs the full gate.`
+    `scan, adapter-surface, test-timing${renderer}. \`npm test\` with no suite runs the full gate.`
   );
 }

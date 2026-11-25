@@ -20,6 +20,7 @@ export function restoreVariableOperation(input: unknown) {
     if (variableFiles.readFileSync(change.path, 'utf8') !== change.base) {
       return {
         ok: false,
+        // i18n-ignore: a server reply carried to the panel as plain text; the renderer shows server text as received (playbook section 3).
         error: 'A collaborator changed this stylesheet. Undo would replace their edits.',
       };
     }

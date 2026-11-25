@@ -1,11 +1,16 @@
+// i18n-ignore-file: breakpoint names are English next to their `labelKey`, which the panel translates.
 // Native Webflow class styles — the responsive/breakpoint model + the pure
 // helpers that project a NativeModel (read in webflow.ts) into the resolved
 // style panel. Class styles are read/written through the Designer Style API
 // (getProperties/setProperty), keyed by (breakpoint, pseudo). Tag styles have no
 // Designer API, so they never appear here — those edits fall back to an embed.
 
+import { assert } from '../../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { STATES, type NativeContribution, type StateKey, type StyleContext } from './resolved';
 import type { BreakpointId, NativeModel } from './styleTypes';
+import { nestedQueryOfKey, splitSourcedKey } from './queryWrapper';
 
 // ─────────────────────────── Breakpoints + states ───────────────────────────
 
@@ -14,6 +19,7 @@ export type NativeStyleOptions = { breakpoint?: BreakpointId; pseudo?: string };
 export type BreakpointDefinition = {
   id: BreakpointId;
   label: string;
+  labelKey: MessageKey;
   /** Canonical `@media` condition, used to merge an equivalent embed query. */
   media: string | undefined;
 };
@@ -21,13 +27,13 @@ export type BreakpointDefinition = {
 // Webflow's fixed breakpoint scale, largest → smallest (the order the dropdown
 // lists them after Base). `main` is the base breakpoint (= the panel's Base).
 export const BREAKPOINTS: readonly BreakpointDefinition[] = [
-  { id: 'xxl', label: 'Desktop ≥1920', media: '(min-width: 1920px)' },
-  { id: 'xl', label: 'Desktop ≥1440', media: '(min-width: 1440px)' },
-  { id: 'large', label: 'Desktop ≥1280', media: '(min-width: 1280px)' },
-  { id: 'main', label: 'Base', media: undefined },
-  { id: 'medium', label: 'Tablet', media: '(max-width: 991px)' },
-  { id: 'small', label: 'Mobile (L)', media: '(max-width: 767px)' },
-  { id: 'tiny', label: 'Mobile', media: '(max-width: 479px)' },
+  { id: 'xxl', label: 'Desktop ≥1920', labelKey: 'styleModel.breakpoint.xxl', media: '(min-width: 1920px)' },
+  { id: 'xl', label: 'Desktop ≥1440', labelKey: 'styleModel.breakpoint.xl', media: '(min-width: 1440px)' },
+  { id: 'large', label: 'Desktop ≥1280', labelKey: 'styleModel.breakpoint.large', media: '(min-width: 1280px)' },
+  { id: 'main', label: 'Base', labelKey: 'styleModel.breakpoint.main', media: undefined },
+  { id: 'medium', label: 'Tablet', labelKey: 'styleModel.breakpoint.medium', media: '(max-width: 991px)' },
+  { id: 'small', label: 'Mobile (L)', labelKey: 'styleModel.breakpoint.small', media: '(max-width: 767px)' },
+  { id: 'tiny', label: 'Mobile', labelKey: 'styleModel.breakpoint.tiny', media: '(max-width: 479px)' },
 ];
 
 function isBreakpointId(value: string): value is BreakpointId {
@@ -49,13 +55,14 @@ const PSEUDO_FOR_STATE: Record<StateKey, string | undefined> = {
   ':active': 'active',
 };
 
-export const breakpointLabel = (id: BreakpointId): string =>
-  BREAKPOINTS.find((bp) => bp.id === id)?.label ?? id;
+export function breakpointLabel(id: BreakpointId, translate: Translator = ENGLISH_TRANSLATE): string {
+  const definition = BREAKPOINTS.find((bp) => bp.id === id);
+  return definition === undefined ? id : translate(definition.labelKey);
+}
 
 /** The `@media` condition for a breakpoint (e.g. `(max-width: 767px)`), or undefined for
  *  main/base. */
-export const mediaParamsForBreakpoint = (id: BreakpointId): string | undefined =>
-  BREAKPOINTS.find((bp) => bp.id === id)?.media;
+export const mediaParamsForBreakpoint = (id: BreakpointId): string | undefined => BREAKPOINTS.find((bp) => bp.id === id)?.media;
 
 // Same compilation Webflow applies to a class display name → CSS class name.
 // Duplicated (not imported from webflow.ts) to keep this module free of the
@@ -101,10 +108,7 @@ export function breakpointForAtContext(atContext: string): BreakpointId | undefi
  * specified" path, which reads the Designer's *current* breakpoint instead of
  * base — hiding desktop/base styles whenever the Designer isn't on desktop.
  */
-export function readOptionsFor(
-  breakpoint: BreakpointId,
-  state: StateKey,
-): NativeStyleOptions | undefined {
+export function readOptionsFor(breakpoint: BreakpointId, state: StateKey): NativeStyleOptions | undefined {
   const options: NativeStyleOptions = {};
   if (breakpoint !== 'main') {
     options.breakpoint = breakpoint;
@@ -161,14 +165,17 @@ export function nativeHasValues(model: NativeModel | undefined, breakpoint: Brea
 /**
  * Build the panel's ordered context list: Base + embed `@media`/`@container`
  * contexts (tagging any that equal a Webflow breakpoint) + native-only Webflow
- * breakpoints that carry values (plus the Designer's current breakpoint so you
- * can always add there). Ordering: Base, then the Webflow scale, then other
- * embed queries.
+ * breakpoints that carry values. Ordering: Base, then the Webflow scale, then
+ * other embed queries.
+ *
+ * The canvas device does not add an entry. It used to: a phone-width canvas put
+ * "Mobile (L)" in the list, and a tablet one "Tablet", though no stylesheet held
+ * either query, so the list named breakpoints the project never had. A query is
+ * listed because it is written somewhere, never because the canvas is that wide.
  */
 export function buildStyleContexts(
   embedContextKeys: string[],
   model: NativeModel | undefined,
-  currentBreakpoint: BreakpointId | undefined,
   /** Embed at-contexts where the selected element actually has styles. Custom
    *  queries and up-breakpoints only appear in the list when they're in here. */
   styledEmbedContexts: ReadonlySet<string> = new Set(),
@@ -176,22 +183,34 @@ export function buildStyleContexts(
    *  own queries. They lead the custom-query group; ones reaching this element
    *  from somewhere else in the project follow. */
   ownContexts: ReadonlySet<string> = new Set(),
+  translate: Translator = ENGLISH_TRANSLATE,
 ): StyleContext[] {
   const list: StyleContext[] = [];
   const usedBp = new Set<BreakpointId>();
 
   const nativeBps = nativeBreakpointsWithValues(model);
-  if (currentBreakpoint && currentBreakpoint !== 'main') {
-    nativeBps.add(currentBreakpoint);
-  }
 
   embedContextKeys.forEach((key) => {
     if (key === '') {
-      list.push({ key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' });
+      list.push({ key: '', label: translate('styleModel.breakpoint.main'), breakpoint: 'main', embedAtContext: '' });
       usedBp.add('main');
       return;
     }
-    const bp = breakpointForAtContext(key);
+    // A query nested inside a rule is its own row, labelled by its query and
+    // carrying its wrapper (model/queryWrapper.ts); it is never a breakpoint's row,
+    // which stands for the query at the top level.
+    // A key may also name the stylesheet the block is in (queryWrapper.ts): the
+    // same query in two stylesheets is two rows, each saying where it lives.
+    const { placed, source } = splitSourcedKey(key);
+    const sourced = source === undefined ? {} : { source };
+    const nested = nestedQueryOfKey(key);
+    if (nested !== undefined) {
+      if (styledEmbedContexts.has(key)) {
+        list.push({ key, label: nested.atContext, breakpoint: undefined, embedAtContext: nested.atContext, wrapper: nested.wrapper, ...sourced });
+      }
+      return;
+    }
+    const bp = breakpointForAtContext(placed);
     if (bp) {
       // A breakpoint query, listed when it carries values — native, or the
       // element has styles here. Key it by `bp:<id>` (NOT the embed @media
@@ -207,9 +226,9 @@ export function buildStyleContexts(
       usedBp.add(bp);
       list.push({
         key: `bp:${bp}`,
-        label: breakpointLabel(bp),
+        label: breakpointLabel(bp, translate),
         breakpoint: bp,
-        embedAtContext: key,
+        embedAtContext: placed,
       });
     } else {
       // A custom @media/@container: show only when the element has styles there,
@@ -217,7 +236,7 @@ export function buildStyleContexts(
       if (!styledEmbedContexts.has(key)) {
         return;
       }
-      list.push({ key, label: key, breakpoint: undefined, embedAtContext: key });
+      list.push({ key, label: placed, breakpoint: undefined, embedAtContext: placed, ...sourced });
     }
   });
 
@@ -233,20 +252,21 @@ export function buildStyleContexts(
     usedBp.add(definition.id);
     list.push({
       key: `bp:${definition.id}`,
-      label: definition.label,
+      label: translate(definition.labelKey),
       breakpoint: definition.id,
       embedAtContext: undefined,
     });
   }
 
-  return list
+  // One row per context: an authored query that equals a breakpoint's is that
+  // breakpoint's row, never a second one beside it.
+  assert(new Set(list.map((context) => context.key)).size === list.length, 'buildStyleContexts: every context is listed once');
+  const ordered = list
     .map((context, index) => ({ context, index }))
-    .sort(
-      (left, right) =>
-        rank(left.context, ownContexts) - rank(right.context, ownContexts) ||
-        left.index - right.index,
-    )
+    .sort((left, right) => rank(left.context, ownContexts) - rank(right.context, ownContexts) || left.index - right.index)
     .map((entry) => entry.context);
+  assert(ordered.length === list.length, 'buildStyleContexts: ordering keeps every context');
+  return ordered;
 }
 
 function rank(context: StyleContext, ownContexts: ReadonlySet<string>): number {
@@ -260,7 +280,7 @@ function rank(context: StyleContext, ownContexts: ReadonlySet<string>): number {
   // among those, the open component's own queries come first. They're the ones
   // being worked on; a query reaching this element from a project-wide stylesheet
   // is further away in every sense.
-  return ownContexts.has(context.embedAtContext ?? '') ? 100 : 101;
+  return ownContexts.has(context.key) ? 100 : 101;
 }
 
 /**
@@ -300,11 +320,7 @@ export function breakpointTier(target: BreakpointId): number {
  * narrower breakpoint wins a same-specificity tie. Empty for a non-breakpoint
  * context.
  */
-export function nativeContribsFor(
-  model: NativeModel | undefined,
-  context: StyleContext,
-  state: StateKey,
-): NativeContribution[] {
+export function nativeContribsFor(model: NativeModel | undefined, context: StyleContext, state: StateKey): NativeContribution[] {
   if (!model) {
     return [];
   }
@@ -370,10 +386,7 @@ export type NativeSelectorChip = {
  * than hide) selectors styled only in other breakpoints — matching how embed
  * selectors from every query are listed.
  */
-export function nativeSelectorChips(
-  model: NativeModel | undefined,
-  breakpoint: BreakpointId,
-): NativeSelectorChip[] {
+export function nativeSelectorChips(model: NativeModel | undefined, breakpoint: BreakpointId): NativeSelectorChip[] {
   if (!model) {
     return [];
   }
@@ -417,10 +430,7 @@ function pickedClassNames(selectedTokens: string[]): string[] | undefined {
  * where the element carries the class via its `class` attribute, not the Styles
  * panel, yet a Webflow class of that name exists and is editable.
  */
-export function selectedNativeIndexFor(
-  model: NativeModel | undefined,
-  selectedTokens: string[],
-): number | undefined {
+export function selectedNativeIndexFor(model: NativeModel | undefined, selectedTokens: string[]): number | undefined {
   if (!model) {
     return undefined;
   }

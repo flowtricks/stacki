@@ -3,13 +3,7 @@
 // runner, a free port, and a process tree stopped as a whole.
 
 import { MAIN_LIMITS } from './mainLimits';
-import {
-  commandNeedsShell,
-  mergeToolPaths,
-  pathEnvironmentValue,
-  setPathEnvironment,
-  staticToolPathGuesses,
-} from './platform';
+import { commandNeedsShell, mergeToolPaths, pathEnvironmentValue, setPathEnvironment, staticToolPathGuesses } from './platform';
 import { userInfo } from 'os';
 import type { ChildProcess, ExecFileOptions } from 'child_process';
 import { toRecord } from '../../shared/core/record';
@@ -222,12 +216,7 @@ export function nodeCliCommand(binPath: string, args: readonly string[]): [strin
   return entry ? [node, [entry, ...args]] : [binPath, [...args]];
 }
 
-export function run(
-  cmd: string,
-  args: readonly string[],
-  cwd: string,
-  options: ExecFileOptions = {},
-) {
+export function run(cmd: string, args: readonly string[], cwd: string, options: ExecFileOptions = {}) {
   // Launched from Finder, the packaged app inherits a bare PATH — Homebrew's
   // bin isn't on it, so `gh` looks uninstalled however it was set up. Cheap
   // after the first call (memoized).
@@ -255,12 +244,48 @@ export function run(
   });
 }
 
-export async function git(
-  projectPath: string,
-  args: readonly string[],
-  options: ExecFileOptions = {},
-) {
-  return run('git', args, projectPath, options);
+/**
+ * What every git child process is told about its surroundings. Why each one:
+ * - `LC_ALL=C` and `LANGUAGE=C`: the modules that read git's answers match its English wording ("not fully merged", "would be
+ *   overwritten"); on a machine set to another language those matches silently stop working and a question turns into a raw error.
+ * - `GIT_TERMINAL_PROMPT=0`: no terminal exists to answer a credential prompt, so git must fail with a reason instead of waiting out the timeout.
+ * - `GIT_EDITOR=true`, `GIT_MERGE_AUTOEDIT=no`: nothing may open an editor nobody is sitting at.
+ * - `GIT_OPTIONAL_LOCKS=0`: a status read must not take the index lock, or the polling panel races the user's own commit into `index.lock`.
+ */
+const GIT_ENVIRONMENT = {
+  LC_ALL: 'C',
+  LANGUAGE: 'C',
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_EDITOR: 'true',
+  GIT_MERGE_AUTOEDIT: 'no',
+  GIT_OPTIONAL_LOCKS: '0',
+} as const;
+
+/** Both streams of a failed git command, the tail kept: hooks and signing tools print their verdict last. */
+function gitFailureText(error: Error & { stdout?: unknown; stderr?: unknown }): string {
+  const parts = [error.stderr, error.stdout].map((stream) => (typeof stream === 'string' ? stream.trim() : '')).filter((stream) => stream.length > 0);
+  const joined = parts.join('\n');
+  return joined.length > MAIN_LIMITS.gitMessageCharsMax ? `…${joined.slice(-MAIN_LIMITS.gitMessageCharsMax)}` : joined;
+}
+
+export async function git(projectPath: string, args: readonly string[], options: ExecFileOptions = {}) {
+  try {
+    return await run('git', args, projectPath, {
+      maxBuffer: MAIN_LIMITS.gitOutputBytesMax,
+      ...options,
+      env: { ...(options.env ?? process.env), ...GIT_ENVIRONMENT },
+    });
+  } catch (error: unknown) {
+    // execFile's message is "Command failed: git <every argument>", which quotes a whole commit message and path list at the person.
+    // The streams carry git's own words, so they replace it; `stdout`, `stderr`, `code` and `killed` stay for the code that matches them.
+    if (error instanceof Error) {
+      const words = gitFailureText(error);
+      if (words.length > 0 && error.message.startsWith('Command failed:')) {
+        error.message = words;
+      }
+    }
+    throw error;
+  }
 }
 
 export async function findFreePort(start: number): Promise<number> {
@@ -276,17 +301,49 @@ export async function findFreePort(start: number): Promise<number> {
       return port;
     }
   }
+  // Windows (Hyper-V, WSL, Docker) can reserve a block of hundreds of ports at once, so a search that
+  // starts inside one never leaves it. Ports the system hands out itself are never in a reserved block.
+  const assigned = await findSystemAssignedPort();
+  if (assigned !== undefined) {
+    return assigned;
+  }
   throw new Error('No available preview port within the search limit');
+}
+
+// One port chosen by the operating system, or undefined when it refuses; other socket failures propagate.
+function findSystemAssignedPort(): Promise<number | undefined> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+        resolve(undefined);
+      } else {
+        reject(error);
+      }
+    });
+    server.once('listening', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : undefined;
+      server.close(() => resolve(port));
+    });
+    server.listen(0, '127.0.0.1');
+  });
 }
 
 export function findFreePortProbe(port: number): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.once('error', (error: NodeJS.ErrnoException) => {
-      if (error.code === 'EADDRINUSE') {
-        resolve(false);
-      } else {
-        reject(error);
+      switch (error.code) {
+        // Windows reserves port ranges even when no process is listening.
+        // Treat those ports as unavailable within the existing bounded search.
+        case 'EADDRINUSE':
+        case 'EACCES':
+          resolve(false);
+          break;
+        case undefined:
+        default:
+          reject(error);
       }
     });
     server.once('listening', () => server.close(() => resolve(true)));
@@ -300,16 +357,13 @@ export function stopProcessTree(proc: ChildProcess | undefined) {
   }
   try {
     if (isWin) {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on(
-        'error',
-        () => {
-          try {
-            proc.kill('SIGTERM');
-          } catch {
-            /* already gone */
-          }
-        },
-      );
+      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on('error', () => {
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          /* already gone */
+        }
+      });
     } else {
       process.kill(-proc.pid, 'SIGTERM');
     }
@@ -326,7 +380,7 @@ export function stopProcessTree(proc: ChildProcess | undefined) {
 // `devServer` belongs to the canvas, and a thumbnail must not disturb what the
 // editor is showing. The project's own config is used rather than the app's
 // generated one — the picture is of the site, not of the canvas.
-export function spawnAstroServer(projectPath: string, localBin: string, args: readonly string[]) {
+export function spawnAstroServer(projectPath: string, localBin: string, args: readonly string[], extraEnvironment: Readonly<Record<string, string>> = {}) {
   const [cmd, argv] = nodeCliCommand(localBin, args);
   return spawn(cmd, argv, {
     cwd: projectPath,
@@ -335,6 +389,6 @@ export function spawnAstroServer(projectPath: string, localBin: string, args: re
     // Vite and Astro together, including CLIs that launch another process.
     detached: !isWin,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+    env: { ...process.env, ...extraEnvironment, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
 }

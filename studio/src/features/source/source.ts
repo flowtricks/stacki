@@ -1,10 +1,8 @@
-import type { InsertionDefaults } from './instanceDefaults';
-import { componentInsertionEdits } from './componentInsertion';
 import { parsePage } from '../../../vendor/stacki/electron/parse/astroParser';
 import type { ParserNode } from '../../../vendor/stacki/electron/parse/astroParserTypes';
 import { MAX_SOURCE, record, string } from '../../shared/validation';
 import { parseClipboard, type NodeClipboard } from './clipboardPayload';
-import { contentInsertionEdits, parseInsertContent, type InsertContent } from './insertContent';
+import { parseInsertContent, type InsertContent } from './insertContentContract';
 
 export { parsePage };
 export type { ParserNode };
@@ -28,6 +26,7 @@ export type TreeAction =
     }
   | { readonly kind: 'delete'; readonly node: string }
   | { readonly kind: 'duplicate'; readonly node: string }
+  | { readonly kind: 'wrap-text'; readonly node: string; readonly name: 'div' | 'span' }
   | {
       readonly kind: 'move';
       readonly node: string;
@@ -81,12 +80,7 @@ export function bounds(node: ParserNode) {
 export function applyEdits(source: string, edits: readonly Edit[]): string {
   let previous = source.length + 1;
   for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
-    if (
-      edit.start < 0 ||
-      edit.end < edit.start ||
-      edit.end > source.length ||
-      edit.end > previous
-    ) {
+    if (edit.start < 0 || edit.end < edit.start || edit.end > source.length || edit.end > previous) {
       throw new Error('Overlapping edit');
     }
     source = source.slice(0, edit.start) + edit.text + source.slice(edit.end);
@@ -97,13 +91,7 @@ export function applyEdits(source: string, edits: readonly Edit[]): string {
   }
   return source;
 }
-export function attributeEdit(
-  source: string,
-  id: string,
-  name: string,
-  value: string | undefined,
-  expression = false,
-): Edit {
+export function attributeEdit(source: string, id: string, name: string, value: string | undefined, expression = false): Edit {
   if (!/^[A-Za-z_:][\w:.-]*$/.test(name)) {
     throw new Error('Invalid property name');
   }
@@ -115,12 +103,7 @@ export function attributeEdit(
   if (spans.length > 1) {
     throw new Error('Duplicate attributes require source editing');
   }
-  const text =
-    value === undefined
-      ? ''
-      : expression
-        ? `${name}={${value}}`
-        : `${name}="${escapeAttribute(value)}"`;
+  const text = value === undefined ? '' : expression ? `${name}={${value}}` : `${name}="${escapeAttribute(value)}"`;
   const span = spans[0];
   if (span) {
     return { start: span.span.start, end: span.span.end, text };
@@ -143,79 +126,6 @@ export function contentEdit(source: string, id: string, value: string): Edit {
   }
   const end = closingOffset(source, node);
   return { start: end, end, text: escapeText(value) };
-}
-export function structuralEdits(
-  source: string,
-  action: TreeAction,
-  file = '',
-  settings?: InsertionDefaults,
-): Edit[] {
-  if (action.kind === 'paste') {
-    throw new Error('Paste requires the destination file context');
-  }
-  if (action.kind === 'insert-content') {
-    return contentInsertionEdits(source, action);
-  }
-  if (action.kind === 'insert') {
-    return componentInsertionEdits(source, action, file, settings);
-  }
-  const node = nodeAt(source, action.node);
-  if (node.id === 'layout') {
-    throw new Error('The page layout cannot be removed or moved');
-  }
-  const range = bounds(node);
-  if (action.kind === 'delete') {
-    return [{ ...range, text: '' }];
-  }
-  const fragment = source.slice(range.start, range.end);
-  if (action.kind === 'duplicate') {
-    return [{ start: range.end, end: range.end, text: `\n${fragment}` }];
-  }
-  const target = nodeAt(source, action.target);
-  const targetBounds = bounds(target);
-  if (range.start <= targetBounds.start && range.end >= targetBounds.end) {
-    throw new Error('Cannot move an element into itself');
-  }
-  const offset =
-    action.placement === 'before'
-      ? targetBounds.start
-      : action.placement === 'after'
-        ? targetBounds.end
-        : closingOffset(source, target);
-  return [
-    { ...range, text: '' },
-    { start: offset, end: offset, text: `\n${fragment}\n` },
-  ];
-}
-export function insertFragment(
-  source: string,
-  action: { readonly target: string; readonly placement?: 'before' | 'after' | 'inside' },
-  fragment: string,
-  empty: boolean,
-): Edit {
-  const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  const text = `${eol}${fragment}${eol}`;
-  if (!action.target && empty) {
-    return { start: source.length, end: source.length, text };
-  }
-  const target = nodeAt(source, action.target);
-  const range = bounds(target);
-  if (
-    (!action.placement || action.placement === 'inside') &&
-    target.name &&
-    source.slice(range.start, range.end).endsWith('/>')
-  ) {
-    return { start: range.end - 2, end: range.end, text: `>${text}</${target.name}>` };
-  }
-  const offset =
-    action.placement === 'before'
-      ? range.start
-      : action.placement === 'after'
-        ? range.end
-        : target.children
-          ? closingOffset(source, target)
-          : range.end;
-  return { start: offset, end: offset, text };
 }
 function closingOffset(source: string, node: ParserNode): number {
   if (!node.children) {
@@ -257,6 +167,13 @@ export function parseAction(input: unknown): TreeAction {
   if (kind === 'delete' || kind === 'duplicate') {
     return { kind, node: string(action['node'], 200) };
   }
+  if (kind === 'wrap-text') {
+    const name = action['name'];
+    if (name !== 'div' && name !== 'span') {
+      throw new Error('Invalid text tag');
+    }
+    return { kind, node: string(action['node'], 200), name };
+  }
   if (kind === 'move') {
     const placement = action['placement'];
     if (placement !== 'before' && placement !== 'after' && placement !== 'inside') {
@@ -276,11 +193,7 @@ export function parseAction(input: unknown): TreeAction {
       name: string(action['name'], 100),
       importPath: string(action['importPath'], 500),
       paired: action['paired'] === true,
-      ...(action['placement'] === 'before' ||
-      action['placement'] === 'after' ||
-      action['placement'] === 'inside'
-        ? { placement: action['placement'] }
-        : {}),
+      ...(action['placement'] === 'before' || action['placement'] === 'after' || action['placement'] === 'inside' ? { placement: action['placement'] } : {}),
     };
   }
   throw new Error('Unknown operation');

@@ -11,7 +11,7 @@ const { DocumentActors } = require('#dist/electron/documents/documentActors.js')
 const { NODE_PROJECTOR, NodeDocumentDisk } = require('#dist/electron/documents/documentDisk.js');
 const { createDocumentTelemetry } = require('#dist/electron/documents/documentTelemetry.js');
 const { planIntent } = require('#dist/shared/engine/planner.js');
-const { ATOMIC_DIRECTORY } = require('#dist/electron/documents/atomicDirectory.js');
+const { atomicDirectoryOf } = require('#dist/electron/documents/atomicDirectory.js');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
@@ -39,7 +39,7 @@ async function scratch(base, run) {
 
 /** Temporary and lock files left in a target directory's stable staging folder. */
 function protocolLeftovers(root) {
-  const directory = path.join(root, ATOMIC_DIRECTORY);
+  const directory = atomicDirectoryOf(path.join(root, 'page.astro'));
   return fs.existsSync(directory) ? fs.readdirSync(directory) : [];
 }
 
@@ -67,8 +67,7 @@ function windowsFilesystem() {
   if (!fs.existsSync(directory)) {
     return { skip: `no NTFS temp folder at ${directory}` };
   }
-  const toWindows = (file) =>
-    spawnSync('wslpath', ['-w', file], { encoding: 'utf8' }).stdout.trim();
+  const toWindows = (file) => spawnSync('wslpath', ['-w', file], { encoding: 'utf8' }).stdout.trim();
   return { directory, toWindows, powershell: 'powershell.exe' };
 }
 
@@ -76,8 +75,7 @@ function windowsFilesystem() {
  * returned release is called. Resolves once the handle is held. */
 function holdFromWindows(windows, file, share) {
   const script =
-    `$f=[System.IO.File]::Open('${windows.toWindows(file)}','Open','Read','${share}');` +
-    `Write-Output held; [Console]::In.ReadLine() | Out-Null; $f.Close()`;
+    `$f=[System.IO.File]::Open('${windows.toWindows(file)}','Open','Read','${share}');` + `Write-Output held; [Console]::In.ReadLine() | Out-Null; $f.Close()`;
   const child = spawn(windows.powershell, ['-NoProfile', '-Command', script], {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
@@ -96,22 +94,16 @@ function holdFromWindows(windows, file, share) {
 
 /** Run test/helpers/platformChild.js with a JSON job; resolves with its exit and output. */
 function runChild(job) {
-  const child = spawn(
-    process.execPath,
-    [path.join(__dirname, 'platformChild.js'), JSON.stringify(job)],
-    {
-      stdio: ['ignore', 'pipe', 'inherit'],
-    },
-  );
+  const child = spawn(process.execPath, [path.join(__dirname, 'platformChild.js'), JSON.stringify(job)], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  });
   let output = '';
   child.stdout.on('data', (chunk) => {
     output += String(chunk);
   });
   return new Promise((resolve, reject) => {
     child.on('error', reject);
-    child.on('exit', (code, signal) =>
-      resolve({ code, signal, lines: output.split('\n').filter(Boolean) }),
-    );
+    child.on('exit', (code, signal) => resolve({ code, signal, lines: output.split('\n').filter(Boolean) }));
   });
 }
 

@@ -1,10 +1,10 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import PublishModal from './PublishModal';
-import type { PublishRequest } from './PublishModal';
+import type { PublishRequest, PublishResult } from './PublishModal';
 import { initializeGit, readGitInfo } from './gitChipBridge';
 import { publishGitProject } from './gitPublishWorkflow';
 import { openExternalURL } from '../../ipc/appBridge';
-import { cleanError } from '../../lib/cleanError';
-import type { Result } from '../../../shared/core/result';
+import { failureOf } from '../../lib/cleanError';
 
 export function PublishRepositorySetup({
   projectPath,
@@ -15,7 +15,8 @@ export function PublishRepositorySetup({
   readonly close: () => void;
   readonly flushSave: () => Promise<unknown>;
 }) {
-  async function configure(request: PublishRequest): Promise<Result<string | undefined, string>> {
+  const translate = useTranslate();
+  async function configure(request: PublishRequest): Promise<PublishResult> {
     try {
       await flushSave();
       const info = await readGitInfo(projectPath);
@@ -28,16 +29,16 @@ export function PublishRepositorySetup({
           return initialized;
         }
       }
-      return await publishGitProject(projectPath, request);
+      return await publishGitProject(projectPath, request, translate);
     } catch (error: unknown) {
-      return { ok: false, error: cleanError(error) };
+      return failureOf(error);
     }
   }
   return (
     <PublishModal
       projectPath={projectPath}
       defaultName={projectPath.split(/[/\\]/).at(-1) ?? 'website'}
-      branch="current branch"
+      branch={translate('git.publish.currentBranch')}
       onClose={close}
       onPublish={configure}
       openExternal={(url) => {

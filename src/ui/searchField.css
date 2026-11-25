@@ -1,0 +1,51 @@
+/* A search field: the glass inside the field, at its start, and no border. The
+   Apps panel's searches draw with it (SearchField.tsx), and the app UI kit's
+   `<stacki-search>` is the same component under this same file. */
+.ui-search {
+  position: relative;
+  display: block;
+}
+.ui-search-icon {
+  position: absolute;
+  inset-inline-start: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.ui-search input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  padding-block: 0;
+  padding-inline: 28px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+/* The clear button of a field that asks for one (`clearLabel`): inside the field at its end edge, in logical
+   properties so it follows the reading direction; the text stops short of it, and the browser's own cross is
+   hidden so there is one. */
+.ui-search.clearable input {
+  padding-inline-end: 28px;
+}
+.ui-search.clearable input::-webkit-search-cancel-button {
+  appearance: none;
+}
+.ui-search-clear {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-faint);
+}

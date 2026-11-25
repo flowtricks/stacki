@@ -3,16 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {
-  applyEdits,
-  nodeId,
-  attributeEdit,
-  contentEdit,
-  flatten,
-  nodesOf,
-  structuralEdits,
-  parsePage,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, nodeId, attributeEdit, contentEdit, flatten, nodesOf, parseAction, parsePage } from '../src/features/source/source';
 import { filePath, sourcePath } from '../src/shared/validation';
 
 const source = await readFile(new URL('./fixtures/homepage.astro', import.meta.url), 'utf8');
@@ -20,6 +12,18 @@ const nodes = flatten(nodesOf(source));
 const heading = nodes.find((node) => node.name === 'Heading');
 assert.ok(heading?.id);
 const headingId = nodeId(heading);
+test('nested flatMap cards expose editable markup in the assembled Studio parser', () => {
+  const source = `{groups.flatMap((group) => group.cards.map((card) => (
+  <a href={card.href} data-campuses={group.campuses.join(",")} class="card">{card.title}</a>
+)))}`;
+  const nodes = flatten(nodesOf(source));
+  assert.equal(nodes[0]?.kind, 'map');
+  const card = nodes.find((node) => node.name === 'a');
+  assert.ok(card);
+  const next = applyEdits(source, [attributeEdit(source, nodeId(card), 'class', 'featured')]);
+  assert.equal(next, source.replace('class="card"', 'class="featured"'));
+  assert.equal(flatten(nodesOf(next)).find((node) => node.name === 'a')?.kind, 'element');
+});
 test('content edit preserves the entire surrounding source', () => {
   const edit = contentEdit(source, headingId, 'Hello <world> {safe}');
   const next = applyEdits(source, [edit]);
@@ -79,16 +83,42 @@ test('moving siblings keeps the source parseable and retains both', () => {
   assert.equal((next.match(/<Heading/g) ?? []).length, 1);
 });
 test('path guards reject traversal, hidden files and unsupported sources', () => {
-  for (const input of [
-    '../.env',
-    'src/../.env',
-    'src/.env',
-    '/etc/passwd',
-    'src/a\\b',
-    'src/%2e%2e/a',
-  ]) {
+  for (const input of ['../.env', 'src/../.env', 'src/.env', '/etc/passwd', 'src/a\\b', 'src/%2e%2e/a']) {
     assert.throws(() => filePath(input));
   }
   assert.throws(() => sourcePath('public/picture.png'));
   assert.equal(sourcePath('src/content/posts/hello.md'), 'src/content/posts/hello.md');
+  assert.equal(sourcePath('src/pages/campus/[slug].astro'), 'src/pages/campus/[slug].astro');
+  assert.equal(sourcePath('src/pages/[...path].astro'), 'src/pages/[...path].astro');
+  assert.throws(() => sourcePath('src/pages/[slug]/../../.env'));
+});
+test('plain text converts to a tag around that run alone, with its bytes kept', () => {
+  const text = '<code>one &#123;<br /> two<br />three</code>';
+  const run = (words: string) => {
+    const node = flatten(nodesOf(text)).find((item) => item.kind === 'text' && item.value?.includes(words));
+    assert.ok(node);
+    return nodeId(node);
+  };
+  const converted = (words: string, name: 'div' | 'span') => applyEdits(text, structuralEdits(text, { kind: 'wrap-text', node: run(words), name }));
+  assert.equal(converted('one', 'span'), '<code><span>one &#123;</span><br /> two<br />three</code>');
+  assert.equal(converted('two', 'div'), '<code>one &#123;<br /><div> two</div><br />three</code>');
+  const layout = '<p>\n  words\n  <b>x</b></p>';
+  const words = flatten(nodesOf(layout)).find((item) => item.kind === 'text');
+  assert.ok(words);
+  assert.equal(
+    applyEdits(layout, structuralEdits(layout, { kind: 'wrap-text', node: nodeId(words), name: 'span' })),
+    '<p>\n  <span>words</span>\n  <b>x</b></p>',
+  );
+});
+test('text conversion refuses anything but words and bad wire input', () => {
+  const text = '<code><b>x</b> <i>y</i></code>';
+  const nodes = flatten(nodesOf(text));
+  const tag = nodes.find((item) => item.name === 'b');
+  const blank = nodes.find((item) => item.kind === 'text' && item.value?.trim() === '');
+  assert.ok(tag);
+  assert.ok(blank);
+  assert.throws(() => structuralEdits(text, { kind: 'wrap-text', node: nodeId(tag), name: 'span' }), /Only plain text/);
+  assert.throws(() => structuralEdits(text, { kind: 'wrap-text', node: nodeId(blank), name: 'span' }), /blank/);
+  assert.deepEqual(parseAction({ kind: 'wrap-text', node: 'n0', name: 'div' }), { kind: 'wrap-text', node: 'n0', name: 'div' });
+  assert.throws(() => parseAction({ kind: 'wrap-text', node: 'n0', name: 'section' }), /Invalid text tag/);
 });

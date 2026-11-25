@@ -10,22 +10,17 @@ type TooltipState =
     };
 
 // Retain the last placement during exit so the tooltip fades where it was opened.
-export default function Tooltip({
-  text,
-  className,
-}: {
-  readonly text: string;
-  readonly className?: string;
-}) {
+export default function Tooltip({ text, className }: { readonly text: string; readonly className?: string }) {
   const id = useId();
   const [state, setState] = useState<TooltipState>({ kind: 'idle' });
-  const close = () =>
-    setState((previous) => (previous.kind === 'idle' ? previous : { ...previous, kind: 'closed' }));
+  const close = () => setState((previous) => (previous.kind === 'idle' ? previous : { ...previous, kind: 'closed' }));
   return (
     <>
       <span
         className={className}
         aria-describedby={state.kind === 'open' ? id : undefined}
+        // An empty title blanks any `title` an ancestor carries, so the browser's native box never covers this tip.
+        title=""
         onMouseEnter={(event) => {
           const bounds = event.currentTarget.getBoundingClientRect();
           setState({

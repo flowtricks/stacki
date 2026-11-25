@@ -1,3 +1,4 @@
+import type { MessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import * as css from '../../../vendor/stacki/electron/project/cssVars';
 import { parseIpcPayload } from '../../../vendor/stacki/shared/ipc/ipcPayloads';
 import { VARIABLE_ROOT } from './variableWorkspace';
@@ -20,20 +21,16 @@ export function applyVariableOperation(operation: string, input: unknown) {
     case 'renameCssVariables':
       return css.renameVariables(VARIABLE_ROOT, parseIpcPayload('css:renameVariables', input));
     case 'addCssVariables':
-      return batch(parseIpcPayload('css:addVariables', input).adds ?? [], (add) =>
-        css.addVariable(VARIABLE_ROOT, add),
-      );
+      return batch(parseIpcPayload('css:addVariables', input).adds ?? [], (add) => css.addVariable(VARIABLE_ROOT, add));
     case 'moveCssVariables':
       return batch(parseIpcPayload('css:moveVariables', input).moves ?? [], (move) =>
-        'names' in move
-          ? css.moveSection(VARIABLE_ROOT, move)
-          : css.moveVariable(VARIABLE_ROOT, move),
+        'names' in move ? css.moveSection(VARIABLE_ROOT, move) : css.moveVariable(VARIABLE_ROOT, move),
       );
     default:
       throw new Error('Unknown variable operation');
   }
 }
-function batch<T>(items: readonly T[], apply: (item: T) => { ok: boolean; error?: string }) {
+function batch<T>(items: readonly T[], apply: (item: T) => { ok: boolean; error?: string; errorRef?: MessageRef | undefined }) {
   if (items.length > 1000) {
     throw new Error('Too many variable edits');
   }

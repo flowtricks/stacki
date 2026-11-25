@@ -5,8 +5,7 @@ import { mkdir } from 'node:fs/promises';
 
 const fixture = await startStyleFixture();
 const browser = await chromium.launch({
-  executablePath:
-    process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: process.env['CHROME_PATH'] ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -16,6 +15,9 @@ page.on('pageerror', (error) => errors.push(error.message));
 const failed = new Set<string>();
 let unavailable = false;
 let failures = 0;
+let successes = 0;
+// Polls of 100 ms each, five seconds in all, for the recovered inventories.
+const RECOVERY_POLLS_MAX = 50;
 // A server restart can interrupt the initial inventories. Subsequent replies
 // are the real draft server's files, not a fabricated selector fixture.
 await page.route('**/studio/api/styles*', async (route) => {
@@ -26,6 +28,7 @@ await page.route('**/studio/api/styles*', async (route) => {
     await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Restarting' });
     return;
   }
+  successes++;
   await route.continue();
 });
 try {
@@ -46,10 +49,11 @@ try {
   await display.and(page.locator('[aria-pressed="true"]')).waitFor();
   await display.click();
   await display.and(page.locator('[aria-pressed="false"]')).waitFor();
-  const globals = page.getByRole('checkbox', { name: /Show global selectors/ });
-  await globals.check();
+  // Hiding is the checked state: unchecked shows the global `p` rule, checked hides it.
+  const hideGlobals = page.getByRole('checkbox', { name: /Hide global selectors/ });
+  await hideGlobals.uncheck();
   assert.ok((await chips.filter({ hasText: /^p$/ }).count()) > 0);
-  await globals.uncheck();
+  await hideGlobals.check();
   assert.equal(await chips.filter({ hasText: /^p$/ }).count(), 0);
   await selectNode(page, '.card');
   await chips.filter({ hasText: /^\.card$/ }).waitFor();
@@ -65,9 +69,7 @@ try {
   await mkdir('test-results', { recursive: true });
   await page.screenshot({ path: 'test-results/style-selectors.png' });
   assert.deepEqual(errors, []);
-  console.log(
-    'Selector loading recovers after interrupted inventories; Stacki chip selection, global filters, element switching, and reopening pass.',
-  );
+  console.log('Selector loading recovers after interrupted inventories; Stacki chip selection, global filters, element switching, and reopening pass.');
 } finally {
   await browser.close();
   await fixture.stop();
@@ -79,12 +81,14 @@ async function selectNode(page: Page, selector: string) {
     .click({ position: { x: 5, y: 5 } });
 }
 
+// A failed inventory reports through the app's toast stack (not an inline alert),
+// keeps the chips it already had, and recovers on the next focus or online event.
 async function checkRecovery(page: Page) {
   await page.waitForLoadState('networkidle');
   failures = 0;
   unavailable = true;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.getByRole('alert').filter({ hasText: 'Could not load stylesheet sources' }).waitFor();
+  await page.getByRole('region', { name: 'Notifications' }).getByText('Could not load stylesheet sources', { exact: false }).first().waitFor();
   // All three attempts fail, then stop. A failed refresh must retain the chips.
   await page.waitForTimeout(2500);
   assert.equal(failures, 6, 'Each of the two inventories gets at most three attempts');
@@ -93,9 +97,11 @@ async function checkRecovery(page: Page) {
     .filter({ hasText: /^\.sheet$/ })
     .waitFor();
   unavailable = false;
-  await page.getByRole('button', { name: 'Retry stylesheet loading', exact: true }).click();
-  await page
-    .getByRole('alert')
-    .filter({ hasText: 'Could not load stylesheet sources' })
-    .waitFor({ state: 'hidden' });
+  successes = 0;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  for (let attempt = 0; attempt < RECOVERY_POLLS_MAX && successes < 2; attempt++) {
+    await page.waitForTimeout(100);
+  }
+  assert.equal(successes, 2, 'Both inventories reload once the server is back');
+  assert.equal(failures, 6, 'A recovered server takes no further failed attempts');
 }

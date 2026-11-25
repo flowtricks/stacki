@@ -59,13 +59,7 @@ function parsePosition(input: unknown): CursorPosition {
 function parseAnchor(value: Record<string, unknown>): NonNullable<CursorPosition['anchor']> {
   const path = string(value['path'], 500);
   const occurrence = value['occurrence'];
-  if (
-    !/^\d+(\.\d+)*$/.test(path) ||
-    typeof occurrence !== 'number' ||
-    !Number.isInteger(occurrence) ||
-    occurrence < 0 ||
-    occurrence > 10000
-  ) {
+  if (!/^\d+(\.\d+)*$/.test(path) || typeof occurrence !== 'number' || !Number.isInteger(occurrence) || occurrence < 0 || occurrence > 10000) {
     throw new Error('Invalid cursor anchor');
   }
   return { path, occurrence, x: fraction(value['x']), y: fraction(value['y']) };

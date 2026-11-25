@@ -2,100 +2,34 @@
 // choosing an import path, a layout's fields, a schema, the class field,
 // extracting a component, and what a paste brings in (App.tsx).
 
-import type { ImportDecl, PageModel, PageNode } from '../../../shared/page/pageNode';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { labelsNode } from '../../../shared/page/leadingNote';
+import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
+import type { Attr } from '../../../shared/page/pageNodeTypes';
+import type { StyleTagAttribute } from '../../../shared/properties/newStyleTag';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent } from '../../editor/treeSelection';
 import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/astroAssets';
 import { getElementSchema, VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from '../../features/props/RichContent';
 import { type EditGesture } from '../../editor/pageEdits';
-import {
-  type InsertPlace,
-  frontmatterGesture,
-  insertGesture,
-  removalGesture,
-  sequence,
-} from '../../editor/editGestures';
+import { type InsertPlace, frontmatterGesture, insertGesture, nodeGesture, removalGesture, sequence } from '../../editor/editGestures';
+import { ancestorChain } from '../../editor/editorTree';
 import type { NodeId } from '../../../shared/core/brand';
 import { nodeAtPath } from '../../editor/editorTree';
 import { namesUsedIn, neededFrontmatter, withStatements } from '../../editor/frontmatterMove';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { AstroAsset } from '../../features/palette/astroAssets';
-import type { InsertItem } from '../../features/palette/InsertSearch';
+import type { InsertChoice } from '../../features/palette/InsertSearch';
 import { type HistoryEntry, type NodeClipboard } from '../appTypes';
-import {
-  findEditorNodeById as findNodeById,
-  findEditorParentList as findParentList,
-  type OpenFile,
-} from '../../editor/pageState';
+import { findEditorNodeById as findNodeById, findEditorParentList as findParentList, type OpenFile } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath, rebaseProjectImport, type ImportPaths } from '../../ipc/appBridge';
-import {
-  newId,
-  defaultText,
-  collectUsedNames,
-  codeText,
-  voided,
-  frontmatterOf,
-} from './nodeFactory';
-
-// Imports the app is willing to remove once nothing refers to them: a
-// component file of any flavour Astro renders, an image, and Astro's own
-// <Image>/<Picture>. All three are reachable only as a tag or from an
-// expression, both of which the check below reads in full. A stylesheet, a
-// data module or a utility is left alone — those get imported for effects
-// this file can't see, and dropping one that is still doing its job breaks
-// the page.
-export const COMPONENT_IMPORT_RE = /\.(astro|jsx|tsx|vue|svelte)$/i;
-export const ASSET_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
-
-export function prunableImport(i: ImportDecl): boolean {
-  return (
-    COMPONENT_IMPORT_RE.test(i.path) ||
-    ASSET_IMPORT_RE.test(i.path) ||
-    i.path === ASTRO_ASSETS_MODULE
-  );
-}
-
-export function withPrunedImports(model: EditorModel): EditorModel {
-  const used = collectUsedNames(model);
-  // A name can be referenced as code rather than as a tag — inside a
-  // `<Fragment set:html>` chunk, a frontmatter const, a prop expression. The
-  // test is deliberately loose (a bare word anywhere in the code counts),
-  // because the cost of a false positive is a stray import and the cost of a
-  // false negative is deleting something the page still needs.
-  const code = codeText(model);
-  const mentioned = (name: string): boolean =>
-    new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(code);
-  const imports = model.imports.filter(
-    (i) => !prunableImport(i) || used.has(i.name) || mentioned(i.name),
-  );
-  return imports.length === model.imports.length ? model : { ...model, imports };
-}
-
-// Chooses an import path matching the page's existing style: if it already
-// imports via a src alias (e.g. "@/components/X.astro"), reuse that alias
-// root for the new import; otherwise fall back to a relative path.
-export function chooseImportPath(
-  model: Pick<PageModel, 'imports'>,
-  paths: { readonly relative: string; readonly srcRelative: string | undefined },
-): string {
-  const { relative, srcRelative: sourceRelative } = paths;
-  if (sourceRelative) {
-    for (const imp of model.imports) {
-      if (imp.path.startsWith('.')) {
-        continue;
-      }
-      for (const marker of ['/components/', '/layouts/']) {
-        const index = imp.path.indexOf(marker);
-        if (index > 0) {
-          return imp.path.slice(0, index + 1) + sourceRelative;
-        }
-      }
-    }
-  }
-  return relative;
-}
+import { newId, defaultText, voided, frontmatterOf } from './nodeFactory';
+import { STYLE_GLOBAL_ATTRIBUTE } from './styleBlockScope';
+import { assert } from '../../../shared/core/assert';
+import { chooseImportPath } from './pageModelGestures';
+export { ASSET_IMPORT_RE, chooseImportPath, COMPONENT_IMPORT_RE, prunableImport, withLayoutField, withPrunedImports } from './pageModelGestures';
 
 // Whether the props panel would offer this node a Content field — the rich
 // inline editor over its words. The same test PropsPanel makes: children that
@@ -132,10 +66,7 @@ export const effective = (list: HistoryEntry[]): HistoryEntry | undefined => {
 // The comment sitting directly above a node. The navigator folds it into
 // that node's row rather than giving it one of its own, and the props panel
 // edits it there — so a section's label and its note stay together.
-export const commentAbove = (
-  model: EditorModel | undefined,
-  nodeId: string | undefined,
-): EditorNode | undefined => {
+export const commentAbove = (model: EditorModel | undefined, nodeId: string | undefined): EditorNode | undefined => {
   if (!model || !nodeId) {
     return undefined;
   }
@@ -144,54 +75,33 @@ export const commentAbove = (
     return undefined;
   }
   const previous = found.list[found.index - 1];
-  return previous && previous.kind === 'comment' ? previous : undefined;
+  const node = found.list[found.index];
+  if (previous === undefined || node === undefined) {
+    return undefined;
+  }
+  return labelsNode(previous.kind, node.kind) ? previous : undefined;
 };
 
 // Set/replace/remove the `layout:` key in a markdown page's YAML
 // frontmatter, leaving every other key and its formatting alone. The
 // frontmatter text stays the single source of truth — editing it by hand in
 // the frontmatter editor and picking a layout here write to the same place.
-export const withLayoutField = (frontmatter: string, layoutPath: string | undefined): string => {
-  const fm = frontmatter ?? '';
-  if (/^[ \t]*layout[ \t]*:/m.test(fm)) {
-    return layoutPath
-      ? fm.replace(/^[ \t]*layout[ \t]*:.*$/m, `layout: ${layoutPath}`)
-      : fm.replace(/^[ \t]*layout[ \t]*:.*(\n|$)/m, '');
-  }
-  if (!layoutPath) {
-    return fm;
-  }
-  // First, so it reads as the page's frame rather than one field among many.
-  return fm ? `layout: ${layoutPath}\n${fm}` : `layout: ${layoutPath}`;
-};
-
 // A component whose Props extends HTMLAttributes<"tag"> also accepts that
 // element's built-in attributes — merge them in after its own props.
-export const schemaFor = (
-  entry: ScanComponent | AstroAsset | undefined,
-): readonly FieldDefinition[] => {
+export const schemaFor = (entry: ScanComponent | AstroAsset | undefined): readonly FieldDefinition[] => {
   if (!entry) {
     return [];
   }
   const own = entry.schema || [];
   const ownNames = new Set(own.map((field) => field.name));
   const extendsTag = 'extendsTag' in entry ? entry.extendsTag : undefined;
-  const inherited = extendsTag
-    ? getElementSchema(extendsTag).filter((field) => !ownNames.has(field.name))
-    : [];
+  const inherited = extendsTag ? getElementSchema(extendsTag).filter((field) => !ownNames.has(field.name)) : [];
   // A component that spreads `...rest` passes class straight through to
   // whatever it renders, so styling one is a normal thing to want — give it
   // the same class field an element has rather than making the user add it
   // by hand in Attributes.
-  const passesClass =
-    entry.hasRest &&
-    !own.some((field) => /^class(Name|es)?$/i.test(field.name)) &&
-    !inherited.some((field) => field.name === 'class');
-  return [
-    ...own,
-    ...(passesClass ? [{ name: 'class', type: 'string', optional: true }] : []),
-    ...inherited,
-  ];
+  const passesClass = entry.hasRest && !own.some((field) => /^class(Name|es)?$/i.test(field.name)) && !inherited.some((field) => field.name === 'class');
+  return [...own, ...(passesClass ? [{ name: 'class', type: 'string', optional: true }] : []), ...inherited];
 };
 
 // Every element takes a class, and it's the field people reach for most —
@@ -199,14 +109,11 @@ export const schemaFor = (
 // only appeared once something had already set one. Given first place, right
 // under the tag, on anything that renders an element.
 export const withClassField = (fields: readonly FieldDefinition[]): readonly FieldDefinition[] =>
-  fields.some((field) => field.name === 'class')
-    ? fields
-    : [{ name: 'class', type: 'string', optional: true }, ...fields];
+  fields.some((field) => field.name === 'class') ? fields : [{ name: 'class', type: 'string', optional: true }, ...fields];
 
 // A marker path may arrive namespaced (src/…/Card.astro|0.1). The index trail
 // after the pipe is what addresses a node in the open file's tree.
-export const trailOf = (path: string): number[] =>
-  (path.split('|').pop() ?? '').split('.').map(Number);
+export const trailOf = (path: string): number[] => (path.split('|').pop() ?? '').split('.').map(Number);
 
 // The stack entry for a component opened from `host` (an instance in the file on screen).
 export function componentEntry(
@@ -234,9 +141,7 @@ export function componentEntry(
   // body said the opposite of what opening a layout does.
   const top = stack[stack.length - 1];
   const hostPath = host.path;
-  const hostNode = hostPath
-    ? nodeAtPath(nodes, (String(hostPath).split('|').at(-1) ?? '').split('.').map(Number))
-    : undefined;
+  const hostNode = hostPath ? nodeAtPath(nodes, (String(hostPath).split('|').at(-1) ?? '').split('.').map(Number)) : undefined;
   const focusPath = top?.focusPath ?? hostPath ?? undefined;
   const nested = top?.focusPath !== undefined;
   const focusOcc = nested ? (top.focusOcc ?? 0) : host.occurrence;
@@ -249,6 +154,7 @@ export function componentEntry(
     focusOcc,
     focusWhole,
     hostKey: hostPath ?? undefined,
+    hostOcc: nested ? host.occurrence : undefined,
   };
 }
 
@@ -264,9 +170,11 @@ export function extractionGesture(
     readonly props: readonly string[];
     readonly place: InsertPlace;
     readonly paths: ImportPaths;
+    /** The frontmatter once the moved code has left it, when any has. */
+    readonly parent?: { readonly imports: EditorModel['imports']; readonly extraFrontmatter: string };
   },
 ): EditGesture {
-  const { id, name, props, place, paths } = extracted;
+  const { id, name, props, place, paths, parent } = extracted;
   // The instance passes each value straight back in under its own name.
   // That's what reconnects it: `title` meant the page's title where this
   // markup used to sit, and it still does, one level out.
@@ -278,39 +186,92 @@ export function extractionGesture(
     children: undefined,
   };
   const urgent = { coalesceKey: undefined, urgency: true };
-  const replaced = sequence(
-    insertGesture(shown, instance, place, urgent),
-    removalGesture([nodeId], urgent),
-  );
+  const swapped = sequence(insertGesture(shown, instance, place, urgent), removalGesture([nodeId], urgent));
+  // A node inside a loop stands for every repeat, so main refuses to remove it on
+  // its own and only after the instance has gone in, leaving both in a loop body
+  // that holds one expression. Stated as no request, the gesture goes out as a
+  // replacement of the loop instead, in one piece.
+  const inLoop = (ancestorChain(shown.nodes, nodeId) ?? []).some((node) => node.kind === 'map');
+  const replaced: EditGesture = inLoop ? { ...swapped, request: () => undefined } : swapped;
   const after = replaced.apply(shown);
-  const imports = (pageModel: EditorModel): EditorModel =>
-    pageModel.imports.some((i) => i.name === name)
-      ? pageModel
+  // One frontmatter write says both things: what left it and the new import. It is
+  // part of this gesture, so Undo restores the moved code with the markup.
+  const imports = (pageModel: EditorModel): EditorModel => {
+    const left = parent === undefined ? pageModel : withFrontmatterLeft(pageModel, parent);
+    return left.imports.some((i) => i.name === name)
+      ? left
       : {
-          ...pageModel,
-          imports: [
-            ...pageModel.imports,
-            { name, path: chooseImportPath(pageModel, paths), quote: "'" },
-          ],
+          ...left,
+          imports: [...left.imports, { name, path: chooseImportPath(left, paths), quote: "'" }],
         };
-  return frontmatterOf(imports(after)) === frontmatterOf(after)
-    ? replaced
-    : sequence(replaced, frontmatterGesture(after, urgent, imports));
+  };
+  return frontmatterOf(imports(after)) === frontmatterOf(after) ? replaced : sequence(replaced, frontmatterGesture(after, urgent, imports));
+}
+
+// The printer keeps the whitespace around the code as it was written, which is the
+// right thing while there is code. With none left it would stand as blank lines at
+// the bottom of the block, so it goes with the code.
+function withFrontmatterLeft(model: EditorModel, left: Pick<EditorModel, 'imports' | 'extraFrontmatter'>): EditorModel {
+  if (left.extraFrontmatter !== '') {
+    return { ...model, ...left };
+  }
+  const { slots } = model.frontmatterLayout;
+  return { ...model, ...left, frontmatterLayout: { extra: '', slots: slots.map((slot) => ({ ...slot, offset: 0 })) } };
 }
 
 // What creating a component says it did.
+/** The page's half of "Move styles": nothing to change, a tag that changed since the move was planned, or the gesture. */
+export type MovedStylesEdit = { readonly kind: 'none' } | { readonly kind: 'changed' } | { readonly kind: 'ready'; readonly gesture: EditGesture };
+
+/**
+ * The page's `<style>` tags as a move of their rules leaves them: each rewritten with its rules gone, or removed when
+ * nothing but space is left. A tag missing from `shown`, or holding other CSS than the plan read, means the page
+ * moved on: writing the plan's text would put the old CSS back over the new, so nothing is written.
+ */
+export function movedStylesEdit(
+  shown: EditorModel,
+  edits: readonly { readonly id: string; readonly before: string; readonly inner: string }[],
+): MovedStylesEdit {
+  const urgent = { coalesceKey: undefined, urgency: true };
+  let gesture: EditGesture | undefined = undefined;
+  for (const edit of edits) {
+    const tag = findNodeById(shown.nodes, edit.id);
+    if (tag?.kind !== 'raw' || tag.inner !== edit.before) {
+      return { kind: 'changed' };
+    }
+    assert(edit.inner !== edit.before, 'movedStylesEdit: every listed tag changes');
+    const step = edit.inner.trim() === '' ? removalGesture([edit.id], urgent) : nodeGesture(edit.id, { ...tag, inner: edit.inner }, urgent);
+    gesture = gesture === undefined ? step : sequence(gesture, step);
+  }
+  assert((gesture === undefined) === (edits.length === 0), 'movedStylesEdit: one step per edited tag');
+  return gesture === undefined ? { kind: 'none' } : { kind: 'ready', gesture };
+}
+
 export function createdComponentMessage(
   rel: string,
-  propCount: number,
+  counts: { readonly props: number; readonly moved: number; readonly styles: number },
   { stranded }: { readonly stranded: boolean },
+  translate: Translator,
 ): string {
   if (stranded) {
-    return `Created ${rel} — it reads page data, so it will need props.`;
+    return translate('shell.component.createdStranded', { rel });
   }
-  if (propCount > 0) {
-    return `Created ${rel} with ${propCount} prop${propCount === 1 ? '' : 's'}.`;
+  const parts = [
+    counts.moved > 0 ? translate('shell.component.movedValues', { count: counts.moved }) : '',
+    counts.props > 0 ? translate('shell.component.propCount', { count: counts.props }) : '',
+    counts.styles > 0 ? translate('shell.component.movedStyles', { count: counts.styles }) : '',
+  ].filter((part) => part !== '');
+  assert(parts.length <= 3, 'createdComponentMessage: at most three parts');
+  const [first, second, third] = parts;
+  if (first === undefined) {
+    return translate('shell.component.created', { rel });
   }
-  return `Created ${rel}`;
+  if (second === undefined) {
+    return translate('shell.component.createdWithOne', { rel, first });
+  }
+  return third === undefined
+    ? translate('shell.component.createdWithTwo', { rel, first, second })
+    : translate('shell.component.createdWithThree', { rel, first, second, third });
 }
 
 // What a pasted subtree needs from its new page: project components to import from
@@ -329,8 +290,7 @@ export async function pasteNeeds(
   // condition's test.
   const names = namesUsedIn([clip.node]);
   const knows = (nm: string): boolean =>
-    model.imports.some((i) => i.name === nm) ||
-    new RegExp(`\\b${nm.replace(/\$/g, '\\$')}\\b`).test(model.extraFrontmatter || '');
+    model.imports.some((i) => i.name === nm) || new RegExp(`\\b${nm.replace(/\$/g, '\\$')}\\b`).test(model.extraFrontmatter || '');
   const missing = [...names].filter((nm) => !knows(nm));
   // A component this project has is imported from where it actually lives,
   // whatever the page it was copied from called it.
@@ -363,13 +323,17 @@ export async function pasteNeeds(
   for (const imp of carried.imports) {
     // A relative path means something different from another page's folder.
     const rebased =
-      clip.pagePath && String(imp.path || '').startsWith('.')
-        ? await rebaseProjectImport(clip.pagePath, context.currentPath(), imp.path)
-        : { path: imp.path };
+      clip.pagePath && String(imp.path || '').startsWith('.') ? await rebaseProjectImport(clip.pagePath, context.currentPath(), imp.path) : { path: imp.path };
+    // Which way it binds comes across with it: `import { getCollection } from 'astro:content'`
+    // is a named import, and written without that it is a default import, which has no
+    // such export. Where it sat in the other page's frontmatter (`at`) means nothing here.
     carriedImports.push({
       name: imp.name,
       path: rebased.path || imp.path,
       quote: "'",
+      ...(imp.imported === undefined ? {} : { imported: imp.imported }),
+      ...(imp.named === undefined ? {} : { named: imp.named }),
+      ...(imp.typeOnly === undefined ? {} : { typeOnly: imp.typeOnly }),
     });
   }
 
@@ -398,20 +362,14 @@ export function pastedImports(needs: PasteNeeds): (model: EditorModel) => Editor
         imports = [...imports, imp];
       }
     }
-    const extraFrontmatter = carried.statements.length
-      ? withStatements(model.extraFrontmatter, carried.statements)
-      : model.extraFrontmatter;
+    const extraFrontmatter = carried.statements.length ? withStatements(model.extraFrontmatter, carried.statements) : model.extraFrontmatter;
     return { ...model, imports, extraFrontmatter };
   };
 }
 
 // Pastes into the selection when it can host children (a non-void element, or a
 // component with a default slot), otherwise after it, or at the end of the page.
-export function pastePlace(
-  model: EditorModel,
-  selectionId: string | undefined,
-  insertables: readonly ScanComponent[],
-): InsertPlace {
+export function pastePlace(model: EditorModel, selectionId: string | undefined, insertables: readonly ScanComponent[]): InsertPlace {
   const acceptsChildren = (node: EditorNode): boolean => {
     if (node.id === 'layout') {
       return true;
@@ -420,9 +378,7 @@ export function pastePlace(
       return !VOID_TAGS.has(String(node.name).toLowerCase());
     }
     if (node.kind === 'component') {
-      return (insertables.find((component) => component.name === node.name)?.slots || []).includes(
-        'default',
-      );
+      return (insertables.find((component) => component.name === node.name)?.slots || []).includes('default');
     }
     return false;
   };
@@ -476,9 +432,30 @@ export function astroAssetGesture(
   }
 }
 
+// A new `<style is:global>` holding `inner`: the one place a block Stacki adds is shaped, for the
+// insert palette (empty) and for the Style panel's first styles (a first rule).
+export function globalStyleNode(id: NodeId, inner: string): EditorNode {
+  return { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner };
+}
+
+// A new `<style>` tag the Style panel creates, with the attributes the project's `newStyleTag` setting
+// gives it (`is:global` by default; `lang="scss"` or `media` when the project says so), in its order.
+export function styleTagNode(id: NodeId, inner: string, attributes: readonly StyleTagAttribute[]): EditorNode {
+  // Built by construction, not by index writes, so the page tree's adapter surface stays at zero.
+  const props: Record<string, Attr> = Object.fromEntries(
+    attributes.map((attribute): readonly [string, Attr] => [
+      attribute.name,
+      attribute.value === undefined ? { type: 'bare' } : { type: 'string', value: attribute.value },
+    ]),
+  );
+  assert(Object.keys(props).length === attributes.length, 'styleTagNode: each attribute is written once');
+  return { id, kind: 'raw', name: 'style', props, inner };
+}
+
 // A new node for an insert-palette item that needs no import, or undefined for one
-// that is not inserted as a node here.
-export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefined {
+// that is not inserted as a node here. A style block is always global
+// (styleBlockScope.ts).
+export function insertedNode(item: InsertChoice, id: NodeId): EditorNode | undefined {
   let node: EditorNode | undefined = undefined;
   if (item.type === 'element') {
     const placeholder = defaultText(item.tag);
@@ -487,11 +464,7 @@ export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefin
       kind: 'element',
       name: item.tag,
       props: {},
-      children: VOID_TAGS.has(item.tag)
-        ? undefined
-        : placeholder
-          ? [{ id: newId(), kind: 'text', value: placeholder }]
-          : [],
+      children: VOID_TAGS.has(item.tag) ? undefined : placeholder ? [{ id: newId(), kind: 'text', value: placeholder }] : [],
     };
   } else if (item.type === 'map') {
     // No source until one is picked in the props panel. An empty literal
@@ -517,13 +490,16 @@ export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefin
   } else if (item.type === 'comment') {
     node = { id, kind: 'comment', value: ' Comment ' };
   } else if (item.type === 'text') {
+    // i18n-ignore: starter content written into the person's page, not interface text.
     node = { id, kind: 'text', value: 'Text' };
   } else if (item.type === 'expr') {
     node = { id, kind: 'expr', value: '{/* code */}' };
   } else if (item.type === 'doctype') {
     node = { id, kind: 'raw-line', value: '<!doctype html>' };
-  } else if (item.type === 'style' || item.type === 'script') {
-    node = { id, kind: 'raw', name: item.type, props: {}, inner: '' };
+  } else if (item.type === 'style') {
+    node = globalStyleNode(id, '');
+  } else if (item.type === 'script') {
+    node = { id, kind: 'raw', name: 'script', props: {}, inner: '' };
   }
   return node;
 }

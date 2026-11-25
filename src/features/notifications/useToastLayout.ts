@@ -18,13 +18,8 @@ export function useToastLayout(notices: readonly ToastNotice[]) {
   const positions = toastPositions(notices, measurement.heights);
   const totalHeight = toastListHeight(positions);
   const overflow = totalHeight > measurement.available;
-  const visibleCount =
-    expanded && overflow && !showAll
-      ? toastVisibleCount(positions, measurement.available - TOAST_MORE_PX)
-      : positions.length;
-  const height = expanded
-    ? toastListHeight(positions.slice(0, visibleCount)) + (overflow ? TOAST_MORE_PX : 0)
-    : (positions[0]?.height ?? 0);
+  const visibleCount = expanded && overflow && !showAll ? toastVisibleCount(positions, measurement.available - TOAST_MORE_PX) : positions.length;
+  const height = expanded ? toastListHeight(positions.slice(0, visibleCount)) + (overflow ? TOAST_MORE_PX : 0) : (positions[0]?.height ?? 0);
   useLayoutEffect(() => {
     // Removing a focused dismiss button may not emit blur; do not retain stale focus ownership.
     if (!measurement.ref.current?.contains(document.activeElement)) {
@@ -68,9 +63,7 @@ export function useToastLayout(notices: readonly ToastNotice[]) {
 function useToastMeasurements(notices: readonly ToastNotice[]) {
   const ref = useRef<HTMLElement>(null);
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
-  const [available, setAvailable] = useState(() =>
-    Math.max(TOAST_HEIGHT_PX, window.innerHeight - VIEWPORT_MARGIN_PX),
-  );
+  const [available, setAvailable] = useState(() => Math.max(TOAST_HEIGHT_PX, window.innerHeight - VIEWPORT_MARGIN_PX));
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
@@ -79,10 +72,7 @@ function useToastMeasurements(notices: readonly ToastNotice[]) {
     const measure = () => {
       const next = new Map<string, number>();
       // Only the bounded, mounted notices contribute to layout or retained measurements.
-      for (const slot of Array.from(element.querySelectorAll('.toast-slot')).slice(
-        0,
-        TOAST_LIMIT,
-      )) {
+      for (const slot of Array.from(element.querySelectorAll('.toast-slot')).slice(0, TOAST_LIMIT)) {
         if (slot instanceof HTMLElement) {
           const id = slot.dataset['toastId'];
           if (id !== undefined) {
@@ -93,17 +83,11 @@ function useToastMeasurements(notices: readonly ToastNotice[]) {
           }
         }
       }
-      setHeights((previous) =>
-        next.size === previous.size &&
-        [...next].every(([id, height]) => previous.get(id) === height)
-          ? previous
-          : next,
-      );
+      setHeights((previous) => (next.size === previous.size && [...next].every(([id, height]) => previous.get(id) === height) ? previous : next));
       setAvailable(Math.max(TOAST_HEIGHT_PX, window.innerHeight - VIEWPORT_MARGIN_PX));
     };
     measure();
-    const observer =
-      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
     for (const card of Array.from(element.querySelectorAll('.toast')).slice(0, TOAST_LIMIT)) {
       observer?.observe(card);
     }
@@ -121,10 +105,7 @@ interface ToastPosition {
   readonly offset: number;
 }
 
-function toastPositions(
-  notices: readonly ToastNotice[],
-  heights: ReadonlyMap<string, number>,
-): readonly ToastPosition[] {
+function toastPositions(notices: readonly ToastNotice[], heights: ReadonlyMap<string, number>): readonly ToastPosition[] {
   // This accumulator owns the ordered layout; measured heights keep multiline cards separate.
   let offset = 0;
   return notices.slice(0, TOAST_LIMIT).map((notice) => {
@@ -141,8 +122,6 @@ function toastListHeight(positions: readonly ToastPosition[]): number {
 }
 
 function toastVisibleCount(positions: readonly ToastPosition[], available: number): number {
-  const count = positions.filter(
-    (position) => position.offset + position.height <= available,
-  ).length;
+  const count = positions.filter((position) => position.offset + position.height <= available).length;
   return Math.max(1, count);
 }

@@ -1,17 +1,11 @@
 import { forwardRef, useLayoutEffect, useRef } from 'react';
-import type {
-  CSSProperties,
-  ForwardedRef,
-  ReactNode,
-  RefObject,
-  RefCallback,
-  HTMLAttributes,
-} from 'react';
+import type { CSSProperties, ForwardedRef, ReactNode, RefObject, RefCallback, HTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
 import { POPUP_MOTION_MS, usePopupLifecycle } from './popupLifecycle';
-import { usePopupDismiss, popupIsTop } from './popupDismiss';
+import { usePopupDismiss, popupIsTop, DISMISSED_BY_ATTRIBUTE } from './popupDismiss';
 import './popup.css';
 import { PopupScopeContext, usePopupScope } from './popupScope';
+import { popupLayer } from './popupLayer';
 
 export interface PopupActions {
   readonly close: () => void;
@@ -19,15 +13,7 @@ export interface PopupActions {
 }
 export interface PopupProps extends Pick<
   HTMLAttributes<HTMLDivElement>,
-  | 'onKeyDownCapture'
-  | 'aria-activedescendant'
-  | 'onKeyDown'
-  | 'onMouseDown'
-  | 'onPointerDown'
-  | 'onMouseEnter'
-  | 'onMouseLeave'
-  | 'tabIndex'
-  | 'id'
+  'onKeyDownCapture' | 'aria-activedescendant' | 'onKeyDown' | 'onMouseDown' | 'onPointerDown' | 'onMouseEnter' | 'onMouseLeave' | 'tabIndex' | 'id'
 > {
   readonly mode?: 'modal' | 'popover';
   readonly portal?: boolean;
@@ -35,7 +21,13 @@ export interface PopupProps extends Pick<
   readonly onClose: () => void;
   readonly onEscape?: () => void;
   readonly dismissible?: boolean;
+  // A popover closes when anything scrolls, because it usually sits on what moved.
+  // Set for one placed at the pointer, which a scroll elsewhere leaves where it is.
+  readonly keepOnScroll?: boolean;
   readonly anchor?: HTMLElement | undefined;
+  // A press inside this element is not an outside press: the popup stays open and the click
+  // goes through, so a control beside the anchor (a split button's main half) acts at once.
+  readonly within?: HTMLElement | undefined;
   readonly className?: string;
   readonly style?: CSSProperties | undefined;
   readonly role?: 'dialog' | 'alertdialog' | 'menu' | 'listbox' | 'tooltip';
@@ -54,7 +46,11 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
   const active = lifecycle.phase !== 'closed';
   const scope = usePopupScope(surface, { active, anchor: props.anchor, role: props.role });
   usePopupFocus(dialog, surface, { active, mode, anchor: props.anchor });
-  usePopupDismiss(surface, { ...props, active, mode }, lifecycle);
+  // A popup on its way out no longer owns presses: the click that comes during its exit
+  // motion (Escape, then straight to another control) belongs to what it lands on.
+  const dismissing = lifecycle.phase === 'opening' || lifecycle.phase === 'open';
+  usePopupDismiss(surface, { ...props, active: dismissing, mode }, lifecycle);
+  useStackAboveAnchor(surface, { active, anchor: props.anchor });
   const content = typeof props.children === 'function' ? props.children(lifecycle) : props.children;
   if (!active) {
     return undefined;
@@ -117,10 +113,59 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
 });
 export default Popup;
 
-function assignPopupRef(
-  ref: ForwardedRef<HTMLDivElement>,
-  element: Parameters<RefCallback<HTMLDivElement>>[0],
+// The most ancestors a popup's anchor is searched through for the layer it sits in.
+const ANCHOR_DEPTH_MAX = 64;
+
+/**
+ * A popover drawn above whatever it was opened from. Its stylesheet gives it a
+ * place among the app's layers (a menu at 400, a row's pop-up at 390), but one
+ * opened from inside a higher layer (the attribute editor, at 450) would land
+ * beneath the panel it came from. So the popup reads the highest layer its
+ * anchor sits in and, only when that is at or above its own, steps one above
+ * it: popups stack by who opened whom, with no number written for the pair.
+ */
+function useStackAboveAnchor(
+  surface: RefObject<HTMLDivElement>,
+  { active, anchor }: { readonly active: boolean; readonly anchor: HTMLElement | undefined },
 ): void {
+  useLayoutEffect(() => {
+    const element = surface.current ?? undefined;
+    if (!active || element === undefined || anchor === undefined) {
+      return;
+    }
+    const owner = anchorLayer(anchor);
+    const own = layerOf(element);
+    if (owner !== undefined && (own === undefined || owner >= own)) {
+      element.style.zIndex = String(owner + 1);
+    }
+  }, [active, anchor, surface]);
+}
+
+// The highest z-index among the positioned elements `anchor` sits in.
+function anchorLayer(anchor: HTMLElement): number | undefined {
+  let highest: number | undefined;
+  let element: HTMLElement | undefined = anchor;
+  for (let depth = 0; element !== undefined && depth < ANCHOR_DEPTH_MAX; depth += 1) {
+    const layer = layerOf(element);
+    if (layer !== undefined && (highest === undefined || layer > highest)) {
+      highest = layer;
+    }
+    element = element.parentElement ?? undefined;
+  }
+  return highest;
+}
+
+function layerOf(element: HTMLElement): number | undefined {
+  // Read through the element's own window: a popup can render in a frame's document.
+  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+  if (style === undefined || style.position === 'static') {
+    return undefined;
+  }
+  const value = Number.parseInt(style.zIndex, 10);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function assignPopupRef(ref: ForwardedRef<HTMLDivElement>, element: Parameters<RefCallback<HTMLDivElement>>[0]): void {
   if (typeof ref === 'function') {
     ref(element);
   } else if (ref) {
@@ -137,7 +182,7 @@ function popupContainer(mode: 'modal' | 'popover'): HTMLElement {
       return modal;
     }
   }
-  return document.body;
+  return popupLayer();
 }
 
 function usePopupFocus(
@@ -166,9 +211,9 @@ function usePopupFocus(
     return () => {
       const focused = document.activeElement;
       // Unanchored editors own their focus; restoring their input can reopen them on blur.
-      const restore =
-        mode === 'modal' ||
-        (anchor !== undefined && (focused === document.body || content?.contains(focused)));
+      // Not after a press elsewhere or the page moving (popupDismiss.ts): that left focus where the person put it.
+      const pressed = content?.getAttribute(DISMISSED_BY_ATTRIBUTE) !== null && content?.getAttribute(DISMISSED_BY_ATTRIBUTE) !== undefined;
+      const restore = mode === 'modal' || (!pressed && anchor !== undefined && (focused === document.body || content?.contains(focused)));
       const target = anchor ?? previousFocus;
       element?.close();
       if (restore && target instanceof window.HTMLElement && target.isConnected) {

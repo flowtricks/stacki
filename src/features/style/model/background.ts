@@ -1,3 +1,6 @@
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
+import { assert } from '../../../../shared/core/assert';
 // Multi-layer `background` model. CSS backgrounds are parallel comma-separated
 // lists — background-image holds the layers (index 0 = the TOP layer), and
 // background-size / -position / -repeat / -attachment hold one entry per layer.
@@ -70,8 +73,7 @@ export function colorOverlayOf(image: string): string | undefined {
   if (!parts.length) {
     return undefined;
   }
-  const isDirection = (text: string) =>
-    /^to\s/i.test(text.trim()) || /^-?[\d.]+(deg|grad|rad|turn)$/i.test(text.trim());
+  const isDirection = (text: string) => /^to\s/i.test(text.trim()) || /^-?[\d.]+(deg|grad|rad|turn)$/i.test(text.trim());
   const stops = isDirection(parts[0] ?? '') ? parts.slice(1) : parts;
   if (stops.length < 2) {
     return undefined;
@@ -139,15 +141,20 @@ export function splitTopLevelSpaces(value: string): string[] {
   return parts;
 }
 
+/** Whether a token of a shadow is one of its lengths, whatever the unit: a number or
+ *  dimension (`0`, `.5px`, `1pt`, `2cqmin`) or a math function. A list of known units
+ *  read `1pt` or `calc()` as the colour, and writing the list back put the real lengths
+ *  after four defaults: a declaration the browser drops. */
+export function isShadowLength(token: string): boolean {
+  const text = token.trim();
+  return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?([a-z]+|%)?$/i.test(text) || /^[+-]?(calc|min|max|clamp)\(.*\)$/is.test(text);
+}
+
 const REPEAT_KW = new Set(['repeat', 'repeat-x', 'repeat-y', 'no-repeat', 'space', 'round']);
 const ATTACH_KW = new Set(['scroll', 'fixed', 'local']);
 const BOX_KW = new Set(['border-box', 'padding-box', 'content-box']);
-const isImageToken = (token: string) =>
-  /^(url|(repeating-)?(linear|radial|conic)-gradient)\(/i.test(token) ||
-  token.toLowerCase() === 'none';
-const isPositionToken = (token: string) =>
-  /^(left|right|top|bottom|center)$/i.test(token) ||
-  /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token);
+const isImageToken = (token: string) => /^(url|(repeating-)?(linear|radial|conic)-gradient)\(/i.test(token) || token.toLowerCase() === 'none';
+const isPositionToken = (token: string) => /^(left|right|top|bottom|center)$/i.test(token) || /^-?[\d.]+(px|%|em|rem|vw|vh|vmin|vmax|ch|fr)?$/i.test(token);
 
 /** Parse a `background` shorthand into the five longhands + the (single) color.
  *  Order-tolerant per CSS; a `pos / size` group is split on the top-level slash.
@@ -179,8 +186,7 @@ export function splitBackgroundShorthand(bg: string): BackgroundLonghands & { co
     repeats.push(layer.repeat);
     attachments.push(layer.attachment);
   });
-  const join = (list: string[], initial: string) =>
-    list.some((item) => item.trim()) ? list.map((item) => item.trim() || initial).join(', ') : '';
+  const join = (list: string[], initial: string) => (list.some((item) => item.trim()) ? list.map((item) => item.trim() || initial).join(', ') : '');
   return {
     image: images.join(', '),
     size: join(sizes, 'auto'),
@@ -188,6 +194,46 @@ export function splitBackgroundShorthand(bg: string): BackgroundLonghands & { co
     repeat: join(repeats, 'repeat'),
     attachment: join(attachments, 'scroll'),
     color,
+  };
+}
+
+/** One layer as `background` shorthand text: its image, then position / size,
+ *  tiling and attachment where set. What the code view of a layer edits. */
+export function layerShorthand(layer: BgLayer): string {
+  const parts = [layer.image.trim()];
+  const position = layer.position.trim();
+  const size = layer.size.trim();
+  if (size !== '') {
+    parts.push(`${position !== '' ? position : '0 0'} / ${size}`);
+  } else if (position !== '') {
+    parts.push(position);
+  }
+  for (const part of [layer.repeat, layer.attachment]) {
+    if (part.trim() !== '') {
+      parts.push(part.trim());
+    }
+  }
+  const text = parts.join(' ');
+  assert(text.startsWith(parts[0] ?? ''), 'layerShorthand: the image leads');
+  return text;
+}
+
+/** The layer a shorthand text describes, or undefined when it names no image
+ *  (an empty or colour-only text is not a layer). */
+export function parseLayerShorthand(text: string): BgLayer | undefined {
+  if (splitTopLevelCommas(text).length !== 1) {
+    return undefined; // One layer per code block: a comma here would start a second.
+  }
+  const tokens = parseBackgroundLayer(text.trim(), { isLastLayer: false });
+  if (!tokens.image) {
+    return undefined;
+  }
+  return {
+    image: tokens.image,
+    size: tokens.sizeTokens.join(' '),
+    position: tokens.positionTokens.join(' '),
+    repeat: tokens.repeat,
+    attachment: tokens.attachment,
   };
 }
 
@@ -202,10 +248,7 @@ type BackgroundLayerTokens = {
 };
 
 // Sort one layer's tokens into its longhands. Only the LAST layer may carry the colour.
-function parseBackgroundLayer(
-  layerText: string,
-  options: { readonly isLastLayer: boolean },
-): BackgroundLayerTokens {
+function parseBackgroundLayer(layerText: string, options: { readonly isLastLayer: boolean }): BackgroundLayerTokens {
   // Normalize `a / b` (with or without spaces around the slash) into tokens.
   const tokens = splitTopLevelSpaces(layerText.replace(/\s*\/\s*/g, ' / '));
   const layer: BackgroundLayerTokens = {
@@ -253,22 +296,13 @@ export function layerKind(image: string): LayerKind {
   if (colorOverlayOf(image) !== undefined) {
     return 'color';
   }
-  if (
-    normalized.startsWith('linear-gradient') ||
-    normalized.startsWith('repeating-linear-gradient')
-  ) {
+  if (normalized.startsWith('linear-gradient') || normalized.startsWith('repeating-linear-gradient')) {
     return 'linear';
   }
-  if (
-    normalized.startsWith('radial-gradient') ||
-    normalized.startsWith('repeating-radial-gradient')
-  ) {
+  if (normalized.startsWith('radial-gradient') || normalized.startsWith('repeating-radial-gradient')) {
     return 'radial';
   }
-  if (
-    normalized.startsWith('conic-gradient') ||
-    normalized.startsWith('repeating-conic-gradient')
-  ) {
+  if (normalized.startsWith('conic-gradient') || normalized.startsWith('repeating-conic-gradient')) {
     return 'conic';
   }
   return 'other';
@@ -286,20 +320,20 @@ export function urlFileName(image: string): string | undefined {
 }
 
 /** A short human label for a layer (Webflow-style). */
-export function layerLabel(image: string): string {
+export function layerLabel(image: string, translate: Translator = ENGLISH_TRANSLATE): string {
   switch (layerKind(image)) {
     case 'image':
-      return urlFileName(image) ?? 'Image';
+      return urlFileName(image) ?? translate('styleModel.background.layer.image');
     case 'color':
-      return colorOverlayOf(image) ?? 'Color overlay';
+      return colorOverlayOf(image) ?? translate('styleModel.background.layer.colorOverlay');
     case 'linear':
-      return 'Linear gradient';
+      return translate('styleModel.background.layer.linear');
     case 'radial':
-      return 'Radial gradient';
+      return translate('styleModel.background.layer.radial');
     case 'conic':
-      return 'Conic gradient';
+      return translate('styleModel.background.layer.conic');
     case 'other':
-      return image.trim() || 'Layer';
+      return image.trim() || translate('styleModel.background.layer.other');
   }
 }
 
@@ -341,9 +375,7 @@ export function serializeLayers(layers: BgLayer[]): BackgroundLonghands {
     return { image: '', size: '', position: '', repeat: '', attachment: '' };
   }
   const list = (key: 'size' | 'position' | 'repeat' | 'attachment'): string =>
-    layers.some((layer) => layer[key].trim())
-      ? layers.map((layer) => layer[key].trim() || INITIAL[key]).join(', ')
-      : '';
+    layers.some((layer) => layer[key].trim()) ? layers.map((layer) => layer[key].trim() || INITIAL[key]).join(', ') : '';
   return {
     image: layers.map((layer) => layer.image.trim()).join(', '),
     size: list('size'),

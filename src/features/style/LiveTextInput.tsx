@@ -5,10 +5,12 @@
 import { useEffect, useRef, useState } from 'react';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
+import { followWhileRendering } from './model/fieldHooks';
 import VariableConnect from './VariableConnect';
-import { commitInPlace } from './model/commitInPlace';
+import { commitInPlace } from './model/commitStyleInPlace';
 import { parseImportant } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // ─────────────────────────── Live text input ───────────────────────────
 
@@ -28,15 +30,20 @@ export function LiveInput({
   onLiveCommit,
   onClear,
 }: LiveInputProps) {
+  const translate = useTranslate();
   const field = useLiveInputEditing({ value, busy, onCommit, onLiveCommit, onClear });
+  // The field holds the property's whole value, so the picker previews a hovered variable on the canvas
+  // as that property (VariableConnect owns the preview; it never reaches this field's live write).
+  const canvasProperty = prop ?? dataProp;
   // A computed value is a hint, never a draft that blur could write into CSS.
   const computed = useStyleHint(value.trim() ? '' : (prop ?? ''));
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel || 'value'} to a variable`}
+      ariaLabel={translate('style.liveTextInput.connect', { name: ariaLabel || translate('style.liveTextInput.value') })}
       disabled={busy}
       {...(prop === undefined ? {} : { prop })}
+      {...(canvasProperty === undefined ? {} : { canvasProperty })}
       onPick={(binding) => onCommit(binding, false)}
     >
       <input
@@ -78,6 +85,7 @@ export type LiveInputProps = {
 
 // The input's editing state: a draft that follows `value` while nobody is
 // typing, live writes while someone is, and the commit (or clear) on blur.
+// The picker's preview never reaches it (VariableConnect shows it itself).
 export function useLiveInputEditing({
   value,
   busy,
@@ -89,12 +97,27 @@ export function useLiveInputEditing({
 }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
-  useEffect(() => {
+  // A new value reaches the draft while rendering, not in an effect (fieldHooks.ts
+  // followWhileRendering). A field being typed in keeps its draft, as before.
+  followWhileRendering(useState(value), value, () => {
     if (!focused.current) {
       setDraft(value);
     }
-  }, [value]);
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive(onLiveCommit);
+  });
+  // Whether a live write went out that no commit or clear has settled, and whether the person has edited the
+  // text since the last commit. A blur commits only after an edit or a live write: a field that shows its
+  // default (or the picker's preview, put back) was never edited, and writing what it shows would turn an
+  // unset property into a set one.
+  const wrote = useRef(false);
+  const edited = useRef(false);
+  const trackedLive =
+    onLiveCommit === undefined
+      ? undefined
+      : (...written: Parameters<NonNullable<LiveInputProps['onLiveCommit']>>): void => {
+          wrote.current = true;
+          onLiveCommit(...written);
+        };
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive(trackedLive);
   const commit = (text = draft) => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -104,6 +127,10 @@ export function useLiveInputEditing({
     const parsed = parseImportant(trimmed);
     onCommit(parsed.value, parsed.important);
   };
+  const settle = (): void => {
+    wrote.current = false;
+    edited.current = false;
+  };
   const scrub = useScrub({
     value: draft,
     disabled: busy,
@@ -111,6 +138,7 @@ export function useLiveInputEditing({
     onInput: liveNow,
     onCommit: (text) => {
       setDraft(text);
+      settle();
       commit(text);
     },
   });
@@ -119,6 +147,7 @@ export function useLiveInputEditing({
     scrub,
     change: (text: string) => {
       setDraft(text);
+      edited.current = true;
       scheduleLive(text);
     },
     focus: () => {
@@ -127,11 +156,16 @@ export function useLiveInputEditing({
     blur: () => {
       focused.current = false;
       cancelLive();
+      if (!edited.current && !wrote.current) {
+        return;
+      }
+      settle();
       commit();
     },
     keyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
       const stepped = stepLiveKey(event);
       if (stepped !== undefined) {
+        edited.current = true;
         setDraft(stepped);
         scheduleLive(stepped);
       }

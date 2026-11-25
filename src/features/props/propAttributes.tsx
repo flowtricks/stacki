@@ -1,10 +1,13 @@
 import { useCodeAccess } from '../../ui/CodeAccess';
+import PropTip from './PropTip';
+import { ErrorToast } from '../../ui/ErrorToast';
+import { dataPickerPosition } from './dataPickerPosition';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { PropValues } from './propRules';
 import type { RichContext } from './RichContent';
-import type { SourceContext, FieldPosition, InsertAPI } from './propBindings';
+import type { SourceContext, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
@@ -13,16 +16,31 @@ import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
+import { AttributesPropControl, BoundSpreadRow } from './AttributesPropBinding';
+import { CodeInline } from '../../ui/CodeBlock';
+import { ComputedField, ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator } from '../../lib/i18n/localeContext';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { classListOfAttr, computedOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
+import { ClassListField } from './ClassListValue';
+import { CLASS_LIST_ATTRIBUTE, classListAppended, classListOfferOf, type ClassListOffer } from './classListProp';
+import { isReferencePath } from '../../editor/conditionalValue';
+import { readAttributesBinding, withDefaultAttribute } from '../../editor/attributesBinding';
+import { attributeNameNote } from '../../editor/htmlAttributes';
+import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
 import {
   type AttributePair,
   type ObjectEntry,
   decodeAttr,
-  attributeDisplayName,
   encodeAttr,
   parseAttrPaste,
   decodeRaw,
   encodeRaw,
+  spreadOfName,
+  typedAttributeName,
 } from './attributeText';
+import { commitInPlace } from '../../ui/commitInPlace';
 export { parseAttrPaste, parseObjectLiteral, serializeObjectLiteral } from './attributeText';
 
 interface AttributeNode {
@@ -47,19 +65,50 @@ interface AttributesSectionProps extends ContextProps {
   readonly onSetProp: SetProp;
   readonly onSetProps?: SetProps | undefined;
   readonly onRenameProp: (previous: string, next: string) => void;
+  /** The element's tag, when it is an HTML element: its attributes prop is typed by it, and names are checked against it. */
+  readonly tag?: string | undefined;
+  /** The names an attribute here would collide with: an instance's component props. */
+  readonly reservedNames?: readonly string[] | undefined;
+  /** For an instance: the tag its component passes attributes to (Props extends HTMLAttributes<"img">), shown and checked against. */
+  readonly passedTo?: string | undefined;
+  /** Renames a frontmatter variable across the file: the attributes prop's rest binding, from its chip's settings. */
+  readonly onRenameVariable?: ((rename: { readonly from: string; readonly to: string }) => string | undefined) | undefined;
+  /** Writes the whole attribute list in order, for connecting it to an attributes prop. */
+  readonly onReplaceProps?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
+  /**
+   * Writes the whole attribute list in order, for removing a spread: the
+   * engine edits a spread only as part of its tag (planner.ts), so taking one
+   * out is the tag rewritten without it, one undo step.
+   */
+  readonly onReplaceAttributes?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
+  readonly onSetFrontmatter?: ((source: string) => void) | undefined;
 }
 interface AttrEditorProps extends ContextProps {
+  readonly tag?: string | undefined;
+  readonly passedTo?: string | undefined;
+  readonly reservedNames?: readonly string[] | undefined;
   readonly pos: FieldPosition;
   readonly triggerRootRef: RefObject<HTMLElement>;
   readonly name: string;
   readonly value: string;
-  readonly syntax: 'pair' | 'spread';
   readonly isNew: boolean;
+  /** The names the element's other attributes have, which a new or renamed one would duplicate. */
+  readonly takenNames: readonly string[];
   readonly dataContext?: SourceContext | undefined;
   readonly onCommitName: (name: string) => void;
+  /** Adds a spread of `path` typed into a new attribute's Name; absent where a spread cannot be written. */
+  readonly onCommitSpread?: ((path: string) => void) | undefined;
+  /** What the spread being edited passes (`rest`), when the attribute is a spread. */
+  readonly spreadPath?: string | undefined;
+  /** Points the spread being edited at `path`, in its place; absent where a spread cannot be written. */
+  readonly onRenameSpread?: ((path: string) => void) | undefined;
   readonly onCommitPair: (name: string, value: string) => void;
   readonly onCommitMany: (pairs: readonly AttributePair[]) => void;
   readonly onChangeValue: (value: string) => void;
+  /** Writes a value made whole elsewhere (the Value conditions editor) at once, undefined leaving the attribute out: one undo step. */
+  readonly onApplyValue: (value: Attr | undefined) => void;
+  /** A `class:list`'s picker offers "New Class list property" (classListProp.ts). */
+  readonly classList?: ClassListOffer | undefined;
   readonly onClose: () => void;
 }
 interface ObjectAttrsFieldProps extends ContextProps {
@@ -70,24 +119,40 @@ interface ObjectAttrsFieldProps extends ContextProps {
 }
 
 export function AttributesSection(props: AttributesSectionProps) {
+  const translate = useTranslate();
   const state = useAttributesSection(props);
-  const { node, names, onSetProp, editor, setEditor, listRef, openEditor } = state;
+  const { node, onSetProp, editor, setEditor, listRef, openEditor, tag, onReplaceProps, bindContext } = state;
+  // Connected to the component's attributes prop: every attribute is a row in
+  // source order, and the spread is the "+ items in {} rest" row where it sits:
+  // the rows before it are defaults an instance overrides, the rows after it
+  // win (attributesBinding.ts).
+  const restLocal = bindContext?.newProp?.restLocal;
+  const binding = restLocal === undefined ? undefined : readAttributesBinding(node.props, restLocal);
+  // Stacki's own attributes stay on the node and are never a row: no edit here
+  // can reach them, so every write below carries them through untouched.
+  const names = visibleAttributeNames(state.names);
 
   return (
     <div className="props-field" ref={listRef}>
       {/* A label activates its control on any click, including blank space.
           A plain row keeps the add button as the only activation target. */}
-      <div className="props-label-row">
+      <div className="props-label-row attrs-label-row">
         <span className="prop-label">
           <BracesIcon size={12} className="prop-label-icon" />
-          Attributes
+          {translate('props.attributes.title')}
         </span>
-        <button
-          className="ghost"
-          title="Add attribute"
-          data-attribute-editor-trigger
-          onClick={() => openEditor(undefined)}
-        >
+        {state.passedTo !== undefined && <span className="attrs-tag-type">{translate('props.attributes.tagType', { tag: state.passedTo })}</span>}
+        {tag !== undefined && onReplaceProps !== undefined && (
+          <AttributesPropControl
+            props={node.props}
+            tag={tag}
+            bindContext={bindContext}
+            onReplaceProps={onReplaceProps}
+            onSetFrontmatter={state.onSetFrontmatter}
+            onRenameVariable={state.onRenameVariable}
+          />
+        )}
+        <button className="ghost" title={translate('props.attributes.add')} data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
           <PlusIcon size={12} />
         </button>
       </div>
@@ -96,24 +161,25 @@ export function AttributesSection(props: AttributesSectionProps) {
         <div className="attrs-list">
           {names.map((name) => {
             const value = node.props?.[name];
-            const syntax = value?.type === 'spread' ? 'spread' : 'pair';
+            if (value?.type === 'spread' && binding !== undefined && value.value === restLocal) {
+              return <BoundSpreadRow key={name} local={value.value} />;
+            }
+            if (value?.type === 'spread') {
+              return <SpreadRow key={name} name={name} spread={value.value} state={state} />;
+            }
             return (
               <div
                 key={name}
-                className={`attr-row ${syntax} ${editor?.attr === name ? 'editing' : ''}`}
+                className={`attr-row pair ${editor?.attr === name ? 'editing' : ''}`}
                 data-attribute-editor-trigger
                 onClick={() => openEditor(name)}
               >
-                <span className="attr-name">{attributeDisplayName(name, value)}</span>
-                {syntax === 'pair' && (
-                  <>
-                    <span className="attr-eq">=</span>
-                    <span className="attr-value">{decodeAttr(value)}</span>
-                  </>
-                )}
+                <span className="attr-name">{name}</span>
+                <span className="attr-eq">=</span>
+                <AttributeRowValue name={name} value={value} />
                 <button
                   className="row-action"
-                  title="Delete attribute"
+                  title={translate('props.attributes.delete')}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (editor?.attr === name) {
@@ -135,9 +201,131 @@ export function AttributesSection(props: AttributesSectionProps) {
   );
 }
 
+// A pair's value as its row previews it: a conditional or a class list as its
+// chip, anything else as written.
+function AttributeRowValue({ name, value }: { readonly name: string; readonly value: Attr | undefined }) {
+  const translate = useTranslate();
+  if (conditionalOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge />
+      </span>
+    );
+  }
+  if (name === 'class:list' && classListOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge label={translate('props.classList.title')} />
+      </span>
+    );
+  }
+  if (computedOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge label={translate('props.conditional.computed')} tone="computed" />
+      </span>
+    );
+  }
+  return <span className="attr-value">{decodeAttr(value)}</span>;
+}
+
+// A spread (`{...rest}`, `{...Astro.props}`) as the code it is: no name to
+// rename and no value to edit, only where it sits, which decides whether the
+// attributes beside it override it or are overridden. Removing it rewrites
+// the tag without it and leaves every other attribute where it was.
+function SpreadRow({ name, spread, state }: { readonly name: string; readonly spread: string; readonly state: AttributesState }) {
+  const translate = useTranslate();
+  const { node, onReplaceAttributes, editor, openEditor } = state;
+  assert(name.startsWith('...'), 'SpreadRow: a spread is keyed by its source');
+  return (
+    <div
+      className={`attr-row spread ${editor?.attr === name ? 'editing' : ''}`}
+      title={translate('props.attributes.spreadTitle')}
+      data-attribute-editor-trigger
+      onClick={() => openEditor(name)}
+    >
+      <span className="attr-name">
+        <CodeInline text={`{...${spread}}`} language="javascript" />
+      </span>
+      {onReplaceAttributes !== undefined && (
+        <button
+          className="row-action"
+          title={translate('props.attributes.deleteSpread')}
+          aria-label={translate('props.attributes.deleteSpreadNamed', { spread: `{...${spread}}` })}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (editor?.attr === name) {
+              state.setEditor(undefined);
+            }
+            onReplaceAttributes(withoutAttribute(node.props, name));
+          }}
+        >
+          <TrashIcon size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The attributes in order with a spread of `path` last, where a new attribute goes; one already there stays where it is. */
+export function withSpreadAdded(props: PropValues | undefined, path: string): Readonly<Record<string, Attr>> {
+  const key = `...${path}`;
+  const out: Record<string, Attr> = {};
+  for (const [name, value] of Object.entries(props ?? {})) {
+    if (value !== undefined) {
+      Object.defineProperty(out, name, { value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  if (!Object.hasOwn(out, key)) {
+    Object.defineProperty(out, key, { value: { type: 'spread', value: path }, enumerable: true, writable: true, configurable: true });
+  }
+  assert(out[key]?.type === 'spread', 'withSpreadAdded: the spread is there');
+  assert(Object.keys(out).length <= LIMITS.attrsPerNodeMax + 1, 'withSpreadAdded: attribute limit exceeded');
+  return out;
+}
+
+/** The attributes in order with the spread keyed `from` now spreading `path`, in the same place. */
+export function withSpreadRenamed(props: PropValues | undefined, from: string, path: string): Readonly<Record<string, Attr>> {
+  const key = `...${path}`;
+  assert(Object.hasOwn(props ?? {}, from), 'withSpreadRenamed: the spread is there');
+  const out: Record<string, Attr> = {};
+  for (const [name, value] of Object.entries(props ?? {})) {
+    const [slot, entry]: readonly [string, Attr | undefined] = name === from ? [key, { type: 'spread', value: path }] : [name, value];
+    if (entry !== undefined) {
+      Object.defineProperty(out, slot, { value: entry, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  assert(Object.keys(out).indexOf(key) === Object.keys(props ?? {}).indexOf(from), 'withSpreadRenamed: the spread keeps its place');
+  return out;
+}
+
+/** The attributes in order without `name`, Stacki's own included. */
+export function withoutAttribute(props: PropValues | undefined, name: string): Readonly<Record<string, Attr>> {
+  const out: Record<string, Attr> = {};
+  const entries = Object.entries(props ?? {});
+  assert(entries.length <= LIMITS.attrsPerNodeMax, 'withoutAttribute: attribute limit exceeded');
+  for (const [key, value] of entries) {
+    if (key !== name && value !== undefined) {
+      Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  assert(!Object.hasOwn(out, name), 'withoutAttribute: the attribute is gone');
+  return out;
+}
+
 function useAttributesSection(props: AttributesSectionProps) {
   const { names } = props;
   assert(names.length <= LIMITS.attrsPerNodeMax, 'Attributes: name limit exceeded');
+  // A new attribute of an element connected to the attributes prop goes
+  // before the spread, so it stays a default an instance can override.
+  const onSetProp: SetProp = (name, value, immediate) => {
+    const placed = value === undefined ? undefined : defaultPlacement(props, name, value);
+    if (placed === undefined) {
+      props.onSetProp(name, value, immediate);
+    } else {
+      props.onReplaceProps?.(placed);
+    }
+  };
   const [editor, setEditor] = useState<AttributeEditor | undefined>(undefined);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -155,16 +343,36 @@ function useAttributesSection(props: AttributesSectionProps) {
     );
   };
 
-  return { ...props, editor, setEditor, listRef, openEditor };
+  return { ...props, onSetProp, editor, setEditor, listRef, openEditor };
 }
 type AttributesState = ReturnType<typeof useAttributesSection>;
+
+// The attribute list with a new `name` before the connected spread, or
+// undefined when it is not a new attribute of a connected element.
+function defaultPlacement(props: AttributesSectionProps, name: string, value: Attr): Readonly<Record<string, Attr>> | undefined {
+  const local = props.bindContext?.newProp?.restLocal;
+  if (local === undefined || props.onReplaceProps === undefined || name.startsWith('...')) {
+    return undefined;
+  }
+  if (Object.hasOwn(props.node.props ?? {}, name)) {
+    return undefined;
+  }
+  if (readAttributesBinding(props.node.props, local) === undefined) {
+    return undefined;
+  }
+  const out = withDefaultAttribute(props.node.props, local, name, value);
+  assert(Object.keys(out).indexOf(name) < Object.keys(out).indexOf(`...${local}`), 'defaultPlacement: the new attribute is before the spread');
+  return out;
+}
 function AttributesSectionPopup({ state }: { readonly state: AttributesState }) {
   const { node, projectPath, bindContext, onSetProp, onRenameProp, editor, setEditor } = state;
   if (!editor) {
     return undefined;
   }
   const value = editor.attr ? node.props?.[editor.attr] : undefined;
-  const syntax = value?.type === 'spread' ? 'spread' : 'pair';
+  // A spread opens the editor on its code: a Name of `{...rest}` and no value.
+  const spreadPath = value?.type === 'spread' ? value.value : undefined;
+  const onReplaceAttributes = state.onReplaceAttributes;
   return (
     <AttrEditor
       key={editor.attr ?? '__new'}
@@ -173,10 +381,50 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       projectPath={projectPath ?? undefined}
       bindContext={bindContext}
       dataContext={bindContext}
-      name={attributeDisplayName(editor.attr ?? '', value)}
-      value={syntax === 'pair' ? decodeAttr(value) : ''}
-      syntax={syntax}
+      tag={state.tag}
+      passedTo={state.passedTo}
+      reservedNames={state.reservedNames}
+      name={spreadPath === undefined ? (editor.attr ?? '') : `{...${spreadPath}}`}
+      value={spreadPath === undefined ? decodeAttr(value) : ''}
+      spreadPath={spreadPath}
+      classList={
+        editor.attr === CLASS_LIST_ATTRIBUTE
+          ? classListOfferOf(
+              // An HTML element is the only kind of node the section is given a tag for.
+              { kind: state.tag === undefined ? 'component' : 'element', name: state.tag ?? '', props: node.props },
+              bindContext?.newProp,
+              onReplaceAttributes === undefined
+                ? undefined
+                : (props) => {
+                    // The editor's draft is the list as it was; the row shows the list as written.
+                    setEditor(undefined);
+                    onReplaceAttributes(props);
+                  },
+            )
+          : undefined
+      }
+      onRenameSpread={
+        onReplaceAttributes === undefined || editor.attr === undefined
+          ? undefined
+          : (path) => {
+              const from = editor.attr;
+              if (from === undefined) {
+                return;
+              }
+              onReplaceAttributes(withSpreadRenamed(node.props, from, path));
+              setEditor((current) => (current ? { ...current, attr: `...${path}` } : undefined));
+            }
+      }
       isNew={editor.attr === undefined}
+      takenNames={Object.keys(node.props ?? {}).filter((key) => key !== editor.attr)}
+      onCommitSpread={
+        onReplaceAttributes === undefined
+          ? undefined
+          : (path) => {
+              setEditor(undefined);
+              onReplaceAttributes(withSpreadAdded(node.props, path));
+            }
+      }
       onCommitName={(newName) => {
         const clean = newName.trim();
         if (editor.attr === undefined) {
@@ -193,6 +441,14 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       onChangeValue={(text) => {
         if (editor.attr) {
           onSetProp(editor.attr, encodeAttr(text));
+        }
+      }}
+      onApplyValue={(next) => {
+        if (editor.attr) {
+          onSetProp(editor.attr, next, true);
+          if (next === undefined) {
+            setEditor(undefined); // No value left the attribute out: there is no row to edit.
+          }
         }
       }}
       // Pasting `id="hero"` fills both boxes at once — the attribute is
@@ -242,27 +498,24 @@ function attributesCommitMany(state: AttributesState, pairs: readonly AttributeP
 }
 
 function AttrEditor(props: AttrEditorProps) {
+  const translate = useTranslate();
   const state = useAttrEditor(props);
-  const { ref, pos: position, syntax, isStyleValue, assetMode, setAssetMode } = state;
+  const { ref, pos: position, isStyleValue, assetMode, setAssetMode, spreadName } = state;
 
   return (
-    <div
-      ref={ref}
-      className="attr-editor"
-      style={{ top: position.top, left: position.left, width: position.width }}
-    >
+    <div ref={ref} className="attr-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <AttributeName state={state} />
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
-          tall field. */}
-      {syntax === 'pair' && (
-        <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`}>
-          <span>Value</span>
+          tall field. A spread has no value. */}
+      {spreadName.kind === 'none' && state.spreadPath === undefined && (
+        <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`} ref={state.valueRowRef}>
+          <span>{translate('props.attributes.value')}</span>
           <AttributeValue state={state} />
           <AttributePopups state={state} />
           <button
             className={`attr-asset-toggle ${assetMode ? 'on' : ''}`}
-            title={assetMode ? 'Edit as a plain value' : 'Choose a file from public/'}
+            title={assetMode ? translate('props.attributes.plainValue') : translate('props.attributes.chooseFile')}
             onClick={() => setAssetMode((previous) => !previous)}
           >
             <ElementImageIcon size={12} />
@@ -274,13 +527,14 @@ function AttrEditor(props: AttrEditorProps) {
 }
 
 function useAttrEditor(props: AttrEditorProps) {
-  const { name, value, syntax, isNew, bindContext, onCommitName, onClose, triggerRootRef } = props;
+  const { value, isNew, bindContext, onCommitName, onCommitSpread, onClose, triggerRootRef } = props;
+  const { name } = props;
   const [draftName, setDraftName] = useState(name);
   const [draftValue, setDraftValue] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
   // Where the purple dot's picker sits, and the field's own insert-at-the-caret
   // handle — the same pair every schema-driven field uses (see PropField).
-  const [insertAt, setInsertAt] = useState<FieldPosition | undefined>(undefined);
+  const [insertAt, setInsertAt] = useState<FieldPickerAt | undefined>(undefined);
   // Where the bigger value editor sits, when `=` has asked for one.
   const [bigAt, setBigAt] = useState<FieldPosition | undefined>(undefined);
   // What this value can name, for the completions and the chips — the same list
@@ -289,6 +543,9 @@ function useAttrEditor(props: AttrEditorProps) {
   const scopeNames = new Set(scope.map((completion) => completion.label.split('.')[0] ?? ''));
   const chipsInScope = (text: string) => scopeChips(text, scopeNames);
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
+  // The Value row, which the Value conditions editor opens beside, and whether it is open.
+  const valueRowRef = useRef<HTMLDivElement>(null);
+  const [conditionalOpen, setConditionalOpen] = useState(false);
 
   // Whether the value is an {expression} is settled when the popover opens,
   // so the field can't change shape halfway through typing one. The name is
@@ -313,15 +570,45 @@ function useAttrEditor(props: AttrEditorProps) {
   }, []);
   const focusValue = !isNew && !mounted.current;
 
+  // A spread typed into a new attribute's Name is the whole attribute: it is
+  // added in place and the editor closes, as it has nothing more to edit.
+  const spreadName = spreadOfName(draftName);
+  const commitSpread = (path: string): void => {
+    if (props.takenNames.includes(`...${path}`)) {
+      return;
+    }
+    if (isNew && onCommitSpread !== undefined) {
+      onCommitSpread(path);
+    } else if (props.spreadPath !== undefined && props.spreadPath !== path && props.onRenameSpread !== undefined) {
+      props.onRenameSpread(path);
+    }
+  };
   const commitName = () => {
-    if (syntax === 'pair') {
-      onCommitName(draftName);
+    switch (spreadName.kind) {
+      case 'none':
+        // A spread stays a spread: its Name is its code, and an attribute is added on its own.
+        if (props.spreadPath === undefined) {
+          onCommitName(draftName);
+        }
+        return;
+      case 'spread':
+        commitSpread(spreadName.path);
+        return;
+      case 'invalid':
+        return; // The note under the Name says why; nothing is written.
+      default: {
+        const exhaustive: never = spreadName;
+        return exhaustive;
+      }
     }
   };
 
   useAttrEditorDismiss(ref, triggerRootRef, onClose);
   return {
     ...props,
+    name,
+    spreadName,
+    commitSpread,
     draftName,
     setDraftName,
     draftValue,
@@ -334,6 +621,9 @@ function useAttrEditor(props: AttrEditorProps) {
     scope,
     chipsInScope,
     bindApiRef,
+    valueRowRef,
+    conditionalOpen,
+    setConditionalOpen,
     assetMode,
     setAssetMode,
     isStyleValue,
@@ -342,11 +632,7 @@ function useAttrEditor(props: AttrEditorProps) {
   };
 }
 type AttributeState = ReturnType<typeof useAttrEditor>;
-function useAttrEditorDismiss(
-  ref: RefObject<HTMLElement>,
-  triggerRootRef: RefObject<HTMLElement>,
-  onClose: () => void,
-) {
+function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefObject<HTMLElement>, onClose: () => void) {
   useEffect(() => {
     const onDown = (event: MouseEvent) => {
       const target = event.target;
@@ -356,17 +642,21 @@ function useAttrEditorDismiss(
       if (ref.current?.contains(target)) {
         return;
       }
-      const trigger =
-        target instanceof window.Element
-          ? target.closest('[data-attribute-editor-trigger]')
-          : undefined;
+      // A press in a pop-up this editor opened (a menu, the Value conditions
+      // editor) is inside the editor as far as the person is concerned.
+      if (target instanceof window.Element && target.closest('[data-popup-phase]') !== null) {
+        return;
+      }
+      const trigger = target instanceof window.Element ? target.closest('[data-attribute-editor-trigger]') : undefined;
       if (trigger && triggerRootRef.current?.contains(trigger)) {
         return;
       }
       onClose();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      // A pop-up open over the editor (a menu, the Value conditions editor)
+      // takes Escape for itself; the next Escape closes the editor.
+      if (event.key === 'Escape' && document.querySelector('[data-popup-phase]') === null) {
         onClose();
       }
     };
@@ -378,67 +668,147 @@ function useAttrEditorDismiss(
     };
   }, [onClose, ref, triggerRootRef]);
 }
+// What the Name has to say, shown behind a "?" beside its label and, for a refusal,
+// as the field's error look and one toast when the Name is committed: never as a
+// row under it. Advice never refuses: a name this tag does not take, or one the
+// component already means something by, still saves (htmlAttributes.ts).
+type NameWords = { readonly kind: 'advice' | 'refusal'; readonly text: string } | undefined;
+function nameWords(state: AttributeState, translate: Translator, translateDescribed: DescribedTranslator): NameWords {
+  const { spreadName } = state;
+  if (spreadName.kind === 'invalid') {
+    return { kind: 'refusal', text: translateDescribed(spreadName) };
+  }
+  if (spreadName.kind === 'spread') {
+    // An existing spread always says what it does; a new one only where one can be written.
+    const available = state.spreadPath !== undefined || state.onCommitSpread !== undefined;
+    return {
+      kind: 'advice',
+      text: available
+        ? `{...${spreadName.path}} ${translate('props.attributes.spreadPasses', { path: spreadName.path })}`
+        : translate('props.attributes.spreadAdded'),
+    };
+  }
+  if (state.spreadPath !== undefined) {
+    return { kind: 'refusal', text: translate('props.attributes.spreadName') };
+  }
+  const advice = attributeNameNote(
+    state.draftName,
+    {
+      tag: state.tag,
+      passedTo: state.passedTo,
+      reserved: state.reservedNames ?? [],
+      own: state.isNew ? undefined : state.name,
+      taken: state.takenNames,
+    },
+    translate,
+  );
+  return advice === undefined ? undefined : { kind: 'advice', text: advice };
+}
 function AttributeName({ state }: { readonly state: AttributeState }) {
-  const {
-    syntax,
-    isNew,
-    draftName,
-    setDraftName,
-    setDraftValue,
-    onCommitPair,
-    onCommitMany,
-    commitName,
-  } = state;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const { isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany } = state;
+  const words = nameWords(state, translate, translateDescribed);
+  // A refusal is toasted once when the Name is committed, not on every key typed.
+  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const commitName = (): void => {
+    setRefused(words?.kind === 'refusal' ? words.text : undefined);
+    state.commitName();
+  };
+  const nameRef = useRef<HTMLDivElement>(null);
+  const [picker, setPicker] = useState<FieldPosition | undefined>(undefined);
+  // A spread's Name takes data like a value does: the dot picks what it spreads.
+  const spreading = state.spreadPath !== undefined || state.spreadName.kind !== 'none';
   return (
     <div className="attr-editor-row">
-      <span>Name</span>
-      <input
-        autoFocus={isNew}
-        value={draftName}
-        readOnly={syntax === 'spread'}
-        placeholder="data-attribute"
-        spellCheck={false}
-        onPaste={(event) => {
-          if (syntax === 'spread') {
-            return;
-          }
-          const text = event.clipboardData.getData('text');
-          // Only when it actually looks like markup — a plain name paste
-          // must keep behaving like a paste into a text box.
-          if (!text || !/=/.test(text)) {
-            return;
-          }
-          const pairs = parseAttrPaste(text);
-          if (!pairs.length) {
-            return;
-          }
-          event.preventDefault();
-          const pair = pairs[0];
-          if (pairs.length === 1 && pair) {
-            setDraftName(pair.name);
-            setDraftValue(pair.value);
-            onCommitPair(pair.name, pair.value);
-          } else {
-            onCommitMany(pairs);
-          }
-        }}
-        onChange={(event) => setDraftName(event.target.value.replace(/[^\w@:.-]/g, ''))}
-        onBlur={commitName}
-        onKeyDown={(event) => event.key === 'Enter' && (commitName(), event.currentTarget.blur())}
-      />
+      <span>
+        {translate('props.attributes.name')}
+        <PropTip text={words?.text} />
+      </span>
+      <ErrorToast message={refused} />
+      <div className="attr-name-field" ref={nameRef}>
+        <input
+          autoFocus={isNew}
+          value={draftName}
+          placeholder="data-attribute"
+          aria-invalid={words?.kind === 'refusal'}
+          spellCheck={false}
+          onPaste={(event) => {
+            const text = event.clipboardData.getData('text');
+            // Only when it actually looks like markup — a plain name paste
+            // must keep behaving like a paste into a text box.
+            if (!text || !/=/.test(text)) {
+              return;
+            }
+            const pairs = parseAttrPaste(text);
+            if (!pairs.length) {
+              return;
+            }
+            event.preventDefault();
+            const pair = pairs[0];
+            if (pairs.length === 1 && pair) {
+              setDraftName(pair.name);
+              setDraftValue(pair.value);
+              onCommitPair(pair.name, pair.value);
+            } else {
+              onCommitMany(pairs);
+            }
+          }}
+          onChange={(event) => {
+            setRefused(undefined);
+            setDraftName(typedAttributeName(event.target.value));
+          }}
+          onBlur={commitName}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              commitName();
+              // A new attribute's Name is done with Enter and leaves; an existing one keeps the focus.
+              if (isNew) {
+                event.currentTarget.blur();
+              } else {
+                commitInPlace(event.currentTarget);
+              }
+            }
+          }}
+        />
+        {spreading && (
+          <BindHandle
+            active={picker !== undefined}
+            onOpen={() => {
+              const bounds = nameRef.current?.getBoundingClientRect();
+              setPicker(picker !== undefined || bounds === undefined ? undefined : dataPickerPosition(bounds));
+            }}
+          />
+        )}
+      </div>
+      {picker !== undefined && (
+        <FieldDataPicker
+          pos={picker}
+          bindContext={state.bindContext}
+          current={state.spreadName.kind === 'spread' ? state.spreadName.path : undefined}
+          onPick={(path) => {
+            setPicker(undefined);
+            // What it spreads is a name in scope: a prop, a frontmatter object.
+            if (isReferencePath(path)) {
+              setDraftName(`{...${path}}`);
+              state.commitSpread(path);
+            }
+          }}
+          onClose={() => setPicker(undefined)}
+        />
+      )}
     </div>
   );
 }
 function AttributeValue({ state }: { readonly state: AttributeState }) {
-  const {
-    isStyleValue,
-    draftValue,
-    focusValue,
-    setDraftValue,
-    onChangeValue,
-    assetMode,
-    projectPath,
-  } = state;
+  const { isStyleValue, draftValue, focusValue, setDraftValue, onChangeValue, assetMode, projectPath } = state;
+  // Code the Value conditions editor can draw is drawn by it; any other code keeps the code editor.
+  const conditional = conditionalOfAttr(encodeAttr(draftValue));
+  // A `class:list` in the shape the class-list editor draws is drawn by it.
+  const classList = state.draftName === 'class:list' ? classListOfAttr(encodeAttr(draftValue)) : undefined;
+  // Code that chooses between values but cannot be drawn is the Computed pill until its {} asks for the code.
+  const computed = computedOfAttr(encodeAttr(draftValue));
+  const [codeShown, setCodeShown] = useState(false);
   return isStyleValue ? (
     // A style attribute is CSS, so edit it as CSS — one declaration per
     // line, highlighted. An {expression} value stays a plain field:
@@ -466,6 +836,22 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
         }}
       />
     </div>
+  ) : classList !== undefined ? (
+    // In a component the list has the purple dot too: data picked from it joins the list, and "New Class list property" is there.
+    <div className="attr-value-field">
+      <ClassListField model={classList} value={encodeAttr(draftValue)} bindContext={state.bindContext} onApply={(next) => applyValue(state, next)} />
+      {state.classList !== undefined && <ClassListHandle state={state} />}
+    </div>
+  ) : conditional !== undefined ? (
+    <ConditionalField
+      model={conditional}
+      value={encodeAttr(draftValue)}
+      bindContext={state.bindContext}
+      language={valueLanguageOf(state.draftName)}
+      onApply={(next) => applyValue(state, next)}
+    />
+  ) : computed !== undefined && !codeShown ? (
+    <ComputedField code={computed} onEditCode={() => setCodeShown(true)} />
   ) : (
     // The same field a schema-driven prop gets: text with data in it shown
     // as chips, and real code edited as code — JavaScript, highlighted. A
@@ -477,19 +863,9 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
   );
 }
 function AttributeBinding({ state }: { readonly state: AttributeState }) {
+  const translate = useTranslate();
   const allowCode = useCodeAccess();
-  const {
-    draftValue,
-    setDraftValue,
-    onChangeValue,
-    bindContext,
-    dataContext,
-    bindApiRef,
-    insertAt,
-    setInsertAt,
-    ref,
-    setBigAt,
-  } = state;
+  const { draftValue, setDraftValue, onChangeValue, bindContext, dataContext, bindApiRef, insertAt, setInsertAt, ref, setBigAt } = state;
   const valueRef = useRef<HTMLDivElement>(null);
   return (
     <>
@@ -500,9 +876,11 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
           // "undefined". Empty text is an empty string here; encodeAttr still
           // stores it as bare on the way out.
           value={draftValue === '' ? { type: 'string', value: '' } : encodeAttr(draftValue)}
-          placeholder="Type, or insert data"
+          placeholder={translate('props.attributes.typeOrInsert')}
           bindContext={bindContext}
           dataContext={dataContext}
+          attributeName={state.draftName}
+          elementName={state.tag}
           wrapCode
           apiRef={bindApiRef}
           onChange={(next) => {
@@ -517,7 +895,7 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
                 again. A dot that flickers under the pointer. */}
         <BindHandle
           active={!!insertAt}
-          onOpen={(host) => {
+          onOpen={(host, focus) => {
             if (insertAt) {
               setInsertAt(undefined);
               return;
@@ -526,11 +904,7 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
             if (!rect) {
               return;
             }
-            setInsertAt({
-              left: rect.left,
-              top: Math.min(rect.bottom + 4, Math.max(60, window.innerHeight - 340)),
-              width: Math.max(rect.width, 240),
-            });
+            setInsertAt({ ...dataPickerPosition(rect), focus });
           }}
         />
       </div>
@@ -538,8 +912,8 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
         <button
           type="button"
           className="attr-expand-toggle"
-          title="Expand value"
-          aria-label="Expand value"
+          title={translate('props.attributes.expand')}
+          aria-label={translate('props.attributes.expand')}
           onClick={() => openExpandedAttribute(valueRef.current ?? undefined, setBigAt)}
         >
           <MaximizeIcon size={12} />
@@ -560,22 +934,25 @@ function expandedAttributeEditorPosition(host: HTMLElement): FieldPosition {
   };
 }
 function AttributePopups({ state }: { readonly state: AttributeState }) {
-  const {
-    bigAt,
-    draftName,
-    draftValue,
-    scope,
-    chipsInScope,
-    bindContext,
-    setDraftValue,
-    onChangeValue,
-    setBigAt,
-    insertAt,
-    setInsertAt,
-    bindApiRef,
-  } = state;
+  const { bigAt, draftName, draftValue, scope, chipsInScope, bindContext, setDraftValue, onChangeValue, setBigAt, insertAt, setInsertAt, bindApiRef } = state;
+  const catalog = useConditionCatalog(bindContext);
+  // Only in a component, which has props to test, and only for a value a branch can hold.
+  const start = bindContext?.newProp === undefined ? undefined : startingConditional(encodeAttr(draftValue), catalog);
   return (
     <>
+      {state.conditionalOpen && start !== undefined && (
+        <ConditionalEditor
+          anchorRef={state.valueRowRef}
+          start={start}
+          model={undefined}
+          value={encodeAttr(draftValue)}
+          bindContext={bindContext}
+          language={valueLanguageOf(draftName)}
+          shapes="rich"
+          onApply={(next) => applyValue(state, next)}
+          onClose={() => state.setConditionalOpen(false)}
+        />
+      )}
       {bigAt ? (
         <ValueCodeEditor
           pos={bigAt}
@@ -595,19 +972,40 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
         <FieldDataPicker
           pos={insertAt}
           bindContext={bindContext}
+          seed={{ fit: 'text', label: draftName || 'value', value: draftValue.startsWith('{') ? '' : draftValue }}
+          classList={draftName === CLASS_LIST_ATTRIBUTE ? state.classList : undefined}
+          onBindNew={(path) => {
+            setInsertAt(undefined);
+            setDraftValue(`{${path}}`);
+            onChangeValue(`{${path}}`);
+          }}
           onPick={(path) => {
             setInsertAt(undefined);
-            // Into the caret when the field has one, so a chip lands beside
-            // what is already typed; otherwise this is the value's first
-            // binding and it becomes the whole of it.
-            if (bindApiRef.current?.insert) {
+            // At the caret while the value is being typed, so a chip lands
+            // beside what is already there; the dot pressed outside the field
+            // connects the whole value (fieldFocus.ts).
+            if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
               bindApiRef.current.insert(path);
+              return;
+            }
+            // A class list takes the data as one more class, rather than as the whole list.
+            const appended = draftName === CLASS_LIST_ATTRIBUTE && draftValue !== '' ? classListAppended(encodeAttr(draftValue), path) : undefined;
+            if (appended !== undefined) {
+              applyValue(state, appended);
               return;
             }
             const text = `{${path}}`;
             setDraftValue(text);
             onChangeValue(text);
           }}
+          onConditional={
+            start === undefined
+              ? undefined
+              : () => {
+                  setInsertAt(undefined);
+                  state.setConditionalOpen(true);
+                }
+          }
           onClose={() => setInsertAt(undefined)}
         />
       ) : undefined}
@@ -615,7 +1013,34 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
   );
 }
 
+// The purple dot beside a class list the Class list editor draws, opening the same picker as a value's dot.
+function ClassListHandle({ state }: { readonly state: AttributeState }) {
+  const { insertAt, setInsertAt, ref } = state;
+  return (
+    <BindHandle
+      active={insertAt !== undefined}
+      onOpen={(host, focus) => {
+        if (insertAt !== undefined) {
+          setInsertAt(undefined);
+          return;
+        }
+        const rectangle = (host ?? ref.current)?.getBoundingClientRect();
+        if (rectangle !== undefined) {
+          setInsertAt({ ...dataPickerPosition(rectangle), focus });
+        }
+      }}
+    />
+  );
+}
+
+// A whole value from the Value conditions editor: shown at once, written at once.
+function applyValue(state: AttributeState, next: Attr | undefined): void {
+  state.setDraftValue(decodeAttr(next));
+  state.onApplyValue(next);
+}
+
 export function ObjectAttrsField(props: ObjectAttrsFieldProps) {
+  const translate = useTranslate();
   const state = useObjectAttrsField(props);
   const { pill, menu, entries, onCommit, editor, setEditor, listRef, openEditor } = state;
 
@@ -623,12 +1048,7 @@ export function ObjectAttrsField(props: ObjectAttrsFieldProps) {
     <div className="props-field" ref={listRef}>
       <div className="props-label-row">
         {pill}
-        <button
-          className="ghost"
-          title="Add attribute"
-          data-attribute-editor-trigger
-          onClick={() => openEditor(undefined)}
-        >
+        <button className="ghost" title={translate('props.attributes.add')} data-attribute-editor-trigger onClick={() => openEditor(undefined)}>
           <PlusIcon size={12} />
         </button>
         {menu}
@@ -648,7 +1068,7 @@ export function ObjectAttrsField(props: ObjectAttrsFieldProps) {
               <span className="attr-value">{decodeRaw(en.raw)}</span>
               <button
                 className="row-action"
-                title="Delete attribute"
+                title={translate('props.attributes.delete')}
                 onClick={(event) => {
                   event.stopPropagation();
                   if (editor?.index === i) {
@@ -707,7 +1127,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       dataContext={bindContext}
       name={editor.index !== undefined ? (entries[editor.index]?.key ?? '') : ''}
       value={editor.index !== undefined ? decodeRaw(entries[editor.index]?.raw ?? '') : ''}
-      syntax="pair"
+      takenNames={entries.filter((_, index) => index !== editor.index).map((entry) => entry.key)}
       isNew={editor.index === undefined}
       onCommitName={(newName) => {
         const clean = newName.trim();
@@ -726,10 +1146,20 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       }}
       onChangeValue={(text) => {
         if (editor.index !== undefined) {
-          onCommit(
-            entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)),
-          );
+          onCommit(entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)));
         }
+      }}
+      onApplyValue={(next) => {
+        if (editor.index === undefined) {
+          return;
+        }
+        if (next === undefined) {
+          onCommit(entries.filter((_, i) => i !== editor.index));
+          setEditor(undefined);
+          return;
+        }
+        const text = decodeAttr(next);
+        onCommit(entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)));
       }}
       onCommitPair={(name, value) => {
         const entry = { key: name.trim(), raw: encodeRaw(value) };
@@ -757,10 +1187,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
   );
 }
 
-function openExpandedAttribute(
-  host: HTMLElement | undefined,
-  open: (position: FieldPosition) => void,
-): void {
+function openExpandedAttribute(host: HTMLElement | undefined, open: (position: FieldPosition) => void): void {
   if (host) {
     open(expandedAttributeEditorPosition(host));
   }
