@@ -35,6 +35,37 @@ export async function saveAuditIgnores(projectPath: string, base: StoredIgnores,
   }
 }
 
+// Saves under way, by project: the file as the last one left it.
+const saving = new Map<string, Promise<StoredIgnores | undefined>>();
+
+/**
+ * One change to the settings, saved after any save still under way and made to what that one wrote: two quick changes both hold the
+ * bytes read before either, and the second would be refused as stale. A change made elsewhere is still never overwritten.
+ */
+export async function changeAuditIgnores(
+  projectPath: string,
+  base: StoredIgnores,
+  change: (value: AuditIgnores) => AuditIgnores,
+): Promise<Result<StoredIgnores, string>> {
+  const before = saving.get(projectPath) ?? Promise.resolve(undefined);
+  const result = before.then(async (latest) => {
+    const from = latest ?? base;
+    try {
+      return await saveAuditIgnores(projectPath, from, change(from.value));
+    } catch (error: unknown) {
+      return err(error instanceof Error ? error.message : String(error));
+    }
+  });
+  const after = Promise.all([before, result]).then(([latest, saved]) => (saved.ok ? saved.value : latest));
+  saving.set(projectPath, after);
+  const saved = await result;
+  await after;
+  if (saving.get(projectPath) === after) {
+    saving.delete(projectPath);
+  }
+  return saved;
+}
+
 export type RenderedHtml = { readonly ok: true; readonly status: number; readonly html: string } | { readonly ok: false; readonly message: string };
 
 export function parseRenderedHtml(input: unknown): RenderedHtml {

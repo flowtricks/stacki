@@ -51,7 +51,7 @@ import type { CustomAudit } from '../../../shared/properties/customAudits';
 import { applyFixes, type FixDeps } from './auditFixes';
 import type { AuditScope } from './auditScope';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
-import { saveAuditIgnores } from './auditsBridge';
+import { changeAuditIgnores } from './auditsBridge';
 import { allFindings, auditState, updateAuditState, useAuditState } from './auditStore';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { useAuditText, type AuditText } from './useAuditText';
@@ -568,14 +568,13 @@ function EmptyLine({ filtered }: { readonly filtered: boolean }) {
 /** Writes the changed ignores; true once they are saved, false after a failure the person was told about. */
 async function writeIgnores(props: AuditsPanelProps, translate: Translator, change: (value: AuditIgnores) => AuditIgnores): Promise<boolean> {
   const base = auditState().ignores;
-  let next: AuditIgnores;
   try {
-    next = change(base.value);
+    change(base.value);
   } catch (error: unknown) {
     props.showToast(error instanceof Error ? error.message : String(error), 'error');
     return false;
   }
-  const saved = await saveAuditIgnores(props.project.path, base, next);
+  const saved = await changeAuditIgnores(props.project.path, base, change);
   if (saved.ok) {
     updateAuditState((current) => ({ ...current, ignores: saved.value }));
     return true;

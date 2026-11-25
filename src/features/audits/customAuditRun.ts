@@ -140,6 +140,9 @@ function astroFindings(
   const lines = lineStarts(source.source);
   const where = { file: source.file, fileKind: source.fileKind };
   if (matcher.scope === 'markup') {
+    if (source.source.length > CUSTOM_MATCH_LIMITS.textCharsMax) {
+      return { findings: [], stopped: true }; // Too long to read: this file is left out, and the audit says it read only part.
+    }
     const scan = scanCustom(markupText(source.source), matcher, context.budget, now);
     const findings = scan.matches.map((match) => {
       const element = elementAt(source.nodes, match.offset);

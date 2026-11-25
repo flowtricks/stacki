@@ -29,7 +29,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { reportErrorToast } from '../../ui/errorNotices';
 import InfoHint from '../../ui/InfoHint';
 import { AUDIT_ICONS } from '../../features/audits/AuditIcons';
-import { readAuditIgnores, saveAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
+import { changeAuditIgnores, readAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
 import { updateAuditState } from '../../features/audits/auditStore';
 import { useAuditText } from '../../features/audits/useAuditText';
 import { unitGroupText } from '../../features/audits/tokenActions';
@@ -79,8 +79,8 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
     );
   }
   const file = state.stored.value;
-  const save = async (next: AuditFile): Promise<void> => {
-    const saved = await saveAuditIgnores(projectPath, state.stored, next);
+  const save = async (change: (current: AuditFile) => AuditFile): Promise<void> => {
+    const saved = await changeAuditIgnores(projectPath, state.stored, change);
     if (saved.ok) {
       setState({ kind: 'ready', stored: saved.value });
       updateAuditState((current) => ({ ...current, ignores: saved.value, request: current.request + 1 }));
@@ -98,7 +98,10 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
       return next;
     });
   const setting = (id: AuditCheckId): AuditCheckSetting => file.checks[id] ?? DEFAULT_SETTING;
-  const tokens = (next: AuditTokenSettings): AuditFile => ({ ...file, tokens: next });
+  // Each change is made to the file as last saved, so one made while another is saving keeps both.
+  const tokens =
+    (change: (current: AuditTokenSettings) => AuditTokenSettings) =>
+    (current: AuditFile): AuditFile => ({ ...current, tokens: change(current.tokens) });
   return (
     <div className="audits-settings">
       {AUDIT_CATEGORIES.map((category) => {
@@ -115,12 +118,21 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
             all={{
               checked: all,
               disabled: !editable,
-              onToggle: () => void save(ids.reduce((next, id) => withCheckSetting(next, id, { ...setting(id), enabled: !all }), file)),
+              onToggle: () =>
+                void save((current) =>
+                  ids.reduce((next, id) => withCheckSetting(next, id, { ...(next.checks[id] ?? DEFAULT_SETTING), enabled: !all }), current),
+                ),
             }}
           >
             <div className="app-role-group audits-settings-grid">
               {ids.map((id) => (
-                <CheckRow key={id} id={id} setting={setting(id)} editable={editable} onChange={(next) => void save(withCheckSetting(file, id, next))} />
+                <CheckRow
+                  key={id}
+                  id={id}
+                  setting={setting(id)}
+                  editable={editable}
+                  onChange={(next) => void save((current) => withCheckSetting(current, id, next))}
+                />
               ))}
             </div>
             {category === 'content' && (
@@ -133,7 +145,7 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
                   items={file.placeholders}
                   placeholder={translate('settings.audits.phrases.add')}
                   disabled={!editable}
-                  onChange={(placeholders) => void save({ ...file, placeholders })}
+                  onChange={(placeholders) => void save((current) => ({ ...current, placeholders }))}
                 />
               </div>
             )}
@@ -146,28 +158,28 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
                     description={translate('settings.audits.rules.colorsInfo')}
                     checked={file.tokens.colors}
                     disabled={!editable}
-                    onToggle={() => void save(tokens({ ...file.tokens, colors: !file.tokens.colors }))}
+                    onToggle={() => void save(tokens((current) => ({ ...current, colors: !file.tokens.colors })))}
                   />
                   <PlainSwitch
                     label={translate('settings.audits.rules.pxLabel')}
                     description={translate('settings.audits.rules.px')}
                     checked={file.tokens.px}
                     disabled={!editable}
-                    onToggle={() => void save(tokens({ ...file.tokens, px: !file.tokens.px }))}
+                    onToggle={() => void save(tokens((current) => ({ ...current, px: !file.tokens.px })))}
                   />
                   <PlainSwitch
                     label={translate('settings.audits.rules.remLabel')}
                     description={translate('settings.audits.rules.remInfo')}
                     checked={file.tokens.remOutsideVariables}
                     disabled={!editable}
-                    onToggle={() => void save(tokens({ ...file.tokens, remOutsideVariables: !file.tokens.remOutsideVariables }))}
+                    onToggle={() => void save(tokens((current) => ({ ...current, remOutsideVariables: !file.tokens.remOutsideVariables })))}
                   />
                   <PlainSwitch
                     label={translate('settings.audits.rules.sizesLabel')}
                     description={translate('settings.audits.rules.sizesInfo')}
                     checked={file.tokens.sizes}
                     disabled={!editable}
-                    onToggle={() => void save(tokens({ ...file.tokens, sizes: !file.tokens.sizes }))}
+                    onToggle={() => void save(tokens((current) => ({ ...current, sizes: !file.tokens.sizes })))}
                   />
                   {/* On means flagged, as Flag px reads: a unit switched off is fine as written on every property. */}
                   {AUDIT_UNIT_GROUP_IDS.map((group) => {
@@ -179,7 +191,7 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
                         description={translate('settings.audits.rules.unitInfo', { units: unitGroupText(group, 'full') })}
                         checked={flagged}
                         disabled={!editable}
-                        onToggle={() => void save(tokens(withUnitGroup(file.tokens, group, flagged ? 'allowed' : 'flagged')))}
+                        onToggle={() => void save(tokens((current) => withUnitGroup(current, group, flagged ? 'allowed' : 'flagged')))}
                       />
                     );
                   })}
@@ -189,14 +201,14 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
                   items={file.tokens.properties}
                   placeholder={translate('settings.audits.properties.add')}
                   disabled={!editable}
-                  onChange={(properties) => void save(tokens({ ...file.tokens, properties }))}
+                  onChange={(properties) => void save(tokens((current) => ({ ...current, properties })))}
                 />
                 <h5>{translate('settings.audits.allowed.title')}</h5>
                 <ChipList
                   items={file.tokens.allowed}
                   placeholder={translate('settings.audits.allowed.add')}
                   disabled={!editable}
-                  onChange={(allowed) => void save(tokens({ ...file.tokens, allowed: allowed.map((item) => item.toLowerCase()) }))}
+                  onChange={(allowed) => void save(tokens((current) => ({ ...current, allowed: allowed.map((item) => item.toLowerCase()) })))}
                 />
               </div>
             )}
