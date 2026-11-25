@@ -234,7 +234,7 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
 
 // Whether the open file is the component canvas's page itself, not an instance opened inside it.
 function atCanvasPage(app: ShellView): boolean {
-  return app.editStack.length <= 1 && isComponentCanvasPage(app.currentPage?.path);
+  return isComponentCanvasPage(app.currentPage?.path) && app.editStack.length <= 1;
 }
 
 // The instance the component defaults page edits, while that page is the open file; undefined anywhere else.

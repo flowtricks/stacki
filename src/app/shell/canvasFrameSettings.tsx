@@ -119,7 +119,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
 
 // Whether the open file is the component canvas's page itself, not an instance opened inside it.
 function atCanvasPage(app: ShellView): boolean {
-  return app.editStack.length <= 1 && isComponentCanvasPage(app.currentPage?.path);
+  return isComponentCanvasPage(app.currentPage?.path) && app.editStack.length <= 1;
 }
 
 // The own-frames toggle beside a prop's {}: the same size and hover as it, filled while the prop is split.
