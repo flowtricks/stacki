@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': '关闭（编辑会实时保存）',
   'workspace.code.title': '代码',
+  'workspace.notifications.copied': '已复制',
+  'workspace.notifications.copy': '复制',
   'workspace.notifications.dismiss': '关闭通知',
   'workspace.notifications.label': '通知',
   'workspace.notifications.loadMore': '加载更多（{count}）',

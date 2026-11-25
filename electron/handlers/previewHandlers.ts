@@ -2,12 +2,11 @@
 // its render check, and stopping it.
 
 import { MAIN_LIMITS } from '../lib/mainLimits';
-import * as path from 'path';
 import * as fs from 'fs';
 import * as previewWorktree from '../preview/previewWorktree';
 import { checkPreviewRender } from '../preview/previewCheck';
-import { isWin } from '../lib/mainHelpers';
 import { findFreePort, git, spawnAstroServer } from '../lib/nodeTools';
+import { localAstroBin } from '../project/projectFiles';
 import { serverAlive } from '../preview/devServerChecks';
 import { previewServers, stopPreview } from '../preview/previewServers';
 import type { MainHost } from './mainHost';
@@ -30,8 +29,7 @@ function registerPreviewAtCommitHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>):
       return { url: running.url, ref, reused: true as const };
     }
 
-    const bin = isWin ? 'astro.cmd' : 'astro';
-    const localBin = path.join(projectPath, 'node_modules', '.bin', bin);
+    const localBin = localAstroBin(projectPath);
     if (!fs.existsSync(localBin)) {
       throw new Error('This project’s packages aren’t installed, so an older version can’t be shown. ' + 'Install them and try again.');
     }

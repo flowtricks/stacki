@@ -5,6 +5,8 @@ import type { MessageKey } from '../en/workspace';
 export const messages = {
   'workspace.code.close': '닫기(편집 내용은 자동으로 저장됨)',
   'workspace.code.title': '코드',
+  'workspace.notifications.copied': '복사됨',
+  'workspace.notifications.copy': '복사',
   'workspace.notifications.dismiss': '알림 닫기',
   'workspace.notifications.label': '알림',
   'workspace.notifications.loadMore': '더 불러오기({count})',

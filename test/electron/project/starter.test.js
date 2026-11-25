@@ -18,7 +18,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { createStarter, startSiteHistory, STARTERS } = require('#dist/electron/project/starter.js');
+const { createStarter, scaffolderEnvironment, startSiteHistory, STARTERS } = require('#dist/electron/project/starter.js');
 
 const failures = [];
 let checked = 0;
@@ -120,6 +120,12 @@ console.log('Ready.');
     calls()[0],
   );
   check('the log says what it ran', log.join('').includes('> npm create lumos@latest my-site'), log.join(''));
+
+  // Bun runs the scaffolder with its own `create`, which takes no `--yes` and no `--` separator.
+  const bunLog = [];
+  await createStarter({ npm, manager: 'bun', parentPath: parent, name: 'bun-site', onLog: (text) => bunLog.push(text) });
+  check('with Bun chosen, it runs bun create without npm-only flags', calls().at(-1) === 'create lumos@latest bun-site --no-install', calls().at(-1));
+  check('and the log names bun', bunLog.join('').includes('> bun create lumos@latest bun-site'), bunLog.join(''));
   check('and shows what it said', log.join('').includes('Ready.'), log.join(''));
 
   // The package is the site now.
@@ -165,7 +171,7 @@ console.log('Ready.');
   );
   check('a starter nobody has heard of is refused', /not a starter/.test(await refuses({ starter: 'nope', name: 'x' })));
   check('and so is a folder that is not there', /Choose where/.test(await refuses({ parentPath: path.join(root, 'nowhere'), name: 'x' })));
-  check('a refused name never reaches the command line', calls().length === 1, calls().join(' | '));
+  check('a refused name never reaches the command line (only the npm and Bun sites ran)', calls().length === 2, calls().join(' | '));
 
   // A scaffolder that fails is a site that was not made, said out loud.
   {
@@ -224,6 +230,29 @@ g('-c', 'user.email=t@t', '-c', 'user.name=T',
   const second = await createStarter({ npm, parentPath: parent, name: 'another-site' });
   check('a second site is made alongside the first', fs.existsSync(second.projectPath));
   check('with its own name', JSON.parse(fs.readFileSync(path.join(second.projectPath, 'package.json'), 'utf8')).name === 'another-site');
+
+  // The scaffolder's Windows fallback copies a folder with `copyFile`, which fails with EPERM. The preload it runs under
+  // turns that into a recursive copy, and leaves copying a file alone.
+  {
+    const from = path.join(root, 'skill');
+    fs.mkdirSync(path.join(from, 'nested'), { recursive: true });
+    fs.writeFileSync(path.join(from, 'nested', 'a.md'), 'skill');
+    fs.writeFileSync(path.join(root, 'plain.txt'), 'plain');
+    const probe = `import { copyFile } from 'node:fs/promises';
+await copyFile(${JSON.stringify(from)}, ${JSON.stringify(path.join(root, 'skill-copy'))});
+await copyFile(${JSON.stringify(path.join(root, 'plain.txt'))}, ${JSON.stringify(path.join(root, 'plain-copy.txt'))});`;
+    fs.writeFileSync(path.join(root, 'probe.mjs'), probe);
+    execFileSync(process.execPath, [path.join(root, 'probe.mjs')], { env: { ...process.env, ...scaffolderEnvironment() } });
+    check('a folder given to copyFile is copied whole', fs.readFileSync(path.join(root, 'skill-copy', 'nested', 'a.md'), 'utf8') === 'skill');
+    check('a file given to copyFile is still copied', fs.readFileSync(path.join(root, 'plain-copy.txt'), 'utf8') === 'plain');
+    let plainFailed = false;
+    try {
+      execFileSync(process.execPath, [path.join(root, 'probe.mjs')], { stdio: 'pipe' });
+    } catch {
+      plainFailed = true;
+    }
+    check('without the preload, copying a folder is refused as before', plainFailed || process.platform !== 'win32');
+  }
 
   fs.rmSync(root, { recursive: true, force: true });
 

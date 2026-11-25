@@ -126,13 +126,24 @@ export function isAstroProject(directory: string): boolean {
   return false;
 }
 
+// The project's own `astro` command in node_modules/.bin. On Windows npm, pnpm and Yarn leave `astro.cmd`, while Bun
+// leaves `astro.exe` (and no .cmd), so whichever is there is the one; when neither is, the path npm would have made.
+export function localAstroBin(projectPath: string): string {
+  const folder = path.join(projectPath, 'node_modules', '.bin');
+  if (!isWin) {
+    return path.join(folder, 'astro');
+  }
+  const executable = path.join(folder, 'astro.exe');
+  const shim = path.join(folder, 'astro.cmd');
+  return fs.existsSync(shim) || !fs.existsSync(executable) ? shim : executable;
+}
+
 // Astro has to be installed for a page to be rendered at all; without it the
 // card can only offer to open the project. A workspace hoists node_modules to its root, so each parent counts.
 export function hasDependencies(projectPath: string): boolean {
-  const binName = isWin ? 'astro.cmd' : 'astro';
   return ancestorsOf(projectPath).some(
     (directory) =>
-      fs.existsSync(path.join(directory, 'node_modules', '.bin', binName)) ||
+      fs.existsSync(localAstroBin(directory)) ||
       fs.existsSync(path.join(directory, 'node_modules', 'astro', 'package.json')) ||
       // Yarn Plug'n'Play keeps packages in a cache and no node_modules at all.
       fs.existsSync(path.join(directory, '.pnp.cjs')),

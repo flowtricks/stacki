@@ -15,6 +15,7 @@ import {
   PACKAGE_MANAGERS,
   packageManagerLabel,
   parseCreatePackageManager,
+  packageManagerProgram,
   parsePackageManagerField,
 } from '#dist/shared/properties/packageManager.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
@@ -47,16 +48,17 @@ test('the packageManager field names nothing when unknown, malformed or oversize
   }
 });
 
-test('a new site can be created with npm or pnpm, and nothing else yet', () => {
-  assert.deepEqual(CREATE_PACKAGE_MANAGERS, ['npm', 'pnpm']);
+test('a new site can be created with npm, pnpm or bun, and nothing else yet', () => {
+  assert.deepEqual(CREATE_PACKAGE_MANAGERS, ['npm', 'pnpm', 'bun']);
   assert.equal(parseCreatePackageManager('npm'), 'npm');
   assert.equal(parseCreatePackageManager('pnpm'), 'pnpm');
-  for (const input of [undefined, 7, '', 'yarn', 'bun', 'PNPM', ' npm']) {
-    assert.throws(() => parseCreatePackageManager(input), /expected npm or pnpm/, String(input));
+  assert.equal(parseCreatePackageManager('bun'), 'bun');
+  for (const input of [undefined, 7, '', 'yarn', 'BUN', 'PNPM', ' npm']) {
+    assert.throws(() => parseCreatePackageManager(input), /expected npm, pnpm or bun/, String(input));
   }
   assert.equal(parseIpcPayload('project:createStarter', starter('pnpm')).packageManager, 'pnpm');
   assert.equal(parseIpcPayload('project:createStarter', starter(undefined)).packageManager, undefined);
-  assert.throws(() => parseIpcPayload('project:createStarter', starter('yarn')), /npm or pnpm/);
+  assert.throws(() => parseIpcPayload('project:createStarter', starter('yarn')), /npm, pnpm or bun/);
 });
 
 test('each package manager installs dependencies with its own command', () => {
@@ -94,4 +96,12 @@ test('lockfiles decide when the field is absent, unknown or unreadable', async (
   for (const [files, expected] of cases) {
     assert.equal(detectPackageManager(await project(context, files)), expected);
   }
+});
+
+test('Bun is started as itself on Windows, the Node shims as .cmd files', () => {
+  assert.equal(packageManagerProgram('bun', { windows: true }), 'bun');
+  assert.equal(packageManagerProgram('pnpm', { windows: true }), 'pnpm.cmd');
+  assert.equal(packageManagerProgram('npm', { windows: true }), 'npm.cmd');
+  assert.equal(packageManagerProgram('bun', { windows: false }), 'bun');
+  assert.equal(packageManagerProgram('yarn', { windows: false }), 'yarn');
 });
