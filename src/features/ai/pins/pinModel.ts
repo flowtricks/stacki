@@ -18,6 +18,7 @@ import {
   type CommentPin,
   type PinAnchor,
   type PinBoard,
+  type PinEdit,
   type PinId,
   type PinImageId,
   type PinImageRef,
@@ -57,6 +58,8 @@ export function addPin(board: PinBoard, input: { readonly id: PinId; readonly an
     updatedAt: input.at,
     comment: '',
     images: [],
+    savedAt: undefined,
+    edit: { comment: '', images: [] },
     anchor: input.anchor,
     place: input.place,
     included: true,
@@ -95,12 +98,73 @@ export function clearSentPins(board: PinBoard): PinBoard {
   return { ...board, pins: board.pins.filter((pin) => pin.delivery.kind === 'draft') };
 }
 
+/** What the pin's box shows: its unsaved changes when it has some, else what was saved. */
+export function workingCopy(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): PinEdit {
+  return pin.edit ?? { comment: pin.comment, images: pin.images };
+}
+
 /**
- * Whether deleting the pin loses something the person made: words, or an image they added. The crop is taken by
- * Stacki and taken again on a new pin, so a pin with only its crop is deleted without asking.
+ * Whether words or images hold something the person made: the crop is taken by Stacki and taken again on a new
+ * pin, so a crop alone is not content (it neither enables Save nor asks before it goes).
  */
-export function hasContentToLose(pin: Pick<CommentPin, 'comment' | 'images'>): boolean {
-  return pin.comment.trim() !== '' || pin.images.some((image) => image.kind === 'added');
+export function hasPersonContent(edit: Pick<PinEdit, 'comment' | 'images'>): boolean {
+  return edit.comment.trim() !== '' || edit.images.some((image) => image.kind === 'added');
+}
+
+/** Whether deleting the pin loses something the person made, saved or not. */
+export function hasContentToLose(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): boolean {
+  return hasPersonContent(pin) || (pin.edit !== undefined && hasPersonContent(pin.edit));
+}
+
+/** Whether the box holds changes that differ from what was saved. */
+export function hasUnsavedChanges(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): boolean {
+  const edit = pin.edit;
+  if (edit === undefined) {
+    return false;
+  }
+  return edit.comment !== pin.comment || edit.images.map((image) => image.id).join() !== pin.images.map((image) => image.id).join();
+}
+
+/** The pin with its box saved: the working words and images become the pin's own, and "Send all" takes them. */
+export function savePinEdit(pin: CommentPin, at: number): CommentPin {
+  const edit = workingCopy(pin);
+  assert(hasPersonContent(edit), 'savePinEdit: a pin is saved with words or an added image');
+  const saved = { ...pin, comment: edit.comment, images: edit.images, savedAt: Math.max(at, pin.createdAt), edit: undefined };
+  assert(saved.edit === undefined, 'savePinEdit: nothing is left unsaved');
+  return saved;
+}
+
+/** The pin without its unsaved changes: what was saved stays. */
+export function discardPinEdit(pin: CommentPin): CommentPin {
+  assert(pin.savedAt !== undefined, 'discardPinEdit: only a saved pin keeps itself without its box');
+  return { ...pin, edit: undefined };
+}
+
+/** How closing a pin's box ends: kept as it is, saved, discarded, or the pin removed. */
+export type CloseOutcome = 'unchanged' | 'save' | 'discard' | 'remove';
+
+/**
+ * What closing the box does. `discard` (its close button, Escape): a pin never saved goes, a saved one loses only
+ * its unsaved changes. `keep` (a press elsewhere, another pin, leaving the mode or the page): content is saved,
+ * and an empty box leaves a pin never saved out and a saved pin as it was saved.
+ */
+export function closeOutcome(pin: Pick<CommentPin, 'comment' | 'images' | 'edit' | 'savedAt' | 'delivery'>, how: 'keep' | 'discard'): CloseOutcome {
+  if (pin.delivery.kind === 'sent') {
+    return 'unchanged'; // A sent pin's box is read-only.
+  }
+  if (pin.savedAt === undefined) {
+    return how === 'keep' && hasPersonContent(workingCopy(pin)) ? 'save' : 'remove';
+  }
+  if (!hasUnsavedChanges(pin)) {
+    return pin.edit === undefined ? 'unchanged' : 'discard';
+  }
+  return how === 'keep' && hasPersonContent(workingCopy(pin)) ? 'save' : 'discard';
+}
+
+/** The pin stuck to another element: its words, images and number stay; the crop is taken again by the caller. */
+export function movePinAnchor(pin: CommentPin, target: { readonly anchor: PinAnchor; readonly place: PinPlace }): CommentPin {
+  assert(pin.delivery.kind === 'draft', 'movePinAnchor: a sent pin stays where it was sent from');
+  return { ...pin, anchor: target.anchor, place: target.place };
 }
 
 /** A sent pin back to a draft (Reopen): its words and images stay, and "Send all" takes it again. */
@@ -114,7 +178,7 @@ export type ImageOutcome =
   | { readonly kind: 'limited'; readonly pin: CommentPin; readonly added: readonly PinImageRef[]; readonly reason: 'count' | 'size' };
 
 /**
- * The pin with `images` added in order, as many as fit `imagesPerPinMax` and, with `boardChars` (the base64
+ * The pin with `images` added to its box (its unsaved working copy) in order, as many as fit `imagesPerPinMax` and, with `boardChars` (the base64
  * characters the board's images already hold), `boardImageCharsMax`. A crop replaces the pin's earlier crop.
  */
 export function addPinImages(
@@ -124,7 +188,9 @@ export function addPinImages(
   sizeOf: (id: PinImageId) => number,
 ): ImageOutcome {
   assert(boardChars >= 0, 'addPinImages: the board holds a nonnegative weight');
-  let kept = [...pin.images];
+  const working = workingCopy(pin);
+  const withImages = (images: readonly PinImageRef[]): CommentPin => ({ ...pin, edit: { comment: working.comment, images } });
+  let kept = [...working.images];
   let chars = boardChars;
   const added: PinImageRef[] = [];
   for (const image of images) {
@@ -137,10 +203,10 @@ export function addPinImages(
       }
     }
     if (kept.length >= PIN_LIMITS.imagesPerPinMax) {
-      return { kind: 'limited', pin: { ...pin, images: kept }, added, reason: 'count' };
+      return { kind: 'limited', pin: withImages(kept), added, reason: 'count' };
     }
     if (chars + image.chars > PIN_LIMITS.boardImageCharsMax) {
-      return { kind: 'limited', pin: { ...pin, images: kept }, added, reason: 'size' };
+      return { kind: 'limited', pin: withImages(kept), added, reason: 'size' };
     }
     const ref: PinImageRef = { id: image.id, kind: image.kind, name: image.name, mimeType: image.mimeType };
     kept = image.kind === 'crop' ? [ref, ...kept] : [...kept, ref];
@@ -148,7 +214,7 @@ export function addPinImages(
     chars += image.chars;
   }
   assert(kept.length <= PIN_LIMITS.imagesPerPinMax, 'addPinImages: a pin’s images are bounded');
-  return { kind: 'added', pin: { ...pin, images: kept }, added };
+  return { kind: 'added', pin: withImages(kept), added };
 }
 
 /** Image ids held in memory that the board no longer names: dropped from memory with the save that drops them. */
@@ -296,9 +362,11 @@ function waitingInTurn(view: ChatView, turn: TurnId): boolean {
 // What "Send all" carries
 // ---------------------------------------------------------------------------
 
-/** The pins "Send all" takes: drafts that are included, in number order. */
+/** The pins "Send all" takes: saved drafts that are included, in number order. Unsaved changes are never sent. */
 export function pinsToSend(board: PinBoard): readonly CommentPin[] {
-  return board.pins.filter((pin) => pin.delivery.kind === 'draft' && pin.included).sort((left, right) => left.number - right.number);
+  return board.pins
+    .filter((pin) => pin.delivery.kind === 'draft' && pin.included && pin.savedAt !== undefined)
+    .sort((left, right) => left.number - right.number);
 }
 
 export type SendRefusal = 'none' | 'too-many-pins' | 'too-many-images';

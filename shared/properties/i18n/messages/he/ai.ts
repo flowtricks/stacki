@@ -443,6 +443,8 @@ export const messages = {
   'ai.pins.delete.title': 'למחוק את נעץ {number}?',
   'ai.pins.detached': 'מנותק',
   'ai.pins.detachedTip': 'הרכיב שלו כבר לא נמצא בדף הזה. אפשר לפתוח את הנעץ ולהעביר אותו לרכיב אחר.',
+  'ai.pins.discard': 'השלכת הנעץ',
+  'ai.pins.discardedToast': 'השינויים בנעץ {number} בוטלו',
   'ai.pins.done': 'סיום',
   'ai.pins.elementIn': 'רכיב ב-{file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -477,6 +479,7 @@ export const messages = {
   'ai.pins.mode': 'נעצי תגובות',
   'ai.pins.modeTip': 'לחיצה על כל דבר בדף נועצת עליו תגובה, ואז אפשר לשלוח את כולן בבת אחת.',
   'ai.pins.moveDetached': 'העברת הנעץ לרכיב',
+  'ai.pins.movedToast': 'נעץ {number} הועבר',
   'ai.pins.moving': 'יש ללחוץ במקום החדש של נעץ {number}',
   'ai.pins.noComment': 'אין עדיין תגובה',
   'ai.pins.noElement': 'נעצים מוצמדים לרכיב בדף. יש ללחוץ על רכיב.',
@@ -495,8 +498,10 @@ export const messages = {
   'ai.pins.progress.working': 'בעבודה',
   'ai.pins.progress.workingTip': 'הסוכן עובד על הנעץ הזה.',
   'ai.pins.recapture': 'צילום מחדש של האזור שננעץ',
+  'ai.pins.removedToast': 'נעץ {number} הוסר',
   'ai.pins.reopen': 'פתיחה מחדש',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'שמירה',
   'ai.pins.send.busy': 'הסוכן עדיין עונה בצ׳אט הזה. יש להמתין שיסיים, או לעצור אותו.',
   'ai.pins.send.none': 'אין מה לשלוח. אפשר לנעוץ תגובה, או לכלול נעץ מהרשימה.',
   'ai.pins.send.notReady': 'קודם יש להגדיר את הסוכן בחלונית הצ׳אט.',
@@ -516,6 +521,9 @@ export const messages = {
     two: 'תגובות על שני נעצים',
     other: 'תגובות על {count} נעצים',
   },
+  'ai.pins.undo': 'ביטול פעולה',
+  'ai.pins.unsaved': 'לא נשמר',
+  'ai.pins.unsavedTip': 'עדיין לא נשמר: „שליחת הכול” לא תכלול אותו עד שייפתח ויישמר.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'התוכנית הושלמה',

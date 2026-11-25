@@ -427,6 +427,8 @@ export const messages = {
   'ai.pins.delete.title': 'पिन {number} मिटाएँ?',
   'ai.pins.detached': 'अलग हुआ',
   'ai.pins.detachedTip': 'इसका एलिमेंट अब इस पेज पर नहीं है। इसे दूसरे एलिमेंट पर ले जाने के लिए पिन खोलें।',
+  'ai.pins.discard': 'पिन खारिज करें',
+  'ai.pins.discardedToast': 'पिन {number} के बदलाव खारिज किए गए',
   'ai.pins.done': 'हो गया',
   'ai.pins.elementIn': '{file} में एलिमेंट',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -457,6 +459,7 @@ export const messages = {
   'ai.pins.mode': 'कमेंट पिन',
   'ai.pins.modeTip': 'पेज पर किसी भी चीज़ पर क्लिक करके उस पर कमेंट पिन करें, फिर सभी को एक साथ भेजें।',
   'ai.pins.moveDetached': 'पिन को किसी एलिमेंट पर ले जाएँ',
+  'ai.pins.movedToast': 'पिन {number} ले जाया गया',
   'ai.pins.moving': 'पिन {number} को जहाँ रखना है वहाँ क्लिक करें',
   'ai.pins.noComment': 'अभी कोई कमेंट नहीं',
   'ai.pins.noElement': 'पिन पेज के किसी एलिमेंट पर लगते हैं। किसी एलिमेंट पर क्लिक करें।',
@@ -475,8 +478,10 @@ export const messages = {
   'ai.pins.progress.working': 'काम जारी है',
   'ai.pins.progress.workingTip': 'एजेंट इस पिन पर काम कर रहा है।',
   'ai.pins.recapture': 'पिन किया गया हिस्सा दोबारा कैप्चर करें',
+  'ai.pins.removedToast': 'पिन {number} हटाया गया',
   'ai.pins.reopen': 'फिर से खोलें',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'सहेजें',
   'ai.pins.send.busy': 'एजेंट इस चैट में अभी भी जवाब दे रहा है। उसके पूरा होने तक रुकें, या उसे रोकें।',
   'ai.pins.send.none': 'भेजने के लिए कुछ नहीं है। कोई कमेंट पिन करें, या सूची से कोई पिन शामिल करें।',
   'ai.pins.send.notReady': 'पहले चैट पैनल में एजेंट सेट अप करें।',
@@ -494,6 +499,9 @@ export const messages = {
     one: '{count} पिन पर कमेंट',
     other: '{count} पिन पर कमेंट',
   },
+  'ai.pins.undo': 'पूर्ववत करें',
+  'ai.pins.unsaved': 'सहेजा नहीं गया',
+  'ai.pins.unsavedTip': 'अभी सहेजा नहीं गया: जब तक आप इसे खोलकर सहेज नहीं लेते, “सभी भेजें” इसे छोड़ देगा।',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'योजना पूरी हुई',

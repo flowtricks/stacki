@@ -53,8 +53,14 @@ export function DetachedPill() {
   return <PinPill tone="detached" label={translate('ai.pins.detached')} tip={translate('ai.pins.detachedTip')} />;
 }
 
+/** A pin never saved: its box holds words that "Send all" will not take until they are saved. */
+export function UnsavedPill() {
+  const translate = useTranslate();
+  return <PinPill tone="unsaved" label={translate('ai.pins.unsaved')} tip={translate('ai.pins.unsavedTip')} />;
+}
+
 /** A small filled pill with the app's tooltip. */
-function PinPill({ tone, label, tip }: { readonly tone: PinProgress['kind'] | 'detached'; readonly label: string; readonly tip: string }) {
+function PinPill({ tone, label, tip }: { readonly tone: PinProgress['kind'] | 'detached' | 'unsaved'; readonly label: string; readonly tip: string }) {
   const tooltip = useDelayedTooltip();
   return (
     <>

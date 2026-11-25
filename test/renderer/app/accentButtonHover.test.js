@@ -49,6 +49,7 @@ const TARGETS = [
   ['the merge-conflict choice', 'conflict-choice', 'on'],
   ['the loop binder primary', 'probe', 'loop-bind-button primary'],
   ['comment pins Send all', 'ai-pin-bar', 'primary ai-pin-send'],
+  ['comment pin Save', 'ai-pin-tools', 'primary ai-pin-save'],
 ];
 const SHEETS = [
   'src/app/styles.css',

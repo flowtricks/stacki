@@ -427,6 +427,8 @@ export const messages = {
   'ai.pins.delete.title': '{number} numaralı iğne silinsin mi?',
   'ai.pins.detached': 'Bağlantısı koptu',
   'ai.pins.detachedTip': 'Öğesi artık bu sayfada değil. İğneyi başka bir öğeye taşımak için açın.',
+  'ai.pins.discard': 'İğneyi at',
+  'ai.pins.discardedToast': '{number} numaralı iğnedeki değişiklikler atıldı',
   'ai.pins.done': 'Bitti',
   'ai.pins.elementIn': '{file} içindeki öğe',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -457,6 +459,7 @@ export const messages = {
   'ai.pins.mode': 'Yorum iğneleri',
   'ai.pins.modeTip': 'Yorum iğnelemek için sayfada herhangi bir şeye tıklayın, sonra hepsini birden gönderin.',
   'ai.pins.moveDetached': 'İğneyi bir öğeye taşı',
+  'ai.pins.movedToast': '{number} numaralı iğne taşındı',
   'ai.pins.moving': '{number} numaralı iğnenin gideceği yere tıklayın',
   'ai.pins.noComment': 'Henüz yorum yok',
   'ai.pins.noElement': 'İğneler sayfadaki bir öğeye konur. Bir öğeye tıklayın.',
@@ -475,8 +478,10 @@ export const messages = {
   'ai.pins.progress.working': 'Çalışıyor',
   'ai.pins.progress.workingTip': 'Ajan bu iğne üzerinde çalışıyor.',
   'ai.pins.recapture': 'İğnelenen alanı yeniden yakala',
+  'ai.pins.removedToast': '{number} numaralı iğne kaldırıldı',
   'ai.pins.reopen': 'Yeniden aç',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Kaydet',
   'ai.pins.send.busy': 'Ajan bu sohbette hâlâ yanıt veriyor. Bitirmesini bekleyin veya durdurun.',
   'ai.pins.send.none': 'Gönderilecek bir şey yok. Bir yorum iğneleyin veya listeden bir iğneyi dahil edin.',
   'ai.pins.send.notReady': 'Önce sohbet panelinde ajanı kurun.',
@@ -494,6 +499,9 @@ export const messages = {
     one: '{count} iğneye yorum',
     other: '{count} iğneye yorumlar',
   },
+  'ai.pins.undo': 'Geri al',
+  'ai.pins.unsaved': 'Kaydedilmedi',
+  'ai.pins.unsavedTip': 'Henüz kaydedilmedi: açıp kaydedene kadar Tümünü gönder onu dışarıda bırakır.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan tamamlandı',

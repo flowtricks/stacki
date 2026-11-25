@@ -430,6 +430,8 @@ export const messages = {
   'ai.pins.delete.title': 'Pin {number} löschen?',
   'ai.pins.detached': 'Gelöst',
   'ai.pins.detachedTip': 'Sein Element ist nicht mehr auf dieser Seite. Öffne den Pin, um ihn auf ein anderes Element zu verschieben.',
+  'ai.pins.discard': 'Pin verwerfen',
+  'ai.pins.discardedToast': 'Änderungen an Pin {number} verworfen',
   'ai.pins.done': 'Fertig',
   'ai.pins.elementIn': 'Element in {file}', // same
   'ai.pins.elementWithText': '{element} „{text}“',
@@ -460,6 +462,7 @@ export const messages = {
   'ai.pins.mode': 'Kommentar-Pins',
   'ai.pins.modeTip': 'Klicke auf etwas auf der Seite, um einen Kommentar anzuheften, und sende dann alle auf einmal.',
   'ai.pins.moveDetached': 'Pin auf ein Element verschieben',
+  'ai.pins.movedToast': 'Pin {number} verschoben',
   'ai.pins.moving': 'Klicke dorthin, wo Pin {number} hin soll',
   'ai.pins.noComment': 'Noch kein Kommentar',
   'ai.pins.noElement': 'Pins gehören auf ein Element der Seite. Klicke auf ein Element.',
@@ -478,8 +481,10 @@ export const messages = {
   'ai.pins.progress.working': 'Arbeitet',
   'ai.pins.progress.workingTip': 'Der Agent arbeitet an diesem Pin.',
   'ai.pins.recapture': 'Markierten Bereich neu erfassen',
+  'ai.pins.removedToast': 'Pin {number} entfernt',
   'ai.pins.reopen': 'Wieder öffnen',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Speichern',
   'ai.pins.send.busy': 'Der Agent antwortet in diesem Chat noch. Warte, bis er fertig ist, oder stoppe ihn.',
   'ai.pins.send.none': 'Nichts zu senden. Hefte einen Kommentar an oder schließe einen Pin aus der Liste ein.',
   'ai.pins.send.notReady': 'Richte zuerst den Agenten im Chat-Bereich ein.',
@@ -497,6 +502,9 @@ export const messages = {
     one: 'Kommentar zu {count} Pin',
     other: 'Kommentare zu {count} Pins',
   },
+  'ai.pins.undo': 'Rückgängig',
+  'ai.pins.unsaved': 'Nicht gespeichert',
+  'ai.pins.unsavedTip': 'Noch nicht gespeichert: „Alle senden“ lässt ihn aus, bis du ihn öffnest und speicherst.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan abgeschlossen',

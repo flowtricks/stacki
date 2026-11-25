@@ -31,11 +31,33 @@
     transform 120ms ease,
     background-color 120ms ease;
 }
-.ai-pin-marker:hover,
-.ai-pin-marker.is-open {
-  background: var(--accent-hover);
+/* Hovered, pressed, focused, open or dragged, a pin stays the same blue, darker and opaque (blue buttons stay blue).
+   `button.` and :not(:disabled) outrank controls.css's grey wash on every button's hover, which faded it. */
+button.ai-pin-marker:hover:not(:disabled),
+button.ai-pin-marker:focus-visible,
+button.ai-pin-marker:active:not(:disabled),
+button.ai-pin-marker.is-open,
+button.ai-pin-marker.is-dragging {
+  background: var(--accent-pressed);
+  color: #fff;
+  opacity: 1;
   transform: translateY(-100%) scale(1.08);
   transform-origin: bottom left;
+}
+button.ai-pin-marker.is-movable {
+  cursor: grab;
+}
+button.ai-pin-marker.is-dragging {
+  cursor: grabbing;
+  transition: none;
+  z-index: 1;
+}
+/* A pin never saved (its box is open, or the app closed before Save): the same blue, ringed, so it reads as unfinished. */
+button.ai-pin-marker.is-unsaved {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent-soft),
+    0 2px 8px rgba(0, 0, 0, 0.35);
 }
 .ai-pin-marker.is-queued {
   background: var(--bg-active);
@@ -54,7 +76,18 @@
   background: var(--bg-active);
   color: var(--text);
 }
-.ai-pin-marker.is-excluded {
+button.ai-pin-marker.is-done:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--green), #000 18%);
+}
+button.ai-pin-marker.is-attention:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--orange), #000 18%);
+}
+button.ai-pin-marker.is-queued:hover:not(:disabled),
+button.ai-pin-marker.is-sent:hover:not(:disabled) {
+  background: var(--bg-pressed);
+  color: var(--text);
+}
+.ai-pin-marker.is-excluded:not(:hover):not(.is-open) {
   opacity: 0.55;
 }
 .ai-pin-layer.is-moving .ai-pin-marker {
@@ -473,4 +506,32 @@
 .ai-pins-message-pin,
 .ai-pins-message-list {
   min-width: 0;
+}
+
+/* The pin's Save: the composer's primary action, blue at rest, on hover and on press (controls.css button.primary). */
+.ai-pin-save {
+  height: 28px;
+  margin-inline-start: 4px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font: inherit;
+  font-weight: 600;
+}
+.ai-pin-save:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A pin's number in a row or a message darkens with the row it opens, as the canvas pin does. */
+button.ai-pin-row-open:hover:not(:disabled) .ai-pin-number.is-draft,
+button.ai-pins-message-open:hover:not(:disabled) .ai-pin-number {
+  background: var(--accent-pressed);
+}
+button.ai-pins-message-open:hover:not(:disabled) {
+  background: transparent;
+}
+
+.ai-pin-progress.is-unsaved {
+  background: var(--accent-soft);
+  color: var(--accent);
 }

@@ -18,6 +18,7 @@ import { pageDisplayLabel } from '../../lib/pageName';
 import { projectRelativePath } from '../../lib/projectPath';
 import { nodeAtPath } from '../../editor/editorTree';
 import { setCanvasClickInterceptor, type CanvasClickReport } from '../../ui/canvasClickSlot';
+import { queryCanvasPoint } from '../../ui/canvasPointQuery';
 import { describeNode } from '../../ui/navigatorLabel';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { registerPanelMode } from '../../features/ai/panelModes';
@@ -27,14 +28,17 @@ import { PinOverlay, type PlacedPin } from '../../features/ai/pins/PinOverlay';
 import { cropRect, normalizedWords, pointInBox, resolveAnchor, type CanvasBox, type CanvasNow } from '../../features/ai/pins/pinModel';
 import {
   capturePinCrop,
+  closePinBox,
   closePins,
   dropPin,
   followChats,
   followPinElement,
   loadPins,
+  movePin,
   pinState,
   progressOf,
   setDetachedPins,
+  setPinMover,
   setPinNavigator,
   startMovingPin,
   usePinState,
@@ -78,7 +82,11 @@ export function PinsHost({ app }: { readonly app: ShellView }) {
   useEffect(() => followChats(), []);
   useEffect(() => {
     setPinNavigator({ reveal: (pin) => revealPin(appRef.current, pin) });
-    return () => setPinNavigator(undefined);
+    setPinMover((id, point, translate) => moveDraggedPin(appRef.current, id, point, translate));
+    return () => {
+      setPinNavigator(undefined);
+      setPinMover(undefined);
+    };
   }, []);
   // Leaving the panel's role, or the project, ends the mode.
   useEffect(() => {
@@ -117,6 +125,15 @@ export function PinsHost({ app }: { readonly app: ShellView }) {
   }, [on]);
   // A go-to that opened another page selects the pin's element once the canvas has rendered it.
   const shownPage = canvasPage(app);
+  // Another page on the canvas: a box open on a pin of the page left behind is kept (saved when it has content),
+  // never lost with the page.
+  useEffect(() => {
+    const open = pinState().open;
+    const pin = open === undefined ? undefined : pinState().board.pins.find((candidate) => candidate.id === open);
+    if (pin !== undefined && shownPage !== undefined && pin.place.page !== shownPage && pendingReveal?.id !== pin.id) {
+      closePinBox('keep', translateRef.current);
+    }
+  }, [shownPage]);
   const rendered = app.renderedPaths !== undefined;
   useEffect(() => {
     const wanted = pendingReveal;
@@ -359,6 +376,31 @@ function cropPlaced(entry: PlacedPin, translate: Translator): void {
   const box = lastFrame.rects[entry.path]?.[entry.pin.anchor.occurrence] ?? lastFrame.rects[entry.path]?.[0];
   if (box !== undefined) {
     void cropAt(entry.pin.id, box, entry.pin.anchor, translate);
+  }
+}
+
+// A marker dragged and released at `point` (canvas CSS pixels): the element under it takes the pin, with its words,
+// images and unsaved changes; its crop is taken again there, unless the person had removed it. Nothing under the
+// point (off the page) leaves the pin where it was.
+async function moveDraggedPin(app: ShellView, id: PinId, point: { readonly x: number; readonly y: number }, translate: Translator): Promise<void> {
+  const pin = pinState().board.pins.find((candidate) => candidate.id === id);
+  const page = canvasPage(app);
+  if (pin === undefined || page === undefined || pin.delivery.kind === 'sent') {
+    return;
+  }
+  const hit = await queryCanvasPoint(point.x, point.y);
+  if (hit?.path === undefined || hit.path.length > PIN_LIMITS.canvasPathCharsMax) {
+    return;
+  }
+  const target = pinTarget(app, hit.path, page, { ...hit, x: point.x, y: point.y }, translate);
+  if (target === undefined || !movePin(id, target, translate)) {
+    return;
+  }
+  const hadCrop = (pin.edit ?? pin).images.some((image) => image.kind === 'crop');
+  if (hadCrop && hit.box !== undefined) {
+    // After the marker has landed and its box steps back in, so the crop shows the pin in its new place.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await cropAt(id, hit.box, target.anchor, translate);
   }
 }
 

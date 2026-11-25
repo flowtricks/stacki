@@ -100,14 +100,28 @@ export type PinDelivery =
   | { readonly kind: 'draft' }
   | { readonly kind: 'sent'; readonly chat: ChatId; readonly turn: TurnId | undefined; readonly mode: PinSendMode; readonly at: number };
 
+/**
+ * What is being typed in a pin's box and not saved yet: its words and images as they stand. It is kept on the
+ * board, so an unsaved comment survives a restart; "Send all" never reads it.
+ */
+export interface PinEdit {
+  readonly comment: string;
+  readonly images: readonly PinImageRef[];
+}
+
 export interface CommentPin {
   readonly id: PinId;
   /** The number on the pin and in the message: unique on the board. */
   readonly number: number;
   readonly createdAt: number;
   readonly updatedAt: number;
+  /** The saved words and images: what the pin says and "Send all" sends. Empty on a pin never saved. */
   readonly comment: string;
   readonly images: readonly PinImageRef[];
+  /** When the pin was last saved; undefined for a pin never saved, which "Send all" leaves out. */
+  readonly savedAt: number | undefined;
+  /** Changes in its box not saved yet; undefined when there are none. */
+  readonly edit: PinEdit | undefined;
   readonly anchor: PinAnchor;
   readonly place: PinPlace;
   /** Whether "Send all" takes it. */
@@ -202,7 +216,7 @@ export function parsePinBoardRead(input: unknown): PinBoardRead {
 
 /** Every image id the board names. */
 export function boardImageIds(board: PinBoard): ReadonlySet<PinImageId> {
-  return new Set(board.pins.flatMap((pin) => pin.images.map((image) => image.id)));
+  return new Set(board.pins.flatMap((pin) => [...pin.images, ...(pin.edit?.images ?? [])].map((image) => image.id)));
 }
 
 /** One pin; throws on any shape the type does not allow. */
@@ -213,10 +227,8 @@ export function parsePin(input: unknown): CommentPin {
   if (updatedAt < createdAt) {
     throw new Error('pin.updatedAt: earlier than createdAt');
   }
-  const images = list(value['images'], PIN_LIMITS.imagesPerPinMax, 'pin.images').map(parsePinImageRef);
-  if (new Set(images.map((image) => image.id)).size !== images.length) {
-    throw new Error('pin.images: repeated image');
-  }
+  const images = pinImages(value['images'], 'pin.images');
+  const savedAt = value['savedAt'] === undefined ? undefined : count(value['savedAt'], 'pin.savedAt');
   const pin: CommentPin = {
     id: toPinId(text(value['id'], 17, 'pin.id')),
     number: pinNumber(value['number']),
@@ -224,6 +236,8 @@ export function parsePin(input: unknown): CommentPin {
     updatedAt,
     comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'pin.comment'),
     images,
+    savedAt,
+    edit: value['edit'] === undefined ? undefined : parsePinEdit(value['edit']),
     anchor: parsePinAnchor(value['anchor']),
     place: parsePinPlace(value['place']),
     included: flag(value['included'], 'pin.included'),
@@ -231,6 +245,20 @@ export function parsePin(input: unknown): CommentPin {
   };
   assert(pin.number >= 1, 'parsePin: numbers start at one');
   return pin;
+}
+
+/** Unsaved changes: words and images bounded as a pin's own are. */
+export function parsePinEdit(input: unknown): PinEdit {
+  const value = object(input, 'edit');
+  return { comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'edit.comment'), images: pinImages(value['images'], 'edit.images') };
+}
+
+function pinImages(input: unknown, name: string): readonly PinImageRef[] {
+  const images = list(input, PIN_LIMITS.imagesPerPinMax, name).map(parsePinImageRef);
+  if (new Set(images.map((image) => image.id)).size !== images.length) {
+    throw new Error(`${name}: repeated image`);
+  }
+  return images;
 }
 
 export function parsePinAnchor(input: unknown): PinAnchor {

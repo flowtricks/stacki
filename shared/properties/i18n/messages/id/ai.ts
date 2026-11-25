@@ -410,6 +410,8 @@ export const messages = {
   'ai.pins.delete.title': 'Hapus pin {number}?',
   'ai.pins.detached': 'Terlepas',
   'ai.pins.detachedTip': 'Elemennya tidak lagi ada di halaman ini. Buka pin untuk memindahkannya ke elemen lain.',
+  'ai.pins.discard': 'Buang pin',
+  'ai.pins.discardedToast': 'Perubahan pada pin {number} dibuang',
   'ai.pins.done': 'Selesai',
   'ai.pins.elementIn': 'Elemen di {file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -436,6 +438,7 @@ export const messages = {
   'ai.pins.mode': 'Pin komentar',
   'ai.pins.modeTip': 'Klik apa saja di halaman untuk menyematkan komentar padanya, lalu kirim semuanya sekaligus.',
   'ai.pins.moveDetached': 'Pindahkan pin ke elemen',
+  'ai.pins.movedToast': 'Pin {number} dipindahkan',
   'ai.pins.moving': 'Klik tempat tujuan pin {number}',
   'ai.pins.noComment': 'Belum ada komentar',
   'ai.pins.noElement': 'Pin ditempatkan pada elemen halaman. Klik sebuah elemen.',
@@ -454,8 +457,10 @@ export const messages = {
   'ai.pins.progress.working': 'Mengerjakan',
   'ai.pins.progress.workingTip': 'Agen sedang mengerjakan pin ini.',
   'ai.pins.recapture': 'Tangkap ulang area yang dipin',
+  'ai.pins.removedToast': 'Pin {number} dihapus',
   'ai.pins.reopen': 'Buka kembali',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Simpan',
   'ai.pins.send.busy': 'Agen masih menjawab di obrolan ini. Tunggu sampai selesai, atau hentikan.',
   'ai.pins.send.none': 'Tidak ada yang bisa dikirim. Sematkan komentar, atau sertakan pin dari daftar.',
   'ai.pins.send.notReady': 'Siapkan agen di panel obrolan terlebih dahulu.',
@@ -471,6 +476,9 @@ export const messages = {
   'ai.pins.summaryTitle': {
     other: 'Komentar pada {count} pin',
   },
+  'ai.pins.undo': 'Urungkan',
+  'ai.pins.unsaved': 'Belum disimpan',
+  'ai.pins.unsavedTip': 'Belum disimpan: Kirim semua akan melewatinya sampai Anda membuka dan menyimpannya.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Rencana selesai',

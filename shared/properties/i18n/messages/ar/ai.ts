@@ -498,6 +498,8 @@ export const messages = {
   'ai.pins.delete.title': 'حذف الدبوس {number}؟',
   'ai.pins.detached': 'منفصل',
   'ai.pins.detachedTip': 'لم يعد عنصره موجودًا في هذه الصفحة. افتح الدبوس لنقله إلى عنصر آخر.',
+  'ai.pins.discard': 'تجاهل الدبوس',
+  'ai.pins.discardedToast': 'تم تجاهل التغييرات على الدبوس {number}',
   'ai.pins.done': 'تم',
   'ai.pins.elementIn': 'عنصر في {file}',
   'ai.pins.elementWithText': '{element} «{text}»',
@@ -544,6 +546,7 @@ export const messages = {
   'ai.pins.mode': 'دبابيس التعليقات',
   'ai.pins.modeTip': 'انقر أي شيء في الصفحة لتثبيت تعليق عليه، ثم أرسلها كلها دفعة واحدة.',
   'ai.pins.moveDetached': 'نقل الدبوس إلى عنصر',
+  'ai.pins.movedToast': 'تم نقل الدبوس {number}',
   'ai.pins.moving': 'انقر الموضع الجديد للدبوس {number}',
   'ai.pins.noComment': 'لا تعليق بعد',
   'ai.pins.noElement': 'تُثبَّت الدبابيس على عنصر في الصفحة. انقر عنصرًا.',
@@ -562,8 +565,10 @@ export const messages = {
   'ai.pins.progress.working': 'قيد العمل',
   'ai.pins.progress.workingTip': 'الوكيل يعمل على هذا الدبوس.',
   'ai.pins.recapture': 'إعادة التقاط المنطقة المثبّت عليها الدبوس',
+  'ai.pins.removedToast': 'تمت إزالة الدبوس {number}',
   'ai.pins.reopen': 'إعادة الفتح',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'حفظ',
   'ai.pins.send.busy': 'لا يزال الوكيل يرد في هذه الدردشة. انتظر حتى ينتهي، أو أوقفه.',
   'ai.pins.send.none': 'لا شيء لإرساله. ثبّت تعليقًا، أو ضمّن دبوسًا من القائمة.',
   'ai.pins.send.notReady': 'أعدّ الوكيل في لوحة الدردشة أولًا.',
@@ -589,6 +594,9 @@ export const messages = {
     many: 'تعليقات على {count} دبوسًا',
     other: 'تعليقات على {count} دبوس',
   },
+  'ai.pins.undo': 'تراجع',
+  'ai.pins.unsaved': 'غير محفوظ',
+  'ai.pins.unsavedTip': 'لم يُحفظ بعد: يستثنيه «إرسال الكل» إلى أن تفتحه وتحفظه.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'اكتملت الخطة',

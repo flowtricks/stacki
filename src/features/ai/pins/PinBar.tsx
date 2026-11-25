@@ -74,7 +74,7 @@ export function PinBar() {
             onClick={() => setPinListOpen(pins.listOpen ? 'closed' : 'open')}
           >
             <ListGlyph size={16} />
-            {translate('ai.pins.list', { count: pins.board.pins.length })}
+            {translate('ai.pins.list', { count: pins.board.pins.filter((pin) => pin.savedAt !== undefined).length })}
           </button>
           <button
             type="button"

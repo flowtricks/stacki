@@ -428,6 +428,8 @@ export const messages = {
   'ai.pins.delete.title': 'Pin {number} verwijderen?',
   'ai.pins.detached': 'Losgekoppeld',
   'ai.pins.detachedTip': 'Het element staat niet meer op deze pagina. Open de pin om hem naar een ander element te verplaatsen.',
+  'ai.pins.discard': 'Pin weggooien',
+  'ai.pins.discardedToast': 'Wijzigingen aan pin {number} verworpen',
   'ai.pins.done': 'Klaar',
   'ai.pins.elementIn': 'Element in {file}', // same
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -458,6 +460,7 @@ export const messages = {
   'ai.pins.mode': 'Opmerkingspins',
   'ai.pins.modeTip': 'Klik op iets op de pagina om er een opmerking aan vast te pinnen en verstuur ze daarna allemaal tegelijk.',
   'ai.pins.moveDetached': 'De pin naar een element verplaatsen',
+  'ai.pins.movedToast': 'Pin {number} verplaatst',
   'ai.pins.moving': 'Klik waar pin {number} moet komen',
   'ai.pins.noComment': 'Nog geen opmerking',
   'ai.pins.noElement': 'Pins horen op een element van de pagina. Klik op een element.',
@@ -476,8 +479,10 @@ export const messages = {
   'ai.pins.progress.working': 'Bezig',
   'ai.pins.progress.workingTip': 'De agent werkt aan deze pin.',
   'ai.pins.recapture': 'Het vastgepinde gebied opnieuw vastleggen',
+  'ai.pins.removedToast': 'Pin {number} verwijderd',
   'ai.pins.reopen': 'Heropenen',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Opslaan',
   'ai.pins.send.busy': 'De agent antwoordt nog in deze chat. Wacht tot hij klaar is of stop hem.',
   'ai.pins.send.none': 'Niets te versturen. Pin een opmerking vast of selecteer een pin in de lijst.',
   'ai.pins.send.notReady': 'Stel eerst de agent in het chatpaneel in.',
@@ -495,6 +500,9 @@ export const messages = {
     one: 'Opmerking bij {count} pin',
     other: 'Opmerkingen bij {count} pins',
   },
+  'ai.pins.undo': 'Ongedaan maken',
+  'ai.pins.unsaved': 'Niet opgeslagen',
+  'ai.pins.unsavedTip': 'Nog niet opgeslagen: Alles versturen slaat hem over totdat je hem opent en opslaat.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan voltooid',

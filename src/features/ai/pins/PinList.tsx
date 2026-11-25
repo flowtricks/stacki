@@ -10,8 +10,8 @@ import { confirmDialog } from '../../../ui/ConfirmDialog';
 import Popup from '../../../ui/Popup';
 import { Switch } from '../../../ui/Switch';
 import { TipButton } from '../sessions/TipButton';
-import { commentLine, hasContentToLose } from './pinModel';
-import { DetachedPill, PinProgressPill } from './PinProgressPill';
+import { commentLine, hasContentToLose, workingCopy } from './pinModel';
+import { DetachedPill, PinProgressPill, UnsavedPill } from './PinProgressPill';
 import { cancelRun, clearSent, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
 import type { CommentPin } from '../../../../shared/properties/ai/commentPins';
 import type { Translator } from '../../../lib/i18n/localeContext';
@@ -82,6 +82,8 @@ function PinRow({
   readonly translate: Translator;
 }) {
   const progress = progressOf(pin);
+  // A pin never saved shows what its box holds; a saved one what it says.
+  const words = pin.savedAt === undefined ? workingCopy(pin).comment : pin.comment;
   const width = pin.place.breakpointPx === undefined ? translate('ai.pins.fluid') : translate('ai.pins.width', { width: pin.place.breakpointPx });
   const remove = async (): Promise<void> => {
     if (hasContentToLose(pin)) {
@@ -103,15 +105,15 @@ function PinRow({
         <span className={`ai-pin-number is-${progress.kind}`}>{pin.number}</span>
         {image === undefined ? <span className="ai-pin-thumb is-empty" /> : <img className="ai-pin-thumb" src={image} alt="" />}
         <span className="ai-pin-row-text">
-          <span className={pin.comment.trim() === '' ? 'ai-pin-row-comment is-empty' : 'ai-pin-row-comment'}>
-            {pin.comment.trim() === '' ? translate('ai.pins.noComment') : commentLine(pin.comment, ROW_COMMENT_CHARS_MAX)}
+          <span className={words.trim() === '' ? 'ai-pin-row-comment is-empty' : 'ai-pin-row-comment'}>
+            {words.trim() === '' ? translate('ai.pins.noComment') : commentLine(words, ROW_COMMENT_CHARS_MAX)}
           </span>
           <span className="ai-pin-row-place">{translate('ai.pins.rowPlace', { page: pin.place.pageLabel, element: pin.place.elementLabel, width })}</span>
         </span>
       </button>
       {detached && <DetachedPill />}
-      <PinProgressPill progress={progress} />
-      {pin.delivery.kind === 'draft' && (
+      {pin.savedAt === undefined ? <UnsavedPill /> : <PinProgressPill progress={progress} />}
+      {pin.delivery.kind === 'draft' && pin.savedAt !== undefined && (
         <Switch
           label={translate('ai.pins.include', { number: pin.number })}
           checked={pin.included}

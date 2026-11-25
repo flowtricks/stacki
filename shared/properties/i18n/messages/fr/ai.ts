@@ -429,6 +429,8 @@ export const messages = {
   'ai.pins.delete.title': 'Supprimer l’épingle {number} ?',
   'ai.pins.detached': 'Détachée',
   'ai.pins.detachedTip': 'Son élément n’est plus sur cette page. Ouvrez l’épingle pour la déplacer vers un autre élément.',
+  'ai.pins.discard': 'Abandonner l’épingle',
+  'ai.pins.discardedToast': 'Modifications de l’épingle {number} abandonnées',
   'ai.pins.done': 'Terminé',
   'ai.pins.elementIn': 'Élément dans {file}',
   'ai.pins.elementWithText': '{element} « {text} »',
@@ -459,6 +461,7 @@ export const messages = {
   'ai.pins.mode': 'Épingles de commentaire',
   'ai.pins.modeTip': 'Cliquez n’importe où sur la page pour y épingler un commentaire, puis envoyez-les tous d’un coup.',
   'ai.pins.moveDetached': 'Déplacer l’épingle vers un élément',
+  'ai.pins.movedToast': 'Épingle {number} déplacée',
   'ai.pins.moving': 'Cliquez à l’endroit où placer l’épingle {number}',
   'ai.pins.noComment': 'Pas encore de commentaire',
   'ai.pins.noElement': 'Les épingles se placent sur un élément de la page. Cliquez sur un élément.',
@@ -477,8 +480,10 @@ export const messages = {
   'ai.pins.progress.working': 'En cours',
   'ai.pins.progress.workingTip': 'L’agent travaille sur cette épingle.',
   'ai.pins.recapture': 'Capturer de nouveau la zone épinglée',
+  'ai.pins.removedToast': 'Épingle {number} supprimée',
   'ai.pins.reopen': 'Rouvrir',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Enregistrer',
   'ai.pins.send.busy': 'L’agent répond encore dans cette conversation. Attendez qu’il termine ou arrêtez-le.',
   'ai.pins.send.none': 'Rien à envoyer. Épinglez un commentaire ou incluez une épingle de la liste.',
   'ai.pins.send.notReady': 'Configurez d’abord l’agent dans le panneau de conversation.',
@@ -496,6 +501,9 @@ export const messages = {
     one: 'Commentaire sur {count} épingle',
     other: 'Commentaires sur {count} épingles',
   },
+  'ai.pins.undo': 'Annuler',
+  'ai.pins.unsaved': 'Non enregistrée',
+  'ai.pins.unsavedTip': 'Pas encore enregistrée : Tout envoyer la laisse de côté tant que vous ne l’avez pas ouverte et enregistrée.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan terminé',

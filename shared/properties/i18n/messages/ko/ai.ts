@@ -409,6 +409,8 @@ export const messages = {
   'ai.pins.delete.title': '핀 {number}을(를) 삭제할까요?',
   'ai.pins.detached': '분리됨',
   'ai.pins.detachedTip': '이 핀의 요소가 더 이상 이 페이지에 없습니다. 핀을 열어 다른 요소로 옮기세요.',
+  'ai.pins.discard': '핀 버리기',
+  'ai.pins.discardedToast': '핀 {number}의 변경 사항을 버렸습니다',
   'ai.pins.done': '완료',
   'ai.pins.elementIn': '{file}의 요소',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -435,6 +437,7 @@ export const messages = {
   'ai.pins.mode': '댓글 핀',
   'ai.pins.modeTip': '페이지에서 원하는 곳을 클릭해 댓글을 고정한 다음 한 번에 보내세요.',
   'ai.pins.moveDetached': '핀을 요소로 옮기기',
+  'ai.pins.movedToast': '핀 {number}을(를) 옮겼습니다',
   'ai.pins.moving': '핀 {number}을(를) 놓을 곳을 클릭하세요',
   'ai.pins.noComment': '아직 댓글이 없습니다',
   'ai.pins.noElement': '핀은 페이지의 요소에 놓습니다. 요소를 클릭하세요.',
@@ -453,8 +456,10 @@ export const messages = {
   'ai.pins.progress.working': '작업 중',
   'ai.pins.progress.workingTip': '에이전트가 이 핀을 작업하고 있습니다.',
   'ai.pins.recapture': '고정한 영역 다시 캡처',
+  'ai.pins.removedToast': '핀 {number}을(를) 삭제했습니다',
   'ai.pins.reopen': '다시 열기',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': '저장',
   'ai.pins.send.busy': '에이전트가 이 채팅에서 아직 답변 중입니다. 끝날 때까지 기다리거나 중지하세요.',
   'ai.pins.send.none': '보낼 항목이 없습니다. 댓글을 고정하거나 목록에서 핀을 포함하세요.',
   'ai.pins.send.notReady': '먼저 채팅 패널에서 에이전트를 설정하세요.',
@@ -470,6 +475,9 @@ export const messages = {
   'ai.pins.summaryTitle': {
     other: '핀 {count}개에 대한 댓글',
   },
+  'ai.pins.undo': '실행 취소',
+  'ai.pins.unsaved': '저장 안 됨',
+  'ai.pins.unsavedTip': '아직 저장하지 않았습니다. 열어서 저장할 때까지 모두 보내기에서 제외됩니다.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': '계획 완료',

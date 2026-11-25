@@ -30,6 +30,9 @@ if (project.length === 0 || userData.length === 0 || scenarioModule.length === 0
 // Before the app's main module opens its window: the soak must never appear on a person's screen.
 installWindowHiding(electron);
 app.setPath('userData', userData);
+// A test run never touches the person's login keychain: Chromium's safe storage gets an in-memory key instead, so
+// macOS never asks about (or offers to reset) an "Electron Key" while a run is going.
+app.commandLine.appendSwitch('use-mock-keychain');
 // The run is unattended, so its window must never take the person's screen: the app creates it hidden and shows
 // it on its first frame (electron/app/windowReveal.ts), and these two calls keep it hidden. A hidden window still
 // paints and answers capturePage, which is all the scenarios read; the Dock icon is hidden for the same reason.

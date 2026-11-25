@@ -59,24 +59,24 @@ test('images: a crop replaces the last crop, the count and the size stop the res
   const sizeOf = (id) => sizes.get(id) ?? 0;
   const first = model.addPinImages(pin, [image(1, 'crop')], 0, sizeOf);
   assert.deepEqual(
-    first.pin.images.map((entry) => entry.id),
+    model.workingCopy(first.pin).images.map((entry) => entry.id),
     [imageId(1)],
   );
   sizes.set(imageId(1), 10);
   const recrop = model.addPinImages(first.pin, [image(2, 'crop')], 10, sizeOf);
   assert.deepEqual(
-    recrop.pin.images.map((entry) => entry.id),
+    model.workingCopy(recrop.pin).images.map((entry) => entry.id),
     [imageId(2)],
     'the new crop takes the old one’s place',
   );
   const full = model.addPinImages(recrop.pin, [image(3, 'added'), image(4, 'added'), image(5, 'added'), image(6, 'added')], 10, sizeOf);
   assert.equal(full.kind, 'limited');
   assert.equal(full.reason, 'count');
-  assert.equal(full.pin.images.length, 4);
+  assert.equal(model.workingCopy(full.pin).images.length, 4);
   const heavy = model.addPinImages(pin, [image(7, 'added', 24_000_001)], 0, sizeOf);
   assert.equal(heavy.kind, 'limited');
   assert.equal(heavy.reason, 'size');
-  assert.deepEqual(heavy.pin.images, []);
+  assert.deepEqual(model.workingCopy(heavy.pin).images, []);
 });
 
 test('deleting asks only when words or added images would be lost', () => {
@@ -157,13 +157,15 @@ test('a send: images in pin order with their notes, briefs naming them, words wi
   board = added(board, 2).board;
   board = model.changePin(board, pinId(1), 20, (pin) => ({
     ...pin,
+    savedAt: 20,
+    edit: undefined,
     comment: 'Make it bigger\nand bolder',
     images: [
       { id: imageId(1), kind: 'crop', name: 'Pinned area', mimeType: 'image/png' },
       { id: imageId(2), kind: 'added', name: 'ref.jpg', mimeType: 'image/jpeg' },
     ],
   }));
-  board = model.changePin(board, pinId(2), 20, (pin) => ({ ...pin, included: false }));
+  board = model.changePin(board, pinId(2), 20, (pin) => ({ ...pin, included: false, savedAt: 20, edit: undefined, comment: 'Later' }));
   const chosen = model.pinsToSend(board);
   assert.deepEqual(
     chosen.map((pin) => pin.number),
@@ -274,4 +276,54 @@ test('a point and a crop: inside the box, padded, bounded, and inside the canvas
   const large = model.cropRect({ box: { x: 0, y: 0, w: 4000, h: 3000 }, at: { x: 0.05, y: 0.05 }, scale: 1, origin: { x: 300, y: 100 }, clip });
   assert.ok(large.width <= 960 && large.height <= 640);
   assert.equal(model.cropRect({ box: { x: 5000, y: 5000, w: 10, h: 10 }, at: { x: 0, y: 0 }, scale: 1, origin: { x: 300, y: 100 }, clip }), undefined);
+});
+
+test('saving: words or an added image save, a crop alone does not; Send all takes only what was saved', () => {
+  const { pin } = added(EMPTY, 1);
+  const crop = { id: imageId(1), kind: 'crop', name: 'Pinned area', mimeType: 'image/png' };
+  const withCrop = { ...pin, edit: { comment: '  ', images: [crop] } };
+  assert.equal(model.hasPersonContent(model.workingCopy(withCrop)), false, 'a crop alone is not a comment');
+  assert.throws(() => model.savePinEdit(withCrop, 30), /a pin is saved with words or an added image/);
+  const typed = { ...withCrop, edit: { comment: 'Bigger', images: [crop] } };
+  const saved = model.savePinEdit(typed, 30);
+  assert.equal(saved.comment, 'Bigger');
+  assert.equal(saved.savedAt, 30);
+  assert.equal(saved.edit, undefined);
+  assert.equal(model.pinsToSend({ version: 1, pins: [typed] }).length, 0, 'an unsaved pin is never sent');
+  assert.equal(model.pinsToSend({ version: 1, pins: [saved] }).length, 1);
+  const editing = { ...saved, edit: { comment: 'Much bigger', images: [crop] } };
+  assert.equal(model.pinsToSend({ version: 1, pins: [editing] })[0].comment, 'Bigger', 'Send all takes the saved words, never the box');
+});
+
+test('closing: discard drops a pin never saved and only the changes of a saved one; keep saves content', () => {
+  const { pin } = added(EMPTY, 1);
+  const typed = { ...pin, edit: { comment: 'Bigger', images: [] } };
+  assert.equal(model.closeOutcome(pin, 'discard'), 'remove');
+  assert.equal(model.closeOutcome(pin, 'keep'), 'remove', 'an empty pin never saved is let go');
+  assert.equal(model.closeOutcome(typed, 'discard'), 'remove');
+  assert.equal(model.closeOutcome(typed, 'keep'), 'save', 'a press elsewhere never loses typed words');
+  const saved = model.savePinEdit(typed, 30);
+  assert.equal(model.closeOutcome(saved, 'discard'), 'unchanged');
+  const changed = { ...saved, edit: { comment: 'Smaller', images: [] } };
+  assert.equal(model.closeOutcome(changed, 'discard'), 'discard');
+  assert.equal(model.discardPinEdit(changed).comment, 'Bigger', 'the saved comment stays');
+  assert.equal(model.closeOutcome(changed, 'keep'), 'save');
+  const cleared = { ...saved, edit: { comment: '', images: [] } };
+  assert.equal(model.closeOutcome(cleared, 'keep'), 'discard', 'an emptied box keeps what was saved');
+  const sent = { ...changed, delivery: { kind: 'sent', chat: CHAT, turn: TURN, mode: 'subagents', at: 1 } };
+  assert.equal(model.closeOutcome(sent, 'discard'), 'unchanged');
+  assert.equal(model.hasUnsavedChanges(saved), false);
+  assert.equal(model.hasUnsavedChanges(changed), true);
+});
+
+test('moving: a pin keeps its number, words, images and unsaved changes; a sent pin does not move', () => {
+  const { pin } = added(EMPTY, 1);
+  const editing = { ...pin, edit: { comment: 'Unsaved words', images: [] } };
+  const target = { anchor: { ...anchor, path: '0.4', tag: 'p', text: 'Hello' }, place: { ...place, locator: '0.4', elementLabel: 'Paragraph' } };
+  const moved = model.movePinAnchor(editing, target);
+  assert.equal(moved.number, 1);
+  assert.equal(moved.anchor.path, '0.4');
+  assert.equal(moved.place.elementLabel, 'Paragraph');
+  assert.deepEqual(moved.edit, editing.edit);
+  assert.throws(() => model.movePinAnchor({ ...editing, delivery: { kind: 'sent', chat: CHAT, turn: TURN, mode: 'single', at: 1 } }, target));
 });

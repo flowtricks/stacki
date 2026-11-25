@@ -28,12 +28,13 @@ import {
   type PinImageData,
   type PinImageId,
   type PinImageKind,
+  type PinImageRef,
   type PinImageType,
   type PinPlace,
 } from '../../../../shared/properties/ai/commentPins';
 import type { ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { Translator } from '../../../lib/i18n/localeContext';
-import { reportErrorToast } from '../../../ui/errorNotices';
+import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { aiPinsRead, aiPinsWrite, aiScreenshot } from '../aiBridge';
 import { aiState, newChat, openChat, preferredAgent, sendPinMessage, subscribeAiState } from '../aiStore';
 import {
@@ -41,7 +42,15 @@ import {
   addPinImages,
   changePin,
   clearSentPins,
+  closeOutcome,
   commentLine,
+  discardPinEdit,
+  hasPersonContent,
+  hasUnsavedChanges,
+  movePinAnchor,
+  nextPinNumber,
+  savePinEdit,
+  workingCopy,
   pinMessage,
   pinProgress,
   pinsToSend,
@@ -80,6 +89,8 @@ export interface PinState {
   /** A crop is being taken: the popover steps aside for the frame of the capture. */
   readonly capturing: boolean;
   readonly run: SequentialRun | undefined;
+  /** A marker being dragged to another element. */
+  readonly dragging: PinId | undefined;
   /** Pins of the page shown whose element is gone from it (the shell resolves them, pinModel.ts resolveAnchor). */
   readonly detached: ReadonlySet<PinId>;
 }
@@ -95,6 +106,7 @@ const INITIAL: PinState = {
   listOpen: false,
   capturing: false,
   run: undefined,
+  dragging: undefined,
   detached: new Set(),
 };
 
@@ -151,9 +163,9 @@ export async function loadPins(projectPath: string): Promise<void> {
     return;
   }
   stored = new Set(reply.value.images.map((image) => image.id));
-  const pins = reply.value.board.pins.map((pin) =>
-    pin.delivery.kind === 'sent' && pin.delivery.turn === undefined ? { ...pin, delivery: { kind: 'draft' as const } } : pin,
-  );
+  const pins = reply.value.board.pins
+    .filter((pin) => pin.savedAt !== undefined || hasPersonContent(workingCopy(pin)))
+    .map((pin) => (pin.delivery.kind === 'sent' && pin.delivery.turn === undefined ? { ...pin, delivery: { kind: 'draft' as const } } : pin));
   const images = new Map(reply.value.images.map((image) => [image.id, image.data]));
   // Set without a save: what was read is what is stored.
   state = { ...state, loaded: true, board: { version: 1, pins }, images };
@@ -226,12 +238,102 @@ function dropUnusedImages(): void {
 // Comment mode and the popover
 // ---------------------------------------------------------------------------
 
-export function setCommentMode(mode: 'on' | 'off'): void {
-  update((current) => (mode === 'on' ? { ...current, mode } : { ...current, mode, open: undefined, moving: undefined, listOpen: false }));
+export function setCommentMode(mode: 'on' | 'off', translate?: Translator): void {
+  if (mode === 'off') {
+    // Leaving the mode never loses typed words: the open box is kept (saved when it has content).
+    closePinBox('keep', translate);
+  }
+  update((current) => (mode === 'on' ? { ...current, mode } : { ...current, mode, open: undefined, moving: undefined, listOpen: false, dragging: undefined }));
 }
 
-export function openPin(id: PinId | undefined): void {
+/** Opens pin `id`'s box; a box open on another pin is kept first (saved when it has content). */
+export function openPin(id: PinId, translate?: Translator): void {
+  if (state.open !== undefined && state.open !== id) {
+    closePinBox('keep', translate);
+  }
   update((current) => ({ ...current, open: id, moving: undefined }));
+}
+
+/**
+ * Closes the open box. `discard` (its close button, Escape): a pin never saved goes, a saved pin loses only its
+ * unsaved changes, and when words or images the person made go with it an Undo toast brings them back. `keep`
+ * (a press elsewhere, another pin, leaving the mode or the page): content is saved, an empty box is let go.
+ */
+export function closePinBox(how: 'keep' | 'discard', translate?: Translator): void {
+  const id = state.open;
+  const pin = id === undefined ? undefined : state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined) {
+    if (id !== undefined) {
+      update((current) => ({ ...current, open: undefined }));
+    }
+    return;
+  }
+  const outcome = closeOutcome(pin, how);
+  const lost = (outcome === 'remove' || outcome === 'discard') && pin.edit !== undefined && hasPersonContent(pin.edit) && hasUnsavedChanges(pin);
+  const at = Date.now();
+  update((current) => {
+    switch (outcome) {
+      case 'unchanged':
+        return { ...current, open: undefined };
+      case 'save':
+        return { ...current, open: undefined, board: changePin(current.board, pin.id, at, (old) => savePinEdit(old, at)) };
+      case 'discard':
+        return { ...current, open: undefined, board: changePin(current.board, pin.id, at, discardPinEdit) };
+      case 'remove':
+        return { ...current, open: undefined, board: removePin(current.board, pin.id) };
+      default: {
+        const exhaustive: never = outcome;
+        return exhaustive;
+      }
+    }
+  });
+  if (lost && translate !== undefined) {
+    offerUndo(pin, translate(outcome === 'remove' ? 'ai.pins.removedToast' : 'ai.pins.discardedToast', { number: pin.number }), translate);
+  }
+}
+
+/** Saves the open box (its Save button, Enter) and closes it; a box without words or an added image is not saved. */
+export function savePinBox(): void {
+  const id = state.open;
+  const pin = id === undefined ? undefined : state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined || pin.delivery.kind === 'sent' || !hasPersonContent(workingCopy(pin))) {
+    return;
+  }
+  const at = Date.now();
+  update((current) => ({ ...current, open: undefined, board: changePin(current.board, pin.id, at, (old) => savePinEdit(old, at)) }));
+}
+
+// A toast that puts a pin back as it was before it was closed, moved or removed, with the bytes of its images.
+function offerUndo(before: CommentPin, message: string, translate: Translator): void {
+  const held = new Map<PinImageId, string>();
+  for (const image of [...before.images, ...(before.edit?.images ?? [])]) {
+    const data = state.images.get(image.id);
+    if (data !== undefined) {
+      held.set(image.id, data);
+    }
+  }
+  reportActionToast(message, 'info', [{ label: translate('ai.pins.undo'), run: () => restorePin(before, held, translate) }]);
+}
+
+function restorePin(before: CommentPin, held: ReadonlyMap<PinImageId, string>, translate: Translator): void {
+  const present = state.board.pins.some((pin) => pin.id === before.id);
+  const others = state.board.pins.filter((pin) => pin.id !== before.id);
+  if (!present && others.length >= PIN_LIMITS.pinsMax) {
+    reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
+    return;
+  }
+  // Its number again, unless a newer pin took it meanwhile.
+  const number = others.some((pin) => pin.number === before.number) ? nextPinNumber({ version: 1, pins: others }) : before.number;
+  update((current) => {
+    const images = new Map(current.images);
+    for (const [id, data] of held) {
+      images.set(id, data);
+      stored.delete(id); // The save that dropped it may have removed its file: it is written again.
+    }
+    const restored = { ...before, number };
+    const pins = present ? current.board.pins.map((pin) => (pin.id === before.id ? restored : pin)) : [...current.board.pins, restored];
+    return { ...current, images, board: { ...current.board, pins } };
+  });
 }
 
 export function setPinListOpen(open: 'open' | 'closed'): void {
@@ -241,6 +343,25 @@ export function setPinListOpen(open: 'open' | 'closed'): void {
 /** The next canvas click moves pin `id` there (a detached pin, or one on the wrong element); undefined cancels. */
 export function startMovingPin(id: PinId | undefined): void {
   update((current) => ({ ...current, moving: id, open: undefined }));
+}
+
+/** A marker being dragged: its box steps aside until it lands. */
+export function setDraggingPin(id: PinId | undefined): void {
+  update((current) => ({ ...current, dragging: id }));
+}
+
+/**
+ * Pin `id` moved onto another element (dragged there, or clicked there after "Move the pin"): its words, images and
+ * number stay, unsaved changes included; an Undo toast puts it back. True when it moved.
+ */
+export function movePin(id: PinId, target: { readonly anchor: PinAnchor; readonly place: PinPlace }, translate: Translator): boolean {
+  const pin = state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined || pin.delivery.kind === 'sent') {
+    return false;
+  }
+  update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (old) => movePinAnchor(old, target)), moving: undefined }));
+  offerUndo(pin, translate('ai.pins.movedToast', { number: pin.number }), translate);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -253,15 +374,12 @@ export function startMovingPin(id: PinId | undefined): void {
  */
 export function dropPin(input: { readonly anchor: PinAnchor; readonly place: PinPlace }, translate: Translator): PinId | undefined {
   const moving = state.moving;
-  if (moving !== undefined && state.board.pins.some((pin) => pin.id === moving)) {
-    update((current) => ({
-      ...current,
-      board: changePin(current.board, moving, Date.now(), (pin) => ({ ...pin, anchor: input.anchor, place: input.place })),
-      moving: undefined,
-      open: moving,
-    }));
+  if (moving !== undefined && movePin(moving, input, translate)) {
+    update((current) => ({ ...current, open: moving }));
     return moving;
   }
+  // Another spot pinned while a box is open: that box is kept (saved when it has content), never lost.
+  closePinBox('keep', translate);
   const outcome = addPin(state.board, { id: newPinId(), anchor: input.anchor, place: input.place, at: Date.now() });
   if (outcome.kind === 'full') {
     reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
@@ -289,9 +407,13 @@ export function followPinElement(id: PinId, path: string): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (old) => ({ ...old, anchor: { ...old.anchor, path } })) }));
 }
 
+/** The box's words as typed or dictated: unsaved until Save. */
 export function setPinComment(id: PinId, comment: string): void {
   const bounded = comment.slice(0, PIN_LIMITS.commentCharsMax);
-  update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, comment: bounded })) }));
+  update((current) => ({
+    ...current,
+    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, edit: { comment: bounded, images: workingCopy(pin).images } })),
+  }));
 }
 
 export function setPinIncluded(id: PinId, choice: 'include' | 'exclude'): void {
@@ -352,7 +474,7 @@ export function addImagesToPin(id: PinId, images: readonly PinImageInput[], tran
         nextImages.set(entry.id, entry.data);
       }
     }
-    return { ...current, images: nextImages, board: changePin(current.board, id, Date.now(), () => outcome.pin) };
+    return { ...current, images: nextImages, board: changePin(current.board, id, Date.now(), () => withCrop(pin, outcome.pin, outcome.added)) };
   });
   if (outcome.kind === 'limited') {
     reportErrorToast(outcome.reason === 'count' ? translate('ai.pins.imagesFull', { count: PIN_LIMITS.imagesPerPinMax }) : translate('ai.pins.imagesTooLarge'));
@@ -360,10 +482,27 @@ export function addImagesToPin(id: PinId, images: readonly PinImageInput[], tran
   return outcome;
 }
 
+/**
+ * A crop is Stacki's, not the person's, so it needs no Save: on a saved pin it replaces the saved crop too, and a pin
+ * with no unsaved changes gets none from it. Anything the person added stays in the box until Save.
+ */
+function withCrop(before: CommentPin, after: CommentPin, added: readonly PinImageRef[]): CommentPin {
+  const crop = added.find((image) => image.kind === 'crop');
+  if (crop === undefined || before.savedAt === undefined || !added.every((image) => image.kind === 'crop')) {
+    return after;
+  }
+  const savedImages = [crop, ...before.images.filter((image) => image.kind !== 'crop')].slice(0, PIN_LIMITS.imagesPerPinMax);
+  return { ...after, images: savedImages, edit: before.edit === undefined ? undefined : after.edit };
+}
+
+/** Takes an image out of the box: unsaved until Save. */
 export function removePinImage(id: PinId, image: PinImageId): void {
   update((current) => ({
     ...current,
-    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, images: pin.images.filter((entry) => entry.id !== image) })),
+    board: changePin(current.board, id, Date.now(), (pin) => {
+      const working = workingCopy(pin);
+      return { ...pin, edit: { comment: working.comment, images: working.images.filter((entry) => entry.id !== image) } };
+    }),
   }));
 }
 
@@ -410,13 +549,31 @@ export function setPinNavigator(next: PinNavigator | undefined): void {
   navigator = next;
 }
 
+/** What the shell installs to move a dragged pin: the canvas point (its CSS pixels) it was released at. */
+export type PinMover = (id: PinId, point: { readonly x: number; readonly y: number }, translate: Translator) => Promise<void>;
+
+let mover: PinMover | undefined;
+
+export function setPinMover(next: PinMover | undefined): void {
+  mover = next;
+}
+
+/** Moves pin `id` to what is under `point` on the canvas; nothing happens where the shell has no canvas. */
+export function movePinTo(id: PinId, point: { readonly x: number; readonly y: number }, translate: Translator): Promise<void> {
+  return mover === undefined ? Promise.resolve() : mover(id, point, translate);
+}
+
 /** Shows pin `id`: comment mode on, its element on the canvas, its popover open. False when there is no such pin. */
 export function jumpToPin(id: PinId): boolean {
   const pin = state.board.pins.find((candidate) => candidate.id === id);
   if (pin === undefined) {
     return false;
   }
-  update((current) => ({ ...current, mode: 'on', open: id, moving: undefined }));
+  if (state.open !== undefined && state.open !== id) {
+    closePinBox('keep');
+  }
+  // The list steps aside for the pin's box.
+  update((current) => ({ ...current, mode: 'on', open: id, moving: undefined, listOpen: false }));
   navigator?.reveal(pin);
   return true;
 }
@@ -686,5 +843,6 @@ export function resetPinStore(): void {
   runTranslate = undefined;
   runSending = false;
   navigator = undefined;
+  mover = undefined;
   state = INITIAL;
 }

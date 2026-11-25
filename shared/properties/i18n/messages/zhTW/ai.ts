@@ -407,6 +407,8 @@ export const messages = {
   'ai.pins.delete.title': '要刪除圖釘 {number} 嗎？',
   'ai.pins.detached': '已脫離',
   'ai.pins.detachedTip': '其元素已不在此頁面上。開啟圖釘，將它移到其他元素。',
+  'ai.pins.discard': '捨棄圖釘',
+  'ai.pins.discardedToast': '已捨棄對圖釘 {number} 的變更',
   'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element}「{text}」',
@@ -433,6 +435,7 @@ export const messages = {
   'ai.pins.mode': '註解圖釘',
   'ai.pins.modeTip': '按一下頁面上的任何內容即可釘上註解，再一次全部傳送。',
   'ai.pins.moveDetached': '將圖釘移到某個元素',
+  'ai.pins.movedToast': '已移動圖釘 {number}',
   'ai.pins.moving': '按一下圖釘 {number} 的新位置',
   'ai.pins.noComment': '尚無註解',
   'ai.pins.noElement': '圖釘只能放在頁面元素上。請按一下元素。',
@@ -451,8 +454,10 @@ export const messages = {
   'ai.pins.progress.working': '處理中',
   'ai.pins.progress.workingTip': '代理程式正在處理此圖釘。',
   'ai.pins.recapture': '重新擷取標記區域',
+  'ai.pins.removedToast': '已移除圖釘 {number}',
   'ai.pins.reopen': '重新開啟',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': '儲存',
   'ai.pins.send.busy': '代理程式仍在此對話中回覆。請等它完成，或將它停止。',
   'ai.pins.send.none': '沒有可傳送的內容。請釘上註解，或從清單納入圖釘。',
   'ai.pins.send.notReady': '請先在對話面板中設定代理程式。',
@@ -468,6 +473,9 @@ export const messages = {
   'ai.pins.summaryTitle': {
     other: '{count} 個圖釘的註解',
   },
+  'ai.pins.undo': '復原',
+  'ai.pins.unsaved': '未儲存',
+  'ai.pins.unsavedTip': '尚未儲存：在你開啟並儲存之前，「全部傳送」不會包含它。',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': '計畫已完成',

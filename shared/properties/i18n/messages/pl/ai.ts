@@ -464,6 +464,8 @@ export const messages = {
   'ai.pins.delete.title': 'Usunąć pinezkę {number}?',
   'ai.pins.detached': 'Odłączona',
   'ai.pins.detachedTip': 'Jej elementu nie ma już na tej stronie. Otwórz pinezkę, aby przenieść ją na inny element.',
+  'ai.pins.discard': 'Odrzuć pinezkę',
+  'ai.pins.discardedToast': 'Odrzucono zmiany w pinezce {number}',
   'ai.pins.done': 'Gotowe',
   'ai.pins.elementIn': 'Element w {file}',
   'ai.pins.elementWithText': '{element} „{text}”',
@@ -502,6 +504,7 @@ export const messages = {
   'ai.pins.mode': 'Pinezki z komentarzami',
   'ai.pins.modeTip': 'Kliknij dowolne miejsce na stronie, aby przypiąć do niego komentarz, a potem wyślij wszystkie naraz.',
   'ai.pins.moveDetached': 'Przenieś pinezkę na element',
+  'ai.pins.movedToast': 'Przeniesiono pinezkę {number}',
   'ai.pins.moving': 'Kliknij, gdzie ma trafić pinezka {number}',
   'ai.pins.noComment': 'Nie ma jeszcze komentarza',
   'ai.pins.noElement': 'Pinezki umieszcza się na elementach strony. Kliknij element.',
@@ -520,8 +523,10 @@ export const messages = {
   'ai.pins.progress.working': 'Pracuje',
   'ai.pins.progress.workingTip': 'Agent pracuje nad tą pinezką.',
   'ai.pins.recapture': 'Przechwyć przypięty obszar ponownie',
+  'ai.pins.removedToast': 'Usunięto pinezkę {number}',
   'ai.pins.reopen': 'Otwórz ponownie',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Zapisz',
   'ai.pins.send.busy': 'Agent nadal odpowiada na tym czacie. Poczekaj, aż skończy, lub go zatrzymaj.',
   'ai.pins.send.none': 'Nie ma nic do wysłania. Przypnij komentarz lub uwzględnij pinezkę z listy.',
   'ai.pins.send.notReady': 'Najpierw skonfiguruj agenta w panelu czatu.',
@@ -543,6 +548,9 @@ export const messages = {
     many: 'Komentarze do {count} pinezek',
     other: 'Komentarze do {count} pinezki',
   },
+  'ai.pins.undo': 'Cofnij',
+  'ai.pins.unsaved': 'Niezapisana',
+  'ai.pins.unsavedTip': 'Jeszcze nie zapisano: „Wyślij wszystkie” pominie ją, dopóki jej nie otworzysz i nie zapiszesz.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan ukończony',

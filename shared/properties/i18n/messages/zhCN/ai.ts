@@ -407,6 +407,8 @@ export const messages = {
   'ai.pins.delete.title': '删除图钉 {number}？',
   'ai.pins.detached': '已脱离',
   'ai.pins.detachedTip': '它对应的元素已不在此页面上。打开图钉，将其移到其他元素。',
+  'ai.pins.discard': '放弃图钉',
+  'ai.pins.discardedToast': '已放弃对图钉 {number} 的更改',
   'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -433,6 +435,7 @@ export const messages = {
   'ai.pins.mode': '评论图钉',
   'ai.pins.modeTip': '点击页面上的任意内容即可钉上评论，然后一次性全部发送。',
   'ai.pins.moveDetached': '将图钉移到某个元素',
+  'ai.pins.movedToast': '已移动图钉 {number}',
   'ai.pins.moving': '点击图钉 {number} 的新位置',
   'ai.pins.noComment': '还没有评论',
   'ai.pins.noElement': '图钉只能放在页面元素上。请点击一个元素。',
@@ -451,8 +454,10 @@ export const messages = {
   'ai.pins.progress.working': '处理中',
   'ai.pins.progress.workingTip': '代理正在处理此图钉。',
   'ai.pins.recapture': '重新截取标记区域',
+  'ai.pins.removedToast': '已移除图钉 {number}',
   'ai.pins.reopen': '重新打开',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': '保存',
   'ai.pins.send.busy': '代理仍在此聊天中回复。请等它完成，或将其停止。',
   'ai.pins.send.none': '没有可发送的内容。请钉一条评论，或从列表中纳入一个图钉。',
   'ai.pins.send.notReady': '请先在聊天面板中设置代理。',
@@ -468,6 +473,9 @@ export const messages = {
   'ai.pins.summaryTitle': {
     other: '{count} 个图钉的评论',
   },
+  'ai.pins.undo': '撤销',
+  'ai.pins.unsaved': '未保存',
+  'ai.pins.unsavedTip': '尚未保存：在你打开并保存之前，“全部发送”不会包含它。',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': '计划已完成',

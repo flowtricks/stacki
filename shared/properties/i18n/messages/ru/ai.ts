@@ -464,6 +464,8 @@ export const messages = {
   'ai.pins.delete.title': 'Удалить метку {number}?',
   'ai.pins.detached': 'Откреплена',
   'ai.pins.detachedTip': 'Её элемента больше нет на этой странице. Откройте метку, чтобы переместить её на другой элемент.',
+  'ai.pins.discard': 'Отменить создание метки',
+  'ai.pins.discardedToast': 'Изменения метки {number} отменены',
   'ai.pins.done': 'Готово',
   'ai.pins.elementIn': 'Элемент в {file}',
   'ai.pins.elementWithText': '{element} «{text}»',
@@ -502,6 +504,7 @@ export const messages = {
   'ai.pins.mode': 'Метки с комментариями',
   'ai.pins.modeTip': 'Щёлкните что угодно на странице, чтобы прикрепить комментарий, а затем отправьте все сразу.',
   'ai.pins.moveDetached': 'Переместить метку на элемент',
+  'ai.pins.movedToast': 'Метка {number} перемещена',
   'ai.pins.moving': 'Щёлкните там, куда переместить метку {number}',
   'ai.pins.noComment': 'Комментария пока нет',
   'ai.pins.noElement': 'Метки ставятся на элементы страницы. Щёлкните элемент.',
@@ -520,8 +523,10 @@ export const messages = {
   'ai.pins.progress.working': 'Работает',
   'ai.pins.progress.workingTip': 'Агент работает над этой меткой.',
   'ai.pins.recapture': 'Заново сделать снимок отмеченной области',
+  'ai.pins.removedToast': 'Метка {number} удалена',
   'ai.pins.reopen': 'Открыть заново',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Сохранить',
   'ai.pins.send.busy': 'Агент ещё отвечает в этом чате. Дождитесь окончания или остановите его.',
   'ai.pins.send.none': 'Отправлять нечего. Прикрепите комментарий или включите метку из списка.',
   'ai.pins.send.notReady': 'Сначала настройте агента на панели чата.',
@@ -543,6 +548,9 @@ export const messages = {
     many: 'Комментарии к {count} меткам',
     other: 'Комментарии к {count} метки',
   },
+  'ai.pins.undo': 'Отменить',
+  'ai.pins.unsaved': 'Не сохранено',
+  'ai.pins.unsavedTip': 'Ещё не сохранена: «Отправить все» пропустит её, пока вы не откроете и не сохраните её.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'План выполнен',

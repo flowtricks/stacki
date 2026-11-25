@@ -428,6 +428,8 @@ export const messages = {
   'ai.pins.delete.title': '¿Eliminar el pin {number}?',
   'ai.pins.detached': 'Desvinculado',
   'ai.pins.detachedTip': 'Su elemento ya no está en esta página. Abre el pin para moverlo a otro elemento.',
+  'ai.pins.discard': 'Descartar pin',
+  'ai.pins.discardedToast': 'Cambios del pin {number} descartados',
   'ai.pins.done': 'Listo',
   'ai.pins.elementIn': 'Elemento en {file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
@@ -458,6 +460,7 @@ export const messages = {
   'ai.pins.mode': 'Pines de comentario',
   'ai.pins.modeTip': 'Haz clic en cualquier parte de la página para fijar un comentario y luego envíalos todos a la vez.',
   'ai.pins.moveDetached': 'Mover el pin a un elemento',
+  'ai.pins.movedToast': 'Pin {number} movido',
   'ai.pins.moving': 'Haz clic donde va el pin {number}',
   'ai.pins.noComment': 'Aún sin comentario',
   'ai.pins.noElement': 'Los pines van en un elemento de la página. Haz clic en un elemento.',
@@ -476,8 +479,10 @@ export const messages = {
   'ai.pins.progress.working': 'Trabajando',
   'ai.pins.progress.workingTip': 'El agente está trabajando en este pin.',
   'ai.pins.recapture': 'Volver a capturar la zona marcada',
+  'ai.pins.removedToast': 'Pin {number} eliminado',
   'ai.pins.reopen': 'Reabrir',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': 'Guardar',
   'ai.pins.send.busy': 'El agente aún está respondiendo en este chat. Espera a que termine o detenlo.',
   'ai.pins.send.none': 'No hay nada que enviar. Fija un comentario o incluye un pin de la lista.',
   'ai.pins.send.notReady': 'Primero configura el agente en el panel de chat.',
@@ -495,6 +500,9 @@ export const messages = {
     one: 'Comentario en {count} pin',
     other: 'Comentarios en {count} pines',
   },
+  'ai.pins.undo': 'Deshacer',
+  'ai.pins.unsaved': 'Sin guardar',
+  'ai.pins.unsavedTip': 'Aún sin guardar: Enviar todo lo omite hasta que lo abras y lo guardes.',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'Plan completado',

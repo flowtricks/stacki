@@ -410,6 +410,8 @@ export const messages = {
   'ai.pins.delete.title': 'ピン {number} を削除しますか？',
   'ai.pins.detached': '切り離し',
   'ai.pins.detachedTip': 'このピンの要素はこのページにもうありません。ピンを開いて別の要素に移動してください。',
+  'ai.pins.discard': 'ピンを破棄',
+  'ai.pins.discardedToast': 'ピン {number} の変更を破棄しました',
   'ai.pins.done': '完了',
   'ai.pins.elementIn': '{file} 内の要素',
   'ai.pins.elementWithText': '{element}「{text}」',
@@ -436,6 +438,7 @@ export const messages = {
   'ai.pins.mode': 'コメントピン',
   'ai.pins.modeTip': 'ページ上の好きな場所をクリックしてコメントをピン留めし、まとめて送信します。',
   'ai.pins.moveDetached': 'ピンを要素に移動',
+  'ai.pins.movedToast': 'ピン {number} を移動しました',
   'ai.pins.moving': 'ピン {number} の移動先をクリックしてください',
   'ai.pins.noComment': 'コメントはまだありません',
   'ai.pins.noElement': 'ピンはページの要素に配置します。要素をクリックしてください。',
@@ -454,8 +457,10 @@ export const messages = {
   'ai.pins.progress.working': '作業中',
   'ai.pins.progress.workingTip': 'エージェントがこのピンの作業をしています。',
   'ai.pins.recapture': 'ピン留めした領域を再キャプチャ',
+  'ai.pins.removedToast': 'ピン {number} を削除しました',
   'ai.pins.reopen': '再開',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
+  'ai.pins.save': '保存',
   'ai.pins.send.busy': 'エージェントはこのチャットでまだ返信中です。完了を待つか、停止してください。',
   'ai.pins.send.none': '送信するものがありません。コメントをピン留めするか、一覧のピンを含めてください。',
   'ai.pins.send.notReady': '先にチャットパネルでエージェントを設定してください。',
@@ -471,6 +476,9 @@ export const messages = {
   'ai.pins.summaryTitle': {
     other: '{count} 件のピンへのコメント',
   },
+  'ai.pins.undo': '元に戻す',
+  'ai.pins.unsaved': '未保存',
+  'ai.pins.unsavedTip': 'まだ保存されていません。開いて保存するまで「すべて送信」の対象外です。',
   'ai.pins.where': '{page} · {width}', // same
   'ai.pins.width': '{width}px', // same
   'ai.plan.complete': 'プラン完了',

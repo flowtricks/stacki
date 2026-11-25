@@ -62,6 +62,15 @@ export function setCanvasClickInterceptor(next: CanvasClickInterceptor | undefin
   interceptor = next;
 }
 
+/**
+ * Whether the editor's own click mode (comment pins) takes canvas clicks now. While it does, the keys the canvas frame
+ * forwards as editing shortcuts (Delete, arrows, the insert palette) must not act on the selection: the person is
+ * pinning comments, and a key that reached the frame was meant for a pin's box.
+ */
+export function canvasClicksIntercepted(): boolean {
+  return interceptor?.capturing() === true;
+}
+
 /** Whether a canvas click or double click belongs to an app or to the editor's own click mode now, not to selection. */
 export function canvasClicksCaptured(): boolean {
   return interceptor?.capturing() === true || handler?.capturing() === true;

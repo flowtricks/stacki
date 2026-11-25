@@ -17,7 +17,11 @@ const output = repoPath('node_modules/.stacki-test/pinStore.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
 esbuild.buildSync({
   stdin: {
-    contents: ["export * as pins from './src/features/ai/pins/pinStore';", "export * as ai from './src/features/ai/aiStore';"].join('\n'),
+    contents: [
+      "export * as pins from './src/features/ai/pins/pinStore';",
+      "export * as ai from './src/features/ai/aiStore';",
+      "export * as errorNotices from './src/ui/errorNotices';",
+    ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'ts',
   },
@@ -37,7 +41,7 @@ global.localStorage = {
   clear: () => storage.clear(),
 };
 global.requestAnimationFrame = (run) => setTimeout(run, 0);
-const { pins, ai } = require(output);
+const { pins, ai, errorNotices } = require(output);
 
 const PROJECT = '/site';
 const CHAT = `c${'a'.repeat(24)}`;
@@ -117,6 +121,27 @@ function drop(file = 'src/pages/index.astro', path = '0.1') {
   return id;
 }
 
+// A pin dropped, its words typed and saved, as the person does with Save.
+function pinned(words, file = 'src/pages/index.astro', path = '0.1') {
+  const id = drop(file, path);
+  pins.setPinComment(id, words);
+  pins.savePinBox();
+  assert.equal(pins.pinState().open, undefined, 'Save closes the box');
+  return id;
+}
+
+const pinOf = (id) => pins.pinState().board.pins.find((pin) => pin.id === id);
+
+// The toasts the store raised, read as the app's toast host reads them.
+function collectToasts() {
+  const toasts = [];
+  const unsubscribe = errorNotices.subscribeErrorToasts(
+    (toast) => toasts.push(toast),
+    () => undefined,
+  );
+  return { toasts, unsubscribe };
+}
+
 test('a board is read when the project opens; a pin left waiting in a closed run is a draft again', async () => {
   const waiting = {
     id: `p${'1'.repeat(16)}`,
@@ -125,13 +150,26 @@ test('a board is read when the project opens; a pin left waiting in a closed run
     updatedAt: 1,
     comment: 'Bigger',
     images: [],
+    savedAt: 1,
     anchor: anchor('0.1'),
     place: { ...place('src/pages/index.astro'), scope: undefined },
     included: true,
     delivery: { kind: 'sent', chat: CHAT, mode: 'single', at: 1 },
   };
-  await start({ board: { version: 1, pins: [waiting] } });
+  const typed = {
+    ...waiting,
+    id: `p${'2'.repeat(16)}`,
+    number: 2,
+    comment: '',
+    savedAt: undefined,
+    delivery: { kind: 'draft' },
+    edit: { comment: 'Typed before a crash', images: [] },
+  };
+  const empty = { ...typed, id: `p${'3'.repeat(16)}`, number: 3, edit: { comment: '', images: [] } };
+  await start({ board: { version: 1, pins: [waiting, typed, empty] } });
   assert.deepEqual(pins.pinState().board.pins[0].delivery, { kind: 'draft' });
+  assert.equal(pins.pinState().board.pins[1]?.edit?.comment, 'Typed before a crash', 'unsaved words survive a restart');
+  assert.equal(pins.pinState().board.pins.length, 2, 'an empty pin never saved is let go');
 });
 
 test('changes are saved after a pause, each image once; nothing is sent by itself', async (context) => {
@@ -147,7 +185,8 @@ test('changes are saved after a pause, each image once; nothing is sent by itsel
   context.mock.timers.tick(0);
   const writes = fake.named('aiPinsWrite');
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].payload.board.pins[0].comment, 'Make it bigger');
+  assert.equal(writes[0].payload.board.pins[0].edit.comment, 'Make it bigger', 'unsaved words are stored, so a crash loses nothing');
+  assert.equal(writes[0].payload.board.pins[0].comment, '', 'they are not the comment until Save');
   assert.equal(writes[0].payload.images.length, 1);
   pins.setPinComment(id, 'Make it much bigger');
   context.mock.timers.tick(400);
@@ -158,8 +197,8 @@ test('changes are saved after a pause, each image once; nothing is sent by itsel
 
 test('include, delete and clear sent do only what they say', async () => {
   await start();
-  const first = drop();
-  const second = drop('src/pages/about.astro');
+  const first = pinned('First');
+  const second = pinned('Second', 'src/pages/about.astro');
   pins.setPinIncluded(second, 'exclude');
   assert.equal(pins.pinState().board.pins.find((pin) => pin.id === second).included, false);
   pins.deletePin(first);
@@ -173,12 +212,13 @@ test('include, delete and clear sent do only what they say', async () => {
 
 test('Send all to Claude: one message, the brief naming every included pin, then marked sent with the turn', async () => {
   const fake = await start({ agent: 'claude' });
-  const first = drop('src/pages/index.astro', '0.1');
-  pins.setPinComment(first, 'Bigger heading');
-  const second = drop('src/pages/index.astro', '0.2');
-  pins.setPinComment(second, 'Less space');
-  const third = drop('src/pages/about.astro', '0.3');
+  const first = pinned('Bigger heading', 'src/pages/index.astro', '0.1');
+  pinned('Less space', 'src/pages/index.astro', '0.2');
+  const third = pinned('Later', 'src/pages/about.astro', '0.3');
   pins.setPinIncluded(third, 'exclude');
+  // A fourth, typed and never saved, is not sent.
+  const fourth = drop('src/pages/about.astro', '0.4');
+  pins.setPinComment(fourth, 'Not saved yet');
   assert.equal(pins.sendReadiness(pins.pinState(), ai.aiState()).kind, 'ready');
   assert.equal(await pins.sendAllPins(translate), true);
   const sent = fake.named('aiPrompt');
@@ -197,7 +237,7 @@ test('Send all to Claude: one message, the brief naming every included pin, then
 
 test('a refused send keeps the drafts', async () => {
   await start({ prompt: () => ({ ok: false, error: { code: 'busy', message: 'busy' } }) });
-  drop();
+  pinned('Bigger');
   assert.equal(await pins.sendAllPins(translate), false);
   assert.equal(pins.pinState().board.pins[0].delivery.kind, 'draft');
 });
@@ -205,9 +245,9 @@ test('a refused send keeps the drafts', async () => {
 test('Send all to Codex: one message per pin, the next after a turn that ended well, held after one that did not', async () => {
   const fake = await start({ agent: 'codex' });
   const stop = pins.followChats();
-  drop('src/pages/index.astro', '0.1');
-  drop('src/pages/index.astro', '0.2');
-  drop('src/pages/index.astro', '0.3');
+  pinned('One', 'src/pages/index.astro', '0.1');
+  pinned('Two', 'src/pages/index.astro', '0.2');
+  pinned('Three', 'src/pages/index.astro', '0.3');
   assert.equal(await pins.sendAllPins(translate), true);
   assert.equal(fake.named('aiPrompt').length, 1, 'one pin at a time');
   assert.equal(fake.named('aiPrompt')[0].payload.pins.mode, 'single');
@@ -236,4 +276,54 @@ test('Send all to Codex: one message per pin, the next after a turn that ended w
   assert.equal(await pins.continueRun(translate), true);
   assert.equal(fake.named('aiPrompt').length, 3);
   stop();
+});
+
+test('the close button drops a pin never saved, with Undo; on a saved pin it drops only the changes', async () => {
+  await start();
+  const { toasts, unsubscribe } = collectToasts();
+  const fresh = drop();
+  pins.setPinComment(fresh, 'Typed, never saved');
+  pins.closePinBox('discard', translate);
+  assert.equal(pinOf(fresh), undefined, 'a pin never saved goes');
+  const undo = toasts.at(-1)?.recovery?.[0];
+  assert.ok(undo !== undefined, 'an Undo is offered for the words that went');
+  await errorNotices.runToastRecovery(undo);
+  assert.equal(pinOf(fresh)?.edit?.comment, 'Typed, never saved', 'Undo brings the pin and its words back');
+  const saved = pinned('Saved words', 'src/pages/about.astro', '0.2');
+  pins.openPin(saved, translate);
+  pins.setPinComment(saved, 'Changed, not saved');
+  pins.closePinBox('discard', translate);
+  assert.equal(pinOf(saved)?.comment, 'Saved words', 'the saved comment stays');
+  assert.equal(pinOf(saved)?.edit, undefined);
+  unsubscribe();
+});
+
+test('a press elsewhere, another pin or leaving the mode keeps typed words: saved with content, let go when empty', async () => {
+  await start();
+  const typed = drop();
+  pins.setPinComment(typed, 'Keep me');
+  const empty = drop('src/pages/about.astro', '0.2');
+  assert.equal(pinOf(typed)?.comment, 'Keep me', 'pinning another spot saved the open box');
+  pins.setCommentMode('off');
+  assert.equal(pinOf(empty), undefined, 'an empty pin never saved is let go when the mode ends');
+  pins.setCommentMode('on');
+  pins.openPin(typed, translate);
+  pins.setPinComment(typed, 'Kept again');
+  pins.closePinBox('keep', translate);
+  assert.equal(pinOf(typed)?.comment, 'Kept again');
+});
+
+test('a moved pin keeps its words, unsaved changes and number; Undo puts it back', async () => {
+  await start();
+  const { toasts, unsubscribe } = collectToasts();
+  const id = pinned('Bigger');
+  pins.openPin(id, translate);
+  pins.setPinComment(id, 'Bigger still');
+  assert.equal(pins.movePin(id, { anchor: anchor('0.7'), place: place('src/pages/index.astro') }, translate), true);
+  assert.equal(pinOf(id)?.anchor.path, '0.7');
+  assert.equal(pinOf(id)?.edit?.comment, 'Bigger still', 'moving does not need Save and loses nothing');
+  assert.equal(pins.pinState().open, id, 'its box stays open');
+  await errorNotices.runToastRecovery(toasts.at(-1).recovery[0]);
+  assert.equal(pinOf(id)?.anchor.path, '0.1', 'Undo puts it back');
+  unsubscribe();
 });
