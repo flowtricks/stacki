@@ -33,7 +33,7 @@ function CanvasRichPlus({ plus }: { readonly plus: CanvasRichPlusState }) {
     plus.choose(kind === 'link' ? { kind: 'link', href: value } : { kind: 'media', media: kind, address: value });
   };
   return (
-    <div className="canvas-rich-plus" style={{ position: 'fixed', left: place.left, top: place.top, zIndex: 40 }}>
+    <div className="canvas-rich-plus" style={{ position: 'fixed', left: place.left, top: place.top, zIndex: 40 }} onPointerDownCapture={plus.hold}>
       <BlockInsertButton
         onChoose={(choice) => {
           if (choice.kind === 'media') {

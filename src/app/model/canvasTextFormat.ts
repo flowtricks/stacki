@@ -86,7 +86,12 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       if (sameRichContent(before, html, document)) {
         return true; // Nothing a reader would see changed: the file keeps its bytes.
       }
-      setInline(instance.id, richTextNodes(html, document));
+      const next = richTextNodes(html, document);
+      // A line of words stays one: blocks typed into content the component may draw inside a <p> are refused.
+      if (isInlineOnly(instance.children ?? []) && next.length > 0 && !isInlineOnly(next)) {
+        return false;
+      }
+      setInline(instance.id, next);
       return true;
     },
   };
@@ -505,11 +510,14 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
     // (a component, an expression) keeps Enter as it was.
     const html = settings.richText === true ? plainChildrenHTML(node.children) : undefined;
     const rich = html !== undefined && richTextView(html, document).view === 'rich';
-    const richRoot = rich && node.id !== undefined ? pathFor(node.id) : undefined;
+    // Content that is one line of words (a Paragraph's) has no block to start a paragraph after, and the component may
+    // draw it inside a <p>, where a paragraph is invalid HTML: with rich text on it takes line breaks, as with breaks on.
+    const words = (node.children ?? []).length === 0 || isInlineOnly(node.children);
+    const richRoot = rich && !words && node.id !== undefined ? pathFor(node.id) : undefined;
     for (const child of node.children ?? []) {
       if (richRoot !== undefined) {
         markBlock(child, (text) => mark(text, { breaks: 'rich', richRoot }, 0));
-      } else if (settings.lineBreaks === true) {
+      } else if (settings.lineBreaks === true || (rich && words)) {
         mark(child, { breaks: 'line' }, 0);
       }
     }

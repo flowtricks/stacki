@@ -13,7 +13,7 @@ import type { ImportNeed } from '../../editor/dataSample';
 import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
 import { insertAtRange } from './fieldFocus';
-import { LITERAL_ATTRIBUTE, nodesToHtml, isChippable } from './richContentModel';
+import { CARET_BREAK_ATTRIBUTE, LITERAL_ATTRIBUTE, isDOMElement, nodesToHtml, isChippable } from './richContentModel';
 import type { InlineNode } from './richContentModel';
 import { richApplyLink, richContentNodes, richExec, richReadStates, richWrapTag, type FormatState, type RichTarget } from './richFormat';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type Bubble, type BubblePosition } from './RichFormatButtons';
@@ -83,7 +83,7 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
           // Keep formatting shortcuts local; Enter inserts <br> (inline field).
           if (event.key === 'Enter') {
             event.preventDefault();
-            document.execCommand('insertHTML', false, '<br>');
+            richLineBreak(hostRef.current ?? undefined);
             emit();
             return;
           }
@@ -99,6 +99,42 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
       <RichBubble state={state} emit={emit} />
     </>
   );
+}
+
+/**
+ * A line break at the caret. At the very end of the content a break alone has no line to put the caret on (the
+ * browser shows a last empty line only with something after it), so the words typed next landed before it: the end
+ * gets a second break marked as the caret's (CARET_BREAK_ATTRIBUTE), which the field never reads back.
+ */
+function richLineBreak(host: HTMLElement | undefined): void {
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  if (host === undefined || range === undefined || !host.contains(range.endContainer)) {
+    document.execCommand('insertHTML', false, '<br>');
+    return;
+  }
+  const after = document.createRange();
+  after.setStart(range.endContainer, range.endOffset);
+  after.setEnd(host, host.childNodes.length);
+  const rest = Array.from(after.cloneContents().childNodes);
+  const atEnd = rest.every((node) => (node.nodeType === 3 ? (node.textContent ?? '') === '' : isDOMElement(node) && node.hasAttribute(CARET_BREAK_ATTRIBUTE)));
+  const held = rest.some((node) => isDOMElement(node) && node.hasAttribute(CARET_BREAK_ATTRIBUTE));
+  if (atEnd && !held) {
+    // Built here rather than by insertHTML, which drops a second break at the end and leaves the caret before the first.
+    range.deleteContents();
+    const line = document.createElement('br');
+    const caret = document.createElement('br');
+    caret.setAttribute(CARET_BREAK_ATTRIBUTE, '');
+    range.insertNode(caret);
+    range.insertNode(line);
+    const next = document.createRange();
+    next.setStartAfter(line);
+    next.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(next);
+    return;
+  }
+  document.execCommand('insertHTML', false, '<br>');
 }
 
 function useRichState() {

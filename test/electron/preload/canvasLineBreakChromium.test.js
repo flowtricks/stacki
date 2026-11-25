@@ -138,23 +138,34 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
        await open('p');
        win.webContents.focus();
        out.opened = await box('p');
-       out.whiteSpace = await run('getComputedStyle(' + frame + '.document.querySelector("p")).whiteSpace');
+       out.editing = await run(frame + '.document.querySelector("p").isContentEditable');
        // The caret at the end of the words.
        await run('(() => { const d = ' + frame + '.document; const t = [...d.querySelector("p").childNodes].find((n) => n.nodeType === 3 && /Words/.test(n.data)); d.getSelection().collapse(t, t.data.trimEnd().length); })()');
        const caretTop = () => run('(() => { const s = ' + frame + '.document.getSelection(); const r = s.getRangeAt(0).getClientRects(); const b = r.length ? r[0] : s.getRangeAt(0).getBoundingClientRect(); return b.top; })()');
        out.caretBefore = await caretTop();
        key('Return');
-       await waitFor({ what: 'the break was typed', read: () => run(frame + '.document.querySelector("p").textContent'), until: (text) => text.includes('\\n') });
+       await waitFor({ what: 'the break was typed', read: () => run(frame + '.document.querySelectorAll("p br").length'), until: (count) => count > 0 });
        out.caretAfter = await caretTop();
        out.grown = await box('p');
        await win.webContents.insertText('More');
        await waitFor({ what: 'the words were typed', read: () => run(frame + '.document.querySelector("p").textContent'), until: (text) => text.includes('More') });
        const image = await win.webContents.capturePage();
        fs.writeFileSync(${JSON.stringify(shot)}, image.toPNG());
+       // ⌘/Ctrl Enter breaks the line too, and Backspace takes a break back out.
        key('Return', [process.platform === 'darwin' ? 'meta' : 'control']);
+       await win.webContents.insertText('Gone');
+       for (let index = 0; index < 'Gone'.length + 1; index++) {
+         key('Backspace');
+       }
+       out.afterBackspace = await run(frame + '.document.querySelector("p").innerHTML');
+       // A press elsewhere on the canvas saves, and the page keeps showing the break until its rendering arrives.
+       const away = await run('(() => { const f = document.getElementById("canvas").getBoundingClientRect(); const r = ' + frame + '.document.querySelector("h2").getBoundingClientRect(); return { x: Math.round(f.left + r.left + 4), y: Math.round(f.top + r.top + 4) }; })()');
+       win.webContents.sendInputEvent({ type: 'mouseDown', x: away.x, y: away.y, button: 'left', clickCount: 1 });
+       win.webContents.sendInputEvent({ type: 'mouseUp', x: away.x, y: away.y, button: 'left', clickCount: 1 });
        await waitFor({ what: 'the editor closed', read: () => run(editorOpen), until: (value) => value === false });
+       out.shownAfterSave = await run(frame + '.document.querySelector("p").innerHTML');
        // The frame's messages reach the host a task later: wait for the save (or a refusal) to arrive.
-       out.saved = JSON.parse(await waitFor({ what: 'the save arrived', read: posts, until: (text) => /text-(save|refused)/.test(text) }));
+       out.saved = JSON.parse(await waitFor({ what: 'the save arrived', read: () => run('JSON.stringify(window.posts.filter((m) => /^avb:(rich-save|text-(save|refused))/.test(m.type)))'), until: (text) => /save|refused/.test(text) }));
        // Without the setting, Enter finishes.
        await open('h2');
        key('Return');
@@ -177,9 +188,15 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
        await waitFor({ what: 'the heading took words', read: blocks, until: (text) => text.includes('H3:New') });
        out.afterChoice = await blocks();
        fs.writeFileSync(${JSON.stringify(richShot)}, (await win.webContents.capturePage()).toPNG());
+       // ⌘/Ctrl Enter breaks the line inside the heading; a press elsewhere saves.
        key('Return', [process.platform === 'darwin' ? 'meta' : 'control']);
+       out.richBreak = await run(frame + '.document.querySelector(".rich h3").innerHTML');
+       key('Backspace');
+       const outside = await run('(() => { const f = document.getElementById("canvas").getBoundingClientRect(); const r = ' + frame + '.document.querySelector("h2.head").getBoundingClientRect(); return { x: Math.round(f.left + r.left + 4), y: Math.round(f.top + r.top + 4) }; })()');
+       win.webContents.sendInputEvent({ type: 'mouseDown', x: outside.x, y: outside.y, button: 'left', clickCount: 1 });
+       win.webContents.sendInputEvent({ type: 'mouseUp', x: outside.x, y: outside.y, button: 'left', clickCount: 1 });
        await waitFor({ what: 'the rich editor closed', read: () => run(editorOpen), until: (value) => value === false });
-       out.rich = JSON.parse(await waitFor({ what: 'the rich save arrived', read: () => run('JSON.stringify(window.posts.filter((m) => m.type === "avb:rich-save"))'), until: (text) => text !== '[]' }));
+       out.rich = JSON.parse(await waitFor({ what: 'the rich save arrived', read: () => run('JSON.stringify(window.posts.filter((m) => m.type === "avb:rich-save"))'), until: (text) => (text.match(/rich-save/g) ?? []).length >= 2 }));
        console.log('RESULT ' + JSON.stringify(out));
        app.quit();
      });`,
@@ -205,23 +222,22 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
   } else {
     const reading = JSON.parse(line.slice('RESULT '.length));
     const detail = JSON.stringify(reading);
-    check('the editor shows typed newlines', reading.whiteSpace === 'pre-line', detail);
+    check('the words are edited as a block the browser edits', reading.editing === true, detail);
     for (const key of ['top', 'left', 'width', 'height']) {
       check(`opening keeps the ${key}`, reading.opened[key] === reading.before[key], detail);
     }
-    check('Enter at the end moves the caret a line down', reading.caretAfter > reading.caretBefore + 10, detail);
+    check('Enter at the end puts the words typed next on the new line', /<br>More/.test(reading.afterBackspace), detail);
     check('the paragraph grew by the new line', reading.grown.height > reading.before.height + 10, detail);
-    const saves = reading.saved.filter((message) => message.type === 'avb:text-save');
+    const saves = reading.saved.filter((message) => message.type === 'avb:rich-save');
     check('one save', saves.length === 1, detail);
-    check(
-      'the save holds one newline and no line-end space',
-      saves[0] !== undefined && /paragraph\nMore$/.test(saves[0].value.trim()) && !saves[0].value.includes('​'),
-      detail,
-    );
+    check('Backspace took the ⌘ Enter break back out', !/More<br>.*<br>/.test(reading.afterBackspace), detail);
+    check('the save holds the words and one break, nothing left over', saves[0] !== undefined && /paragraph\s*<br>More$/.test(saves[0].html.trim()), detail);
+    check('the break still shows once the editor closed', /<br>/.test(reading.shownAfterSave), detail);
     check('a text without the setting finishes on Enter, unchanged', reading.heading === 'A heading', detail);
     check('rich Enter makes a new paragraph at once', reading.afterEnter === 'SPAN:Component label|P:Hello|P:world|H2:Title', detail);
     check('a + choice turns the empty block into a heading', reading.afterChoice === 'SPAN:Component label|P:Hello|H3:New|H2:Title', detail);
-    check('the save is the instance blocks only, without bookkeeping', reading.rich[0]?.html === '<p>Hello</p><h3>New</h3><h2>Title</h2>', detail);
+    check('⌘ Enter in rich text breaks the line inside the block', /<br>/.test(reading.richBreak ?? ''), detail);
+    check('the save is the instance blocks only, without bookkeeping', reading.rich.at(-1)?.html === '<p>Hello</p><h3>New</h3><h2>Title</h2>', detail);
   }
   if (failures.length) {
     console.error(`canvas-line-break: ${failures.length}/${checked} failed\n${failures.join('\n')}`);

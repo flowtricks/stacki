@@ -11,7 +11,7 @@ import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/propert
 import { canvasTextSourceMatches, pathsOf } from './frameRegions';
 import { matchCanvasText, textRunsAround, type TextMatch, type TextRun } from './frameTextMatch';
 import { openNativeText, type NativeTextResult } from './frameTextNative';
-import { openRichText } from './frameRichText';
+import { holdsInlineWords, openRichText, type RichTextPlace } from './frameRichText';
 import { textEditorRoot, textSelection, type TextOffsets } from './frameTextSelection';
 
 interface ActiveText {
@@ -56,6 +56,10 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
     receive: (input: unknown) => {
+      if (isRichHold(input)) {
+        rich?.hold();
+        return;
+      }
       const choice = readRichBlockRequest(input);
       if (choice !== undefined) {
         // Only an open rich text editor takes a choice, from whichever catalog of this file drew its `+`.
@@ -94,14 +98,13 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       if (!current) {
         return;
       }
-      if (target.breaks === 'rich' && target.richRoot !== undefined) {
-        rich = openCanvasRich(
-          { session: () => catalog?.session ?? current.session, target, element: match.element, richRoot: target.richRoot, at: event },
-          post,
-          () => {
-            rich = undefined;
-          },
-        );
+      // Text whose component allows breaks is edited as the browser edits a block (frameRichText.ts): Enter, ⌘/Ctrl Enter,
+      // Backspace over a <br>, undo all behave as in any editor, and the whole content is saved as one edit.
+      const place = canvasEditingPlace(target, match);
+      if (place !== undefined) {
+        rich = openCanvasRich({ session: () => catalog?.session ?? current.session, target, place, at: event }, post, () => {
+          rich = undefined;
+        });
         if (rich) {
           openedAtMs = performance.now();
           return;
@@ -151,14 +154,13 @@ function openCanvasRich(
   context: {
     readonly session: () => string;
     readonly target: CanvasTextTarget;
-    readonly element: Element;
-    readonly richRoot: string;
+    readonly place: RichTextPlace;
     readonly at: MouseEvent;
   },
   post: (message: unknown) => void,
   closed: () => void,
 ) {
-  const editor = openRichText(context.element, context.richRoot, context.at, {
+  const editor = openRichText(context.place, context.at, {
     plus: (rect) => post({ type: 'avb:rich-plus', session: context.session(), ...(rect ? { rect } : {}) }),
     done: (html) => {
       closed();
@@ -182,6 +184,11 @@ function openCanvasRich(
   return { ...editor, announce };
 }
 
+// The host's `+` or its menu was pressed: the blur that press caused is not the person leaving.
+function isRichHold(input: unknown): boolean {
+  return typeof input === 'object' && input !== null && 'type' in input && input.type === 'avb:rich-hold';
+}
+
 function readRichBlockRequest(input: unknown) {
   try {
     return parseRichBlockRequest(input);
@@ -189,6 +196,16 @@ function readRichBlockRequest(input: unknown) {
     // Not a `+` choice, or a malformed one: nothing is edited.
     return undefined;
   }
+}
+
+// Where text that allows breaks is edited: a rich text instance's blocks, or the element holding a line of words (when
+// it holds nothing but the instance's inline words; otherwise the run editor below types the break as before).
+function canvasEditingPlace(target: CanvasTextTarget, match: TextMatch): RichTextPlace | undefined {
+  if (target.breaks === 'rich' && target.richRoot !== undefined) {
+    return { kind: 'rich', block: match.element, richRoot: target.richRoot };
+  }
+  const container = target.breaks === 'line' ? textEditorRoot(match) : undefined;
+  return container !== undefined && holdsInlineWords(container) ? { kind: 'line', container } : undefined;
 }
 
 // An open editor whose text the page replaced, or whose source moved on.

@@ -257,6 +257,7 @@ function showRichPlus(message: { readonly session: string; readonly rect?: Canva
     session: options.session,
     box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
     // The menu took focus out of the frame; it goes back to the frame first, since a page's script may not take it.
+    hold: () => options.current.current?.post({ type: 'avb:rich-hold', session: options.session }),
     choose: (choice) => {
       options.current.current?.frame.current?.focus();
       options.current.current?.post({ type: 'avb:rich-block', session: options.session, choice });

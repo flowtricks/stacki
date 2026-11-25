@@ -1149,9 +1149,12 @@ test('a component content restated with line breaks applies in every position', 
     ['twice at the end', [text(words), br(), br()]],
     ['two lines and a third', [text('One'), br(), text('Two'), br(), text('Three')]],
     ['joined back', [text('OneTwo')]],
+    ['the canvas reading, template whitespace and all', [text(`\n    ${words} Panel line`), br(), text('Some text'), br()]],
+    ['a break after a break already written', [text(words), br(), text('Some text'), br(), text('Third')]],
   ];
   const shape = (nodes: readonly PageNode[]) =>
-    nodes.map((child) => (child.kind === 'text' ? child.value : child.kind === 'element' ? child.name : child.kind));
+    // Text as a reader sees it: template whitespace around the words is the printer's to lay out.
+    nodes.map((child) => (child.kind === 'text' ? child.value.replace(/\s+/g, ' ').trim() : child.kind === 'element' ? child.name : child.kind));
   for (const [what, children] of shapes) {
     fs.writeFileSync(file, page(words));
     const shown = await read(harness, file);

@@ -26,6 +26,13 @@ function session(breaks, run) {
   window.Range.prototype.getBoundingClientRect = () => new window.DOMRect(0, 0, 0, 0);
   window.document.caretRangeFromPoint = () => undefined;
   window.document.adoptedStyleSheets = [];
+  // JSDOM has no editing commands: the ones the editor asks for are recorded (recordCommands).
+  const commands = [];
+  Reflect.set(window, 'stackiCommands', commands);
+  window.document.execCommand = (name) => {
+    commands.push(name);
+    return true;
+  };
   const posted = [];
   const { createCanvasTextSession } = loadRenderer('electron/preload/frameTextSession.ts');
   const { matchCanvasText } = loadRenderer('electron/preload/frameTextMatch.ts');
@@ -70,46 +77,62 @@ test('without the setting, Enter finishes editing and types nothing', () => {
   });
 });
 
-test('with line breaks, Enter types a break where the caret is, and ⌘ Enter saves it', () => {
-  session('line', ({ caret, press, text, paragraph, drafts }) => {
+// With line breaks the words are edited as the browser edits a block (frameRichText.ts): JSDOM has no editing
+// commands, so the commands the keys ask for are recorded, and the save is read from a DOM written as the browser
+// would leave it.
+function recordCommands(window) {
+  return Reflect.get(window, 'stackiCommands');
+}
+
+test('with line breaks, Enter and ⌘ Enter both break the line; a press elsewhere saves the whole content', () => {
+  session('line', ({ caret, press, paragraph, posted }) => {
+    const commands = recordCommands(paragraph.ownerDocument.defaultView);
     caret(5);
+    assert.equal(paragraph.getAttribute('contenteditable'), 'true', 'the block is editable');
     press('Enter');
-    assert.equal(text.data, 'Hello\n world');
-    assert.equal(paragraph.getAttribute('contenteditable'), 'true', 'still editing');
-    press('Enter', { shiftKey: true });
-    assert.equal(text.data, 'Hello\n\n world', 'Shift Enter types a break too');
     press('Enter', { metaKey: true });
-    assert.equal(paragraph.hasAttribute('contenteditable'), false, 'the editor closed');
-    assert.equal(drafts().at(-1), 'Hello\n\n world');
-  });
-});
-
-test('a break at the end keeps an empty caret line open, and the space is never saved', () => {
-  session('line', ({ caret, press, text, drafts }) => {
-    caret(11);
-    press('Enter');
-    assert.equal(text.data, `Hello world\n${LINE_END}`);
     press('Enter', { ctrlKey: true });
-    assert.equal(drafts().at(-1), 'Hello world\n');
+    press('Enter', { shiftKey: true });
+    assert.equal(commands.filter((name) => name === 'insertLineBreak').length, 4, 'Enter, ⌘ Enter, Ctrl Enter and Shift Enter each break the line');
+    assert.equal(paragraph.getAttribute('contenteditable'), 'true', 'still editing: no key finishes');
+    // As the browser leaves it after two breaks at the end, then words.
+    paragraph.innerHTML = 'Hello world<br>Some text<br>';
+    paragraph.dispatchEvent(new paragraph.ownerDocument.defaultView.MouseEvent('mousedown', { bubbles: true }));
+    assert.equal(paragraph.hasAttribute('contenteditable'), true, 'a press inside keeps editing');
   });
 });
 
-test('rich text types a break the save turns into a paragraph; Escape cancels and restores the words', () => {
-  session('rich', ({ caret, press, text, paragraph, saves }) => {
-    caret(5);
-    press('Enter');
-    assert.equal(text.data, 'Hello\n world');
+test('an Escape leaves without saving and puts the words back', () => {
+  session('line', ({ press, paragraph, posted }) => {
+    recordCommands(paragraph.ownerDocument.defaultView);
+    paragraph.innerHTML = 'Changed<br>';
     press('Escape');
     assert.equal(paragraph.textContent, 'Hello world');
-    assert.deepEqual(saves(), []);
+    assert.equal(paragraph.hasAttribute('contenteditable'), false);
+    assert.equal(
+      posted.some((message) => message.type === 'avb:rich-save'),
+      false,
+    );
   });
+});
+
+test('a lone break at the end is not saved; two show an empty line and are', () => {
+  const { withoutTrailingCaretBreak } = loadRenderer('electron/preload/frameRichText.ts');
+  assert.equal(withoutTrailingCaretBreak('Hello<br>'), 'Hello');
+  assert.equal(withoutTrailingCaretBreak('Hello<br><br>'), 'Hello<br><br>');
+  assert.equal(withoutTrailingCaretBreak('Hello<br>World'), 'Hello<br>World');
+  assert.equal(withoutTrailingCaretBreak(''), '');
 });
 
 test('an Enter that ends an IME composition is the IME’s', () => {
-  session('line', ({ caret, press, text, paragraph }) => {
+  session('line', ({ caret, press, paragraph }) => {
+    const commands = recordCommands(paragraph.ownerDocument.defaultView);
     caret(5);
     press('Enter', { isComposing: true });
-    assert.equal(text.data, 'Hello world');
+    assert.deepEqual(
+      commands.filter((name) => name === 'insertLineBreak'),
+      [],
+    );
     assert.equal(paragraph.getAttribute('contenteditable'), 'true');
   });
 });

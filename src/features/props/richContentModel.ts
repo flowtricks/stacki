@@ -185,6 +185,8 @@ function richReadDOM(element: Element, budget: Budget, depth: number): InlineNod
  * expressions, they wrote code into the page that did not compile.
  */
 export const LITERAL_ATTRIBUTE = 'data-rich-literal';
+/** Marks the `<br>` that gives an empty last line its caret; never read back as content. */
+export const CARET_BREAK_ATTRIBUTE = 'data-rich-caret';
 
 // A literal run: its text as text (the canonical value, as any text), and its line breaks.
 function richReadLiteral(node: Element, budget: Budget): InlineNode[] {
@@ -235,7 +237,8 @@ function richReadElement(node: Element, budget: Budget, depth: number): InlineNo
     name = 'em';
   }
   if (name === 'br') {
-    return [{ kind: 'element', name: 'br', props: {}, children: undefined }];
+    // The break that only holds the last line open for the caret (RichContent.tsx richLineBreak) is not content.
+    return node.hasAttribute(CARET_BREAK_ATTRIBUTE) ? [] : [{ kind: 'element', name: 'br', props: {}, children: undefined }];
   }
   const children = richReadDOM(node, budget, depth + 1);
   if (!INLINE_TAGS.has(name)) {

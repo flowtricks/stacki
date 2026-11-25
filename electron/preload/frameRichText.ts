@@ -20,16 +20,40 @@ export interface RichTextCallbacks {
 
 /** Elements a session reads back, and the depth it walks a block for, both bounded. */
 const RICH_LIMITS = { childrenMax: 2_000, depthMax: 64 } as const;
+/** How long a saved edit keeps showing what was typed when no rendering arrives: the canvas's bound for shown edits. */
+const SHOWN_SAVE_MS_MAX = 20_000;
+/** How long a blur waits for the host to say the press was on its `+`: one message across frames, well inside a frame. */
+const HOLD_WAIT_MS = 120;
 
-export function openRichText(block: Element, richRoot: string, at: { readonly clientX: number; readonly clientY: number }, callbacks: RichTextCallbacks) {
-  const top = instanceBlock(block, richRoot);
-  const container = top?.parentElement;
-  if (!top || !(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
+/**
+ * Where the editor works: `rich`, the element holding a component instance's blocks (found from the block double
+ * clicked); `line`, the element holding a run of inline words (text, `<br>` and inline markup only), all of it the
+ * instance's content.
+ */
+export type RichTextPlace =
+  { readonly kind: 'rich'; readonly block: Element; readonly richRoot: string } | { readonly kind: 'line'; readonly container: HTMLElement };
+
+/** Elements a line of words may hold: inline markup the content field also writes. Anything else is not edited here. */
+const INLINE_ELEMENTS: ReadonlySet<string> = new Set(['BR', 'STRONG', 'EM', 'B', 'I', 'A', 'SPAN', 'SUP', 'SUB', 'CODE', 'SMALL', 'MARK', 'U', 'S']);
+
+/** Whether an element holds inline words only, so its whole content can be edited and read back as the instance's. */
+export function holdsInlineWords(element: Element): boolean {
+  const all = Array.from(element.querySelectorAll('*'));
+  return all.length <= RICH_LIMITS.childrenMax && all.every((child) => INLINE_ELEMENTS.has(child.tagName));
+}
+
+export function openRichText(place: RichTextPlace, at: { readonly clientX: number; readonly clientY: number }, callbacks: RichTextCallbacks) {
+  const container = place.kind === 'line' ? place.container : instanceBlock(place.block, place.richRoot)?.parentElement;
+  if (!(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
+    return undefined;
+  }
+  if (place.kind === 'line' && !holdsInlineWords(container)) {
     return undefined;
   }
   const original = Array.from(container.childNodes);
   const snapshot = original.map((node) => node.cloneNode(true));
-  const startHTML = readInstanceHTML(container, original, richRoot);
+  const read = () => withoutTrailingCaretBreak(place.kind === 'line' ? readWholeHTML(container) : readInstanceHTML(container, original, place.richRoot));
+  const startHTML = read();
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
   container.setAttribute('data-avb-text-editor', '');
@@ -44,10 +68,25 @@ export function openRichText(block: Element, richRoot: string, at: { readonly cl
     closed = true;
     controller.abort();
     callbacks.plus(undefined);
-    const html = action === 'apply' ? readInstanceHTML(container, original, richRoot) : undefined;
-    // The blocks go back as the page rendered them, saved or not: the preview's patch knows its own nodes, and a block
-    // made here would stay beside the rendered one. A save shows when the page renders it.
-    container.replaceChildren(...snapshot);
+    const html = action === 'apply' ? read() : undefined;
+    const saved = html !== undefined && html !== startHTML;
+    // The rendered nodes go back before the preview patches (its patch knows its own nodes, and one made here would stay
+    // beside the rendered one), but not before: a save keeps showing what was typed until its rendering arrives, so a
+    // break or a paragraph shows at once. Bounded, as the canvas's other shown edits are.
+    const putBack = () => container.replaceChildren(...snapshot);
+    if (saved) {
+      const timer = setTimeout(putBack, SHOWN_SAVE_MS_MAX);
+      document.addEventListener(
+        'avb:before-morph',
+        () => {
+          clearTimeout(timer);
+          putBack();
+        },
+        { once: true },
+      );
+    } else {
+      putBack();
+    }
     if (attribute === null) {
       container.removeAttribute('contenteditable');
     } else {
@@ -55,7 +94,7 @@ export function openRichText(block: Element, richRoot: string, at: { readonly cl
     }
     container.removeAttribute('data-avb-text-editor');
     container.blur();
-    callbacks.done(html !== undefined && html !== startHTML ? html : undefined);
+    callbacks.done(saved ? html : undefined);
   };
   window.addEventListener(
     'keydown',
@@ -64,21 +103,39 @@ export function openRichText(block: Element, richRoot: string, at: { readonly cl
         return;
       }
       event.stopImmediatePropagation();
+      // Escape leaves without saving, a click elsewhere saves (the session's dismiss). Enter: in rich text a new block (the
+      // browser's own, a paragraph after a heading or quote, an item in a list, out of an empty one); in a line of words
+      // a line break. ⌘/Ctrl Enter, and Shift Enter, a line break inside the block in both.
       if (event.key === 'Escape') {
         event.preventDefault();
         finish('cancel');
-      } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      } else if (event.key === 'Enter' && (place.kind === 'line' || event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        finish('apply');
+        document.execCommand('insertLineBreak');
+        report();
       }
     },
     listen,
   );
-  const report = () => callbacks.plus(emptyBlockBox(container));
+  // The `+` belongs to rich text: a line of words has no blocks to choose.
+  const report = () => callbacks.plus(place.kind === 'rich' ? emptyBlockBox(container) : undefined);
   document.addEventListener('selectionchange', report, { signal: controller.signal });
   container.addEventListener('input', report, { signal: controller.signal });
-  // Leaving focus does not finish: the `+` menu lives in the host, and choosing from it takes focus out of the frame
-  // and back. A click elsewhere on the canvas finishes (the session's dismiss), as ⌘/Ctrl Enter does.
+  // Leaving the frame saves, as a click elsewhere on the canvas does (the session's dismiss), unless the press that
+  // took focus was on the host's `+` or its menu, which says so (`hold`) and gives focus back with its choice. The
+  // host's word arrives a moment after the blur, so the blur waits that long before it saves.
+  let held = false;
+  window.addEventListener(
+    'blur',
+    () => {
+      setTimeout(() => {
+        if (!held) {
+          finish('apply');
+        }
+      }, HOLD_WAIT_MS);
+    },
+    { signal: controller.signal },
+  );
   container.focus({ preventScroll: true });
   // The caret where the double click was: focusing an editable element would otherwise put it at the element's start.
   const caret = document.caretRangeFromPoint(at.clientX, at.clientY);
@@ -93,7 +150,11 @@ export function openRichText(block: Element, richRoot: string, at: { readonly cl
     container,
     /** Says again where the `+` goes, for a host that has rebuilt its catalog. */
     replus: report,
+    hold: () => {
+      held = true;
+    },
     choose: (choice: RichBlockChoice) => {
+      held = false;
       if (!closed) {
         applyRichChoice(container, choice);
         report();
@@ -156,6 +217,14 @@ function cleanElement(element: Element): Element {
       }
     }
   }
+  // A lone break at the end of a block shows nothing (the browser leaves it after the last line's words go), so it
+  // is not written; two at the end show an empty line and stay.
+  for (const node of all) {
+    const last = node.lastChild;
+    if (last instanceof Element && last.tagName === 'BR' && !(last.previousSibling instanceof Element && last.previousSibling.tagName === 'BR')) {
+      last.remove();
+    }
+  }
   const walker = document.createTreeWalker(copy, NodeFilter.SHOW_COMMENT);
   const comments: Node[] = [];
   for (let node = walker.nextNode(); node && comments.length < RICH_LIMITS.childrenMax; node = walker.nextNode()) {
@@ -163,6 +232,29 @@ function cleanElement(element: Element): Element {
   }
   comments.forEach((comment) => comment.parentNode?.removeChild(comment));
   return copy;
+}
+
+/** The whole content of a line of words, as HTML without the preview's bookkeeping. */
+function readWholeHTML(container: Element): string {
+  const parts: string[] = [];
+  for (const node of Array.from(container.childNodes)) {
+    if (node instanceof Element) {
+      parts.push(cleanElement(node).outerHTML);
+    } else if (node instanceof Text) {
+      parts.push(escapeText(node.data));
+    }
+  }
+  assert(parts.length <= RICH_LIMITS.childrenMax, 'A line of words reads a bounded number of nodes');
+  return parts.join('');
+}
+
+/**
+ * Without a lone `<br>` at the very end: a block shows nothing for it (the browser leaves one behind when the last
+ * line's words are deleted), so it is not written. Two or more at the end are kept: they show an empty last line, in
+ * the editor and on the page alike.
+ */
+export function withoutTrailingCaretBreak(html: string): string {
+  return /<br>$/.test(html) && !/<br><br>$/.test(html) ? html.slice(0, -'<br>'.length) : html;
 }
 
 function escapeText(text: string): string {

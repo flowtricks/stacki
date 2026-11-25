@@ -91,7 +91,7 @@ export default function HtmlField({ value, label, sourceView, blocks, onChange }
           setSource(!source);
         }}
       />
-      <HtmlBody {...{ value, label: fieldLabel, source, sourceView, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
+      <HtmlBody {...{ value, label: fieldLabel, source, sourceView, projection, editor, formatCount, blocks }} onAction={state.run} onChange={onChange} />
       {bubble && !source && (
         <HtmlLinkEditor
           bubble={bubble}
@@ -219,7 +219,17 @@ function HtmlBody(props: BodyProps) {
           typedShortcut(editor, event.nativeEvent);
           editor.emit();
         }}
-        onKeyDown={(event) => keyDown(editor, event, props.onAction)}
+        onKeyDown={(event) => {
+          // Rich text a component holds: Enter starts a new block (the browser's own), ⌘/Ctrl Enter breaks the line
+          // inside the block, as typing on the canvas does.
+          if (props.blocks === 'insert' && event.key === 'Enter' && (MOD === '⌘' ? event.metaKey : event.ctrlKey)) {
+            event.preventDefault();
+            document.execCommand('insertLineBreak');
+            editor.emit();
+            return;
+          }
+          keyDown(editor, event, props.onAction);
+        }}
         onClick={(event) => followLink(event, { open: event.metaKey || event.ctrlKey })}
         onPaste={(event) => {
           event.preventDefault();
