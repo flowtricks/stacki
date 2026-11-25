@@ -25,6 +25,7 @@ async function bundle(): Promise<(props: Record<string, unknown>) => string> {
         "import { createElement } from 'react';",
         "import { RolesLayout } from './src/features/roles/RolesView';",
         'export const draw = (props) => renderToStaticMarkup(createElement(RolesLayout, props));',
+        "export { defaultInviteRole } from './src/features/roles/RolesView';",
       ].join('\n'),
       resolveDir: studio,
       loader: 'tsx',
@@ -112,6 +113,17 @@ test('each sign-in method gets its own invite form and no other', async () => {
   const custom = await layout(draw, 'acme', { kind: 'custom' });
   assert.match(custom, /Acme SSO identifier/);
   assert.match(custom, /placeholder="employee number"/);
+});
+
+test('the invite starts on admin while the file is unclaimed, and on the least-privileged role once claimed', async () => {
+  await bundle();
+  const loaded: unknown = await import(pathToFileURL(path.join(studio, 'node_modules/.studio-test/roles-view.mjs')).href + '?v=' + String(Math.random()));
+  assert.ok(typeof loaded === 'object' && loaded !== null);
+  const pick: unknown = Reflect.get(loaded, 'defaultInviteRole');
+  assert.ok(typeof pick === 'function');
+  const { parseProjectRoles } = await import('../vendor/stacki/shared/properties/projectRoles');
+  assert.equal(Reflect.apply(pick, undefined, [parseProjectRoles(roles({}))]), 'admin', 'unclaimed: its first member must be an admin');
+  assert.equal(Reflect.apply(pick, undefined, [parseProjectRoles(roles({ admin: ['owner'] }))]), 'client');
 });
 
 test('the invite defaults to the least-privileged role', async () => {

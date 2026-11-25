@@ -148,3 +148,47 @@ test('a role file with no admin entry cannot be written by the CLI', async () =>
   assert.ok(!result.ok, 'the app refuses a file with an admin and no members');
   assert.equal(readText(root, '.stacki/roles.json'), ROLES_FIXTURE);
 });
+
+// Unclaimed: a roles.json with no member in any role (a framework's shipped roles) grants as no file does, so an unnamed
+// caller, the MCP server included, is the owner; `--as-role` still picks a role on purpose; the CLI refuses a member for
+// another role until admin has one, and once claimed the MCP server needs a role again.
+test('an unclaimed roles file acts as no file until an admin is added', async () => {
+  const unclaimed = `${JSON.stringify(
+    {
+      version: 1,
+      defaultRole: 'viewer',
+      roles: [
+        { id: 'admin', name: 'Admin', members: [] },
+        { id: 'viewer', name: 'Viewer', access: ['cli:read'] },
+      ],
+    },
+    undefined,
+    2,
+  )}\n`;
+  const root = makeProject({ '.stacki/roles.json': unclaimed });
+  const required = resolveRoleContext(root, { unnamed: 'require' });
+  assert.ok(required.ok, 'the MCP server needs no role while unclaimed');
+  assert.equal(required.value.view.isAdmin, true);
+  const login = resolveRoleContext(root, { login: 'stranger' });
+  assert.ok(login.ok);
+  assert.equal(login.value.view.isAdmin, true, 'the default role restricts nobody while unclaimed');
+  const chosen = resolveRoleContext(root, { role: 'viewer' });
+  assert.ok(chosen.ok);
+  assert.equal(chosen.value.view.id, 'viewer', 'a chosen role still applies');
+  const listed = await runCommand(request(root, ['list'], { what: 'roles' }, undefined, 'plan'));
+  assert.ok(listed.ok);
+  assert.match(JSON.stringify(listed), /no members yet: everyone is the owner until an admin is added/);
+
+  const refused = await runCommand(request(root, ['roles', 'members', 'add'], { role: 'viewer', login: 'sam' }, undefined));
+  assert.ok(!refused.ok, 'a member for another role before an admin is refused');
+  assert.match(refused.error.message, /Add an admin before adding people to other roles/);
+  assert.equal(readText(root, '.stacki/roles.json'), unclaimed, 'nothing is written');
+
+  const claimed = await runCommand(request(root, ['roles', 'members', 'add'], { role: 'admin', login: 'owner' }, undefined));
+  assert.ok(claimed.ok, 'adding an admin claims the file');
+  const after = resolveRoleContext(root, { unnamed: 'require' });
+  assert.ok(!after.ok, 'once claimed, the MCP server needs a role again');
+  const stranger = resolveRoleContext(root, { login: 'stranger' });
+  assert.ok(stranger.ok);
+  assert.equal(stranger.value.view.id, 'viewer', 'the default role applies again');
+});

@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login} 已在 {role} 中',
   'roles.error.membersMax': { other: '一個角色最多 {count} 位成員' },
   'roles.error.lastAdmin': '至少要有一位管理員',
+  'roles.error.adminFirst': '請先新增管理員，再將成員加入其他角色',
   'roles.error.appsMax': {
     other: '一個角色最多保存 {count} 個 App 的權限。請在 roles.json 中移除角色對已不再安裝之 App 的設定。',
   },

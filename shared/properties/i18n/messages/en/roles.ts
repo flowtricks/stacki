@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login} is already in {role}',
   'roles.error.membersMax': { one: 'A role has at most {count} member', other: 'A role has at most {count} members' },
   'roles.error.lastAdmin': 'At least one person must be an admin',
+  'roles.error.adminFirst': 'Add an admin before adding people to other roles',
   'roles.error.appsMax': {
     one: "A role holds app permissions for at most {count} app. Remove a role's settings for apps no longer installed in roles.json.",
     other: "A role holds app permissions for at most {count} apps. Remove a role's settings for apps no longer installed in roles.json.",

@@ -50,7 +50,7 @@ const role: ValueSchema = objectOf({
   ),
   members: field(
     arrayOf(text(ROLE_LIMITS.loginCharsMax, { charsMin: 1, pattern: LOGIN }), ROLE_LIMITS.membersMax),
-    'GitHub usernames in this role; a login is in at most one role (case-insensitive). The admin role needs at least one.',
+    'GitHub usernames in this role; a login is in at most one role (case-insensitive). The admin role needs one as soon as any role lists a member; a file with no members anywhere is unclaimed and grants as no file does.',
     { default: 'no members', commands: ['roles members add', 'roles members remove'] },
   ),
   access: field(
@@ -98,12 +98,12 @@ export const ROLES_FILE: FileSchema = {
     ),
     roles: field(
       arrayOf(role, ROLE_LIMITS.rolesMax),
-      'The roles. Admin and client are always present after reading, listed or not; the admin role must name at least one member.',
+      'The roles. Admin and client are always present after reading, listed or not; the admin role must name a member before any other role does.',
       { required: true, commands: ['roles add', 'roles remove'] },
     ),
   },
-  // The parser refuses a file whose admin has no member, so the starting document names a placeholder login to replace.
-  empty: { version: 1, defaultRole: 'admin', roles: [{ id: 'admin', name: 'Admin', members: ['octocat'] }] },
+  // Unclaimed: no member in any role, so it grants exactly as no file does and names no real person until an admin is added.
+  empty: { version: 1, defaultRole: 'admin', roles: [{ id: 'admin', name: 'Admin', members: [] }] },
   commands: [
     'roles add',
     'roles remove',

@@ -152,6 +152,38 @@ test('edit policy: roles.json is the authority, allow-lists add default-role edi
   }
 });
 
+// Unclaimed: a valid file with no member anywhere (a framework's shipped roles) decides as no file does, so the bootstrap
+// admin keeps the instance; a file with a member but no admin is invalid and still makes that member nobody.
+test('edit policy: an unclaimed file keeps the bootstrap admin, and an admin-less file with members grants nobody', async () => {
+  const bootstrap = principal('google:me@example.com', 'me@example.com');
+  const policy = { bootstrapAdmin: bootstrap.identity, editorAccess: 'repository', allowedEmails: ['friend@x.org'], allowedDomains: [] };
+  const unclaimedState = rolesFile([], []);
+  assert.equal(unclaimedState.kind, 'roles');
+  const unclaimed = createEditorPolicy({ policy, roles: source(unclaimedState) });
+  const none = createEditorPolicy({ policy, roles: source({ kind: 'none' }) });
+  const people = [bootstrap, principal('google:friend@x.org', 'friend@x.org'), principal('google:stranger@x.org', 'stranger@x.org')];
+  for (const person of people) {
+    assert.equal(await unclaimed.canEdit(person, 'fresh'), await none.canEdit(person, 'fresh'), `edit as with no file: ${person.identity}`);
+    assert.equal(await unclaimed.canManage(person), await none.canManage(person), `manage as with no file: ${person.identity}`);
+  }
+  assert.equal(await unclaimed.canManage(bootstrap), true, 'the bootstrap admin manages an unclaimed file');
+  assert.equal(await unclaimed.canEdit(principal('google:stranger@x.org', 'stranger@x.org'), 'cached'), false, 'it opens nothing to strangers');
+  const strict = createEditorPolicy({ policy: { ...policy, editorAccess: 'roles' }, roles: source(unclaimedState) });
+  assert.equal(await strict.canEdit(principal('google:friend@x.org', 'friend@x.org'), 'cached'), false, 'EDITOR_ACCESS=roles still holds');
+  assert.equal(await strict.canEdit(bootstrap, 'cached'), true);
+  // Claimed by its first admin: the file takes over completely, as for any file that lists someone.
+  const claimed = createEditorPolicy({ policy, roles: source(rolesFile(['google:boss@x.org'], [])) });
+  assert.equal(await claimed.canManage(bootstrap), false);
+  assert.equal(await claimed.canManage(principal('google:boss@x.org')), true);
+  // A member with no admin does not parse: invalid, so that member gets nothing.
+  const orphanState = rolesFile([], ['google:ed@x.org']);
+  assert.equal(orphanState.kind, 'invalid');
+  const orphan = createEditorPolicy({ policy: { ...policy, allowedEmails: [] }, roles: source(orphanState) });
+  assert.equal(await orphan.canEdit(principal('google:ed@x.org', 'ed@x.org'), 'fresh'), false, 'an invalid file names no member');
+  assert.equal(await orphan.canManage(principal('google:ed@x.org')), false);
+  assert.equal(await orphan.canManage(bootstrap), true, 'the bootstrap admin can still fix it');
+});
+
 test('edit policy: EDITOR_ACCESS roles switches allow-lists off, authenticated admits any verified person', async () => {
   const base = { bootstrapAdmin: principal('google:me@example.com').identity, allowedEmails: ['friend@x.org'], allowedDomains: [] };
   const rolesOnly = createEditorPolicy({ policy: { ...base, editorAccess: 'roles' }, roles: source({ kind: 'none' }) });
@@ -190,9 +222,11 @@ test('roles source: parses, caches, serves a stale answer during an outage, and 
   now += ROLES_SOURCE_LIMITS.staleMs + 1;
   await assert.rejects(rolesSource.read('cached'), /down/);
   await assert.rejects(createRolesSource(() => Promise.reject(new Error('never answered'))).read('fresh'), /never answered/);
-  for (const text of ['{', '[]', '{"version":2,"roles":[]}', 'x'.repeat(200_000), JSON.stringify({ version: 1, roles: [] })]) {
+  const orphan = JSON.stringify({ version: 1, roles: [{ id: 'client', members: ['google:a@b.test'] }] });
+  for (const text of ['{', '[]', '{"version":2,"roles":[]}', 'x'.repeat(200_000), orphan]) {
     assert.equal(parseRolesState(text).kind, 'invalid', text.slice(0, 20));
   }
+  assert.equal(parseRolesState(JSON.stringify({ version: 1, roles: [] })).kind, 'roles', 'an unclaimed file is valid');
   assert.equal(parseRolesState(undefined).kind, 'none');
 });
 

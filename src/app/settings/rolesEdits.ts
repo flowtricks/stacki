@@ -24,6 +24,7 @@ import {
   APP_ACCESS_ALL,
   CLIENT_ROLE_ID,
   ROLE_LIMITS,
+  adminMembershipRefusal,
   can,
   memberRole,
   parseAppGrantId,
@@ -181,7 +182,14 @@ export function addMember(roles: ProjectRoles, id: string, input: string): Proje
   }
   const previous = memberRole(roles, login);
   const without = previous === undefined ? roles : removeMember(roles, previous.id, login);
-  return updateRole(without, id, (role) => ({ ...role, members: [...role.members, login] }));
+  const next = updateRole(without, id, (role) => ({ ...role, members: [...role.members, login] }));
+  // An unclaimed file (no members anywhere) takes an admin first: a member elsewhere with no admin is refused.
+  const refusal = adminMembershipRefusal(next.roles);
+  if (refusal !== undefined) {
+    throw new DescribedError(refusal);
+  }
+  assert(memberRole(next, login)?.id === id, 'The added member is in the chosen role');
+  return next;
 }
 
 /** Adds a member written as a qualified identity (memberInvite.ts) to a role; a refusal is the described error the card shows. */
@@ -193,14 +201,19 @@ export function addInvitedMemberTo(roles: ProjectRoles, id: string, member: stri
   return added.value;
 }
 
-/** Removes a GitHub username from a role. The last admin cannot be removed. */
+/**
+ * Removes a GitHub username from a role. The last admin can leave only while no other role has members: that leaves
+ * the file unclaimed (projectRoles.ts `rolesClaimed`), which is how a framework author writes a default file.
+ */
 export function removeMember(roles: ProjectRoles, id: string, login: string): ProjectRoles {
   const target = roles.roles.find((role) => role.id === id);
   assert(target !== undefined, 'Members are removed from a role that exists');
-  if (id === ADMIN_ROLE_ID && target.members.length === 1 && target.members.some((member) => sameLogin(member, login))) {
+  const next = updateRole(roles, id, (role) => ({ ...role, members: role.members.filter((member) => !sameLogin(member, login)) }));
+  if (adminMembershipRefusal(next.roles) !== undefined) {
     throw new DescribedError(described('roles.error.lastAdmin'));
   }
-  return updateRole(roles, id, (role) => ({ ...role, members: role.members.filter((member) => !sameLogin(member, login)) }));
+  assert(next.roles.length === roles.roles.length, 'Removing a member keeps every role');
+  return next;
 }
 
 /** Grants or withdraws one feature. Admin has everything and is never edited. */

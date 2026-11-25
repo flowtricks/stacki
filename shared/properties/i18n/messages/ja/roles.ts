@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login}はすでに{role}に属しています',
   'roles.error.membersMax': { other: '1つのロールに所属できるメンバーは最大{count}人です' },
   'roles.error.lastAdmin': '少なくとも1人は管理者である必要があります',
+  'roles.error.adminFirst': '他のロールにメンバーを追加する前に、管理者を追加してください',
   'roles.error.appsMax': {
     other: '1つのロールが持てるアプリ権限は最大{count}個のアプリ分です。roles.jsonから、もうインストールされていないアプリのロール設定を削除してください。',
   },

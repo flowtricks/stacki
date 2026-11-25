@@ -197,13 +197,24 @@ name starts with `~` cannot be loaded from an app folder.
 
 ### Identities and project roles
 
-The Worker forwards the signed-in GitHub login as `x-studio-user`, and the container trusts
-it only alongside the container token. Project roles (`.stacki/roles.json`) name GitHub logins,
-and the container parses every forwarded login as a GitHub username (`parseGitHubLogin` in
-`shared/properties/projectRoles.ts`). A request without a valid GitHub login never gets a role,
-so every role-gated write is refused, even when no roles file exists. A deployment that issues
-its own sign-in names (for example from a custom handoff route) must forward a GitHub login;
-otherwise every role-gated write is refused. Carrying other identities is not supported yet.
+The Worker forwards every signed-in person as `x-studio-identity`, a provider-qualified identity
+(`github:octocat`, `access:a@b.com`, `google:a@b.com`, `oidc:…`, `passkey:client-acme`), with the
+same provider's aliases in `x-studio-aliases`; a GitHub person also keeps `x-studio-user`. The
+container trusts these headers only alongside the container token (`src/features/auth/requestPerson.ts`).
+Project roles (`.stacki/roles.json`) name members as qualified identities, and a bare name still
+means a GitHub login, so every existing file keeps working. A request without a valid identity never
+gets a role, so every role-gated write is refused, even when no roles file exists. Which providers
+exist and how they decide who may edit is in [auth-providers.md](auth-providers.md).
+
+A roles file in which no role lists any member is **unclaimed** (a framework can ship its role
+definitions that way without naming a real person). It grants exactly as no file does: everyone who
+may edit is admin, the default role restricts nobody, and `AUTH_BOOTSTRAP_ADMIN` stays the admin of
+the non-GitHub providers. The first admin added claims it; from then on it applies as usual. A file
+where another role lists a member while admin lists none is refused like any invalid file. Older
+Studio versions refuse an unclaimed file as invalid. Sign-in is unchanged (the same people get in as
+with no file), but every hosted write acts as the built-in Client role, the owner's included, so the
+file cannot be fixed from that Studio; update Studio before shipping one (docs/contracts.md,
+"Project roles", lists what each older host does).
 
 ## Local server configuration
 

@@ -7,9 +7,16 @@
 // fixed (docs/contracts.md, "Project roles").
 //
 // Admin can never be restricted: `can(admin, anything)` is true, admin's access
-// list is not stored, and the parser refuses a file with no admin member, so no
-// save can lock the project's owners out. "developer" (and Studio's internal
-// "designer") is the old name of admin and still reads as admin.
+// list is not stored, and the parser refuses a file in which another role names a
+// member while admin names none, so no save can lock the project's owners out.
+// "developer" (and Studio's internal "designer") is the old name of admin and
+// still reads as admin.
+//
+// A file in which no role names anyone is "unclaimed" (`rolesClaimed`): a
+// framework can ship its role definitions without naming a real person to every
+// user. Its roles, default role, pins and component rules load and are kept, but
+// access is exactly that of a project with no file (`resolveRole`) until an admin
+// is added.
 //
 // Each role may also hold the switches installed apps declare (`appPermissions`,
 // shared/properties/appPermissions.ts). Stacki stores and resolves them
@@ -31,7 +38,7 @@ import { APP_PERMISSION_LIMITS, parseAppPermissionId, type AppPermissionDeclarat
 import { parseComponentRules, storedComponentRule, type ComponentRule } from './componentAccess';
 import { DescribedError } from './describedError';
 import { identityKey, parseQualifiedIdentity, GITHUB_PROVIDER_ID, identityProvider, identitySubject } from './memberIdentity';
-import { described, messageRef, type TypedMessageRef } from './i18n/messageRef';
+import { described, messageRef, type Described, type TypedMessageRef } from './i18n/messageRef';
 
 /** The tracked project file that holds the roles. */
 export const ROLES_FILE = '.stacki/roles.json';
@@ -479,7 +486,8 @@ export function parseProjectRolesSource(source: string): ProjectRoles {
 /**
  * Parses the roles file. Shape: `{ version: 1, defaultRole?, roles: [{ id, name?,
  * members?, access?, appPermissions?, pinnedApps?, componentRules? }] }`. Admin and client are always present in the result,
- * whether or not the file lists them; admin must name at least one member.
+ * whether or not the file lists them. Admin must name a member as soon as any
+ * other role does; a file that names nobody at all is unclaimed (`rolesClaimed`).
  */
 export function parseProjectRoles(input: unknown): ProjectRoles {
   const value = record(input);
@@ -496,16 +504,50 @@ export function parseProjectRoles(input: unknown): ProjectRoles {
   const parsed = items.map(parseRole);
   const roles = withBuiltInRoles(parsed);
   assertUnique(roles);
-  const admin = roles[0];
-  assert(admin !== undefined, 'withBuiltInRoles puts admin first');
-  if (admin.members.length === 0) {
-    throw new Error('At least one person must be an admin');
+  const refusal = adminMembershipRefusal(roles);
+  if (refusal !== undefined) {
+    throw new DescribedError(refusal);
   }
   const defaultRole = value['defaultRole'] === undefined ? ADMIN_ROLE_ID : canonicalRoleId(roleId(value['defaultRole']));
   if (!roles.some((role) => role.id === defaultRole)) {
     throw new Error(`Default role "${defaultRole}" is not a role`);
   }
   return { version: 1, defaultRole, roles };
+}
+
+/**
+ * Whether any role names a member. An unclaimed file (no member in any role, admin
+ * included) grants access exactly as no file does: everyone who may edit is admin,
+ * and the default role restricts nobody (`resolveRole`). Studio's sign-in policy
+ * keeps its bootstrap admin while a file is unclaimed, as while there is none.
+ */
+export function rolesClaimed(roles: ProjectRoles): boolean {
+  assert(roles.roles.length >= 2, 'Roles always hold admin and client');
+  const claimed = roles.roles.some((role) => role.members.length > 0);
+  const admin = roles.roles.find((role) => role.id === ADMIN_ROLE_ID);
+  assert(admin !== undefined, 'Roles always hold admin');
+  // The parser's rule, checked again on the consumer's side: a claimed file always names an admin.
+  assert(!claimed || admin.members.length > 0, 'A claimed roles file names an admin');
+  return claimed;
+}
+
+/**
+ * Why these roles cannot be stored as members go, or undefined when they can: admin may
+ * be empty only while every role is (unclaimed). A member in another role with no admin
+ * would leave nobody able to edit roles, or hand the project to whoever the default role
+ * and Studio's sign-in policy admit.
+ */
+export function adminMembershipRefusal(roles: readonly ProjectRole[]): Described | undefined {
+  assert(roles.length <= ROLE_LIMITS.rolesMax, 'Roles are bounded');
+  const admin = roles.find((role) => role.id === ADMIN_ROLE_ID);
+  assert(admin !== undefined, 'Roles always hold admin');
+  if (admin.members.length > 0) {
+    return undefined;
+  }
+  if (roles.some((role) => role.members.length > 0)) {
+    return described('roles.error.adminFirst');
+  }
+  return undefined;
 }
 
 /** Serializes roles for the file: stable key order, admin without access, two-space indent. */
@@ -641,8 +683,9 @@ export function memberRole(roles: ProjectRoles, login: string, aliases: readonly
 /**
  * Who someone is in a project. `fallback` decides people named in no role:
  * `'default'` (Studio) gives them the file's default role; `'admin'` (Desktop,
- * where the local user owns the files) keeps them admin. No file, or no
- * signed-in login, is always admin: today's behaviour exactly.
+ * where the local user owns the files) keeps them admin. No file, an unclaimed
+ * file (`rolesClaimed`), or no signed-in login, is always admin: today's
+ * behaviour exactly. The file's admin role is used, so its pins still apply.
  */
 export function resolveRole(
   roles: ProjectRoles | undefined,
@@ -655,6 +698,10 @@ export function resolveRole(
   }
   if (login === undefined) {
     // The file's admin role, not the bare admin view, so admin's rail pins apply.
+    return roleViewOf(roles, ADMIN_ROLE_ID);
+  }
+  if (!rolesClaimed(roles)) {
+    // Unclaimed: as with no file, the default role restricts nobody until an admin is named.
     return roleViewOf(roles, ADMIN_ROLE_ID);
   }
   const member = memberRole(roles, login, aliases);

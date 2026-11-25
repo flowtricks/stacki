@@ -11,6 +11,7 @@ import {
   DEFAULT_PROJECT_ROLES,
   parseProjectRoles,
   parseProjectRolesSource,
+  rolesClaimed,
   serializeProjectRoles,
   type ProjectRole,
   type ProjectRoles,
@@ -215,8 +216,14 @@ function roleOptions(roles: ProjectRoles): readonly DropdownOption[] {
   return roles.roles.map((role) => ({ value: role.id, label: role.name }));
 }
 
-/** The least-privileged role someone is invited into by default: the non-admin role granting the fewest features. */
+/**
+ * The role someone is invited into by default: the least-privileged non-admin role (the fewest features), or admin while
+ * the file is unclaimed, since its first member must be an admin (projectRoles.ts `adminMembershipRefusal`).
+ */
 export function defaultInviteRole(roles: ProjectRoles): string {
+  if (!rolesClaimed(roles)) {
+    return ADMIN_ROLE_ID;
+  }
   const others = roles.roles.filter((role) => role.id !== ADMIN_ROLE_ID);
   const least = [...others].sort((first, second) => first.access.length - second.access.length)[0];
   return least?.id ?? ADMIN_ROLE_ID;

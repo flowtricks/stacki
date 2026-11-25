@@ -5,6 +5,7 @@
 //     gives that member, and as the default role for a login it does not list. `--as-role <id>` acts as that role for the command.
 //   - An AI agent over MCP: `stacki mcp --role <id>` pins the server to a role; tool inputs cannot change it. In a project with roles.json a server
 //     started without --role or --login refuses every tool (it never falls back to admin), so an agent's power is always chosen on purpose.
+//     An unclaimed roles.json (no member in any role) is treated as no file here, as everywhere (projectRoles.ts `rolesClaimed`).
 //   Both are COOPERATIVE guardrails on a local machine: anyone who can run the CLI as the owner can edit roles.json or run another role. The real
 //   enforcement is the Studio server, which resolves the authenticated identity and answers for it (docs/stacki-cli.md, "Roles and identity").
 import { err, ok, type Result } from '../../../shared/core/result';
@@ -16,6 +17,7 @@ import {
   parseProjectRolesSource,
   resolveRole,
   roleViewOf,
+  rolesClaimed,
   type ProjectRoles,
   type RoleView,
 } from '../../../shared/properties/projectRoles';
@@ -74,7 +76,8 @@ export function resolveRoleContext(root: string, request: RoleRequest): Result<R
   if (request.login !== undefined && roles.value !== undefined) {
     return ok({ view: resolveRole(roles.value, request.login, 'default'), basis: 'login' });
   }
-  if (roles.value !== undefined && request.unnamed === 'require') {
+  // An unclaimed file (no member in any role) grants as no file does, so an unnamed caller is the owner there too.
+  if (roles.value !== undefined && rolesClaimed(roles.value) && request.unnamed === 'require') {
     return err({
       code: 'usage',
       message: `This project has .stacki/roles.json, so the MCP server needs a role: start it with --role <role> (${roles.value.roles

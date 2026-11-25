@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login} zit al in {role}',
   'roles.error.membersMax': { one: 'Een rol heeft maximaal {count} lid', other: 'Een rol heeft maximaal {count} leden' },
   'roles.error.lastAdmin': 'Minstens één persoon moet beheerder zijn',
+  'roles.error.adminFirst': 'Voeg eerst een beheerder toe voordat je mensen aan andere rollen toevoegt',
   'roles.error.appsMax': {
     one: 'Een rol bevat app-rechten voor maximaal {count} app. Verwijder in roles.json de instellingen van een rol voor apps die niet meer zijn geïnstalleerd.',
     other:

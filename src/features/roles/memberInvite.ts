@@ -1,6 +1,6 @@
 // Goal: "Invite member" for the Roles panel, as pure functions: which identifier a site's sign-in method needs, how it is
 // normalised into the qualified identity written to `.stacki/roles.json`, how it is added (duplicates, other roles, the
-// member bound) and removed (never the last admin), and the audit sentence for the Git commit of that change.
+// member bound, an admin before anyone else) and removed (never the last admin while others are members), and the audit sentence for the Git commit of that change.
 // One form per provider, chosen by the site's AUTH_PROVIDER and never offering a method the site is not configured for:
 //   github   a username   -> the bare login (every existing file's form, so older Studio versions and avatars keep working)
 //   access   an email     -> access:<email>      (and Cloudflare Zero Trust must also allow the person)
@@ -12,7 +12,15 @@
 import { err, ok, type Result } from '../../../shared/core/result';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { IDENTITY_LIMITS, identityKey, parseProviderId, parseQualifiedIdentity } from '../../../shared/properties/memberIdentity';
-import { ADMIN_ROLE_ID, ROLE_LIMITS, parseGitHubLogin, type ProjectRole, type ProjectRoles } from '../../../shared/properties/projectRoles';
+import { assert } from '../../../shared/core/assert';
+import {
+  ADMIN_ROLE_ID,
+  ROLE_LIMITS,
+  adminMembershipRefusal,
+  parseGitHubLogin,
+  type ProjectRole,
+  type ProjectRoles,
+} from '../../../shared/properties/projectRoles';
 
 export type InviteForm =
   | { readonly kind: 'github-login' }
@@ -100,7 +108,17 @@ export function addInvitedMember(roles: ProjectRoles, roleId: string, member: st
   if (previous?.id === ADMIN_ROLE_ID && (without.find((role) => role.id === ADMIN_ROLE_ID)?.members.length ?? 0) === 0) {
     return err(described('roles.error.lastAdmin'));
   }
-  return ok({ ...roles, roles: without.map((role) => (role.id === roleId ? { ...role, members: [...role.members, member] } : role)) });
+  const next = without.map((role) => (role.id === roleId ? { ...role, members: [...role.members, member] } : role));
+  // An unclaimed file (no members anywhere) takes an admin first: a member elsewhere with no admin is refused.
+  const refusal = adminMembershipRefusal(next);
+  if (refusal !== undefined) {
+    return err(refusal);
+  }
+  assert(
+    next.some((role) => role.members.includes(member)),
+    'The invited member is in a role',
+  );
+  return ok({ ...roles, roles: next });
 }
 
 /** Removes a member from whatever role holds them. The last admin cannot be removed. */
@@ -110,13 +128,15 @@ export function removeInvitedMember(roles: ProjectRoles, member: string): Result
   if (holder === undefined) {
     return err(described('roles.invite.error.notMember'));
   }
-  if (holder.id === ADMIN_ROLE_ID && holder.members.length === 1) {
+  const next = roles.roles.map((role) =>
+    role.id === holder.id ? { ...role, members: role.members.filter((existing) => identityKey(existing) !== key) } : role,
+  );
+  // The last admin may leave only when nobody else is in any role, which leaves the file unclaimed (projectRoles.ts).
+  if (adminMembershipRefusal(next) !== undefined) {
     return err(described('roles.error.lastAdmin'));
   }
-  return ok({
-    ...roles,
-    roles: roles.roles.map((role) => (role.id === holder.id ? { ...role, members: role.members.filter((existing) => identityKey(existing) !== key) } : role)),
-  });
+  assert(next.length === roles.roles.length, 'Removing a member keeps every role');
+  return ok({ ...roles, roles: next });
 }
 
 export type RolesChange =

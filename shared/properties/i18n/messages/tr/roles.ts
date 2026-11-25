@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login} zaten {role} rolünde',
   'roles.error.membersMax': { one: 'Bir rolde en fazla {count} üye olabilir', other: 'Bir rolde en fazla {count} üye olabilir' },
   'roles.error.lastAdmin': 'En az bir kişi yönetici olmalı',
+  'roles.error.adminFirst': 'Diğer rollere kişi eklemeden önce bir yönetici ekleyin',
   'roles.error.appsMax': {
     one: 'Bir rol en fazla {count} uygulama için izin tutabilir. roles.json içinde artık yüklü olmayan uygulamaların rol ayarlarını kaldırın.',
     other: 'Bir rol en fazla {count} uygulama için izin tutabilir. roles.json içinde artık yüklü olmayan uygulamaların rol ayarlarını kaldırın.',

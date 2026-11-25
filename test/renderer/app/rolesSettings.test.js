@@ -1,7 +1,8 @@
 // Goal: Settings → Roles saves every change at once, like every other tab: an
 // admin adds a role, its members and access, renames roles (Client included,
 // by name only), and each accepted change writes a valid `.stacki/roles.json`
-// with a brief "Saved"; a change that would leave no admin
+// with a brief "Saved"; a change that would leave no admin while others are members
+// (or add a member before an admin to an unclaimed file, which opens as read and never gains the signed-in login)
 // or reuse a name is refused before any write, never shows, and says why beside
 // its control; a failed write puts the controls back and offers Retry; the
 // group "All" switches set a whole group; Desktop never restricts the editor (a person named in a Client role, or in no role, still edits, and no
@@ -279,17 +280,77 @@ test('roles are renamed in place, Client included, and a bad name is refused bes
 
 test('a change that would leave no admin is refused before any write', async () => {
   writes.length = 0;
-  stored = JSON.stringify({ version: 1, roles: [{ id: 'admin', name: 'Admin', members: ['owner', 'other'] }] });
+  stored = JSON.stringify({
+    version: 1,
+    roles: [
+      { id: 'admin', name: 'Admin', members: ['owner', 'other'] },
+      { id: 'client', members: ['acme'] },
+    ],
+  });
   roles.setActualRole(roles.ADMIN_VIEW);
   await mount();
   await show('Admin', 'members');
   await click(card('Admin').querySelector('button[aria-label="Remove other"]'));
   assert.equal(writes.length, 1, 'removing another admin saves');
   await click(card('Admin').querySelector('button[aria-label="Remove owner"]'));
-  assert.equal(writes.length, 1, 'the last admin cannot be removed');
+  assert.equal(writes.length, 1, 'the last admin cannot be removed while Client has a member');
   assert.match(toasts.at(-1), /At least one person must be an admin/);
   noInlineNotice();
   assert.match(card('Admin').textContent, /owner/);
+  await unmount();
+});
+
+// Unclaimed: a file with no member in any role (a framework's default roles). Opening it writes nothing and never adds
+// the signed-in login; role definitions save while it stays unclaimed; the last admin may leave when nobody else is a
+// member; and a member for another role while admin is empty is refused with a toast.
+test('an unclaimed file opens as read, saves definition edits unclaimed, and takes an admin first', async () => {
+  writes.length = 0;
+  login = 'owner';
+  stored = JSON.stringify({
+    version: 1,
+    defaultRole: 'client',
+    roles: [
+      { id: 'admin', members: [] },
+      { id: 'client', name: 'Editor', access: ['panel:pages'] },
+    ],
+  });
+  roles.setActualRole(roles.ADMIN_VIEW);
+  await mount();
+  assert.equal(writes.length, 0, 'opening an unclaimed file writes nothing');
+  await show('Admin', 'members');
+  assert.doesNotMatch(card('Admin').textContent, /owner/, 'the signed-in login is not added to an existing file');
+  await showCards();
+  await type(document.querySelector('input[aria-label="New role name"]'), 'Writer');
+  await submit(document.querySelector('.app-roles-new'));
+  assert.equal(writes.length, 1, 'a definition edit saves');
+  assert.ok(writes[0].base !== undefined, 'it saves over the file as read');
+  let file = saved();
+  assert.ok(
+    file.roles.every((role) => role.members.length === 0),
+    'it stays unclaimed: nobody was added',
+  );
+  assert.equal(file.defaultRole, 'client', 'the default role is kept');
+  assert.equal(file.roles.find((role) => role.id === 'client').name, 'Editor');
+
+  await show('Writer', 'members');
+  await type(card('Writer').querySelector('input[aria-label="Add a GitHub username to Writer"]'), 'sam');
+  await submit(card('Writer').querySelector('.app-role-add'));
+  assert.equal(writes.length, 1, 'a member for another role while admin is empty is refused');
+  assert.match(toasts.at(-1), /Add an admin before adding people to other roles/);
+  noInlineNotice();
+
+  await show('Admin', 'members');
+  await type(card('Admin').querySelector('input[aria-label="Add a GitHub username to Admin"]'), 'boss');
+  await submit(card('Admin').querySelector('.app-role-add'));
+  assert.equal(writes.length, 2, 'adding an admin claims the file');
+  assert.deepEqual(saved().roles[0].members, ['boss']);
+  await click(card('Admin').querySelector('button[aria-label="Remove boss"]'));
+  assert.equal(writes.length, 3, 'the last admin may leave while nobody else is a member');
+  file = saved();
+  assert.ok(
+    file.roles.every((role) => role.members.length === 0),
+    'it is unclaimed again',
+  );
   await unmount();
 });
 

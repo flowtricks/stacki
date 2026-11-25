@@ -52,6 +52,7 @@ import {
   ADMIN_ROLE_ID,
   parseProjectRolesSource,
   roleIdFor,
+  rolesClaimed,
   sameLogin,
   serializeProjectRoles,
   type AccessFeature,
@@ -400,6 +401,18 @@ function breakpointsRemove(context: CommandContext): Result<Outcome, CliError> {
 
 // ----- roles -----
 
+/** The one-line summary of `stacki list roles`: an unclaimed file says that it grants as no file does. */
+function rolesReadSummary(roles: ProjectRoles | undefined): string {
+  if (roles === undefined) {
+    return 'No roles file: everyone is the owner.';
+  }
+  assert(roles.roles.length >= 2, 'A roles file holds admin and client');
+  if (rolesClaimed(roles)) {
+    return `${roles.roles.length} roles.`;
+  }
+  return `${roles.roles.length} roles, no members yet: everyone is the owner until an admin is added.`;
+}
+
 function rolesEdit(change: (roles: ProjectRoles) => Result<ProjectRoles, CliError>): Result<readonly Edit[], CliError> {
   const schema = fileSchemaById('roles');
   if (schema === undefined) {
@@ -650,7 +663,7 @@ function listCommand(context: CommandContext): Result<Outcome, CliError> {
       }
       return ok({
         kind: 'read',
-        summary: roles.value === undefined ? 'No roles file: everyone is the owner.' : `${roles.value.roles.length} roles.`,
+        summary: rolesReadSummary(roles.value),
         result: {
           exists: roles.value !== undefined,
           defaultRole: roles.value?.defaultRole,

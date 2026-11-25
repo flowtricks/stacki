@@ -4,9 +4,10 @@
 //      the container gives them the file's default role. They never manage. `EDITOR_ACCESS=roles` switches them off.
 //   3. `EDITOR_ACCESS=authenticated` admits every person the provider verified (not recommended for Google or SSO).
 //   4. `AUTH_BOOTSTRAP_ADMIN` is admin (and editor) only while no valid roles file exists, so a new instance has an owner
-//      and a roles file takes over completely the moment it lists someone.
+//      and a roles file takes over completely the moment it lists someone. An unclaimed file (one that names no member in
+//      any role, as a framework ships it) counts as no file: it is how the bootstrap admin adds the first admin.
 // A roles file that does not parse grants nobody anything; the bootstrap admin can still fix it.
-import { memberRole, ADMIN_ROLE_ID } from '../../../../vendor/stacki/shared/properties/projectRoles';
+import { memberRole, rolesClaimed, ADMIN_ROLE_ID, type ProjectRoles } from '../../../../vendor/stacki/shared/properties/projectRoles';
 import type { Principal } from '../authProvider';
 import type { PolicyConfig } from './authConfig';
 import type { RolesSource, RolesState } from './rolesSource';
@@ -36,8 +37,9 @@ export function createEditorPolicy(input: EditorPolicyInput): EditorPolicy {
         return true;
       }
       const state = await input.roles.read(freshness);
-      if (state.kind === 'roles') {
-        if (memberRole(state.roles, principal.identity) !== undefined) {
+      const roles = governingRoles(state);
+      if (roles !== undefined) {
+        if (memberRole(roles, principal.identity) !== undefined) {
           return true;
         }
       } else if (principal.identity === policy.bootstrapAdmin) {
@@ -56,10 +58,22 @@ export function createEditorPolicy(input: EditorPolicyInput): EditorPolicy {
 }
 
 function manages(state: RolesState, principal: Principal, bootstrapAdmin: string): boolean {
-  if (state.kind !== 'roles') {
-    return principal.identity === bootstrapAdmin;
+  const roles = governingRoles(state);
+  if (roles !== undefined) {
+    return memberRole(roles, principal.identity)?.id === ADMIN_ROLE_ID;
   }
-  return memberRole(state.roles, principal.identity)?.id === ADMIN_ROLE_ID;
+  return principal.identity === bootstrapAdmin;
+}
+
+/**
+ * The roles that decide who edits and manages: a valid file that names someone. No file, an unclaimed file and an invalid
+ * file give undefined, which leaves it to the bootstrap admin (and the allow-lists); an invalid file still makes nobody a member.
+ */
+function governingRoles(state: RolesState): ProjectRoles | undefined {
+  if (state.kind === 'roles') {
+    return rolesClaimed(state.roles) ? state.roles : undefined;
+  }
+  return undefined;
 }
 
 /** `email` is present on a principal only when the provider verified it. */

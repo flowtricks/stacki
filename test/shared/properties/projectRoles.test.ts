@@ -1,5 +1,6 @@
 // Goal: `.stacki/roles.json` parses only into a bounded, unambiguous set of roles
-// with at least one admin; old "developer"/"designer" values read as admin;
+// with an admin member whenever any role has members (a file with no members at all
+// is "unclaimed" and grants as no file does); old "developer"/"designer" values read as admin;
 // `can()` is always true for admin and exactly the grants for everyone else; and a
 // GitHub login resolves to one role, case-insensitively, with the right fallback.
 // Method: parse known-good shapes and pin the result, then each known-bad shape
@@ -14,6 +15,7 @@ import {
   CLIENT_DEFAULT_ACCESS,
   DEFAULT_PROJECT_ROLES,
   ROLE_LIMITS,
+  adminMembershipRefusal,
   can,
   memberRole,
   parseGitHubLogin,
@@ -22,6 +24,7 @@ import {
   resolveRole,
   roleIdFor,
   roleViewOf,
+  rolesClaimed,
   sameLogin,
   serializeProjectRoles,
 } from '#dist/shared/properties/projectRoles.js';
@@ -100,8 +103,16 @@ test('every malformed file is refused with its reason', () => {
   const bad = (input: unknown) => () => parseProjectRoles(input);
   assert.throws(bad({ version: 2, roles: [admin] }), /version must be 1/);
   assert.throws(bad({ version: 1 }), /needs a roles list/);
-  assert.throws(bad(file([])), /At least one person must be an admin/);
-  assert.throws(bad(file([{ id: 'admin', members: [] }])), /At least one person must be an admin/);
+  assert.throws(bad(file([{ id: 'client', members: ['acme'] }])), /Add an admin before adding people to other roles/);
+  assert.throws(
+    bad(
+      file([
+        { id: 'admin', members: [] },
+        { id: 'writer', name: 'W', members: ['sam'] },
+      ]),
+    ),
+    /Add an admin before adding people/,
+  );
   assert.throws(bad(file([admin, { id: 'Writer', name: 'W' }])), /lowercase letters/);
   assert.throws(bad(file([admin, { id: 'writer' }])), /needs a name/);
   assert.throws(bad(file([admin, { id: 'writer', name: ' ' }])), /1 to 60 characters/);
@@ -137,7 +148,53 @@ test('the serializer writes a stable file that parses back to the same roles', (
   const source = serializeProjectRoles(roles);
   assert.deepEqual(parseProjectRolesSource(source), roles);
   assert.ok(!source.includes('"access": []') || source.indexOf('"access"') > source.indexOf('"client"'), 'admin carries no access');
-  assert.throws(() => serializeProjectRoles(DEFAULT_PROJECT_ROLES), /At least one person must be an admin/);
+  assert.equal(parseProjectRolesSource(serializeProjectRoles(DEFAULT_PROJECT_ROLES)).roles.length, 2, 'the defaults serialize unclaimed');
+  const orphan = { ...DEFAULT_PROJECT_ROLES, roles: DEFAULT_PROJECT_ROLES.roles.map((role) => (role.id === 'client' ? { ...role, members: ['acme'] } : role)) };
+  assert.throws(() => serializeProjectRoles(orphan), /Add an admin before adding people to other roles/);
+});
+
+test('an unclaimed file (no member in any role) parses, keeps everything, and grants as no file does', () => {
+  const source = JSON.stringify(
+    file(
+      [
+        { id: 'admin', name: 'Admin', members: [], pinnedApps: ['seo'] },
+        { id: 'client', name: 'Editor', access: ['panel:pages'] },
+        { id: 'writer', name: 'Writer', access: ['panel:cms'], appPermissions: { seo: { publish: false } } },
+      ],
+      { defaultRole: 'client' },
+    ),
+  );
+  const roles = parseProjectRolesSource(source);
+  assert.equal(rolesClaimed(roles), false);
+  assert.equal(adminMembershipRefusal(roles.roles), undefined, 'empty everywhere is allowed');
+  assert.equal(roles.defaultRole, 'client', 'the default role is kept');
+  assert.equal(roles.roles[1]?.name, 'Editor');
+  assert.deepEqual(roles.roles[2]?.appPermissions, { seo: { publish: false } });
+  assert.deepEqual(parseProjectRolesSource(serializeProjectRoles(roles)), roles, 'it round-trips unclaimed');
+  // Resolution: everyone is the file's admin role (its pins apply), whatever the fallback; the default role restricts nobody.
+  for (const fallback of ['default', 'admin'] as const) {
+    const view = resolveRole(roles, 'stranger', fallback, ['email:a@b.com']);
+    assert.equal(view.isAdmin, true, fallback);
+    assert.deepEqual(view.pinnedApps, ['seo'], 'admin pins from the file apply');
+  }
+  assert.equal(resolveRole(roles, undefined, 'default').isAdmin, true);
+  assert.equal(memberRole(roles, 'stranger'), undefined, 'nobody is a member');
+  // "View as" still offers each role as the file defines it.
+  assert.equal(can(roleViewOf(roles, 'client'), 'panel:cms'), false);
+  assert.equal(can(roleViewOf(roles, 'writer'), 'panel:cms'), true);
+});
+
+test('claiming: once admin has a member the file applies as usual, and admin-less members stay refused', () => {
+  const claimed = parseProjectRoles(file([admin, { id: 'client', members: [] }], { defaultRole: 'client' }));
+  assert.equal(rolesClaimed(claimed), true);
+  assert.equal(resolveRole(claimed, 'stranger', 'default').id, 'client', 'the default role applies again');
+  assert.equal(resolveRole(claimed, 'owner', 'default').isAdmin, true);
+  const orphan = claimed.roles.map((role) => (role.id === 'admin' ? { ...role, members: [] } : { ...role, members: ['acme'] }));
+  assert.equal(adminMembershipRefusal(orphan)?.message, 'Add an admin before adding people to other roles');
+  assert.deepEqual(adminMembershipRefusal(orphan)?.messageRef, { key: 'roles.error.adminFirst' });
+  assert.equal(adminMembershipRefusal(claimed.roles.map((role) => ({ ...role, members: [] }))), undefined, 'removing every member makes it unclaimed again');
+  // The consumer-side assertion pairs with the parser's rule: a hand-built claimed set without an admin is a bug.
+  assert.throws(() => rolesClaimed({ ...claimed, roles: orphan }), /Assertion failed: A claimed roles file names an admin/);
 });
 
 test('can() is exactly the grants for a non-admin role, and app grants need the Apps panel', () => {

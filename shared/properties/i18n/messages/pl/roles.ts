@@ -123,6 +123,7 @@ export const messages = {
     other: 'Rola ma co najwyżej {count} członka',
   },
   'roles.error.lastAdmin': 'Co najmniej jedna osoba musi być administratorem',
+  'roles.error.adminFirst': 'Dodaj administratora, zanim dodasz osoby do innych ról',
   'roles.error.appsMax': {
     one: 'Rola przechowuje uprawnienia aplikacji dla co najwyżej {count} aplikacji. Usuń z roles.json ustawienia roli dla aplikacji, które nie są już zainstalowane.',
     few: 'Rola przechowuje uprawnienia aplikacji dla co najwyżej {count} aplikacji. Usuń z roles.json ustawienia roli dla aplikacji, które nie są już zainstalowane.',

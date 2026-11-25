@@ -1,6 +1,6 @@
 // Goal: the Roles panel's "Invite member" model is right for every sign-in method and safe on hostile input.
 // Method: table tests per provider form (valid, normalised, invalid, over-long), adding and moving members through
-// roles.json (duplicates, the member bound, the last admin), the audit message, the custom-provider fallback with and without
+// roles.json (duplicates, the member bound, the last admin, an unclaimed file's first admin), the audit message, the custom-provider fallback with and without
 // a provider-declared parser, and the interface's optional `inviteHint` validation. Pure functions: no UI, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -120,16 +120,35 @@ test('inviting adds the member to the chosen role, moves people between roles, a
   assert.equal(over.ok ? 'ok' : over.error.messageRef?.key, 'roles.error.membersMax');
 });
 
-test('the last admin can be neither removed nor moved away', () => {
-  const alone = file({ admin: ['google:boss@corp.test'] });
+test('the last admin cannot be moved away, nor removed while anyone else is in a role', () => {
+  const alone = file({ admin: ['google:boss@corp.test'], client: ['google:ann@corp.test'] });
   const removed = removeInvitedMember(alone, 'google:boss@corp.test');
   assert.equal(removed.ok ? 'ok' : removed.error.messageRef?.key, 'roles.error.lastAdmin');
   const moved = addInvitedMember(alone, 'client', 'google:boss@corp.test');
   assert.equal(moved.ok ? 'ok' : moved.error.messageRef?.key, 'roles.error.lastAdmin');
+  const solo = file({ admin: ['google:boss@corp.test'] });
+  assert.equal(addInvitedMember(solo, 'client', 'google:boss@corp.test').ok, false, 'moving the only member out of admin is refused too');
   const two = file({ admin: ['google:boss@corp.test', 'google:deputy@corp.test'] });
   const fewer = removeInvitedMember(two, 'google:deputy@corp.test');
   assert.ok(fewer.ok);
   assert.equal(removeInvitedMember(two, 'google:stranger@corp.test').ok, false);
+});
+
+test('unclaimed: the last admin may leave when nobody else is a member, and the first member must be an admin', () => {
+  const solo = file({ admin: ['google:boss@corp.test'] });
+  const emptied = removeInvitedMember(solo, 'google:boss@corp.test');
+  assert.ok(emptied.ok, 'nobody else is in a role, so the file becomes unclaimed');
+  assert.ok(
+    emptied.value.roles.every((role) => role.members.length === 0),
+    'no member is left anywhere',
+  );
+  const unclaimed = parseProjectRolesSource(serializeProjectRoles(emptied.value));
+  const refused = addInvitedMember(unclaimed, 'client', 'google:ann@corp.test');
+  assert.equal(refused.ok ? 'ok' : refused.error.messageRef?.key, 'roles.error.adminFirst');
+  const first = addInvitedMember(unclaimed, 'admin', 'google:ann@corp.test');
+  assert.ok(first.ok, 'an admin claims it');
+  const next = addInvitedMember(first.value, 'client', 'google:ed@corp.test');
+  assert.ok(next.ok, 'then other roles take members as usual');
 });
 
 test('the audit message is one bounded printable line, and the sign-in link is the Studio address', () => {

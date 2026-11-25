@@ -108,6 +108,7 @@ export const messages = {
   'roles.error.memberListed': '{login}은(는) 이미 {role}에 속해 있습니다',
   'roles.error.membersMax': { other: '역할에는 구성원을 최대 {count}명까지 둘 수 있습니다' },
   'roles.error.lastAdmin': '관리자가 한 명 이상 있어야 합니다',
+  'roles.error.adminFirst': '다른 역할에 사람을 추가하기 전에 관리자를 추가하세요',
   'roles.error.appsMax': {
     other: '역할은 최대 {count}개 앱의 권한을 가질 수 있습니다. roles.json에서 더 이상 설치되지 않은 앱에 대한 역할 설정을 제거하세요.',
   },

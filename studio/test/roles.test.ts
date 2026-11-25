@@ -120,6 +120,42 @@ test('no roles file, or a local Studio, keeps every route open; a broken file fa
   assert.equal((await requestRole(broken, headers)).isAdmin, true, 'a local Studio has no sign-in: its user is admin');
 });
 
+// Unclaimed: a roles file with no member in any role resolves as no file does (admin for every hosted person, the
+// default role restricting nobody), while a file naming a member but no admin is invalid and fails closed to client.
+test('an unclaimed roles file resolves every hosted person as admin; an admin-less file with members fails closed', async (context) => {
+  const unclaimed = await project(
+    JSON.stringify({
+      version: 1,
+      defaultRole: 'client',
+      roles: [
+        { id: 'admin', members: [] },
+        { id: 'client', access: ['panel:pages'] },
+      ],
+    }),
+  );
+  const orphan = await project(JSON.stringify({ version: 1, roles: [{ id: 'client', members: ['acme'] }] }));
+  const claimed = await project(JSON.stringify({ version: 1, defaultRole: 'client', roles: [{ id: 'admin', members: ['owner'] }] }));
+  context.after(async () => {
+    delete process.env['STUDIO_CONTAINER_TOKEN'];
+    for (const root of [unclaimed, orphan, claimed]) {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  process.env['STUDIO_CONTAINER_TOKEN'] = 'test-token';
+  const github = { headers: { 'x-studio-user': 'acme' } };
+  const google = { headers: { 'x-studio-identity': 'google:a@b.test' } };
+  for (const request of [github, google]) {
+    const role = await requestRole(unclaimed, request);
+    assert.equal(role.isAdmin, true, 'unclaimed: admin, as with no file');
+    assert.doesNotThrow(() => assertRouteAllowed(role, { kind: 'features', features: ['panel:code'] }, ''));
+    assert.equal((await requestRole(claimed, request)).id, 'client', 'claimed: the default role applies again');
+  }
+  const closed = await requestRole(orphan, github);
+  assert.equal(closed.id, 'client', 'a member without an admin is an invalid file: client, never the member role');
+  assert.throws(() => assertRouteAllowed(closed, { kind: 'features', features: ['settings:roles'] }, ''), RoleRefusal);
+  await assert.rejects(requestRole(unclaimed, { headers: {} }), /login|GitHub|characters/i, 'no person still reaches no role');
+});
+
 // Issue #80: a request with no x-studio-user must never resolve to a role, least of all the
 // admin view a project without roles.json gives everyone.
 test('a hosted request that names no user reaches no gated route, with or without a roles file', async (context) => {

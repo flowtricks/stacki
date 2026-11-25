@@ -110,6 +110,7 @@ export const messages = {
   'roles.error.memberListed': '{login} sudah ada di {role}',
   'roles.error.membersMax': { other: 'Sebuah peran memiliki maksimal {count} anggota' },
   'roles.error.lastAdmin': 'Minimal satu orang harus menjadi admin',
+  'roles.error.adminFirst': 'Tambahkan admin sebelum menambahkan orang ke peran lain',
   'roles.error.appsMax': {
     other:
       'Sebuah peran menyimpan izin aplikasi untuk maksimal {count} aplikasi. Hapus pengaturan peran untuk aplikasi yang tidak lagi terpasang di roles.json.',

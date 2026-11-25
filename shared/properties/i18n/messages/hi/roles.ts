@@ -111,6 +111,7 @@ export const messages = {
   'roles.error.memberListed': '{login} पहले से {role} में है',
   'roles.error.membersMax': { one: 'एक भूमिका में अधिकतम {count} सदस्य हो सकता है', other: 'एक भूमिका में अधिकतम {count} सदस्य हो सकते हैं' },
   'roles.error.lastAdmin': 'कम से कम एक व्यक्ति एडमिन होना चाहिए',
+  'roles.error.adminFirst': 'दूसरी भूमिकाओं में लोगों को जोड़ने से पहले एक एडमिन जोड़ें',
   'roles.error.appsMax': {
     one: 'एक भूमिका अधिकतम {count} ऐप की अनुमतियाँ रख सकती है। roles.json में जो ऐप अब इंस्टॉल नहीं हैं, उनके लिए भूमिका की सेटिंग हटाएँ।',
     other: 'एक भूमिका अधिकतम {count} ऐप्स की अनुमतियाँ रख सकती है। roles.json में जो ऐप्स अब इंस्टॉल नहीं हैं, उनके लिए भूमिका की सेटिंग हटाएँ।',

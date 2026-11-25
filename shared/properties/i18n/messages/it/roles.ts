@@ -111,6 +111,7 @@ export const messages = {
   'roles.error.memberListed': '{login} è già in {role}',
   'roles.error.membersMax': { one: 'Un ruolo può avere al massimo {count} membro', other: 'Un ruolo può avere al massimo {count} membri' },
   'roles.error.lastAdmin': 'Almeno una persona deve essere admin',
+  'roles.error.adminFirst': 'Aggiungi un admin prima di aggiungere persone ad altri ruoli',
   'roles.error.appsMax': {
     one: 'Un ruolo può contenere permessi per al massimo {count} app. Rimuovi da roles.json le impostazioni del ruolo per le app non più installate.',
     other: 'Un ruolo può contenere permessi per al massimo {count} app. Rimuovi da roles.json le impostazioni del ruolo per le app non più installate.',
