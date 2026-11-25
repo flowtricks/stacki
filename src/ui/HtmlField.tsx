@@ -266,6 +266,14 @@ function emptyBlockPlace(host: HTMLElement): BlockPlace | undefined {
   if (range === undefined || !range.collapsed) {
     return undefined;
   }
+  // An editor with nothing in it yet: its first line is the empty block.
+  if ((host.textContent ?? '').trim() === '' && host.querySelector('*:not(br)') === null) {
+    const field = host.closest('.html-field') ?? host;
+    const box = host.getBoundingClientRect();
+    const style = getComputedStyle(host);
+    const line = parseFloat(style.lineHeight) || 20;
+    return { top: box.top - field.getBoundingClientRect().top + (parseFloat(style.paddingTop) || 0), height: line };
+  }
   let node: Node | undefined = range.startContainer;
   for (let depth = 0; node !== undefined && node.parentNode !== host && depth < 64; depth++) {
     node = node.parentNode ?? undefined;

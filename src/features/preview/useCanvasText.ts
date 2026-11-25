@@ -65,7 +65,7 @@ export interface CanvasTextFormatter {
    */
   readonly breaks?: (textId: string, breaks: CanvasTextBreaks, value: string) => boolean;
   /** Rich text the canvas left in the instance that holds this text, written as its content. False: refused, nothing written. */
-  readonly richText?: (textId: string, html: string) => boolean;
+  readonly richText?: (textId: string, html: string, breaks: CanvasTextBreaks | undefined) => boolean;
 }
 interface Options {
   readonly document: CanvasTextDocument | undefined;
@@ -237,7 +237,7 @@ function saveRichText(
   options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
 ) {
   const node = options.nodes.get(plan.target.path);
-  const written = node?.kind === 'text' && node.id !== undefined && options.initial.format?.richText?.(node.id, html);
+  const written = node?.kind === 'text' && node.id !== undefined && options.initial.format?.richText?.(node.id, html, plan.target.breaks);
   if (written !== true) {
     options.initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.cannotFormat'));
   }

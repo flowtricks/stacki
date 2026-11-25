@@ -8,8 +8,8 @@ import type { ImportMember } from '../../shared/page/frontmatter';
 import type { ParserNode, ParserPageModel } from './astroParserTypes';
 
 const NODE_VARIANT_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  component: ['name', 'children', 'shorthand', 'tightClose', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
-  element: ['name', 'children', 'shorthand', 'tightClose', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
+  component: ['name', 'children', 'shorthand', 'tightClose', 'openVoid', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
+  element: ['name', 'children', 'shorthand', 'tightClose', 'openVoid', 'closeSource', 'dynamicTag', 'astroAsset', 'chunkFile', 'chunkAggregate'],
   text: ['value'],
   expr: ['value'],
   'raw-line': ['value'],
@@ -188,6 +188,7 @@ function parseSerializeVariant(record: Record<string, unknown>): void {
     'children',
     'shorthand',
     'tightClose',
+    'openVoid',
     'closeSource',
     'dynamicTag',
     'astroAsset',
@@ -247,7 +248,7 @@ function parseSerializeMetadata(record: Record<string, unknown>): void {
       parseCount(record[field], `node.${field}`);
     }
   }
-  for (const field of ['jsx', 'shorthand', 'tightClose', 'dynamicTag', 'astroAsset', 'chunkAggregate', 'bare'] as const) {
+  for (const field of ['jsx', 'shorthand', 'tightClose', 'openVoid', 'dynamicTag', 'astroAsset', 'chunkAggregate', 'bare'] as const) {
     if (record[field] !== undefined) {
       parseBoolean(record[field]);
     }

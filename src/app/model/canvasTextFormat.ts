@@ -72,9 +72,12 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       }
       return splitIntoParagraphs(nodes, { rootId: content.rootId, children: typed, trail: content.trail }, setInline);
     },
-    richText: (textId, html) => {
+    richText: (textId, html, breaks) => {
       const chain = ancestorsOf(nodes, textId);
-      const instance = [...(chain?.ancestors ?? [])].reverse().find((node) => node.kind === 'component');
+      // A line of words is written over the element whose inline content holds the text (a Paragraph instance, a <p>),
+      // never over an outer component such as the page's layout; rich text over the instance that holds its blocks.
+      const instance =
+        breaks === 'line' ? inlineRootOf(nodes, textId)?.root : [...(chain?.ancestors ?? [])].reverse().find((node) => node.kind === 'component');
       if (instance?.id === undefined || richTextView(html, document).view !== 'rich') {
         return false;
       }
@@ -488,7 +491,8 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
     assert(depth <= LIMITS.treeDepthMax, 'Marked text sits at a bounded depth');
     if (node.kind === 'text') {
       const path = node.id === undefined ? undefined : pathFor(node.id);
-      if (path !== undefined) {
+      // A component's setting, read first (outer before inner), is not undone by a <p> inside its content.
+      if (path !== undefined && !breaks.has(path)) {
         breaks.set(path, kind);
       }
       return;
@@ -502,6 +506,12 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
     const node = stack.pop();
     assert(node !== undefined, 'The stack held a node');
     stack.push(...(node.children ?? []));
+    // A plain <p> takes line breaks without any setting: Enter in a paragraph's words is a line break, as in the
+    // Content field. Other elements keep Enter finishing the edit.
+    if (node.kind === 'element' && node.name === 'p' && isInlineOnly(node.children ?? [])) {
+      (node.children ?? []).forEach((child) => mark(child, { breaks: 'line' }, 0));
+      continue;
+    }
     if (node.kind !== 'component') {
       continue;
     }

@@ -194,14 +194,15 @@ test('a page reads which texts Enter breaks from its components’ settings, ric
       Rich: { breaks: 'rich', richRoot: instance.id },
       Item: { breaks: 'rich', richRoot: instance.id },
     });
-    assert.equal(
-      format.canvasTextBreaksOf(
-        nodes,
-        (id) => id,
-        () => ({}),
-      ).size,
-      0,
-      'settings off: nothing changes',
+    const unset = format.canvasTextBreaksOf(
+      nodes,
+      (id) => id,
+      () => ({}),
+    );
+    assert.deepEqual(
+      [...unset.keys()].map((id) => byText.get(id)),
+      ['Rich'],
+      "settings off: only a plain <p>'s words take a break, as every <p> does",
     );
   });
 });
@@ -245,4 +246,40 @@ test('children stand for rich text only while they are plain markup', () => {
   assert.equal(content.plainChildrenHTML([{ kind: 'component', name: 'Card', children: [] }]), undefined);
   assert.equal(content.plainChildrenHTML([element('p', [], { class: { type: 'expr', value: 'x' } })]), undefined);
   assert.equal(content.plainChildrenHTML([{ kind: 'comment', value: 'x' }]), undefined);
+});
+
+test('a plain <p> takes line breaks by default, written over the paragraph and never over the layout around it', () => {
+  withDocument(() => {
+    const parsed = parsePage(
+      '---\nimport Layout from "../layouts/Layout.astro";\n---\n<Layout>\n  <p class="lead">A <strong>bold</strong> word<br />Next</p>\n  <h2>Heading</h2>\n</Layout>\n',
+      { locs: true },
+    );
+    const nodes = parsed.model.nodes;
+    const layout = nodes.find((node) => node.kind === 'component');
+    const paragraph = layout.children.find((node) => node.name === 'p');
+    const heading = layout.children.find((node) => node.name === 'h2');
+    const breaks = format.canvasTextBreaksOf(
+      nodes,
+      (id) => id,
+      () => ({}),
+    );
+    const first = paragraph.children[0];
+    const bold = paragraph.children[1].children[0];
+    assert.deepEqual(breaks.get(first.id), { breaks: 'line' });
+    assert.deepEqual(breaks.get(bold.id), { breaks: 'line' }, 'words inside inline markup too');
+    assert.equal(breaks.get(heading.children[0].id), undefined, 'a heading keeps Enter finishing');
+    let written;
+    const formatter = format.canvasTextFormatter(nodes, (id, children) => {
+      written = { id, children };
+    });
+    assert.equal(formatter.richText(first.id, 'A <strong>bold</strong> word', 'line'), true);
+    assert.equal(written.id, paragraph.id, 'the paragraph, not the layout');
+    assert.deepEqual(
+      written.children.map((node) => node.name ?? node.value),
+      ['A ', 'strong', ' word'],
+    );
+    written = undefined;
+    assert.equal(formatter.richText(first.id, '<p>A</p><p>B</p>', 'line'), false, 'blocks are never written into a line of words');
+    assert.equal(written, undefined);
+  });
 });

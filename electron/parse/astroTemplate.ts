@@ -623,6 +623,8 @@ function parseTemplateTag(template: string, lt: number, base: number | undefined
           ...fields,
           // `<x/>` and `<x />` mean the same thing and are not the same text.
           ...(selfClose === '/' && !/\s\/>$/.test(full) ? { tightClose: true } : {}),
+          // `<br>` and `<br />` too: an edit around a break prints it as the file wrote it, so the bytes still line up.
+          ...(selfClose !== '/' ? { openVoid: true } : {}),
           children: undefined,
         },
         base,

@@ -24,6 +24,8 @@ export interface PairedNode {
   readonly attrOrder?: readonly string[];
   readonly attrSource?: string;
   readonly tightClose?: boolean;
+  /** A void element written open, as HTML writes it (`<br>`), not closed (`<br />`): printed back as written. */
+  readonly openVoid?: boolean;
   readonly shorthand?: boolean;
   readonly source?: string;
   readonly blankBefore?: number;

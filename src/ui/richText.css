@@ -372,6 +372,10 @@
 .html-field-blocks .html-content {
   padding-inline-start: 30px;
 }
+/* The placeholder starts where the words and the caret do, clear of the `+`'s gutter. */
+.html-field-blocks .html-content[data-empty='true']::before {
+  inset-inline-start: 30px;
+}
 .html-block-plus {
   position: absolute;
   inset-inline-start: 6px;

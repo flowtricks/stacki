@@ -27,6 +27,7 @@ type NodeFields =
       children: ParserNode[] | undefined;
       shorthand?: boolean;
       tightClose?: boolean;
+      openVoid?: boolean;
       closeSource?: string;
       dynamicTag?: boolean;
       astroAsset?: boolean;
