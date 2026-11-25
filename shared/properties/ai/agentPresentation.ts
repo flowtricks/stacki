@@ -60,6 +60,12 @@ export interface AgentPresentation {
   readonly toggleLabels: Readonly<Record<string, MessageKey>>;
   /** The agent has a compact command (Claude's `/compact`); Codex has none in its recorded commands. */
   readonly canCompact: boolean;
+  /**
+   * How comment pins reach the agent (commentPinBrief.ts). `subagents`: one message, one subagent per pin, which the
+   * panel follows through each call's `parentToolUseId` (Claude). `single`: one message per pin, in turn, because the
+   * panel cannot follow the agent's subagents: Codex reports one "Start subagent" call and forwards none of its work.
+   */
+  readonly pinSends: 'subagents' | 'single';
 }
 
 const EFFORT_DESCRIPTION = 'ai.effort.description';
@@ -87,6 +93,7 @@ export const AGENT_PRESENTATION: Readonly<Record<AgentId, AgentPresentation>> = 
     toggleOptionIds: ['ultracode', 'fast'],
     toggleLabels: { ultracode: 'ai.toggle.ultracode', fast: 'ai.toggle.fastMode' },
     canCompact: true,
+    pinSends: 'subagents',
   },
   codex: {
     modes: {
@@ -113,6 +120,7 @@ export const AGENT_PRESENTATION: Readonly<Record<AgentId, AgentPresentation>> = 
     toggleOptionIds: ['fast-mode'],
     toggleLabels: { 'fast-mode': 'ai.toggle.fastMode' },
     canCompact: false,
+    pinSends: 'single',
   },
 };
 
@@ -210,6 +218,11 @@ export function toggleOptions(agent: AgentId, options: readonly ChatOption[]): r
   }
   assert(toggles.length <= presentation.toggleOptionIds.length, 'toggleOptions: only the switches the table names');
   return toggles;
+}
+
+/** How a "Send all" of comment pins reaches `agent`: one message with a subagent per pin, or one message per pin. */
+export function pinSendMode(agent: AgentId): 'subagents' | 'single' {
+  return AGENT_PRESENTATION[agent].pinSends;
 }
 
 export function canCompact(agent: AgentId): boolean {

@@ -48,6 +48,8 @@ const TARGETS = [
   ['the Audits run button', 'probe', 'audits-card-button'],
   ['the merge-conflict choice', 'conflict-choice', 'on'],
   ['the loop binder primary', 'probe', 'loop-bind-button primary'],
+  ['comment pins Send all', 'ai-pin-bar', 'primary ai-pin-send'],
+  ['comment pin Save', 'ai-pin-tools', 'primary ai-pin-save'],
 ];
 const SHEETS = [
   'src/app/styles.css',
@@ -61,6 +63,7 @@ const SHEETS = [
   'src/features/audits/audits.css',
   'src/features/props/loopSettings.css',
   'src/ui/switch.css',
+  'src/features/ai/pins/pins.css',
 ];
 const BASE = ['src/features/style/tokens.css', 'src/ui/controls.css'];
 const ORDERS = { 'base first': [...BASE, ...SHEETS], 'feature first': [...SHEETS.slice(1), ...BASE, SHEETS[0]] };

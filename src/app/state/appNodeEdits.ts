@@ -46,6 +46,7 @@ import {
   readAppSettings,
 } from '../../ipc/appBridge';
 import { parseShortcutMessage } from '../../features/preview/previewMessages';
+import { canvasClicksIntercepted } from '../../ui/canvasClickSlot';
 import { namesInSubtree, offerStyleCleanup } from '../../features/selectors/deleteCleanup';
 import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatterOf } from '../model/nodeFactory';
 import { extractionGesture, createdComponentMessage, movedStylesEdit, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
@@ -908,6 +909,11 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
       }
       const message = parseShortcutMessage(event.data);
       if (message === undefined) {
+        return;
+      }
+      // Comment mode takes the canvas: a forwarded edit key (Delete, an arrow, the insert palette) would act on the
+      // page's selection while the person is writing a pin. Escape still reaches the editor, which ends the mode.
+      if (canvasClicksIntercepted() && !(message.name === 'key' && message.key === 'Escape') && message.name !== 'preview') {
         return;
       }
       switch (message.name) {

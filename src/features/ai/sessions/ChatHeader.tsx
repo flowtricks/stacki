@@ -31,6 +31,7 @@ import { AgentChoicesDialog } from '../AgentChoices';
 import { SessionsFilter } from './SessionsFilter';
 import { CHAT_TITLE_CHARS_MAX } from './sessionsModel';
 import { TipButton } from './TipButton';
+import { ModesMenu } from './ModesMenu';
 import './sessions.css';
 
 /** The host's expand toggle: the panel over the whole editor area, or back in the side panel. Absent where the host has none (a floating window). */
@@ -55,10 +56,14 @@ export interface ChatHeaderProps {
 export function ChatHeader({ chat, layout = 'stacked', expansion, windowToggle }: ChatHeaderProps) {
   const translate = useTranslate();
   const windowEntries = panelWindowEntries(expansion, windowToggle, translate);
+  // The Modes button (comment pins and any other registered mode) sits before "+", on the list as in a chat.
   const trailing = (
-    <TipButton label={translate('ai.sessions.newChat')} onClick={() => void newChat(preferredAgent())}>
-      <PlusIcon size={14} />
-    </TipButton>
+    <>
+      <ModesMenu />
+      <TipButton label={translate('ai.sessions.newChat')} onClick={() => void newChat(preferredAgent())}>
+        <PlusIcon size={14} />
+      </TipButton>
+    </>
   );
   if (chat === undefined) {
     return (

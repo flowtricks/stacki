@@ -346,6 +346,8 @@
     "shared/properties/ai/aiLimits.ts",
     "shared/properties/ai/autoCompact.ts",
     "shared/properties/ai/chatModel.ts",
+    "shared/properties/ai/commentPinBrief.ts",
+    "shared/properties/ai/commentPins.ts",
     "shared/properties/ai/mentions.ts",
     "shared/properties/ai/rememberedSettings.ts",
     "shared/properties/appAuth.ts",

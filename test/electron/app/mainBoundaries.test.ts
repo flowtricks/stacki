@@ -135,7 +135,8 @@ test('the complete channel inventory matches real main and terminal registration
   // the icon and the command line; shared/ipc/folderOpen.ts), 326 in all.
   // The Files panel adds thirteen (files:list, :read, :write, :create, :rename, :transfer, :trash, :import, :reveal, :find,
   // :watch, :guardClose and :allowClose; shared/ipc/fileExplorer.ts), 339 in all.
-  assert.equal(harness.handlers.size, 339);
+  // The AI panel's comment pins add two (ai:pinsRead and :pinsWrite, the board kept under userData), 341 in all.
+  assert.equal(harness.handlers.size, 341);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

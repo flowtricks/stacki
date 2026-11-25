@@ -97,6 +97,7 @@ import { withAgentTitle, type ChatRecord, type ChatStore } from './chatStore';
 import { EventPump } from './eventPump';
 import { cancelled, PermissionBroker } from './permissionBroker';
 import { buildPrompt, inside, type BuiltPrompt } from './promptBlocks';
+import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import {
   idleTimeoutMs,
   oldestIdle,
@@ -621,7 +622,7 @@ export class AgentHost {
       return started;
     }
     const process = started.value;
-    const built = await this.promptOf(process, runtime, { text, attachments, parts: options.parts });
+    const built = await this.promptOf(process, runtime, { text, attachments, parts: options.parts, pins: options.pins });
     if (!built.ok) {
       runtime.release();
       return built;
@@ -898,7 +899,12 @@ export class AgentHost {
   private async promptOf(
     process: AgentProcess,
     runtime: ChatRuntime,
-    content: { readonly text: string; readonly attachments: readonly PromptAttachment[]; readonly parts: readonly PromptPart[] | undefined },
+    content: {
+      readonly text: string;
+      readonly attachments: readonly PromptAttachment[];
+      readonly parts: readonly PromptPart[] | undefined;
+      readonly pins?: PinBrief | undefined;
+    },
   ): Promise<Result<BuiltPrompt, AiFailure>> {
     const ready = await process.ready;
     if (!ready.ok) {
@@ -2091,6 +2097,8 @@ function endsUnread(stop: TurnStop): boolean {
 export interface PromptOptions {
   /** The mentions and text the person composed; absent: the message is its text. */
   readonly parts?: readonly PromptPart[] | undefined;
+  /** Comment pins sent with "Send all" (commentPinBrief.ts); absent for any other message. */
+  readonly pins?: PinBrief | undefined;
 }
 
 function userEvent(

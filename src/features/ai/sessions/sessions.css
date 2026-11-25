@@ -388,3 +388,9 @@
   flex: 1;
   min-width: 0;
 }
+
+/* The Modes button in the panel's header: on, it wears the accent. */
+.ai-modes-button.is-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}

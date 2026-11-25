@@ -297,6 +297,8 @@ interface InvokeChannels {
   readonly aiPrompt: 'ai:prompt';
   readonly aiSteer: 'ai:steer';
   readonly aiCompact: 'ai:compact';
+  readonly aiPinsRead: 'ai:pinsRead';
+  readonly aiPinsWrite: 'ai:pinsWrite';
   readonly aiAutoCompactGet: 'ai:autoCompactGet';
   readonly aiAutoCompactSet: 'ai:autoCompactSet';
   readonly aiChatFork: 'ai:chatFork';

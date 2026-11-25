@@ -16,6 +16,7 @@ import {
   parseCompactStarted,
   parseDiffReply,
   parseMentionReply,
+  parsePinsSaved,
   parsePromptTurn,
   parseSetupState,
   parseRememberedSettings,
@@ -39,6 +40,7 @@ import {
   type SteerReply,
 } from '../../../shared/ipc/aiChat';
 import { parseChatSummary, type ChatList, type ChatSummary, type TurnId } from '../../../shared/properties/ai/chatModel';
+import { parsePinBoardRead, type PinBoardRead } from '../../../shared/properties/ai/commentPins';
 import type { MentionCandidate } from '../../../shared/properties/ai/mentions';
 import type { RememberedSettings } from '../../../shared/properties/ai/rememberedSettings';
 import { described } from '../../../shared/properties/i18n/messageRef';
@@ -135,6 +137,18 @@ export function aiPrompt(input: IpcPayloads['ai:prompt']): Promise<AiReply<{ rea
 export function aiSteer(input: IpcPayloads['ai:steer']): Promise<AiReply<SteerReply>> {
   const payload = parseIpcPayload('ai:steer', input);
   return callResult(() => window.avb.aiSteer(payload), parseSteerReply);
+}
+
+/** The project's comment pins and their images (`ai:pinsRead`). */
+export function aiPinsRead(input: IpcPayloads['ai:pinsRead']): Promise<AiReply<PinBoardRead>> {
+  const payload = parseIpcPayload('ai:pinsRead', input);
+  return callResult(() => window.avb.aiPinsRead(payload), parsePinBoardRead);
+}
+
+/** Stores the board whole, with the images not stored yet (`ai:pinsWrite`). */
+export function aiPinsWrite(input: IpcPayloads['ai:pinsWrite']): Promise<AiReply<{ readonly saved: true }>> {
+  const payload = parseIpcPayload('ai:pinsWrite', input);
+  return callResult(() => window.avb.aiPinsWrite(payload), parsePinsSaved);
 }
 
 /** The saved "Auto-compact at" percentage (undefined: the agent's default). */

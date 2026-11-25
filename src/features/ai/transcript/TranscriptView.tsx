@@ -19,7 +19,7 @@
 // a new chat. While a query is typed the window grows (FIND_LIMITS.rowsShownMax) so earlier messages
 // can be found.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatId, TurnId, TurnStop } from '../../../../shared/properties/ai/chatModel';
+import type { ChatId, SentPart, TurnId, TurnStop } from '../../../../shared/properties/ai/chatModel';
 import { ArrowDownIcon } from '../../../ui/Icons';
 import { currentDesktopPlatform } from '../../../lib/shortcutLabel';
 import { answerPermission, draftWithText, newChat, preferredAgent, sendPrompt, setDraft, stopChat } from '../aiStore';
@@ -47,6 +47,7 @@ import { SubagentCard } from './SubagentCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
 import { TurnStatus } from './TurnStatus';
+import { PinsMessage } from '../pins/PinsMessage';
 import { buildRows, finishedTasks, windowRows, type PositionedItem, type TranscriptRow } from './transcriptModel';
 import { useOpenState } from './transcriptUi';
 import './transcript.css';
@@ -296,6 +297,9 @@ export function Transcript({
               reveal={reveal?.call === row.item.call ? reveal.count : undefined}
               onOpenTranscript={onOpenSubagent}
             />
+          ) : row.item.kind === 'user' && pinsPartOf(row.item) !== undefined ? (
+            // A message of comment pins follows its pins' progress, so it reads the whole view (and is outside Item's memo).
+            <PinsRow key={`i${row.key}`} item={row.item} chatId={chatId} view={view} onOpenSubagent={onOpenSubagent} />
           ) : (
             <Item
               key={`i${row.key}`}
@@ -482,6 +486,33 @@ const Item = memo(function Item({
 });
 
 type UserItem = Extract<TranscriptItem, { readonly kind: 'user' }>;
+type PinsPart = Extract<SentPart, { readonly kind: 'pins' }>;
+
+/** The comment pins a message carried ("Send all"), when it carried any. */
+function pinsPartOf(item: UserItem): PinsPart | undefined {
+  return item.parts?.find((part): part is PinsPart => part.kind === 'pins');
+}
+
+/** A message of comment pins: drawn whole by PinsMessage, with no Edit or Resend, since its text is only a summary. */
+function PinsRow({
+  item,
+  chatId,
+  view,
+  onOpenSubagent,
+}: {
+  readonly item: UserItem;
+  readonly chatId: ChatId;
+  readonly view: ChatView;
+  readonly onOpenSubagent: ((call: string) => void) | undefined;
+}) {
+  const part = pinsPartOf(item);
+  if (part === undefined) {
+    return undefined;
+  }
+  return (
+    <PinsMessage chat={chatId} turn={item.turn} mode={part.mode} pins={part.pins} attachments={item.attachments} view={view} onOpenSubagent={onOpenSubagent} />
+  );
+}
 type TextItem = Extract<TranscriptItem, { readonly kind: 'text' }>;
 
 /** The person's message. Edit and resend are given only to the last one while the chat is idle: an older one would branch a session that cannot branch. */

@@ -60,6 +60,7 @@ import { propPreviewInstance, useDesktopPropPreview } from './desktopPropPreview
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
+import { usePinCanvas } from './DesktopPins';
 import { useCanvasDrag } from '../state/appCanvasDrag';
 import { useCanvasImagePopup } from './desktopCanvasImage';
 import { ImagePropFields } from '../../features/props/ImagePropFields';
@@ -88,7 +89,10 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const navigatorDrop = useSyncExternalStore(subscribeCanvasDrag, navigatorDropShown);
   const dropPaths = navigatorDropPaths(navigatorDrop, (id) => app.pathFor(id));
   const dropKey = dropPaths.join('\n');
-  const trackPaths = useMemo(() => [...appOverlayPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, dropKey]);
+  // Comment pins (DesktopPins.tsx): the elements pins sit on are measured too, and their markers drawn over the canvas.
+  const pins = usePinCanvas(app);
+  const pinPaths = pins.trackPaths;
+  const trackPaths = useMemo(() => [...appOverlayPaths, ...pinPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, pinPaths, dropKey]);
   const appOverlays = appOverlayLayer(app);
   return (
     <>
@@ -98,6 +102,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
           <>
             <NavigatorDropLine rects={frame.rects} scale={frame.scale} pathOf={(id) => app.pathFor(id)} />
             {appOverlays(frame)}
+            {pins.overlay(frame)}
           </>
         )}
         textDocument={desktopCanvasText(app, translate)}
@@ -152,6 +157,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
       />
       {context.menu}
       {image.popup}
+      {pins.bar}
     </>
   );
 }

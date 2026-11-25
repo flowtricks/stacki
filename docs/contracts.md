@@ -2722,6 +2722,71 @@ round-trip and bounds; ledger keep, undo, drift and snapshots), `test/renderer/a
 unread, drafts), `test/renderer/ai/chatStatus.test.js` and `test/renderer/ai/aiPanel.test.js` (the panel
 in jsdom).
 
+## Comment pins
+
+Comment mode (the AI panel header's Modes menu, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
+pins, each a small message of its own, and "Send all" sends the included ones to the chat open in the panel. Desktop
+only: the shell's host (`src/app/shell/DesktopPins.tsx`) registers the mode, so Studio and the demo never offer it.
+
+**Modes menu.** `registerPanelMode({ id, order, label, tooltip, icon, isActive, setActive, subscribe })` adds a row
+and returns its removal; the header's button (`sessions/ModesMenu.tsx`) lists whatever is registered, shows the one
+that is on (pressed, accent) and is not drawn when nothing is registered. Turning one mode on turns the others off
+(`setPanelMode`). At most `PANEL_MODES_MAX` (8). Comment pins register `comment-pins` at order 10
+(`pins/commentMode.tsx`); another mode registers from its own file and removing that file leaves the menu working.
+
+**Contract** (`shared/properties/ai/commentPinBrief.ts` under the chat model, `commentPins.ts` above it). A pin is
+`{ id, number, createdAt, updatedAt, comment, images, anchor, place, included, delivery }`: `anchor` is the canvas
+path clicked (`<file>|` scoped inside an open component), the copy, the point in the box (0 to 1) and the element's
+tag and words; `place` is the page, its display name, the open component, the element's file, locator and name, an
+instance's component file and the canvas width. `delivery` is `draft` or `sent` (chat, turn, mode `subagents` or
+`single`). `comment` and `images` are what was saved (`savedAt`, absent on a pin never saved); `edit` is what its box
+holds unsaved, kept on the board so a crash loses nothing and never sent. Save (or Enter) needs words or an added image
+(a crop alone is not a comment); the close button and Escape drop a pin never saved and only the unsaved changes of a
+saved one (Undo in a toast); a press elsewhere, another pin, leaving the mode or the page save a box with content and
+let an empty one go. A draft's marker drags onto another element (anchor, place and crop renewed; words, changes and
+number kept; Undo in a toast); a sent pin does not move. While comment mode takes the canvas, the frame's forwarded edit
+keys (`avb:shortcut`, except Escape and ⌥P) are dropped (`canvasClicksIntercepted`). Bounds `PIN_LIMITS`: 40 pins, 4,000 characters a comment, 4 images a pin, the board's images within
+`attachmentsImageCharsMax`, 16 pins a send, 4 subagents at once. `parsePinBoard` is total (a damaged pin is left out
+alone); `parsePinBoardStrict` (what a writer sends) refuses the whole board.
+
+**Storage** (`electron/handlers/ai/pinBoardStore.ts`): `userData/ai/projects/<sha256(realpath)>/pins/board.json`
+(replaced whole after a 400 ms pause in typing) and `pins/images/<id>.bin` (each written once, removed by the save
+that stops naming it). Never in the project. Unlike a composer draft, a pin's images are stored: the crop of what it
+points at is the point. Channels `ai:pinsRead` (`{ projectPath }`, answers the board and the images still on disk; a
+missing image leaves its pin) and `ai:pinsWrite` (`{ projectPath, board, images }`, the images not stored yet;
+`invalid` when the board's images would pass the bound, nothing changed). A pin left waiting in a run the app closed
+on reads back as a draft.
+
+**Anchoring** (`pins/pinModel.ts` `resolveAnchor`). The stored path holds while the open file's element there has the
+pin's tag (and words, when both have some); otherwise the one rendered element with that tag and words is the
+element moved (the pin follows it); with none, the same tag at the path is the element with its words edited; else
+the pin is detached (kept, listed, offered "Move the pin"). Markers are drawn in the canvas overlay layer from the
+same measurements as the outlines (`extraTrackPaths`), so they follow scrolling, zoom and breakpoints. Clicks go to
+`canvasClickSlot.ts`'s interceptor, ahead of any Stacki app.
+
+**Send.** `ai:prompt` takes `pins` (`PinBrief`: mode and per-pin number, comment, names, page, file, locator, tag,
+words, component, width, image indexes). The renderer sends the pins' images as the attachments, each with the note
+`Pin 2, image 1: …`, and plain `text` ("Comments on 3 pins" and one line per pin). The host
+(`promptBlocks.ts`, `pinInstructions.ts`) puts a `<comment-pins>` text block first and records the user event with
+`text` and a `pins` sent part (number, comment, page and element names, thumbnail index) only: never the instructions,
+a path or a locator. A pin naming an image the message lacks is `invalid`; pins never steer (`ai.error.pinsSteer`).
+
+**Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
+Agent call per pin titled `Pin <n>: …` and give the waves `pinWaves` computed (pins naming a file in common never in
+one wave, in number order, at most 4 per wave), so two subagents never edit one file at once; each pin's progress is
+read from its subagent (`pinProgress`: queued, working, needs you on a waiting permission, failed or stopped, done),
+or from the turn when the agent made the change itself. Codex (`single`): its subagents report one call and forward
+none of their work, so Stacki sends one message per pin; the next goes only after the turn before ended `end_turn`,
+a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). Checkpoints: Claude's pins
+share one turn's changes card; Codex's get one card each. Stop is the chat's own Stop, and permission requests reach
+the person as in any turn.
+
+**Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's number, thumbnail, words
+and names, and its status (opening its subagent when it has one); a pin still on the board opens on the canvas. No
+Edit or Resend. Proofs: `test/shared/properties/ai/commentPins.test.ts`, `test/electron/handlers/ai/pinBoardStore.test.ts`,
+`test/electron/handlers/ai/agentHostPins.test.ts` (the stand-in adapter as Claude's coordinator),
+`test/renderer/ai/pinModel.test.js`, `test/renderer/ai/pinStore.test.js`, `test/renderer/ai/pinsMessage.test.js`.
+
 ## Voice input
 
 The composer's microphone (`src/features/ai/useDictation.ts`). Audio never crosses IPC: the

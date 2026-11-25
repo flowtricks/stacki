@@ -23,6 +23,7 @@ import type {
 } from '../../../shared/ipc/aiChat';
 import { AGENT_IDS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import { applyRemember, NO_REMEMBERED_SETTINGS, type RememberedSettings } from '../../../shared/properties/ai/rememberedSettings';
 import type {
   ChatEvent,
@@ -622,6 +623,29 @@ function reportSendFailure(error: AiFailure): void {
   if (error.code === 'not-trusted') {
     update((current) => ({ ...current, trusted: false }));
   }
+}
+
+/**
+ * Sends a message of comment pins (pins/pinStore.ts): their instructions travel as `pins`, their images as the
+ * attachments, and `text` is the plain words the transcript keeps. The turn it started, or undefined when it was
+ * refused (the failure is shown as any send's is).
+ */
+export async function sendPinMessage(
+  chat: ChatId,
+  message: { readonly text: string; readonly attachments: readonly PromptAttachment[]; readonly pins: PinBrief },
+): Promise<TurnId | undefined> {
+  assert(message.pins.pins.length >= 1, 'sendPinMessage: a message of pins has a pin');
+  const reply = await aiPrompt({ projectPath: requireProject(), chat, text: message.text, attachments: message.attachments, pins: message.pins });
+  if (!reply.ok) {
+    reportSendFailure(reply.error);
+    return undefined;
+  }
+  return reply.value.turn;
+}
+
+/** Tells `listener` after every change of the store; returns the unsubscribe. For stores that follow chats (comment pins). */
+export function subscribeAiState(listener: () => void): () => void {
+  return subscribe(listener);
 }
 
 /** Sends the chat's draft, or `text` when given (Retry, a hand-off). True when the agent took it. */
