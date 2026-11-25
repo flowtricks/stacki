@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import { useDefaultsCanvas } from '../../../vendor/stacki/src/features/componentDefaults/useDefaultsCanvas';
 import { studioDefaultsHost } from './defaultsHost';
 import { parsePage } from '../source/source';
+import { resolveImport } from '../source/imports';
 import type { EditorProps } from '../../app/Editor';
 import type { useEditor } from '../project/useEditor';
 
@@ -42,6 +43,7 @@ export function useStudioDefaultsCanvas(props: EditorProps, model: ReturnType<ty
       props.view.setTab('settings');
     },
     read: (session) => readDefaultsCanvas(props.file, model.document, session.file),
+    resolveImport: (session, specifier) => Promise.resolve(resolveImport(session.file, specifier)),
     leave: async () => {
       await model.document?.whenSaved();
       restore.current = true;

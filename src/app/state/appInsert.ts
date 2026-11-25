@@ -15,7 +15,9 @@ import { findImportPath } from '../../ipc/appBridge';
 import { canAddComponent } from '../../features/palette/componentVisibility';
 import { currentRole } from '../../lib/currentRole';
 import { appInsertGesture, withStringProps } from '../model/appInsertGesture';
-import { componentInstancePlacement, loadComponentInstance } from '../model/componentInstances';
+import { componentInstancePlacement, loadComponentInstance, resolveInstanceImports } from '../model/componentInstances';
+import { sayMissingAssets } from './missingDefaultAssets';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { newId } from '../model/nodeFactory';
 import { insertedNode } from '../model/pageGestures';
 import { gatePlacement } from '../model/placementGate';
@@ -35,6 +37,7 @@ const REFUSED_EDIT = 'The page did not take the edit; try again once it has save
 export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
   const { insertables, pageStateRef, projectRef, selectedIdRef, setSelectedId } = coreState;
   const { commitEdit } = history;
+  const translate = useTranslate();
 
   const insertForApp = useCallback(
     async (request: AppInsertRequest): Promise<AppInsertOutcome> => {
@@ -56,9 +59,7 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
           return { applied: false, reason: `The current role cannot add ${item.name}` };
         }
         const instance = await loadComponentInstance(component, insertables, projectPath);
-        const resolved = await Promise.all(
-          instance.components.map(async (dependency) => ({ component: dependency, paths: await findImportPath(projectPath, pagePath, dependency.path) })),
-        );
+        const resolved = await resolveInstanceImports(instance, projectPath, (target) => findImportPath(projectPath, pagePath, target));
         // Never apply a pending insert to a page or project opened while those reads ran.
         if (pageStateRef.current.currentPage?.path !== pagePath || projectRef.current?.path !== projectPath) {
           return { applied: false, reason: 'The open page changed before the component was inserted' };
@@ -69,6 +70,7 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
         }
         const placed = componentInstancePlacement(state.model, instance, resolved);
         const imports = placed.imports.length === state.model.imports.length ? undefined : placed.imports;
+        sayMissingAssets(instance.missing, translate);
         prepared = { node: withStringProps(placed.node, item.props), imports };
       }
       const state = pageStateRef.current.pageState;
@@ -107,7 +109,7 @@ export function useAppInsert(coreState: ReturnType<typeof useCoreState>, history
       setSelectedId(prepared.node.id);
       return { applied: true, nodeId: prepared.node.id };
     },
-    [commitEdit, insertables, pageStateRef, projectRef, selectedIdRef, setSelectedId],
+    [commitEdit, insertables, pageStateRef, projectRef, selectedIdRef, setSelectedId, translate],
   );
   return { insertForApp };
 }

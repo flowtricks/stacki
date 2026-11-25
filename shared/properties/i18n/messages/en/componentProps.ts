@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'Set by conditions',
   'componentProps.defaults.discard': 'Discard changes',
   'componentProps.defaults.entryRead': 'The code reads {value} from {name} directly. Change it in source.',
+  'componentProps.defaults.insertedWithoutAsset': 'Inserted without {file}, which is no longer in the project. Set this component’s defaults again.',
+  'componentProps.defaults.missingAsset': 'A default file is missing: {file}. Saving removes it from these defaults.',
   'componentProps.defaults.missingTable': '{name} has no per-option defaults to edit.',
   'componentProps.defaults.perOption': 'Start each group with {controller} and one option.',
   'componentProps.defaults.return': 'Return to defaults',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Defaults saved to this project.',
   'componentProps.defaults.tableReset':
     'The component computes this default from its own table: change each option’s default in the conditions, or the table in source.',
+  'componentProps.defaults.unsupportedChild': '{child} can’t be part of the defaults. Remove it and save again, or discard your changes.',
+  'componentProps.defaults.unsupportedValue':
+    '“{prop}” on {tag} can’t be a default because it reads the page’s code. Choose a fixed value, list or file, or discard your changes.',
   'componentProps.dialog.close': 'Close property settings',
   'componentProps.dialog.loading': 'Loading property…',
   'componentProps.dialog.title': 'Property settings',

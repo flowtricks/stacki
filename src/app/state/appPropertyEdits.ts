@@ -52,6 +52,7 @@ import { diffCodePatch } from '../../../shared/engine/codePatch';
 import { LIMITS } from '../../../shared/core/limits';
 import { withInnerSource } from '../../features/props/richTextContent';
 import { findImportPath } from '../../ipc/appBridge';
+import { assetBindingName } from '../../../shared/properties/componentDefaultValues';
 import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
 import { withPrunedImports, chooseImportPath, styleTagNode } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
@@ -445,19 +446,7 @@ export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEd
       let local = (model.imports || []).find((i) => !i.named && i.path === spec)?.name;
       const added = local === undefined;
       if (!local) {
-        const base =
-          withoutRoot
-            .split('/')
-            .pop()
-            ?.replace(/\.[^.]+$/, '') ?? 'asset';
-        let candidate = base.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(\d)/, '_$1') || 'asset';
-        const taken = new Set((model.imports || []).map((i) => i.name));
-        // Ends within taken.size + 1 passes: each tries a name not yet tried.
-        let suffix = 2;
-        while (taken.has(candidate)) {
-          candidate = `${base}${suffix++}`;
-        }
-        local = candidate;
+        local = assetBindingName(picked.rel, new Set((model.imports || []).map((i) => i.name)));
       }
       const binding = local;
       // Step 6, prop and frontmatter: the prop as a request, then the import

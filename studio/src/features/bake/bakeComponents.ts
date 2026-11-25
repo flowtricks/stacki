@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { ParserNode } from '../source/source';
 import { defaultInstance } from '../source/instanceDefaults';
 import { loadInsertionDefaults } from '../settings/loadDefaults';
+import { defaultAssetUses } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 import { scanProject } from '../project/projectServer';
 import { filledSlots } from './componentTemplates';
 import { localName, pageInstances, planProbes, probeSpec, PROBE_LIMITS, requiredProps, type ProbePlan, type ProbeSpec, type ScanField } from './bakeProbes';
@@ -78,10 +79,12 @@ async function recipeSpecs(root: string, pages: ReadonlyMap<string, string>, fie
     return [];
   }
   const specs: ProbeSpec[] = [];
+  // A probe is compiled on its own, with no page to import a file into, so templates go without the image defaults.
+  const unimported = { ...settings, missingAssets: defaultAssetUses(settings.config).map((use) => use.file) };
   for (const component of settings.catalog) {
     let recipe: ParserNode | undefined;
     try {
-      recipe = defaultInstance(component.file, settings, (file) => file);
+      recipe = defaultInstance(component.file, unimported, (file) => file);
     } catch {
       recipe = undefined; // A recipe Studio itself would refuse inserts nothing.
     }

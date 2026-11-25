@@ -8,6 +8,7 @@ import { assetAbs } from './assetFiles';
 import { isPathWithin } from '../lib/platform';
 import { encodeImage, IMAGE_BYTES_MAX } from './imageEncoder';
 import { planImageReferencesSliced, imageReferenceDigest } from './imageReferences';
+import { relinkMovedDefaultAssets } from './componentDefaultRelink';
 import type { ImageReferenceEdit, ImageAliases } from './imageReferences';
 import { translateMain } from '../lib/mainLocale';
 
@@ -43,6 +44,9 @@ export async function convertImage(options: {
       error: references.error + ' Both images were kept so references still work.',
     };
   }
+  // The reference scan skips dot folders, so the component defaults that import the image are moved over here.
+  const fromProject = (file: string) => path.relative(options.projectPath, file).split(path.sep).join('/');
+  relinkMovedDefaultAssets(options.projectPath, [{ from: fromProject(from), to: fromProject(to) }]);
   try {
     const verified = verifyImages(from, bytes, to, encoded.value);
     if (!verified.ok) {

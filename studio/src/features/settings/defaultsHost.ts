@@ -1,12 +1,25 @@
 import { getStudioRole } from '../roles/roleStore';
 import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
-import { parseDefaultsSource, type DefaultsSnapshot, type DefaultComponent } from '../../../vendor/stacki/shared/properties/componentDefaults';
+import {
+  parseDefaultsSource,
+  type ComponentDefaults,
+  type DefaultsSnapshot,
+  type DefaultComponent,
+} from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { defaultAssetUses } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 import { loadProject } from '../project/projectClient';
 import { readMetadata, writeMetadata } from './metadataClient';
 export interface DefaultsHost {
   readonly load: () => Promise<DefaultsSnapshot>;
   readonly save: (snapshot: DefaultsSnapshot) => Promise<DefaultsSnapshot>;
+}
+
+// The project scan lists these kinds of file under names Studio can open; one it would list and does not is gone.
+function missingAssets(config: ComponentDefaults, assets: readonly string[]): readonly string[] {
+  const present = new Set(assets);
+  const listed = (file: string) => /\.(svg|png|jpe?g|gif|webp|avif|mp4)$/i.test(file) && /^src\/[\w./ \[\]-]+$/.test(file);
+  return [...new Set(defaultAssetUses(config).map((use) => use.file))].filter((file) => listed(file) && !present.has(file));
 }
 
 export const studioDefaultsHost = {
@@ -29,7 +42,7 @@ export const studioDefaultsHost = {
     if (!parsed.ok) {
       throw new Error(parsed.error.message);
     }
-    return { source: stored.source, config: parsed.value, catalog };
+    return { source: stored.source, config: parsed.value, catalog, missingAssets: missingAssets(parsed.value, project.assets) };
   },
   save: async (snapshot: DefaultsSnapshot): Promise<DefaultsSnapshot> => {
     if (!can(getStudioRole(), 'component:edit')) {

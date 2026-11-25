@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import vm from 'node:vm';
 import {
   componentPreviewPlugin,
   renderComponentPreviewAttempt,
@@ -344,4 +345,36 @@ const { preview = 'x', id = 'given' } = Astro.props;
 ---
 <div />`;
   assert.deepEqual(componentPreviewInputs(other, 'Other').props, {}, "a preview prop that is not a boolean, and an id with a default, are the author's");
+});
+
+test('an imported file and a list among the defaults reach the preview as code, and a deleted file is left out', (context) => {
+  const recipes = JSON.stringify({
+    version: 1,
+    components: {
+      'src/components/Card.astro': {
+        assets: { art: { file: 'src/assets/art.svg' }, link: { file: 'src/assets/art.svg', url: true }, gone: { file: 'src/assets/gone.png' } },
+        literals: { options: '[{ label: "stackiDefaultAsset0 )" }]', shots: { source: '[shot]', imports: { shot: 'src/assets/art.svg' } } },
+        props: { title: 'stacki-default:0' },
+      },
+    },
+  });
+  const root = project(context, recipes);
+  fs.mkdirSync(path.join(root, 'src/assets'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/assets/art.svg'), '<svg />');
+  const loaded = componentPreviewPlugin([root]).load.call(watcher(), path.join(root, 'src/components/Card.astro') + '?raw&stacki-preview-props');
+  assert.ok(loaded !== undefined);
+  assert.ok(loaded.startsWith(`import stackiDefaultAsset0 from "/${'src'}/assets/art.svg";\nexport default {`), loaded.slice(0, 120));
+  assert.doesNotMatch(loaded, /gone/);
+  // The module runs as written, with the import standing for a value.
+  const body = loaded.slice(loaded.indexOf('export default ') + 'export default '.length, -1);
+  const written: unknown = vm.runInNewContext(`JSON.stringify((${body}).attempts[0].props)`, { stackiDefaultAsset0: { src: '/art.svg' } });
+  assert.ok(typeof written === 'string');
+  const props: unknown = JSON.parse(written);
+  assert.deepEqual(props, {
+    art: { src: '/art.svg' },
+    link: '/art.svg',
+    options: [{ label: 'stackiDefaultAsset0 )' }],
+    shots: [{ src: '/art.svg' }],
+    title: 'stacki-default:0',
+  });
 });

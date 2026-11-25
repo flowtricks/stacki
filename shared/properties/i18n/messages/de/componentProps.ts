@@ -38,6 +38,9 @@ export const messages = {
   'componentProps.defaults.conditional': 'Nach Bedingungen festlegen', // review
   'componentProps.defaults.discard': 'Änderungen verwerfen',
   'componentProps.defaults.entryRead': 'Der Code liest {value} direkt aus {name}. Ändere es im Quellcode.', // review
+  'componentProps.defaults.insertedWithoutAsset':
+    'Ohne {file} eingefügt, weil die Datei nicht mehr im Projekt ist. Lege die Standardwerte dieser Komponente neu fest.',
+  'componentProps.defaults.missingAsset': 'Eine Standarddatei fehlt: {file}. Beim Speichern wird sie aus diesen Standardwerten entfernt.',
   'componentProps.defaults.missingTable': '{name} hat keine Standards pro Option zum Bearbeiten.', // review
   'componentProps.defaults.perOption': 'Beginne jede Gruppe mit {controller} und einer Option.', // review
   'componentProps.defaults.return': 'Zurück zu den Standardwerten',
@@ -45,6 +48,10 @@ export const messages = {
   'componentProps.defaults.saved': 'Standardwerte in diesem Projekt gespeichert.',
   'componentProps.defaults.tableReset':
     'Die Komponente berechnet diesen Standard aus ihrer eigenen Tabelle: Ändere den Standard jeder Option in den Bedingungen oder die Tabelle im Quelltext.', // review
+  'componentProps.defaults.unsupportedChild':
+    '{child} kann nicht Teil der Standardwerte sein. Entferne es und speichere erneut, oder verwirf deine Änderungen.',
+  'componentProps.defaults.unsupportedValue':
+    '„{prop}“ an {tag} kann kein Standardwert sein, weil es Code der Seite liest. Wähle einen festen Wert, eine Liste oder eine Datei, oder verwirf deine Änderungen.',
   'componentProps.dialog.close': 'Eigenschaftseinstellungen schließen',
   'componentProps.dialog.loading': 'Eigenschaft wird geladen …',
   'componentProps.dialog.title': 'Eigenschaftseinstellungen',

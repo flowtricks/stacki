@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': '조건에 따라 설정됨',
   'componentProps.defaults.discard': '변경 사항 취소',
   'componentProps.defaults.entryRead': '코드가 {name}에서 {value}을(를) 직접 읽습니다. 소스에서 변경하세요.',
+  'componentProps.defaults.insertedWithoutAsset': '{file} 파일이 프로젝트에 없어 제외하고 삽입했습니다. 이 컴포넌트의 기본값을 다시 설정하세요.',
+  'componentProps.defaults.missingAsset': '기본값 파일이 없습니다: {file}. 저장하면 이 기본값에서 제거됩니다.',
   'componentProps.defaults.missingTable': '{name}에는 편집할 옵션별 기본값이 없습니다.',
   'componentProps.defaults.perOption': '각 그룹을 {controller}와(과) 옵션 하나로 시작하세요.',
   'componentProps.defaults.return': '기본값으로 되돌리기',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': '기본값이 이 프로젝트에 저장되었습니다.',
   'componentProps.defaults.tableReset':
     '컴포넌트가 자체 테이블에서 이 기본값을 계산합니다. 조건에서 각 옵션의 기본값을 변경하거나 소스에서 테이블을 변경하세요.',
+  'componentProps.defaults.unsupportedChild': '{child}은(는) 기본값에 포함할 수 없습니다. 제거하고 다시 저장하거나 변경 사항을 버리세요.',
+  'componentProps.defaults.unsupportedValue':
+    '{tag}의 “{prop}”은(는) 페이지 코드를 읽으므로 기본값이 될 수 없습니다. 고정 값, 목록 또는 파일을 선택하거나 변경 사항을 버리세요.',
   'componentProps.dialog.close': '속성 설정 닫기',
   'componentProps.dialog.loading': '속성 불러오는 중…',
   'componentProps.dialog.title': '속성 설정',

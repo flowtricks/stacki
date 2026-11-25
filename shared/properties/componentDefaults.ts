@@ -2,6 +2,16 @@
 import { assert } from '../core/assert';
 import { boolean, list, object, optional, record, text } from '../core/boundary';
 import { err, ok, type Result } from '../core/result';
+import {
+  heldDefaults,
+  isStaticMarkup,
+  mergeDefaultValues,
+  parseHeldDefaults,
+  parseWrittenTag,
+  writtenTag,
+  type HeldDefaults,
+  type WrittenTag,
+} from './componentDefaultValues';
 
 export const COMPONENT_DEFAULTS_FILE = '.stacki/components.json';
 export const DEFAULT_LIMITS = {
@@ -16,7 +26,7 @@ export const DEFAULT_LIMITS = {
 } as const;
 
 export type DefaultValue = string | number | boolean;
-export interface ComponentRecipe {
+export interface ComponentRecipe extends HeldDefaults {
   readonly props?: Readonly<Record<string, DefaultValue>>;
   readonly text?: string;
   readonly children?: readonly RecipeChild[];
@@ -25,10 +35,15 @@ export interface ComponentChild extends ComponentRecipe {
   readonly component: string;
   readonly inherit?: false;
 }
-export interface ElementChild extends ComponentRecipe {
+export interface ElementChild extends ComponentRecipe, WrittenTag {
   readonly element: string;
 }
-export type RecipeChild = ComponentChild | ElementChild | { readonly literal: string };
+/** Text between tags; with `verbatim`, markup kept as written (a comment, `{" "}`) in place of text. */
+export interface LiteralChild {
+  readonly literal: string;
+  readonly verbatim?: string;
+}
+export type RecipeChild = ComponentChild | ElementChild | LiteralChild;
 /**
  * How one field of a component is typed in, set where the field's name and tooltip are (the Properties panel): a
  * prop by its name, a slot as `slot:<name>` (`slot:default` for the content between the tags). Stored on the
@@ -63,6 +78,8 @@ export interface DefaultComponent {
 }
 export interface DefaultsSnapshot {
   readonly source?: string;
+  /** Asset defaults whose file the host could not find: they are left out of what it draws or inserts. */
+  readonly missingAssets?: readonly string[];
   readonly config: ComponentDefaults;
   readonly catalog: readonly DefaultComponent[];
 }
@@ -292,8 +309,10 @@ function parseRecipe(input: unknown, depth: number, takeNode: () => void): Compo
   if (content !== undefined && children !== undefined) {
     throw new Error('Choose text or children for a recipe, not both');
   }
+  const parsedProps = props === undefined ? {} : parseRecipeProps(props);
   return {
-    ...(props === undefined ? {} : { props: parseRecipeProps(props) }),
+    ...(props === undefined ? {} : { props: parsedProps }),
+    ...parseHeldDefaults(value, parsedProps),
     ...(content === undefined ? {} : { text: parseRecipeText(content) }),
     ...(children === undefined ? {} : { children: parseRecipeChildren(children, depth, takeNode) }),
   };
@@ -305,6 +324,18 @@ function parseRecipeText(input: unknown): string {
     throw new Error('Default text must be a string');
   }
   return value;
+}
+
+function parseLiteralChild(value: Readonly<Record<string, unknown>>): LiteralChild {
+  const literal = parseRecipeText(value['literal']);
+  if (value['verbatim'] === undefined) {
+    return { literal };
+  }
+  const verbatim = parseRecipeText(value['verbatim']);
+  if (literal !== '' || !isStaticMarkup(verbatim)) {
+    throw new Error('Verbatim default markup is a comment or static braces, in place of text');
+  }
+  return { literal, verbatim };
 }
 
 function parseRecipeProps(input: unknown): Readonly<Record<string, DefaultValue>> {
@@ -337,7 +368,7 @@ function parseRecipeChildren(input: unknown, depth: number, takeNode: () => void
     }
     if (value['literal'] !== undefined) {
       takeNode();
-      return { literal: parseRecipeText(value['literal']) };
+      return parseLiteralChild(value);
     }
     const recipe = parseRecipe(value, depth + 1, takeNode);
     if (value['element'] !== undefined) {
@@ -345,7 +376,7 @@ function parseRecipeChildren(input: unknown, depth: number, takeNode: () => void
       if (!/^[a-z][a-z0-9-]{0,99}$/.test(element)) {
         throw new Error('Invalid default HTML element');
       }
-      return { element, ...recipe };
+      return { element, ...parseWrittenTag(value), ...recipe };
     }
     if (value['inherit'] !== undefined && value['inherit'] !== false) {
       throw new Error('Captured child defaults use inherit: false');
@@ -358,7 +389,7 @@ function parseRecipeChildren(input: unknown, depth: number, takeNode: () => void
   });
 }
 
-export interface ResolvedContent {
+export interface ResolvedContent extends HeldDefaults {
   readonly props: Readonly<Record<string, DefaultValue>>;
   readonly content:
     { readonly kind: 'empty' } | { readonly kind: 'text'; readonly text: string } | { readonly kind: 'children'; readonly children: readonly ResolvedNode[] };
@@ -366,7 +397,7 @@ export interface ResolvedContent {
 export interface ResolvedRecipe extends ResolvedContent {
   readonly component: string;
 }
-export type ResolvedNode = ResolvedRecipe | (ResolvedContent & { readonly element: string }) | { readonly literal: string };
+export type ResolvedNode = ResolvedRecipe | (ResolvedContent & WrittenTag & { readonly element: string }) | LiteralChild;
 
 export function resolveComponentRecipe(file: string, config: ComponentDefaults, catalog: readonly DefaultComponent[]): Result<ResolvedRecipe> {
   assertRecipeCatalog(config, catalog);
@@ -407,17 +438,19 @@ export function resolveComponentRecipe(file: string, config: ComponentDefaults, 
     const base = override.inherit === false ? {} : (config.components[target] ?? {});
     const recipe = recipeOverride(base, override);
     const props = recipe.props ?? {};
+    const held = heldDefaults(recipe);
     if (recipe.text !== undefined) {
       if (!component.slots.includes('default')) {
         // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
         return err({ code: 'missing-slot', message: `${target} has no default slot for text.` });
       }
-      return ok({ component: target, props, content: { kind: 'text', text: recipe.text } });
+      return ok({ component: target, props, ...held, content: { kind: 'text', text: recipe.text } });
     }
     if (recipe.children === undefined) {
-      return ok({ component: target, props, content: { kind: 'empty' } });
+      return ok({ component: target, props, ...held, content: { kind: 'empty' } });
     }
-    return resolveComponentChildren(target, props, recipe.children, component.slots, (child) => resolveChild(child, [...ancestors, target], depth + 1));
+    const filled = resolveComponentChildren(target, props, recipe.children, component.slots, (child) => resolveChild(child, [...ancestors, target], depth + 1));
+    return filled.ok ? ok({ ...filled.value, ...held }) : filled;
   };
   return resolve(file, {}, [], 0);
 }
@@ -442,8 +475,10 @@ function resolveComponentChildren(
     if (!resolved.ok) {
       return resolved;
     }
+    // A comment or a space between tags goes into no slot, so it needs none.
+    const blank = 'literal' in resolved.value && resolved.value.literal.trim() === '';
     const slot = 'literal' in resolved.value ? 'default' : (resolved.value.props['slot'] ?? 'default');
-    if (typeof slot !== 'string' || !slots.includes(slot)) {
+    if (!blank && (typeof slot !== 'string' || !slots.includes(slot))) {
       // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'missing-slot', message: `${target} has no slot "${String(slot)}".` });
     }
@@ -455,7 +490,7 @@ function resolveComponentChildren(
 }
 
 function resolveElement(recipe: ElementChild, resolve: (child: RecipeChild) => Result<ResolvedNode>): Result<ResolvedNode> {
-  const base = { element: recipe.element, props: recipe.props ?? {} };
+  const base = { element: recipe.element, ...writtenTag(recipe), props: recipe.props ?? {}, ...heldDefaults(recipe) };
   if (recipe.text !== undefined) {
     return ok({ ...base, content: { kind: 'text', text: recipe.text } });
   }
@@ -475,14 +510,18 @@ function resolveElement(recipe: ElementChild, resolve: (child: RecipeChild) => R
   return ok({ ...base, content: { kind: 'children', children } });
 }
 function recipeOverride(base: ComponentRecipe, override: ComponentRecipe): ComponentRecipe {
-  const props = { ...base.props, ...override.props };
+  const values = mergeDefaultValues(base, override);
   if (override.text !== undefined) {
-    return { props, text: override.text };
+    return { ...values, text: override.text };
   }
   if (override.children !== undefined) {
-    return { props, children: override.children };
+    return { ...values, children: override.children };
   }
-  return { ...base, props };
+  return {
+    ...(base.text === undefined ? {} : { text: base.text }),
+    ...(base.children === undefined ? {} : { children: base.children }),
+    ...values,
+  };
 }
 
 export function defaultsIssues(config: ComponentDefaults, catalog: readonly DefaultComponent[]): readonly string[] {

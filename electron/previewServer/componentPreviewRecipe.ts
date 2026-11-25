@@ -28,6 +28,7 @@ import { defaultSlotInline, parsePropSchema, parseSlots } from '../parse/astroPa
 import { parseAttrs } from '../parse/astroAttrs';
 import { scanTag } from '../parse/astroTag';
 import { literalProps, type PreviewImport } from './componentPreviewContext';
+import { defaultAttributes, isFragmentTag, withoutMissingAssets } from '../../shared/properties/componentDefaultValues';
 
 export const RECIPE_LIMITS = {
   /**
@@ -65,6 +66,14 @@ export interface PreviewRecipe {
   readonly node: Extract<PreviewRecipeNode, { readonly component: string }>;
   /** Every component file the recipe renders, the owner first, each once, for the route to load. */
   readonly files: readonly string[];
+  /** The imported files and lists among its defaults, which the route's module holds as code (previewModuleSource). */
+  readonly code?: PreviewCode;
+}
+
+export interface PreviewCode {
+  readonly imports: readonly string[];
+  /** A prop's stand-in string, and the expression the module writes in its place. */
+  readonly values: readonly (readonly [string, string])[];
 }
 
 /** The file the defaults live in, absolute, so the route can watch it. */
@@ -105,13 +114,57 @@ export function componentPreviewRecipe(projectDirectory: string, relative: strin
   if (!resolved.ok) {
     return undefined;
   }
-  const node = previewRecipeNode(resolved.value, 0);
+  // A default whose file is gone is left out: an import of it would fail the whole preview module.
+  const present = withoutMissingAssets(resolved.value, (file) => fs.existsSync(path.join(projectDirectory, file))).node;
+  const { recipe, code } = withStandIns(present);
+  const node = previewRecipeNode(recipe, 0);
   if (node === undefined || !('component' in node)) {
     return undefined;
   }
-  const files = [relative, ...recipeFiles(resolved.value).filter((file) => file !== relative)];
+  const files = [relative, ...recipeFiles(recipe).filter((file) => file !== relative)];
   assert(files.length <= DEFAULT_LIMITS.nodesMax + 1, 'Preview recipe: rendered components are bounded by the recipe node limit');
-  return { recipe: resolved.value, node, files };
+  return { recipe, node, files, ...(code.values.length === 0 ? {} : { code }) };
+}
+
+/** The route module's source: its data as JSON, with each stand-in replaced by the expression it stands for. */
+export function previewModuleSource(data: unknown, code: PreviewCode | undefined): string {
+  let json = JSON.stringify(data);
+  for (const [standIn, expression] of code?.values ?? []) {
+    json = json.split(JSON.stringify(standIn)).join(`(${expression}\n)`);
+  }
+  return [...(code?.imports ?? []), `export default ${json};`].join('\n');
+}
+
+// The route's data is JSON, so an imported file or a list goes in as a string that stands for it until the module is written.
+function withStandIns(root: ResolvedRecipe): { readonly recipe: ResolvedRecipe; readonly code: PreviewCode } {
+  const bindings = new Map<string, string>();
+  const values: (readonly [string, string])[] = [];
+  const binding = (file: string): string => {
+    const held = bindings.get(file) ?? `stackiDefaultAsset${bindings.size}`;
+    bindings.set(file, held);
+    return held;
+  };
+  // `assets` and `literals` are emptied, their values now being props.
+  const stand = <N extends Exclude<ResolvedNode, { readonly literal: string }>>(node: N, depth: number): N => {
+    assert(depth <= DEFAULT_LIMITS.depthMax, 'Preview recipe: node depth is bounded');
+    const held = defaultAttributes(
+      { ...(node.assets === undefined ? {} : { assets: node.assets }), ...(node.literals === undefined ? {} : { literals: node.literals }) },
+      binding,
+    ).map(([name, attribute]) => {
+      // The expression and its files are in the stand-in, so a changed default changes the preview's cache key.
+      const standIn = `stacki-default:${values.length}:${JSON.stringify([attribute.value, node.assets, node.literals])}`;
+      values.push([standIn, attribute.value]);
+      return [name, standIn] as const;
+    });
+    const content =
+      node.content.kind === 'children'
+        ? { kind: 'children' as const, children: node.content.children.map((child) => ('literal' in child ? child : stand(child, depth + 1))) }
+        : node.content;
+    return { ...node, props: { ...node.props, ...Object.fromEntries(held) }, content, assets: {}, literals: {} };
+  };
+  const recipe = stand(root, 0);
+  const imports = [...bindings].map(([file, name]) => `import ${name} from ${JSON.stringify('/' + file)};`);
+  return { recipe, code: { imports, values } };
 }
 
 /** The route's form of a resolved node, or undefined when a component's children fill more slots than the route has. */
@@ -132,10 +185,14 @@ export function previewRecipeNode(node: ResolvedNode, depth: number): PreviewRec
     }
   }
   if ('element' in node) {
+    // The route renders elements by name. A Fragment or a built-in is a box that takes no part in the layout.
+    const boxed = isFragmentTag(node.tag) || node.from !== undefined;
+    const element = boxed ? node.element : (node.tag ?? node.element);
+    const props = boxed ? { ...node.props, style: 'display: contents' } : node.props;
     if (node.content.kind === 'children') {
-      return { element: node.element, props: node.props, content: { kind: 'children', children } };
+      return { element, props, content: { kind: 'children', children } };
     }
-    return { element: node.element, props: node.props, content: node.content };
+    return { element, props, content: node.content };
   }
   if (node.content.kind === 'children') {
     const slots = slotGroups(children);

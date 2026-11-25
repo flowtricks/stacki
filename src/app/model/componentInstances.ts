@@ -22,15 +22,36 @@ import {
   type DefaultComponent,
   type ResolvedNode,
 } from '../../../shared/properties/componentDefaults';
+import { assetBindingName, defaultAttributes, isFragmentTag, withoutMissingAssets } from '../../../shared/properties/componentDefaultValues';
+import { missingAssetFiles } from '../../features/componentDefaults/defaultsHost';
 const INSTANCE_COMPONENTS_MAX = DEFAULT_LIMITS.nodesMax;
 
 export interface ComponentInstance {
   readonly node: EditorNode;
   readonly components: readonly ScanComponent[];
+  /** The files under src/ its default values import, each once. */
+  readonly assets: readonly string[];
+  /** Astro's built-ins among its children, which the page imports by name. */
+  readonly builtins: readonly Builtin[];
+  /** Asset defaults left out because their file is gone: said to the person who inserts it. */
+  readonly missing: readonly string[];
+  /** The instance with each asset's import under the name the page gives its file. */
+  readonly bind: (assetName: (file: string) => string) => EditorNode;
 }
+
+export interface Builtin {
+  readonly tag: string;
+  readonly from: string;
+}
+// The name a built-in's node holds until the page's import for it is chosen.
+const builtinKey = (builtin: Builtin): string => `${builtin.from}#${builtin.tag}`;
 
 export interface InstanceImport {
   readonly component: ScanComponent;
+  readonly paths: ImportPaths;
+}
+export interface InstanceAssetImport {
+  readonly asset: string;
   readonly paths: ImportPaths;
 }
 
@@ -43,13 +64,37 @@ export async function loadComponentInstance(component: ScanComponent, available:
   if (parsed && !parsed.ok) {
     throw new Error(parsed.error.message);
   }
-  return componentInstance(component, available, parsed?.ok ? { config: parsed.value, projectPath } : undefined);
+  if (!parsed?.ok) {
+    return componentInstance(component, available);
+  }
+  // A file a default imports may have been deleted since: the insert goes without it rather than with a broken import.
+  const missingAssets = await missingAssetFiles(projectPath, parsed.value);
+  if (missingAssets.length === 0) {
+    return componentInstance(component, available, { config: parsed.value, projectPath });
+  }
+  // The warm read may be from before a move the app made, which rewrote the file: read it again before leaving anything out.
+  const fresh = await readMetadata(projectPath, 'components');
+  const again = fresh.source === undefined ? undefined : parseDefaultsSource(fresh.source);
+  const config = again?.ok ? again.value : parsed.value;
+  return componentInstance(component, available, { config, projectPath, missingAssets: await missingAssetFiles(projectPath, config) });
+}
+
+/** What placing `instance` on the page at `pagePath` imports, each specifier asked of the host. */
+export async function resolveInstanceImports(
+  instance: ComponentInstance,
+  projectPath: string,
+  resolve: (target: string) => Promise<ImportPaths>,
+): Promise<readonly (InstanceImport | InstanceAssetImport)[]> {
+  return Promise.all<InstanceImport | InstanceAssetImport>([
+    ...instance.components.map(async (component) => ({ component, paths: await resolve(component.path) })),
+    ...instance.assets.map(async (asset) => ({ asset, paths: await resolve(`${projectPath}/${asset}`) })),
+  ]);
 }
 
 export function componentInstance(
   component: ScanComponent,
   available: readonly ScanComponent[],
-  settings?: { readonly config: ComponentDefaults; readonly projectPath: string },
+  settings?: { readonly config: ComponentDefaults; readonly projectPath: string; readonly missingAssets?: readonly string[] },
 ): ComponentInstance {
   const definitions = [component, ...available.filter((entry) => entry.path !== component.path)];
   const fileOf = (entry: ScanComponent) =>
@@ -65,69 +110,116 @@ export function componentInstance(
   if (!result.ok) {
     throw new Error(result.error.message);
   }
+  const gone = new Set(settings?.missingAssets);
+  const pruned = withoutMissingAssets(result.value, (file) => !gone.has(file));
   const components = new Map<string, ScanComponent>();
-  const build = (recipe: ResolvedNode, depth: number): EditorNode => {
+  const assets = new Set<string>();
+  const builtins = new Map<string, Builtin>();
+  const build = (recipe: ResolvedNode, depth: number, assetName: (file: string) => string): EditorNode => {
     assert(depth <= DEFAULT_LIMITS.depthMax, 'Component instance preset exceeds its depth limit');
     if ('literal' in recipe) {
-      return { id: newId(), kind: 'text', value: recipe.literal };
+      if (recipe.verbatim === undefined) {
+        return { id: newId(), kind: 'text', value: recipe.literal };
+      }
+      return recipe.verbatim.startsWith('<!--')
+        ? { id: newId(), kind: 'comment', value: recipe.verbatim.slice(4, -3) }
+        : { id: newId(), kind: 'expr', value: recipe.verbatim };
     }
+    const props: Record<string, Attr> = Object.fromEntries(
+      defaultAttributes(recipe, (file) => {
+        assets.add(file);
+        return assetName(file);
+      }),
+    );
     let name: string;
+    // A Fragment or a built-in is written as a component the project does not hold; an SVG tag is an element.
+    let asComponent = 'component' in recipe;
+    let shorthand = false;
     if ('component' in recipe) {
       const definition = definitions.find((entry) => fileOf(entry) === recipe.component);
       assert(definition !== undefined, 'Resolved recipe has a scanned component');
       components.set(definition.path, definition);
       name = settings ? definition.path : definition.name;
+    } else if (recipe.from !== undefined && recipe.tag !== undefined) {
+      const builtin = { tag: recipe.tag, from: recipe.from };
+      builtins.set(builtinKey(builtin), builtin);
+      name = builtinKey(builtin);
+      asComponent = true;
+    } else if (isFragmentTag(recipe.tag)) {
+      name = 'Fragment';
+      asComponent = true;
+      shorthand = recipe.tag === '<>' && Object.keys(props).length === 0;
     } else {
-      name = recipe.element;
+      name = recipe.tag ?? recipe.element;
     }
-    const props: Record<string, Attr> = Object.fromEntries(
-      Object.entries(recipe.props).map(([name, value]) => [
-        name,
-        typeof value === 'string' ? { type: 'string', value } : { type: 'expr', value: String(value) },
-      ]),
-    );
     return {
       id: newId(),
-      kind: 'component' in recipe ? 'component' : 'element',
+      kind: asComponent ? 'component' : 'element',
       name,
+      ...(shorthand ? { shorthand: true } : {}),
       props,
       children:
         recipe.content.kind === 'empty'
           ? undefined
           : recipe.content.kind === 'text'
             ? [{ id: newId(), kind: 'text', value: recipe.content.text }]
-            : recipe.content.children.map((child) => build(child, depth + 1)),
+            : recipe.content.children.map((child) => build(child, depth + 1, assetName)),
     };
   };
-  const node = build(result.value, 0);
-  return { node, components: [...components.values()] };
+  // A first pass finds the components and assets; binding builds it again once the page has named the assets.
+  const bind = (assetName: (file: string) => string): EditorNode => build(pruned.node, 0, assetName);
+  const node = bind((file) => assetBindingName(file, new Set()));
+  return { node, components: [...components.values()], assets: [...assets], builtins: [...builtins.values()], missing: pruned.missing, bind };
 }
 
 export function componentInstancePlacement(
   model: EditorModel,
   instance: ComponentInstance,
-  resolved: readonly InstanceImport[],
+  resolved: readonly (InstanceImport | InstanceAssetImport)[],
 ): { readonly node: EditorNode; readonly imports: readonly ImportDecl[] } {
-  assert(resolved.length === instance.components.length, 'Every instance dependency is resolved');
+  assert(resolved.length === instance.components.length + instance.assets.length, 'Every instance dependency is resolved');
   assert(resolved.length <= INSTANCE_COMPONENTS_MAX, 'Instance imports exceed the preset limit');
   const imports = [...model.imports];
   const taken = namesInScope(model.extraFrontmatter ?? '', imports);
   const names = new Map<string, string>();
-  for (const { component, paths } of resolved) {
-    const importPath = chooseImportPath(model, paths);
-    const existing = imports.find((item) => item.path === importPath || item.path === paths.relative);
-    if (existing) {
-      names.set(component.name, existing.name);
-      names.set(component.path, existing.name);
-    } else {
-      const name = componentInstanceName(component.name, taken);
+  const assetNames = new Map<string, string>();
+  for (const dependency of resolved) {
+    const importPath = chooseImportPath(model, dependency.paths);
+    // The page's own import of the same file is used again: only a default import stands for the whole file.
+    const existing = imports.find((item) => !item.named && (item.path === importPath || item.path === dependency.paths.relative));
+    let name = existing?.name;
+    if (name === undefined) {
+      name = 'asset' in dependency ? assetBindingName(dependency.asset, taken) : componentInstanceName(dependency.component.name, taken);
       taken.add(name);
-      names.set(component.name, name);
-      names.set(component.path, name);
       imports.push({ name, path: importPath, quote: "'" });
     }
+    if ('asset' in dependency) {
+      assetNames.set(dependency.asset, name);
+    } else {
+      names.set(dependency.component.name, name);
+      names.set(dependency.component.path, name);
+    }
   }
-  return { node: componentInstanceRename(instance.node, names, 0), imports };
+  for (const builtin of instance.builtins) {
+    const existing = imports.find((item) => item.named === true && item.path === builtin.from && (item.imported ?? item.name) === builtin.tag);
+    let name = existing?.name;
+    if (name === undefined) {
+      name = componentInstanceName(builtin.tag, taken);
+      taken.add(name);
+      imports.push({ name, imported: builtin.tag, named: true, path: builtin.from, quote: "'" });
+    }
+    names.set(builtinKey(builtin), name);
+  }
+  names.set('Fragment', names.get('Fragment') ?? 'Fragment');
+  const bound =
+    instance.assets.length === 0
+      ? instance.node
+      : instance.bind((file) => {
+          const name = assetNames.get(file);
+          assert(name !== undefined, 'Every asset of the instance has an import binding');
+          return name;
+        });
+  return { node: componentInstanceRename(bound, names, 0), imports };
 }
 
 function componentInstanceName(base: string, taken: ReadonlySet<string>): string {

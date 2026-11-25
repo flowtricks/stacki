@@ -47,6 +47,9 @@ export const messages = {
   'componentProps.defaults.conditional': 'Ustawiana warunkami',
   'componentProps.defaults.discard': 'Odrzuć zmiany',
   'componentProps.defaults.entryRead': 'Kod odczytuje {value} bezpośrednio z {name}. Zmień to w kodzie źródłowym.',
+  'componentProps.defaults.insertedWithoutAsset':
+    'Wstawiono bez pliku {file}, którego nie ma już w projekcie. Ustaw ponownie wartości domyślne tego komponentu.',
+  'componentProps.defaults.missingAsset': 'Brakuje pliku domyślnego: {file}. Zapisanie usunie go z tych wartości domyślnych.',
   'componentProps.defaults.missingTable': '{name} nie ma wartości domyślnych dla opcji do edycji.',
   'componentProps.defaults.perOption': 'Zacznij każdą grupę od {controller} i jednej opcji.',
   'componentProps.defaults.return': 'Przywróć wartości domyślne',
@@ -54,6 +57,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Wartości domyślne zapisano w tym projekcie.',
   'componentProps.defaults.tableReset':
     'Komponent oblicza tę wartość domyślną z własnej tabeli: zmień wartość domyślną każdej opcji w warunkach albo tabelę w kodzie źródłowym.',
+  'componentProps.defaults.unsupportedChild': '{child} nie może być częścią wartości domyślnych. Usuń go i zapisz ponownie albo odrzuć zmiany.',
+  'componentProps.defaults.unsupportedValue':
+    '„{prop}” w {tag} nie może być wartością domyślną, bo odczytuje kod strony. Wybierz stałą wartość, listę lub plik albo odrzuć zmiany.',
   'componentProps.dialog.close': 'Zamknij ustawienia właściwości',
   'componentProps.dialog.loading': 'Wczytywanie właściwości…',
   'componentProps.dialog.title': 'Ustawienia właściwości',

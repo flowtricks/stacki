@@ -17,6 +17,7 @@ import {
   writeExplorerFile,
 } from '../project/explorerOps';
 import { createExplorerWatch } from '../project/explorerWatch';
+import { relinkMovedDefaultAssets } from '../project/componentDefaultRelink';
 import type { MainHost } from './mainHost';
 
 export interface FileExplorerOptions {
@@ -70,11 +71,26 @@ export function registerFileExplorerHandlers(
   });
   ipcMain.handle('files:rename', (_event, { projectPath, path: source, name }) => {
     const root = explorerRoot(projectPath, openProject());
-    return root.ok ? renameEntry(root.value, source, name) : root;
+    if (!root.ok) {
+      return root;
+    }
+    const renamed = renameEntry(root.value, source, name);
+    if (renamed.ok) {
+      // Component defaults that import the file follow it.
+      relinkMovedDefaultAssets(root.value.lexical, [{ from: source, to: renamed.value.path }]);
+    }
+    return renamed;
   });
   ipcMain.handle('files:transfer', async (_event, { projectPath, paths, target, mode, collision }) => {
     const root = explorerRoot(projectPath, openProject());
-    return root.ok ? transferEntries(root.value, { sources: paths, target, mode, collision }, disk) : root;
+    if (!root.ok) {
+      return root;
+    }
+    const transferred = await transferEntries(root.value, { sources: paths, target, mode, collision }, disk);
+    if (transferred.ok && mode === 'move') {
+      relinkMovedDefaultAssets(root.value.lexical, transferred.value.placed);
+    }
+    return transferred;
   });
   ipcMain.handle('files:trash', async (_event, { projectPath, paths }) => {
     const root = explorerRoot(projectPath, openProject());

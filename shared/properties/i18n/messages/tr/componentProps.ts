@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'Koşullarla belirlenir',
   'componentProps.defaults.discard': 'Değişiklikleri at',
   'componentProps.defaults.entryRead': 'Kod {value} değerini doğrudan {name} içinden okuyor. Kaynakta değiştirin.',
+  'componentProps.defaults.insertedWithoutAsset': '{file} artık projede olmadığı için o olmadan eklendi. Bu bileşenin varsayılanlarını yeniden ayarlayın.',
+  'componentProps.defaults.missingAsset': 'Bir varsayılan dosya eksik: {file}. Kaydetmek onu bu varsayılanlardan kaldırır.',
   'componentProps.defaults.missingTable': '{name} için düzenlenecek seçenek başına varsayılan yok.',
   'componentProps.defaults.perOption': 'Her grubu {controller} ve tek bir seçenekle başlat.',
   'componentProps.defaults.return': 'Varsayılanlara dön',
@@ -44,6 +46,9 @@ export const messages = {
   'componentProps.defaults.saved': 'Varsayılanlar bu projeye kaydedildi.',
   'componentProps.defaults.tableReset':
     'Bileşen bu varsayılanı kendi tablosundan hesaplıyor: her seçeneğin varsayılanını koşullarda veya tabloyu kaynakta değiştirin.',
+  'componentProps.defaults.unsupportedChild': '{child} varsayılanların parçası olamaz. Kaldırıp yeniden kaydedin ya da değişikliklerinizi atın.',
+  'componentProps.defaults.unsupportedValue':
+    '{tag} üzerindeki “{prop}” sayfanın kodunu okuduğu için varsayılan olamaz. Sabit bir değer, liste veya dosya seçin ya da değişikliklerinizi atın.',
   'componentProps.dialog.close': 'Özellik ayarlarını kapat',
   'componentProps.dialog.loading': 'Özellik yükleniyor…',
   'componentProps.dialog.title': 'Özellik ayarları',

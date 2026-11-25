@@ -37,6 +37,9 @@ export const messages = {
   'componentProps.defaults.conditional': 'Bepaald door voorwaarden',
   'componentProps.defaults.discard': 'Wijzigingen verwerpen',
   'componentProps.defaults.entryRead': 'De code leest {value} rechtstreeks uit {name}. Wijzig het in de broncode.',
+  'componentProps.defaults.insertedWithoutAsset':
+    'Ingevoegd zonder {file}, dat niet meer in het project staat. Stel de standaardwaarden van dit component opnieuw in.',
+  'componentProps.defaults.missingAsset': 'Een standaardbestand ontbreekt: {file}. Bij opslaan wordt het uit deze standaardwaarden verwijderd.',
   'componentProps.defaults.missingTable': '{name} heeft geen standaardwaarden per optie om te bewerken.',
   'componentProps.defaults.perOption': 'Begin elke groep met {controller} en één optie.',
   'componentProps.defaults.return': 'Terug naar standaardwaarden',
@@ -44,6 +47,10 @@ export const messages = {
   'componentProps.defaults.saved': 'Standaardwaarden opgeslagen in dit project.',
   'componentProps.defaults.tableReset':
     'Het component berekent deze standaardwaarde uit zijn eigen tabel: wijzig de standaardwaarde van elke optie in de voorwaarden, of de tabel in de broncode.',
+  'componentProps.defaults.unsupportedChild':
+    '{child} kan geen deel uitmaken van de standaardwaarden. Verwijder het en sla opnieuw op, of verwerp je wijzigingen.',
+  'componentProps.defaults.unsupportedValue':
+    '‘{prop}’ op {tag} kan geen standaardwaarde zijn, omdat het code van de pagina leest. Kies een vaste waarde, lijst of bestand, of verwerp je wijzigingen.',
   'componentProps.dialog.close': 'Eigenschapsinstellingen sluiten',
   'componentProps.dialog.loading': 'Eigenschap laden…',
   'componentProps.dialog.title': 'Eigenschapsinstellingen',

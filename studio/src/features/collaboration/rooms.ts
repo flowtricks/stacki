@@ -1,5 +1,7 @@
 import { verifyGitWorkspaceLease } from '../history/gitWorkspaceLease';
 import { loadInsertionDefaults } from '../settings/loadDefaults';
+import { leftOutAssets } from '../source/instanceDefaults';
+import { resolveImport } from '../source/imports';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { maintainConnection } from './connectionLease';
 import { parseSaveSequence } from './saveProtocol';
@@ -308,12 +310,25 @@ export class Room {
         this.text.insert(edit.start, edit.text);
       }
     }, 'structure');
+    if (action.kind === 'insert') {
+      this.sayLeftOut(socket, leftOutAssets(resolveImport(this.file, action.importPath, settings?.imports ?? []), settings));
+    }
     for (const [connection, peer] of this.clients) {
       this.clients.set(connection, {
         ...peer,
         selection: select(peer.selection, connection === socket),
         occurrence: connection === socket ? 0 : peer.occurrence,
         ...(connection === socket ? { editing: false } : {}),
+      });
+    }
+  }
+  // The insert happened; the person is told which default file it went without.
+  private sayLeftOut(socket: WebSocket, files: readonly string[]) {
+    const [file] = files;
+    if (file !== undefined) {
+      this.send(socket, {
+        type: 'notice',
+        ...errorWire(new ReferencedError('componentProps.defaults.insertedWithoutAsset', { file }), 'studio.collab.editFailed'),
       });
     }
   }

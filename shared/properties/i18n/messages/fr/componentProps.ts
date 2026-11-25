@@ -37,6 +37,8 @@ export const messages = {
   'componentProps.defaults.conditional': 'Définir par conditions', // review
   'componentProps.defaults.discard': 'Annuler les modifications',
   'componentProps.defaults.entryRead': 'Le code lit {value} directement dans {name}. Modifiez-le dans le source.', // review
+  'componentProps.defaults.insertedWithoutAsset': 'Inséré sans {file}, qui n’est plus dans le projet. Redéfinissez les valeurs par défaut de ce composant.',
+  'componentProps.defaults.missingAsset': 'Un fichier par défaut est introuvable : {file}. L’enregistrement le retire de ces valeurs par défaut.',
   'componentProps.defaults.missingTable': '{name} n’a pas de valeurs par défaut par option à modifier.', // review
   'componentProps.defaults.perOption': 'Commencez chaque groupe par {controller} et une option.', // review
   'componentProps.defaults.return': 'Revenir aux valeurs par défaut',
@@ -44,6 +46,10 @@ export const messages = {
   'componentProps.defaults.saved': 'Valeurs par défaut enregistrées dans ce projet.',
   'componentProps.defaults.tableReset':
     'Le composant calcule cette valeur par défaut avec sa propre table : modifiez celle de chaque option dans les conditions, ou la table dans le source.', // review
+  'componentProps.defaults.unsupportedChild':
+    '{child} ne peut pas faire partie des valeurs par défaut. Retirez-le et enregistrez de nouveau, ou abandonnez vos modifications.',
+  'componentProps.defaults.unsupportedValue':
+    '« {prop} » sur {tag} ne peut pas être une valeur par défaut, car elle lit le code de la page. Choisissez une valeur fixe, une liste ou un fichier, ou abandonnez vos modifications.',
   'componentProps.dialog.close': 'Fermer les réglages de la propriété',
   'componentProps.dialog.loading': 'Chargement de la propriété…',
   'componentProps.dialog.title': 'Réglages de la propriété',
