@@ -43,7 +43,12 @@ export async function checkProject(root: string): Promise<void> {
     if (!parsed.ok) {
       throw new Error(`.stacki/component-canvas.json: ${parsed.error.message}`);
     }
-    canvasProblems.push(...canvasIssues(parsed.value, settings.catalog.map((component) => component.file)));
+    canvasProblems.push(
+      ...canvasIssues(
+        parsed.value,
+        settings.catalog.map((component) => component.file),
+      ),
+    );
   }
   if (issues.length + canvasProblems.length > 0) {
     throw new Error([...issues, ...canvasProblems].join('\n'));

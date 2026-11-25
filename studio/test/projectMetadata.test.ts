@@ -40,7 +40,10 @@ const firstSettings = {
   },
   pages: { version: 1, entries: ['about/', 'index.astro'] },
   componentSources: { version: 1, sources: [] },
-  componentCanvas: { version: 1, components: { 'src/components/Button.astro': { split: ['variant'], frames: { 'variant=main': { background: 'transparent' } } } } },
+  componentCanvas: {
+    version: 1,
+    components: { 'src/components/Button.astro': { split: ['variant'], frames: { 'variant=main': { background: 'transparent' } } } },
+  },
   styles: { version: 1, keep: ['is-*'] },
   folders: { version: 1, folders: { components: ['src/ui'], assets: ['public', 'src/assets'] } },
   instructions: { version: 1, hidden: ['docs/archive'] },
