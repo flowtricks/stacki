@@ -40,14 +40,31 @@ export interface CanvasClickHandler {
 
 let handler: CanvasClickHandler | undefined;
 
+/**
+ * A mode of the editor's own that takes canvas clicks ahead of any app: the AI panel's comment mode, where a click
+ * drops a pin (src/app/shell/DesktopPins.tsx). It has its own slot so it neither replaces nor is replaced by the
+ * Apps host's handler; while it captures, an app neither captures nor observes.
+ */
+export interface CanvasClickInterceptor {
+  readonly capturing: () => boolean;
+  readonly take: (click: CanvasClickReport) => void;
+}
+
+let interceptor: CanvasClickInterceptor | undefined;
+
 /** Installs the Apps host's handler, or removes it with undefined. */
 export function setCanvasClickHandler(next: CanvasClickHandler | undefined): void {
   handler = next;
 }
 
-/** Whether a canvas click or double click belongs to an app now, not to selection. */
+/** Installs the editor's own click mode (comment pins), or removes it with undefined. */
+export function setCanvasClickInterceptor(next: CanvasClickInterceptor | undefined): void {
+  interceptor = next;
+}
+
+/** Whether a canvas click or double click belongs to an app or to the editor's own click mode now, not to selection. */
 export function canvasClicksCaptured(): boolean {
-  return handler?.capturing() === true;
+  return interceptor?.capturing() === true || handler?.capturing() === true;
 }
 
 /**
@@ -65,6 +82,9 @@ let observed: ReturnType<typeof setTimeout> | undefined;
  * window drops the waiting one, so a double click never reaches the app as a placement.
  */
 export function observeCanvasClick(click: CanvasClickReport): boolean {
+  if (interceptor?.capturing() === true) {
+    return false; // The click is a pin's: no app hears it.
+  }
   if (handler === undefined || !handler.observing()) {
     return false;
   }
@@ -87,6 +107,11 @@ export function noteCanvasOpen(): void {
 
 /** Gives the click to the capturing app; false when none captures, and the canvas selects as usual. */
 export function takeCanvasClick(click: CanvasClickReport): boolean {
+  if (interceptor !== undefined && interceptor.capturing()) {
+    assert(click.occurrence >= 0, 'A click names a copy from the first');
+    interceptor.take(click);
+    return true;
+  }
   if (handler === undefined || !handler.capturing()) {
     return false;
   }

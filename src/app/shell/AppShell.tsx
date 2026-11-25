@@ -78,6 +78,7 @@ import { ViewAsChip } from '../roles/ViewAsChip';
 import { AppsTab, DesktopAppsHost } from './DesktopApps';
 import { AuditsHost, AuditsTab } from './DesktopAudits';
 import { AiCover, AiHost, AiTab, useAiRailButton } from './DesktopAi';
+import { PinsHost } from './DesktopPins';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { SettingsButton } from './WelcomeView';
@@ -166,6 +167,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
       <AppOverlays app={app} />
       <AuditsHost app={app} />
       <AiHost app={app} />
+      <PinsHost app={app} />
     </div>
   );
 }

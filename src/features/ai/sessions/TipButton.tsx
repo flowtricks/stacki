@@ -28,6 +28,7 @@ export interface TipButtonProps {
   readonly pressed?: boolean | undefined;
   readonly buttonRef?: Ref<HTMLButtonElement> | undefined;
   readonly menu?: { readonly open: boolean } | undefined;
+  readonly disabled?: boolean | undefined;
   readonly children: ReactNode;
   readonly onClick: () => void;
 }
@@ -44,6 +45,7 @@ export function TipButton(props: TipButtonProps) {
         type="button"
         className={props.className === undefined ? 'ghost' : `ghost ${props.className}`}
         aria-label={props.label}
+        disabled={props.disabled}
         aria-pressed={props.pressed}
         aria-haspopup={props.menu === undefined ? undefined : 'menu'}
         aria-expanded={props.menu?.open}
