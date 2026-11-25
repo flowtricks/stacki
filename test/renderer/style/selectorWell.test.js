@@ -19,6 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { readSourceFolder } = require('../../helpers/sourceText.js');
+const { pollUntil } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -318,33 +319,29 @@ const contrastRatio = (first, second) => {
     logLevel: 'silent',
   });
 
-  const READ_MS = 250;
   const SHEET = {
     rel: 'src/styles/main.css',
     name: 'main.css',
     path: '/p/src/styles/main.css',
     size: 10,
   };
+  const initialRead = Promise.withResolvers();
+  // Reads and writes share the same file so a background scan after a save sees the new CSS.
+  let stylesheetCss = 'section { margin: 0 } div { display: block } .card { color: red }';
   let styleWriteCount = 0;
-  let writtenCss = '';
   dom.window.avb = {
     onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),
-    readStyleFile: () =>
-      new Promise((resolve) =>
-        dom.window.setTimeout(
-          () =>
-            resolve({
-              css: 'section { margin: 0 } div { display: block } .card { color: red }',
-            }),
-          READ_MS,
-        ),
-      ),
+    readStyleFile: async () => {
+      await initialRead.promise;
+      return { css: stylesheetCss };
+    },
     writeStyleFile: async ({ css }) => {
       styleWriteCount += 1;
-      writtenCss = css;
+      stylesheetCss = css;
+      return { ok: true };
     },
   };
 
@@ -383,14 +380,21 @@ const contrastRatio = (first, second) => {
   check('a project with no stylesheets to read settles empty', panelChips().length === 0, `${panelChips().length} chips`);
   check('and does not pretend to be waiting', panelSpinner() === null);
 
-  // The list arrives, after the panel already called itself ready.
+  // The list arrives after the panel is ready. Hold its reads until the loading state is visible.
   setHost({ files: [SHEET] });
-  await wait(60);
+  await pollUntil({ what: 'the stylesheet scan shows its spinner', read: panelSpinner, until: (spinner) => spinner !== null });
   check('the well waits on stylesheets it has just been offered', panelSpinner() !== null);
   check('with nothing in it yet', panelChips().length === 0, `${panelChips().length} chips`);
 
-  await wait(READ_MS + 400); // still far inside the 4s refresh throttle it used to wait out
-  check('the global rule is counted after the stylesheet lands', panel.querySelector('.embed-editor_selector-filter')?.textContent.includes('(1)') === true);
+  initialRead.resolve();
+  const globalRuleCounted = () => panel.querySelector('.embed-editor_selector-filter')?.textContent.includes('(1)') === true;
+  await pollUntil({
+    what: 'the global rule counts without waiting for the four-second background refresh',
+    read: globalRuleCounted,
+    until: (counted) => counted,
+    pollCountMax: 14,
+  });
+  check('the global rule is counted after the stylesheet lands', globalRuleCounted());
   check('the global rule stays folded initially', panelChips().length === 0);
   check('and the spinner goes with the completed scan', panelSpinner() === null);
 
@@ -485,8 +489,14 @@ const contrastRatio = (first, second) => {
       changes: { from: 0, to: editor.state.doc.length, insert: nextCss },
       selection: { anchor: nextCss.length },
     });
-    await wait(450);
-    check('typing in the CSS box automatically writes the selected rule', writtenCss.includes('.card { color: blue }'));
+    const written = () => stylesheetCss.includes(nextCss);
+    const colorValue = () => panel.querySelector('[data-prop="color"]')?.value;
+    await pollUntil({
+      what: 'the CSS autosave has written the rule and the panel shows its new color',
+      read: () => ({ written: written(), color: colorValue() }),
+      until: (state) => state.written && state.color === 'blue',
+    });
+    check('typing in the CSS box automatically writes the selected rule', written());
     const currentEditorElement = panel.querySelector('.embed-editor_css-code-editor .cm-editor');
     check(
       'autosave does not remount the editor or move its caret',
@@ -494,11 +504,7 @@ const contrastRatio = (first, second) => {
       `same element: ${currentEditorElement === editorElement}; ` + `caret: ${editor.state.selection.main.head}; length: ${editor.state.doc.length}`,
     );
     check('the autosaving editor has no manual Save CSS button', !panel.textContent.includes('Save CSS'));
-    check(
-      'the style panel refreshes from the edited CSS',
-      panel.querySelector('[data-prop="color"]')?.value === 'blue',
-      panel.querySelector('[data-prop="color"]')?.value,
-    );
+    check('the style panel refreshes from the edited CSS', colorValue() === 'blue', colorValue());
     editor.dispatch({
       changes: { from: 0, to: editor.state.doc.length, insert: '.card { color:' },
     });

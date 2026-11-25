@@ -1260,8 +1260,11 @@ test('the swap list puts the caret in its search field, and a press back in the 
   // Escape gives the editor its caret back right after the chip.
   await clickPill(0);
   await waitUntil('the swap list opens again', () => list() !== undefined);
-  await act(async () => void document.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
-  await waitUntil('Escape closes it', () => list() === undefined);
+  const reopenedSearch = list().querySelector('.related-css-search');
+  await waitUntil('the reopened search field has the caret', () => document.activeElement === reopenedSearch);
+  await act(async () => void reopenedSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  // The composer restores focus on an animation frame after the popup unmounts.
+  await waitUntil('Escape closes the list and restores editor focus', () => list() === undefined && record.view.hasFocus);
   assert.ok(record.view.hasFocus);
   assert.equal(record.view.state.selection.main.head, 'Use '.length + 1, 'the caret sits right after the chip');
   model.setMentionIndexSource(undefined);

@@ -5,8 +5,8 @@
 // selects copy zero and the outline wrapped the paragraph alone.
 // Method: jsdom pages tagged as the canvas receives them once the comments are gone; collectRegions runs and the
 // derived runs are read from `regions`. Cases: the bug's two children, bare text between children, a loop child, a
-// nested fragment, separate component instances (which must stay separate copies), and 8,000 loop items, whose cost
-// must grow linearly (eight times the items, far less than the sixty-four times a quadratic pass takes).
+// nested fragment, separate component instances (which must stay separate copies), and 8,000 loop items. The large
+// loop counts sibling steps and the size of array membership scans to catch repeated walks of a growing run.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { JSDOM } = require('jsdom');
@@ -101,24 +101,52 @@ test('separate instances of a component stay separate copies of its hollow node'
   }
 });
 
-test('8,000 items in a hollow loop inside a hollow fragment collect in linear time', () => {
-  const timed = (count) => {
+test('collecting a hollow fragment walks the 8,000-item loop a bounded number of times', () => {
+  const measure = (count) => {
     const items = Array.from({ length: count }, (_, item) => `<div data-avb-p="Card.astro|0 ${child(0)}.0">${item}</div>`).join('');
     const page = collect(`${items}<div data-avb-p="${child(1)}">Go</div>`);
     try {
-      const started = performance.now();
-      frame.collectRegions();
-      const elapsedMs = performance.now() - started;
+      const work = countCollectionWork(page.column.ownerDocument.defaultView);
       assert.equal(page.runs(FRAGMENT)?.length, 1);
       assert.equal(elementsOf(page.runs(FRAGMENT)[0]).length, count + 1);
       assert.equal(page.runs(child(0))?.length, 1);
-      return elapsedMs;
+      assert.equal(elementsOf(page.runs(child(0))[0]).length, count);
+      return work;
     } finally {
       page.close();
     }
   };
-  timed(1000); // Warms the JIT so the smaller run is not charged for it.
-  const smallMs = timed(1000);
-  const largeMs = timed(8000);
-  assert.ok(largeMs < Math.max(smallMs, 2) * 24, `8x the items took ${largeMs.toFixed(1)} ms against ${smallMs.toFixed(1)} ms: not linear`);
+  const smallWork = measure(1000);
+  const largeWork = measure(8000);
+  assert.ok(smallWork >= 1000, 'the collection walks the loop');
+  assert.ok(largeWork < smallWork * 24, `8 times the items took ${largeWork} steps against ${smallWork}`);
 });
+
+function countCollectionWork(window) {
+  const nodePrototype = window.Node.prototype;
+  const sibling = Object.getOwnPropertyDescriptor(nodePrototype, 'nextSibling');
+  assert.equal(typeof sibling?.get, 'function', 'jsdom exposes the sibling getter');
+  const includes = Array.prototype.includes;
+  let steps = 0;
+  Object.defineProperty(nodePrototype, 'nextSibling', {
+    ...sibling,
+    get() {
+      steps += 1;
+      return sibling.get.call(this);
+    },
+  });
+  Array.prototype.includes = function (item, fromIndex) {
+    if (item instanceof window.Node) {
+      // Checking each new node against the run already collected scans the full array on a miss.
+      steps += this.length;
+    }
+    return includes.call(this, item, fromIndex);
+  };
+  try {
+    frame.collectRegions();
+    return steps;
+  } finally {
+    Array.prototype.includes = includes;
+    Object.defineProperty(nodePrototype, 'nextSibling', sibling);
+  }
+}
