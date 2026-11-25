@@ -62,13 +62,13 @@ function writeFixture(project) {
     );
   }
   write('src/components/HtmlBlock.astro', '---\nconst { html } = Astro.props;\n---\n<div class="html-block" set:html={html} />\n');
+  // The key pass (RICH_TEXT_KEYS) starts from the bytes a report showed: a break saved earlier, the content indented
+  // other than the printer would, the closing tag on the last line, at depth.
   write(
     'src/pages/index.astro',
     `---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\nimport LumosRichText from "../components/LumosRichText.astro";\nimport HtmlBlock from "../components/HtmlBlock.astro";\nimport LumosParagraph from "../components/typography/Paragraph.astro";\n---\n<html><body>\n<Paragraph>Words of a paragraph</Paragraph>\n<RichText><h2>Title</h2><p>Hello world</p></RichText>\n<LumosRichText><p>Lumos text</p></LumosRichText>\n<HtmlBlock html="<p>From a prop</p>" />\n<HtmlBlock html={"<p>" + "joined" + "</p>"} />\n${
       process.env['RICH_TEXT_KEYS'] === '1'
-        ? // The key pass starts from the bytes a report showed: a break saved earlier, the content indented other than the
-          // printer would, the closing tag on the last line, at depth.
-          '<div>\n  <section>\n    <div>\n        <LumosParagraph id="lumos-p">\n          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.\n        <br />Another paragraph</LumosParagraph>\n    </div>\n  </section>\n</div>'
+        ? '<div>\n  <section>\n    <div>\n        <LumosParagraph id="lumos-p">\n          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.\n        <br />Another paragraph</LumosParagraph>\n    </div>\n  </section>\n</div>'
         : '<LumosParagraph id="lumos-p">\n  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.\n</LumosParagraph>'
     }\n<p id="plain-p" class="lead">Plain <strong>words</strong></p>\n<RichText />\n</body></html>\n`,
   );
