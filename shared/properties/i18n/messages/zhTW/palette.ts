@@ -115,6 +115,7 @@ export const messages = {
   'palette.panel.noMatch': '沒有符合「{query}」的元件。',
   'palette.panel.none': '在 {folder} 中找不到元件。',
   'palette.panel.search': '搜尋元件',
+  'palette.panel.searchHidden': '在搜尋中隱藏',
   'palette.panel.title': '元件',
   'palette.preview.clientOnly': '此元件只能在瀏覽器中運作，因此無法預先繪製。',
   'palette.preview.loading': '正在載入預覽…',

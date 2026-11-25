@@ -9,8 +9,10 @@ import { useMemo } from 'react';
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import type { PropsPanelProps } from '../../../vendor/stacki/src/features/props/propsPanelTypes';
 import type { NewPropHost } from '../../../vendor/stacki/src/features/props/newPropModel';
+import { componentsOfferedTo } from '../../../vendor/stacki/src/features/palette/componentVisibility';
 import { useListProps } from '../../../vendor/stacki/src/app/state/useListProps';
 import { editLoopProperty } from '../../../vendor/stacki/src/app/state/loopPropertyEdit';
+import { useStudioRole } from '../roles/useEditorRole';
 import type { SharedDocument } from '../collaboration/useDocument';
 import type { Component, Project } from '../project/projectClient';
 import { revertComponentProperties } from '../componentProperties/propertyTransport';
@@ -59,8 +61,11 @@ export function useStructureSettings(input: StructureInput): { readonly handlers
   const listProps = useListProps('studio', input.component?.file);
   const { changePhase } = usePropertySaveGuard();
   const translate = useTranslate();
-  const options = useMemo(() => tagOptions(project, source), [project, source]);
-  const layouts = useMemo(() => layoutOptions(project), [project]);
+  const role = useStudioRole();
+  const options = useMemo(() => tagOptions(project, source, role), [project, source, role]);
+  const layouts = useMemo(() => layoutOptions(project, role), [project, role]);
+  // What a typed name may resolve to: the components the role may add (componentAccess.ts).
+  const addable = (): Pick<Project, 'components'> => ({ components: [...componentsOfferedTo(role, 'browse', project.components)] });
   const current = (): string => document.text.toString();
   const write = (next: string): void => {
     if (next !== current()) {
@@ -81,7 +86,7 @@ export function useStructureSettings(input: StructureInput): { readonly handlers
     // False puts the old name back in the field, as Desktop's does when nothing provides it.
     onChangeTag: (name: string) =>
       attempt(() => {
-        const next = changedTag(current(), file, selected, name, project);
+        const next = changedTag(current(), file, selected, name, addable());
         if (next === undefined) {
           return false;
         }
@@ -89,7 +94,7 @@ export function useStructureSettings(input: StructureInput): { readonly handlers
         return true;
       }, false),
     layouts,
-    onChangeLayout: (name: string) => attempt(() => write(changedLayout(current(), file, name, project)), undefined),
+    onChangeLayout: (name: string) => attempt(() => write(changedLayout(current(), file, name, addable())), undefined),
     onReplaceProps: (id, props) => attempt(() => write(replacedProps(current(), id, props)), undefined),
     listProps,
     onCommitLoopHead: (value, renames) =>

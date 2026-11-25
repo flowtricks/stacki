@@ -7,6 +7,12 @@
 .panel-body .palette-folder {
   padding-inline-end: 36px;
 }
+/* A component an admin hid from search: still here to drag in by hand, drawn dimmed. Its "…" stays at full strength. */
+.palette-item.is-search-hidden > .icon,
+.palette-item.is-search-hidden > .label {
+  opacity: 0.45;
+}
+
 .palette-row-menu {
   position: absolute;
   top: 50%;

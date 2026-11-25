@@ -116,6 +116,7 @@ export const messages = {
   'palette.panel.noMatch': '“{query}” से कोई कंपोनेंट मेल नहीं खाता।',
   'palette.panel.none': '{folder} में कोई कंपोनेंट नहीं मिला।',
   'palette.panel.search': 'कंपोनेंट खोजें',
+  'palette.panel.searchHidden': 'खोज से छिपा हुआ',
   'palette.panel.title': 'कंपोनेंट',
   'palette.preview.clientOnly': 'यह कंपोनेंट सिर्फ़ ब्राउज़र में काम करता है, इसलिए इसे पहले से नहीं बनाया जा सकता।',
   'palette.preview.loading': 'प्रीव्यू लोड हो रहा है…',

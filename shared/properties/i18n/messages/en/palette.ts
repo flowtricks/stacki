@@ -116,6 +116,7 @@ export const messages = {
   'palette.panel.noMatch': 'No components match “{query}”.',
   'palette.panel.none': 'No components found in {folder}.',
   'palette.panel.search': 'Search components',
+  'palette.panel.searchHidden': 'Hidden from search',
   'palette.panel.title': 'Components',
   'palette.preview.clientOnly': 'This component only works in the browser, so it cannot be drawn ahead of time.',
   'palette.preview.loading': 'Loading preview…',

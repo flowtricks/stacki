@@ -4,6 +4,7 @@
 // textPieces.ts, newPropGesture.ts), and writes it through Desktop's request
 // drafting and planner (source/gestureWrite.ts). Each takes the page's text and
 // gives back its new text, or throws with the reason the change cannot be made.
+import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { LIMITS } from '../../../vendor/stacki/shared/core/limits';
 import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
@@ -25,6 +26,7 @@ import {
   restatedText,
   tagChangeGesture,
   tagOptionsOf,
+  layoutOptionsOf,
   toggledElseBranch,
   withComponentImport,
   withImportsGesture,
@@ -50,14 +52,16 @@ export function isLayoutComponent(component: Pick<Component, 'isLayout'>): boole
 }
 
 /** What the Tag field offers on this page: tags, the project's components and layouts, Astro's own, and the page's imports. */
-export function tagOptions(project: Pick<Project, 'components'>, source: string): readonly TagOption[] {
-  const components = project.components.map((component) => ({ name: component.name, isLayout: isLayoutComponent(component) }));
-  return tagOptionsOf(components, modelOf(source).imports);
+export function tagOptions(project: Pick<Project, 'components'>, source: string, role: RoleView): readonly TagOption[] {
+  return tagOptionsOf(project.components, modelOf(source).imports, role);
 }
 
 /** What the layout picker offers: the project's layouts, by name. */
-export function layoutOptions(project: Pick<Project, 'components'>): readonly TagOption[] {
-  return project.components.filter((component) => isLayoutComponent(component)).map((component) => ({ name: component.name, kind: 'layout' }));
+export function layoutOptions(project: Pick<Project, 'components'>, role: RoleView): readonly TagOption[] {
+  return layoutOptionsOf(
+    project.components.filter((component) => isLayoutComponent(component)),
+    role,
+  );
 }
 
 /** Node `id` renamed to `tag`: an element by its tag, an instance by a component

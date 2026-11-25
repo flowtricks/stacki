@@ -1,7 +1,7 @@
 // Goal: the Studio server refuses to ADD a component the sender's role hides, as a typed Result and with
 // nothing written, even when a modified client skips the palette's filter; while components already on the
-// page, other roles, other components and admin without rules stay unaffected, and admin restricted by
-// rules is still refused only for inserting (never for settings, which `can()` answers separately).
+// page, other roles and other components stay unaffected, and an admin with rules is never refused: a hidden
+// component only leaves an admin's search, and the Components panel adds it by hand.
 // Method: build roles with the real parser, resolve views, and run the real checks (componentAccess.ts)
 // and the document gate (documentAccess.ts) on insert actions and text edits, each side of every rule.
 import assert from 'node:assert/strict';
@@ -50,8 +50,13 @@ test('a configured import path resolves through the project settings, so an alia
   assert.equal(checkComponentInsert(client, 'src/pages/index.astro', insert('ui/modal'), []).ok, true, 'unresolvable without settings: nothing to hide by');
 });
 
-test('admin is restricted for inserting like any role, and keeps every other power', () => {
-  assert.equal(checkComponentInsert(admin, 'src/pages/index.astro', insert('../components/secret/Key.astro'), []).ok, false);
+test('an admin with rules adds a hidden component by hand: neither the insert nor its new import is refused', () => {
+  assert.equal(checkComponentInsert(admin, 'src/pages/index.astro', insert('../components/secret/Key.astro'), []).ok, true);
+  assert.equal(
+    checkComponentImports(admin, 'src/pages/index.astro', '---\n---\n<p />\n', "---\nimport Key from '../components/secret/Key.astro';\n---\n<Key />\n", []).ok,
+    true,
+  );
+  assertComponentInsertAllowed(admin, 'src/pages/index.astro', insert('../components/secret/Key.astro'), []);
   assert.equal(can(admin, 'settings:roles'), true, 'rules never touch settings access');
   assert.equal(can(admin, 'code:edit'), true);
 });

@@ -13,9 +13,10 @@
 //
 // Hiding stops ADDING, nothing else: a hidden component already on a page stays there,
 // stays editable and still shows in the Navigator, and copying, pasting or duplicating
-// markup that holds one is allowed because the component is already on the page. Only
-// the insert surfaces (the palette's search and grid, the Components panel and the
-// server's insert action) consult these rules. They never touch settings access.
+// markup that holds one is allowed because the component is already on the page. What a
+// rule takes away depends on who holds it (`componentOffer`): an admin loses the component
+// from search but keeps it in the Components panel to add by hand; every other role loses
+// it from every place that adds, and Studio's server refuses it. Rules never touch settings access.
 //
 // A rule whose path no longer exists is kept, shown as "missing" in the Roles tab and
 // ignored by resolution, so restoring the component or folder restores the rule.
@@ -200,7 +201,7 @@ function stateOf(effect: ComponentRuleEffect): ComponentState {
   return effect === 'hide' ? 'hidden' : 'visible';
 }
 
-/** The question every insert surface asks: may a role holding `rules` add the component in `file`? */
+/** Whether `rules` leave the component in `file` shown, whoever holds them. What a role is then offered is `componentOffer`. */
 export function componentVisible(rules: readonly ComponentRule[], file: string): boolean {
   if (rules.length === 0) {
     return true;
@@ -208,17 +209,82 @@ export function componentVisible(rules: readonly ComponentRule[], file: string):
   return resolveComponent(componentAccessIndex(rules), file).state === 'visible';
 }
 
+// What a hidden component means to whoever holds the rules. This is the one rule every list, search and
+// add guard reads (Desktop, Studio's browser and Studio's server), so no surface can answer it for itself.
+
+/** Who is asking: the two things about a role (shared/properties/projectRoles.ts, `RoleView`) the rule reads. */
+export interface ComponentViewer {
+  readonly isAdmin: boolean;
+  readonly componentRules: readonly ComponentRule[];
+}
+
 /**
- * A predicate for filtering many components: the index is built once. With no rules it is the
- * identity, so a project that restricts nothing pays nothing.
+ * How a place offers components. `browse` is a list a person reads through and picks from by hand (the
+ * Components panel and its own filter box, a layout dropdown). `search` finds something to add from what
+ * is typed or asked for (the insert palette, which every canvas "+" opens, and the Tag field's suggestions).
  */
-export function componentVisibility(rules: readonly ComponentRule[]): (file: string | undefined) => boolean {
-  if (rules.length === 0) {
-    return () => true;
+export type ComponentSurface = 'browse' | 'search';
+
+/**
+ * How one viewer is offered one component: `everywhere` when no rule hides it; `browse-only` when a rule
+ * hides it from an admin, who keeps it by hand but is not shown it in search; `nowhere` when a rule hides
+ * it from anyone else, who may then not add it by any route.
+ */
+export type ComponentOffer = 'everywhere' | 'browse-only' | 'nowhere';
+
+/** Whether an offer reaches a surface. */
+export function offeredOn(offer: ComponentOffer, surface: ComponentSurface): boolean {
+  switch (offer) {
+    case 'everywhere':
+      return true;
+    case 'browse-only':
+      return surface === 'browse';
+    case 'nowhere':
+      return false;
+    default: {
+      const exhaustive: never = offer;
+      return exhaustive;
+    }
   }
-  const index = componentAccessIndex(rules);
-  // A component with no file of the project's (a package's) has nothing to hide by: it stays available.
-  return (file) => file === undefined || resolveComponent(index, file).state === 'visible';
+}
+
+/**
+ * A reader of `viewer`'s offers for many components: the index is built once, and with no rules nothing is
+ * looked up. A component with no file of the project's (a package's) has nothing to hide by.
+ */
+export function componentOffers(viewer: ComponentViewer): (file: string | undefined) => ComponentOffer {
+  if (viewer.componentRules.length === 0) {
+    return () => 'everywhere';
+  }
+  const index = componentAccessIndex(viewer.componentRules);
+  const hidden: ComponentOffer = viewer.isAdmin ? 'browse-only' : 'nowhere';
+  return (file) => (file === undefined || resolveComponent(index, file).state === 'visible' ? 'everywhere' : hidden);
+}
+
+/** How `viewer` is offered the component in `file`. */
+export function componentOffer(viewer: ComponentViewer, file: string | undefined): ComponentOffer {
+  return componentOffers(viewer)(file);
+}
+
+/** The question every add guard asks: may `viewer` add the component in `file` by any route at all? */
+export function componentAddable(viewer: ComponentViewer, file: string | undefined): boolean {
+  return componentOffer(viewer, file) !== 'nowhere';
+}
+
+/** The items `surface` lists for `viewer`, in their order; `fileOf` names an item's file. With no rules it is the same list. */
+export function offeredComponents<T>(
+  viewer: ComponentViewer,
+  surface: ComponentSurface,
+  items: readonly T[],
+  fileOf: (item: T) => string | undefined,
+): readonly T[] {
+  if (viewer.componentRules.length === 0) {
+    return items;
+  }
+  const offer = componentOffers(viewer);
+  const kept = items.filter((item) => offeredOn(offer(fileOf(item)), surface));
+  assert(kept.length <= items.length, 'Filtering never adds components');
+  return kept;
 }
 
 /**
@@ -243,17 +309,6 @@ export function componentRuleFile(component: {
   const base = component.isLayout === true ? 'src/layouts' : 'src/components';
   const folder = (component.folder ?? '').replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
   return [base, folder, `${component.name}.astro`].filter((part) => part !== '').join('/');
-}
-
-/** The items a role may add: those whose component file no rule hides. `fileOf` names an item's file. */
-export function visibleComponents<T>(rules: readonly ComponentRule[], items: readonly T[], fileOf: (item: T) => string | undefined): readonly T[] {
-  if (rules.length === 0) {
-    return items;
-  }
-  const visible = componentVisibility(rules);
-  const kept = items.filter((item) => visible(fileOf(item)));
-  assert(kept.length <= items.length, 'Filtering never adds components');
-  return kept;
 }
 
 /**

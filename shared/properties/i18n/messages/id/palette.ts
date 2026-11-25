@@ -115,6 +115,7 @@ export const messages = {
   'palette.panel.noMatch': 'Tidak ada komponen yang cocok dengan “{query}”.',
   'palette.panel.none': 'Tidak ada komponen di {folder}.',
   'palette.panel.search': 'Cari komponen',
+  'palette.panel.searchHidden': 'Disembunyikan dari pencarian',
   'palette.panel.title': 'Komponen',
   'palette.preview.clientOnly': 'Komponen ini hanya berfungsi di browser, jadi tidak dapat digambar sebelumnya.',
   'palette.preview.loading': 'Memuat pratinjau…',

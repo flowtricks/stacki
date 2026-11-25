@@ -309,7 +309,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'oculto',
   'settings.roles.components.hide': 'Ocultar {name}',
   'settings.roles.components.info':
-    'Este papel não pode adicionar componentes ocultos pela paleta nem pelo painel de componentes. Os que já estão em uma página continuam editáveis. Componentes novos ficam visíveis para todos os papéis.',
+    'Componentes ocultos saem da busca e dos menus de adicionar deste papel. O administrador ainda pode adicioná-los manualmente pelo painel de componentes; os outros papéis não podem adicioná-los. Os que já estão em uma página continuam editáveis.',
   'settings.roles.components.missing': 'Regras de caminhos que não existem mais',
   'settings.roles.components.noMatch': 'Nenhum componente corresponde.',
   'settings.roles.components.none': 'Este projeto ainda não tem componentes.',

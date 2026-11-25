@@ -373,7 +373,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'مخفي',
   'settings.roles.components.hide': 'إخفاء {name}',
   'settings.roles.components.info':
-    'لا يستطيع هذا الدور إضافة المكوّنات المخفية من اللوحة أو من لوحة Components. تبقى المكوّنات الموجودة في الصفحة قابلة للتعديل. المكوّنات الجديدة ظاهرة لكل دور.',
+    'تختفي المكوّنات المخفية من البحث وقوائم الإضافة لهذا الدور. يمكن للمسؤول إضافتها يدويًا من لوحة المكوّنات، أما الأدوار الأخرى فلا يمكنها إضافتها إطلاقًا. تبقى المكوّنات الموجودة في الصفحة قابلة للتعديل.',
   'settings.roles.components.missing': 'قواعد لمسارات لم تعد موجودة',
   'settings.roles.components.noMatch': 'لا توجد مكوّنات مطابقة.',
   'settings.roles.components.none': 'لا توجد مكوّنات في هذا المشروع بعد.',

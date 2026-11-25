@@ -1,11 +1,11 @@
-// What the insert surfaces list for the active role: the project's components minus the ones the role's
-// rules hide (shared/properties/componentAccess.ts). The palette's search and grid and the Components
-// panel read it, so a hidden component is absent from the results, the counts and the folder pills alike.
-// Hiding stops adding only: instances already on a page, and copying, pasting or duplicating markup that
-// holds one, are untouched because the component is already on the page.
+// What each list of components shows the active role. The rule itself is `componentOffer`
+// (shared/properties/componentAccess.ts); this file only names a scanned component's file and follows the
+// role store. The Components panel and the layout dropdowns are `browse` surfaces, the insert palette and
+// the Tag field are `search` surfaces. Hiding stops adding only: instances already on a page, and copying,
+// pasting or duplicating markup that holds one, are untouched because the component is already on the page.
 import { useMemo } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { componentRuleFile, componentVisible, visibleComponents } from '../../../shared/properties/componentAccess';
+import { componentAddable, componentOffers, componentRuleFile, offeredComponents, type ComponentSurface } from '../../../shared/properties/componentAccess';
 import { DescribedError } from '../../../shared/properties/describedError';
 import { described } from '../../../shared/properties/i18n/messageRef';
 import type { RoleView } from '../../../shared/properties/projectRoles';
@@ -22,29 +22,32 @@ export interface InsertableComponent {
 
 const NONE: readonly never[] = [];
 
-/** The components `role` may add: those no rule hides, in their order. */
-export function componentsAddableBy<T extends InsertableComponent>(role: RoleView, components: readonly T[]): readonly T[] {
-  const kept = visibleComponents(role.componentRules, components, componentRuleFile);
+/** The components `surface` lists for `role`, in their order. */
+export function componentsOfferedTo<T extends InsertableComponent>(role: RoleView, surface: ComponentSurface, components: readonly T[]): readonly T[] {
+  const kept = offeredComponents(role, surface, components, componentRuleFile);
   assert(kept.length <= components.length, 'A role never gains components');
   return kept;
 }
 
-/** Whether `role` may add `component`: the guard behind every insert path, so a hidden one is refused wherever it was asked for. */
-export function canAddComponent(role: RoleView, component: InsertableComponent): boolean {
-  const file = componentRuleFile(component);
-  return file === undefined || componentVisible(role.componentRules, file);
+/** Whether `component` is in `role`'s lists but left out of its searches: an admin's own hidden component, which a row dims. */
+export function searchHidden(role: RoleView, component: InsertableComponent): boolean {
+  return componentOffers(role)(componentRuleFile(component)) === 'browse-only';
 }
 
-/** Refuses adding a component the role hides. Desktop's guard behind every insert path; Studio's server holds the same rule (studio/src/features/roles/componentAccess.ts). */
+/** Whether `role` may add `component` at all: the guard behind every insert path, so one it is not offered is refused wherever it was asked for. */
+export function canAddComponent(role: RoleView, component: InsertableComponent): boolean {
+  return componentAddable(role, componentRuleFile(component));
+}
+
+/** Refuses adding a component withheld from the role. Desktop's guard behind every insert path; Studio's server holds the same rule (studio/src/features/roles/componentAccess.ts). */
 export function assertCanAddComponent(role: RoleView, component: InsertableComponent): void {
   if (!canAddComponent(role, component)) {
     throw new DescribedError(described('roles.error.componentHidden', { role: role.name, name: component.name }));
   }
 }
 
-/** The components the active role (an admin's "View as" included) may add, kept stable while nothing changes. */
-export function useAddableComponents<T extends InsertableComponent>(components: readonly T[] | undefined): readonly T[] {
+/** What `surface` lists for the active role (an admin's "View as" included), kept stable while nothing changes. */
+export function useOfferedComponents<T extends InsertableComponent>(surface: ComponentSurface, components: readonly T[] | undefined): readonly T[] {
   const role = useCurrentRole();
-  const rules = role.componentRules;
-  return useMemo(() => componentsAddableBy({ ...role, componentRules: rules }, components ?? NONE), [components, role, rules]);
+  return useMemo(() => componentsOfferedTo(role, surface, components ?? NONE), [role, surface, components]);
 }

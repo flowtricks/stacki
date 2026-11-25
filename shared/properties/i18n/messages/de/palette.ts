@@ -121,6 +121,7 @@ export const messages = {
   'palette.panel.noMatch': 'Keine Komponente passt zu „{query}“.',
   'palette.panel.none': 'Keine Komponenten in {folder} gefunden.',
   'palette.panel.search': 'Komponenten suchen',
+  'palette.panel.searchHidden': 'In der Suche ausgeblendet',
   'palette.panel.title': 'Komponenten',
   'palette.preview.clientOnly': 'Diese Komponente funktioniert nur im Browser und kann nicht vorab gezeichnet werden.',
   'palette.preview.loading': 'Vorschau wird geladen …',

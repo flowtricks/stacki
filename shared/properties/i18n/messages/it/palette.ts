@@ -121,6 +121,7 @@ export const messages = {
   'palette.panel.noMatch': 'Nessun componente corrisponde a “{query}”.',
   'palette.panel.none': 'Nessun componente trovato in {folder}.',
   'palette.panel.search': 'Cerca componenti',
+  'palette.panel.searchHidden': 'Nascosto dalla ricerca',
   'palette.panel.title': 'Componenti',
   'palette.preview.clientOnly': 'Questo componente funziona solo nel browser, quindi non può essere disegnato in anticipo.',
   'palette.preview.loading': 'Caricamento dell’anteprima…',

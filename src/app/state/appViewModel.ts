@@ -7,7 +7,8 @@ import { componentReference } from '../model/componentReference';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { readPage, readSymbol, readText } from '../../ipc/bridge';
-import { tagOptionsOf } from '../model/pageModelGestures';
+import { layoutOptionsOf, tagOptionsOf } from '../model/pageModelGestures';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
@@ -228,8 +229,11 @@ export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOp
   // is how `<AstroLogo />` from an imported .svg becomes reachable.
   // Each option carries what it is, so the list can wear the same icons the
   // insert palette does — a tag, a component, a layout, one of Astro's.
-  const tagOptions = React.useMemo<readonly TagOption[]>(() => tagOptionsOf(insertables, model?.imports || []), [insertables, model]);
-  return { linkContext, tagOptions };
+  // Both follow the role: what it hides from search is not suggested (componentAccess.ts).
+  const role = useCurrentRole();
+  const tagOptions = React.useMemo<readonly TagOption[]>(() => tagOptionsOf(insertables, model?.imports || [], role), [insertables, model, role]);
+  const layoutOptions = React.useMemo<readonly TagOption[]>(() => layoutOptionsOf(scan.layouts, role), [scan.layouts, role]);
+  return { linkContext, tagOptions, layoutOptions };
 }
 
 // The floating code window.

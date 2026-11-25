@@ -309,7 +309,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': '非表示',
   'settings.roles.components.hide': '{name}を非表示',
   'settings.roles.components.info':
-    'このロールは、非表示のコンポーネントをパレットやコンポーネントパネルから追加できません。すでにページ上にあるものは引き続き編集できます。新しいコンポーネントはすべてのロールに表示されます。',
+    '非表示のコンポーネントは、このロールの検索と追加メニューに表示されません。管理者はコンポーネントパネルから手動で追加できますが、その他のロールは追加できません。すでにページ上にあるものは引き続き編集できます。',
   'settings.roles.components.missing': '存在しなくなったパスのルール',
   'settings.roles.components.noMatch': '一致するコンポーネントはありません。',
   'settings.roles.components.none': 'このプロジェクトにはまだコンポーネントがありません。',

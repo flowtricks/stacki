@@ -11,7 +11,10 @@ import {
   COMPONENT_ACCESS_LIMITS,
   ComponentRulesBoundError,
   componentRuleFile,
-  componentVisibility,
+  componentAddable,
+  componentOffer,
+  offeredComponents,
+  offeredOn,
   componentVisible,
   missingComponentRules,
   moveComponentRules,
@@ -20,7 +23,6 @@ import {
   resolveComponent,
   componentAccessIndex,
   setComponentState,
-  visibleComponents,
 } from '#dist/shared/properties/componentAccess.js';
 import { parseProjectRoles, roleViewOf, serializeProjectRoles, can, parseProjectRolesSource } from '#dist/shared/properties/projectRoles.js';
 
@@ -34,7 +36,7 @@ const rules = parseComponentRules([
 
 test('with no rules every component is visible, so a new one needs no migration', () => {
   assert.equal(componentVisible([], 'src/components/New.astro'), true);
-  assert.equal(componentVisibility([])(undefined), true);
+  assert.equal(componentOffer({ isAdmin: false, componentRules: [] }, undefined), 'everywhere');
 });
 
 test('a folder hides what is under it, nested folders included, and nothing outside it', () => {
@@ -66,8 +68,51 @@ test('a package component has no project file and stays available; filtering kee
   assert.equal(componentRuleFile({ name: 'Card', file: 'src\\components\\Card.astro' }), 'src/components/Card.astro');
   const items = ['src/components/interactive/Modal.astro', 'src/components/Card.astro', undefined, 'src/components/Hero.astro'];
   assert.deepEqual(
-    visibleComponents(rules, items, (item) => item),
+    offeredComponents({ isAdmin: false, componentRules: rules }, 'browse', items, (item) => item),
     ['src/components/Card.astro', undefined],
+  );
+});
+
+// The one rule every list, search and add guard reads: what a hidden component means depends on who asks.
+test('a hidden component is out of an admin’s search only, and gone from every other role by every route', () => {
+  const adminViewer = { isAdmin: true, componentRules: rules };
+  const otherViewer = { isAdmin: false, componentRules: rules };
+  // By its own rule, by its folder and by a folder further up: every hide source reads the same.
+  for (const file of ['src/components/Hero.astro', 'src/components/interactive/Modal.astro', 'src/components/interactive/deep/er/Modal.astro']) {
+    assert.equal(componentOffer(adminViewer, file), 'browse-only', file);
+    assert.equal(componentOffer(otherViewer, file), 'nowhere', file);
+    assert.equal(componentAddable(adminViewer, file), true, 'admin may still add by hand');
+    assert.equal(componentAddable(otherViewer, file), false);
+  }
+  for (const file of ['src/components/Card.astro', 'src/components/interactive/Tabs.astro', undefined]) {
+    assert.equal(componentOffer(adminViewer, file), 'everywhere');
+    assert.equal(componentOffer(otherViewer, file), 'everywhere');
+  }
+  assert.deepEqual(
+    (['everywhere', 'browse-only', 'nowhere'] as const).map((offer) => [offeredOn(offer, 'browse'), offeredOn(offer, 'search')]),
+    [
+      [true, true],
+      [true, false],
+      [false, false],
+    ],
+  );
+  const items = ['src/components/Hero.astro', 'src/components/Card.astro'];
+  assert.deepEqual(
+    offeredComponents(adminViewer, 'browse', items, (item) => item),
+    items,
+  );
+  assert.deepEqual(
+    offeredComponents(adminViewer, 'search', items, (item) => item),
+    ['src/components/Card.astro'],
+  );
+  assert.deepEqual(
+    offeredComponents(otherViewer, 'search', items, (item) => item),
+    ['src/components/Card.astro'],
+  );
+  assert.equal(
+    offeredComponents({ isAdmin: false, componentRules: [] }, 'search', items, (item) => item),
+    items,
+    'no rules, no copy',
   );
 });
 

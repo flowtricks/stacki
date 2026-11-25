@@ -115,6 +115,7 @@ export const messages = {
   'palette.panel.noMatch': '“{query}”와(과) 일치하는 컴포넌트가 없습니다.',
   'palette.panel.none': '{folder}에서 컴포넌트를 찾을 수 없습니다.',
   'palette.panel.search': '컴포넌트 검색',
+  'palette.panel.searchHidden': '검색에서 숨김',
   'palette.panel.title': '컴포넌트',
   'palette.preview.clientOnly': '이 컴포넌트는 브라우저에서만 작동하므로 미리 그릴 수 없습니다.',
   'palette.preview.loading': '미리보기 불러오는 중…',

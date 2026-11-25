@@ -8,7 +8,7 @@ import { HTML_TAGS } from '../../editor/elementSchemas';
 import type { TrailingSlash } from '../../editor/pageState';
 import { rankInsertItems, tagSearchText } from '../../lib/insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
-import { useAddableComponents } from './componentVisibility';
+import { useOfferedComponents } from './componentVisibility';
 import { insertFolderOf, type InsertFolderKey } from './insertFolders';
 import { insertResultsMax, insertView, moveHighlight, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
@@ -314,8 +314,9 @@ function useInsertSearch({ components, allowSlot, projectKey, apps, devUrl, trai
   // card must not make the list slide under the pointer.
   const movedBy = useRef<'keyboard' | 'pointer'>('keyboard');
 
-  // The components this role may add: hidden ones leave the results, the counts and the folder pills together.
-  const addable = useAddableComponents(components);
+  // What search offers this role: a hidden component leaves the results, the counts and the folder pills together,
+  // for an admin too, who adds it from the Components panel instead.
+  const addable = useOfferedComponents('search', components);
   const allItems = useMemo(() => insertItems(addable, { allowSlot }), [addable, allowSlot]);
   const appList = apps?.list;
   // The apps this role may open, as search rows; none while they load, or when the role has no Apps panel.

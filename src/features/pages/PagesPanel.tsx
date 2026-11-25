@@ -1,6 +1,5 @@
 import { PageTreeRenameDialog } from './PageTreeRenameDialog';
 import { can } from '../../../shared/properties/projectRoles';
-import { useCurrentRole } from '../../lib/useCurrentRole';
 import type { PageRename } from '../../../shared/properties/pageRename';
 import { useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { useProjectPageOrder } from './pageOrderPersistence';
@@ -30,6 +29,8 @@ import { usePageSelection, type PageSelectionModel } from './usePageSelection';
 import { selectionCount, selectionTargets } from './pageSelection';
 import './pageSelect.css';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { componentRuleFile, offeredComponents } from '../../../shared/properties/componentAccess';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 
 interface PagesPanelProps {
   readonly projectPath?: string;
@@ -61,6 +62,9 @@ export default function PagesPanel(props: PagesPanelProps) {
     save: ordering.save,
   });
   const model = usePagesPanel(props);
+  // A layout dropdown is read and picked by hand, so it lists what the role may add that way (componentAccess.ts, `componentOffer`).
+  const role = useCurrentRole();
+  const layouts = useMemo(() => offeredComponents(role, 'browse', props.scan.layouts, componentRuleFile), [role, props.scan.layouts]);
   const {
     showNew,
     setShowNew,
@@ -133,7 +137,7 @@ export default function PagesPanel(props: PagesPanelProps) {
       )}
       {showNew && (
         <NewPageModal
-          layouts={props.scan.layouts}
+          layouts={layouts}
           onClose={() => setShowNew(false)}
           onCreate={(name, layout) => {
             setShowNew(false);
@@ -144,7 +148,7 @@ export default function PagesPanel(props: PagesPanelProps) {
       {showEmDash && props.projectPath !== undefined && (
         <EmDashTemplateDialog
           projectPath={props.projectPath}
-          layouts={props.scan.layouts}
+          layouts={layouts}
           onClose={() => setShowEmDash(false)}
           onCreate={(draft) => props.onCreateTemplate(draft, undefined)}
         />
@@ -152,7 +156,7 @@ export default function PagesPanel(props: PagesPanelProps) {
       {showTemplate && props.projectPath !== undefined && (
         <PageTemplateDialog
           projectPath={props.projectPath}
-          layouts={props.scan.layouts}
+          layouts={layouts}
           onClose={() => setShowTemplate(false)}
           onCreate={props.onCreateTemplate}
           connectSanity={props.connectSanity}

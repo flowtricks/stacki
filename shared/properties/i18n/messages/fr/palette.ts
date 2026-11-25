@@ -120,6 +120,7 @@ export const messages = {
   'palette.panel.noMatch': 'Aucun composant ne correspond à « {query} ».',
   'palette.panel.none': 'Aucun composant trouvé dans {folder}.',
   'palette.panel.search': 'Rechercher des composants',
+  'palette.panel.searchHidden': 'Masqué dans la recherche',
   'palette.panel.title': 'Composants',
   'palette.preview.clientOnly': 'Ce composant ne fonctionne que dans le navigateur ; il ne peut pas être dessiné à l’avance.',
   'palette.preview.loading': 'Chargement de l’aperçu…',

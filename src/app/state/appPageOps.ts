@@ -1,4 +1,6 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { assertCanAddComponent } from '../../features/palette/componentVisibility';
+import { currentRole } from '../../lib/currentRole';
 import { componentFileOf, componentReference } from '../model/componentReference';
 import { useListProps } from './useListProps';
 // Page operations: changing the layout, creating, moving and deleting pages
@@ -107,6 +109,9 @@ export function useLayoutChange(
         if (layoutName && !layout) {
           return;
         }
+        if (layout) {
+          assertCanAddComponent(currentRole(), layout);
+        }
         // A file-relative path, not an alias: `layout:` is resolved by Astro
         // against the page, and every project has that whether or not it has
         // configured `@/…`.
@@ -140,6 +145,10 @@ export function useLayoutChange(
       const layout = scan.layouts.find((candidate) => candidate.name === layoutName);
       if (!layout) {
         return;
+      }
+      // Keeping the layout the page already has adds nothing, whatever the role is offered.
+      if (wrapper?.name !== layout.name) {
+        assertCanAddComponent(currentRole(), layout);
       }
       const paths = await resolveImportPath(layout.path);
       if (seq !== layoutSeq.current) {

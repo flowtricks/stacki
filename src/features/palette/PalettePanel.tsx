@@ -7,7 +7,7 @@ import { cleanError } from '../../lib/cleanError';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
 import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
-import { useAddableComponents } from './componentVisibility';
+import { searchHidden, useOfferedComponents } from './componentVisibility';
 import type { PaletteRoleRules } from './componentRolesMenu';
 import type { ManagedItem, PaletteManagement, RenameHost } from './paletteManagement';
 import { PaletteRowMenu } from './PaletteRowMenu';
@@ -35,6 +35,7 @@ import { DEFAULT_PROJECT_FOLDERS } from '../../../shared/properties/projectFolde
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
+import FittedTooltip from '../../ui/FittedTooltip';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { currentRole } from '../../lib/currentRole';
@@ -84,9 +85,10 @@ export default function PalettePanel(props: PalettePanelProps) {
   const usage = useUsagePopup(props.onUsage, preview.cancel);
   const usageRef = useRef<HTMLDivElement>(null);
   useCreateRequest(props.createRequest ?? 0, props.createFrom, setCreating);
-  // The list shows what this role may add; a new component's name is still checked against every component (PalettePopups).
-  const addable = useAddableComponents(props.components);
-  const list = useMemo(() => rankInsertItems(addable, query), [addable, query]);
+  // The panel is the manual way to add, so it lists what this role may add by hand, an admin's search-hidden ones too, and
+  // its own box only narrows that list. A new component's name is still checked against every component (PalettePopups).
+  const listed = useOfferedComponents('browse', props.components);
+  const list = useMemo(() => rankInsertItems(listed, query), [listed, query]);
   const groups = useMemo(() => groupPaletteComponents(list), [list]);
   return (
     <div className="panel-section grow">
@@ -95,7 +97,7 @@ export default function PalettePanel(props: PalettePanelProps) {
       <PaletteList
         groups={groups}
         query={query}
-        componentCount={addable.length}
+        componentCount={listed.length}
         roleRules={props.roleRules}
         management={props.management}
         canvas={props.canvas}
@@ -297,9 +299,13 @@ function PaletteList(props: PaletteListProps) {
 
 function PaletteItem({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
   const translate = useTranslate();
+  // Dimmed, with its reason on the icon: this admin's rules keep the component out of search.
+  const unsearched = searchHidden(useCurrentRole(), component);
+  const tooltip = useDelayedTooltip();
+  const why = unsearched ? translate('palette.panel.searchHidden') : undefined;
   return (
     <div
-      className="palette-item"
+      className={unsearched ? 'palette-item is-search-hidden' : 'palette-item'}
       draggable
       title={translate('palette.panel.itemHint')}
       onMouseEnter={(event) => props.preview.show(component, event.currentTarget)}
@@ -307,7 +313,14 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
       onDragEnd={clearDrag}
       onDoubleClick={() => props.onInsert(component.path)}
     >
-      <span className="icon">{component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}</span>
+      <span
+        className="icon"
+        // An empty title keeps the row's own hint from covering the tip that says why the row is dimmed.
+        {...(why === undefined ? {} : { title: '', role: 'img', 'aria-label': why, onMouseEnter: tooltip.show, onMouseLeave: tooltip.hide })}
+      >
+        {component.isLayout ? <LayoutIcon size={14} /> : <ElementComponentIcon size={14} />}
+      </span>
+      {why !== undefined && tooltip.value !== undefined && <FittedTooltip anchor={tooltip.value}>{why}</FittedTooltip>}
       <ItemRoles component={component} props={props} />
       <span className="label">
         {prettyComponentName(component.name)}

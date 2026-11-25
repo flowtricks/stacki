@@ -42,6 +42,8 @@ interface MapEditorProps {
 export interface TagOption {
   readonly name: string;
   readonly kind?: string;
+  /** Resolves when typed in full, but is not suggested: a layout hidden from search (componentAccess.ts). */
+  readonly unlisted?: boolean;
 }
 export interface TagFieldProps {
   readonly tag: string;

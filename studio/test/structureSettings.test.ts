@@ -29,6 +29,7 @@ import { nodeGesture } from '../vendor/stacki/src/editor/editGestures';
 import { listPropsOf } from '../vendor/stacki/src/editor/listProps';
 import { readPropsDestructure, withProp } from '../vendor/stacki/src/editor/loopProps';
 import { parsePageNode } from '../vendor/stacki/shared/page/pageNode';
+import { ADMIN_VIEW } from '../vendor/stacki/shared/properties/projectRoles';
 
 const FILE = 'src/pages/index.astro';
 const PAGE = `---
@@ -73,14 +74,14 @@ function parses(source: string): string {
 }
 
 test('the Tag field offers tags, components, layouts, Astro’s own and the page’s imports, once each', () => {
-  const options = tagOptions(PROJECT, PAGE);
+  const options = tagOptions(PROJECT, PAGE, ADMIN_VIEW);
   const kind = (name: string) => options.find((option) => option.name === name)?.kind;
   assert.equal(kind('section'), 'element');
   assert.equal(kind('Hero'), 'component');
   assert.equal(kind('Base'), 'layout');
   assert.equal(kind('Image'), 'astroAsset');
   assert.equal(new Set(options.map((option) => option.name)).size, options.length);
-  assert.deepEqual(layoutOptions(PROJECT), [{ name: 'Base', kind: 'layout' }]);
+  assert.deepEqual(layoutOptions(PROJECT, ADMIN_VIEW), [{ name: 'Base', kind: 'layout' }]);
 });
 
 test('an element renamed to another tag keeps its attributes, and the demo shows it', () => {

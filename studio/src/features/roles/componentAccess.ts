@@ -9,7 +9,7 @@
 // package's, has nothing to hide by and passes.
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { err, ok, type Result } from '../../../vendor/stacki/shared/core/result';
-import { componentVisible } from '../../../vendor/stacki/shared/properties/componentAccess';
+import { componentAddable } from '../../../vendor/stacki/shared/properties/componentAccess';
 import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { resolveImport, type ComponentImport } from '../source/imports';
 import type { TreeAction } from '../source/source';
@@ -68,7 +68,9 @@ function checkSpecifier(
   configured: readonly ComponentImport[],
 ): Result<undefined, ComponentHiddenError> {
   const file = resolveImport(documentFile, specifier, configured);
-  if (file === undefined || componentVisible(role.componentRules, file)) {
+  // The shared rule (componentAccess.ts, `componentOffer`): an admin's hidden component is only out of their search, so
+  // adding it by hand passes here; every other role is refused.
+  if (file === undefined || componentAddable(role, file)) {
     return ok(undefined);
   }
   assert(file.length > 0, 'A refused component has a file');

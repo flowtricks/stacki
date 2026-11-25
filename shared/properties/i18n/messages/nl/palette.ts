@@ -120,6 +120,7 @@ export const messages = {
   'palette.panel.noMatch': 'Geen componenten gevonden voor “{query}”.',
   'palette.panel.none': 'Geen componenten gevonden in {folder}.',
   'palette.panel.search': 'Componenten zoeken',
+  'palette.panel.searchHidden': 'Verborgen in zoeken',
   'palette.panel.title': 'Componenten',
   'palette.preview.clientOnly': 'Dit component werkt alleen in de browser, dus kan niet vooraf worden getekend.',
   'palette.preview.loading': 'Preview laden…',

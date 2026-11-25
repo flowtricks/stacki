@@ -143,6 +143,7 @@ export const messages = {
   'palette.panel.noMatch': 'Нет компонентов, соответствующих «{query}».',
   'palette.panel.none': 'В {folder} компоненты не найдены.',
   'palette.panel.search': 'Поиск компонентов',
+  'palette.panel.searchHidden': 'Скрыт из поиска',
   'palette.panel.title': 'Компоненты',
   'palette.preview.clientOnly': 'Этот компонент работает только в браузере, поэтому его нельзя отрисовать заранее.',
   'palette.preview.loading': 'Загрузка предпросмотра…',

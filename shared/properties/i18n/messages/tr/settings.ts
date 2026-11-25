@@ -307,7 +307,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'gizli',
   'settings.roles.components.hide': '{name} öğesini gizle',
   'settings.roles.components.info':
-    'Bu rol, gizli bileşenleri palete veya Bileşenler panelinden ekleyemez. Sayfada zaten olanlar düzenlenebilir kalır. Yeni bileşenler her role görünür.',
+    'Gizli bileşenler bu rolün aramasından ve ekleme menülerinden kalkar. Yönetici onları Bileşenler panelinden elle ekleyebilir; diğer roller hiç ekleyemez. Sayfada zaten olanlar düzenlenebilir kalır.',
   'settings.roles.components.missing': 'Artık var olmayan yollar için kurallar',
   'settings.roles.components.noMatch': 'Eşleşen bileşen yok.',
   'settings.roles.components.none': 'Bu projede henüz bileşen yok.',

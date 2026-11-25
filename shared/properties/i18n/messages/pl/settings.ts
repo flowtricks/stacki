@@ -340,7 +340,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'ukryty',
   'settings.roles.components.hide': 'Ukryj {name}',
   'settings.roles.components.info':
-    'Ta rola nie może dodawać ukrytych komponentów z palety ani panelu Komponenty. Te już na stronie pozostają edytowalne. Nowe komponenty są widoczne dla każdej roli.',
+    'Ukryte komponenty znikają z wyszukiwania i menu dodawania tej roli. Administrator nadal może dodać je ręcznie z panelu Komponenty; inne role nie mogą ich dodać. Te już na stronie pozostają edytowalne.',
   'settings.roles.components.missing': 'Reguły dla ścieżek, które już nie istnieją',
   'settings.roles.components.noMatch': 'Brak pasujących komponentów.',
   'settings.roles.components.none': 'Ten projekt nie ma jeszcze komponentów.',

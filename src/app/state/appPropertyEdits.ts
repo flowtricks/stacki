@@ -1,6 +1,8 @@
 // Editing a node's properties: its comment, classes, asset props, renames,
 // kind and tag, text, branches and content (App.tsx).
 
+import { canAddComponent } from '../../features/palette/componentVisibility';
+import { currentRole } from '../../lib/currentRole';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { ClassOutcome, StyleBlockRequest } from '../../features/style/model/host';
@@ -534,6 +536,10 @@ export function useNodeKind(coreState: ReturnType<typeof useCoreState>, nodeEdit
       if (!already && !comp && !asset) {
         return false;
       } // nothing provides it
+      // A component the role is not offered is not there to change into; one the page already imports is, as for paste.
+      if (comp && !already && !canAddComponent(currentRole(), comp)) {
+        return false;
+      }
       const paths = comp && !already ? await resolveImportPath(comp.path) : undefined;
       const current = pageStateRef.current.pageState;
       const model = current?.editable ? current.model : undefined;

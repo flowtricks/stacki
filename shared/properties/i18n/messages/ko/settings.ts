@@ -304,7 +304,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': '숨겨짐',
   'settings.roles.components.hide': '{name} 숨기기',
   'settings.roles.components.info':
-    '이 역할은 팔레트나 컴포넌트 패널에서 숨겨진 컴포넌트를 추가할 수 없습니다. 이미 페이지에 있는 컴포넌트는 계속 편집할 수 있습니다. 새 컴포넌트는 모든 역할에 표시됩니다.',
+    '숨겨진 컴포넌트는 이 역할의 검색과 추가 메뉴에서 빠집니다. 관리자는 컴포넌트 패널에서 직접 추가할 수 있지만 다른 역할은 추가할 수 없습니다. 이미 페이지에 있는 컴포넌트는 계속 편집할 수 있습니다.',
   'settings.roles.components.missing': '더 이상 존재하지 않는 경로에 대한 규칙',
   'settings.roles.components.noMatch': '일치하는 컴포넌트가 없습니다.',
   'settings.roles.components.none': '이 프로젝트에는 아직 컴포넌트가 없습니다.',

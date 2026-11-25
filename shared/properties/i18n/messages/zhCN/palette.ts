@@ -115,6 +115,7 @@ export const messages = {
   'palette.panel.noMatch': '没有与“{query}”匹配的组件。',
   'palette.panel.none': '在 {folder} 中未找到组件。',
   'palette.panel.search': '搜索组件',
+  'palette.panel.searchHidden': '在搜索中隐藏',
   'palette.panel.title': '组件',
   'palette.preview.clientOnly': '此组件只能在浏览器中运行，因此无法预先绘制。',
   'palette.preview.loading': '正在加载预览…',

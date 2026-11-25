@@ -313,7 +313,7 @@ export function ElementTag({ state }: { readonly state: ElementState }) {
           // local name the page imported it under — that name is a detail of
           // this page, while the file is what you're choosing between.
           tag={layoutTag ? currentLayoutName || node.name : node.name}
-          options={layoutTag ? layouts.map((option) => ({ name: option.name, kind: 'layout' })) : tagOptions}
+          options={layoutTag ? layouts.filter((option) => option.unlisted !== true).map((option) => ({ name: option.name, kind: 'layout' })) : tagOptions}
           onChangeTag={layoutTag ? changeToLayout : (name) => onChangeTag?.(name)}
         />
       )}

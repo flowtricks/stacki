@@ -116,6 +116,7 @@ export const messages = {
   'palette.panel.noMatch': '「{query}」に一致するコンポーネントはありません。',
   'palette.panel.none': '{folder} にコンポーネントが見つかりません。',
   'palette.panel.search': 'コンポーネントを検索',
+  'palette.panel.searchHidden': '検索には表示されません',
   'palette.panel.title': 'コンポーネント',
   'palette.preview.clientOnly': 'このコンポーネントはブラウザでのみ動作するため、事前に描画できません。',
   'palette.preview.loading': 'プレビューを読み込み中…',

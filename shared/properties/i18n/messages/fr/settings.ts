@@ -311,7 +311,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'masqué',
   'settings.roles.components.hide': 'Masquer {name}',
   'settings.roles.components.info':
-    'Ce rôle ne peut pas ajouter les composants masqués depuis la palette ni le panneau Composants. Ceux déjà sur une page restent modifiables. Les nouveaux composants sont visibles pour tous les rôles.',
+    'Les composants masqués disparaissent de la recherche et des menus d’ajout de ce rôle. L’administrateur peut toujours les ajouter à la main depuis le panneau Composants ; les autres rôles ne peuvent pas les ajouter. Ceux déjà sur une page restent modifiables.',
   'settings.roles.components.missing': "Règles de chemins qui n'existent plus",
   'settings.roles.components.noMatch': 'Aucun composant ne correspond.',
   'settings.roles.components.none': "Ce projet n'a pas encore de composants.",

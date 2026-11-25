@@ -162,6 +162,7 @@ export const messages = {
   'palette.panel.noMatch': 'لا توجد مكوّنات تطابق “{query}”.',
   'palette.panel.none': 'لم يُعثر على مكوّنات في {folder}.',
   'palette.panel.search': 'بحث في المكوّنات',
+  'palette.panel.searchHidden': 'مخفي من البحث',
   'palette.panel.title': 'المكوّنات',
   'palette.preview.clientOnly': 'يعمل هذا المكوّن في المتصفح فقط، لذلك لا يمكن رسمه مسبقًا.',
   'palette.preview.loading': 'جارٍ تحميل المعاينة…',

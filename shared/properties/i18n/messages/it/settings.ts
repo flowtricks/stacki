@@ -309,7 +309,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'nascosto',
   'settings.roles.components.hide': 'Nascondi {name}',
   'settings.roles.components.info':
-    'Questo ruolo non può aggiungere componenti nascosti dalla palette o dal pannello Componenti. Quelli già in una pagina restano modificabili. I nuovi componenti sono visibili a ogni ruolo.',
+    'I componenti nascosti escono dalla ricerca e dai menu Aggiungi di questo ruolo. L’amministratore può ancora aggiungerli a mano dal pannello Componenti; gli altri ruoli non possono aggiungerli. Quelli già in una pagina restano modificabili.',
   'settings.roles.components.missing': 'Regole per percorsi che non esistono più',
   'settings.roles.components.noMatch': 'Nessun componente corrisponde.',
   'settings.roles.components.none': 'Questo progetto non ha ancora componenti.',

@@ -4,6 +4,8 @@
 // what the Tag field offers. The app's hooks call these (src/app/state), and
 // Studio vendors this module so its Settings panel builds the same gestures
 // from the same rules rather than a copy of them.
+import { componentOffers, componentRuleFile, offeredComponents, offeredOn, type ComponentViewer } from '../../../shared/properties/componentAccess';
+import type { InsertableComponent } from '../../features/palette/componentVisibility';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { ImportDecl, PageModel, PageNode } from '../../../shared/page/pageNode';
@@ -28,10 +30,13 @@ type BranchNode = Extract<EditorNode, { readonly kind: 'branch' }>;
 /** What the Tag field offers: every HTML tag, the project's components and
  * layouts, Astro's own, and whatever the page already imports — which is how
  * `<AstroLogo />` from an imported .svg becomes reachable. Each carries what it
- * is, so the list wears the insert palette's icons. */
+ * is, so the list wears the insert palette's icons. Typing there is a search for
+ * something to add, so a component search hides from `viewer` is not offered,
+ * not even through an import the page already has. */
 export function tagOptionsOf(
-  components: readonly { readonly name: string; readonly isLayout?: boolean | undefined }[],
+  components: readonly InsertableComponent[],
   imports: readonly Pick<ImportDecl, 'name'>[],
+  viewer: ComponentViewer,
 ): readonly TagOption[] {
   assert(components.length <= LIMITS.scanEntriesMax, 'tagOptionsOf: components stay inside the scan bound');
   const out: TagOption[] = [];
@@ -46,17 +51,35 @@ export function tagOptionsOf(
   for (const tag of HTML_TAGS) {
     add(tag, 'element');
   }
-  for (const component of components) {
+  const searchable = offeredComponents(viewer, 'search', components, componentRuleFile);
+  for (const component of searchable) {
     add(component.name, component.isLayout === true ? 'layout' : 'component');
   }
+  // Names only hidden components answer to: a shown namesake in another folder keeps the name offered.
+  const shownNames = new Set(searchable.map((component) => component.name));
+  const unsearched = new Set(components.map((component) => component.name).filter((name) => !shownNames.has(name)));
   for (const asset of ASTRO_ASSETS) {
     add(asset.name, 'astroAsset');
   }
   for (const entry of imports) {
-    add(entry.name, 'component');
+    if (!unsearched.has(entry.name)) {
+      add(entry.name, 'component');
+    }
   }
   assert(out.length === seen.size, 'tagOptionsOf: each name is offered once');
   return out;
+}
+
+/** The layout field's choices: every layout, so a typed name still resolves, with those search hides from
+ * `viewer` marked as left out of the suggestions. */
+export function layoutOptionsOf(layouts: readonly InsertableComponent[], viewer: ComponentViewer): readonly TagOption[] {
+  assert(layouts.length <= LIMITS.scanEntriesMax, 'layoutOptionsOf: layouts stay inside the scan bound');
+  const offer = componentOffers(viewer);
+  return layouts.map((layout) => ({
+    name: layout.name,
+    kind: 'layout',
+    ...(offeredOn(offer(componentRuleFile(layout)), 'search') ? {} : { unlisted: true }),
+  }));
 }
 
 /** Whether an attribute survives any tag change: a global one, data-* and aria-*. */

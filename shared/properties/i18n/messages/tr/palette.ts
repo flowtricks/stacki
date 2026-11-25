@@ -120,6 +120,7 @@ export const messages = {
   'palette.panel.noMatch': '“{query}” ile eşleşen bileşen yok.',
   'palette.panel.none': '{folder} içinde bileşen bulunamadı.',
   'palette.panel.search': 'Bileşenlerde ara',
+  'palette.panel.searchHidden': 'Aramada gizli',
   'palette.panel.title': 'Bileşenler',
   'palette.preview.clientOnly': 'Bu bileşen yalnızca tarayıcıda çalışır, bu yüzden önceden çizilemez.',
   'palette.preview.loading': 'Önizleme yükleniyor…',

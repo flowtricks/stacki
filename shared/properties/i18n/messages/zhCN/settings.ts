@@ -294,7 +294,8 @@ export const messages = {
   'settings.roles.components.hiddenBy': '被文件夹隐藏',
   'settings.roles.components.hiddenOwn': '已隐藏',
   'settings.roles.components.hide': '隐藏 {name}',
-  'settings.roles.components.info': '此角色无法从组件库或组件面板添加隐藏的组件。页面上已有的组件仍可编辑。新组件对所有角色可见。',
+  'settings.roles.components.info':
+    '隐藏的组件会从此角色的搜索和添加菜单中移除。管理员仍可从组件面板手动添加；其他角色完全无法添加。页面上已有的组件仍可编辑。',
   'settings.roles.components.missing': '已不存在路径的规则',
   'settings.roles.components.noMatch': '没有匹配的组件。',
   'settings.roles.components.none': '此项目还没有组件。',

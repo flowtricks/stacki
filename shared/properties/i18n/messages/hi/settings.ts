@@ -307,7 +307,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'छिपा',
   'settings.roles.components.hide': '{name} छिपाएँ',
   'settings.roles.components.info':
-    'यह भूमिका छिपे हुए कंपोनेंट को पैलेट या Components पैनल से नहीं जोड़ सकती। पेज पर पहले से मौजूद कंपोनेंट संपादन योग्य रहते हैं। नए कंपोनेंट हर भूमिका को दिखते हैं।',
+    'छिपे हुए कंपोनेंट इस भूमिका की खोज और जोड़ने के मेनू से हट जाते हैं। एडमिन उन्हें Components पैनल से खुद जोड़ सकता है; बाकी भूमिकाएँ उन्हें बिल्कुल नहीं जोड़ सकतीं। पेज पर पहले से मौजूद कंपोनेंट संपादन योग्य रहते हैं।',
   'settings.roles.components.missing': 'उन पाथ के नियम जो अब मौजूद नहीं हैं',
   'settings.roles.components.noMatch': 'कोई कंपोनेंट मेल नहीं खाता।',
   'settings.roles.components.none': 'इस प्रोजेक्ट में अभी कोई कंपोनेंट नहीं है।',

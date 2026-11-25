@@ -153,7 +153,8 @@ export function useAddComponent(
       if (!comp || !page || !projectPath) {
         return;
       }
-      // The palette already leaves a hidden component out; this refuses one asked for another way (a drag, a stale list).
+      // Lists already leave out what the role is not offered; this refuses one asked for another way (a drag, a stale list).
+      // An admin's hidden component passes: adding it by hand from the Components panel is theirs to do.
       assertCanAddComponent(currentRole(), comp);
       const instance = await loadComponentInstance(comp, insertables, projectPath);
       const resolved = await Promise.all(

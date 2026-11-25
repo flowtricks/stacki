@@ -121,6 +121,7 @@ export const messages = {
   'palette.panel.noMatch': 'אין רכיבים שתואמים ל־“{query}”.',
   'palette.panel.none': 'לא נמצאו רכיבים ב־{folder}.',
   'palette.panel.search': 'חיפוש רכיבים',
+  'palette.panel.searchHidden': 'מוסתר מהחיפוש',
   'palette.panel.title': 'רכיבים',
   'palette.preview.clientOnly': 'הרכיב הזה עובד רק בדפדפן, ולכן אי אפשר לצייר אותו מראש.',
   'palette.preview.loading': 'טוען תצוגה מקדימה…',

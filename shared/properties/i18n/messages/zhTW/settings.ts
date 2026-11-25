@@ -294,7 +294,8 @@ export const messages = {
   'settings.roles.components.hiddenBy': '由資料夾隱藏',
   'settings.roles.components.hiddenOwn': '已隱藏',
   'settings.roles.components.hide': '隱藏 {name}',
-  'settings.roles.components.info': '此角色無法從元件庫或元件面板新增隱藏的元件。已在頁面上的元件仍可編輯。新元件對所有角色皆可見。',
+  'settings.roles.components.info':
+    '隱藏的元件會從此角色的搜尋和新增選單中移除。管理員仍可從元件面板手動新增；其他角色完全無法新增。已在頁面上的元件仍可編輯。',
   'settings.roles.components.missing': '已不存在之路徑的規則',
   'settings.roles.components.noMatch': '沒有符合的元件。',
   'settings.roles.components.none': '此專案尚無元件。',

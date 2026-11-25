@@ -852,10 +852,14 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   deny-list: no rule means visible, so new, moved and renamed components are enabled for every role with no
   migration. The most specific rule wins (component, then the nearest folder above it); a `show` rule
   re-enables one component inside a hidden folder. A rule for a path that no longer exists is kept, listed as
-  missing in the Roles tab and ignored. It only stops ADDING: the palette's All and Components results, folder
-  pills and counts, the Components panel, Desktop's `addComponent` and apps' `node.insert`, and Studio's room
-  (`insert` actions, and a text edit that newly imports a hidden component, refused with a typed
-  `component-hidden` Result before any write). Instances already on a page stay, stay editable, show in the
+  missing in the Roles tab and ignored. What a rule takes away depends on who holds it, and one rule answers
+  for every surface (`componentOffer`, same module). An **admin's** hidden component leaves only what searches
+  for something to add (the insert palette that ⌘K and every canvas "+" open, and the Tag and layout fields'
+  suggestions); the Components panel (its own filter box too) and the new-page layout dropdowns still list it,
+  its row dimmed with a "Hidden from search" tip, and adding it by hand is allowed. **Every other role** loses
+  it from all of those and may not add it: Desktop's `addComponent`, layout and kind changes, apps'
+  `node.insert`, and Studio's room (`insert` actions, and a text edit that newly imports a hidden component,
+  refused with a typed `component-hidden` Result before any write). Add elements lists no project components. Instances already on a page stay, stay editable, show in the
   Navigator, and may be copied, pasted or duplicated. It never changes `can()`, so a restricted admin keeps
   Settings. Nothing in the app moves or renames a component yet; `moveComponentRules` is ready for the
   rename that does, and until then a moved path shows as missing.

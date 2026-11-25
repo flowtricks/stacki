@@ -301,7 +301,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'מוסתר',
   'settings.roles.components.hide': 'הסתרת {name}',
   'settings.roles.components.info':
-    'התפקיד הזה לא יכול להוסיף רכיבים מוסתרים מהפלטה או מלוח הרכיבים. רכיבים שכבר נמצאים בדף נשארים ניתנים לעריכה. רכיבים חדשים גלויים לכל התפקידים.',
+    'רכיבים מוסתרים נעלמים מהחיפוש ומתפריטי ההוספה של התפקיד הזה. מנהל יכול להוסיף אותם ידנית מלוח הרכיבים; תפקידים אחרים לא יכולים להוסיף אותם כלל. רכיבים שכבר נמצאים בדף נשארים ניתנים לעריכה.',
   'settings.roles.components.missing': 'כללים לנתיבים שכבר לא קיימים',
   'settings.roles.components.noMatch': 'אין רכיבים תואמים.',
   'settings.roles.components.none': 'בפרויקט הזה עדיין אין רכיבים.',

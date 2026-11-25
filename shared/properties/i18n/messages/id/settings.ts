@@ -305,7 +305,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'disembunyikan',
   'settings.roles.components.hide': 'Sembunyikan {name}',
   'settings.roles.components.info':
-    'Peran ini tidak dapat menambahkan komponen tersembunyi dari palet atau panel Komponen. Komponen yang sudah ada di halaman tetap dapat diedit. Komponen baru terlihat oleh semua peran.',
+    'Komponen tersembunyi hilang dari pencarian dan menu tambah peran ini. Admin tetap dapat menambahkannya secara manual dari panel Komponen; peran lain tidak dapat menambahkannya sama sekali. Komponen yang sudah ada di halaman tetap dapat diedit.',
   'settings.roles.components.missing': 'Aturan untuk path yang sudah tidak ada',
   'settings.roles.components.noMatch': 'Tidak ada komponen yang cocok.',
   'settings.roles.components.none': 'Proyek ini belum memiliki komponen.',

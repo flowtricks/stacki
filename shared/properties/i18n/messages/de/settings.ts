@@ -313,7 +313,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'ausgeblendet',
   'settings.roles.components.hide': '{name} ausblenden',
   'settings.roles.components.info':
-    'Ausgeblendete Komponenten kann diese Rolle weder in der Palette noch im Komponenten-Panel hinzufügen. Bereits vorhandene bleiben bearbeitbar. Neue Komponenten sind für jede Rolle sichtbar.',
+    'Ausgeblendete Komponenten verschwinden aus der Suche und den Hinzufügen-Menüs dieser Rolle. Admins können sie weiterhin von Hand im Komponenten-Panel hinzufügen, andere Rollen gar nicht. Bereits vorhandene bleiben bearbeitbar.',
   'settings.roles.components.missing': 'Regeln für Pfade, die es nicht mehr gibt',
   'settings.roles.components.noMatch': 'Keine passenden Komponenten.',
   'settings.roles.components.none': 'Dieses Projekt hat noch keine Komponenten.',

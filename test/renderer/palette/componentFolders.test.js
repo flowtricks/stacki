@@ -151,7 +151,7 @@ const toPosix = (filePath) => filePath.split(path.sep).join('/');
   const panel = fs.readFileSync(repoPath('src/features/palette/PalettePanel.tsx'), 'utf8');
   check(
     'the components panel searches by that rule too',
-    /rankInsertItems\((addable|props\.components), query\)/.test(panel),
+    /rankInsertItems\((listed|props\.components), query\)/.test(panel),
     'the panel has its own idea of what matches',
   );
   const model = fs.readFileSync(repoPath('src/features/palette/paletteModel.ts'), 'utf8');

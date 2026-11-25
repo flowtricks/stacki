@@ -310,7 +310,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'verborgen',
   'settings.roles.components.hide': '{name} verbergen',
   'settings.roles.components.info':
-    'Deze rol kan verborgen componenten niet toevoegen vanuit het palet of het paneel Componenten. Componenten die al op een pagina staan blijven bewerkbaar. Nieuwe componenten zijn zichtbaar voor elke rol.',
+    'Verborgen componenten verdwijnen uit zoeken en de menu’s om toe te voegen van deze rol. Beheerders kunnen ze nog met de hand toevoegen vanuit het paneel Componenten; andere rollen helemaal niet. Componenten die al op een pagina staan blijven bewerkbaar.',
   'settings.roles.components.missing': 'Regels voor paden die niet meer bestaan',
   'settings.roles.components.noMatch': 'Geen componenten gevonden.',
   'settings.roles.components.none': 'Dit project heeft nog geen componenten.',
