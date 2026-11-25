@@ -367,14 +367,14 @@
   margin-top: 1.1em;
 }
 
-/* The `+` beside an empty block of rich text a component holds: it sits in the content's left padding, so the words
+/* The `+` beside an empty block of rich text a component holds: it sits in the content's start padding, so the words
    never move when it appears. A fill shows it, never a border. */
 .html-field-blocks .html-content {
-  padding-left: 30px;
+  padding-inline-start: 30px;
 }
 .html-block-plus {
   position: absolute;
-  left: 6px;
+  inset-inline-start: 6px;
   z-index: 1;
   display: grid;
   place-items: center;

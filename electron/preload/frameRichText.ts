@@ -8,6 +8,7 @@
 // edit, one undo step. Escape puts every block back as it was and posts nothing.
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
+import { ownClasses } from './frameMeasure';
 import type { RichBlockChoice } from '../../shared/properties/canvasText';
 
 export interface RichTextCallbacks {
@@ -133,8 +134,9 @@ export function readInstanceHTML(container: Element, original: readonly Node[], 
   return parts.join('');
 }
 
-// A copy without the preview's bookkeeping: its marker comments and the `data-avb-*` and `data-astro-*` attributes and
-// the `astro-*` classes the preview and Astro's scoped styles put on rendered elements.
+// A copy without the preview's bookkeeping: its marker comments, the `data-avb-*` and `data-astro-*` attributes, the
+// canvas's own classes (`stacki-opened`, ownClasses) and the `astro-*` classes Astro's scoped styles put on rendered
+// elements. A canvas class saved into the page would mark the block as opened in every later preview.
 function cleanElement(element: Element): Element {
   const copy = element.cloneNode(true);
   assert(copy instanceof Element, 'A cloned element is an element');
@@ -145,7 +147,7 @@ function cleanElement(element: Element): Element {
         node.removeAttribute(attribute.name);
       }
     }
-    const kept = Array.from(node.classList).filter((name) => !name.startsWith('astro-'));
+    const kept = ownClasses(node).filter((name) => !name.startsWith('astro-'));
     if (node.hasAttribute('class')) {
       if (kept.length === 0) {
         node.removeAttribute('class');
