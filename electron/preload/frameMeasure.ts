@@ -152,6 +152,49 @@ const contentsAnchor = (element: Element): Rect => {
   };
 };
 
+// Elements looked through for one that shows; past it the copy counts as shown.
+const SHOWN_ELEMENTS_CHECKED_MAX = 200;
+const UNPAINTED_TAGS: ReadonlySet<string> = new Set(['TEMPLATE', 'SCRIPT', 'STYLE', 'LINK', 'META']);
+
+// Whether a copy has a box and paints nothing: every element of it, and every element inside those, computes to
+// `visibility: hidden` (a child may turn itself visible again). Stacked tab panels hold their inactive copies
+// this way, each exactly where the active one is drawn, so an outline of the hidden Heading read as an outline of
+// the other panel's. `display: none` has no box to mislead with.
+const paintsNothing = (nodes: readonly Node[]): boolean => {
+  const pending: Element[] = [];
+  const queue = (element: Element): void => {
+    if (element.isConnected && !UNPAINTED_TAGS.has(element.tagName)) {
+      pending.push(element);
+    }
+  };
+  for (const node of nodes) {
+    if (isElement(node)) {
+      queue(node);
+    }
+  }
+  if (pending.length === 0) {
+    // Words alone take their parent's visibility.
+    const parent = nodes.find((node) => node.isConnected && node.nodeType === 3)?.parentElement ?? undefined;
+    return parent !== undefined && window.getComputedStyle(parent).visibility === 'hidden';
+  }
+  for (let index = 0; index < pending.length; index += 1) {
+    const element = pending[index];
+    if (element === undefined || index >= SHOWN_ELEMENTS_CHECKED_MAX) {
+      return false;
+    }
+    if (window.getComputedStyle(element).visibility !== 'hidden') {
+      return false;
+    }
+    for (const child of Array.from(element.children).slice(0, SHOWN_ELEMENTS_CHECKED_MAX)) {
+      queue(child);
+    }
+  }
+  return true;
+};
+
+// The copy's box, marked when it paints nothing. The box stays in the list, so the copies keep their numbers.
+const shownAs = (rect: Rect, nodes: readonly Node[]): Rect => (paintsNothing(nodes) ? { ...rect, hidden: true } : rect);
+
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A ::before or ::after layer (shared/page/pseudoPath.ts) is measured on its element.
   const pseudo = splitPseudoPath(nodePath);
@@ -164,7 +207,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
     const tagged = elementsWithPath(nodePath);
     const places = placesOf(tagged);
     if (places.length) {
-      return places.map((place) => place.rect);
+      return places.map((place) => shownAs(place.rect, [place.el]));
     }
     // A text run in an inline run has neither markers nor a tag (inlineText.ts).
     const inline = rectsForInlineText(nodePath);
@@ -177,7 +220,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
       acc = addNode(acc, node);
     }
     if (acc) {
-      out.push(toRect(acc));
+      out.push(shownAs(toRect(acc), run));
     }
   }
   // A single node can still be many elements on the page — see PATH_ATTR:
@@ -189,7 +232,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
     const acc = boxOfRun(nodePath, runs[0] || [], runs.length);
     // Nothing measurable: fall through to the children (see below).
     if (acc) {
-      return [toRect(acc)];
+      return [shownAs(toRect(acc), [...(runs[0] ?? []), ...elementsWithPath(nodePath)])];
     }
   }
   if (out.length) {

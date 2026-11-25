@@ -4,7 +4,8 @@
 // The boxes this file measures and the shapes it reports, shared by the
 // outline, gap and hit-test paths.
 export type Box = { left: number; top: number; right: number; bottom: number };
-export type Rect = { x: number; y: number; w: number; h: number };
+/** `hidden`: the copy has a box and paints nothing (`visibility: hidden`), so no outline may be drawn for it. */
+export type Rect = { x: number; y: number; w: number; h: number; hidden?: true };
 export type TaggedPlace = { el: Element; rect: Rect };
 export type GapBand = { axis: 'column' | 'row'; x: number; y: number; w: number; h: number };
 export type ThinTarget = { path: string; el: Element; box: DOMRect };

@@ -138,6 +138,9 @@ function SpacingOverlays(props: PreviewOverlaysProps) {
   const boxes = props.rects[selectedPath] ?? [];
   const measurements = props.spacing[selectedPath] ?? [];
   const box = boxes[props.selOcc ?? 0] ?? boxes[0];
+  if (box?.hidden === true) {
+    return undefined;
+  }
   const measurement = measurements[props.selOcc ?? 0] ?? measurements[0] ?? undefined;
   const sized = withLiveSpacing(measurement, spacingHover.kind, spacingHover.live);
   return spacingBands(box, sized, spacingHover.kind, spacingHover.sides).flatMap((drawn, index) => {

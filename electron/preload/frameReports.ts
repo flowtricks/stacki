@@ -78,6 +78,10 @@ const boxesMoved = (before: Rect[] | undefined, now: Rect[] | undefined): boolea
     return true;
   }
   for (let i = 0; i < now.length; i++) {
+    // A copy shown or hidden where it stands (a tab switch ending its transition) is a change to follow too.
+    if (before[i]?.hidden !== now[i]?.hidden) {
+      return true;
+    }
     for (const key of ['x', 'y', 'w', 'h'] as const) {
       if (Math.abs((before[i]?.[key] ?? 0) - (now[i]?.[key] ?? 0)) > MOVE_SLACK) {
         return true;

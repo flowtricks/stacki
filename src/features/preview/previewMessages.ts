@@ -484,7 +484,8 @@ function parseBox(input: unknown): Box {
   if (width < 0 || height < 0) {
     throw new Error('Preview rectangle: expected nonnegative size');
   }
-  return { x: finite(value['x']), y: finite(value['y']), w: width, h: height };
+  const box = { x: finite(value['x']), y: finite(value['y']), w: width, h: height };
+  return value['hidden'] === true ? { ...box, hidden: true } : box;
 }
 
 function parseTextMarkBox(input: unknown): TextMarkBox {

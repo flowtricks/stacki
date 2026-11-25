@@ -52,6 +52,14 @@ check(
   onePerPlace([point, { x: 0, y: 0, w: 50, h: 20 }]).length === 1 && onePerPlace([point, { x: 0, y: 0, w: 50, h: 20 }])[0].w === 50,
 );
 check('a collapsed copy picked by occurrence is drawn', copiesToDraw([point], 0).length === 1);
+// A copy that paints nothing (a hidden tab panel's) sits where another panel's copy shows: it draws nothing, and
+// no other copy stands in for it.
+const unseen = { x: 0, y: 0, w: 68, h: 20, hidden: true };
+const seen = { x: 0, y: 90, w: 68, h: 20 };
+check('a hidden copy picked by occurrence draws nothing', copiesToDraw([seen, unseen], 1).length === 0);
+check('its shown sibling still draws', copiesToDraw([seen, unseen], 0)[0] === seen);
+check('with no occurrence only the shown copies draw', onePerPlace([unseen, seen]).length === 1 && onePerPlace([unseen, seen])[0] === seen);
+check('a node hidden everywhere draws nothing', onePerPlace([unseen]).length === 0 && copiesToDraw([unseen], undefined).length === 0);
 
 const CASES = [
   [
@@ -68,6 +76,8 @@ const CASES = [
     true,
   ],
   ['a display: none element', '<div id="c5" data-avb-p="0.5" style="display:none"></div>', false],
+  ['an element in a hidden tab panel', '<div style="visibility:hidden"><h2 data-avb-p="0.6">Section 3</h2></div>', true, 'hidden'],
+  ['a hidden wrapper whose child shows itself', '<div data-avb-p="0.7" style="visibility:hidden"><b style="visibility:visible">x</b></div>', true],
 ];
 
 const PROBE = `const { app, BrowserWindow } = require('electron');
@@ -173,8 +183,11 @@ import * as boxes from ${JSON.stringify(path.join(ROOT, 'src/features/preview/ou
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 500));
   } else {
     const results = JSON.parse(line.slice('RESULT '.length));
-    for (const [index, [name, , shown]] of CASES.entries()) {
+    for (const [index, [name, , shown, paint]] of CASES.entries()) {
       const entry = results[index];
+      if (entry.drawn[0]) {
+        check(`${name}: marked hidden only when it paints nothing`, (entry.drawn[0].rect.hidden === true) === (paint === 'hidden'), JSON.stringify(entry));
+      }
       if (!shown) {
         check(`${name}: nothing to draw`, entry.rects === 0, JSON.stringify(entry));
         continue;

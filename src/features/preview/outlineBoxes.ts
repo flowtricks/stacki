@@ -6,6 +6,8 @@ export interface Box {
   readonly y: number;
   readonly w: number;
   readonly h: number;
+  /** The copy paints nothing (a hidden tab panel's, stacked where another's shows): never outlined. */
+  readonly hidden?: boolean;
 }
 interface Occurrence {
   readonly path?: string | undefined;
@@ -40,7 +42,7 @@ const covers = (outer: Box, inner: Box): boolean =>
  */
 export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): readonly T[] {
   assert((boxes?.length ?? 0) <= LIMITS.treeNodesMax, 'Outline box count exceeds limit');
-  const present = (boxes || []).filter((box) => box);
+  const present = (boxes || []).filter((box) => box && box.hidden !== true);
   // A collapsed node reports a point (collapseKind says how it is drawn); it is kept only
   // when nothing beside it has a size, so a hollow copy never draws.
   const sized = present.filter((box) => box.w > 0 && box.h > 0);
@@ -147,8 +149,9 @@ export function copiesToDraw<T extends Box>(all: readonly T[], occurrence: numbe
   }
   assert(Number.isSafeInteger(occurrence), 'copiesToDraw: an occurrence is a whole number');
   assert(occurrence >= 0, 'copiesToDraw: an occurrence is not negative');
-  const selected = all[occurrence];
-  return selected ? [selected] : all.slice(0, 1);
+  // A hidden copy draws nothing: another copy's box in its place would name the wrong instance.
+  const selected = all[occurrence] ?? all[0];
+  return selected === undefined || selected.hidden === true ? [] : [selected];
 }
 
 /** A map has no box of its own: it is on the page only as the copies of what
@@ -183,7 +186,7 @@ export function loopChildPaths(path: string, childCount: number): readonly strin
  */
 export function unionBox(boxes: readonly Box[]): Box | undefined {
   assert(boxes.length <= LIMITS.treeNodesMax, 'unionBox: box count exceeds limit');
-  const sized = boxes.filter((box) => box.w > 0 && box.h > 0);
+  const sized = boxes.filter((box) => box.w > 0 && box.h > 0 && box.hidden !== true);
   const [first] = sized;
   if (first === undefined) {
     return undefined;
