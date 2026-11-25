@@ -23,6 +23,7 @@ import { canvasInert, canvasSelects } from './frameInteraction';
 import { parentPath } from './framePaths';
 import { activeScope, elementsWithPath, inScope, pathsOf, PATH_ATTR, regions, runsOf } from './frameRegions';
 import { rectsForPath } from './frameMeasure';
+import { scrollPageBy } from './frameScrollbar';
 import { isCanvasTextEditing } from './frameTextNative';
 
 export const FRAME_DRAG_LIMITS = {
@@ -252,9 +253,8 @@ function edgeScrollTick(): void {
   if (step === 0) {
     return;
   }
-  const before = window.scrollY;
-  window.scrollBy(0, step);
-  if (window.scrollY === before) {
+  // The document or <body>, whichever scrolls this page.
+  if (!scrollPageBy(step)) {
     return; // At the end of the page: nothing more to reach.
   }
   scheduleProbe();

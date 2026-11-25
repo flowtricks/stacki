@@ -137,6 +137,18 @@ function scrollPageTo(topPx: number): void {
   }
 }
 
+/** Moves the page by `deltaPx`, whichever element scrolls it; false when it could not move. */
+export function scrollPageBy(deltaPx: number): boolean {
+  assert(Number.isFinite(deltaPx), 'scrollPageBy: a finite distance');
+  const root = scrollRoot();
+  if (root === undefined) {
+    return false;
+  }
+  const before = root.scrollTop;
+  scrollPageTo(before + deltaPx);
+  return root.scrollTop !== before;
+}
+
 // A scrolling <body> in a standards-mode page: the one case read and scrolled through an element, not the window.
 function bodyIsRoot(root: Element): boolean {
   if (root === document.body) {
