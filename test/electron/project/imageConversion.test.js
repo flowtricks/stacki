@@ -212,3 +212,23 @@ test('a concurrent document edit rolls back earlier references and keeps both im
     fs.rmSync(projectPath, { recursive: true, force: true });
   }
 });
+
+// The reference scan skips dot folders, so component defaults follow the converted file separately.
+test('a converted image stays the one a component default imports', async () => {
+  const projectPath = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-images-defaults-')));
+  try {
+    fs.mkdirSync(path.join(projectPath, 'src/assets'), { recursive: true });
+    fs.mkdirSync(path.join(projectPath, '.stacki'));
+    fs.writeFileSync(path.join(projectPath, 'src/assets/photo.png'), await picture());
+    const settings = path.join(projectPath, '.stacki/components.json');
+    fs.writeFileSync(
+      settings,
+      JSON.stringify({ version: 1, components: { 'src/components/Img.astro': { assets: { src: { file: 'src/assets/photo.png' } } } } }),
+    );
+    const result = await convertImage({ projectPath, rel: 'src/assets/photo.png', format: 'webp', trash: async (file) => fs.rmSync(file) });
+    assert.equal(result.ok, true, result.error);
+    assert.match(fs.readFileSync(settings, 'utf8'), /assets\/photo\.webp/);
+  } finally {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  }
+});

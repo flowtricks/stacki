@@ -9,6 +9,7 @@ import { configOf } from '../../vendor/stacki/shared/properties/projectFolders';
 import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
 import { instrumentVariant } from '../features/preview/variantRuntime';
 import { mutateAsset } from '../features/assets/assetOperations';
+import { relinkMovedDefaults } from '../features/settings/projectMetadata';
 import { describeReplacementRefusal } from '../../vendor/stacki/shared/properties/mediaHosting';
 import { configureRenderPush } from '../features/preview/renderPushServer';
 import { managedAsset, MEDIA_EXT } from '../features/assets/assetStateTypes';
@@ -197,7 +198,11 @@ async function handleRequestInWorkspace(
   }
   if (url.pathname === '/studio/api/assets' && request.method === 'POST') {
     const input: unknown = JSON.parse(await body(request));
-    json(response, 200, await rooms.coordinator.run(() => mutateAsset(options.root, input)));
+    const { moved, ...answer } = { moved: undefined, ...(await rooms.coordinator.run(() => mutateAsset(options.root, input))) };
+    if (moved !== undefined) {
+      await relinkMovedDefaults(options.root, rooms, moved);
+    }
+    json(response, 200, answer);
     return;
   }
   if (url.pathname === '/studio/api/assets' && request.method === 'GET') {

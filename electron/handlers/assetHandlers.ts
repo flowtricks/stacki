@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import type { MainHost } from './mainHost';
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { describeReplacementRefusal } from '../../shared/properties/mediaHosting';
+import { relinkMovedDefaultAssets } from '../project/componentDefaultRelink';
 import { rootOfRel, assetAbs, assetWriteRefusal, uniqueTarget, imageSizeOf, listAssetEntriesSliced } from '../project/assetFiles';
 
 export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
@@ -78,6 +79,7 @@ function registerAssetsMoveHandlers({
     noteAppWrite();
     fs.mkdirSync(toDirectory, { recursive: true });
     fs.renameSync(from, target);
+    relinkAfterMove(projectPath, from, target);
     send('assets:changed', {});
     // Where it landed: a taken name is moved in as `name-1`, and Undo must move that file, never the one already there.
     return { ok: true as const, rel: toPosix(path.relative(path.resolve(projectPath), target)) };
@@ -109,6 +111,7 @@ function registerAssetsMoveHandlers({
     noteAppWrite();
     noteAppWrite();
     fs.renameSync(from, target);
+    relinkAfterMove(projectPath, from, target);
     send('assets:changed', {});
     return { ok: true as const };
   });
@@ -158,6 +161,12 @@ function registerAssetsMoveHandlers({
     send('assets:changed', {});
     return { ok: true as const };
   });
+}
+
+// Component defaults import src/ files by path (.stacki/components.json), so they follow a file or folder that moves.
+function relinkAfterMove(projectPath: string, from: string, to: string): void {
+  const rel = (file: string) => toPosix(path.relative(path.resolve(projectPath), file));
+  relinkMovedDefaultAssets(projectPath, [{ from: rel(from), to: rel(to) }]);
 }
 
 function registerAssetsReadTextHandlers({

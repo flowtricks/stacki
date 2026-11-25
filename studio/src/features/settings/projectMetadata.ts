@@ -8,6 +8,8 @@ import {
   type MetadataKind,
 } from '../../../vendor/stacki/shared/properties/projectMetadata';
 import { readSource, preparePath, safePath } from '../project/projectServer';
+import { parseDefaultsSource } from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { relinkDefaultAssets } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
 import type { createRooms } from '../collaboration/rooms';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -72,6 +74,23 @@ export async function metadataRoute(
   response.setHeader('Content-Type', 'application/json');
   response.end(JSON.stringify(result));
   return true;
+}
+
+/** Component defaults import src/ files by path, so they follow an asset (or folder) that moved. */
+export async function relinkMovedDefaults(root: string, rooms: ReturnType<typeof createRooms>, moved: { readonly from: string; readonly to: string }) {
+  const stored = await readMetadataSource(root, 'components');
+  if (stored.source === undefined) {
+    return;
+  }
+  // The move has happened: settings that do not read are left alone, and check-project names the missing file.
+  const parsed = parseDefaultsSource(stored.source);
+  if (!parsed.ok) {
+    return;
+  }
+  const relinked = relinkDefaultAssets(parsed.value, moved.from, moved.to);
+  if (relinked !== parsed.value) {
+    await saveMetadata(root, rooms, { kind: 'components', source: `${JSON.stringify(relinked, undefined, 2)}\n`, base: stored.source });
+  }
 }
 
 async function saveMetadata(root: string, rooms: ReturnType<typeof createRooms>, value: unknown) {

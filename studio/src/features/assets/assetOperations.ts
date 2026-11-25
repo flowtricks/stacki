@@ -58,7 +58,7 @@ export async function mutateAsset(root: string, input: unknown) {
   }
   await vacant(root, destination);
   await relocate(root, rel, destination, info.isDirectory());
-  return { ok: true };
+  return { ok: true, moved: { from: rel, to: destination } };
 }
 async function relocate(root: string, rel: string, destination: string, directory: boolean) {
   const contents = directory ? await assetDirectoryContents(root, rel) : { files: [rel], directories: [] };
