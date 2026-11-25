@@ -163,6 +163,7 @@ export function parsePinBoard(input: unknown): PinBoard {
   }
   assert(pins.length <= PIN_LIMITS.pinsMax, 'parsePinBoard: the board is bounded');
   assert(ids.size === pins.length, 'parsePinBoard: ids are unique');
+  assert(numbers.size === pins.length, 'parsePinBoard: numbers are unique');
   return { version: 1, pins };
 }
 
@@ -183,6 +184,7 @@ export function parsePinBoardStrict(input: unknown): PinBoard {
   if (new Set(pins.map((pin) => pin.number)).size !== pins.length) {
     throw new Error('board.pins: repeated number');
   }
+  assert(pins.length <= PIN_LIMITS.pinsMax, 'parsePinBoardStrict: the board is bounded');
   return { version: 1, pins };
 }
 
@@ -200,7 +202,9 @@ export function parsePinImages(input: unknown): readonly PinImageData[] {
 
 /** Base64 characters of `images` together. */
 export function pinImageChars(images: readonly Pick<PinImageData, 'data'>[]): number {
-  return images.reduce((sum, image) => sum + image.data.length, 0);
+  const chars = images.reduce((sum, image) => sum + image.data.length, 0);
+  assert(Number.isSafeInteger(chars), 'pinImageChars: a count of characters');
+  return chars;
 }
 
 /** What `ai:pinsRead` answers: the board and the bytes of each image it names that is still on disk. */
@@ -244,6 +248,7 @@ export function parsePin(input: unknown): CommentPin {
     delivery: parsePinDelivery(value['delivery']),
   };
   assert(pin.number >= 1, 'parsePin: numbers start at one');
+  assert(pin.updatedAt >= pin.createdAt, 'parsePin: a pin is changed after it is made');
   return pin;
 }
 
@@ -258,6 +263,7 @@ function pinImages(input: unknown, name: string): readonly PinImageRef[] {
   if (new Set(images.map((image) => image.id)).size !== images.length) {
     throw new Error(`${name}: repeated image`);
   }
+  assert(images.length <= PIN_LIMITS.imagesPerPinMax, 'pinImages: a pin holds a bounded number of images');
   return images;
 }
 

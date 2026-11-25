@@ -103,6 +103,7 @@ export function parsePinBrief(input: unknown): PinBrief {
     images.every((index) => index < AI_LIMITS.attachmentsMax),
     'parsePinBrief: images index the attachments',
   );
+  assert(pins.length <= PIN_LIMITS.pinsPerSendMax, 'parsePinBrief: a send is bounded');
   return { mode, pins };
 }
 
@@ -155,6 +156,7 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
   if (pins.length === 0) {
     throw new Error('sentPins: expected at least one pin');
   }
+  assert(pins.length <= PIN_LIMITS.pinsPerSendMax, 'parseSentPins: a send is bounded');
   return pins;
 }
 
@@ -209,7 +211,9 @@ export function pinWaves(work: readonly PinWork[], concurrencyMax: number = PIN_
 
 /** The files a pin's change is expected to touch: where the element is written and, for an instance, its component. */
 export function pinFiles(pin: Pick<PinBriefEntry, 'file' | 'componentFile'>): readonly string[] {
-  return pin.componentFile === undefined || pin.componentFile === pin.file ? [pin.file] : [pin.file, pin.componentFile];
+  const files = pin.componentFile === undefined || pin.componentFile === pin.file ? [pin.file] : [pin.file, pin.componentFile];
+  assert(new Set(files).size === files.length, 'pinFiles: each file is named once');
+  return files;
 }
 
 /** The note sent right before a pin's image, so the agent knows which pin it shows. */

@@ -78,14 +78,16 @@ function parseEntries<T>(input: unknown, parse: (value: unknown) => T): Readonly
   if (entries.length > DEFAULT_VALUE_LIMITS.entriesMax) {
     throw new Error('Too many default props');
   }
-  return Object.fromEntries(
+  const parsed = Object.fromEntries(
     entries.map(([name, value]) => {
       if (!PROP_NAME.test(name)) {
         throw new Error('Invalid default prop name');
       }
-      return [name, parse(value)];
+      return [name, parse(value)] as const;
     }),
   );
+  assert(Object.keys(parsed).length === entries.length, 'parseEntries: every entry is kept under its own name');
+  return parsed;
 }
 
 function parseLiteral(input: unknown): LiteralDefault {
@@ -149,10 +151,12 @@ export function mergeDefaultValues(base: Values, override: Values): Values & { r
     ...Object.fromEntries(Object.entries(held ?? {}).filter(([name]) => !taken.has(name))),
     ...own,
   });
-  return {
-    props: kept(base.props, override.props),
-    ...heldDefaults({ assets: kept(base.assets, override.assets), literals: kept(base.literals, override.literals) }),
-  };
+  const props = kept(base.props, override.props);
+  assert(
+    Object.keys(override.props ?? {}).every((name) => Object.hasOwn(props, name)),
+    'mergeDefaultValues: every override prop is kept',
+  );
+  return { props, ...heldDefaults({ assets: kept(base.assets, override.assets), literals: kept(base.literals, override.literals) }) };
 }
 
 /** A node's defaults as attributes, as picking each by hand would write them. `binding` names an asset's import. */
@@ -162,6 +166,7 @@ export function defaultAttributes(
 ): readonly (readonly [string, { readonly type: 'string' | 'expr'; readonly value: string }])[] {
   const assets = Object.entries(node.assets ?? {}).map(([name, asset]) => {
     const local = binding(asset.file);
+    assert(local.length > 0, 'defaultAttributes: an asset is written by the name of its import');
     return [name, { type: 'expr' as const, value: asset.url === true ? `${local}.src` : local }] as const;
   });
   const props = Object.entries(node.props ?? {}).map(
@@ -187,6 +192,7 @@ function literalText(literal: LiteralDefault, binding: (file: string) => string)
     assert(file !== undefined, 'literalText: every reference has its import');
     written = written.slice(0, reference.start) + binding(file) + written.slice(reference.start + reference.name.length);
   }
+  assert(written.length > 0, 'literalText: a literal is never written as nothing');
   return written;
 }
 
@@ -214,6 +220,8 @@ export function assetBindingName(file: string, taken: ReadonlySet<string>): stri
     assert(suffix <= taken.size + 2, 'assetBindingName: a free name is found');
     candidate = `${first}${suffix}`;
   }
+  assert(!taken.has(candidate), 'assetBindingName: the name is free');
+  assert(!RESERVED.has(candidate), 'assetBindingName: the name can name an import');
   return candidate;
 }
 
@@ -273,6 +281,7 @@ export function writtenTag(node: WrittenTag): WrittenTag {
 
 /** One tag as source. `<>` takes no attributes, so one given any is written as `<Fragment>`. */
 export function elementMarkup(name: string, props: string, children: string | undefined): string {
+  assert(name.length > 0, 'elementMarkup: a tag has a name');
   const tag = name === '<>' && props !== '' ? 'Fragment' : name;
   if (tag === '<>') {
     return `<>${children ?? ''}</>`;
@@ -335,11 +344,13 @@ function literalTokens(source: string): readonly LiteralToken[] | undefined {
     if (found === undefined || tokens.length > DEFAULT_VALUE_LIMITS.literalTokensMax) {
       return undefined;
     }
+    assert(found.length > 0, 'literalTokens: every token moves the reading on');
     if (!/^(?:\s|\/\*|\/\/)/.test(found)) {
       tokens.push({ text: found, start: at });
     }
     at += found.length;
   }
+  assert(at === source.length, 'literalTokens: the tokens cover the whole source');
   return tokens;
 }
 
@@ -353,7 +364,12 @@ export function literalReferences(source: string, imports: ReadonlySet<string>):
     return undefined;
   }
   const reading: LiteralReading = { tokens, imports, references: [] };
-  return literalEnd(reading, 0, 0) === tokens.length ? reading.references : undefined;
+  const whole = literalEnd(reading, 0, 0) === tokens.length;
+  assert(
+    reading.references.every((reference) => imports.has(reference.name)),
+    'literalReferences: only the given imports are referred to',
+  );
+  return whole ? reading.references : undefined;
 }
 
 /** Whether `source` is only data, naming nothing. */
@@ -382,6 +398,7 @@ function literalEnd(reading: LiteralReading, at: number, depth: number): number 
 
 function collectionEnd(reading: LiteralReading, at: number, depth: number): number | undefined {
   const { tokens } = reading;
+  assert(tokens[at]?.text === '[' || tokens[at]?.text === '{', 'collectionEnd: starts at a list or an object');
   const close = tokens[at]?.text === '[' ? ']' : '}';
   let next = at + 1;
   // Each pass consumes at least one token.
@@ -401,6 +418,7 @@ function collectionEnd(reading: LiteralReading, at: number, depth: number): numb
     if (after !== ',' && after !== close) {
       return undefined;
     }
+    assert(end > at, 'collectionEnd: each item moves the reading on');
     next = after === ',' ? end + 1 : end;
   }
   return tokens[next]?.text === close ? next + 1 : undefined;
@@ -475,6 +493,7 @@ export function relinkDefaultAssets(config: ComponentDefaults, from: string, to:
     };
   };
   const components = Object.fromEntries(Object.entries(config.components).map(([owner, recipe]) => [owner, relink(recipe, 0)]));
+  assert(Object.keys(components).length === Object.keys(config.components).length, 'relinkDefaultAssets: every component keeps its recipe');
   return changed ? { version: 1, components } : config;
 }
 
