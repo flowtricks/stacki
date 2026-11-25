@@ -62,11 +62,15 @@ test('guide migration, coalesced saves, and stale editor protection', async () =
   assert.equal(writes.length, 2);
   first.change((settings) => ({ ...settings, opacity: 0.2 }));
   await until(() => writes.length === 3);
-  other.change((settings) => ({ ...settings, opacity: 0.3 }));
+  other.change((settings) => ({ ...settings, numbers: false }));
   await until(() => otherStates.at(-1)?.problem.includes('Changed in another editor.'));
   assert.equal(JSON.parse(source).settings.opacity, 0.2);
+  assert.equal(writes.length, 3);
+  // The retry writes the stale editor's own change over the newer file, and nothing else of its.
   other.reload();
-  await until(() => otherStates.at(-1)?.settings.opacity === 0.2);
+  await until(() => writes.length === 4 && otherStates.at(-1)?.problem === '');
+  assert.equal(JSON.parse(source).settings.opacity, 0.2);
+  assert.equal(JSON.parse(source).settings.numbers, false);
   first.close();
   other.close();
   delete globalThis.window;

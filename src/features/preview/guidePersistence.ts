@@ -13,6 +13,9 @@ export interface GuidePersistence {
   readonly loading: boolean;
   readonly reload: () => void;
 }
+// Every setting, so a change can be told apart field by field.
+const GUIDE_KEYS = ['visible', 'columns', 'color', 'opacity', 'numbers', 'margin', 'gutter', 'widthMax'] as const satisfies ReadonlyArray<keyof GuideSettings>;
+
 interface GuideState {
   readonly settings: GuideSettings;
   readonly problem: string;
@@ -77,8 +80,12 @@ export function createGuideController(project: string, notify: (state: GuideStat
 class ProjectGuideController {
   private settings = GUIDE_DEFAULTS;
   private source: string | undefined;
-  private pending: GuideSettings | undefined;
+  /** The settings changed here and not yet written; each outlives a failed save and a re-read. */
+  private unsaved = new Set<keyof GuideSettings>();
+  /** App-storage settings read for a project with no file yet, still to be written. */
+  private unmigrated = false;
   private writing = false;
+  private problem = '';
   private status: 'loading' | 'ready' | 'failed' | 'closed' = 'loading';
   private timer: ReturnType<typeof setTimeout> | undefined;
   private loadToken: object | undefined;
@@ -88,18 +95,29 @@ class ProjectGuideController {
   ) {}
 
   change(change: Parameters<GuideUpdate>[0]): void {
-    if (this.status !== 'ready') {
+    if (this.status === 'closed') {
       return;
     }
-    this.settings = change(this.settings);
-    this.pending = this.settings;
-    // A save in progress is no news: the guide already shows the change.
-    this.report('');
-    this.schedule();
+    const next = change(this.settings);
+    for (const key of GUIDE_KEYS) {
+      if (next[key] !== this.settings[key]) {
+        this.unsaved.add(key);
+      }
+    }
+    this.settings = next;
+    if (this.status === 'ready') {
+      // A save in progress is no news: the guide already shows the change.
+      this.report('');
+      this.schedule();
+    } else {
+      // The read in flight, or the next one, saves it over what the file then holds.
+      this.report(this.problem);
+    }
   }
 
   reload(): void {
-    if (this.writing || this.pending !== undefined || this.status === 'closed') {
+    // A save on its way would be raced by the read; it reports for itself.
+    if (this.writing || this.status === 'closed' || (this.status === 'ready' && this.unsaved.size > 0)) {
       return;
     }
     const token = {};
@@ -111,16 +129,10 @@ class ProjectGuideController {
         if (this.status === 'closed' || this.loadToken !== token) {
           return;
         }
-        this.source = stored.source;
-        // Without a file, only settings from app storage are written; defaults wait for a change.
-        const legacy = this.source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
-        this.settings = this.source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(this.source);
+        this.adopt(stored.source);
         this.status = 'ready';
         this.report('');
-        if (legacy !== undefined) {
-          this.pending = legacy;
-          await this.save();
-        }
+        await this.save();
       })
       .catch((error: unknown) => {
         if (this.status !== 'closed' && this.loadToken === token) {
@@ -131,9 +143,33 @@ class ProjectGuideController {
   }
 
   close(): void {
+    const status = this.status;
     this.status = 'closed';
     clearTimeout(this.timer);
-    void this.save();
+    if (status === 'ready') {
+      void this.save();
+    } else if (this.unsaved.size > 0 && !this.writing) {
+      // One last try over the current file. A file that cannot be read is left as it is.
+      void readMetadata(this.project, 'guide')
+        .then(async (stored) => {
+          this.adopt(stored.source);
+          await this.save();
+        })
+        .catch(() => undefined);
+    }
+  }
+
+  // The file's settings, with the unsaved changes over them.
+  private adopt(source: string | undefined): void {
+    // Without a file, only settings from app storage are written; defaults wait for a change.
+    const legacy = source === undefined ? loadLegacyGuideSettings(this.project) : undefined;
+    let settings = source === undefined ? (legacy ?? GUIDE_DEFAULTS) : guideFromSource(source);
+    for (const key of this.unsaved) {
+      settings = { ...settings, [key]: this.settings[key] };
+    }
+    this.source = source;
+    this.unmigrated = legacy !== undefined;
+    this.settings = settings;
   }
 
   private schedule(): void {
@@ -143,17 +179,20 @@ class ProjectGuideController {
 
   private report(problem: string): void {
     if (this.status !== 'closed') {
+      this.problem = problem;
       this.notify({ settings: this.settings, problem, loading: this.status === 'loading' });
     }
   }
 
   private async save(): Promise<void> {
-    if (this.writing || this.pending === undefined) {
+    if (this.writing || (this.unsaved.size === 0 && !this.unmigrated)) {
       return;
     }
-    const next = this.pending;
-    this.pending = undefined;
+    const next = this.settings;
+    const sending = this.unsaved;
+    this.unsaved = new Set();
     this.writing = true;
+    let saved = false;
     try {
       const result = await writeMetadata(this.project, {
         kind: 'guide',
@@ -161,16 +200,22 @@ class ProjectGuideController {
         ...(this.source === undefined ? {} : { base: this.source }),
       });
       this.source = result.source;
+      this.unmigrated = false;
+      saved = true;
       this.report('');
     } catch (error: unknown) {
-      this.pending = undefined;
+      for (const key of sending) {
+        this.unsaved.add(key);
+      }
       if (this.status !== 'closed') {
         this.status = 'failed';
       }
+      // The next `reload` reads the file again and saves what is still unsaved.
       this.report(`${errorMessage(error)} Project settings will retry automatically.`);
     } finally {
       this.writing = false;
-      if (this.pending !== undefined) {
+      // A change made during this write; a failed one waits for `reload` instead.
+      if (saved && this.unsaved.size > 0) {
         this.schedule();
       }
     }
