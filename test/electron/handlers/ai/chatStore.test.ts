@@ -597,3 +597,30 @@ test('a fork keeps its own name against agent titles', () => {
   assert.equal(forked.value.record.titleSource, 'user');
   assert.equal(withAgentTitle(forked.value.record, 'Something else'), undefined);
 });
+
+test('an agent title of emoji is cut within the limit, never through a character', () => {
+  for (const raw of ['🎉'.repeat(AI_LIMITS.titleCharsMax), `x${'🎉'.repeat(AI_LIMITS.titleCharsMax)}`]) {
+    const title = withAgentTitle(record(1), raw)?.title;
+    assert.ok(title !== undefined);
+    assert.ok(title.length <= AI_LIMITS.titleCharsMax, `${title.length} units`);
+    assert.ok(title.length >= AI_LIMITS.titleCharsMax - 1, 'nothing more is cut than has to be');
+    assert.doesNotMatch(title, /\p{Surrogate}/u, 'no half of a surrogate pair');
+  }
+});
+
+test('an event appended after a half-written last line is kept', () => {
+  const root = temporary('torn');
+  const store = new ChatStore(path.join(root, 'ai'));
+  const project = path.join(root, 'site');
+  const event = (turn: number) => ({ kind: 'turn-start' as const, turn: toTurnId(`t${String(turn).repeat(16)}`), at: turn });
+  const stored = () => store.read(project, id(1)).events.length;
+  assert.equal(store.append(project, id(1), [event(1)]), true);
+  const file = path.join(store.projectDirectory(project), 'chats', `${id(1)}.jsonl`);
+  // A crash part-way through a write: the last line has no end.
+  fs.appendFileSync(file, '{"kind":"turn-sta', 'utf8');
+  assert.equal(store.append(project, id(1), [event(2)]), true);
+  assert.equal(stored(), 2, 'the torn line alone is lost');
+  assert.equal(store.append(project, id(1), [event(3)]), true);
+  assert.equal(stored(), 3);
+  assert.ok(!fs.readFileSync(file, 'utf8').includes('\n\n'), 'a whole last line gains no blank one');
+});

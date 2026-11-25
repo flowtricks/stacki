@@ -217,11 +217,13 @@ export class ChatStore {
     const file = this.transcriptFile(projectPath, chat);
     const lines = events.map((event) => JSON.stringify(event)).join('\n');
     const size = sizeOf(file);
-    if (size + lines.length + 1 > AI_LIMITS.chatBytesMax) {
+    // A crash part-way through a write leaves a last line with no end: ending it keeps these events out of it.
+    const separator = size > 0 && !endsWithNewline(file, size) ? '\n' : '';
+    if (size + separator.length + lines.length + 1 > AI_LIMITS.chatBytesMax) {
       return false;
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.appendFileSync(file, `${lines}\n`, 'utf8');
+    fs.appendFileSync(file, `${separator}${lines}\n`, 'utf8');
     assert(sizeOf(file) > size, 'append: the transcript grew');
     return true;
   }
@@ -420,7 +422,15 @@ export function cleanAgentTitle(raw: string): string | undefined {
   if (cleaned === '') {
     return undefined;
   }
-  return Array.from(cleaned).slice(0, AI_LIMITS.titleCharsMax).join('').trim();
+  return cutToUnits(cleaned, AI_LIMITS.titleCharsMax).trim();
+}
+
+// The longest start of `text` within `unitsMax` UTF-16 units (what every title bound counts) that keeps each character whole.
+function cutToUnits(text: string, unitsMax: number): string {
+  const cut = text.slice(0, unitsMax);
+  const last = cut.charCodeAt(cut.length - 1);
+  const halved = cut.length < text.length && last >= 0xd800 && last <= 0xdbff;
+  return halved ? cut.slice(0, -1) : cut;
 }
 
 /**
@@ -699,6 +709,19 @@ function parseLine(line: string): ChatEvent | undefined {
   } catch {
     return undefined;
   }
+}
+
+// Whether the file of `size` bytes ends its last line.
+function endsWithNewline(file: string, size: number): boolean {
+  assert(size > 0, 'endsWithNewline: the file has a last byte');
+  const last = Buffer.alloc(1);
+  const handle = fs.openSync(file, 'r');
+  try {
+    fs.readSync(handle, last, 0, 1, size - 1);
+  } finally {
+    fs.closeSync(handle);
+  }
+  return last[0] === 0x0a;
 }
 
 function sizeOf(file: string): number {
