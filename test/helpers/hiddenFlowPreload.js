@@ -15,8 +15,10 @@ require('./hideDockPreload.js');
 if (process.versions.electron !== undefined && process.type === 'browser') {
   // Queued after hideDockPreload's own patches of the same methods, so these are the ones left standing.
   setImmediate(() => {
-    const { BrowserWindow } = require('electron');
+    const { app, BrowserWindow } = require('electron');
     BrowserWindow.prototype.show = function show() {};
     BrowserWindow.prototype.showInactive = function showInactive() {};
+    // Throttled, a window that is never shown gets no animation frames and the app never draws.
+    app.on('browser-window-created', (_event, window) => window.webContents.setBackgroundThrottling(false));
   });
 }
