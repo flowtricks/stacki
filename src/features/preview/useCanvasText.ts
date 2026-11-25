@@ -1,6 +1,6 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
-import type { CanvasTextRefusal } from '../../../shared/properties/canvasText';
+import type { CanvasTextBreaks, CanvasTextRefusal } from '../../../shared/properties/canvasText';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
@@ -49,12 +49,21 @@ export interface CanvasTextDocument {
   readonly focus?: readonly string[] | undefined;
   /** The Content field's formatting, for words selected on the canvas. Absent: no bar. */
   readonly format?: CanvasTextFormatter | undefined;
+  /** What Enter types in the text at a page path, from its component's editing settings. Absent: Enter finishes, as before. */
+  readonly breaks?: ((textPath: string) => CanvasTextBreaks | undefined) | undefined;
+  /** What `breaks` is read from (the editing settings); a new value rebuilds the catalog, as `components` does. */
+  readonly settings?: unknown;
 }
 export interface CanvasTextFormatter {
   /** The lit buttons for a text node, or undefined when it cannot be formatted. */
   readonly states: (textId: string) => CanvasFormatState | undefined;
   /** One press over [start, end) of the text, which reads `value`. False: nothing changed. */
   readonly apply: (textId: string, selection: { readonly start: number; readonly end: number; readonly value: string }, action: CanvasFormatAction) => boolean;
+  /**
+   * Words typed with line breaks (`\n`) saved as markup: `line` as `<br>` where each was typed, `rich` as a new
+   * paragraph split at each one. False: the content cannot be laid out so, and nothing was written.
+   */
+  readonly breaks?: (textId: string, breaks: CanvasTextBreaks, value: string) => boolean;
 }
 interface Options {
   readonly document: CanvasTextDocument | undefined;
@@ -74,7 +83,8 @@ export function useCanvasText(options: Options): void {
   const file = document?.file;
   const source = document?.source;
   const components = document?.components;
-  useEffect(() => startCanvasText(current), [file, source, components]);
+  const settings = document?.settings;
+  useEffect(() => startCanvasText(current), [file, source, components, settings]);
   const focus = (document?.focus ?? []).join('\n');
   useEffect(() => startCanvasFocus(current, focus), [focus]);
 }
@@ -192,6 +202,9 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
       return;
     }
+    if (savedWithBreaks(plan, message, { ...options, nodes })) {
+      return;
+    }
     busy = true;
     const draft = canvasTextDraft.get();
     void saveCanvasText(plan, message, options)
@@ -203,6 +216,27 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
         }
       });
   };
+}
+
+// Words typed with line breaks in a text whose component allows them: saved as the markup the breaks stand for, the
+// way a format press saves (the element's whole inline content in one edit). Without a break, or for a run saved
+// with others, the words save as any text does, so a setting that is off changes nothing.
+function savedWithBreaks(
+  plan: CanvasTextEdit,
+  message: CanvasTextRunValue & { readonly also?: readonly CanvasTextRunValue[] },
+  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
+): boolean {
+  const breaks = plan.target.breaks;
+  if (breaks === undefined || message.also !== undefined || !message.value.includes('\n')) {
+    return false;
+  }
+  const node = options.nodes.get(plan.target.path);
+  const written =
+    node?.kind === 'text' && node.id !== undefined && options.initial.format?.breaks?.(node.id, breaks, canvasTypedText(plan.target.value, message.value));
+  if (written !== true) {
+    options.initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.cannotFormat'));
+  }
+  return true;
 }
 
 // One text saves through its own plan. Texts one selection changed together are
@@ -295,7 +329,7 @@ async function publishCanvasTextSession(
   const literal = canvasTextPlans(document.source, document.nodes, document.pathFor);
   const plans: readonly CanvasTextEdit[] = [
     ...literal.map((plan) => ({
-      target: plan.target,
+      target: withBreaks(plan.target, document.breaks?.(plan.target.path)),
       plan,
       apply: (value: string) => {
         const typed = canvasTypedText(plan.target.value, value);
@@ -343,6 +377,10 @@ async function publishCanvasTextSession(
       },
     });
   }
+}
+
+function withBreaks<Target extends { readonly breaks?: CanvasTextBreaks }>(target: Target, breaks: CanvasTextBreaks | undefined): Target {
+  return breaks === undefined ? target : { ...target, breaks };
 }
 
 // The cue over the text being typed in: which source its words are written to.

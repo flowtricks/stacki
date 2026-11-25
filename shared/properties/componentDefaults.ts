@@ -29,9 +29,19 @@ export interface ElementChild extends ComponentRecipe {
   readonly element: string;
 }
 export type RecipeChild = ComponentChild | ElementChild | { readonly literal: string };
+/**
+ * How text inside a component's instances is edited, set from "Set component defaults". Stored on the component's own
+ * recipe, and only while on: an absent key is off, so a file that never turned one on is byte-for-byte what it was.
+ * Older Stacki versions read a recipe key by key and skip these (parseRecipe), so the file stays readable to them.
+ */
+export const EDITING_SETTINGS = ['lineBreaks', 'richText'] as const;
+export type EditingSetting = (typeof EDITING_SETTINGS)[number];
+export type EditingSettings = { readonly [Setting in EditingSetting]?: true };
+/** A component's own recipe: what it inserts with, and how its text is edited. Children recipes carry no editing settings. */
+export type OwnerRecipe = ComponentRecipe & EditingSettings;
 export interface ComponentDefaults {
   readonly version: 1;
-  readonly components: Readonly<Record<string, ComponentRecipe>>;
+  readonly components: Readonly<Record<string, OwnerRecipe>>;
 }
 export interface DefaultComponent {
   readonly importPath?: string;
@@ -40,6 +50,8 @@ export interface DefaultComponent {
   readonly props: readonly string[];
   readonly slots: readonly string[];
   readonly slotText: boolean;
+  /** The template sets HTML from a value (`set:html`). Absent from an older host: false. */
+  readonly setHtml?: boolean;
 }
 export interface DefaultsSnapshot {
   readonly source?: string;
@@ -74,10 +86,94 @@ export function parseComponentDefaults(input: unknown): ComponentDefaults {
       throw new Error('Component defaults exceed the stored node limit');
     }
   };
-  const components = Object.fromEntries(entries.map(([file, recipe]) => [componentFile(file), parseRecipe(recipe, 0, takeNode)]));
+  const components = Object.fromEntries(
+    entries.map(([file, recipe]) => [componentFile(file), { ...parseRecipe(recipe, 0, takeNode), ...parseEditingSettings(record(recipe)) }]),
+  );
   assert(Object.keys(components).length === entries.length, 'Recipe parsing preserves every owner');
   assert(nodes <= DEFAULT_LIMITS.storedNodesMax, 'Parsed recipes fit the total node budget');
   return { version: 1, components };
+}
+
+// Each setting is `true` or absent; `false` is refused rather than kept, so "off" has one spelling (no key) and a
+// hand-edited `false` cannot sit in the file looking like a choice the editor would show.
+function parseEditingSettings(value: Readonly<Record<string, unknown>>): EditingSettings {
+  const settings: { [Setting in EditingSetting]?: true } = {};
+  for (const setting of EDITING_SETTINGS) {
+    const stored = value[setting];
+    if (stored === undefined) {
+      continue;
+    }
+    if (stored !== true) {
+      throw new Error(`Component defaults: ${setting} is true or left out`);
+    }
+    settings[setting] = true;
+  }
+  assert(Object.keys(settings).length <= EDITING_SETTINGS.length, 'Each editing setting is read once');
+  return settings;
+}
+
+/**
+ * Whether a component can take several HTML children, which rich text editing writes: a default slot that is not a
+ * line of words (a slot inside `<p>` or a heading takes inline text only, so a paragraph there would be invalid HTML),
+ * or an element whose HTML is set from a value. A wrapper that forwards its slot to another component still writes
+ * `<slot />` in its own template, so it qualifies the same way.
+ */
+export function richTextAllowed(component: Pick<DefaultComponent, 'slots' | 'slotText' | 'setHtml'>): boolean {
+  if (component.setHtml === true) {
+    return true;
+  }
+  if (component.slots.includes('default')) {
+    return !component.slotText;
+  }
+  return false;
+}
+
+/**
+ * The settings that apply to a component now: a stored rich text setting counts only while the component qualifies.
+ * The stored key is kept either way, so the setting comes back if the slot does; check-project names it meanwhile.
+ */
+export function effectiveEditing(config: ComponentDefaults, component: DefaultComponent): EditingSettings {
+  const stored = componentEditing(config, component.file);
+  if (stored.richText === true && !richTextAllowed(component)) {
+    return stored.lineBreaks === true ? { lineBreaks: true } : {};
+  }
+  return stored;
+}
+
+/** The editing settings stored for a component: every one off when it has no recipe. */
+export function componentEditing(config: ComponentDefaults, file: string): EditingSettings {
+  const recipe = config.components[file];
+  if (recipe === undefined) {
+    return {};
+  }
+  return Object.fromEntries(EDITING_SETTINGS.flatMap((setting) => (recipe[setting] === true ? [[setting, true] as const] : [])));
+}
+
+/**
+ * The configuration with one setting of one component turned on or off. Turning a setting off removes its key, and a
+ * recipe left with nothing in it goes with it, so turning a setting on and off again leaves the file as it was.
+ */
+export function withComponentEditing(config: ComponentDefaults, file: string, setting: EditingSetting, state: 'on' | 'off'): ComponentDefaults {
+  const owner = componentFile(file);
+  const existing: OwnerRecipe = config.components[owner] ?? {};
+  const rest: OwnerRecipe = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== setting));
+  const next: OwnerRecipe = state === 'on' ? { ...rest, [setting]: true } : rest;
+  const others = Object.entries(config.components).filter(([key]) => key !== owner);
+  const components = Object.keys(next).length === 0 && config.components[owner] !== undefined && state === 'off' ? others : [...others, [owner, next] as const];
+  const result: ComponentDefaults = { version: 1, components: Object.fromEntries(keepOrder(config, components)) };
+  assert((result.components[owner]?.[setting] === true) === (state === 'on'), 'The setting reads back as it was set');
+  assert(Object.keys(result.components).length <= DEFAULT_LIMITS.componentsMax + 1, 'Settings add at most one owner');
+  return result;
+}
+
+// Owners keep the order the file wrote them in; a new owner goes last, so a toggle's diff is the toggle.
+function keepOrder(config: ComponentDefaults, entries: readonly (readonly [string, OwnerRecipe])[]): readonly (readonly [string, OwnerRecipe])[] {
+  const order = Object.keys(config.components);
+  const rank = (key: string) => {
+    const index = order.indexOf(key);
+    return index === -1 ? order.length : index;
+  };
+  return [...entries].sort((left, right) => rank(left[0]) - rank(right[0]));
 }
 
 export function parseDefaultsSource(source: string): Result<ComponentDefaults> {
@@ -105,6 +201,7 @@ export const parseDefaultComponent = object({
   props: list(text),
   slots: list(text),
   slotText: boolean,
+  setHtml: optional(boolean),
 });
 export const parseDefaultsSnapshot = object({
   source: optional(text),
@@ -343,7 +440,13 @@ export function defaultsIssues(config: ComponentDefaults, catalog: readonly Defa
   assert(Object.keys(config.components).length <= DEFAULT_LIMITS.componentsMax, 'Diagnostics have bounded work');
   return Object.keys(config.components).flatMap((file) => {
     const result = resolveComponentRecipe(file, config, catalog);
-    return result.ok ? [] : [result.error.message];
+    const component = catalog.find((entry) => entry.file === file);
+    // i18n-ignore: check-project speaks to agents and scripts in English, like the recipe refusals above.
+    const ignored =
+      component !== undefined && config.components[file]?.richText === true && !richTextAllowed(component)
+        ? [`${file} has richText on but no slot or set:html for HTML children; it is ignored.`]
+        : [];
+    return [...(result.ok ? [] : [result.error.message]), ...ignored];
   });
 }
 

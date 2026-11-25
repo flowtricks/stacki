@@ -45,6 +45,10 @@ import { checkLoopHead, planVariableRename, type VariableRename } from '../../..
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
+import { withNode } from '../../editor/insertGestures';
+import { diffCodePatch } from '../../../shared/engine/codePatch';
+import { LIMITS } from '../../../shared/core/limits';
+import { withInnerSource } from '../../features/props/richTextContent';
 import { findImportPath } from '../../ipc/appBridge';
 import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
 import { withPrunedImports, chooseImportPath, styleTagNode } from '../model/pageGestures';
@@ -829,5 +833,47 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
     },
     [commitEdit, pageStateRef],
   );
-  return { setNodeContent, setNodeInline, setNodeTextPieces };
+  // A node's content written as code (the rich text code view): the bytes between its tags and nothing else, as one
+  // patch of the file, so markup the panel cannot read (a component, an expression) is never reprinted.
+  const setNodeContentSource = useCallback(
+    (nodeId: string, next: string) => {
+      const state = pageStateRef.current.pageState;
+      const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+      if (!node || (node.kind !== 'component' && node.kind !== 'element')) {
+        return;
+      }
+      commitEdit(contentSourceGesture(node, next));
+    },
+    [commitEdit, pageStateRef],
+  );
+  return { setNodeContent, setNodeInline, setNodeTextPieces, setNodeContentSource };
+}
+
+function contentSourceGesture(node: EditorNode, next: string): EditGesture {
+  assert(next.length <= LIMITS.ipcFieldCharsMax, 'Content code fits one field');
+  return {
+    coalesceKey: `content:${node.id}`,
+    urgency: false,
+    stream: undefined,
+    request: (refOf, origin) => {
+      const ref = refOf(node.id);
+      if (ref === undefined) {
+        return undefined;
+      }
+      const element = origin.source.slice(ref.span.start, ref.span.end);
+      const rewritten = withInnerSource(
+        element,
+        { name: node.name ?? '', inner: 'source' in node && typeof node.source === 'string' ? node.source : '' },
+        next,
+      );
+      if (rewritten === undefined) {
+        return undefined;
+      }
+      const target = origin.source.slice(0, ref.span.start) + rewritten + origin.source.slice(ref.span.end);
+      const patch = diffCodePatch(origin.source, target);
+      return patch.ok && patch.value.length > 0 ? [{ tag: 'code-patch', hunks: patch.value }] : undefined;
+    },
+    // The page is parsed again once the patch lands; until then the node shows its new code.
+    apply: (model) => withNode(model, node.id, (current) => ({ ...current, source: next })),
+  };
 }

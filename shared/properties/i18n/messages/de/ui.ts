@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'An {where} gesendet.',
   'ui.htmlField.characters': { one: '{count} Zeichen', other: '{count} Zeichen' },
   'ui.htmlField.hint': '## Überschrift · - Liste · > Zitat · **fett** · `Code` · {shortcut} Link',
+  'ui.htmlField.image': 'Bild',
+  'ui.htmlField.insertBlock': 'Block auswählen',
   'ui.htmlField.label': 'Formatierter Text',
   'ui.htmlField.placeholder': 'Schreibe oder tippe ## für eine Überschrift …',
   'ui.htmlField.restricted': 'Dieses HTML enthält Markup, das sich nicht visuell bearbeiten lässt. Verwende HTML, um es beizubehalten.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { one: '{count} Wort', other: '{count} Wörter' },
   'ui.htmlLink.address': 'Link-Adresse',
   'ui.htmlLink.edit': 'Link bearbeiten',

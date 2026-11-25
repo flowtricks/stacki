@@ -1,4 +1,5 @@
 import { useDesktopDefaultsCanvas } from './state/useDesktopDefaultsCanvas';
+import { useComponentEditing, type ComponentEditingLookup } from './state/useComponentEditing';
 import { useCallback, useMemo } from 'react';
 import Settings from './settings/LazySettings';
 import { useProjectRoles } from './roles/useProjectRoles';
@@ -32,6 +33,7 @@ export default function App() {
   const scope = useAppScope();
   const actions = useUiActions(scope);
   const defaultsCanvas = useDesktopDefaultsCanvas(scope);
+  const componentEditing = useComponentEditing(scope.project?.path, scope.scan.components);
   // The project's role (.stacki/roles.json and the signed-in GitHub user) drives what the UI shows.
   useProjectRoles(scope.project?.path);
   // Keeps the next session's first frame real (src/app/boot): the page list, the open page and the left panel.
@@ -41,6 +43,7 @@ export default function App() {
     ...scope,
     ...actions,
     defaultsCanvas,
+    componentEditing,
     setSelectedId: defaultsSelection(scope, defaultsCanvas),
   };
   return (
@@ -87,6 +90,8 @@ type AppScope = ReturnType<typeof useAppScope>;
 export type AppView = AppScope &
   ReturnType<typeof useUiActions> & {
     readonly defaultsCanvas: ReturnType<typeof useDesktopDefaultsCanvas>;
+    /** How each component's text is edited (.stacki/components.json lineBreaks, richText). */
+    readonly componentEditing: ComponentEditingLookup;
   };
 export type ShellView = AppView &
   CanvasRoute & {

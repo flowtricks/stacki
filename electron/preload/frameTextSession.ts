@@ -1,5 +1,11 @@
 import { assert } from '../../shared/core/assert';
-import { canvasTextFolded, parseCanvasTextCatalog, type CanvasTextCatalog, type CanvasTextTarget } from '../../shared/properties/canvasText';
+import {
+  canvasTextFolded,
+  canvasTextWithoutLineEnds,
+  parseCanvasTextCatalog,
+  type CanvasTextCatalog,
+  type CanvasTextTarget,
+} from '../../shared/properties/canvasText';
 import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches, pathsOf } from './frameRegions';
 import { matchCanvasText, textRunsAround, type TextMatch, type TextRun } from './frameTextMatch';
@@ -73,20 +79,26 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       const runs = textRunsAround(current, opened);
       const space = { runs: runs.map((run) => run.match.nodes), primary: runs.indexOf(opened) };
       let stopSelection = () => {};
-      const editor = openNativeText(match, space, event, {
-        changed: (value) => post({ type: 'avb:text-draft', session: current.session, key: target.key, value }),
-        refused: () =>
-          // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
-          post({ type: 'avb:text-refused', message: 'This selection reaches text that cannot be changed along with it.', reason: 'selection-reaches' }),
-        done: (result) => {
-          active = undefined;
-          stopSelection();
-          // Save precedes inactive so the panel can retain its draft until the
-          // source acknowledges it, without flashing the old text on blur.
-          commitCanvasText({ catalog: current, runs }, result, post);
-          post({ type: 'avb:text-inactive', session: current.session });
+      const editor = openNativeText(
+        match,
+        space,
+        event,
+        {
+          changed: (value) => post({ type: 'avb:text-draft', session: current.session, key: target.key, value: canvasTextWithoutLineEnds(value) }),
+          refused: () =>
+            // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
+            post({ type: 'avb:text-refused', message: 'This selection reaches text that cannot be changed along with it.', reason: 'selection-reaches' }),
+          done: (result) => {
+            active = undefined;
+            stopSelection();
+            // Save precedes inactive so the panel can retain its draft until the
+            // source acknowledges it, without flashing the old text on blur.
+            commitCanvasText({ catalog: current, runs }, result, post);
+            post({ type: 'avb:text-inactive', session: current.session });
+          },
         },
-      });
+        target.breaks,
+      );
       if (editor) {
         openedAtMs = performance.now();
         active = { catalog: current, editor };
@@ -230,9 +242,10 @@ function commitCanvasText(
   result: NativeTextResult,
   post: (message: unknown) => void,
 ) {
-  const edits = result.changes.flatMap(({ run, value }) => {
+  const edits = result.changes.flatMap(({ run, value: typed }) => {
     const entryRun = entry.runs[run];
     assert(entryRun !== undefined, 'A changed run is one of the editor runs');
+    const value = canvasTextWithoutLineEnds(typed);
     return value === entryRun.target.value ? [] : [{ run: entryRun, value }];
   });
   const [first, ...also] = edits;

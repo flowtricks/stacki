@@ -28,6 +28,7 @@ export interface Component {
   readonly slotText?: boolean;
   /** Whether it forwards arbitrary attributes (`...rest` on Astro.props), so its instances show Attributes. */
   readonly hasRest?: boolean;
+  readonly setHtml?: boolean;
   /** The tag its Props takes attributes from (`extends HTMLAttributes<"img">`): its instances' attribute names are checked against it. */
   readonly extendsTag?: string;
 }
@@ -118,6 +119,9 @@ export function parseProject(input: unknown): Project {
     if (item['slotText'] !== undefined && typeof item['slotText'] !== 'boolean') {
       throw new Error('Invalid default slot type');
     }
+    if (item['setHtml'] !== undefined && typeof item['setHtml'] !== 'boolean') {
+      throw new Error('Invalid set:html flag');
+    }
     if (item['hasRest'] !== undefined && typeof item['hasRest'] !== 'boolean') {
       throw new Error('Invalid rest attributes flag');
     }
@@ -137,6 +141,7 @@ export function parseProject(input: unknown): Project {
       numericStyles: parseNumericBindings(item['numericStyles']),
       slotText: item['slotText'] === true,
       hasRest: item['hasRest'] === true,
+      setHtml: item['setHtml'] === true,
       ...(extendsTag === undefined ? {} : { extendsTag }),
       ...parseRenderTag(item['renderTag']),
     };

@@ -1,4 +1,5 @@
 import type { TextMatch } from './frameTextMatch';
+import type { CanvasTextBreaks } from '../../shared/properties/canvasText';
 import { createTextBuffer, type TextRunChange } from './frameTextBuffer';
 import { placeTextCaret, textEditorRoot, textSelection, type TextSpace } from './frameTextSelection';
 import { installNativeTextEvents } from './frameTextNativeEvents';
@@ -25,7 +26,7 @@ interface NativeTextCallbacks {
   readonly done: (result: NativeTextResult) => void;
 }
 
-export function openNativeText(match: TextMatch, space: TextSpace, event: MouseEvent, callbacks: NativeTextCallbacks) {
+export function openNativeText(match: TextMatch, space: TextSpace, event: MouseEvent, callbacks: NativeTextCallbacks, breaks?: CanvasTextBreaks) {
   const root = textEditorRoot(match);
   if (!root || match.nodes.map((node) => node.data).join('').length > 10_000) {
     return undefined;
@@ -45,7 +46,7 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     }
   };
   const heightBefore = root.getBoundingClientRect().height;
-  installNativeTextStyle(root);
+  installNativeTextStyle(root, breaks);
   root.setAttribute('contenteditable', 'true');
   root.setAttribute('data-avb-text-editor', '');
   // Opening the editor must not move a pixel. In Chromium an editable block with
@@ -55,8 +56,14 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
   // That whitespace is collapsed and invisible while the page is not editable, so
   // the editor keeps it out of the text it edits and puts it back on close.
   const trimmed = root.getBoundingClientRect().height > heightBefore + GROWTH_TOLERANCE_PX ? trimEdgeWhitespace(root, match.nodes) : [];
+  // Where Enter types a line break, the editor shows newlines (pre-line): the template's own newlines, which the page
+  // shows as spaces, are spaces while it is open, and come back when it closes without a save.
+  const folded = breaks === undefined ? [] : foldSourceNewlines(space.runs.flat());
   const buffer = createTextBuffer(root, space, changed);
   if (!buffer) {
+    for (const edge of folded) {
+      edge.node.data = edge.data;
+    }
     restoreAttributes();
     for (const edge of trimmed) {
       edge.node.data = edge.data;
@@ -74,7 +81,18 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     clearNativeTextSelection(root);
     const changes = action === 'apply' ? buffer.changes() : [];
     // The original words come back first: the save is checked against them.
-    const { restored, keep } = buffer.restore();
+    const { restored, keep: keepTyped } = buffer.restore();
+    const unfolded = folded.map((edge) => ({ ...edge, shown: edge.node.data }));
+    for (const edge of unfolded) {
+      edge.node.data = edge.data;
+    }
+    // The typed words are shown over the folded text they were typed in.
+    const keep = () => {
+      for (const edge of unfolded) {
+        edge.node.data = edge.shown;
+      }
+      keepTyped();
+    };
     restoreAttributes();
     for (const edge of trimmed) {
       edge.node.data = edge.data;
@@ -84,7 +102,7 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     done({ changes, restored, keep });
   };
   editingRoot = root;
-  const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused });
+  const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused, breaks });
   const stopPointer = installInterceptedPointer(root, match.nodes);
   root.focus({ preventScroll: true });
   placeTextCaret(space, event);
@@ -129,8 +147,22 @@ function clearNativeTextSelection(root: HTMLElement): void {
   }
 }
 
-function installNativeTextStyle(root: HTMLElement): void {
-  const whitespace = getComputedStyle(root).whiteSpace;
+// Each text's newlines and the indentation around them, as one space: what `white-space: normal` shows for them.
+function foldSourceNewlines(nodes: readonly Text[]): TrimmedEdge[] {
+  const folded: TrimmedEdge[] = [];
+  for (const node of nodes) {
+    if (/\n/.test(node.data)) {
+      folded.push({ node, data: node.data });
+      node.data = node.data.replace(/[\t\f\r ]*\n[\t\n\f\r ]*/g, ' ');
+    }
+  }
+  return folded;
+}
+
+function installNativeTextStyle(root: HTMLElement, breaks: CanvasTextBreaks | undefined): void {
+  const computed = getComputedStyle(root).whiteSpace;
+  // Typed line breaks show as lines; spaces still collapse as they did, so nothing moves when the editor opens.
+  const whitespace = breaks !== undefined && /^(normal|nowrap)$/.test(computed) ? 'pre-line' : computed;
   if (!stylesheet) {
     stylesheet = new CSSStyleSheet();
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, stylesheet];

@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': '{where} konumuna gönderildi.',
   'ui.htmlField.characters': { one: '{count} karakter', other: '{count} karakter' },
   'ui.htmlField.hint': '## başlık · - liste · > alıntı · **kalın** · `kod` · {shortcut} bağlantı',
+  'ui.htmlField.image': 'Görsel',
+  'ui.htmlField.insertBlock': 'Bloğu seçin',
   'ui.htmlField.label': 'Zengin metin',
   'ui.htmlField.placeholder': 'Yazın veya başlık için ## yazın…',
   'ui.htmlField.restricted': 'Bu HTML görsel olarak düzenlenemeyen işaretleme içeriyor. Korumak için HTML kullanın.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { one: '{count} sözcük', other: '{count} sözcük' },
   'ui.htmlLink.address': 'Bağlantı adresi',
   'ui.htmlLink.edit': 'Bağlantıyı düzenle',

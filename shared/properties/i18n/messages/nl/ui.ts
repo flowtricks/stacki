@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'Verstuurd naar {where}.',
   'ui.htmlField.characters': { one: '{count} teken', other: '{count} tekens' },
   'ui.htmlField.hint': '## kop · - lijst · > citaat · **vet** · `code` · {shortcut} link',
+  'ui.htmlField.image': 'Afbeelding',
+  'ui.htmlField.insertBlock': 'Kies het blok',
   'ui.htmlField.label': 'Opgemaakte tekst',
   'ui.htmlField.placeholder': 'Schrijf, of typ ## voor een kop…',
   'ui.htmlField.restricted': 'Deze HTML bevat markup die niet visueel kan worden bewerkt. Gebruik HTML om die te behouden.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { one: '{count} woord', other: '{count} woorden' },
   'ui.htmlLink.address': 'Linkadres',
   'ui.htmlLink.edit': 'Link bewerken',

@@ -213,6 +213,14 @@ function destructuredTag(frontmatter: string, name: string): { prop: string; tag
 // scanning forward from its `{`: a rest element is always last, and looking
 // forward tripped over any `}` in front of it (`containerAttrs = {}, ...rest`).
 // The optional `: Type` covers an annotated destructure.
+// Whether the template sets an element's HTML from a value (`set:html={body}`): such a component takes a run of HTML
+// children through that prop, as a slot takes them, which is what lets it offer rich text editing.
+export function rendersHtml(source: string): boolean {
+  const fm = frontmatterOf(source);
+  const body = withoutComments(source).slice(fm ? fm.length : 0);
+  return /\sset:html\s*=\s*\{/.test(body);
+}
+
 export function forwardsRest(source: string): boolean {
   return /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source);
 }

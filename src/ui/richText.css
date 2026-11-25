@@ -366,3 +366,29 @@
 .html-content * + h6 {
   margin-top: 1.1em;
 }
+
+/* The `+` beside an empty block of rich text a component holds: it sits in the content's left padding, so the words
+   never move when it appears. A fill shows it, never a border. */
+.html-field-blocks .html-content {
+  padding-left: 30px;
+}
+.html-block-plus {
+  position: absolute;
+  left: 6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-active);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.html-block-plus:hover,
+.html-block-plus[aria-expanded='true'] {
+  background: var(--bg-hover, var(--bg-active));
+  color: var(--text);
+}

@@ -244,6 +244,12 @@ export const messages = {
   'props.edit.studioRecoveryFailed': 'Eigenschappen opslaan mislukt; herstel mislukt voor {files}. {detail}',
   'props.edit.uncertain': '{file} is mogelijk niet opgeslagen. {detail}',
   'props.edit.uncertainBare': '{file} is mogelijk niet opgeslagen.',
+  'props.editing.lineBreaks': 'Regeleinden toestaan',
+  'props.editing.lineBreaksTip':
+    'Enter voegt een regeleinde in de tekst van dit component in, op de pagina en in Inhoud. Rond het bewerken op de pagina af met ⌘ of Ctrl Enter.',
+  'props.editing.richText': 'Bewerken als opgemaakte tekst toestaan',
+  'props.editing.richTextTip':
+    'Enter begint een nieuwe alinea in de inhoud van dit component, en + verandert een blok in een kop, citaat, lijst, afbeelding of video.',
   'props.element.content': 'Inhoud',
   'props.element.fallback': 'Fallback', // same
   'props.element.fallbackNote': 'Wordt alleen getoond wanneer wat deze component ook gebruikt niets voor de slot doorgeeft.',
@@ -572,6 +578,15 @@ export const messages = {
   'props.rename.spreadCollision': 'Een spread bevat {name} al.',
   'props.rename.symlink': 'De projectbronnen bevatten een symbolische link. Los die op voordat je projectbreed hernoemt.',
   'props.rename.unreadable': 'Deze component kan niet worden gelezen om “{name}” veilig te hernoemen. {detail}',
+  'props.richText.asCode': 'Als code tonen',
+  'props.richText.codeComponent': 'Getoond als code: bevat een component dat de editor voor opgemaakte tekst niet kan weergeven.',
+  'props.richText.codeExpression': 'Getoond als code: bevat een expressie die de editor voor opgemaakte tekst als tekst zou schrijven.',
+  'props.richText.codeMarkup': 'Getoond als code: bevat markup die de editor voor opgemaakte tekst niet ongewijzigd kan weergeven.',
+  'props.richText.codeSize': 'Getoond als code: te lang voor de editor voor opgemaakte tekst.',
+  'props.richText.edit': 'Opgemaakte tekst bewerken',
+  'props.richText.title': 'Opgemaakte tekst',
+  'props.richText.useEditor': 'De editor voor opgemaakte tekst gebruiken',
+  'props.richText.viewCode': 'Als code bekijken',
   'props.sections.addField': 'Veld toevoegen',
   'props.sections.codeType': 'Codetype',
   'props.sections.defaultItems': 'Standaarditems',

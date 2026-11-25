@@ -1,3 +1,6 @@
+import { componentEditing, richTextAllowed } from '../../../shared/properties/componentDefaults';
+import { FilesCover } from './DesktopFiles';
+import type { ComponentEditingControl } from '../../features/props/ComponentEditingFields';
 import { useFormat, useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { desktopCanvasText } from './desktopCanvasText';
@@ -333,6 +336,7 @@ export function CanvasCovers({ app }: { readonly app: ShellView }) {
   return (
     <>
       <InstructionsCover app={app} />
+      <FilesCover app={app} />
       {app.varsGroup && (
         <VariablesView
           key={app.project.path}
@@ -647,6 +651,21 @@ function useRenderedClassesKnown(selectedId: string | undefined, report: { reado
   return gaveUpFor === selectedId;
 }
 
+// The switches of how the component's text is typed: on the instance whose defaults are being set, and only there.
+function defaultsEditing(app: ShellView): ComponentEditingControl | undefined {
+  const canvas = app.defaultsCanvas;
+  if (canvas.state.kind === 'idle' || app.selectedId === undefined || app.selectedId !== canvas.rootId) {
+    return undefined;
+  }
+  const session = canvas.state.session;
+  const component = session.snapshot.catalog.find((entry) => entry.file === session.component);
+  return {
+    settings: componentEditing(session.snapshot.config, session.component),
+    richTextAllowed: component !== undefined && richTextAllowed(component),
+    onChange: (setting, value) => void canvas.setEditing(setting, value).catch(app.reportFailure),
+  };
+}
+
 // What the Settings tab shows about the selection.
 export function settingsValues(app: ShellView) {
   const { selectedNode, selectedId } = app;
@@ -778,6 +797,13 @@ export function settingsTextHandlers(app: ShellView) {
         app.setNodeInline(selectedId, kids);
       }
     },
+    richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path).richText === true,
+    onSetContentSource: (source: string) => {
+      if (selectedId) {
+        app.setNodeContentSource(selectedId, source);
+      }
+    },
+    componentEditing: defaultsEditing(app),
     onSetTextPieces: (pieces: readonly TextPiece[]) => {
       if (selectedId) {
         app.setNodeTextPieces(selectedId, pieces);

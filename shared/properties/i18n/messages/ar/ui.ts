@@ -58,9 +58,12 @@ export const messages = {
     other: '{count} حرف',
   },
   'ui.htmlField.hint': '## heading · - list · > quote · **bold** · `code` · {shortcut} link', // same
+  'ui.htmlField.image': 'صورة',
+  'ui.htmlField.insertBlock': 'اختيار الكتلة',
   'ui.htmlField.label': 'نص منسّق',
   'ui.htmlField.placeholder': 'اكتب، أو اكتب ## لإضافة عنوان…',
   'ui.htmlField.restricted': 'يتضمن هذا الـ HTML وسومًا لا يمكن تحريرها بصريًا. استخدم HTML للحفاظ عليها.',
+  'ui.htmlField.video': 'فيديو',
   'ui.htmlField.words': {
     zero: '{count} كلمة',
     one: 'كلمة واحدة',

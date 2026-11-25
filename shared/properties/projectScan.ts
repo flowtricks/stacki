@@ -82,6 +82,8 @@ export interface ScanComponent {
   /** The component the template opens with (`Section` for `<Section>…`), when the root is one. */
   readonly rootComponent?: string | undefined;
   readonly hasRest?: boolean;
+  /** The template sets an element's HTML from a value (`set:html={…}`). Absent from an older host: read as false. */
+  readonly setHtml?: boolean;
 }
 
 /** One file's share of a component's instance count (ScanComponent.uses). */
@@ -266,6 +268,12 @@ function parseComponent(input: unknown, where: string): ScanComponent {
       fail(where, 'slotText: expected boolean');
     }
     out['slotText'] = record['slotText'];
+  }
+  if (record['setHtml'] !== undefined) {
+    if (typeof record['setHtml'] !== 'boolean') {
+      fail(where, 'setHtml: expected boolean');
+    }
+    out['setHtml'] = record['setHtml'];
   }
   if (record['hasRest'] !== undefined) {
     if (typeof record['hasRest'] !== 'boolean') {

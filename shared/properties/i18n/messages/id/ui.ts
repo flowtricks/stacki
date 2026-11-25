@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'Dikirim ke {where}.',
   'ui.htmlField.characters': { other: '{count} karakter' },
   'ui.htmlField.hint': '## judul · - daftar · > kutipan · **tebal** · `kode` · {shortcut} tautan',
+  'ui.htmlField.image': 'Gambar',
+  'ui.htmlField.insertBlock': 'Pilih blok',
   'ui.htmlField.label': 'Teks kaya',
   'ui.htmlField.placeholder': 'Tulis, atau ketik ## untuk judul…',
   'ui.htmlField.restricted': 'HTML ini memuat markup yang tidak dapat disunting secara visual. Gunakan HTML agar tetap terjaga.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { other: '{count} kata' },
   'ui.htmlLink.address': 'Alamat tautan',
   'ui.htmlLink.edit': 'Sunting tautan',

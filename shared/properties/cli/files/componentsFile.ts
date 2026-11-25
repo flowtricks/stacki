@@ -66,7 +66,8 @@ const childSchema = buildChildSchema();
 export const COMPONENTS_FILE: FileSchema = {
   id: 'components',
   file: '.stacki/components.json',
-  description: 'What each component brings along when it is inserted: default props, text or children. Shared by Desktop and Studio.',
+  description:
+    'What each component brings along when it is inserted (default props, text or children) and how its text is edited (lineBreaks, richText). Shared by Desktop and Studio.',
   requires: 'component:edit',
   metadataKind: 'components',
   fields: {
@@ -79,6 +80,16 @@ export const COMPONENTS_FILE: FileSchema = {
           children: field(
             arrayOf(childSchema, DEFAULT_LIMITS.childrenMax),
             `Children inserted inside, up to ${DEFAULT_LIMITS.childrenMax}; a recipe holds text or children, never both.`,
+            { commands: COMMANDS },
+          ),
+          lineBreaks: field(
+            literal(true),
+            "On: Enter types a line break (<br>) in this component's text on the canvas and in the Content field. Off is the key left out; true is the only stored value.",
+            { commands: COMMANDS },
+          ),
+          richText: field(
+            literal(true),
+            'On: text inside this component is edited as rich text (Enter starts a new paragraph, a + menu changes the block). Applies only while the component has a slot or a set:html prop; off is the key left out.',
             { commands: COMMANDS },
           ),
         }),

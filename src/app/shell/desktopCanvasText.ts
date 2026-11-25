@@ -5,7 +5,9 @@ import { readPage, readText, resolvePath, writeText } from '../../ipc/bridge';
 import { boundPropReader, canvasBoundEdits, type BoundTextHost, type BoundTextWords } from '../model/canvasBoundText';
 import type { ShellView } from '../App';
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
-import { canvasTextFormatter } from '../model/canvasTextFormat';
+import { canvasTextBreaksOf, canvasTextFormatter } from '../model/canvasTextFormat';
+import { componentReference } from '../model/componentReference';
+import type { CanvasTextBreaks } from '../../../shared/properties/canvasText';
 import { projectRelativePath } from '../../lib/projectPath';
 
 export function desktopCanvasText(app: ShellView, translate: Translator): CanvasTextDocument | undefined {
@@ -49,8 +51,25 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
     report: app.showToast,
     // The canvas bar's presses, saved as the Content field saves them.
     format: canvasTextFormatter(state.model.nodes, app.setNodeInline),
+    breaks: desktopTextBreaks(app, state.model),
+    settings: app.componentEditing,
     focus: canvasFocus(app.selectedId, app.pathFor),
     components: app.insertables,
+  };
+}
+
+// What Enter types in each text, from the editing settings of the component it sits in.
+function desktopTextBreaks(app: ShellView, model: NonNullable<ShellView['model']>): (path: string) => CanvasTextBreaks | undefined {
+  const imports = 'imports' in model ? model.imports : [];
+  // Read when a catalog is published, not on every render of the shell.
+  let breaks: ReadonlyMap<string, CanvasTextBreaks> | undefined;
+  return (path) => {
+    breaks ??= canvasTextBreaksOf(model.nodes, app.pathFor, (node) =>
+      app.componentEditing(
+        componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
+      ),
+    );
+    return breaks.get(path);
   };
 }
 

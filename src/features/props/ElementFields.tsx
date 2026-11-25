@@ -24,12 +24,23 @@ import { canvasDraftInline } from './canvasDraftInline';
 import { classListOfferOf } from './classListProp';
 import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
+import { ComponentEditingSwitches, RichTextContentField } from './ComponentEditingFields';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
+  if (state.richTextContent === true && node.kind === 'component') {
+    return (
+      <RichTextContentField
+        label={translate('props.element.content')}
+        source={'source' in node && typeof node.source === 'string' ? node.source : undefined}
+        onSetNodes={onSetInline}
+        onSetSource={state.onSetContentSource}
+      />
+    );
+  }
   return (
     <>
       {showContentField && (
@@ -139,6 +150,9 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, onSetContent, showLooseTextField, looseText } = state;
+  if (state.richTextContent === true && node.kind === 'component') {
+    return undefined; // The rich text field above holds all of the content, loose words with it.
+  }
   return (
     <>
       {showLooseTextField && (
@@ -253,7 +267,8 @@ export function ElementExtraFields({ state }: { readonly state: ElementState }) 
 
 export function ElementSettingsHeader({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
-  const { settingsOpen, setSettingsOpen, hasSettings, settingsCount } = state;
+  const { settingsOpen, setSettingsOpen, settingsCount } = state;
+  const hasSettings = state.hasSettings || state.componentEditing !== undefined;
   return (
     <>
       {hasSettings && (
@@ -408,7 +423,8 @@ export function ElementSlot({ state }: { readonly state: ElementState }) {
 }
 
 export function ElementSettings({ state }: { readonly state: ElementState }) {
-  const { node, comment, onSetComment, settingsOpen, hasSettings } = state;
+  const { node, comment, onSetComment, settingsOpen } = state;
+  const hasSettings = state.hasSettings || state.componentEditing !== undefined;
   return (
     <>
       {hasSettings && settingsOpen && (
@@ -425,6 +441,8 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
             put it — so it sits apart from the component's own props, last of
             all, below even the comment. */}
           <ElementSlot state={state} />
+          {/* How the component's text is typed: set while its defaults are, and last of all, below even slot. */}
+          {state.componentEditing && <ComponentEditingSwitches control={state.componentEditing} />}
         </>
       )}
     </>

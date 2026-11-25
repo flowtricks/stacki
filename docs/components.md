@@ -89,3 +89,28 @@ Delete in the Components panel's "…" menu is one step over the whole site, pla
   that is gone.
 - Duplicate's Undo deletes the copy with `uses: 'refuse'`: a copy something now uses is kept. The CLI's `components delete`
   refuses a used component the same way.
+
+## How a component's text is edited
+
+"Set component defaults" ends its Settings group with two switches, both off by default. Each writes
+`.stacki/components.json` at once, as a key on the component's own recipe that exists only while on (`"lineBreaks": true`,
+`"richText": true`); turning one off removes the key, and an owner left empty goes with it, so the file returns byte for
+byte. Older Stacki versions read recipes key by key and skip these keys, so they keep reading the file; a defaults save
+made in an older version rewrites the file from what it parsed and drops them. Renames and moves carry them
+(`relinkDefaults`); the CLI's `components` schema describes them, so `stacki config set` can turn them on.
+
+| Setting | Offered for | Canvas | Properties panel |
+|---|---|---|---|
+| Allow line breaks | Every component | Enter and Shift Enter type a line break, saved as `<br />`; ⌘/Ctrl Enter finishes, Escape cancels, a click away saves | The Content field, which already wrote `<br>` for Enter, is unchanged |
+| Allow rich text editing | A component with a default slot that is not a line of words (`<slot />` not inside `<p>`, a heading, a link…), or a `set:html` (`richTextAllowed`) | Enter in a paragraph, heading, quote, list item or code block types a break that is saved as a new block, inline formatting split with it; a heading goes on as a paragraph, a list item as another item | Content becomes **Edit rich text**, which opens the rich text editor in a dialog; `+` beside an empty block chooses Heading 1–6, Paragraph, Quote, Image, Link, Video, lists, divider or code block |
+
+With both on, rich text's Enter wins in a block. A stored rich text setting on a component that no longer qualifies is
+ignored and kept, and `check-project` names it. The rich text editor opens only content it can give back unchanged in
+meaning (`richTextView`, `src/features/props/richTextContent.ts`): native rich text tags with plain attributes. A
+component, an expression, a comment, a directive or an unknown tag or attribute shows the content as highlighted code
+instead, the `{}` beside the label locked on code with a tooltip saying why. Code is written as one patch of the bytes
+between the instance's tags, when the code view loses focus, and refused when those bytes changed meanwhile.
+
+Not yet: Studio and the demo draw the same panel components but pass neither setting, so they edit as before; the `+`
+menu lives in the dialog, not on the canvas; a set:html component qualifies for the setting but its prop is still edited
+by its own field.

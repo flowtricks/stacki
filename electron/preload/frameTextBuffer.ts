@@ -50,6 +50,11 @@ export function createTextBuffer(root: HTMLElement, space: TextSpace, changed: (
     crosses: (range: TextOffsets) => runWords(space, rendered, range) === undefined,
     // The source's own words in a range inside one run; undefined across runs.
     words: (range: TextOffsets) => runWords(space, rendered, range),
+    // The words of the run holding `offset` that come after it: where a typed line break would end its line.
+    after: (offset: number) => {
+      const run = runRanges(space, rendered).find((entry) => entry.start <= offset && offset <= entry.end);
+      return run === undefined ? undefined : runWords(space, rendered, { start: offset, end: run.end });
+    },
     // The original words back; `keep` shows the typed ones again once a save is checked.
     restore: () => closeTextBuffer(original, rendered, { intact, write }),
     replace: (range: TextOffsets, text: string) => {

@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': '{where} को भेज दिया गया।',
   'ui.htmlField.characters': { one: '{count} वर्ण', other: '{count} वर्ण' },
   'ui.htmlField.hint': '## heading · - list · > quote · **bold** · `code` · {shortcut} link', // same
+  'ui.htmlField.image': 'इमेज',
+  'ui.htmlField.insertBlock': 'ब्लॉक चुनें',
   'ui.htmlField.label': 'रिच टेक्स्ट',
   'ui.htmlField.placeholder': 'लिखें, या शीर्षक के लिए ## टाइप करें…',
   'ui.htmlField.restricted': 'इस HTML में ऐसा मार्कअप है जिसे विज़ुअल रूप से संपादित नहीं किया जा सकता। इसे बनाए रखने के लिए HTML का उपयोग करें।',
+  'ui.htmlField.video': 'वीडियो',
   'ui.htmlField.words': { one: '{count} शब्द', other: '{count} शब्द' },
   'ui.htmlLink.address': 'लिंक का पता',
   'ui.htmlLink.edit': 'लिंक संपादित करें',

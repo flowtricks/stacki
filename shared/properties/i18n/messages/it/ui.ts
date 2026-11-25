@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'Inviato a {where}.',
   'ui.htmlField.characters': { one: '{count} carattere', other: '{count} caratteri' },
   'ui.htmlField.hint': '## titolo · - elenco · > citazione · **grassetto** · `codice` · {shortcut} link',
+  'ui.htmlField.image': 'Immagine',
+  'ui.htmlField.insertBlock': 'Scegli il blocco',
   'ui.htmlField.label': 'Testo formattato',
   'ui.htmlField.placeholder': 'Scrivi, oppure digita ## per un titolo…',
   'ui.htmlField.restricted': 'Questo HTML contiene markup che non si può modificare in modo visivo. Usa HTML per conservarlo.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { one: '{count} parola', other: '{count} parole' },
   'ui.htmlLink.address': 'Indirizzo del link',
   'ui.htmlLink.edit': 'Modifica link',

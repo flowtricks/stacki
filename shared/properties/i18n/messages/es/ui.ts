@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'Enviado a {where}.',
   'ui.htmlField.characters': { one: '{count} carácter', other: '{count} caracteres' },
   'ui.htmlField.hint': '## encabezado · - lista · > cita · **negrita** · `código` · {shortcut} enlace',
+  'ui.htmlField.image': 'Imagen',
+  'ui.htmlField.insertBlock': 'Elegir el bloque',
   'ui.htmlField.label': 'Texto enriquecido',
   'ui.htmlField.placeholder': 'Escribe, o escribe ## para un encabezado…',
   'ui.htmlField.restricted': 'Este HTML incluye marcado que no se puede editar visualmente. Usa HTML para conservarlo.',
+  'ui.htmlField.video': 'Video', // same
   'ui.htmlField.words': { one: '{count} palabra', other: '{count} palabras' },
   'ui.htmlLink.address': 'Dirección del enlace',
   'ui.htmlLink.edit': 'Editar enlace',

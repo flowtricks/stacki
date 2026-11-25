@@ -19,6 +19,7 @@ export function desktopDefaultsHost(projectPath: string): DefaultsHost {
         props: (component.schema ?? []).map((field) => field.name),
         slots: component.slots ?? [],
         slotText: component.slotText ?? false,
+        ...(component.setHtml === true ? { setHtml: true } : {}),
       }));
       return defaultsSnapshot(stored.source, catalog);
     },

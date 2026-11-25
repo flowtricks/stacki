@@ -11,6 +11,7 @@ export async function loadInsertionDefaults(root: string) {
     props: component.fields.map((field) => field.name),
     slots: component.slots,
     slotText: component.slotText,
+    ...(component.setHtml === true ? { setHtml: true } : {}),
   }));
   if (stored.source === undefined) {
     return { config: starterDefaults(catalog), catalog, imports: project.components };

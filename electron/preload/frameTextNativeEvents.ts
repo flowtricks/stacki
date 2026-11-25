@@ -1,4 +1,5 @@
 import type { createTextBuffer } from './frameTextBuffer';
+import { CANVAS_LINE_END, type CanvasTextBreaks } from '../../shared/properties/canvasText';
 import { runsSelection, selectRunsOffsets, type TextSpace } from './frameTextSelection';
 
 interface NativeTextOptions {
@@ -6,6 +7,12 @@ interface NativeTextOptions {
   readonly space: TextSpace;
   readonly buffer: NonNullable<ReturnType<typeof createTextBuffer>>;
   readonly finish: (action: 'apply' | 'cancel') => void;
+  /**
+   * What Enter types: `undefined` for text whose component allows no breaks, where Enter finishes editing as it always
+   * has. `line` and `rich` type a line break (written as `<br>`, or for rich text as a new paragraph, when saved); then
+   * ⌘ or Ctrl Enter finishes, and Escape still cancels.
+   */
+  readonly breaks: CanvasTextBreaks | undefined;
   /** Says that the selection reaches text this editor may not change. */
   readonly refused: () => void;
 }
@@ -131,10 +138,34 @@ function nativeTextKey(options: NativeTextOptions, event: KeyboardEvent): void {
   } else if (modifier && (key === 'z' || key === 'y')) {
     event.preventDefault();
     options.buffer.history(event.shiftKey || key === 'y' ? 'redo' : 'undo');
+  } else if (event.key === 'Enter' && options.breaks !== undefined) {
+    event.preventDefault();
+    if (modifier) {
+      options.finish('apply');
+    } else {
+      typeLineBreak(options);
+    }
   } else if (event.key === 'Escape' || (event.key === 'Enter' && !event.shiftKey)) {
     event.preventDefault();
     options.finish(event.key === 'Escape' ? 'cancel' : 'apply');
   }
+}
+
+// A line break at the caret, Shift or not. At the end of its line the break also takes a zero-width space: a line
+// holding nothing has no height, so the caret would stay on the line above until a word was typed. The space is never
+// saved (canvasTextWithoutLineEnds).
+function typeLineBreak(options: NativeTextOptions): void {
+  const selection = runsSelection(options.space.runs);
+  if (!selection) {
+    options.refused();
+    return;
+  }
+  if (options.buffer.crosses(selection)) {
+    return;
+  }
+  const rest = options.buffer.after(selection.end);
+  const endsLine = rest === undefined || /^[\t\n\f\r ]*$/.test(rest);
+  options.buffer.replace(selection, endsLine ? '\n' + CANVAS_LINE_END : '\n');
 }
 
 function nativeTextInput(options: NativeTextOptions, event: InputEvent): void {

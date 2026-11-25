@@ -19,6 +19,7 @@ export const studioDefaultsHost = {
       props: component.fields.map((field) => field.name),
       slots: component.slots,
       slotText: component.slotText ?? false,
+      ...(component.setHtml === true ? { setHtml: true } : {}),
     }));
     if (stored.source === undefined) {
       return { catalog, config: starterDefaults(catalog) };

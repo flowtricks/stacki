@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': 'Envoyé à {where}.',
   'ui.htmlField.characters': { one: '{count} caractère', other: '{count} caractères' },
   'ui.htmlField.hint': '## titre · - liste · > citation · **gras** · `code` · {shortcut} lien',
+  'ui.htmlField.image': 'Image', // same
+  'ui.htmlField.insertBlock': 'Choisir le bloc',
   'ui.htmlField.label': 'Texte enrichi',
   'ui.htmlField.placeholder': 'Écrivez, ou tapez ## pour un titre…',
   'ui.htmlField.restricted': 'Ce HTML contient du balisage qui ne peut pas être modifié visuellement. Utilisez HTML pour le conserver.',
+  'ui.htmlField.video': 'Vidéo',
   'ui.htmlField.words': { one: '{count} mot', other: '{count} mots' },
   'ui.htmlLink.address': 'Adresse du lien',
   'ui.htmlLink.edit': 'Modifier le lien',

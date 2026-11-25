@@ -17,6 +17,7 @@ import type { TextPiece } from './textConnect';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import React from 'react';
+import type { ComponentEditingControl } from './ComponentEditingFields';
 import LinkField from './LinkField';
 
 export type SelectedNode = PageNode | { readonly kind: 'frontmatter'; readonly id: string };
@@ -56,6 +57,15 @@ export interface PropsPanelProps {
   readonly onSetText: SetText;
   readonly onSetContent: (text: string) => void;
   readonly onSetInline: (nodes: readonly InlineNode[]) => void;
+  /**
+   * The selected component instance's text is rich text (its component's richText setting, while it qualifies): the
+   * Content field becomes the rich text editor's button and a code view (ComponentEditingFields.tsx).
+   */
+  readonly richTextContent?: boolean | undefined;
+  /** Writes the selected node's content as code, byte for byte; absent where the host has no source writer. */
+  readonly onSetContentSource?: ((source: string) => void) | undefined;
+  /** While the selected node is the component whose defaults are being set: its editing settings, last in Settings. */
+  readonly componentEditing?: ComponentEditingControl | undefined;
   /** Restates the selected text or expression node as these pieces (TextConnectField.tsx); absent where the host cannot. */
   readonly onSetTextPieces?: ((pieces: readonly TextPiece[]) => void) | undefined;
   readonly onOpenCode?: () => void;

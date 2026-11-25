@@ -5,6 +5,12 @@ import { parseMetadataResult, type MetadataKind } from '../../shared/properties/
 // for a moment (src/app/model/componentWarm.ts) is never older than the last write.
 let metadataVersion = 0;
 export const metadataVersionNow = (): number => metadataVersion;
+// Who rereads metadata after the app writes it: the component editing settings the canvas and the panel follow.
+const metadataWritten = new Set<() => void>();
+export function onMetadataWrite(listener: () => void): () => void {
+  metadataWritten.add(listener);
+  return () => metadataWritten.delete(listener);
+}
 
 export async function readMetadata(projectPath: string, kind: MetadataKind) {
   const input = parseIpcPayload('project:metadata', { projectPath, kind });
@@ -38,6 +44,7 @@ export async function writeMetadata(projectPath: string, write: { readonly kind:
   if (!result.ok) {
     throw new Error(result.error.message);
   }
+  metadataWritten.forEach((listener) => listener());
   return result.value;
 }
 import { parseCanvasFile } from '../../shared/properties/defaultsCanvas';

@@ -51,9 +51,12 @@ export const messages = {
   'ui.handoff.sent': '已发送到 {where}。',
   'ui.htmlField.characters': { other: '{count} 个字符' },
   'ui.htmlField.hint': '## 标题 · - 列表 · > 引用 · **粗体** · `代码` · {shortcut} 链接',
+  'ui.htmlField.image': '图片',
+  'ui.htmlField.insertBlock': '选择区块',
   'ui.htmlField.label': '富文本',
   'ui.htmlField.placeholder': '开始书写，或输入 ## 添加标题…',
   'ui.htmlField.restricted': '此 HTML 包含无法可视化编辑的标记。请使用 HTML 以保留它。',
+  'ui.htmlField.video': '视频',
   'ui.htmlField.words': { other: '{count} 个字' }, // review
   'ui.htmlLink.address': '链接地址',
   'ui.htmlLink.edit': '编辑链接',

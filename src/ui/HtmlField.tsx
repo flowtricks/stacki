@@ -27,7 +27,9 @@ import {
   type FormatState,
   type RichTextAction,
 } from './richTextCommands';
-import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts } from './richTextModel';
+import { blockShortcut, cleanPastedHTML, escapeHTML, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
+import Menu, { type MenuEntry } from './Menu';
+import { PlusIcon } from './Icons';
 import './contentInputs.css';
 import './richText.css';
 import { useTranslate } from '../lib/i18n/useTranslate';
@@ -37,6 +39,11 @@ interface Props {
   readonly label?: string | undefined;
   /** The source view in place of the HTML one: a Markdown body shows its Markdown. */
   readonly sourceView?: SourceView | undefined;
+  /**
+   * Rich text a component's slot holds: a `+` beside an empty block chooses what the block is (a heading, a quote, a
+   * list, an image, a video …), and video is content the editor keeps. Off for CMS fields, which keep their list.
+   */
+  readonly blocks?: 'insert' | undefined;
   readonly onChange: (value: string) => void;
 }
 
@@ -57,16 +64,16 @@ interface Editor {
   readonly restore: () => HTMLDivElement | undefined;
 }
 
-export default function HtmlField({ value, label, sourceView, onChange }: Props) {
+export default function HtmlField({ value, label, sourceView, blocks, onChange }: Props) {
   const translate = useTranslate();
   const fieldLabel = label ?? translate('ui.htmlField.label');
   const [source, setSource] = useState(false);
   const [formatCount, setFormatCount] = useState(0);
-  const projection = editableHTML(value, document);
-  const state = useHtmlEditor({ value, projection, onChange });
+  const projection = editableHTML(value, document, { media: blocks === 'insert' });
+  const state = useHtmlEditor({ value, projection, media: blocks === 'insert', onChange });
   const { editor, bubble, setBubble } = state;
   return (
-    <div className="html-field">
+    <div className={blocks === 'insert' ? 'html-field html-field-blocks' : 'html-field'}>
       <HtmlToolbar
         format={state.format}
         source={source}
@@ -92,6 +99,7 @@ export default function HtmlField({ value, label, sourceView, onChange }: Props)
           onClose={state.closeBubble}
         />
       )}
+      {blocks === 'insert' && !source && !projection.restricted && <BlockInsert editor={editor} place={state.plus} onAction={state.run} />}
       {!source && <HtmlFooter words={state.counts.words} characters={state.counts.characters} />}
     </div>
   );
@@ -99,8 +107,14 @@ export default function HtmlField({ value, label, sourceView, onChange }: Props)
 
 // The editor's state: the live text, what the caret is in, the link bubble, the
 // counts, and the actions the toolbar and keyboard run.
-function useHtmlEditor(options: { readonly value: string; readonly projection: ReturnType<typeof editableHTML>; readonly onChange: (value: string) => void }) {
-  const { value, projection, onChange } = options;
+function useHtmlEditor(options: {
+  readonly value: string;
+  readonly projection: ReturnType<typeof editableHTML>;
+  readonly media: boolean;
+  readonly onChange: (value: string) => void;
+}) {
+  const { value, projection, media, onChange } = options;
+  const [plus, setPlus] = useState<BlockPlace>();
   const host = useRef<HTMLDivElement>();
   const saved = useRef<Range>();
   const plainPaste = useRef(false);
@@ -128,7 +142,7 @@ function useHtmlEditor(options: { readonly value: string; readonly projection: R
     emit: () => {
       if (host.current !== undefined) {
         // Always leave a paragraph when emptied so the HTML field keeps its editor.
-        const html = editableHTML(host.current.innerHTML, document).html;
+        const html = editableHTML(host.current.innerHTML, document, { media }).html;
         emitted.current = containsHTML(html) ? html : `<p>${html}</p>`;
         refresh();
         onChange(emitted.current);
@@ -139,6 +153,7 @@ function useHtmlEditor(options: { readonly value: string; readonly projection: R
   useSelectionTracking(editor, (next) => {
     setFormat(next);
     setBubble((open) => bubbleFor(host.current, next, open));
+    setPlus(host.current === undefined ? undefined : emptyBlockPlace(host.current));
   });
   const run = (action: RichTextAction): void => {
     const element = editor.restore();
@@ -160,7 +175,7 @@ function useHtmlEditor(options: { readonly value: string; readonly projection: R
   const forget = (): void => {
     emitted.current = undefined;
   };
-  return { editor, format, bubble, setBubble, counts, run, closeBubble, forget };
+  return { editor, format, bubble, setBubble, counts, run, closeBubble, forget, plus };
 }
 
 interface BodyProps extends Props {
@@ -223,6 +238,103 @@ function HtmlFooter(props: { readonly words: number; readonly characters: number
         {translate('ui.htmlField.words', { count: props.words })} · {translate('ui.htmlField.characters', { count: props.characters })}
       </span>
     </div>
+  );
+}
+
+/** Where the `+` of an empty block sits, in the field's own coordinates. */
+interface BlockPlace {
+  readonly top: number;
+  readonly height: number;
+}
+
+// The block the caret is in, when it holds nothing yet: the place to choose what it becomes. A block is a child of the
+// editor, or a list item; a rule, an image or a video is content, not an empty block.
+function emptyBlockPlace(host: HTMLElement): BlockPlace | undefined {
+  const range = rangeIn(host);
+  if (range === undefined || !range.collapsed) {
+    return undefined;
+  }
+  let node: Node | undefined = range.startContainer;
+  for (let depth = 0; node !== undefined && node.parentNode !== host && depth < 64; depth++) {
+    node = node.parentNode ?? undefined;
+  }
+  if (!(node instanceof HTMLElement) || node.parentNode !== host) {
+    return undefined;
+  }
+  if ((node.textContent ?? '').trim() !== '' || node.querySelector('img, hr, video') !== null || ['HR', 'IMG', 'VIDEO'].includes(node.tagName)) {
+    return undefined;
+  }
+  const field = host.closest('.html-field') ?? host;
+  const box = node.getBoundingClientRect();
+  return { top: box.top - field.getBoundingClientRect().top, height: box.height };
+}
+
+// The `+` beside an empty block and the menu it opens, in the order a writer reaches for them: the headings, then
+// paragraph, quote, image, link and video, then the other common rich text blocks. Changing a block keeps its words
+// (formatBlock moves them); an image or a video asks for its address the way a link does.
+function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlace | undefined; readonly onAction: (action: RichTextAction) => void }) {
+  const translate = useTranslate();
+  const [anchor, setAnchor] = useState<HTMLElement>();
+  const [media, setMedia] = useState<{ readonly kind: 'image' | 'video'; readonly place: LinkBubblePlace }>();
+  const { editor, place, onAction } = props;
+  const block = (value: Block) => () => onAction({ kind: 'block', block: value });
+  const askMedia = (kind: 'image' | 'video') => () => {
+    editor.restore();
+    setMedia({ kind, place: { top: (place?.top ?? 0) + (place?.height ?? 0) + 6, left: 12 } });
+  };
+  const item = (id: string, label: string, onSelect: () => void): MenuEntry => ({ kind: 'item', id, label, onSelect });
+  const entries: readonly MenuEntry[] = [
+    ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag, index) => item(tag, translate('ui.htmlToolbar.heading', { level: index + 1 }), block(tag))),
+    item('p', translate('ui.htmlToolbar.paragraph'), block('p')),
+    item('blockquote', translate('ui.htmlToolbar.quote'), block('blockquote')),
+    item('image', translate('ui.htmlField.image'), askMedia('image')),
+    item('link', translate('ui.htmlToolbar.link'), () => onAction({ kind: 'link' })),
+    item('video', translate('ui.htmlField.video'), askMedia('video')),
+    { kind: 'divider', id: 'more' },
+    item('ul', translate('ui.htmlToolbar.bulletedList'), () => onAction({ kind: 'list', list: 'ul' })),
+    item('ol', translate('ui.htmlToolbar.numberedList'), () => onAction({ kind: 'list', list: 'ol' })),
+    item('hr', translate('ui.htmlToolbar.divider'), () => onAction({ kind: 'rule' })),
+    item('pre', translate('ui.htmlToolbar.codeBlock'), block('pre')),
+  ];
+  return (
+    <>
+      {place !== undefined && (
+        <button
+          type="button"
+          className="html-block-plus"
+          style={{ top: place.top + Math.max(0, Math.floor((place.height - 20) / 2)) }}
+          aria-label={translate('ui.htmlField.insertBlock')}
+          aria-haspopup="menu"
+          aria-expanded={anchor !== undefined}
+          // The caret stays in the empty block: the menu's choice acts on it.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => setAnchor(anchor === undefined ? event.currentTarget : undefined)}
+        >
+          <PlusIcon size={14} />
+        </button>
+      )}
+      <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={() => setAnchor(undefined)} />
+      {media && (
+        <HtmlLinkEditor
+          bubble={{ kind: 'edit', href: '', place: media.place }}
+          onEdit={() => {}}
+          onApply={(address) => {
+            const element = editor.restore();
+            setMedia(undefined);
+            if (element !== undefined) {
+              const source = escapeHTML(address).replaceAll('"', '&quot;');
+              document.execCommand('insertHTML', false, media.kind === 'image' ? `<img src="${source}" alt="">` : `<video src="${source}" controls></video>`);
+              editor.emit();
+            }
+          }}
+          onRemove={() => setMedia(undefined)}
+          onClose={() => {
+            setMedia(undefined);
+            editor.restore();
+          }}
+        />
+      )}
+    </>
   );
 }
 

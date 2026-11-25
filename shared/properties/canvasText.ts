@@ -38,6 +38,24 @@ export interface CanvasTextTarget {
    * may be changed together with the text beside them, by one selection.
    */
   readonly literal?: true;
+  /**
+   * What Enter types in this text, from its component's editing settings (.stacki/components.json): `line` a line
+   * break, `rich` a new paragraph. Absent: Enter finishes editing, as in a frame older than these settings.
+   */
+  readonly breaks?: CanvasTextBreaks;
+}
+
+export const CANVAS_TEXT_BREAKS = ['line', 'rich'] as const;
+export type CanvasTextBreaks = (typeof CANVAS_TEXT_BREAKS)[number];
+
+/** Typed after a line break that ends its line, so the empty line has a caret; never saved. */
+export const CANVAS_LINE_END = '\u200B';
+
+/** Typed canvas words as they are saved: each typed line break without the space that held its empty line open. */
+export function canvasTextWithoutLineEnds(value: string): string {
+  const saved = value.replaceAll('\n' + CANVAS_LINE_END, '\n');
+  assert(saved.length <= value.length, 'Removing line ends never adds characters');
+  return saved;
 }
 
 export interface CanvasTextCatalog {
@@ -162,7 +180,16 @@ function parseTarget(input: unknown): CanvasTextTarget {
     ...(data['from'] === undefined ? {} : { from: parseFrom(data['from']) }),
     ...(data['segment'] === undefined ? {} : { segment: parseSegment(data['segment']) }),
     ...(data['literal'] === undefined ? {} : { literal: parseLiteral(data['literal']) }),
+    ...(data['breaks'] === undefined ? {} : { breaks: parseBreaks(data['breaks']) }),
   };
+}
+
+function parseBreaks(input: unknown): CanvasTextBreaks {
+  const breaks = CANVAS_TEXT_BREAKS.find((value) => value === input);
+  if (breaks === undefined) {
+    throw new Error('Expected what Enter types in canvas text');
+  }
+  return breaks;
 }
 
 function parseLiteral(input: unknown): true {

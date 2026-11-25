@@ -247,6 +247,12 @@ export const messages = {
   'props.edit.studioRecoveryFailed': 'Das Speichern der Eigenschaften ist fehlgeschlagen, und die Wiederherstellung von {files} ebenfalls. {detail}',
   'props.edit.uncertain': '{file} wurde möglicherweise nicht gespeichert. {detail}',
   'props.edit.uncertainBare': '{file} wurde möglicherweise nicht gespeichert.',
+  'props.editing.lineBreaks': 'Zeilenumbrüche erlauben',
+  'props.editing.lineBreaksTip':
+    'Die Eingabetaste (Enter) fügt im Text dieser Komponente einen Zeilenumbruch ein, auf der Seite und in „Inhalt“. Mit ⌘ oder Ctrl Enter beendest du die Bearbeitung auf der Seite.',
+  'props.editing.richText': 'Rich-Text-Bearbeitung erlauben',
+  'props.editing.richTextTip':
+    'Enter beginnt im Inhalt dieser Komponente einen neuen Absatz, und mit + wird ein Block zu Überschrift, Zitat, Liste, Bild oder Video.',
   'props.element.content': 'Inhalt',
   'props.element.fallback': 'Fallback', // same
   'props.element.fallbackNote': 'Wird nur angezeigt, wenn das, was diese Komponente verwendet, nichts an den Slot übergibt.',
@@ -587,6 +593,15 @@ export const messages = {
   'props.rename.spreadCollision': 'Ein Spread enthält {name} bereits.',
   'props.rename.symlink': 'Der Projektquellcode enthält einen symbolischen Link. Löse ihn auf, bevor du projektweit umbenennst.',
   'props.rename.unreadable': 'Diese Komponente lässt sich nicht lesen, um „{name}“ sicher umzubenennen. {detail}',
+  'props.richText.asCode': 'Als Code anzeigen',
+  'props.richText.codeComponent': 'Wird als Code angezeigt: Enthält eine Komponente, die der Editor für formatierten Text nicht darstellen kann.',
+  'props.richText.codeExpression': 'Wird als Code angezeigt: Enthält einen Ausdruck, den der Editor für formatierten Text als Text schreiben würde.',
+  'props.richText.codeMarkup': 'Wird als Code angezeigt: Enthält Markup, das der Editor für formatierten Text nicht unverändert darstellen kann.',
+  'props.richText.codeSize': 'Wird als Code angezeigt: Zu lang für den Editor für formatierten Text.',
+  'props.richText.edit': 'Formatierten Text bearbeiten',
+  'props.richText.title': 'Formatierter Text',
+  'props.richText.useEditor': 'Editor für formatierten Text verwenden',
+  'props.richText.viewCode': 'Als Code ansehen',
   'props.sections.addField': 'Feld hinzufügen',
   'props.sections.codeType': 'Code-Typ',
   'props.sections.defaultItems': 'Standardeinträge',
