@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'Nie można zapisać ustawień kanwy: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'nie ustawiono',
-  'componentCanvas.menu.open': 'Otwórz kanwę',
+  'componentCanvas.menu.open': 'Otwórz na kanwie',
   'componentCanvas.notice.truncated': 'Wyświetlane ramki: pierwsze {shown} z {total}. Aby zobaczyć pozostałe, daj własne ramki mniejszej liczbie właściwości.',
   'componentCanvas.pageName': 'Kanwa {name}',
   'componentCanvas.panel.background': 'Tło',
@@ -52,6 +52,8 @@ export const messages = {
     other: '{count} wartości',
   },
   'componentCanvas.panel.width': 'Szerokość',
+  'componentCanvas.popup.close': 'Zamknij ustawienia ramki',
+  'componentCanvas.popup.title': 'Ustawienia ramki',
   'componentCanvas.titleBar.close': 'Zamknij kanwę {name}',
   'componentCanvas.zoom.fit': 'Dopasuj',
   'componentCanvas.zoom.fitAll': 'Dopasuj powiększenie do wszystkich ramek',

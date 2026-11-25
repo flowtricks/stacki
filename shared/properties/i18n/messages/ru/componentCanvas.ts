@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'Не удалось сохранить настройки холста: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'не задано',
-  'componentCanvas.menu.open': 'Открыть холст',
+  'componentCanvas.menu.open': 'Открыть на холсте',
   'componentCanvas.notice.truncated': 'Показаны первые фреймы: {shown} из {total}. Чтобы увидеть остальные, выделите отдельные фреймы меньшему числу свойств.',
   'componentCanvas.pageName': 'Холст {name}',
   'componentCanvas.panel.background': 'Фон',
@@ -52,6 +52,8 @@ export const messages = {
     other: '{count} значения',
   },
   'componentCanvas.panel.width': 'Ширина',
+  'componentCanvas.popup.close': 'Закрыть настройки фрейма',
+  'componentCanvas.popup.title': 'Настройки фрейма',
   'componentCanvas.titleBar.close': 'Закрыть холст {name}',
   'componentCanvas.zoom.fit': 'Вписать',
   'componentCanvas.zoom.fitAll': 'Масштабировать, чтобы вписать все фреймы',

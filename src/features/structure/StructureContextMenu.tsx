@@ -5,7 +5,7 @@ import { ChevronRightIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useShortcutTip } from '../../ui/shortcutTip';
 
-export type ContextAction = 'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
+export type ContextAction = 'defaults' | 'open' | 'canvas' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
 export interface ContextPosition {
   readonly left: number;
   readonly top: number;
@@ -16,6 +16,8 @@ interface MenuProps {
   readonly position: ContextPosition;
   readonly component: boolean;
   readonly canOpen: boolean;
+  /** "Open in canvas": absent where there is no component canvas (Studio), so the row is left out. */
+  readonly openCanvas: 'enabled' | 'disabled' | 'absent';
   readonly canSetDefaults: boolean;
   readonly canWrapBox: boolean;
   readonly canWrapLink: boolean;
@@ -84,11 +86,14 @@ export function ContextMenu(props: MenuProps) {
   );
 }
 
-function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'onAction'>) {
+function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | 'onAction'>) {
   const translate = useTranslate();
   return (
     <>
       <MenuItem label={translate('structure.menu.openComponent')} disabled={!props.canOpen} onSelect={() => props.onAction('open')} />
+      {props.openCanvas !== 'absent' && (
+        <MenuItem label={translate('componentCanvas.menu.open')} disabled={props.openCanvas === 'disabled'} onSelect={() => props.onAction('canvas')} />
+      )}
       <div className="ctx-divider" role="separator" />
     </>
   );

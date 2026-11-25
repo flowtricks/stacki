@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'Pengaturan kanvas tidak dapat disimpan: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'belum diatur',
-  'componentCanvas.menu.open': 'Buka kanvas',
+  'componentCanvas.menu.open': 'Buka di kanvas',
   'componentCanvas.notice.truncated': 'Menampilkan {shown} frame pertama dari {total}. Berikan frame sendiri ke lebih sedikit prop untuk melihat sisanya.',
   'componentCanvas.pageName': 'Kanvas {name}',
   'componentCanvas.panel.background': 'Latar belakang',
@@ -45,6 +45,8 @@ export const messages = {
     other: '{count} nilai',
   },
   'componentCanvas.panel.width': 'Lebar',
+  'componentCanvas.popup.close': 'Tutup pengaturan frame',
+  'componentCanvas.popup.title': 'Pengaturan frame',
   'componentCanvas.titleBar.close': 'Tutup kanvas {name}',
   'componentCanvas.zoom.fit': 'Pas',
   'componentCanvas.zoom.fitAll': 'Zoom agar semua frame pas',

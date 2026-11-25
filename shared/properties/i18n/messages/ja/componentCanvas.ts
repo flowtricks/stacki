@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'キャンバスの設定を保存できませんでした: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '未設定',
-  'componentCanvas.menu.open': 'キャンバスを開く',
+  'componentCanvas.menu.open': 'キャンバスで開く',
   'componentCanvas.notice.truncated':
     '{total} フレーム中、最初の {shown} フレームを表示しています。残りを表示するには、個別のフレームを持つプロパティを減らしてください。',
   'componentCanvas.pageName': '{name} キャンバス',
@@ -47,6 +47,8 @@ export const messages = {
     other: '{count} 個の値',
   },
   'componentCanvas.panel.width': '幅',
+  'componentCanvas.popup.close': 'フレーム設定を閉じる',
+  'componentCanvas.popup.title': 'フレーム設定',
   'componentCanvas.titleBar.close': '{name} キャンバスを閉じる',
   'componentCanvas.zoom.fit': 'フィット',
   'componentCanvas.zoom.fitAll': 'すべてのフレームが収まるようにズーム',

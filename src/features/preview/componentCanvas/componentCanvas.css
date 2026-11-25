@@ -4,10 +4,55 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: 100%;
+  flex: 1 1 auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
+}
+/* The frame's settings over the canvas's right edge (ComponentCanvasFramePopup.tsx): the app's popup surface,
+   placed from the measured canvas, scrolling inside and never taller than the canvas. */
+.component-canvas-popup.component-canvas-popup {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  z-index: 300;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  /* The right panel's own fill, so its fields look as they do there; lifted by the menus' shadow, not a border. */
+  background: var(--bg-panel);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+.component-canvas-popup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  padding-block-end: 4px;
+  padding-inline-start: 12px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.component-canvas-popup-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.component-canvas-popup-close {
+  cursor: pointer;
+}
+.component-canvas-popup .props-title {
+  padding-top: 4px;
+}
+/* The canvas draws one component at its own sizes, so the toolbar's breakpoint devices do not apply to it. */
+.app[data-component-canvas] .device-btns:not(.guide-btns) {
+  display: none;
 }
 .component-canvas-panel-name {
   min-width: 0;

@@ -19,6 +19,8 @@ export interface CanvasOpen {
   /** Where the panel's edits go: `` all frames, a split value's key, or the selected frame's own key. */
   readonly scope: string;
   readonly scale: number;
+  /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
+  readonly framePanel: 'shown' | 'hidden';
   /** The props the component defaults give an inserted instance: what a frame shows where it sets nothing. */
   readonly defaults: Readonly<Record<string, DefaultValue>>;
 }
@@ -39,12 +41,26 @@ export interface ComponentCanvasControl {
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;
+  readonly hideFramePanel: () => void;
+  /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */
+  readonly coverRight: (pixels: number) => void;
 }
 
 export const ComponentCanvasContext = createContext<ComponentCanvasControl | undefined>(undefined);
 
 export function useComponentCanvas(): ComponentCanvasControl | undefined {
   return useContext(ComponentCanvasContext);
+}
+
+// How the element menus (navigator and canvas) open a canvas for a component instance: set by the host while it can,
+// absent where there is no canvas (Studio), so the menus leave the row out there.
+type InstanceOpener = (name: string, id: string) => void;
+let instanceOpener: InstanceOpener | undefined;
+export function canvasInstanceOpener(): InstanceOpener | undefined {
+  return instanceOpener;
+}
+export function registerCanvasInstanceOpener(opener: InstanceOpener | undefined): void {
+  instanceOpener = opener;
 }
 
 // Read by code outside React's tree of this context (the canvas click handler): whether a canvas is open now.

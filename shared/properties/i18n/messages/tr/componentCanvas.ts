@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'Tuval ayarları kaydedilemedi: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'ayarlanmamış',
-  'componentCanvas.menu.open': 'Tuvali aç',
+  'componentCanvas.menu.open': 'Tuvalde aç',
   'componentCanvas.notice.truncated': '{total} çerçevenin ilk {shown} tanesi gösteriliyor. Kalanları görmek için daha az prop’a ayrı çerçeve verin.',
   'componentCanvas.pageName': '{name} tuvali',
   'componentCanvas.panel.background': 'Arka plan',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} değer',
   },
   'componentCanvas.panel.width': 'Genişlik',
+  'componentCanvas.popup.close': 'Çerçeve ayarlarını kapat',
+  'componentCanvas.popup.title': 'Çerçeve ayarları',
   'componentCanvas.titleBar.close': '{name} tuvalini kapat',
   'componentCanvas.zoom.fit': 'Sığdır',
   'componentCanvas.zoom.fitAll': 'Tüm çerçeveleri sığdıracak şekilde yakınlaştır',

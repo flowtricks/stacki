@@ -29,12 +29,14 @@ import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentC
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
   noteComponentCanvas,
+  registerCanvasInstanceOpener,
   type CanvasOpen,
   type CanvasState,
   type CanvasZoom,
   type ComponentCanvasControl,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { cleanError } from '../../lib/cleanError';
+import { resolveProjectImport } from '../../ipc/appBridge';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { OpenFile } from '../../editor/pageState';
@@ -50,6 +52,9 @@ const CANVAS_TIMING = {
 interface Origin {
   readonly stack: readonly OpenFile[];
   readonly selectionPath: string | undefined;
+  /** The preview device and custom width the canvas was opened at, given back on leaving. */
+  readonly device: string;
+  readonly customWidth: number | undefined;
 }
 
 interface Writes {
@@ -57,6 +62,8 @@ interface Writes {
   base: string | undefined;
   /** The page text last written, so an unchanged page is never rewritten. */
   page: string;
+  /** The canvas whose page may be written: cleared as it closes, so a write already under way never revives a retired page. */
+  active: string | undefined;
   settingsTimer: ReturnType<typeof setTimeout> | undefined;
   pageTimer: ReturnType<typeof setTimeout> | undefined;
 }
@@ -66,32 +73,49 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   const [state, setState] = useState<CanvasState>({ kind: 'idle' });
   const stateRef = useRef(state);
   stateRef.current = state;
-  const origin = useRef<Origin>({ stack: [], selectionPath: undefined });
-  const writes = useRef<Writes>({ base: undefined, page: '', settingsTimer: undefined, pageTimer: undefined });
+  const origin = useRef<Origin>({ stack: [], selectionPath: undefined, device: 'desktop', customWidth: undefined });
+  const writes = useRef<Writes>({ base: undefined, page: '', active: undefined, settingsTimer: undefined, pageTimer: undefined });
   const project = app.project.path;
   noteComponentCanvas(state);
 
-  const saveSettings = useCallback(async (): Promise<void> => {
-    const current = stateRef.current;
-    const held = writes.current;
-    clearTimeout(held.settingsTimer);
-    held.settingsTimer = undefined;
-    if (current.kind !== 'open') {
-      return;
-    }
-    const source = serializeComponentCanvas(current.settings);
-    if (source === held.base || (held.base === undefined && Object.keys(current.settings.components).length === 0)) {
-      return;
-    }
-    try {
-      const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(held.base === undefined ? {} : { base: held.base }) });
-      held.base = saved.source;
-    } catch (error: unknown) {
-      app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
-      // Someone else changed the file: carry on from what is on disk now.
-      held.base = (await readMetadata(project, 'componentCanvas')).source;
-    }
-  }, [app, project, translate]);
+  const saveSettings = useCallback(
+    async (closing?: CanvasOpen): Promise<void> => {
+      const current = closing ?? stateRef.current;
+      const held = writes.current;
+      clearTimeout(held.settingsTimer);
+      held.settingsTimer = undefined;
+      if (current.kind !== 'open') {
+        return;
+      }
+      const source = serializeComponentCanvas(current.settings);
+      if (source === held.base || (held.base === undefined && Object.keys(current.settings.components).length === 0)) {
+        return;
+      }
+      try {
+        const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(held.base === undefined ? {} : { base: held.base }) });
+        held.base = saved.source;
+      } catch (error: unknown) {
+        app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
+        // Someone else changed the file: carry on from what is on disk now.
+        held.base = (await readMetadata(project, 'componentCanvas')).source;
+      }
+    },
+    [app, project, translate],
+  );
+
+  // Ends one canvas without navigating: its settings are written and its page retired (projectMetadataHandlers.ts).
+  const retire = useCallback(
+    async (closing: CanvasState): Promise<void> => {
+      if (closing.kind !== 'open') {
+        return;
+      }
+      await saveSettings(closing);
+      clearTimeout(writes.current.pageTimer);
+      writes.current.active = undefined;
+      await removeDefaultsCanvas(project, pageFileOf(closing.id)).catch((error: unknown) => console.warn('Could not retire the component canvas page:', error));
+    },
+    [project, saveSettings],
+  );
 
   const finish = useCallback(
     async (restore: Origin | undefined): Promise<void> => {
@@ -101,6 +125,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       }
       await saveSettings();
       clearTimeout(writes.current.pageTimer);
+      writes.current.active = undefined;
       setState({ kind: 'idle' });
       if (restore !== undefined) {
         await returnTo(app, restore, translate);
@@ -112,27 +137,33 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
 
   const open = useCallback(
     (component: ScanComponent): void => {
-      if (stateRef.current.kind !== 'idle') {
+      const current = stateRef.current;
+      if (current.kind === 'opening') {
         return;
       }
       if (app.defaultsCanvas.state.kind !== 'idle') {
         app.showToast(translate('componentCanvas.error.busy'), 'info');
         return;
       }
+      // From inside a canvas (Open in canvas on a component in a frame) the new canvas replaces it, and leaving the new
+      // one still returns to where the first was opened from.
+      const kept = current.kind === 'open' ? origin.current : undefined;
       setState({ kind: 'opening', component: component.path });
-      void openCanvas(app, component, translate).then(
-        (opened) => {
-          origin.current = opened.origin;
-          writes.current = { base: opened.base, page: opened.page, settingsTimer: undefined, pageTimer: undefined };
-          setState(opened.state);
-        },
-        (error: unknown) => {
-          setState({ kind: 'idle' });
-          app.showToast(translate('componentCanvas.error.open', { message: cleanError(error) }), 'error');
-        },
-      );
+      void (kept === undefined ? Promise.resolve() : retire(current))
+        .then(() => openCanvas(app, component, translate))
+        .then(
+          (opened) => {
+            origin.current = kept ?? opened.origin;
+            writes.current = { base: opened.base, page: opened.page, active: opened.state.id, settingsTimer: undefined, pageTimer: undefined };
+            setState(opened.state);
+          },
+          (error: unknown) => {
+            setState({ kind: 'idle' });
+            app.showToast(translate('componentCanvas.error.open', { message: cleanError(error) }), 'error');
+          },
+        );
     },
-    [app, translate],
+    [app, retire, translate],
   );
 
   const update = useCallback(
@@ -160,10 +191,21 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
 
   const catalog = useRef<readonly DefaultComponent[]>([]);
   catalog.current = useMemo(() => catalogOf(project, app.scan), [project, app.scan]);
+  // Stable across renders: the popover reports its cover once per placement, not on every canvas change.
+  const cover = useRef(0);
+  const coverRight = useCallback((pixels: number): void => {
+    cover.current = pixels;
+    const current = stateRef.current;
+    if (current.kind === 'open') {
+      postToCanvas(current.id, { command: 'inset', right: pixels / previewScale() });
+    }
+  }, []);
   useCanvasPageWrites(state, writes, catalog, { project, translate, setState });
-  useCanvasMessages(state, setState, app);
+  useCanvasMessages(state, setState, app, cover);
   useLiveSchema(state, app.scan, setState);
   useLeaveWhenAway(state, app, origin, finish);
+  useNoDeviceKeys(state);
+  useInstanceOpener(app, translate, open);
   useEffect(() => () => noteComponentCanvas({ kind: 'idle' }), []);
 
   return useMemo(
@@ -175,7 +217,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       selectFrame: (key) => {
         const current = stateRef.current;
         if (current.kind === 'open' && current.layout.frames.some((frame) => frame.key === key)) {
-          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key) });
+          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key), framePanel: 'shown' });
         }
       },
       setScope: (scope) => {
@@ -186,14 +228,22 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       },
       edit: (edit: FrameEdit) => update((current) => withFrameEdit(current.settings, current.component.file, current.scope, edit)),
       setSplit: (split) => update((current) => withSplit(current.settings, current.component.file, split)),
+      coverRight,
+      hideFramePanel: () => {
+        const current = stateRef.current;
+        if (current.kind === 'open' && current.framePanel === 'shown') {
+          setState({ ...current, framePanel: 'hidden' });
+        }
+      },
       zoom: (action: CanvasZoom) => {
         const current = stateRef.current;
         if (current.kind === 'open') {
-          postToCanvas(current.id, { command: 'zoom', action });
+          // 100% is the component at its own size on screen, whatever the preview frame's own scale.
+          postToCanvas(current.id, { command: 'zoom', action, unit: 1 / previewScale() });
         }
       },
     }),
-    [app.project.path, finish, open, state, update],
+    [app.project.path, coverRight, finish, open, state, update],
   );
 }
 
@@ -248,7 +298,12 @@ async function openCanvas(
   await createDefaultsCanvas(project, pageFile, page);
   try {
     const focusPath = await canvasRootPath(project + '/' + pageFile, page);
-    const origin: Origin = { stack: app.editStackRef.current, selectionPath: app.pathFor(app.selectedId) };
+    const origin: Origin = {
+      stack: app.editStackRef.current,
+      selectionPath: app.pathFor(app.selectedId),
+      device: app.device,
+      customWidth: app.previewDimensions.customWidth,
+    };
     const pageEntry: OpenFile = {
       kind: 'page',
       path: project + '/' + pageFile,
@@ -277,6 +332,7 @@ async function openCanvas(
         frame: first,
         scope: first,
         scale: 1,
+        framePanel: 'shown',
         defaults: defaultProps(snapshot, file, prettyComponentName(component.name)),
       },
       origin,
@@ -348,6 +404,12 @@ async function canvasRootPath(pagePath: string, source: string): Promise<string>
 }
 
 async function returnTo(app: ShellView, back: Origin, translate: Translator): Promise<void> {
+  // The page comes back at the device and width it was left at: the canvas draws at the pane's own width.
+  if (back.device === 'custom' && back.customWidth !== undefined) {
+    app.requestCanvasWidth(back.customWidth);
+  } else {
+    app.setDevice(back.device);
+  }
   const entry = back.stack.at(-1);
   if (entry === undefined) {
     app.setCurrentPage(undefined);
@@ -359,6 +421,13 @@ async function returnTo(app: ShellView, back: Origin, translate: Translator): Pr
   if (app.pageStateRef.current.currentPage?.path !== entry.path) {
     app.showToast(translate('componentCanvas.error.notReturned'), 'error');
   }
+}
+
+// How much the preview frame is scaled on screen (a fixed-width device drawn smaller than its width): 1 when it fills.
+function previewScale(): number {
+  const frame = document.querySelector<HTMLIFrameElement>('.preview-frame-wrap iframe');
+  const width = frame?.offsetWidth ?? 0;
+  return frame === null || width === 0 ? 1 : Math.max(frame.getBoundingClientRect().width / width, 0.01);
 }
 
 function postToCanvas(id: string, message: Readonly<Record<string, unknown>>): void {
@@ -400,7 +469,7 @@ function useCanvasPageWrites(
           setState((current) => (current.kind === 'open' && current.id === open.id ? { ...current, defaults } : current));
         }
         const page = pageSourceOf(open.id, open.component, open.layout, snapshot, translate);
-        if (page !== held.page) {
+        if (page !== held.page && held.active === open.id) {
           held.page = page;
           await writeText(project, pageFileOf(open.id), page);
         }
@@ -411,7 +480,12 @@ function useCanvasPageWrites(
 }
 
 // Messages from the canvas page: which frame a press landed in, the zoom, and that it is ready for the selection.
-function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.SetStateAction<CanvasState>>, app: ShellView): void {
+function useCanvasMessages(
+  state: CanvasState,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+  app: ShellView,
+  cover: React.MutableRefObject<number>,
+): void {
   const id = state.kind === 'open' ? state.id : undefined;
   const frame = state.kind === 'open' ? state.frame : undefined;
   const { setSelectedId } = app;
@@ -428,19 +502,23 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
         const key = message.frame;
         setState((current) =>
           current.kind === 'open' && current.layout.frames.some((candidate) => candidate.key === key)
-            ? { ...current, frame: key, scope: scopeAfterSelect(current, key) }
+            ? // A press on a frame's label or the space around its component selects the frame and opens its settings.
+              { ...current, frame: key, scope: scopeAfterSelect(current, key), framePanel: message.chrome ? 'shown' : current.framePanel }
             : current,
         );
         if (message.chrome) {
           setSelectedId(undefined);
         }
       } else if (message.event === 'view' && message.scale !== undefined) {
-        const scale = message.scale;
+        // The zoom on screen: the canvas's own times the preview frame's (a fixed-width Desktop is drawn smaller).
+        const scale = message.scale * previewScale();
         setState((current) => (current.kind === 'open' && current.scale !== scale ? { ...current, scale } : current));
       } else if (message.event === 'ready') {
         setState((current) => {
           if (current.kind === 'open') {
             postToCanvas(current.id, { command: 'select', frame: current.frame });
+            // A page that loaded after the popover opened has not heard how much of it the popover covers.
+            postToCanvas(current.id, { command: 'inset', right: cover.current / previewScale() });
           }
           return current;
         });
@@ -448,7 +526,7 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [id, setSelectedId, setState]);
+  }, [cover, id, setSelectedId, setState]);
   useEffect(() => {
     if (id !== undefined && frame !== undefined) {
       postToCanvas(id, { command: 'select', frame });
@@ -507,4 +585,58 @@ function useLeaveWhenAway(
       void finish(origin.current);
     }
   }, [current, finish, id, origin, project, root]);
+}
+
+// The breakpoint devices do not apply to the canvas (its toolbar hides them), so their number keys do nothing there:
+// a capture listener on the window runs before the toolbar's (usePreviewSizing.ts useDeviceShortcuts) and keeps the key.
+function useNoDeviceKeys(state: CanvasState): void {
+  const open = state.kind === 'open';
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const keep = (event: KeyboardEvent): void => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable);
+      if (/^[0-9]$/.test(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !typing) {
+        event.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener('keydown', keep, true);
+    return () => window.removeEventListener('keydown', keep, true);
+  }, [open]);
+}
+
+// Open in canvas from the element menus (navigator and canvas): the instance's component as the open file imports it,
+// the way Open component finds it (appNavigation.ts useOpenComponent), then the same open as the Components panel's.
+function useInstanceOpener(app: ShellView, translate: Translator, open: (component: ScanComponent) => void): void {
+  const appRef = useRef(app);
+  appRef.current = app;
+  useEffect(() => {
+    const opener = (name: string): void => {
+      const current = appRef.current;
+      void instanceComponent(current, name).then(
+        (component) => {
+          if (component === undefined) {
+            current.showToast(translate('componentCanvas.error.open', { message: name }), 'error');
+          } else {
+            open(component);
+          }
+        },
+        (error: unknown) => current.showToast(translate('componentCanvas.error.open', { message: cleanError(error) }), 'error'),
+      );
+    };
+    registerCanvasInstanceOpener(opener);
+    return () => registerCanvasInstanceOpener(undefined);
+  }, [open, translate]);
+}
+
+async function instanceComponent(app: ShellView, name: string): Promise<ScanComponent | undefined> {
+  const { currentPage, pageState } = app.pageStateRef.current;
+  const spec = pageState?.editable === true ? pageState.model.imports.find((entry) => entry.name === name)?.path : undefined;
+  const host = currentPage?.path;
+  const file = spec === undefined || host === undefined ? undefined : await resolveProjectImport(app.project.path, host, spec);
+  const normalized = file?.replaceAll('\\', '/');
+  const byFile = normalized === undefined ? undefined : app.scan.components.find((component) => component.path.replaceAll('\\', '/') === normalized);
+  return byFile ?? app.scan.components.find((component) => component.name === name && component.origin?.kind !== 'package');
 }

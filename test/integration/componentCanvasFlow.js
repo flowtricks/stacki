@@ -119,7 +119,7 @@ function writeFixture(project) {
     await window.getByRole('switch', { name: 'Give each value of direction its own frame' }).click();
     await waitFor(async () => (await canvas.locator('stacki-frame').count()) === 6, 'the arrow frames split by direction');
     results.splitFrames = await labels(canvas);
-    await canvas.locator('stacki-frame[data-frame="direction=back&variant=arrow"] stacki-frame-label').click({ force: true });
+    await press(canvas.locator('stacki-frame[data-frame="direction=back&variant=arrow"] stacki-frame-label'));
     await waitFor(async () => (await window.locator('.component-canvas-prop.is-disabled', { hasText: 'direction' }).count()) === 1, 'direction is disabled');
     results.directionDisabled = true;
     await waitForFile(
@@ -145,7 +145,7 @@ function writeFixture(project) {
     await shot(window, '03-preview-values.png');
 
     // Select an element inside a frame: the ordinary panel; add a line break to the component, in every frame.
-    await canvas.locator('stacki-frame[data-frame="variant=main"] .button_wrap').click();
+    await press(canvas.locator('stacki-frame[data-frame="variant=main"] .button_wrap'));
     await settled(canvas);
     await shot(window, '04-element-selected.png');
     await window.locator('[data-rail-id="elements"]').click();
@@ -213,19 +213,35 @@ function writeFixture(project) {
     }
     results.finalSettings = JSON.parse(read('.stacki/component-canvas.json'));
 
+    // Open in canvas from the navigator's right-click menu, second under Open component.
+    // The rail toggles its panel: open the navigator only when it is not showing already.
+    if ((await window.locator('[data-node-id]').count()) === 0) {
+      await window.locator('[data-rail-id="navigator"]').click();
+    }
+    await window.locator('[data-node-id]', { hasText: 'Section' }).first().click({ button: 'right' });
+    await window.getByRole('menuitem', { name: 'Open in canvas' }).waitFor({ timeout: WAIT_MS });
+    results.contextMenu = await window.locator('.ctx-menu [role="menuitem"]').allInnerTexts();
+    await shot(window, '12b-context-menu.png');
+    await window.getByRole('menuitem', { name: 'Open in canvas' }).click();
+    await window.waitForSelector('[data-testid="component-canvas-panel"]', { timeout: WAIT_MS });
+    await settled(canvas);
+    await shot(window, '12c-section-from-context-menu.png');
+    await window.getByRole('button', { name: 'Close Section canvas' }).click();
+    await waitFor(async () => (await window.locator('[data-testid="component-canvas-panel"]').count()) === 0, 'the Section canvas closed');
+
     // Consistency views: the menu, many frames zoomed out, a narrow window, a frame tooltip, and Arabic.
     await window.locator('[data-rail-id="components"]').click();
     await window.locator('button[aria-label="Options for Button"]').first().click({ force: true });
-    await window.getByRole('menuitem', { name: 'Open canvas' }).waitFor({ timeout: WAIT_MS });
+    await window.getByRole('menuitem', { name: 'Open in canvas' }).waitFor({ timeout: WAIT_MS });
     await shot(window, '13-menu.png');
-    await window.getByRole('menuitem', { name: 'Open canvas' }).click();
+    await window.getByRole('menuitem', { name: 'Open in canvas' }).click();
     await window.waitForSelector('[data-testid="component-canvas-panel"]', { timeout: WAIT_MS });
     await window.getByRole('switch', { name: 'Give each value of emphasis its own frame' }).click();
     await waitFor(async () => (await canvas.locator('stacki-frame').count()) > 6, 'emphasis splits the frames');
     results.manyFrames = await canvas.locator('stacki-frame').count();
     await settled(canvas);
     await shot(window, '14-many-frames.png');
-    await canvas.locator('stacki-frame[data-frame="direction=forward&emphasis=primary&variant=arrow"] stacki-frame-label').click({ force: true });
+    await press(canvas.locator('stacki-frame[data-frame="direction=forward&emphasis=primary&variant=arrow"] stacki-frame-label'));
     await window.locator('.component-canvas-prop.is-disabled', { hasText: 'direction' }).locator('.component-canvas-disabled').hover();
     await window.waitForSelector('.rail-tooltip', { timeout: WAIT_MS });
     await shot(window, '15-disabled-tooltip.png');
@@ -269,7 +285,7 @@ async function openCanvas(window, name) {
   const row = window.locator(`button[aria-label="Options for ${name}"]`).first();
   await row.waitFor({ timeout: WAIT_MS });
   await row.click({ force: true });
-  await window.getByRole('menuitem', { name: 'Open canvas' }).click();
+  await window.getByRole('menuitem', { name: 'Open in canvas' }).click();
   await window.waitForSelector('[data-testid="component-canvas-panel"]', { timeout: WAIT_MS });
 }
 
@@ -279,6 +295,13 @@ async function pick(window, label, option) {
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   await window.locator('.dd-option', { hasText: option }).first().click();
+}
+
+// A press and a click inside the preview frame, sent to the element: Playwright refuses pointer clicks inside a frame the
+// editor draws scaled (a fixed-width Desktop), and the editor reads both from the element they land on.
+async function press(locator) {
+  await locator.dispatchEvent('pointerdown', { button: 0, bubbles: true });
+  await locator.dispatchEvent('click', { button: 0, bubbles: true });
 }
 
 async function labels(canvas) {

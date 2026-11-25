@@ -25,7 +25,6 @@ export const CANVAS_MESSAGE = 'stacki:component-canvas';
 export function chromeStyles(theme: 'light' | 'dark'): string {
   const canvas = theme === 'dark' ? '#1e1e1e' : '#e9e9e9';
   const label = theme === 'dark' ? '#a3a3a3' : '#6b6b6b';
-  const check = theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
   const css = `
 html, body { margin: 0 !important; padding: 0 !important; height: 100% !important; overflow: hidden !important; }
 stacki-canvas { position: fixed; inset: 0; display: block; overflow: clip; background: ${canvas}; touch-action: none; }
@@ -36,7 +35,7 @@ stacki-frame { display: flex; flex-direction: column; align-items: flex-start; g
 stacki-frame-label { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; letter-spacing: 0; text-transform: none; color: ${label}; user-select: none; cursor: default; }
 stacki-frame[data-selected] > stacki-frame-label { color: #2f80ff; }
 stacki-frame-body { display: block; position: relative; transform: translate(0); box-sizing: border-box; width: max-content; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px; min-width: 24px; min-height: 24px; }
-stacki-frame-body[data-transparent] { background-image: conic-gradient(${check} 25%, transparent 0 50%, ${check} 0 75%, transparent 0); background-size: 16px 16px; }
+stacki-frame-body[data-transparent] { background: var(--stacki-page-background, #fff); }
 stacki-frame-body[data-fixed-width] { max-width: none; overflow-x: clip; }
 stacki-frame-body[data-fixed-height] { overflow-y: clip; }
 stacki-frame-body[data-fixed-width][data-fixed-height] { content-visibility: auto; }
@@ -65,6 +64,8 @@ export function chromeScript(id: string): string {
   var space = false;
   // Until the person pans or zooms, the view keeps fitting the frames as they load and change size.
   var moved = false;
+  // The part of the canvas the editor covers on its right (the frame settings popover), left out when fitting.
+  var insetRight = 0;
   try { var stored = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (stored && isFinite(stored.x) && isFinite(stored.y) && stored.scale > 0) { view = { x: stored.x, y: stored.y, scale: stored.scale }; restoredMoved = stored.moved === true; } } catch (e) {}
   function post(message) { message.type = TYPE; message.canvas = ID; try { window.parent.postMessage(message, '*'); } catch (e) {} }
   function clamp(value, low, high) { return Math.min(Math.max(value, low), high); }
@@ -82,9 +83,10 @@ export function chromeScript(id: string): string {
   function fit() {
     var width = world.offsetWidth, height = world.offsetHeight;
     var box = canvas.getBoundingClientRect();
-    if (!width || !height || !box.width || !box.height) return;
-    var scale = clamp(Math.min(box.width / width, box.height / height), ZOOM_MIN, 1);
-    set({ scale: scale, x: Math.max((box.width - width * scale) / 2, 0), y: Math.max((box.height - height * scale) / 2, 0) });
+    var room = Math.max(box.width - insetRight, box.width / 3);
+    if (!width || !height || !room || !box.height) return;
+    var scale = clamp(Math.min(room / width, box.height / height), ZOOM_MIN, 1);
+    set({ scale: scale, x: Math.max((room - width * scale) / 2, 0), y: Math.max((box.height - height * scale) / 2, 0) });
   }
   function zoomAt(scale, x, y) {
     moved = true;
@@ -113,8 +115,16 @@ export function chromeScript(id: string): string {
       if (outside !== body.hasAttribute('data-fallback')) { if (outside) body.setAttribute('data-fallback', ''); else body.removeAttribute('data-fallback'); }
     }
   }
+  // A frame without a background of its own shows the page's, as the component sits on in the site: the site's text
+  // colours are chosen for it, and over the canvas's grey a dark link or a light button vanished.
+  function pageBackground() {
+    var clear = function (color) { return !color || color === 'transparent' || /rgba\(.*,\s*0\)$/.test(color); };
+    var body = getComputedStyle(document.body).backgroundColor, root = getComputedStyle(document.documentElement).backgroundColor;
+    var color = !clear(body) ? body : !clear(root) ? root : '#fff';
+    if (canvas.style.getPropertyValue('--stacki-page-background') !== color) canvas.style.setProperty('--stacki-page-background', color);
+  }
   var queued = false;
-  function settle() { queued = false; apply(); mark(); fallbacks(); }
+  function settle() { queued = false; apply(); mark(); fallbacks(); pageBackground(); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
   new MutationObserver(queue).observe(canvas, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
@@ -153,11 +163,15 @@ export function chromeScript(id: string): string {
   window.addEventListener('message', function (event) {
     var data = event.data;
     if (event.source !== window.parent || !data || data.type !== TYPE || data.canvas !== ID) return;
+    if (data.command === 'inset' && isFinite(data.right) && data.right >= 0) {
+      insetRight = data.right;
+      if (!moved) fit();
+    }
     if (data.command === 'select') { selected = typeof data.frame === 'string' ? data.frame : null; mark(); }
     if (data.command === 'zoom' && view) {
       var box = canvas.getBoundingClientRect();
       if (data.action === 'fit') { moved = false; fit(); }
-      else zoomAt(data.action === 'reset' ? 1 : data.action === 'in' ? view.scale * 1.25 : view.scale / 1.25, box.width / 2, box.height / 2);
+      else zoomAt(data.action === 'reset' ? (isFinite(data.unit) && data.unit > 0 ? data.unit : 1) : data.action === 'in' ? view.scale * 1.25 : view.scale / 1.25, box.width / 2, box.height / 2);
     }
   });
   if (typeof ResizeObserver === 'function') {
@@ -166,6 +180,7 @@ export function chromeScript(id: string): string {
     refit.observe(canvas);
   }
   fallbacks();
+  pageBackground();
   if (view) { moved = restoredMoved; apply(); if (moved) remember(); else fit(); } else { fit(); }
   if (!view) set({ scale: 1, x: 0, y: 0 });
   post({ event: 'ready' });

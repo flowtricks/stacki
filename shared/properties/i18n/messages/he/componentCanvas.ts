@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'לא ניתן היה לשמור את הגדרות הקנבס: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'לא הוגדר',
-  'componentCanvas.menu.open': 'פתיחת קנבס',
+  'componentCanvas.menu.open': 'פתיחה בקנבס',
   'componentCanvas.notice.truncated': 'מוצגות {shown} המסגרות הראשונות מתוך {total}. כדי לראות את השאר, יש לתת מסגרות נפרדות לפחות props.',
   'componentCanvas.pageName': 'קנבס {name}',
   'componentCanvas.panel.background': 'רקע',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} ערכים',
   },
   'componentCanvas.panel.width': 'רוחב',
+  'componentCanvas.popup.close': 'סגירת הגדרות המסגרת',
+  'componentCanvas.popup.title': 'הגדרות מסגרת',
   'componentCanvas.titleBar.close': 'סגירת הקנבס {name}',
   'componentCanvas.zoom.fit': 'התאמה',
   'componentCanvas.zoom.fitAll': 'זום להתאמת כל המסגרות',

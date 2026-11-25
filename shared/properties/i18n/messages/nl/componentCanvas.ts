@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'De canvasinstellingen konden niet worden opgeslagen: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'niet ingesteld',
-  'componentCanvas.menu.open': 'Canvas openen',
+  'componentCanvas.menu.open': 'Op canvas openen',
   'componentCanvas.notice.truncated': 'De eerste {shown} van {total} frames worden getoond. Geef minder props eigen frames om de rest te zien.',
   'componentCanvas.pageName': 'Canvas van {name}',
   'componentCanvas.panel.background': 'Achtergrond',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} waarden',
   },
   'componentCanvas.panel.width': 'Breedte',
+  'componentCanvas.popup.close': 'Frame-instellingen sluiten',
+  'componentCanvas.popup.title': 'Frame-instellingen',
   'componentCanvas.titleBar.close': 'Canvas van {name} sluiten',
   'componentCanvas.zoom.fit': 'Passend',
   'componentCanvas.zoom.fitAll': 'Zoomen zodat alle frames passen',

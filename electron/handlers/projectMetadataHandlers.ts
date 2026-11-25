@@ -4,7 +4,7 @@ import { METADATA_FILES, type MetadataKind } from '../../shared/properties/proje
 import { readProjectMetadata, writeProjectMetadata } from '../project/projectMetadata';
 import type { MainHost } from './mainHost';
 import { assert } from '../../shared/core/assert';
-import { createProjectText } from '../documents/documentWrites';
+import { createProjectText, writeProjectText } from '../documents/documentWrites';
 import { ensureExcluded } from '../lib/projectExclusions';
 import { translateMain } from '../lib/mainLocale';
 
@@ -46,6 +46,7 @@ export function registerProjectMetadataHandlers(host: Pick<MainHost, 'ipcMain' |
     const file = canvasPath(project, input.canvas.file);
     const directory = path.dirname(file);
     fs.mkdirSync(directory, { recursive: true });
+    sweepRetiredCanvases(directory);
     if (fs.readdirSync(directory).length >= 64) {
       throw new Error('Too many defaults previews. Close an existing preview first.');
     }
@@ -55,9 +56,37 @@ export function registerProjectMetadataHandlers(host: Pick<MainHost, 'ipcMain' |
   });
   host.ipcMain.handle('project:removeDefaultsCanvas', (_event, input) => {
     const project = root(input.projectPath, 'components');
-    fs.rmSync(canvasPath(project, input.file), { force: true });
+    retireCanvas(canvasPath(project, input.file));
     return undefined;
   });
+}
+
+// A closed canvas page is emptied, not deleted, and deleted when the next canvas opens. Why: the dev server keeps the
+// page in its module graph after the editor moves on, and a frame that still showed it (the preview keeps the last page
+// while the next one loads) or a reload the dev server sends for it then asked for a file that was gone: Vite's
+// "Failed to load url /.stacki/canvas/….astro" error page, over the page the person had just returned to. An empty page
+// in its place renders nothing; by the time the next canvas opens, nothing shows the old one any more.
+export const RETIRED_CANVAS_SOURCE =
+  '---\n// Retired by Stacki: this canvas closed. Removed when the next canvas opens.\n---\n<html><head><meta charset="utf-8" /></head><body></body></html>\n';
+
+function retireCanvas(file: string): void {
+  if (!fs.existsSync(file)) {
+    return;
+  }
+  writeProjectText(file, RETIRED_CANVAS_SOURCE);
+  assert(fs.readFileSync(file, 'utf8') === RETIRED_CANVAS_SOURCE, 'A retired canvas holds the empty page');
+}
+
+// Deletes the retired pages of the folder: only files that hold exactly the empty page, so a canvas still open is kept.
+function sweepRetiredCanvases(directory: string): void {
+  const entries = fs.readdirSync(directory).filter((name) => /^[a-f0-9-]{36}\.astro$/.test(name));
+  assert(entries.length <= 1_024, 'The canvas folder holds a bounded number of pages');
+  for (const name of entries) {
+    const file = path.join(directory, name);
+    if (fs.lstatSync(file).isFile() && fs.readFileSync(file, 'utf8') === RETIRED_CANVAS_SOURCE) {
+      fs.rmSync(file, { force: true });
+    }
+  }
 }
 
 function canvasPath(root: string, relative: string): string {

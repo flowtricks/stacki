@@ -10,6 +10,8 @@ export interface ElementActionProps {
   readonly editRootId?: string | undefined;
   readonly onSetDefaults?: (name: string, id: string) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
+  /** Opens the component canvas for the instance's component; left out where there is no canvas (Studio). */
+  readonly onOpenCanvas?: (name: string, id: string) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
   /** Gives bare text a tag. Left out where a page cannot write one, and the menu then offers none. */
   readonly onConvertText?: (id: string, tag: TextTag) => void;
@@ -50,10 +52,17 @@ export function ElementContextMenu(
 
 function runContextAction(action: ContextAction, props: ElementActionProps, menu: ContextPosition): void {
   const capabilities = contextCapabilities(props, menu);
-  if (capabilities.protectedNode && action !== 'paste' && action !== 'open' && action !== 'defaults') {
+  if (capabilities.protectedNode && action !== 'paste' && action !== 'open' && action !== 'canvas' && action !== 'defaults') {
     return;
   }
   switch (action) {
+    case 'canvas': {
+      const node = findNavigatorNode(props.nodes, menu.nodeId);
+      if (capabilities.openCanvas === 'enabled' && node?.kind === 'component') {
+        props.onOpenCanvas?.(node.name, node.id);
+      }
+      return;
+    }
     case 'defaults':
     case 'open': {
       const node = findNavigatorNode(props.nodes, menu.nodeId);
@@ -139,9 +148,18 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
     canSetDefaults: component && !props.clientMode && props.onSetDefaults !== undefined,
     canCut: props.onCutNode !== undefined && canChange,
     canOpen: component && !node.astroAsset && props.onOpenComponent !== undefined,
+    // The same rule as Open component: an Astro component of the project, not an asset or a dynamic tag.
+    openCanvas: openCanvasState({ offered: props.onOpenCanvas !== undefined, opens: component && !node.astroAsset }),
     canWrapBox: wrap && canWrapNode(nodes, position.nodeId, 'div'),
     canWrapLink: wrap && canWrapNode(nodes, position.nodeId, 'a'),
     canConvertDiv: convert && canConvertText(nodes, position.nodeId, 'div'),
     canConvertSpan: convert && canConvertText(nodes, position.nodeId, 'span'),
   };
+}
+
+function openCanvasState(state: { readonly offered: boolean; readonly opens: boolean }): 'enabled' | 'disabled' | 'absent' {
+  if (!state.offered) {
+    return 'absent';
+  }
+  return state.opens ? 'enabled' : 'disabled';
 }

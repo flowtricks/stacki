@@ -13,7 +13,7 @@ import { FieldEditingContext, type FieldEditingHost } from '../../features/compo
 import { editingOffered, withEditingFieldMoved, withFieldEditing } from '../../../shared/properties/componentDefaults';
 import { useDesktopComponentCanvas } from '../state/useDesktopComponentCanvas';
 import { ComponentCanvasContext, useComponentCanvas, type ComponentCanvasControl } from '../../features/preview/componentCanvas/componentCanvasSession';
-import { ComponentCanvasPanel } from '../../features/preview/componentCanvas/ComponentCanvasPanel';
+import { ComponentCanvasFramePopup } from '../../features/preview/componentCanvas/ComponentCanvasFramePopup';
 import { ComponentCanvasBack, ComponentCanvasZoom } from '../../features/preview/componentCanvas/ComponentCanvasControls';
 import { DesktopPublishButton } from './DesktopPublishButton';
 import { ToastStack } from '../../features/notifications/ToastStack';
@@ -118,7 +118,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   const componentCanvas = useDesktopComponentCanvas(app);
   return (
     <ComponentCanvasContext.Provider value={componentCanvas}>
-      <div className="app">
+      <div className="app" data-component-canvas={componentCanvas.state.kind === 'idle' ? undefined : ''}>
         {app.propertySave.phase === 'saving' && (
           <div className="property-saving-overlay" role="status">
             {translate('shell.saving.properties')}
@@ -151,6 +151,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
               <AiCover app={app} />
             </PanelBoundary>
             <ComponentCanvasZoom canvas={componentCanvas} />
+            <CanvasFramePopup app={app} canvas={componentCanvas} />
           </div>
           {app.assetPick?.presentation === 'overlay' && (
             <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
@@ -171,7 +172,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
             // returns the panel as it was, on the same tab and scroll.
             <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
               <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
-                <CanvasFramePanel app={app} canvas={componentCanvas} fallback={<RightPanel app={app} />} />
+                <RightPanel app={app} />
               </PanelBoundary>
             </div>
           )}
@@ -186,18 +187,14 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   );
 }
 
-// While a canvas frame is selected and no element in it, the right panel is the frame's: its size, background and
-// preview props. Selecting an element, or drilling into a component inside it, brings the ordinary panel back.
-function CanvasFramePanel({ app, canvas, fallback }: { readonly app: ShellView; readonly canvas: ComponentCanvasControl; readonly fallback: ReactNode }) {
+// The selected frame's settings, over the canvas, while the frame is selected and no element in it is. The right panel
+// stays the ordinary Style and Settings panel throughout; drilling into a component inside a frame hides this too.
+function CanvasFramePopup({ app, canvas }: { readonly app: ShellView; readonly canvas: ComponentCanvasControl }) {
   const state = canvas.state;
-  if (state.kind !== 'open' || app.selectedId !== undefined || app.editStack.length !== 2) {
-    return fallback;
+  if (state.kind !== 'open' || state.framePanel === 'hidden' || app.selectedId !== undefined || app.editStack.length !== 2) {
+    return undefined;
   }
-  return (
-    <ResizablePanel kind="right">
-      <ComponentCanvasPanel canvas={canvas} state={state} />
-    </ResizablePanel>
-  );
+  return <ComponentCanvasFramePopup canvas={canvas} state={state} />;
 }
 
 // The site with no editing, over the panels, at the canvas's own size: the width and height

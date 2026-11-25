@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'تعذّر حفظ إعدادات اللوحة: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'غير معيّن',
-  'componentCanvas.menu.open': 'فتح اللوحة',
+  'componentCanvas.menu.open': 'فتح في اللوحة',
   'componentCanvas.notice.truncated': 'تُعرض أول {shown} من إجمالي الإطارات البالغ {total}. لرؤية البقية، امنح عددًا أقل من الخصائص إطارات خاصة بها.',
   'componentCanvas.pageName': 'لوحة {name}',
   'componentCanvas.panel.background': 'الخلفية',
@@ -54,6 +54,8 @@ export const messages = {
     other: '{count} قيمة',
   },
   'componentCanvas.panel.width': 'العرض',
+  'componentCanvas.popup.close': 'إغلاق إعدادات الإطار',
+  'componentCanvas.popup.title': 'إعدادات الإطار',
   'componentCanvas.titleBar.close': 'إغلاق لوحة {name}',
   'componentCanvas.zoom.fit': 'ملاءمة',
   'componentCanvas.zoom.fitAll': 'تكبير أو تصغير لملاءمة كل الإطارات',

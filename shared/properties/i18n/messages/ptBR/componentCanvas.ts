@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'Não foi possível salvar as configurações do canvas: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'não definido',
-  'componentCanvas.menu.open': 'Abrir canvas',
+  'componentCanvas.menu.open': 'Abrir no canvas',
   'componentCanvas.notice.truncated': 'Mostrando os primeiros {shown} de {total} quadros. Dê quadros próprios a menos props para ver o restante.',
   'componentCanvas.pageName': 'Canvas de {name}',
   'componentCanvas.panel.background': 'Plano de fundo',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} valores',
   },
   'componentCanvas.panel.width': 'Largura',
+  'componentCanvas.popup.close': 'Fechar configurações do quadro',
+  'componentCanvas.popup.title': 'Configurações do quadro',
   'componentCanvas.titleBar.close': 'Fechar o canvas de {name}',
   'componentCanvas.zoom.fit': 'Ajustar',
   'componentCanvas.zoom.fitAll': 'Ajustar o zoom para ver todos os quadros',

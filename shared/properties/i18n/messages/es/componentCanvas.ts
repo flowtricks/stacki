@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'No se pudieron guardar los ajustes del lienzo: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'sin definir',
-  'componentCanvas.menu.open': 'Abrir lienzo',
+  'componentCanvas.menu.open': 'Abrir en el lienzo',
   'componentCanvas.notice.truncated': 'Se muestran los primeros {shown} de {total} marcos. Da marcos propios a menos props para ver el resto.',
   'componentCanvas.pageName': 'Lienzo de {name}',
   'componentCanvas.panel.background': 'Fondo',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} valores',
   },
   'componentCanvas.panel.width': 'Ancho',
+  'componentCanvas.popup.close': 'Cerrar ajustes del marco',
+  'componentCanvas.popup.title': 'Ajustes del marco',
   'componentCanvas.titleBar.close': 'Cerrar el lienzo de {name}',
   'componentCanvas.zoom.fit': 'Ajustar',
   'componentCanvas.zoom.fitAll': 'Ajustar el zoom para ver todos los marcos',

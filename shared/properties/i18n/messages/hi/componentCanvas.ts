@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': 'कैनवास सेटिंग सहेजी नहीं जा सकीं: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'सेट नहीं है',
-  'componentCanvas.menu.open': 'कैनवास खोलें',
+  'componentCanvas.menu.open': 'कैनवास में खोलें',
   'componentCanvas.notice.truncated': '{total} में से पहले {shown} फ़्रेम दिखाए जा रहे हैं। बाकी देखने के लिए कम प्रॉप्स को अलग फ़्रेम दें।',
   'componentCanvas.pageName': '{name} कैनवास',
   'componentCanvas.panel.background': 'पृष्ठभूमि',
@@ -48,6 +48,8 @@ export const messages = {
     other: '{count} मान',
   },
   'componentCanvas.panel.width': 'चौड़ाई',
+  'componentCanvas.popup.close': 'फ़्रेम सेटिंग्स बंद करें',
+  'componentCanvas.popup.title': 'फ़्रेम सेटिंग्स',
   'componentCanvas.titleBar.close': '{name} कैनवास बंद करें',
   'componentCanvas.zoom.fit': 'फ़िट',
   'componentCanvas.zoom.fitAll': 'सभी फ़्रेम फ़िट करने के लिए ज़ूम करें',

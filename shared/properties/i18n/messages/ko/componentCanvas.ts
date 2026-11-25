@@ -10,7 +10,7 @@ export const messages = {
   'componentCanvas.error.save': '캔버스 설정을 저장할 수 없습니다: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '설정 안 됨',
-  'componentCanvas.menu.open': '캔버스 열기',
+  'componentCanvas.menu.open': '캔버스에서 열기',
   'componentCanvas.notice.truncated': '전체 {total}개 중 처음 {shown}개의 프레임을 표시합니다. 나머지를 보려면 개별 프레임을 갖는 속성을 줄이세요.',
   'componentCanvas.pageName': '{name} 캔버스',
   'componentCanvas.panel.background': '배경',
@@ -45,6 +45,8 @@ export const messages = {
     other: '값 {count}개',
   },
   'componentCanvas.panel.width': '너비',
+  'componentCanvas.popup.close': '프레임 설정 닫기',
+  'componentCanvas.popup.title': '프레임 설정',
   'componentCanvas.titleBar.close': '{name} 캔버스 닫기',
   'componentCanvas.zoom.fit': '맞춤',
   'componentCanvas.zoom.fitAll': '모든 프레임이 보이도록 확대/축소',
