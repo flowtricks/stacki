@@ -440,8 +440,12 @@ function useWorkspaceLeft({ active, aiDocked }: { readonly active: boolean; read
     const measure = () => {
       const rail = document.querySelector('.main > .rail')?.getBoundingClientRect();
       const center = document.querySelector('.main > .center')?.getBoundingClientRect();
-      const railPx = rail === undefined ? 44 : Math.round(rail.right);
-      setLeft({ railPx, workspacePx: aiDocked && center !== undefined ? Math.round(center.left) : railPx });
+      // Measured from the inline start, as the overlay places itself: the left edge, or the right one in a right-to-left language.
+      const rightToLeft = document.documentElement.dir === 'rtl';
+      const far = (box: DOMRect): number => (rightToLeft ? window.innerWidth - box.left : box.right);
+      const near = (box: DOMRect): number => (rightToLeft ? window.innerWidth - box.right : box.left);
+      const railPx = rail === undefined ? 44 : Math.round(far(rail));
+      setLeft({ railPx, workspacePx: aiDocked && center !== undefined ? Math.round(near(center)) : railPx });
     };
     measure();
     const observer = new ResizeObserver(measure);

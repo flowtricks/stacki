@@ -255,6 +255,9 @@
 }
 .dm-size-label,
 .dm-gap-label {
+  /* Numbers read left to right in every language: "120 × 40" never flips to "40 × 120". */
+  direction: ltr;
+  unicode-bidi: isolate;
   padding: 1px 5px;
   border-radius: 4px;
   background: var(--accent);
