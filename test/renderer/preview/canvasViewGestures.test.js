@@ -1,10 +1,11 @@
 // Goal: on the all-breakpoints canvas (src/features/preview/CanvasView.tsx), a
-// background click that does not drag leaves auto-fit on. A bare click turned
-// auto-fit off for good.
+// background click that does not drag leaves auto-fit on, and one notch of
+// Ctrl + mouse wheel zooms by one step. A bare click turned auto-fit off for
+// good, and a notch (a wheel delta of 100 or more) zoomed about 2.7 times.
 // Method: the real CanvasView mounted in jsdom. jsdom has no layout, so the test
 // sets the canvas's size and calls its resize observer by hand, then reads the
 // zoom from the world's transform. The negative space: a real drag pans and ends
-// auto-fit.
+// auto-fit, and a trackpad pinch's small deltas zoom exactly as before.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -120,4 +121,32 @@ test('a drag pans the canvas and ends auto-fit', async (context) => {
   const panned = view();
   await resize(3000);
   assert.deepEqual(view(), panned);
+});
+
+async function zoom(canvas, init) {
+  const before = view().scale;
+  await act(async () => {
+    canvas.dispatchEvent(new dom.window.WheelEvent('wheel', { bubbles: true, cancelable: true, ...init }));
+  });
+  return view().scale / before;
+}
+
+const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-6, `${actual} is not ${expected}`);
+
+test('one notch of Ctrl + wheel is one zoom step, either way', async (context) => {
+  const canvas = await mounted(context);
+  for (const delta of [100, 120, 240]) {
+    close(await zoom(canvas, { ctrlKey: true, deltaY: -delta }), 1.25);
+    close(await zoom(canvas, { ctrlKey: true, deltaY: delta }), 1 / 1.25);
+    // Cmd + wheel is the same gesture.
+    close(await zoom(canvas, { metaKey: true, deltaY: -delta }), 1.25);
+    close(await zoom(canvas, { metaKey: true, deltaY: delta }), 1 / 1.25);
+  }
+});
+
+test('a pinch zooms as it did', async (context) => {
+  const canvas = await mounted(context);
+  for (const delta of [-1.5, -8, -20, 12]) {
+    close(await zoom(canvas, { ctrlKey: true, deltaY: delta }), Math.exp(-delta * 0.01));
+  }
 });

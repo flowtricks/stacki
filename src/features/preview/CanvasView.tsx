@@ -54,6 +54,9 @@ const ZOOM_MIN = 0.05;
 const ZOOM_MAX = 4;
 // A press that travels less than this is a click: it moves nothing, and the canvas goes on zooming to fit.
 const PAN_START_PX = 3;
+// The most one wheel event zooms by: one step of the zoom buttons. A mouse wheel's notch reports a delta of 100 or more
+// (about 2.7 times at once); a trackpad pinch's deltas stay under this, and zoom as they come.
+const WHEEL_ZOOM_DELTA_MAX = Math.log(1.25) / 0.01;
 type BreakpointKey = string;
 // Per-breakpoint lookups that fill in as frames mount and report: a frame that
 // has not reported yet has no entry. Sparse maps, not update types, so absence
@@ -343,7 +346,8 @@ function wheelView(view: ViewState | undefined, event: WheelEvent, x: number, y:
   if (!event.ctrlKey && !event.metaKey) {
     return { ...view, x: view.x - event.deltaX, y: view.y - event.deltaY };
   }
-  const scale = clamp(view.scale * Math.exp(-event.deltaY * 0.01), ZOOM_MIN, ZOOM_MAX);
+  const delta = clamp(event.deltaY, -WHEEL_ZOOM_DELTA_MAX, WHEEL_ZOOM_DELTA_MAX);
+  const scale = clamp(view.scale * Math.exp(-delta * 0.01), ZOOM_MIN, ZOOM_MAX);
   const ratio = scale / view.scale;
   return { scale, x: x - (x - view.x) * ratio, y: y - (y - view.y) * ratio };
 }
