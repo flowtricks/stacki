@@ -1,0 +1,95 @@
+/* The component canvas's right panel and its zoom controls. Controls are fills, never outlines (the panel's own
+   field tokens); the panel scrolls with a stable gutter so its rows never shift when the bar comes or goes. */
+.component-canvas-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: 16px;
+}
+.component-canvas-panel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.component-canvas-section {
+  padding-top: 4px;
+}
+.component-canvas-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 12px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.component-canvas-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: 0 12px 4px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.component-canvas-switch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.component-canvas-switch-count {
+  margin-inline-start: auto;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.component-canvas-length,
+.component-canvas-color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.component-canvas-length > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.component-canvas-input {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.component-canvas-length .component-canvas-input {
+  flex: 0 0 84px;
+}
+.component-canvas-suffix {
+  position: absolute;
+  inset-inline-end: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.component-canvas-switch {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+}
+.component-canvas-prop.is-disabled {
+  opacity: 0.45;
+}
+.component-canvas-disabled > * {
+  pointer-events: none;
+}
+.component-canvas-zoom {
+  z-index: 6;
+}

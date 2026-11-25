@@ -9,6 +9,10 @@ import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanv
 import { desktopDefaultsHost, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { FieldEditingContext, type FieldEditingHost } from '../../features/componentProperties/PropertyEditingSettings';
 import { editingOffered, withEditingFieldMoved, withFieldEditing } from '../../../shared/properties/componentDefaults';
+import { useDesktopComponentCanvas } from '../state/useDesktopComponentCanvas';
+import { ComponentCanvasContext, useComponentCanvas, type ComponentCanvasControl } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { ComponentCanvasPanel } from '../../features/preview/componentCanvas/ComponentCanvasPanel';
+import { ComponentCanvasBack, ComponentCanvasZoom } from '../../features/preview/componentCanvas/ComponentCanvasControls';
 import { DesktopPublishButton } from './DesktopPublishButton';
 import { ToastStack } from '../../features/notifications/ToastStack';
 import { ProjectFolderDrop } from './ProjectFolderDrop';
@@ -108,68 +112,87 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   const role = useCurrentRole();
   const leftTab = app.leftTab !== undefined && canRailTab(role, app.leftTab) ? app.leftTab : undefined;
   const aiButton = useAiRailButton(app);
+  // The component canvas (useDesktopComponentCanvas.ts): the title bar, the Components panel and the right panel read it.
+  const componentCanvas = useDesktopComponentCanvas(app);
   return (
-    <div className="app">
-      {app.propertySave.phase === 'saving' && (
-        <div className="property-saving-overlay" role="status">
-          {translate('shell.saving.properties')}
-        </div>
-      )}
-      <TitleBar app={app} />
-      <DefaultsCanvasBar canvas={app.defaultsCanvas} />
-      <div className="main">
-        <LeftRail
-          active={leftTab === 'ai' ? undefined : leftTab}
-          componentOpen={app.componentPropertiesOpen}
-          projectPath={projectPath}
-          onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
-          onOpenSettings={(target) => {
-            // Opens, never toggles: the shortcut for a section must not close Settings that is already showing it.
-            requestSettingsSection(target);
-            app.setLeftTab('projectSettings');
-          }}
-          aiButton={aiButton}
-        />
-        {leftTab && <LeftPanel app={app} tab={leftTab} />}
-        <div className="center">
-          {/* Each pane is its own boundary, so one that throws names itself and the rest of the window keeps working. */}
-          <PanelBoundary name="The canvas" label={translate('recovery.pane.canvas')} resetKey={app.pageUrlPath}>
-            <CanvasPane app={app} />
-          </PanelBoundary>
-          <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
-            <CanvasCovers app={app} />
-            {/* Last, so an expanded chat is on top of any other cover: it is the mode the person just chose. */}
-            <AiCover app={app} />
-          </PanelBoundary>
-        </div>
-        {app.assetPick?.presentation === 'overlay' && (
-          <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
-            <AssetsPanel
-              project={app.project}
-              showToast={app.showToast}
-              pick={app.assetPick}
-              onPickCancel={() => app.endAssetPick(false)}
-              onRecordUndo={app.pushCommand}
-            />
-          </AssetPickOverlay>
-        )}
-        {app.inPreview && app.previewSource && <PreviewModeView app={app} source={app.previewSource} />}
-        <OldVersionCover app={app} />
-        {app.pageState?.editable && !app.previewRef && (
-          // An open CMS item has nothing to style, so the CMS takes the Style and
-          // Settings panel's width too. Hidden, not unmounted: closing the CMS
-          // returns the panel as it was, on the same tab and scroll.
-          <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
-            <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
-              <RightPanel app={app} />
-            </PanelBoundary>
+    <ComponentCanvasContext.Provider value={componentCanvas}>
+      <div className="app">
+        {app.propertySave.phase === 'saving' && (
+          <div className="property-saving-overlay" role="status">
+            {translate('shell.saving.properties')}
           </div>
         )}
+        <TitleBar app={app} />
+        <DefaultsCanvasBar canvas={app.defaultsCanvas} />
+        <div className="main">
+          <LeftRail
+            active={leftTab === 'ai' ? undefined : leftTab}
+            componentOpen={app.componentPropertiesOpen}
+            projectPath={projectPath}
+            onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
+            onOpenSettings={(target) => {
+              // Opens, never toggles: the shortcut for a section must not close Settings that is already showing it.
+              requestSettingsSection(target);
+              app.setLeftTab('projectSettings');
+            }}
+            aiButton={aiButton}
+          />
+          {leftTab && <LeftPanel app={app} tab={leftTab} />}
+          <div className="center">
+            {/* Each pane is its own boundary, so one that throws names itself and the rest of the window keeps working. */}
+            <PanelBoundary name="The canvas" label={translate('recovery.pane.canvas')} resetKey={app.pageUrlPath}>
+              <CanvasPane app={app} />
+            </PanelBoundary>
+            <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
+              <CanvasCovers app={app} />
+              {/* Last, so an expanded chat is on top of any other cover: it is the mode the person just chose. */}
+              <AiCover app={app} />
+            </PanelBoundary>
+            <ComponentCanvasZoom canvas={componentCanvas} />
+          </div>
+          {app.assetPick?.presentation === 'overlay' && (
+            <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
+              <AssetsPanel
+                project={app.project}
+                showToast={app.showToast}
+                pick={app.assetPick}
+                onPickCancel={() => app.endAssetPick(false)}
+                onRecordUndo={app.pushCommand}
+              />
+            </AssetPickOverlay>
+          )}
+          {app.inPreview && app.previewSource && <PreviewModeView app={app} source={app.previewSource} />}
+          <OldVersionCover app={app} />
+          {app.pageState?.editable && !app.previewRef && (
+            // An open CMS item has nothing to style, so the CMS takes the Style and
+            // Settings panel's width too. Hidden, not unmounted: closing the CMS
+            // returns the panel as it was, on the same tab and scroll.
+            <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
+              <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
+                <CanvasFramePanel app={app} canvas={componentCanvas} fallback={<RightPanel app={app} />} />
+              </PanelBoundary>
+            </div>
+          )}
+        </div>
+        <AppOverlays app={app} />
+        <AuditsHost app={app} />
+        <AiHost app={app} />
       </div>
-      <AppOverlays app={app} />
-      <AuditsHost app={app} />
-      <AiHost app={app} />
-    </div>
+    </ComponentCanvasContext.Provider>
+  );
+}
+
+// While a canvas frame is selected and no element in it, the right panel is the frame's: its size, background and
+// preview props. Selecting an element, or drilling into a component inside it, brings the ordinary panel back.
+function CanvasFramePanel({ app, canvas, fallback }: { readonly app: ShellView; readonly canvas: ComponentCanvasControl; readonly fallback: ReactNode }) {
+  const state = canvas.state;
+  if (state.kind !== 'open' || app.selectedId !== undefined || app.editStack.length !== 2) {
+    return fallback;
+  }
+  return (
+    <ResizablePanel kind="right">
+      <ComponentCanvasPanel canvas={canvas} state={state} />
+    </ResizablePanel>
   );
 }
 
@@ -251,6 +274,9 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
 export function TitleBar({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
   const canPublish = can(useCurrentRole(), 'publish');
+  const componentCanvas = useComponentCanvas();
+  // At the canvas's own level the way back leaves the canvas; drilled deeper, back steps out one level as anywhere.
+  const atCanvas = componentCanvas !== undefined && componentCanvas.state.kind !== 'idle' && app.editStack.length <= 2;
   return (
     <div className="titlebar">
       <button
@@ -279,6 +305,8 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
           <ChevronLeftIcon size={13} />
           <span>{translate('shell.titleBar.closeDefaults')}</span>
         </button>
+      ) : atCanvas ? (
+        <ComponentCanvasBack canvas={componentCanvas} />
       ) : app.editStack.length > 1 ? (
         <button
           className="page-switch-btn comp-back"
@@ -773,8 +801,10 @@ export function PaletteTab({ app }: { readonly app: ShellView }) {
   const management = useComponentManagement(app);
   // Counts that follow the open tree: an instance deleted on the page is gone from the count in the same frame.
   const components = useLiveInsertables(app);
+  const canvas = useComponentCanvas();
   return (
     <PalettePanel
+      canvas={canvas}
       components={components}
       roleRules={roleRules}
       management={management}

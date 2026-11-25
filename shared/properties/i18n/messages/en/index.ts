@@ -11,6 +11,7 @@ import { messages as cms } from './cms';
 import { messages as cmsBackend } from './cmsBackend';
 import { messages as cmsConnections } from './cmsConnections';
 import { messages as cmsRemote } from './cmsRemote';
+import { messages as componentCanvas } from './componentCanvas';
 import { messages as componentProps } from './componentProps';
 import { messages as contentUi } from './contentUi';
 import { messages as customAudits } from './customAudits';
@@ -55,6 +56,7 @@ export const messages = {
   ...cmsBackend,
   ...cmsConnections,
   ...cmsRemote,
+  ...componentCanvas,
   ...componentProps,
   ...contentUi,
   ...customAudits,

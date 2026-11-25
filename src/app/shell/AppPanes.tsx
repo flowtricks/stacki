@@ -65,6 +65,7 @@ import { ImagePropFields } from '../../features/props/ImagePropFields';
 import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
+import { componentCanvasShown } from '../../features/preview/componentCanvas/componentCanvasSession';
 
 // One function for the life of the app: the Style panel publishes its host on every render, and a
 // new arrow each time would wake every host subscriber (StylePanel.tsx useStableList says why).
@@ -267,6 +268,11 @@ export function selectCanvasPath(
     return;
   }
   if (kind === 'close') {
+    // On the component canvas the space around the frames is the canvas page, not a page to back out to: a click
+    // there selects a frame (useDesktopComponentCanvas.ts), and leaving is the title bar's Close canvas.
+    if (componentCanvasShown() && app.editStack.length <= 2) {
+      return;
+    }
     if (app.defaultsCanvas.state.kind !== 'idle') {
       void app.defaultsCanvas.run('done');
     } else {

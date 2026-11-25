@@ -1,0 +1,64 @@
+// Arabic `componentCanvas` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/componentCanvas';
+
+export const messages = {
+  'componentCanvas.error.busy': 'أغلق محرّر القيم الافتراضية قبل فتح لوحة.',
+  'componentCanvas.error.notOpened': 'لم يُفتح المكوّن على اللوحة. حاول مرة أخرى.',
+  'componentCanvas.error.notReturned': 'تعذّرت العودة إلى الملف الذي كنت فيه. افتحه من لوحة الصفحات.',
+  'componentCanvas.error.open': 'تعذّر فتح اللوحة: {message}',
+  'componentCanvas.error.save': 'تعذّر حفظ إعدادات اللوحة: {message}',
+  'componentCanvas.frame.part': '{prop}: {value}', // same
+  'componentCanvas.frame.unset': 'غير معيّن',
+  'componentCanvas.menu.open': 'فتح اللوحة',
+  'componentCanvas.notice.truncated': 'تُعرض أول {shown} من إجمالي الإطارات البالغ {total}. لرؤية البقية، امنح عددًا أقل من الخصائص إطارات خاصة بها.',
+  'componentCanvas.pageName': 'لوحة {name}',
+  'componentCanvas.panel.background': 'الخلفية',
+  'componentCanvas.panel.fixed': 'ثابت',
+  'componentCanvas.panel.frame.hint': 'انقر على تسمية الإطار أو المساحة المحيطة بمكوّنه لتحديد الإطار. انقر داخل المكوّن لتعديله.',
+  'componentCanvas.panel.frame.pick': 'الإطار',
+  'componentCanvas.panel.frame.title': 'الإطار',
+  'componentCanvas.panel.frames': {
+    zero: 'لا إطارات',
+    one: 'إطار واحد',
+    two: 'إطاران',
+    few: '{count} إطارات',
+    many: '{count} إطارًا',
+    other: '{count} إطار',
+  },
+  'componentCanvas.panel.height': 'الارتفاع',
+  'componentCanvas.panel.hug': 'حسب المحتوى',
+  'componentCanvas.panel.pixels': '{side} بالبكسل',
+  'componentCanvas.panel.props.hint': 'القيم التي يُعرض بها هذا الإطار. تبقى هذه القيم على اللوحة وتعود في كل مرة تفتحها. ولا تُكتب أبدًا في المكوّن أو نسخه.',
+  'componentCanvas.panel.props.none': 'غير معيّن',
+  'componentCanvas.panel.props.split': 'لكل قيمة من قيم {name} إطار خاص بها.',
+  'componentCanvas.panel.props.title': 'خصائص المعاينة',
+  'componentCanvas.panel.props.unused': 'لا يستخدم هذا المتغير {name}.',
+  'componentCanvas.panel.scope.all': 'كل الإطارات',
+  'componentCanvas.panel.scope.frame': 'هذا الإطار',
+  'componentCanvas.panel.scope.hint':
+    'أين يُطبَّق الحجم والخلفية وقيم الخصائص التي تعيّنها: على هذا الإطار، أو على كل إطارات قيمة واحدة، أو على كل الإطارات. ويتقدّم إعداد الإطار الخاص على الإعداد الأوسع نطاقًا.',
+  'componentCanvas.panel.scope.label': 'تطبيق على',
+  'componentCanvas.panel.scope.part': 'كل إطارات {part}',
+  'componentCanvas.panel.split.hint':
+    'تحصل كل قيمة لخاصية مفعّلة هنا على إطار خاص بها، وتعرض الإطارات كل التركيبات. أما الخاصية غير المفعّلة فتعرض قيمة واحدة في كل إطار، وتعيّنها في خصائص المعاينة.',
+  'componentCanvas.panel.split.title': 'إطارات خاصة',
+  'componentCanvas.panel.split.toggle': 'منح كل قيمة من قيم {name} إطارًا خاصًا بها',
+  'componentCanvas.panel.transparent': 'شفاف',
+  'componentCanvas.panel.values': {
+    zero: 'لا قيم',
+    one: 'قيمة واحدة',
+    two: 'قيمتان',
+    few: '{count} قيم',
+    many: '{count} قيمة',
+    other: '{count} قيمة',
+  },
+  'componentCanvas.panel.width': 'العرض',
+  'componentCanvas.titleBar.close': 'إغلاق لوحة {name}',
+  'componentCanvas.zoom.fit': 'ملاءمة',
+  'componentCanvas.zoom.fitAll': 'تكبير أو تصغير لملاءمة كل الإطارات',
+  'componentCanvas.zoom.in': 'تكبير',
+  'componentCanvas.zoom.out': 'تصغير',
+  'componentCanvas.zoom.percent': '{percent}%', // same
+  'componentCanvas.zoom.reset': 'تكبير إلى 100%',
+} as const satisfies CatalogOf<MessageKey>;

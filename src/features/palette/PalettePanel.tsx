@@ -15,7 +15,19 @@ import type { MenuEntry } from '../../ui/Menu';
 import { rolesSubmenu } from './componentRolesMenu';
 import { componentRuleFile } from '../../../shared/properties/componentAccess';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
-import { CopyIcon, ElementComponentIcon, GearIcon, LayoutIcon, MoveFolderIcon, PencilIcon, PlusIcon, TargetIcon, TrashIcon, UsersIcon } from '../../ui/Icons';
+import {
+  CanvasIcon,
+  CopyIcon,
+  ElementComponentIcon,
+  GearIcon,
+  LayoutIcon,
+  MoveFolderIcon,
+  PencilIcon,
+  PlusIcon,
+  TargetIcon,
+  TrashIcon,
+  UsersIcon,
+} from '../../ui/Icons';
 import { PanelSearch } from '../../ui/PanelSearch';
 import { RenameComponentDialog } from './RenameComponentDialog';
 import type { RenameCandidate } from './renameAvailability';
@@ -48,6 +60,14 @@ interface PalettePanelProps {
   readonly onSelectInstance?: (id: string) => void;
   readonly createFrom: ComponentCreationSource;
   readonly createRequest?: number;
+  /** The component canvas, for the "…" menu's Open canvas. Absent (Studio, for now): the row is left out. */
+  readonly canvas?: PaletteCanvas | undefined;
+}
+
+/** What the "…" menu needs of the component canvas: whether it can open on a component, and opening it. */
+export interface PaletteCanvas {
+  readonly canOpen: (component: ScanComponent) => boolean;
+  readonly open: (component: ScanComponent) => void;
 }
 
 interface Point {
@@ -78,6 +98,7 @@ export default function PalettePanel(props: PalettePanelProps) {
         componentCount={addable.length}
         roleRules={props.roleRules}
         management={props.management}
+        canvas={props.canvas}
         allComponents={props.components}
         onInsert={props.onInsert}
         {...(props.onDragBegin === undefined ? {} : { onDragBegin: props.onDragBegin })}
@@ -236,6 +257,7 @@ interface PaletteListProps {
   readonly componentCount: number;
   readonly roleRules: PaletteRoleRules | undefined;
   readonly management: PaletteManagement | undefined;
+  readonly canvas: PaletteCanvas | undefined;
   /** Every component of the project, hidden ones too, for a folder's counts in the Roles submenu. */
   readonly allComponents: readonly ScanComponent[];
   readonly onInsert: (name: string) => void;
@@ -314,7 +336,7 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
   );
 }
 
-// The "…" for one component: Edit settings, Show instances, Roles (when the project has roles), then Duplicate and Delete. Rows the
+// The "…" for one component: Edit settings, Open canvas, Show instances, Roles (when the project has roles), then Duplicate and Delete. Rows the
 // viewer's role may not use, or the host cannot do, are left out; Delete is shown disabled, with why, while the component is used.
 function ItemRoles({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
   const translate = useTranslate();
@@ -335,6 +357,19 @@ function ItemRoles({ component, props }: { readonly component: ScanComponent; re
             },
           ]
         : [];
+    const canvas = props.canvas;
+    const canvasEntry: readonly MenuEntry[] =
+      canvas !== undefined && canvas.canOpen(component) && can(role, 'component:edit')
+        ? [
+            {
+              kind: 'item',
+              id: 'canvas',
+              label: translate('componentCanvas.menu.open'),
+              icon: <CanvasIcon size={14} />,
+              onSelect: () => canvas.open(component),
+            },
+          ]
+        : [];
     const instances: MenuEntry = {
       kind: 'item',
       id: 'instances',
@@ -351,7 +386,7 @@ function ItemRoles({ component, props }: { readonly component: ScanComponent; re
       rules === undefined || file === undefined
         ? []
         : [{ ...rolesSubmenu(rules, { kind: 'component', path: file }, [file], translate), icon: <UsersIcon size={14} /> }];
-    return [...settings, instances, ...roles, ...componentChanges(component, file, props, role, translate)];
+    return [...settings, ...canvasEntry, instances, ...roles, ...componentChanges(component, file, props, role, translate)];
   };
   return <PaletteRowMenu entries={entries} name={prettyComponentName(component.name)} onOpenChange={props.preview.block} />;
 }

@@ -437,8 +437,8 @@ export function keyPairs(key: string): readonly string[] {
 
 /**
  * The frames a split makes: every combination of the split props' values, in order, with each prop a frame's
- * variant does not take left out and the duplicates that leaves removed. The first split prop's values are the
- * rows; the rest vary along each row. `applies` says whether a prop is used, given the values chosen so far.
+ * variant does not take left out and the duplicates that leaves removed. One split prop is one row; with more,
+ * the first split prop's values are the rows and the rest vary along each row. `applies` says whether a prop is used, given the values chosen so far.
  */
 export function canvasFrames(split: readonly SplitCandidate[], applies: (prop: string, chosen: readonly FramePart[]) => boolean): CanvasFrames {
   assert(split.length <= CANVAS_LIMITS.splitPropsMax, 'A split has a bounded number of props');
@@ -470,7 +470,8 @@ export function canvasFrames(split: readonly SplitCandidate[], applies: (prop: s
     seen.add(key);
     total += 1;
     if (frames.length < CANVAS_LIMITS.framesMax) {
-      const rowKey = parts[0] === undefined ? '' : frameKey([parts[0]]);
+      // One split prop lays its frames out side by side; with more, the first one's values are the rows.
+      const rowKey = split.length < 2 || parts[0] === undefined ? '' : frameKey([parts[0]]);
       const row = rows.get(rowKey) ?? rows.size;
       rows.set(rowKey, row);
       const column = columns.get(row) ?? 0;

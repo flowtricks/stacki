@@ -1,0 +1,53 @@
+// Simplified Chinese `componentCanvas` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/componentCanvas';
+
+export const messages = {
+  'componentCanvas.error.busy': '打开画布前，请先关闭默认值编辑器。',
+  'componentCanvas.error.notOpened': '组件未能在画布上打开。请重试。',
+  'componentCanvas.error.notReturned': '无法返回你之前所在的文件。请从“页面”面板打开它。',
+  'componentCanvas.error.open': '无法打开画布：{message}',
+  'componentCanvas.error.save': '无法保存画布设置：{message}',
+  'componentCanvas.frame.part': '{prop}：{value}',
+  'componentCanvas.frame.unset': '未设置',
+  'componentCanvas.menu.open': '打开画布',
+  'componentCanvas.notice.truncated': '正在显示 {total} 个框架中的前 {shown} 个。要查看其余框架，请减少拥有独立框架的属性。',
+  'componentCanvas.pageName': '{name} 画布',
+  'componentCanvas.panel.background': '背景',
+  'componentCanvas.panel.fixed': '固定',
+  'componentCanvas.panel.frame.hint': '点击框架的标签或组件周围的空白处即可选择该框架。点击组件内部即可编辑组件。',
+  'componentCanvas.panel.frame.pick': '框架',
+  'componentCanvas.panel.frame.title': '框架',
+  'componentCanvas.panel.frames': {
+    other: '{count} 个框架',
+  },
+  'componentCanvas.panel.height': '高度',
+  'componentCanvas.panel.hug': '适应内容',
+  'componentCanvas.panel.pixels': '{side}（像素）',
+  'componentCanvas.panel.props.hint': '此框架渲染时使用的值。这些值保留在画布上，每次打开画布时都会恢复。它们绝不会写入组件或其实例。',
+  'componentCanvas.panel.props.none': '未设置',
+  'componentCanvas.panel.props.split': '{name} 的每个值都有自己的框架。',
+  'componentCanvas.panel.props.title': '预览属性',
+  'componentCanvas.panel.props.unused': '此变体未使用 {name}。',
+  'componentCanvas.panel.scope.all': '所有框架',
+  'componentCanvas.panel.scope.frame': '此框架',
+  'componentCanvas.panel.scope.hint': '你设置的尺寸、背景和属性值的应用范围：此框架、某个值的所有框架，或所有框架。框架自身的设置优先于范围更大的设置。',
+  'componentCanvas.panel.scope.label': '应用到',
+  'componentCanvas.panel.scope.part': '所有 {part} 框架',
+  'componentCanvas.panel.split.hint':
+    '在此开启的属性，其每个值都有自己的框架，这些框架会显示所有组合。未开启的属性在每个框架中只显示一个值，该值在“预览属性”中设置。',
+  'componentCanvas.panel.split.title': '独立框架',
+  'componentCanvas.panel.split.toggle': '为 {name} 的每个值提供独立框架',
+  'componentCanvas.panel.transparent': '透明',
+  'componentCanvas.panel.values': {
+    other: '{count} 个值',
+  },
+  'componentCanvas.panel.width': '宽度',
+  'componentCanvas.titleBar.close': '关闭 {name} 画布',
+  'componentCanvas.zoom.fit': '适应',
+  'componentCanvas.zoom.fitAll': '缩放以显示所有框架',
+  'componentCanvas.zoom.in': '放大',
+  'componentCanvas.zoom.out': '缩小',
+  'componentCanvas.zoom.percent': '{percent}%', // same
+  'componentCanvas.zoom.reset': '缩放到 100%',
+} as const satisfies CatalogOf<MessageKey>;
