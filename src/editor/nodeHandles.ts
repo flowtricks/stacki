@@ -85,7 +85,8 @@ export function carryHandles(input: CarryInput): PageModel {
     handles.set(entry.key, handle);
     used.add(handle);
   };
-  carryMapped(befores, afters, { map, exact: splices !== undefined }, assign);
+  const kept = input.predicted === undefined ? undefined : new Set<string>(inOrder(input.predicted).map((entry) => entry.node.id));
+  carryMapped(befores, afters, { map, exact: splices !== undefined, kept }, assign);
   if (input.own !== undefined && input.predicted !== undefined) {
     const created = createdRanges(input.own);
     pairCreated(afters, handles, used, created, input.predicted, assign);
@@ -219,11 +220,19 @@ function spanMapper(before: ByteString, after: ByteString, splices: readonly Spl
 // A node of `before` keeps its handle on the node of `after` its span maps to,
 // of its kind — or, through the app's own splices, of any kind: renaming `div`
 // to `Card` changes the kind of the node the user renamed. A node and a
-// same-span first descendant tie, and a tie carries nothing.
+// same-span first descendant tie, and a tie carries nothing. A node the gesture
+// removed was not renamed, whatever now stands in its bytes: `<div>` taken out
+// for a new `<Card />` in the same place is one splice, and the instance is the
+// gesture's new node (pairCreated), the one it selects.
 function carryMapped(
   befores: readonly Entry[],
   afters: readonly Entry[],
-  mapping: { readonly map: SpanMap; readonly exact: boolean },
+  mapping: {
+    readonly map: SpanMap;
+    readonly exact: boolean;
+    /** The handles the predicted tree still holds; undefined with no prediction. */
+    readonly kept: ReadonlySet<string> | undefined;
+  },
   assign: (entry: Entry, handle: string) => void,
 ): void {
   const bySpan = new Map<string, Entry[]>();
@@ -239,7 +248,8 @@ function carryMapped(
     const candidates = mapped === undefined ? [] : (bySpan.get(spanKey(mapped)) ?? []);
     const free = candidates.filter((candidate) => !taken.has(candidate.key));
     const kin = free.filter((candidate) => candidate.node.kind === entry.node.kind);
-    const renamed = mapping.exact && kin.length === 0 && free.length === 1 ? free : [];
+    const removed = mapping.kept?.has(entry.node.id) === false;
+    const renamed = mapping.exact && !removed && kin.length === 0 && free.length === 1 ? free : [];
     const [target, ...others] = kin.length > 0 ? kin : renamed;
     if (target !== undefined && others.length === 0) {
       taken.add(target.key);
