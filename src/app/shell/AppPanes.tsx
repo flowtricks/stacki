@@ -66,7 +66,9 @@ import { ImagePropFields } from '../../features/props/ImagePropFields';
 import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/CanvasDropOverlay';
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
-import { componentCanvasShown } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { canvasInstanceAt, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
+import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
 
 // The Settings panel's CSS fields (the style prop) draw the code editors' chips.
@@ -223,6 +225,11 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
   return { ...point, nodeId: node.id };
 }
 
+// Whether the open file is the component canvas's page itself, not an instance opened inside it.
+function atCanvasPage(app: ShellView): boolean {
+  return app.editStack.length <= 1 && isComponentCanvasPage(app.currentPage?.path);
+}
+
 // The instance the component defaults page edits, while that page is the open file; undefined anywhere else.
 function defaultsRootPath(app: ShellView): string | undefined {
   const canvas = app.defaultsCanvas;
@@ -270,6 +277,18 @@ export function selectCanvasPath(
     app.setLeftTab(leftTabAfterCanvasSelection);
     app.setRevealTick((count) => count + 1);
   };
+  if (atCanvasPage(app)) {
+    // On the component canvas's own page a frame is one thing: a click anywhere in it (its label, its body, inside its
+    // instance) selects the frame's instance, closed, and a click between frames selects nothing.
+    const instance = canvasInstanceAt(path);
+    const node = instance === undefined || app.model === undefined ? undefined : nodeAtPath(app.model.nodes, trailOf(instance.path));
+    if (node === undefined) {
+      app.setSelectedId(undefined);
+    } else {
+      reveal(node);
+    }
+    return;
+  }
   const { kind } = canvasClickAction({
     path: path ?? undefined,
     outside: !!info?.outside,
@@ -281,11 +300,6 @@ export function selectCanvasPath(
     return;
   }
   if (kind === 'close') {
-    // On the component canvas the space around the frames is the canvas page, not a page to back out to: a click
-    // there selects a frame (useDesktopComponentCanvas.ts), and leaving is the title bar's Close canvas.
-    if (componentCanvasShown() && app.editStack.length <= 2) {
-      return;
-    }
     // Opening the parent file reports its own failures.
     void app.closeComponent();
     return;
@@ -319,6 +333,15 @@ export function pickPseudo(app: Pick<ShellView, 'setPseudoPick'>, target: Pseudo
 // landed on chrome the layout renders itself (nav, footer) — that markup belongs to
 // the layout, so open the layout, matching what a single click there selects.
 export function openCanvasPath(app: ShellView, path: string | undefined, occurrence: number): void {
+  if (atCanvasPage(app)) {
+    // A double click anywhere in a component canvas frame goes inside its instance, as on its navigator row.
+    const instance = canvasInstanceAt(path);
+    const node = instance === undefined || app.model === undefined ? undefined : nodeAtPath(app.model.nodes, trailOf(instance.path));
+    if (instance !== undefined && node?.kind === 'component') {
+      void app.openComponent(node.name, instance.path, 0).catch(app.reportFailure);
+    }
+    return;
+  }
   const root = defaultsRootPath(app);
   if (root !== undefined && canvasClickAction({ path, ownedRoot: root }).kind === 'nothing') {
     return; // A double click on the dimmed page around the defaults instance opens nothing, the layout included.
@@ -490,6 +513,8 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
   const visible = RIGHT_TABS.filter((tab) => canPanel(role, tab.id));
   const fallback = visible.some((tab) => tab.id === app.rightTab) ? undefined : visible[0]?.id;
   const { setRightTab } = app;
+  // A component canvas frame's instance: its props are that frame's preview values (canvasFrameSettings.tsx).
+  const canvasInstance = useCanvasInstanceSettings(app, useComponentCanvas());
   useEffect(() => {
     if (fallback !== undefined) {
       setRightTab(fallback);
@@ -508,9 +533,11 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
       </KeptTabPanel>
       <KeptTabPanel shown={app.rightTab === 'settings'}>
         <PropPreviewContext.Provider value={propPreview}>
-          <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
-            <PropsPanel {...settingsValues(app)} {...settingsHandlers(app, translate)} />
-          </PanelBoundary>
+          <PropFieldExtrasContext.Provider value={canvasInstance?.extras}>
+            <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
+              <PropsPanel {...settingsOf(app, translate, canvasInstance)} />
+            </PanelBoundary>
+          </PropFieldExtrasContext.Provider>
         </PropPreviewContext.Provider>
       </KeptTabPanel>
     </ResizablePanel>
@@ -674,6 +701,28 @@ function selectedContentSource(app: ShellView): string | undefined {
   const source = app.pageState?.source;
   const range = source === undefined ? undefined : sourceRangeForSelection(app.model, app.selectedId, source.length);
   return source === undefined || range === undefined ? undefined : innerSourceOf(source.slice(range.from, range.to));
+}
+
+// The Settings tab's values and handlers. A component canvas frame's instance keeps its props only: what it is given is
+// that frame's preview values (canvasFrameSettings.tsx), and its content, tag, attributes and comment are the generated
+// canvas page's, which is never edited, so they are not offered.
+function settingsOf(app: ShellView, translate: Translator, canvasInstance: CanvasInstanceSettings | undefined) {
+  const values = settingsValues(app);
+  const handlers = settingsHandlers(app, translate);
+  const { onChangeTag, onSetComment, ...kept } = handlers;
+  const node = values.node;
+  if (canvasInstance === undefined || node?.kind !== 'component') {
+    return { ...values, ...kept, onChangeTag, onSetComment };
+  }
+  return {
+    ...values,
+    ...kept,
+    node: { ...node, children: undefined },
+    onSetProp: canvasInstance.onSetProp,
+    takesSlotText: false,
+    allowAttrs: false,
+    richTextContent: false,
+  };
 }
 
 // What the Settings tab shows about the selection.

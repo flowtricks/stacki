@@ -3,6 +3,7 @@
 // tests read one answer. The settings file's own rules (keys, merging, bounds) are shared/properties/componentCanvas.ts.
 import { assert } from '../../../../shared/core/assert';
 import type { PropField } from '../../../../shared/properties/propSchema';
+import type { Attr } from '../../../../shared/page/pageNodeTypes';
 import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
 import {
   CANVAS_LIMITS,
@@ -13,6 +14,7 @@ import {
   splitValueText,
   unionAllows,
   type CanvasFrame,
+  type CanvasValue,
   type ComponentCanvas,
   type FramePart,
   type ResolvedFrame,
@@ -81,14 +83,6 @@ export function fieldControl(field: PropField): FieldControl | undefined {
 /** Whether the frame's variant takes the prop at all: a discriminated union may forbid it (`direction` on `main`). */
 export function frameTakes(component: CanvasComponent, frame: ModelFrame, prop: string): boolean {
   return unionAllows(unionsOf(component.schema), prop, heldBy(component.schema, frame.parts, frame.props));
-}
-
-/** The value a frame's instance shows for a prop: its preview value, else the component defaults' value, else the prop's own default. */
-export function shownValue(field: PropField, frame: ModelFrame, defaults: Readonly<Record<string, DefaultValue>>): DefaultValue | undefined {
-  if (frame.omitted.has(field.name)) {
-    return field.default;
-  }
-  return frame.props[field.name] ?? defaults[field.name] ?? field.default;
 }
 
 export function splitPartOf(frame: ModelFrame, prop: string): FramePart | undefined {
@@ -212,4 +206,33 @@ function sampleValue(field: PropField): DefaultValue | undefined {
 function humanize(name: string): string {
   const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// A prop value as the canvas settings hold it: text, a number or a switch. An expression that is none of those
+// (data, a function, an object) is code the canvas cannot replay, so it is refused rather than stored as text.
+export function previewValue(value: Attr): CanvasValue | undefined {
+  switch (value.type) {
+    case 'string':
+      return value.value;
+    case 'bare':
+      return true;
+    case 'spread':
+      return undefined;
+    case 'expr': {
+      const code = value.value.trim();
+      if (code === 'true' || code === 'false') {
+        return code === 'true';
+      }
+      if (/^-?\d+(\.\d+)?$/.test(code)) {
+        const number = Number(code);
+        return Number.isFinite(number) ? number : undefined;
+      }
+      const quoted = /^(["'`])(.*)\1$/s.exec(code);
+      return quoted === null || /[\\${}]/.test(quoted[2] ?? '') ? undefined : quoted[2];
+    }
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
 }

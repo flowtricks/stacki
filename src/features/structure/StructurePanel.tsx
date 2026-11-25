@@ -74,6 +74,11 @@ interface StructurePanelProps {
   readonly selectedPseudo?: PseudoKind | undefined;
   readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Labels that stand in for rows' own, by node id. Given, the tree is a list of named rows rather than a file (the
+   * component canvas's frames), so the file's frontmatter row is left out.
+   */
+  readonly rowLabels?: ReadonlyMap<string, string>;
   readonly revealTick?: number;
   readonly onSelect: (id: string) => void;
   readonly onHoverNode?: (id: string | undefined) => void;
@@ -463,6 +468,7 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
     selectedPseudo: props.selectedPseudo,
     ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
+    ...(props.rowLabels === undefined ? {} : { rowLabels: props.rowLabels }),
     currentLayoutName: props.currentLayoutName,
     dropTarget: canvasDrag === undefined ? state.dropTarget : canvasDrag.navigator,
     setDropTarget: state.setDropTarget,
@@ -736,7 +742,7 @@ function NavigatorBody({
       {/* One box as wide as the widest row: every row, and the tinted block under a selected one, fill it, so a
           selected row and its subtree share both edges however long a label runs (styles.css, .structure-tree). */}
       <div className="structure-tree">
-        {!props.clientMode && !props.editRootId && !search.filtering && <FrontmatterRow props={props} />}
+        {!props.clientMode && !props.editRootId && props.rowLabels === undefined && !search.filtering && <FrontmatterRow props={props} />}
         <NodeList nodes={search.filtering ? search.nodes : nodes} parentId={undefined} depth={0} {...context} />
       </div>
       {!props.clientMode && nodes.length === 0 && <EmptyDropTarget props={props} state={state} />}

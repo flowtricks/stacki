@@ -32,6 +32,8 @@ export interface StructureTreeContext {
   readonly selectedPseudo?: PseudoKind | undefined;
   readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
+  /** Labels that stand in for rows' own, by node id: the component canvas names each frame's instance by its frame. */
+  readonly rowLabels?: ReadonlyMap<string, string>;
   readonly currentLayoutName: string;
   /** The search's folded words: rows draw them marked in their label. Absent when nothing is searched. */
   readonly highlightWords?: readonly string[];
@@ -291,6 +293,7 @@ function treeContextFromRow(props: TreeNodeProps): StructureTreeContext {
     selectedPseudo: props.selectedPseudo,
     ...(props.onSelectPseudo === undefined ? {} : { onSelectPseudo: props.onSelectPseudo }),
     ...(props.liveClassesById === undefined ? {} : { liveClassesById: props.liveClassesById }),
+    ...(props.rowLabels === undefined ? {} : { rowLabels: props.rowLabels }),
     currentLayoutName: props.currentLayoutName,
     ...(props.highlightWords === undefined ? {} : { highlightWords: props.highlightWords }),
     ...(props.searchSnippets === undefined ? {} : { searchSnippets: props.searchSnippets }),
@@ -336,6 +339,10 @@ function nodeView(props: TreeNodeProps, shape: Pick<NodeView, 'children' | 'host
   const layout = node.id === 'layout';
   const component = node.kind === 'component' && !node.dynamicTag && !fragment;
   let description = describeNode(node, props.liveClassesById?.get(node.id), translate);
+  const ownLabel = props.rowLabels?.get(node.id);
+  if (ownLabel !== undefined) {
+    description = { ...description, label: ownLabel };
+  }
   let hint: string | undefined;
   if (layout) {
     const label = node.kind === 'component' || node.kind === 'element' ? node.name : '';

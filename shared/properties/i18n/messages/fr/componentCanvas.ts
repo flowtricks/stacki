@@ -7,17 +7,21 @@ export const messages = {
   'componentCanvas.error.notOpened': 'Le composant ne s’est pas ouvert sur le canevas. Réessayez.',
   'componentCanvas.error.notReturned': 'Impossible de revenir au fichier sur lequel vous étiez. Ouvrez-le depuis le panneau Pages.',
   'componentCanvas.error.open': 'Impossible d’ouvrir le canevas : {message}',
+  'componentCanvas.error.pageReadOnly': 'Ce canevas ne fait qu’afficher le composant. Double-cliquez sur un cadre pour modifier le composant qu’il contient.',
+  'componentCanvas.error.previewValue': 'Un cadre peut afficher en aperçu du texte, un nombre ou un état activé ou désactivé pour {name}, mais pas du code.',
   'componentCanvas.error.save': 'Impossible d’enregistrer les réglages du canevas : {message}',
   'componentCanvas.frame.part': '{prop} : {value}',
   'componentCanvas.frame.unset': 'non défini',
+  'componentCanvas.framePanel.hide': 'Masquer les réglages du cadre',
+  'componentCanvas.framePanel.show': 'Afficher les réglages du cadre',
   'componentCanvas.menu.open': 'Ouvrir dans le canevas',
   'componentCanvas.notice.truncated': 'Affichage des {shown} premiers cadres sur {total}. Donnez des cadres séparés à moins de props pour voir les autres.',
   'componentCanvas.pageName': 'Canevas de {name}',
   'componentCanvas.panel.background': 'Arrière-plan',
   'componentCanvas.panel.backgroundVariable': 'Connecter à une variable',
   'componentCanvas.panel.fixed': 'Fixe',
-  'componentCanvas.panel.frame.hint':
-    'Cliquez sur le libellé d’un cadre ou sur l’espace autour de son composant pour sélectionner le cadre. Cliquez dans le composant pour le modifier.',
+  'componentCanvas.panel.frame.about':
+    'Cliquez sur un cadre pour sélectionner son composant, et double-cliquez dessus pour modifier le composant à l’intérieur.',
   'componentCanvas.panel.frame.pick': 'Cadre',
   'componentCanvas.panel.frame.title': 'Cadre',
   'componentCanvas.panel.frames': {
@@ -27,12 +31,6 @@ export const messages = {
   'componentCanvas.panel.height': 'Hauteur',
   'componentCanvas.panel.hug': 'Au contenu',
   'componentCanvas.panel.pixels': '{side} en pixels',
-  'componentCanvas.panel.props.hint':
-    'Les valeurs avec lesquelles ce cadre est rendu. Elles restent sur le canevas et reviennent à chaque ouverture. Elles ne sont jamais écrites dans le composant ni dans ses instances.',
-  'componentCanvas.panel.props.none': 'Non défini',
-  'componentCanvas.panel.props.split': 'Chaque valeur de {name} a son propre cadre.',
-  'componentCanvas.panel.props.title': 'Props d’aperçu',
-  'componentCanvas.panel.props.unused': 'Cette variante n’utilise pas {name}.',
   'componentCanvas.panel.scope.all': 'Tous les cadres',
   'componentCanvas.panel.scope.frame': 'Ce cadre',
   'componentCanvas.panel.scope.hint':
@@ -40,18 +38,17 @@ export const messages = {
   'componentCanvas.panel.scope.label': 'Appliquer à',
   'componentCanvas.panel.scope.part': 'Tous les cadres {part}',
   'componentCanvas.panel.scope.project': 'Tous les composants',
-  'componentCanvas.panel.split.hint':
-    'Chaque valeur d’une prop activée ici a son propre cadre, et les cadres montrent toutes les combinaisons. Une prop désactivée affiche une seule valeur par cadre, que vous définissez dans Props d’aperçu.',
-  'componentCanvas.panel.split.title': 'Cadres séparés',
-  'componentCanvas.panel.split.toggle': 'Donner à chaque valeur de {name} son propre cadre',
   'componentCanvas.panel.transparent': 'Transparent', // same
-  'componentCanvas.panel.values': {
-    one: '{count} valeur',
-    other: '{count} valeurs',
-  },
   'componentCanvas.panel.width': 'Largeur',
   'componentCanvas.popup.close': 'Fermer les réglages du cadre',
   'componentCanvas.popup.title': 'Réglages du cadre',
+  'componentCanvas.split.full': 'Jusqu’à {max} props peuvent avoir leurs propres cadres. Désactivez-en d’abord une.',
+  'componentCanvas.split.locked': 'Chaque valeur de {name} a son propre cadre.',
+  'componentCanvas.split.off': {
+    one: 'Donner à chaque valeur de {name} son propre cadre ({count} valeur)',
+    other: 'Donner à chaque valeur de {name} son propre cadre ({count} valeurs)',
+  },
+  'componentCanvas.split.on': 'Afficher {name} dans un seul cadre',
   'componentCanvas.titleBar.close': 'Fermer le canevas de {name}',
   'componentCanvas.zoom.fit': 'Ajuster',
   'componentCanvas.zoom.fitAll': 'Ajuster le zoom pour afficher tous les cadres',

@@ -2,6 +2,8 @@
 // src/app/state/useDesktopComponentCanvas.ts) owns the state and the writes; the panel, the title bar and the
 // Components panel menu reach it through this context, so none of them depends on the host.
 import { createContext, useContext } from 'react';
+import { assert } from '../../../../shared/core/assert';
+import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
 import type { ComponentCanvasFile, FrameEdit } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
 import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
@@ -23,6 +25,16 @@ export interface CanvasOpen {
   readonly framePanel: 'shown' | 'hidden';
   /** The props the component defaults give an inserted instance: what a frame shows where it sets nothing. */
   readonly defaults: Readonly<Record<string, DefaultValue>>;
+  /** Each frame's instance on the canvas page, by its path in the page's tree: what the navigator lists and a click selects. */
+  readonly instances: readonly CanvasInstance[];
+}
+
+/** One frame's instance of the component on the canvas page. */
+export interface CanvasInstance {
+  /** The frame's key (componentCanvas.ts frame keys). */
+  readonly key: string;
+  /** The instance's node path in the canvas page (`0.1.2`): stable while the page's frames are, unlike a node id. */
+  readonly path: string;
 }
 
 export type CanvasState = { readonly kind: 'idle' } | { readonly kind: 'opening'; readonly component: string } | CanvasOpen;
@@ -48,6 +60,13 @@ export interface ComponentCanvasControl {
   readonly setSplit: (split: readonly string[] | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;
   readonly hideFramePanel: () => void;
+  /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */
+  readonly showFramePanel: () => void;
+  /**
+   * A preview prop value from the Settings panel: written to the Apply to scope (this frame unless a wider one is
+   * chosen; the project level holds no props, so there it is this frame). Never to the component or its instances.
+   */
+  readonly editProp: (edit: Extract<FrameEdit, { readonly kind: 'prop' | 'unset' | 'inherit' }>) => void;
   /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */
   readonly coverRight: (pixels: number) => void;
 }
@@ -69,11 +88,54 @@ export function registerCanvasInstanceOpener(opener: InstanceOpener | undefined)
   instanceOpener = opener;
 }
 
-// Read by code outside React's tree of this context (the canvas click handler): whether a canvas is open now.
-let canvasShown = false;
+// Read by code outside React's tree of this context (the canvas click handler, the edit commit): what is open now.
+let noted: CanvasState = { kind: 'idle' };
 export function componentCanvasShown(): boolean {
-  return canvasShown;
+  return noted.kind !== 'idle';
 }
 export function noteComponentCanvas(state: CanvasState): void {
-  canvasShown = state.kind !== 'idle';
+  noted = state;
+}
+
+/** The canvas page's file, project-relative: `.stacki/canvas/<id>.astro`. */
+export function canvasPageFile(id: string): string {
+  assert(/^[a-f0-9-]{36}$/.test(id), 'A canvas page is named by a UUID');
+  return CANVAS_DIRECTORY + id + '.astro';
+}
+
+/**
+ * Whether `path` (an open file's absolute path) is the open canvas's page. That page is generated from the canvas
+ * settings and rewritten whole, so it is never edited: its instances are selected, and opened to edit the component.
+ */
+export function isComponentCanvasPage(path: string | undefined): boolean {
+  if (noted.kind !== 'open' || path === undefined) {
+    return false;
+  }
+  return path.replaceAll('\\', '/').endsWith('/' + canvasPageFile(noted.id));
+}
+
+/**
+ * The frame whose instance a node of the canvas page belongs to: the node is the instance, inside it, or the frame's
+ * label or body around it. Undefined for the space between frames, or with no canvas open.
+ */
+export function canvasInstanceAt(path: string | undefined): CanvasInstance | undefined {
+  if (noted.kind !== 'open' || path === undefined) {
+    return undefined;
+  }
+  return noted.instances.find((instance) => {
+    const frame = framePathOf(instance.path);
+    return path === frame || path.startsWith(frame + '.');
+  });
+}
+
+/** The instance at exactly `path` in the canvas page, if one is. */
+export function canvasInstanceOf(path: string | undefined): CanvasInstance | undefined {
+  return noted.kind === 'open' && path !== undefined ? noted.instances.find((instance) => instance.path === path) : undefined;
+}
+
+// An instance sits in its frame's body, which sits in the frame (canvasPage.ts frameMarkup).
+function framePathOf(instancePath: string): string {
+  const parts = instancePath.split('.');
+  assert(parts.length > 2, 'A canvas instance is inside a frame body inside a frame');
+  return parts.slice(0, -2).join('.');
 }

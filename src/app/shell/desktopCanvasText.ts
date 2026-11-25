@@ -1,4 +1,5 @@
 import type { Translator } from '../../lib/i18n/localeContext';
+import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { canvasContentEdits } from '../model/canvasTextContent';
 import { canvasPropEdits, type ComponentSource } from '../model/canvasPropText';
 import { readPage, readText, resolvePath, writeText } from '../../ipc/bridge';
@@ -17,6 +18,11 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
     return undefined;
   }
   if (!file.endsWith('.astro')) {
+    return undefined;
+  }
+  // The component canvas's page is generated and never edited: a double click there opens a frame's instance, so its
+  // words offer no typing (it would take the double click and then be refused).
+  if (app.editStack.length <= 1 && isComponentCanvasPage(file)) {
     return undefined;
   }
   const host = boundTextHost(app);

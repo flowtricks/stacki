@@ -7,9 +7,14 @@ export const messages = {
   'componentCanvas.error.notOpened': 'コンポーネントがキャンバスで開きませんでした。もう一度お試しください。',
   'componentCanvas.error.notReturned': '元のファイルに戻れませんでした。ページパネルから開いてください。',
   'componentCanvas.error.open': 'キャンバスを開けませんでした: {message}',
+  'componentCanvas.error.pageReadOnly':
+    'このキャンバスはコンポーネントを表示するだけです。フレーム内のコンポーネントを編集するには、フレームをダブルクリックしてください。',
+  'componentCanvas.error.previewValue': 'フレームで {name} としてプレビューできるのは、テキスト、数値、オン/オフです。コードはプレビューできません。',
   'componentCanvas.error.save': 'キャンバスの設定を保存できませんでした: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '未設定',
+  'componentCanvas.framePanel.hide': 'フレーム設定を非表示',
+  'componentCanvas.framePanel.show': 'フレーム設定を表示',
   'componentCanvas.menu.open': 'キャンバスで開く',
   'componentCanvas.notice.truncated':
     '{total} フレーム中、最初の {shown} フレームを表示しています。残りを表示するには、個別のフレームを持つプロパティを減らしてください。',
@@ -17,8 +22,7 @@ export const messages = {
   'componentCanvas.panel.background': '背景',
   'componentCanvas.panel.backgroundVariable': '変数に接続',
   'componentCanvas.panel.fixed': '固定',
-  'componentCanvas.panel.frame.hint':
-    'フレームのラベルかコンポーネントの周囲の余白をクリックすると、フレームを選択できます。コンポーネントの内側をクリックすると編集できます。',
+  'componentCanvas.panel.frame.about': 'フレームをクリックするとそのコンポーネントが選択され、ダブルクリックすると中のコンポーネントを編集できます。',
   'componentCanvas.panel.frame.pick': 'フレーム',
   'componentCanvas.panel.frame.title': 'フレーム',
   'componentCanvas.panel.frames': {
@@ -27,12 +31,6 @@ export const messages = {
   'componentCanvas.panel.height': '高さ',
   'componentCanvas.panel.hug': 'コンテンツに合わせる',
   'componentCanvas.panel.pixels': '{side}（ピクセル）',
-  'componentCanvas.panel.props.hint':
-    'このフレームのレンダリングに使う値です。値はキャンバスに保持され、開くたびに復元されます。コンポーネントやそのインスタンスには書き込まれません。',
-  'componentCanvas.panel.props.none': '未設定',
-  'componentCanvas.panel.props.split': '{name} の値ごとに個別のフレームがあります。',
-  'componentCanvas.panel.props.title': 'プレビュー用プロパティ',
-  'componentCanvas.panel.props.unused': 'このバリアントは {name} を使用していません。',
   'componentCanvas.panel.scope.all': 'すべてのフレーム',
   'componentCanvas.panel.scope.frame': 'このフレーム',
   'componentCanvas.panel.scope.hint':
@@ -40,17 +38,16 @@ export const messages = {
   'componentCanvas.panel.scope.label': '適用先',
   'componentCanvas.panel.scope.part': '{part} のすべてのフレーム',
   'componentCanvas.panel.scope.project': 'すべてのコンポーネント',
-  'componentCanvas.panel.split.hint':
-    'ここでオンにしたプロパティは値ごとに個別のフレームを持ち、フレームにはすべての組み合わせが表示されます。オフのプロパティはフレームごとに 1 つの値を表示し、その値は「プレビュー用プロパティ」で設定します。',
-  'componentCanvas.panel.split.title': '個別のフレーム',
-  'componentCanvas.panel.split.toggle': '{name} の値ごとに個別のフレームを作成',
   'componentCanvas.panel.transparent': '透明',
-  'componentCanvas.panel.values': {
-    other: '{count} 個の値',
-  },
   'componentCanvas.panel.width': '幅',
   'componentCanvas.popup.close': 'フレーム設定を閉じる',
   'componentCanvas.popup.title': 'フレーム設定',
+  'componentCanvas.split.full': '個別のフレームを持てるプロパティは {max} 個までです。先にいずれかをオフにしてください。',
+  'componentCanvas.split.locked': '{name} の値ごとに個別のフレームがあります。',
+  'componentCanvas.split.off': {
+    other: '{name} の値ごとに個別のフレームを表示（値 {count} 個）',
+  },
+  'componentCanvas.split.on': '{name} を 1 つのフレームに表示',
   'componentCanvas.titleBar.close': '{name} キャンバスを閉じる',
   'componentCanvas.zoom.fit': 'フィット',
   'componentCanvas.zoom.fitAll': 'すべてのフレームが収まるようにズーム',

@@ -2,6 +2,7 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
+import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { requestCanvasReports } from '../../editor/canvasQuery';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -311,7 +312,9 @@ export function useCanvasMarks(
   if (model && selectedId === 'frontmatter') {
     crumbs.push({ id: 'frontmatter', label: 'Frontmatter' }); // i18n-ignore: the file format's own word, shown as written.
   } else if (model && selectedId) {
-    const chain = selectedAncestors;
+    // On the component canvas's page the frames' wrappers are its own chrome, not the person's markup: the trail names
+    // the frame's instance alone, as the Navigator lists it.
+    const chain = isComponentCanvasPage(currentPage?.path) ? selectedAncestors.filter((node) => node.kind === 'component') : selectedAncestors;
     // A then has no row in the navigator, so the trail doesn't name it either —
     // "if command › then › hero-command" said "then" to no one (see
     // branches.js).

@@ -1,6 +1,7 @@
 // A prop field's label row: its pill, its menu, the picker it opens, and the
 // reset menu (PropField.tsx).
 
+import { usePropFieldExtra } from './propFieldExtras';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useRef, useState } from 'react';
 import { dataPickerPosition } from './dataPickerPosition';
@@ -117,6 +118,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
           <BracesIcon size={12} />
         </button>
       )}
+      <PropFieldExtraAction name={field.name} />
       {bindable && (
         <BindHandle
           active={!!insertAt}
@@ -137,6 +139,12 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
     </label>
   );
 }
+// The host's control for this prop (propFieldExtras.ts), beside the {} button.
+function PropFieldExtraAction({ name }: { readonly name: string }) {
+  const extra = usePropFieldExtra(name);
+  return extra?.action === undefined ? undefined : <span className="prop-field-extra">{extra.action}</span>;
+}
+
 export function PropFieldPicker({ state }: { readonly state: PropState }) {
   const { field, value, bindContext, onChange, type, setCustom, insertAt, setInsertAt, bindApiRef } = state;
   // The Value conditions editor, opened from the picker's "Create conditional"

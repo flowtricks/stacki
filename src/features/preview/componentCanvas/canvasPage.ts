@@ -3,8 +3,9 @@
 // instance is the component's insertion defaults (`.stacki/components.json`, else the starter defaults) with the
 // frame's props over them, so slots and required props show what an inserted instance would.
 //
-// The component's own file is the document the editor edits while the canvas is open; this page is never edited, only
-// rewritten whole when frames or preview values change. Nothing here is written to the component or its instances.
+// The editor opens this page with each instance closed, and the component's own file when one is opened inside; the
+// page itself is never edited (src/app/state/appHistory.ts refuses it), only rewritten whole when frames or preview
+// values change. Nothing here is written to the component or its instances.
 import { assert } from '../../../../shared/core/assert';
 import { encodeText } from '../../../../shared/page/htmlText';
 import { starterDefaults } from '../../../../shared/properties/componentStarterDefaults';
@@ -21,6 +22,7 @@ import {
 import type { FrameLength } from '../../../../shared/properties/componentCanvas';
 import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 import { chromeScript, chromeStyles } from './canvasChrome';
+import type { CanvasInstance } from './componentCanvasSession';
 
 export interface CanvasPageFrame {
   readonly key: string;
@@ -46,8 +48,8 @@ export interface CanvasPageInput {
   readonly frames: readonly CanvasPageFrame[];
 }
 
-/** The tag the frames' world is: the editor focuses it, so every frame is the instance being edited. */
-export const CANVAS_ROOT_TAG = 'stacki-canvas';
+/** The tag around the frames' world: the pannable, zoomable canvas the page's script drives. */
+const CANVAS_ROOT_TAG = 'stacki-canvas';
 
 export function canvasPageSource(input: CanvasPageInput): string {
   assert(/^[a-f0-9-]{36}$/.test(input.id), 'A canvas page is named by a UUID');
@@ -77,7 +79,7 @@ const script = ${JSON.stringify(chromeScript(input.id))};
 </head>
 <body {...bodyAttributes}>
 {contextStyles.map((css) => <style is:inline set:html={css}></style>)}
-<${CANVAS_ROOT_TAG}>
+<${CANVAS_ROOT_TAG}${input.surface === undefined ? '' : ' data-surface'}>
 <stacki-canvas-world>
 ${world}
 </stacki-canvas-world>
@@ -88,6 +90,50 @@ ${world}
 `;
   assert(source.length <= DEFAULT_LIMITS.sourceCharsMax, 'A canvas page fits the canvas source bound');
   return source;
+}
+
+/** A node of the canvas page as the editor's parser reads it: only what finding the frames' instances needs. */
+export interface CanvasTreeNode {
+  readonly kind: string;
+  readonly name?: string;
+  readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string }>> | undefined;
+  readonly children?: readonly CanvasTreeNode[] | undefined;
+}
+
+/**
+ * Each frame's instance in the parsed canvas page, in frame order, by its node path (`0.1.2`): a `stacki-frame` names
+ * its frame (an expression attribute holding the key as a JSON string, frameMarkup) and its body holds the instance.
+ */
+export function canvasInstancesOf(nodes: readonly CanvasTreeNode[]): readonly CanvasInstance[] {
+  const found: CanvasInstance[] = [];
+  const pending: { readonly node: CanvasTreeNode; readonly path: string }[] = nodes.map((node, index) => ({ node, path: String(index) }));
+  for (let visited = 0; visited < DEFAULT_LIMITS.nodesMax * CANVAS_LIMITS.framesMax; visited++) {
+    const next = pending.shift();
+    if (next === undefined) {
+      break;
+    }
+    const instance = next.node.kind === 'element' && next.node.name === 'stacki-frame' ? frameInstance(next.node, next.path) : undefined;
+    if (instance === undefined) {
+      (next.node.children ?? []).forEach((child, index) => pending.push({ node: child, path: `${next.path}.${String(index)}` }));
+    } else {
+      found.push(instance);
+    }
+  }
+  assert(found.length <= CANVAS_LIMITS.framesMax, 'A canvas page holds a bounded number of frames');
+  return found;
+}
+
+function frameInstance(frame: CanvasTreeNode, path: string): CanvasInstance | undefined {
+  const attribute = frame.props?.['data-frame'];
+  const key: unknown = attribute?.type === 'expr' && attribute.value !== undefined ? JSON.parse(attribute.value) : undefined;
+  assert(typeof key === 'string', 'A canvas frame names its frame');
+  const bodyIndex = (frame.children ?? []).findIndex((child) => child.kind === 'element' && child.name === 'stacki-frame-body');
+  const body = frame.children?.[bodyIndex];
+  const instanceIndex = (body?.children ?? []).findIndex((child) => child.kind === 'component');
+  if (body === undefined || instanceIndex < 0) {
+    return undefined;
+  }
+  return { key, path: `${path}.${String(bodyIndex)}.${String(instanceIndex)}` };
 }
 
 /** The props an inserted instance is given (the component defaults), which a frame shows unless it sets its own. */
@@ -177,7 +223,8 @@ function frameMarkup(frame: CanvasPageFrame, instance: string): string {
 </stacki-frame>`;
 }
 
-// One import per component the frames use, under a name that cannot meet the page's own words.
+// One import per component the frames use, under a name that cannot meet the page's own words (its constants are
+// lower case, a component's name is not).
 class ImportTable {
   private readonly names = new Map<string, string>();
   constructor(private readonly snapshot: DefaultsSnapshot) {}
@@ -193,7 +240,12 @@ class ImportTable {
         .split('/')
         .at(-1)
         ?.replace(/\.astro$/, '') ?? '';
-    const name = (/^[A-Z][A-Za-z0-9]*$/.test(base) ? base : 'Component') + 'Canvas' + String(this.names.size);
+    // The component's own name where it is free, so the editor's panels, breadcrumb and tag name it as the person
+    // does; a second component of the same name (another folder's Button) is numbered.
+    const own = /^[A-Z][A-Za-z0-9]*$/.test(base) ? base : 'Component';
+    const taken = new Set(this.names.values());
+    const name = taken.has(own) ? own + String(this.names.size) : own;
+    assert(!taken.has(name), 'Each component the canvas imports has its own binding');
     this.names.set(file, name);
     assert(this.names.size <= DEFAULT_LIMITS.nodesMax, 'A canvas page imports a bounded number of components');
     return name;

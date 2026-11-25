@@ -14,6 +14,7 @@ import { editingOffered, withEditingFieldMoved, withFieldEditing } from '../../.
 import { useDesktopComponentCanvas } from '../state/useDesktopComponentCanvas';
 import { ComponentCanvasContext, useComponentCanvas, type ComponentCanvasControl } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { ComponentCanvasFramePopup } from '../../features/preview/componentCanvas/ComponentCanvasFramePopup';
+import { canvasNavigatorView } from './canvasFrameSettings';
 import { ComponentCanvasBack, ComponentCanvasZoom } from '../../features/preview/componentCanvas/ComponentCanvasControls';
 import { DesktopPublishButton } from './DesktopPublishButton';
 import { ToastStack } from '../../features/notifications/ToastStack';
@@ -70,7 +71,9 @@ import { prewarmSecretsListing } from '../../features/projectSettings/secretsCac
 import { prewarmProjectRoles } from '../roles/rolesCache';
 import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
 import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { rootSwatchScope, SwatchScopeContext } from '../../features/style/model/computedColor';
+import { useSharedVars } from '../../features/style/sharedVars';
 import { PreviewModeStage } from '../../features/preview/SizedFrame';
 import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
@@ -151,7 +154,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
               <AiCover app={app} />
             </PanelBoundary>
             <ComponentCanvasZoom canvas={componentCanvas} />
-            <CanvasFramePopup app={app} canvas={componentCanvas} />
+            <CanvasFramePopup canvas={componentCanvas} />
           </div>
           {app.assetPick?.presentation === 'overlay' && (
             <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
@@ -189,12 +192,23 @@ export function AppShell({ app }: { readonly app: ShellView }) {
 
 // The selected frame's settings, over the canvas, while the frame is selected and no element in it is. The right panel
 // stays the ordinary Style and Settings panel throughout; drilling into a component inside a frame hides this too.
-function CanvasFramePopup({ app, canvas }: { readonly app: ShellView; readonly canvas: ComponentCanvasControl }) {
+function CanvasFramePopup({ canvas }: { readonly canvas: ComponentCanvasControl }) {
   const state = canvas.state;
-  if (state.kind !== 'open' || state.framePanel === 'hidden' || app.selectedId !== undefined || app.editStack.length !== 2) {
+  // Frame settings speak of the selected frame (the instance selected on the canvas page, or the one opened inside), so
+  // they show at any depth until closed; the zoom bar's toggle and a frame's label open them again.
+  if (state.kind !== 'open' || state.framePanel === 'hidden') {
     return undefined;
   }
-  return <ComponentCanvasFramePopup canvas={canvas} state={state} />;
+  return <CanvasSwatches>{<ComponentCanvasFramePopup canvas={canvas} state={state} />}</CanvasSwatches>;
+}
+
+// The popover's swatches are not an element's styles: a frame background is drawn on the canvas page, so a
+// `var(--background)` in it is resolved on that page's root element (where a site declares its theme), with or
+// without a selection, instead of against a selected element, which painted a checkerboard while none was.
+function CanvasSwatches({ children }: { readonly children: ReactNode }) {
+  const { vars } = useSharedVars({ active: true });
+  const scope = useMemo(() => rootSwatchScope(vars), [vars]);
+  return <SwatchScopeContext.Provider value={scope}>{children}</SwatchScopeContext.Provider>;
 }
 
 // The site with no editing, over the panels, at the canvas's own size: the width and height
@@ -276,8 +290,10 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
   const canPublish = can(useCurrentRole(), 'publish');
   const componentCanvas = useComponentCanvas();
-  // At the canvas's own level the way back leaves the canvas; drilled deeper, back steps out one level as anywhere.
-  const atCanvas = componentCanvas !== undefined && componentCanvas.state.kind !== 'idle' && app.editStack.length <= 2;
+  // On the canvas page the way back leaves the canvas; inside an instance, back steps out one level as anywhere, and
+  // Close canvas beside it leaves from any depth.
+  const canvasOpen = componentCanvas !== undefined && componentCanvas.state.kind !== 'idle';
+  const atCanvas = canvasOpen && app.editStack.length <= 1;
   return (
     <div className="titlebar">
       <button
@@ -309,19 +325,22 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
       ) : atCanvas ? (
         <ComponentCanvasBack canvas={componentCanvas} />
       ) : app.editStack.length > 1 ? (
-        <button
-          className="page-switch-btn comp-back"
-          title={translate('shell.titleBar.back')}
-          onClick={() => {
-            // Opening the parent file reports its own failures.
-            void app.closeComponent();
-          }}
-        >
-          <ChevronLeftIcon size={13} />
-          <span className="comp-back-sep" />
-          <ElementComponentIcon size={13} />
-          <span className="page-switch-label">{app.currentPage?.name}</span>
-        </button>
+        <>
+          {canvasOpen && <ComponentCanvasBack canvas={componentCanvas} />}
+          <button
+            className="page-switch-btn comp-back"
+            title={translate('shell.titleBar.back')}
+            onClick={() => {
+              // Opening the parent file reports its own failures.
+              void app.closeComponent();
+            }}
+          >
+            <ChevronLeftIcon size={13} />
+            <span className="comp-back-sep" />
+            <ElementComponentIcon size={13} />
+            <span className="page-switch-label">{app.currentPage?.name}</span>
+          </button>
+        </>
       ) : (
         <PageSwitcher pages={app.scan.pages} currentPage={app.currentScanPage} onSelect={app.onSelectPage} />
       )}
@@ -717,6 +736,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
 
 export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
+  const componentCanvas = useComponentCanvas();
   const page = app.currentPage;
   const selectNavigatorNode = (id: string | undefined): void => selectFromPanel(app, id);
   // A ::before or ::after row selects its element, and asks the Style panel
@@ -733,11 +753,14 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
       app.setPseudoPick(undefined);
     }
   };
+  // On the component canvas's page the tree is its frames: one closed instance per frame (canvasFrameSettings.tsx).
+  const canvasView = canvasNavigatorView(app, componentCanvas, translate);
   return (
     <PanelBoundary name="The Navigator" label={translate('shell.navigator.panelName')} resetKey={page?.path}>
       <StructurePanel
         key={page?.path}
-        pageState={app.pageState}
+        pageState={canvasView?.pageState ?? app.pageState}
+        {...(canvasView === undefined ? {} : { rowLabels: canvasView.rowLabels })}
         currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
         layouts={app.scan.layouts}
         insertables={app.insertables}

@@ -3,6 +3,7 @@
 // the code source, outside edits and file events, and composing navigation
 // (App.tsx).
 
+import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { useTranslate, useTranslateRef } from '../../lib/i18n/useTranslate';
 import { messageRef } from '../../../shared/properties/i18n/messageRef';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -587,6 +588,12 @@ export function useCommitEdit(
       const { currentPage, pageState: state } = pageStateRef.current;
       const path = currentPage?.path;
       if (!path || !state?.editable || typedCodeUnparsed()) {
+        return false;
+      }
+      // The component canvas's page is generated from its settings and rewritten whole, so an edit there would be lost:
+      // its instances are edited from inside (a double click), their preview values from the Settings panel.
+      if (isComponentCanvasPage(path)) {
+        showToast(translate('componentCanvas.error.pageReadOnly'), 'info');
         return false;
       }
       // Every page's gestures are edit requests (step 10: Markdown and MDX

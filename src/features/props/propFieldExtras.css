@@ -1,0 +1,11 @@
+/* A prop whose value a host locks (propFieldExtras.ts): greyed out and closed to the pointer, all but the host's own
+   control in the label row, which stays as clickable and as bright as the {} button beside it. */
+.prop-field-locked .props-field > *:not(label),
+.prop-field-locked .props-field > label > *:not(.prop-field-extra) {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.prop-field-extra {
+  display: inline-flex;
+  align-items: center;
+}
