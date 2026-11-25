@@ -114,7 +114,7 @@ export const messages = {
   'preview.reload': 'Önizlemeyi yenile',
   'preview.reload.diffOverCap': 'Tuval yenilendi: değişiklik yerinde güncellenemeyecek kadar büyüktü.',
   'preview.reload.markersOverCap': 'Tuval yenilendi: bu sayfada yerinde güncellenebilenden fazla öğe var.',
-  'preview.size.fitTip': 'Tuvali kullanılabilir genişliğe sıfırla',
+  'preview.size.fitTip': 'Tuvali masaüstüne sıfırla',
   'preview.size.scale': 'Tuval ölçeği',
   'preview.size.scaleTip': 'Önizleme kullanılabilir alana sığacak şekilde ölçeklendi',
   'preview.size.width': 'Tuval genişliği',

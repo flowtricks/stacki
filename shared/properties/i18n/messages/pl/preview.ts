@@ -115,7 +115,7 @@ export const messages = {
   'preview.reload': 'Odśwież podgląd',
   'preview.reload.diffOverCap': 'Kanwa została odświeżona: zmiana była zbyt duża, aby zaktualizować ją na miejscu.',
   'preview.reload.markersOverCap': 'Kanwa została odświeżona: ta strona ma więcej elementów, niż można zaktualizować na miejscu.',
-  'preview.size.fitTip': 'Przywróć szerokość kanwy do dostępnej',
+  'preview.size.fitTip': 'Przywróć kanwę do widoku komputera',
   'preview.size.scale': 'Skala kanwy',
   'preview.size.scaleTip': 'Podgląd przeskalowany do dostępnego miejsca',
   'preview.size.width': 'Szerokość kanwy',

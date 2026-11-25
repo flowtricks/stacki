@@ -33,8 +33,7 @@ export function iconFor(breakpoint: ResolvedBreakpoint, resolved: readonly Resol
 
 // The canvas's device, the one answer the preview bar's pressed button and the style panel's breakpoint trigger both read, so the
 // trigger can never wear a device the bar does not show. The all-breakpoints canvas is picked by name and keeps it at any width; every
-// other device is the device its width belongs to: a dragged custom width, and Desktop too, which fills the pane at the pane's own
-// width, so a pane narrower than the Laptop canvas reads as Laptop (the page is drawn in its layout), never as Desktop.
+// other device is the device its width belongs to, a dragged custom width and the Desktop device's drawn width alike.
 
 /**
  * The device a canvas width belongs to. An `up` breakpoint holds every width from its own (the widest one that fits); between the
@@ -59,8 +58,8 @@ export function deviceForWidth(px: number, resolved: readonly ResolvedBreakpoint
   return 'desktop';
 }
 
-/** The device the preview bar shows pressed: `device` is the one picked (`desktop`, `canvas`, `custom` or a breakpoint id). Desktop
- *  fills the pane, so it is the device the pane's width belongs to; before the pane is measured (`widthPx` 0) it stays Desktop. */
+/** The device the preview bar shows pressed: `device` is the one picked (`desktop`, `canvas`, `custom` or a breakpoint id), and
+ *  `widthPx` the width the canvas draws at; before the pane is measured (`widthPx` 0) the picked one stays. */
 export function activeDeviceFor(device: string, widthPx: number, resolved: readonly ResolvedBreakpoint[]): string {
   assert(device.length > 0, 'activeDeviceFor: a device is named');
   if (device === 'canvas') {

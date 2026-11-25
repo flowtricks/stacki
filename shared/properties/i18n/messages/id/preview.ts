@@ -115,7 +115,7 @@ export const messages = {
   'preview.reload': 'Muat ulang pratinjau',
   'preview.reload.diffOverCap': 'Kanvas dimuat ulang: perubahan terlalu besar untuk diperbarui di tempat.',
   'preview.reload.markersOverCap': 'Kanvas dimuat ulang: halaman ini memiliki lebih banyak elemen daripada yang dapat diperbarui di tempat.',
-  'preview.size.fitTip': 'Setel ulang kanvas ke lebar yang tersedia',
+  'preview.size.fitTip': 'Setel ulang kanvas ke desktop',
   'preview.size.scale': 'Skala kanvas',
   'preview.size.scaleTip': 'Pratinjau diskalakan agar pas dengan ruang yang tersedia',
   'preview.size.width': 'Lebar kanvas',

@@ -117,7 +117,7 @@ export const messages = {
   'preview.reload': 'Vorschau neu laden',
   'preview.reload.diffOverCap': 'Der Canvas wurde neu geladen: Die Änderung war zu groß für eine direkte Aktualisierung.',
   'preview.reload.markersOverCap': 'Der Canvas wurde neu geladen: Diese Seite hat mehr Elemente, als direkt aktualisiert werden.',
-  'preview.size.fitTip': 'Canvas auf verfügbare Breite zurücksetzen',
+  'preview.size.fitTip': 'Canvas auf Desktop zurücksetzen',
   'preview.size.scale': 'Canvas-Maßstab',
   'preview.size.scaleTip': 'Vorschau an den verfügbaren Platz angepasst',
   'preview.size.width': 'Canvas-Breite',

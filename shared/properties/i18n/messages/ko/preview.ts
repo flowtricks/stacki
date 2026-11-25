@@ -113,7 +113,7 @@ export const messages = {
   'preview.reload': '미리보기 새로고침',
   'preview.reload.diffOverCap': '캔버스를 새로고침했습니다: 변경 사항이 너무 커서 그 자리에서 업데이트할 수 없습니다.',
   'preview.reload.markersOverCap': '캔버스를 새로고침했습니다: 이 페이지는 그 자리에서 업데이트할 수 있는 것보다 요소가 많습니다.',
-  'preview.size.fitTip': '캔버스를 사용 가능한 너비로 재설정',
+  'preview.size.fitTip': '캔버스를 데스크톱으로 재설정',
   'preview.size.scale': '캔버스 배율',
   'preview.size.scaleTip': '사용 가능한 공간에 맞게 미리보기 크기 조정됨',
   'preview.size.width': '캔버스 너비',

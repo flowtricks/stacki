@@ -113,7 +113,7 @@ export const messages = {
   'preview.reload': 'Recarregar a visualização',
   'preview.reload.diffOverCap': 'O canvas foi recarregado: a alteração era grande demais para atualizar no lugar.',
   'preview.reload.markersOverCap': 'O canvas foi recarregado: esta página tem mais elementos do que ele atualiza no lugar.',
-  'preview.size.fitTip': 'Redefinir o canvas para a largura disponível',
+  'preview.size.fitTip': 'Redefinir a tela para desktop',
   'preview.size.scale': 'Escala do canvas',
   'preview.size.scaleTip': 'Visualização ajustada ao espaço disponível',
   'preview.size.width': 'Largura do canvas',

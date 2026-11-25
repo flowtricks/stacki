@@ -116,7 +116,7 @@ export const messages = {
   'preview.reload': 'Preview opnieuw laden',
   'preview.reload.diffOverCap': 'Het canvas is opnieuw geladen: de wijziging was te groot om ter plekke bij te werken.',
   'preview.reload.markersOverCap': 'Het canvas is opnieuw geladen: deze pagina heeft meer elementen dan ter plekke kunnen worden bijgewerkt.',
-  'preview.size.fitTip': 'Canvas terugzetten naar beschikbare breedte',
+  'preview.size.fitTip': 'Canvas terugzetten naar desktop',
   'preview.size.scale': 'Canvasschaal',
   'preview.size.scaleTip': 'Preview geschaald naar de beschikbare ruimte',
   'preview.size.width': 'Canvasbreedte',

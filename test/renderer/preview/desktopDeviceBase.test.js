@@ -1,15 +1,15 @@
-// Goal: the Desktop device draws the page at the canvas pane's own width less the scrollbar's two 9px gutters, never
-// scaled or shrunk. In a narrow window the page renders at that width, so its media queries switch to the laptop, tablet or phone layout
-// (as in a browser window that size). The toolbar and the style panel tell the truth about it: a pane narrower
-// than the Laptop canvas reads as Laptop (or Tablet, Phone), so no `< 64rem` row ever wears the Desktop icon,
-// and following lands on the query in effect at the pane's width.
+// Goal: the Desktop device draws the project's Desktop width. In a pane with room for it, the page fills the pane (less the
+// scrollbar's two 9px gutters) at scale 1. In a narrower pane it is exactly what typing that width into the width box gives:
+// the same frame width, scale and height, so the page keeps its desktop layout, the toolbar presses Desktop and following lands
+// where that width does (Base in a desktop-first component). A pane that reaches a wider (`up`) breakpoint draws the Desktop
+// width too, never the wider layout under the Desktop button.
 // Method: a table over two fixtures (desktop-first `< X` rows, mobile-first `>= X` rows). Each case runs the real
 // chain the app runs: the frame width (previewFrameWidth), the viewport and its scale (previewViewport), the
 // device the toolbar presses (activeDeviceFor, fed the width the canvas draws at), the row following picks at
 // the viewport width (followedContextKey) and the trigger icon (canvasTriggerIcon), and pins each by value.
-// Desktop is run at panes 300 to 2000; the narrower devices stay framed at their own widths. Then the boundaries
-// (1023/1024/1025, 767/768, 479/480 at a 16px rem), a held (pinned) panel, and the negative space: an unmeasured
-// pane, the exact boundary widths, a wider (`up`) breakpoint taking over a wide pane, a stale custom width, and
+// Desktop is run at panes 700 to 1600; the narrower devices stay framed at their own widths. Then every pane from 300 to 2000,
+// the boundaries (1023/1024/1025, 767/768, 479/480 at a 16px rem), the pane where filling starts, another Desktop width,
+// a held (pinned) panel, and the negative space: an unmeasured pane, an `up` breakpoint, a stale custom width, and
 // the all-breakpoints canvas that keeps its own name at any width.
 
 const test = require('node:test');
@@ -51,22 +51,18 @@ const FIXED_EXPECTED = {
 };
 const DEVICE_WIDTH_PX = { laptop: 1023, tablet: 767, phone: 479 };
 const PANE_WIDTHS_PX = [700, 882, 1100, 1600];
+const DESKTOP_WIDTH_PX = 1440;
 
-// What the Desktop device shows in each pane: the device the width belongs to, and per fixture the row and the icon.
+// What the Desktop device shows at any pane width: per fixture the row following picks and the icon.
 const DESKTOP_EXPECTED = {
-  700: {
-    device: 'tablet',
-    desktopFirst: { key: '@media (width < 48rem)', icon: 'tablet' },
-    mobileFirst: { key: '@media (width >= 30rem)', icon: 'tablet' },
-  },
-  882: { device: 'laptop', desktopFirst: { key: LAPTOP_DOWN, icon: 'laptop' }, mobileFirst: { key: '@media (width >= 48rem)', icon: 'laptop' } },
-  1100: { device: 'desktop', desktopFirst: { key: '', icon: undefined }, mobileFirst: { key: '@media (width >= 64rem)', icon: 'desktop' } },
-  1600: { device: 'desktop', desktopFirst: { key: '', icon: undefined }, mobileFirst: { key: '@media (width >= 64rem)', icon: 'desktop' } },
+  desktopFirst: { key: '', icon: undefined },
+  mobileFirst: { key: '@media (width >= 64rem)', icon: 'desktop' },
 };
+const room = (paneWidthPx, desktopFramePx = DESKTOP_WIDTH_PX) => ({ desktopFramePx, paneWidthPx });
 
 // The chain the canvas, the toolbar and the style panel run for one device in one pane.
 function canvasAt(device, panePx, contexts) {
-  const width = previewFrameWidth(device, undefined, BREAKPOINT_DEFAULTS);
+  const width = previewFrameWidth(device, undefined, BREAKPOINT_DEFAULTS, room(panePx));
   const viewport = previewViewport(width, { width: panePx, height: PANE_HEIGHT_PX }, undefined);
   const key = followedContextKey(contexts, viewport.width, ROOT_FONT_SIZE_PX);
   const icon = canvasTriggerIcon(key, { device, widthPx: viewport.width }, BREAKPOINT_DEFAULTS);
@@ -76,16 +72,23 @@ function canvasAt(device, panePx, contexts) {
 
 for (const [fixture, contexts] of Object.entries(FIXTURES)) {
   for (const panePx of PANE_WIDTHS_PX) {
-    test(`${fixture}: desktop in a ${panePx}px pane is drawn at the pane width, scale 1`, () => {
+    test(`${fixture}: desktop in a ${panePx}px pane draws the Desktop width`, () => {
       const canvas = canvasAt('desktop', panePx, contexts);
-      const expected = DESKTOP_EXPECTED[panePx];
-      assert.equal(canvas.width, undefined, 'Desktop is a fluid frame: it has no width of its own');
-      assert.equal(canvas.viewport.width, panePx - FLUID_GUTTER_PX.side, 'the page is as wide as the pane less the scrollbar’s gutters');
-      assert.equal(canvas.viewport.scale, 1, 'never scaled or shrunk');
-      assert.equal(canvas.viewport.height, PANE_HEIGHT_PX, 'the page is as tall as the pane');
-      assert.equal(canvas.active, expected.device, 'the toolbar presses the device the pane width belongs to');
-      assert.equal(canvas.key, expected[fixture].key, 'following picks the query in effect at the pane width');
-      assert.equal(canvas.icon, expected[fixture].icon, 'the trigger icon');
+      const pane = { width: panePx, height: PANE_HEIGHT_PX };
+      const fills = panePx - FLUID_GUTTER_PX.side >= DESKTOP_WIDTH_PX;
+      if (fills) {
+        assert.equal(canvas.width, undefined, 'a pane with room is filled');
+        assert.equal(canvas.viewport.width, panePx - FLUID_GUTTER_PX.side, 'the page is as wide as the pane less the scrollbar’s gutters');
+        assert.equal(canvas.viewport.scale, 1);
+      } else {
+        const typed = previewViewport(previewFrameWidth('custom', DESKTOP_WIDTH_PX, BREAKPOINT_DEFAULTS, room(panePx)), pane, undefined);
+        assert.deepEqual(canvas.viewport, typed, 'the same frame as typing the Desktop width');
+        assert.equal(canvas.viewport.width, DESKTOP_WIDTH_PX);
+        assert.equal(canvas.viewport.scale, (panePx - 24) / DESKTOP_WIDTH_PX, 'scaled to fit');
+      }
+      assert.equal(canvas.active, 'desktop', 'the toolbar presses Desktop');
+      assert.equal(canvas.key, DESKTOP_EXPECTED[fixture].key, 'following picks the query in effect at the drawn width');
+      assert.equal(canvas.icon, DESKTOP_EXPECTED[fixture].icon, 'the trigger icon');
     });
     for (const device of ['laptop', 'tablet', 'phone']) {
       test(`${fixture}: ${device} in a ${panePx}px pane stays framed`, () => {
@@ -102,21 +105,30 @@ for (const [fixture, contexts] of Object.entries(FIXTURES)) {
   }
 }
 
-test('the Desktop icon is never worn at a width inside a narrower breakpoint, at any pane width', () => {
+test('Desktop draws a desktop width at every pane width, and fills only where it has room', () => {
   // Bounded: 300 to 2000 in steps of 10 is 171 panes.
   for (let panePx = 300; panePx <= 2000; panePx += 10) {
     for (const contexts of Object.values(FIXTURES)) {
       const canvas = canvasAt('desktop', panePx, contexts);
-      assert.equal(canvas.viewport.scale, 1, `${panePx}px: Desktop never scales`);
-      assert.equal(canvas.viewport.width, panePx - FLUID_GUTTER_PX.side, `${panePx}px: Desktop is drawn at the pane width less its gutters`);
-      if (canvas.viewport.width < 1024) {
-        assert.notEqual(canvas.active, 'desktop', `${panePx}px is inside a narrower breakpoint, so the bar cannot say Desktop`);
-        assert.notEqual(canvas.icon, 'desktop', `${panePx}px: no row wears the Desktop icon`);
-      } else {
-        assert.equal(canvas.active, 'desktop', `${panePx}px is Desktop's own width`);
-      }
+      assert.equal(canvas.viewport.width, Math.max(DESKTOP_WIDTH_PX, panePx - FLUID_GUTTER_PX.side), `${panePx}px`);
+      assert.equal(canvas.active, 'desktop', `${panePx}px: the toolbar presses Desktop`);
+      assert.ok(canvas.viewport.scale <= 1, `${panePx}px: never scaled up`);
     }
   }
+});
+
+test('filling starts at the pane that holds the Desktop width and its gutters', () => {
+  const edgePx = DESKTOP_WIDTH_PX + FLUID_GUTTER_PX.side;
+  assert.equal(previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, room(edgePx - 1)), DESKTOP_WIDTH_PX);
+  assert.equal(previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, room(edgePx)), undefined);
+});
+
+test('the project’s own Desktop width is the one drawn', () => {
+  assert.equal(previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, room(850, 1280)), 1280);
+  assert.equal(previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, room(1298, 1280)), undefined);
+  assert.throws(() => previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, room(850, 0)), {
+    message: 'Assertion failed: The Desktop width is positive',
+  });
 });
 
 test('desktop-first: following lands on the breakpoint a narrow Desktop pane is inside', () => {
@@ -141,7 +153,7 @@ for (const [widthPx, desktopFirstKey, mobileFirstKey, device] of BOUNDARIES) {
     assert.equal(followedContextKey(FIXTURES.desktopFirst, widthPx, ROOT_FONT_SIZE_PX), desktopFirstKey);
     assert.equal(followedContextKey(FIXTURES.mobileFirst, widthPx, ROOT_FONT_SIZE_PX), mobileFirstKey);
     assert.equal(deviceForWidth(widthPx, BREAKPOINT_DEFAULTS), device);
-    assert.equal(activeDeviceFor('desktop', widthPx, BREAKPOINT_DEFAULTS), device, 'Desktop fills the pane, so it reads as the width does');
+    assert.equal(activeDeviceFor('custom', widthPx, BREAKPOINT_DEFAULTS), device, 'a width reads as the device it belongs to');
   });
 }
 
@@ -162,24 +174,26 @@ test('negative space: an unmeasured pane, the all-breakpoints canvas and a bad w
   assert.equal(activeDeviceFor('canvas', 2000, BREAKPOINT_DEFAULTS), 'canvas');
   assert.throws(() => activeDeviceFor('', 800, BREAKPOINT_DEFAULTS), { message: 'Assertion failed: activeDeviceFor: a device is named' });
   const unmeasured = canvasAt('desktop', 0, FIXTURES.desktopFirst);
+  assert.equal(unmeasured.width, undefined, 'an unmeasured pane fills until its first measure');
   assert.equal(unmeasured.active, 'desktop');
   assert.equal(unmeasured.viewport.scale, 1);
 });
 
-test('a wider (`up`) breakpoint takes over a pane at its own width', () => {
+test('a pane that reaches a wider (`up`) breakpoint keeps the Desktop layout', () => {
   const wide = { id: 'bp-1', name: 'Wide', direction: 'up', setting: { value: 100, unit: 'rem' } };
   const resolved = resolveBreakpoints([wide, ...BREAKPOINT_DEFAULTS]);
-  assert.equal(previewFrameWidth('desktop', undefined, resolved), undefined, 'Desktop still fills the pane');
-  assert.equal(activeDeviceFor('desktop', 1599, resolved), 'desktop');
-  assert.equal(activeDeviceFor('desktop', 1600, resolved), 'bp-1', 'the pane is drawn at 1600px, where the wider query holds');
-  assert.equal(followedContextKey([BASE, row('@media (width >= 100rem)')], 1599, ROOT_FONT_SIZE_PX), '', 'the wider query misses just under it');
+  assert.equal(previewFrameWidth('desktop', undefined, resolved, room(1617)), undefined, '1599px filled is still Desktop');
+  assert.equal(previewFrameWidth('desktop', undefined, resolved, room(1618)), DESKTOP_WIDTH_PX, '1600px filled would be the wider layout');
+  assert.equal(previewFrameWidth('desktop', undefined, resolved, room(2400)), DESKTOP_WIDTH_PX);
+  assert.equal(followedContextKey([BASE, row('@media (width >= 100rem)')], DESKTOP_WIDTH_PX, ROOT_FONT_SIZE_PX), '');
 });
 
 test('other devices keep their own widths and a custom width stays custom', () => {
-  assert.equal(previewFrameWidth('custom', 900, BREAKPOINT_DEFAULTS), 900);
-  assert.equal(previewFrameWidth('canvas', undefined, BREAKPOINT_DEFAULTS), undefined);
-  assert.equal(previewFrameWidth('desktop', 900, BREAKPOINT_DEFAULTS), undefined, 'a stale custom width is never read on Desktop');
-  assert.equal(previewFrameWidth('laptop', 900, BREAKPOINT_DEFAULTS), 1023, 'a stale custom width is never read on a device');
+  assert.equal(previewFrameWidth('custom', 900, BREAKPOINT_DEFAULTS, room(850)), 900);
+  assert.equal(previewFrameWidth('canvas', undefined, BREAKPOINT_DEFAULTS, room(850)), undefined);
+  assert.equal(previewFrameWidth('desktop', 900, BREAKPOINT_DEFAULTS, room(1600)), undefined, 'a stale custom width is never read on Desktop');
+  assert.equal(previewFrameWidth('desktop', 900, BREAKPOINT_DEFAULTS, room(850)), DESKTOP_WIDTH_PX);
+  assert.equal(previewFrameWidth('laptop', 900, BREAKPOINT_DEFAULTS, room(850)), 1023, 'a stale custom width is never read on a device');
 });
 
 // A fluid frame fills the pane's height at scale 1 and keeps 9px each side for the scrollbar; a fixed width keeps the

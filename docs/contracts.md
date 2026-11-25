@@ -1144,10 +1144,10 @@ Opening a project without saved guide preferences uses defaults in memory. It do
 `.stacki/breakpoints.json` contains `{ version: 4, desktop: { value, unit }, breakpoints: [...] }`
 (`shared/properties/projectBreakpoints.ts`): Desktop's frame width and an ordered list of `{ id, name?, value, unit }`,
 `unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its only uses are the width of the
-Desktop frame in the side-by-side (all breakpoints) view and the line that decides on which side of Desktop a breakpoint is. The
-single canvas's Desktop button is the full available width, never scaled: a pane narrower than a breakpoint's canvas draws the page
-at the pane's width (scale 1), so its media queries switch to that layout, and the preview bar and the style panel's follow read
-the device that width belongs to (`activeDeviceFor`), a Laptop-wide pane as Laptop, never as Desktop. A breakpoint has no stored direction: it is DERIVED from its
+Desktop frame in the side-by-side (all breakpoints) view, the single canvas's Desktop width, and the line that decides on which
+side of Desktop a breakpoint is. The single canvas's Desktop device fills a pane that has room for that width and reads as
+Desktop (`activeDeviceFor`); a narrower pane, or one that reaches an `up` breakpoint, draws exactly that width, framed and scaled
+to fit, as the same number typed into the width box does (`previewFrameWidth`, docs/style-follow-canvas.md). A breakpoint has no stored direction: it is DERIVED from its
 number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
 exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
 The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the

@@ -28,7 +28,7 @@ const AREA = { width: 1800, height: 900 };
 // Bar order (breakpointDevices.ts barDevices): the `up` one, Desktop, the three `down` ones, the all-breakpoints canvas.
 const EXPECTED = [
   { key: '1', device: 'wide', widthPx: 1600 },
-  { key: '2', device: 'desktop', widthPx: undefined },
+  { key: '2', device: 'desktop', widthPx: 1440 },
   { key: '3', device: 'laptop', widthPx: 1023 },
   { key: '4', device: 'tablet', widthPx: 767 },
   { key: '5', device: 'phone', widthPx: 479 },
@@ -52,7 +52,7 @@ const BREAKPOINTS = resolveBreakpoints([
   { id: 'phone', name: undefined, direction: 'down', setting: { value: 30, unit: 'rem' } },
 ]);
 
-// Settings' Desktop width (90rem), the narrowest the Desktop device draws; the stage is wider.
+// The stage is wide enough to reach the wide breakpoint, so Desktop draws Settings' Desktop width (90rem), not the stage.
 
 // The forwarded key, replayed on the document as appNodeEdits.ts replays it.
 window.addEventListener('message', (event) => {
@@ -65,13 +65,13 @@ window.addEventListener('message', (event) => {
 });
 
 function Canvas({ device, setDevice, dimensions }) {
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: true }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: true, desktopFramePx: 1440 }, setDevice);
   window.harness.canvasWidth = sizing.viewport.width;
   return React.createElement('div', { className: 'preview-frame-wrap', ref: sizing.wrapRef, style: { position: 'absolute', inset: 0 } },
     React.createElement(SizedFrame, { sizing }, React.createElement('div', { className: 'canvas-page' })));
 }
 function PreviewMode({ device, setDevice, dimensions }) {
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: false }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINTS, { deviceShortcuts: false, desktopFramePx: 1440 }, setDevice);
   window.harness.previewWidth = sizing.viewport.width;
   return React.createElement(PreviewModeStage, { sizing }, React.createElement('iframe', { title: 'Site', src: '/site.html' }));
 }

@@ -112,7 +112,7 @@ export const messages = {
   'preview.reload': '重新加载预览',
   'preview.reload.diffOverCap': '画布已重新加载：更改过大，无法就地更新。',
   'preview.reload.markersOverCap': '画布已重新加载：此页面的元素数量超过了就地更新的上限。',
-  'preview.size.fitTip': '将画布重置为可用宽度',
+  'preview.size.fitTip': '将画布重置为桌面视图',
   'preview.size.scale': '画布缩放',
   'preview.size.scaleTip': '预览已缩放以适应可用空间',
   'preview.size.width': '画布宽度',

@@ -116,7 +116,7 @@ export const messages = {
   'preview.reload': 'Ricarica anteprima',
   'preview.reload.diffOverCap': 'Il canvas è stato ricaricato: la modifica era troppo grande per aggiornarlo sul posto.',
   'preview.reload.markersOverCap': 'Il canvas è stato ricaricato: questa pagina ha più elementi di quanti ne aggiorni sul posto.',
-  'preview.size.fitTip': 'Riporta il canvas alla larghezza disponibile',
+  'preview.size.fitTip': 'Reimposta l’area di lavoro su desktop',
   'preview.size.scale': 'Scala del canvas',
   'preview.size.scaleTip': 'Anteprima scalata per adattarsi allo spazio disponibile',
   'preview.size.width': 'Larghezza del canvas',

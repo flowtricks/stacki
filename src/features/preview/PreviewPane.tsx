@@ -119,7 +119,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const ownDimensions = usePreviewDimensions();
   const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
-  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);

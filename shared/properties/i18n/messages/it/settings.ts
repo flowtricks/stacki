@@ -82,7 +82,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Molto grande',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopNote': 'Larghezza del riquadro nella vista affiancata. Mai usata come media query.',
+  'settings.breakpoints.desktopNote': 'Larghezza dell’area di lavoro desktop, ridotta per adattarsi a una finestra più piccola. Mai usata come media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) finirebbe dall’altra parte di Desktop.',
   'settings.breakpoints.error.file': 'Impossibile usare il file dei breakpoint, quindi vengono mostrati i valori predefiniti e il file resta com’è. {message}',
   'settings.breakpoints.error.name': 'Un nome è lungo da 1 a {maximum} caratteri, e ognuno è diverso.',

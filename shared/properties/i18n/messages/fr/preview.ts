@@ -115,7 +115,7 @@ export const messages = {
   'preview.reload': 'Recharger l’aperçu',
   'preview.reload.diffOverCap': 'Le canevas a rechargé : la modification était trop importante pour une mise à jour sur place.',
   'preview.reload.markersOverCap': 'Le canevas a rechargé : cette page contient plus d’éléments qu’il n’en met à jour sur place.',
-  'preview.size.fitTip': 'Rétablir le canevas à la largeur disponible',
+  'preview.size.fitTip': 'Rétablir le canevas en mode Bureau',
   'preview.size.scale': 'Échelle du canevas',
   'preview.size.scaleTip': 'Aperçu mis à l’échelle de l’espace disponible',
   'preview.size.width': 'Largeur du canevas',

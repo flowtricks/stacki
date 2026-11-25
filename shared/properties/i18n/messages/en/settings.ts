@@ -79,7 +79,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Extra large',
   'settings.breakpoints.defaultName.up2': 'Ultra',
   'settings.breakpoints.desktop': 'Desktop',
-  'settings.breakpoints.desktopNote': 'Frame width in the side-by-side view. Never used as a media query.',
+  'settings.breakpoints.desktopNote': 'Desktop canvas width, scaled to fit a smaller window. Never used as a media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) would end up on the other side of Desktop.',
   'settings.breakpoints.error.file': 'The breakpoints file could not be used, so the defaults are shown and the file is left as it is. {message}',
   'settings.breakpoints.error.name': 'A name is 1 to {maximum} characters, and each one is different.',

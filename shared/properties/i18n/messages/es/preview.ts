@@ -115,7 +115,7 @@ export const messages = {
   'preview.reload': 'Recargar la vista previa',
   'preview.reload.diffOverCap': 'El lienzo se recargó: el cambio era demasiado grande para actualizarlo en el sitio.',
   'preview.reload.markersOverCap': 'El lienzo se recargó: esta página tiene más elementos de los que actualiza en el sitio.',
-  'preview.size.fitTip': 'Restablecer el lienzo al ancho disponible',
+  'preview.size.fitTip': 'Restablecer el lienzo a escritorio',
   'preview.size.scale': 'Escala del lienzo',
   'preview.size.scaleTip': 'Vista previa escalada al espacio disponible',
   'preview.size.width': 'Ancho del lienzo',

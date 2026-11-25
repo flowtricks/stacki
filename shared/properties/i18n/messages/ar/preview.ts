@@ -112,7 +112,7 @@ export const messages = {
   'preview.reload': 'إعادة تحميل المعاينة',
   'preview.reload.diffOverCap': 'أُعيد تحميل اللوحة: كان التغيير أكبر من أن يُحدَّث في مكانه.',
   'preview.reload.markersOverCap': 'أُعيد تحميل اللوحة: تحتوي هذه الصفحة على عناصر أكثر مما يمكن تحديثه في مكانه.',
-  'preview.size.fitTip': 'إعادة اللوحة إلى العرض المتاح',
+  'preview.size.fitTip': 'إعادة اللوحة إلى سطح المكتب',
   'preview.size.scale': 'مقياس اللوحة',
   'preview.size.scaleTip': 'تم تحجيم المعاينة لتناسب المساحة المتاحة',
   'preview.size.width': 'عرض اللوحة',

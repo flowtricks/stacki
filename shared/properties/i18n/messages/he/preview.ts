@@ -112,7 +112,7 @@ export const messages = {
   'preview.reload': 'טעינה מחדש של התצוגה המקדימה',
   'preview.reload.diffOverCap': 'הקנבס נטען מחדש: השינוי היה גדול מדי לעדכון במקום.',
   'preview.reload.markersOverCap': 'הקנבס נטען מחדש: בדף הזה יש יותר אלמנטים ממה שאפשר לעדכן במקום.',
-  'preview.size.fitTip': 'איפוס הקנבס לרוחב הזמין',
+  'preview.size.fitTip': 'איפוס הקנבס לתצוגת מחשב שולחני',
   'preview.size.scale': 'קנה מידה של הקנבס',
   'preview.size.scaleTip': 'התצוגה המקדימה מותאמת לשטח הזמין',
   'preview.size.width': 'רוחב הקנבס',

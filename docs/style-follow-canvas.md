@@ -32,16 +32,21 @@ in Base. Turning it back on targets the canvas's own query again, in the same fr
 Why a pick keeps following: picking a row while following asks to see and edit that breakpoint, so
 the target and the canvas move together. Only a row with no canvas width to go to holds instead.
 
-## The Desktop device at a narrow pane
+## The Desktop device and the pane
 
-The Desktop device fills the pane at the pane's own width, never scaled (`previewFrameWidth` has no
-width for it, `previewViewport` scale 1). The canvas reports that width, so following works on the
-width the page really has. A pane narrower than the Laptop canvas is therefore a Laptop layout: the
-page's media queries switch, the toolbar shows the device that width belongs to (`activeDeviceFor`,
-here Laptop, not Desktop), and the panel follows `< 64rem` under the Laptop icon. No `< 64rem` row
-ever wears the Desktop icon, because the icon is the canvas's own device at the width it draws.
-Only a pane inside the Desktop range (past the widest `down` canvas, under the narrowest `up` one)
-reads as Desktop; a pane at or past an `up` canvas reads as that breakpoint's device.
+The Desktop device fills the pane, at scale 1, when the pane has room for the project's Desktop width
+(Settings, 90rem unless set) and the filled width still reads as Desktop. Otherwise it draws that
+width, exactly as the same number typed into the width box: framed and scaled to fit
+(`previewFrameWidth` in `usePreviewSizing.ts`, the one rule for the toolbar button, the device key,
+Fit, the style panel's Base, apps' `canvas.setDevice` and the preview mode, in Desktop and Studio).
+Two panes get the fixed width:
+
+- a narrower one, which filled would lay the page out as a laptop or phone under the Desktop button;
+- one that reaches an `up` breakpoint, which filled would lay the page out in that wider layout.
+
+Resizing the window moves between the two. The canvas reports the width it draws, so the toolbar
+(`activeDeviceFor`) presses Desktop and following lands where that width does: Base in a
+desktop-first component. An unmeasured pane fills until its first measure.
 
 ## Where a picked row puts the canvas
 

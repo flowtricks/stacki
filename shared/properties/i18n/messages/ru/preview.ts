@@ -114,7 +114,7 @@ export const messages = {
   'preview.reload': 'Перезагрузить предпросмотр',
   'preview.reload.diffOverCap': 'Холст перезагружен: изменение было слишком большим для обновления на месте.',
   'preview.reload.markersOverCap': 'Холст перезагружен: на этой странице больше элементов, чем можно обновить на месте.',
-  'preview.size.fitTip': 'Сбросить холст до доступной ширины',
+  'preview.size.fitTip': 'Вернуть холст к виду для компьютера',
   'preview.size.scale': 'Масштаб холста',
   'preview.size.scaleTip': 'Предпросмотр масштабирован под доступное место',
   'preview.size.width': 'Ширина холста',

@@ -692,14 +692,20 @@ test('custom widths preserve layout size, scale ' + 'to fit, and reset with devi
     assert.match(sized.style.transform, /scale\(1\)/);
     await setWidth('7680');
     assert.equal(sized.style.width, '7680px');
-    await act(() => document.querySelector('[data-tooltip="Reset canvas to available width"]').click());
-    // An 824px pane: Desktop fills it less the scrollbar's two 9px gutters, never scaled, so the page's media queries see 806px.
+    await act(() => document.querySelector('[data-tooltip="Reset canvas to Desktop"]').click());
+    // An 824px pane has no room for Desktop: the same frame as typing 1440, so the page keeps its desktop layout.
+    assert.equal(sized.style.width, '1440px');
+    assert.match(sized.style.transform, /scale\(0\.5555/);
+    assert.equal(widthInput().value, '1440');
+    containerWidth = 2000;
+    await act(() => observers.forEach((callback) => callback()));
+    // A pane with room: Desktop fills it less the scrollbar's two 9px gutters, never scaled.
     assert.equal(sized.style.width, 'calc(100% - 18px)');
     assert.equal(sized.style.height, '100%');
     assert.doesNotMatch(sized.style.transform, /scale/);
     // The outlines and the column guides are drawn in their own layer, centred like the frame: same width, or they slide off the page.
     assert.equal(document.querySelector('.preview-overlay-layer').style.width, sized.style.width, 'the overlay layer covers exactly the fluid frame');
-    containerWidth = 2000;
+    containerWidth = 2100;
     await act(() => observers.forEach((callback) => callback()));
     // A wider pane: the fluid frame fills the canvas by CSS too, so it follows a side-panel drag without a render.
     assert.equal(sized.style.width, 'calc(100% - 18px)');

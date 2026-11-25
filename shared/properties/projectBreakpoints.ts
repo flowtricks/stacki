@@ -8,9 +8,10 @@
 //       { "id": "tablet",                 "value": 48,  "unit": "rem" },
 //       { "id": "phone",                  "value": 30,  "unit": "rem" } ] }
 //
-// Desktop is the base of the bar and always full width in the editor's single canvas. Its value here is NOT a media query and is
-// never written into one: it is only the width of the Desktop frame in the side-by-side (all breakpoints) view, 90rem (1440px) by
-// default, and the line that decides on which side of Desktop a breakpoint falls.
+// Desktop is the base of the bar. Its value here is NOT a media query and is never written into one: it is the width of the
+// Desktop frame in the side-by-side (all breakpoints) view, 90rem (1440px) by default, the width the single canvas's Desktop
+// button draws (scaled to fit) when the pane has no room for it (usePreviewSizing previewFrameWidth), and the line that decides
+// on which side of Desktop a breakpoint falls.
 //
 // A breakpoint has no direction to choose: it is DERIVED from its number against Desktop's. Wider than Desktop it is an `up`
 // breakpoint, the query `width >= X` (mobile first), and its canvas is exactly X (100rem is 1600px). Narrower, it is a `down`

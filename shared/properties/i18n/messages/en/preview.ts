@@ -113,7 +113,7 @@ export const messages = {
   'preview.reload': 'Reload preview',
   'preview.reload.diffOverCap': 'The canvas reloaded: the change was too large to update in place.',
   'preview.reload.markersOverCap': 'The canvas reloaded: this page has more elements than it updates in place.',
-  'preview.size.fitTip': 'Reset canvas to available width',
+  'preview.size.fitTip': 'Reset canvas to Desktop',
   'preview.size.scale': 'Canvas scale',
   'preview.size.scaleTip': 'Preview scaled to fit the available space',
   'preview.size.width': 'Canvas width',

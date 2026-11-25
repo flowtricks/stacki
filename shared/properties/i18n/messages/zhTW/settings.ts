@@ -78,7 +78,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': '特大',
   'settings.breakpoints.defaultName.up2': '超大',
   'settings.breakpoints.desktop': '桌機',
-  'settings.breakpoints.desktopNote': '並排檢視中的畫面寬度。永遠不會作為 media query 使用。',
+  'settings.breakpoints.desktopNote': '桌面版畫布寬度，視窗較小時會縮小以符合大小。永遠不會作為 media query 使用。',
   'settings.breakpoints.error.desktopFlips': '{name}（{limit}）會跑到桌機的另一側。',
   'settings.breakpoints.error.file': '無法使用斷點檔案，因此顯示預設值，檔案維持原狀。{message}',
   'settings.breakpoints.error.name': '名稱長度為 1 到 {maximum} 個字元，且每個名稱都必須不同。',

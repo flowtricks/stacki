@@ -71,8 +71,8 @@ export function PreviewCanvas(props: Props) {
     offSite: { clearOverlays: props.preview.clearOverlays },
     pages: props.sitePages,
   });
-  const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
-  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true }, props.onDevice);
+  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,

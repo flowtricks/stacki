@@ -80,7 +80,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Bardzo duży',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopNote': 'Szerokość ramki w widoku obok siebie. Nigdy nie używana jako media query.',
+  'settings.breakpoints.desktopNote': 'Szerokość kanwy komputera, pomniejszana, aby zmieściła się w mniejszym oknie. Nigdy nie używana jako media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) znalazłby się po drugiej stronie Desktopa.',
   'settings.breakpoints.error.file': 'Nie można użyć pliku breakpointów, więc pokazano wartości domyślne, a plik pozostał bez zmian. {message}',
   'settings.breakpoints.error.name': 'Nazwa ma od 1 do {maximum} znaków, a każda jest inna.',

@@ -115,7 +115,7 @@ export const messages = {
   'preview.reload': 'プレビューを再読み込み',
   'preview.reload.diffOverCap': '変更が大きすぎてその場で更新できないため、キャンバスを再読み込みしました。',
   'preview.reload.markersOverCap': 'このページはその場で更新できる要素数を超えているため、キャンバスを再読み込みしました。',
-  'preview.size.fitTip': 'キャンバスを利用可能な幅にリセット',
+  'preview.size.fitTip': 'キャンバスをデスクトップに戻す',
   'preview.size.scale': 'キャンバスの倍率',
   'preview.size.scaleTip': '利用可能なスペースに合わせてプレビューを縮小しています',
   'preview.size.width': 'キャンバスの幅',

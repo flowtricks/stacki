@@ -113,7 +113,7 @@ export const messages = {
   'preview.reload': 'प्रीव्यू रीलोड करें',
   'preview.reload.diffOverCap': 'कैनवास रीलोड हुआ: बदलाव इतना बड़ा था कि उसे सीधे अपडेट नहीं किया जा सका।',
   'preview.reload.markersOverCap': 'कैनवास रीलोड हुआ: इस पेज में सीधे अपडेट होने से ज़्यादा एलिमेंट हैं।',
-  'preview.size.fitTip': 'कैनवास को उपलब्ध चौड़ाई पर रीसेट करें',
+  'preview.size.fitTip': 'कैनवस को डेस्कटॉप पर रीसेट करें',
   'preview.size.scale': 'कैनवास स्केल',
   'preview.size.scaleTip': 'प्रीव्यू उपलब्ध जगह में समाने के लिए स्केल हुआ है',
   'preview.size.width': 'कैनवास की चौड़ाई',

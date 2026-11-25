@@ -1,8 +1,7 @@
-// Goal: in the browser Desktop ships, the Desktop device in a narrow pane draws the page at the pane's own width less
-// the scrollbar's two 9px gutters, never scaled or shrunk: an 882px pane lays the page out at 864px, so its `(width < 64rem)` rules (Laptop's)
-// apply, as in a browser window that size, and the toolbar says Laptop rather than Desktop. Switching devices
-// never draws a frame of the page at a width other than the old or the new device's (no flicker through the pane
-// width).
+// Goal: in the browser Desktop ships, the Desktop device in a narrow pane draws the page at the Desktop width (1440px),
+// scaled to fit, as a typed width is: in an 882px pane the page is laid out at 1440px, so its `(width < 64rem)` rules
+// (Laptop's) do not apply and the toolbar says Desktop. Switching devices never draws a frame of the page at a width
+// other than the old or the new device's (no flicker through the pane width).
 //
 //   node test/renderer/preview/desktopDeviceChromium.test.js
 //
@@ -10,8 +9,8 @@
 // the frame. A harness bundles the real SizedFrame and usePreviewSizing with the real styles.css in an
 // 882 x 700 pane; the page is an iframe whose stylesheet paints Laptop red (`width < 64rem`) and Base blue.
 // The probe reads, inside the frame, matchMedia('(width < 64rem)'), innerWidth, the frame's transform and the
-// painted colour, in two modes: `before` is the all-breakpoints device (fluid by CSS), `after` picks Desktop;
-// the two must agree. Then, with a requestAnimationFrame recorder running, it switches Laptop, Desktop,
+// painted colour, in two modes: `before` is the all-breakpoints device (fluid by CSS, the pane's own width), `after`
+// picks Desktop. Then, with a requestAnimationFrame recorder running, it switches Laptop, Desktop,
 // Tablet, Desktop, Phone, Desktop and checks every recorded frame. Screenshots of both modes are written to
 // node_modules/.stacki-test/desktop-device-chromium/.
 const fs = require('node:fs');
@@ -24,7 +23,10 @@ const PANE = { width: 882, height: 700 };
 // The fluid frame leaves a 9px gutter on each side for the canvas's scrollbar (previewViewport.ts `FLUID_GUTTER_PX`).
 const FLUID_PAGE_WIDTH_PX = PANE.width - 18;
 const SWITCHES = ['laptop', 'desktop', 'tablet', 'desktop', 'phone', 'desktop'];
-const DEVICE_WIDTH_PX = { laptop: 1023, tablet: 767, phone: 479, desktop: FLUID_PAGE_WIDTH_PX };
+const DESKTOP_WIDTH_PX = 1440;
+// A framed device keeps 24px of the pane as its gutter (previewViewport.ts).
+const DESKTOP_SCALE = (PANE.width - 24) / DESKTOP_WIDTH_PX;
+const DEVICE_WIDTH_PX = { laptop: 1023, tablet: 767, phone: 479, desktop: DESKTOP_WIDTH_PX };
 
 // The import paths are JSON-quoted: a Windows path's `\` inside a plain quoted string is an
 // escape, so a quoted literal only works on POSIX.
@@ -45,7 +47,7 @@ const PAGE = '<!doctype html><html><head><style>' +
 function Harness() {
   const [device, setDevice] = useState(mode === 'before' ? 'canvas' : 'desktop');
   const dimensions = usePreviewDimensions();
-  const sizing = usePreviewSizing(device, dimensions, BREAKPOINT_DEFAULTS, { deviceShortcuts: false }, setDevice);
+  const sizing = usePreviewSizing(device, dimensions, BREAKPOINT_DEFAULTS, { deviceShortcuts: false, desktopFramePx: 1440 }, setDevice);
   window.harness = { device, setDevice, width: sizing.viewport.width, scale: sizing.viewport.scale, active: sizing.activeDevice };
   return React.createElement('div', { className: 'preview-frame-wrap', ref: sizing.wrapRef, style: { position: 'absolute', inset: 0 } },
     React.createElement(SizedFrame, { sizing }, React.createElement('iframe', { title: 'Site', srcDoc: PAGE })));
@@ -137,7 +139,7 @@ function check(output) {
   if (before === undefined || after === undefined) {
     return ['both modes were read'];
   }
-  // The fluid all-breakpoints frame and Desktop both fill the 882px pane less its gutters, and so agree.
+  // The fluid all-breakpoints frame fills the 882px pane less its gutters; Desktop does not fit there.
   if (before.innerWidth !== FLUID_PAGE_WIDTH_PX) {
     failures.push(`before: the filling page is the pane's width less its gutters (${before.innerWidth})`);
   }
@@ -147,23 +149,24 @@ function check(output) {
   if (after.device !== 'desktop') {
     failures.push(`after: the device is desktop (${after.device})`);
   }
-  if (after.active !== 'laptop') {
-    failures.push(`after: the toolbar presses the device the 882px width belongs to, laptop (${after.active})`);
+  if (after.active !== 'desktop') {
+    failures.push(`after: the toolbar presses Desktop (${after.active})`);
   }
-  if (after.laptop !== true) {
-    failures.push("after: window.matchMedia('(width < 64rem)').matches is true inside the frame, as in an 882px window");
+  if (after.laptop !== false) {
+    failures.push("after: window.matchMedia('(width < 64rem)').matches is false inside the frame");
   }
-  if (after.innerWidth !== FLUID_PAGE_WIDTH_PX) {
-    failures.push(`after: the page is laid out at the pane's width less its gutters (${after.innerWidth})`);
+  if (after.innerWidth !== DESKTOP_WIDTH_PX) {
+    failures.push(`after: the page is laid out at the Desktop width (${after.innerWidth})`);
   }
-  if (after.background !== 'rgb(255, 0, 0)') {
-    failures.push(`after: the Laptop rule paints the page (${after.background})`);
+  if (after.background !== 'rgb(0, 0, 255)') {
+    failures.push(`after: the Base rule paints the page (${after.background})`);
   }
-  if (after.scale !== 1) {
-    failures.push(`after: the frame is never scaled (${after.scale})`);
+  if (Math.abs(after.scale - DESKTOP_SCALE) > 0.001) {
+    failures.push(`after: the frame is scaled to fit (${after.scale})`);
   }
-  if (after.transform !== 'translateX(-50%)' && after.transform !== 'none' && !/^matrix\(1, 0, 0, 1,/.test(after.transform)) {
-    failures.push(`after: the frame carries no scale (${after.transform})`);
+  const drawn = /^matrix\(([0-9.]+),/.exec(after.transform);
+  if (drawn === null || Math.abs(Number(drawn[1]) - DESKTOP_SCALE) > 0.001) {
+    failures.push(`after: the frame carries that scale (${after.transform})`);
   }
   // No flicker: each frame lays the page out at the committed device's own width, never the pane's.
   if (output.frames.length < SWITCHES.length) {
@@ -175,8 +178,8 @@ function check(output) {
     if (frame.innerWidth !== DEVICE_WIDTH_PX[frame.device]) {
       failures.push(`a frame with ${frame.device} committed is laid out at ${frame.innerWidth}, not ${DEVICE_WIDTH_PX[frame.device]}`);
     }
-    if (frame.device === 'desktop' && !frame.laptop) {
-      failures.push('a Desktop frame in an 882px pane missed (width < 64rem)');
+    if (frame.device === 'desktop' && frame.laptop) {
+      failures.push('a Desktop frame in an 882px pane matched (width < 64rem)');
     }
   }
   for (const device of SWITCHES) {

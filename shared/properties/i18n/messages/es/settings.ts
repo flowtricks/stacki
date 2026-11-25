@@ -83,7 +83,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Extra grande',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Escritorio',
-  'settings.breakpoints.desktopNote': 'Ancho del marco en la vista en paralelo. Nunca se usa como media query.',
+  'settings.breakpoints.desktopNote': 'Ancho del lienzo de escritorio, reducido para caber en una ventana más pequeña. Nunca se usa como media query.',
   'settings.breakpoints.error.desktopFlips': '{name} ({limit}) quedaría al otro lado de Escritorio.',
   'settings.breakpoints.error.file':
     'No se pudo usar el archivo de puntos de corte, así que se muestran los valores predeterminados y el archivo queda intacto. {message}',
