@@ -142,8 +142,8 @@ const CORPUS = [
     ],
   },
   {
-    // A Heading-like line of plain words with tagged children (`Our wild words<br><strong>work</strong>`): a click on the bare words
-    // still picks the text node, but a hover on them is their owner's, since only tagged children get an outline of their own.
+    // A Heading-like line of plain words with tagged children (`Our wild words<br><strong>work</strong>`): the bare words are no
+    // target of their own, for a click as for a hover; only tagged children get an outline.
     name: 'plain-text-among-tagged-children',
     html: page(
       marked(
@@ -155,7 +155,7 @@ const CORPUS = [
       ),
     ),
     clicks: [
-      { at: '#line', expect: '0.0', hover: '0' },
+      { at: '#line', expect: '0', hover: '0' },
       { at: '#strong', expect: '0.1' },
     ],
   },
