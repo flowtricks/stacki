@@ -15,10 +15,17 @@ const path = require('node:path');
 const { repoPath } = require('../helpers/sources.js');
 const { waitFor } = require('../helpers/waitFor.js');
 // Playwright is Studio's dev dependency (its browser tests); Desktop reuses it here rather than adding its own copy.
-const { _electron: electron } = require(repoPath('studio/node_modules/playwright'));
+const { _electron: electron } = require(
+  fs.existsSync(repoPath('studio/node_modules/playwright'))
+    ? repoPath('studio/node_modules/playwright')
+    : '/Users/timothyricks/Documents/Projects/stacki/studio/node_modules/playwright',
+);
 
 const SHOTS = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'stacki-rich-text-shots'));
-const SITE = repoPath('studio/test/fixtures/site');
+// A worktree may not have installed the fixture site's packages: the main checkout's are read, never written.
+const SITE = fs.existsSync(repoPath('studio/test/fixtures/site/node_modules'))
+  ? repoPath('studio/test/fixtures/site')
+  : '/Users/timothyricks/Documents/Projects/stacki/studio/test/fixtures/site';
 const WAIT_MS = 60_000;
 
 function writeFixture(project) {
@@ -57,7 +64,10 @@ function writeFixture(project) {
   write('src/components/HtmlBlock.astro', '---\nconst { html } = Astro.props;\n---\n<div class="html-block" set:html={html} />\n');
   write(
     'src/pages/index.astro',
-    '---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\nimport LumosRichText from "../components/LumosRichText.astro";\nimport HtmlBlock from "../components/HtmlBlock.astro";\nimport LumosParagraph from "../components/typography/Paragraph.astro";\n---\n<html><body>\n<Paragraph>Words of a paragraph</Paragraph>\n<RichText><h2>Title</h2><p>Hello world</p></RichText>\n<LumosRichText><p>Lumos text</p></LumosRichText>\n<HtmlBlock html="<p>From a prop</p>" />\n<HtmlBlock html={"<p>" + "joined" + "</p>"} />\n<LumosParagraph id="lumos-p">\n  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.\n</LumosParagraph>\n</body></html>\n',
+    `---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\nimport LumosRichText from "../components/LumosRichText.astro";\nimport HtmlBlock from "../components/HtmlBlock.astro";\nimport LumosParagraph from "../components/typography/Paragraph.astro";\n---\n<html><body>\n<Paragraph>Words of a paragraph</Paragraph>\n<RichText><h2>Title</h2><p>Hello world</p></RichText>\n<LumosRichText><p>Lumos text</p></LumosRichText>\n<HtmlBlock html="<p>From a prop</p>" />\n<HtmlBlock html={"<p>" + "joined" + "</p>"} />\n<LumosParagraph id="lumos-p">\n  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.${
+      // The key pass starts from a break saved earlier, written open as HTML writes it, on a line of its own.
+      process.env['RICH_TEXT_KEYS'] === '1' ? '<br>\n  Another paragraph' : ''
+    }\n</LumosParagraph>\n<p id="plain-p" class="lead">Plain <strong>words</strong></p>\n<RichText />\n</body></html>\n`,
   );
   write(
     '.stacki/components.json',
@@ -86,7 +96,8 @@ function writeFixture(project) {
   writeFixture(project);
   const page = () => fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8');
   const app = await electron.launch({
-    args: [repoPath('dist/electron/main.js'), `--user-data-dir=${path.join(root, 'user-data')}`, project],
+    // A mock keychain: a test app never asks the person's macOS keychain for anything (its own settings folder, the real HOME).
+    args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
   });
   const results = {};
@@ -325,69 +336,137 @@ async function lookPass(window, canvas, locale, results) {
 // reads the canvas and the file, collects any error toast, and times how long a break takes to show and to be saved.
 async function keyPass(window, canvas, page, results) {
   const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
-  const paragraph = canvas.locator('#lumos-p');
-  const inner = () => paragraph.evaluate((element) => element.innerHTML.replace(/ data-avb-[a-z]+="[^"]*"/g, '').replace(/<!--[^>]*-->/g, ''));
-  const source = () => (/<LumosParagraph id="lumos-p">([\s\S]*?)<\/LumosParagraph>/.exec(page())?.[1] ?? '').trim();
   const toast = () => window.locator('body').evaluate((body) => (/[^.\n]*(?:couldn.t|could not|cannot|can.t)[^.\n]*/i.exec(body.innerText) ?? [''])[0]);
-  // The frame's editing messages, to tell a save that was never sent from one that was refused.
-  await window.evaluate(() => {
-    Reflect.set(window, '__posts', []);
-    addEventListener('message', (event) => {
-      const type = event.data?.type;
-      if (typeof type === 'string' && /^avb:(rich-save|text-(save|inactive|active|refused))/.test(type)) {
-        Reflect.get(window, '__posts').push(`${type}:${event.data.key ?? ''}:${event.data.html ?? event.data.value ?? ''}`);
-      }
-    });
-  });
-  // The panel's Content field: Enter at the end of the words, then more words.
-  await paragraph.click();
+  const lumos = () => (/<LumosParagraph id="lumos-p">([\s\S]*?)<\/LumosParagraph>/.exec(page())?.[1] ?? '').trim();
+  const plain = () => /<p id="plain-p" class="lead">([\s\S]*?)<\/p>/.exec(page())?.[1] ?? '';
+  // Opens the words of an element for typing, the caret placed in the text node holding `words` at `at` (start/end).
+  const open = async (selector, words, at) => {
+    for (let attempt = 0; attempt < 10 && (await canvas.locator('[data-avb-text-editor]').count()) === 0; attempt++) {
+      await canvas.locator(selector).dblclick({ position: { x: 120, y: 8 } });
+      await canvas
+        .locator('[data-avb-text-editor]')
+        .first()
+        .waitFor({ timeout: 2_000 })
+        .catch(() => undefined);
+    }
+    await canvas.locator(selector).evaluate(
+      (element, place) => {
+        const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          if (node.data.includes(place.words)) {
+            const offset = place.at === 'start' ? node.data.indexOf(place.words) : node.data.indexOf(place.words) + place.words.length;
+            element.ownerDocument.getSelection().collapse(node, offset);
+            return;
+          }
+        }
+      },
+      { words, at },
+    );
+  };
+  const step = async (name, run, until, read) => {
+    await run();
+    await leaveCanvas(window);
+    await waitForFile(read, until).catch(() => undefined);
+    results[name] = { source: read(), ok: until(read()), toast: await toast() };
+    await canvas
+      .locator('[data-avb-text-editor]')
+      .first()
+      .waitFor({ state: 'detached', timeout: WAIT_MS })
+      .catch(() => undefined);
+  };
+  // 1. A break saved earlier (`<br>` on its own line), Backspace at the start of the second line: the lines join.
+  await step(
+    'backspaceSavedBreak',
+    async () => {
+      await open('#lumos-p', 'Another', 'start');
+      await window.keyboard.press('Backspace');
+    },
+    (text) => !/<br/.test(text) && /tristique\.\s*Another paragraph/.test(text),
+    lumos,
+  );
+  // 2. A new break at the end and words on it, ⌘ Enter, one more character, then Backspace twice (the character, the break).
+  await step(
+    'enterThenBackspace',
+    async () => {
+      await open('#lumos-p', 'paragraph', 'end');
+      await window.keyboard.press('Enter');
+      await window.keyboard.type('Line two');
+      await window.keyboard.press(`${mod}+Enter`);
+      await window.keyboard.type('x');
+      await window.keyboard.press('Backspace');
+      await window.keyboard.press('Backspace');
+    },
+    (text) => /paragraph\s*<br \/>\s*Line two$/.test(text),
+    lumos,
+  );
+  // 3. Forward Delete at the end of the first line takes the break out, the second line's words kept.
+  await step(
+    'deleteForward',
+    async () => {
+      await open('#lumos-p', 'paragraph', 'end');
+      await window.keyboard.press('Delete');
+    },
+    (text) => !/<br/.test(text) && /paragraph\s*Line two/.test(text),
+    lumos,
+  );
+  // 4. Enter in the middle of the words, then a selection across the new break deleted.
+  await step(
+    'middleThenSelectionAcross',
+    async () => {
+      await open('#lumos-p', 'Lorem ipsum', 'end');
+      await window.keyboard.press('Enter');
+      await window.keyboard.press('Shift+ArrowLeft');
+      await window.keyboard.press('Shift+ArrowLeft');
+      await window.keyboard.press('Backspace');
+    },
+    (text) => !/<br/.test(text) && /Lorem ipsu(?: |&#160;)dolor/.test(text),
+    lumos,
+  );
+  // 5. Enter at the start of the words.
+  await step(
+    'enterAtStart',
+    async () => {
+      await open('#lumos-p', 'Lorem', 'start');
+      await window.keyboard.press('Enter');
+    },
+    (text) => /^<br \/>\s*Lorem/.test(text),
+    lumos,
+  );
+  // 6. A plain <p>, no setting: Enter after its bold word.
+  await step(
+    'plainParagraph',
+    async () => {
+      await open('#plain-p', 'words', 'end');
+      await window.keyboard.press('Enter');
+      await window.keyboard.type('after');
+    },
+    (text) => /Plain <strong>words<\/strong><br \/>after|Plain <strong>words<br \/>after<\/strong>/.test(text),
+    plain,
+  );
+  // 7. The plain <p> from the Content field: Enter at the end, words.
+  await canvas.locator('#plain-p').click({ position: { x: 120, y: 8 } });
   await window.getByText('Settings', { exact: true }).first().click();
-  await window.waitForSelector('.rich-content', { timeout: WAIT_MS });
   await window.click('.rich-content');
   await window.keyboard.press(`${mod}+ArrowDown`);
-  await window.keyboard.press('End');
-  const panelStarted = Date.now();
   await window.keyboard.press('Enter');
-  await window.keyboard.type('Panel line');
-  await waitForFile(source, (text) => /<br\s*\/?>\s*Panel line/.test(text)).catch(() => undefined);
-  results.panelMs = Date.now() - panelStarted;
-  results.panelSource = source();
-  results.panelToast = await toast();
-  await window.screenshot({ path: path.join(SHOTS, 'keys-01-panel.png') });
-  // The canvas: Enter at the end, words, ⌘ Enter, more words, then Backspace back over the last break.
-  await paragraph.dblclick();
-  await canvas.locator('[data-avb-text-editor]').first().waitFor({ timeout: WAIT_MS });
-  results.canvasEditor = await canvas
-    .locator('[data-avb-text-editor]')
-    .first()
-    .evaluate((element) => `${element.tagName}#${element.id}`);
-  await window.keyboard.press(`${mod}+ArrowDown`);
-  const shownStarted = Date.now();
-  const breaks = await canvas.locator('#lumos-p br').count();
-  await window.keyboard.press('Enter');
-  await waitFor({ what: 'the break shows', read: () => canvas.locator('#lumos-p br').count(), until: (count) => count > breaks }).catch(() => undefined);
-  results.canvasBreakShownMs = Date.now() - shownStarted;
-  await window.keyboard.type('Some text');
-  await window.keyboard.press(`${mod}+Enter`);
-  await window.keyboard.type('Third');
-  results.canvasTyped = await inner();
-  await window.screenshot({ path: path.join(SHOTS, 'keys-02-canvas-typed.png') });
-  for (let count = 0; count < 'Third'.length + 1; count++) {
-    await window.keyboard.press('Backspace');
-  }
-  results.canvasAfterBackspace = await inner();
-  // A click away saves; the page keeps showing it until the rendering arrives, and the file gets it.
-  const saveStarted = Date.now();
-  await leaveCanvas(window);
-  results.canvasShownAfterSave = await inner();
-  await waitForFile(source, (text) => text.includes('Some text') && !text.includes('Third')).catch(() => undefined);
-  results.canvasSaveToFileMs = Date.now() - saveStarted;
-  results.canvasSource = source();
-  results.canvasToast = await toast();
-  results.canvasPosts = await window.evaluate(() => Reflect.get(window, '__posts'));
-  await waitFor({ what: 'the rendering arrives', read: inner, until: (html) => html.includes('Some text') }).catch(() => undefined);
-  results.canvasRendered = await inner();
-  await window.screenshot({ path: path.join(SHOTS, 'keys-03-canvas-saved.png') });
+  await window.keyboard.type('panel');
+  await waitForFile(plain, (text) => /<br \/>\s*panel/.test(text)).catch(() => undefined);
+  results.plainPanel = { source: plain(), ok: /<br \/>\s*panel/.test(plain()), toast: await toast() };
+  await window.screenshot({ path: path.join(SHOTS, 'keys-panel.png') });
+  // 8. The Edit rich text dialog on an empty RichText: the + in its gutter, the placeholder and caret at the text edge.
+  await window.getByText('RichText', { exact: true }).nth(1).click();
+  await window.click('.props-rich-text-edit');
+  await window.waitForSelector('.props-rich-text-dialog .html-content', { timeout: WAIT_MS });
+  await window.click('.props-rich-text-dialog .html-content');
+  await window.waitForSelector('.props-rich-text-dialog .html-block-plus', { timeout: WAIT_MS });
+  results.dialogPlus = await window.evaluate(() => {
+    const plus = document.querySelector('.props-rich-text-dialog .html-block-plus').getBoundingClientRect();
+    const content = document.querySelector('.props-rich-text-dialog .html-content');
+    const before = getComputedStyle(content, '::before');
+    const edge = content.getBoundingClientRect().left + parseFloat(getComputedStyle(content).paddingInlineStart);
+    return { plusRight: plus.right, textEdge: edge, placeholderLeft: content.getBoundingClientRect().left + parseFloat(before.insetInlineStart) };
+  });
+  await window.screenshot({ path: path.join(SHOTS, 'keys-dialog-empty.png') });
 }
 
 // A press outside the canvas on nothing that takes the keyboard (the panel header), so the canvas editor saves and the

@@ -198,13 +198,20 @@ function readRichBlockRequest(input: unknown) {
   }
 }
 
+const INLINE_TAGS_SET: ReadonlySet<string> = new Set(['STRONG', 'EM', 'B', 'I', 'A', 'SPAN', 'SUP', 'SUB', 'CODE', 'SMALL', 'MARK', 'U', 'S']);
+
 // Where text that allows breaks is edited: a rich text instance's blocks, or the element holding a line of words (when
 // it holds nothing but the instance's inline words; otherwise the run editor below types the break as before).
 function canvasEditingPlace(target: CanvasTextTarget, match: TextMatch): RichTextPlace | undefined {
   if (target.breaks === 'rich' && target.richRoot !== undefined) {
     return { kind: 'rich', block: match.element, richRoot: target.richRoot };
   }
-  const container = target.breaks === 'line' ? textEditorRoot(match) : undefined;
+  // The whole line of words: past the inline markup the words sit in (`<strong>` in a <p>) to the block holding them,
+  // which is what the save writes over.
+  let container = target.breaks === 'line' ? textEditorRoot(match) : undefined;
+  for (let depth = 0; container?.parentElement && INLINE_TAGS_SET.has(container.tagName) && depth < 16; depth++) {
+    container = container.parentElement;
+  }
   return container !== undefined && holdsInlineWords(container) ? { kind: 'line', container } : undefined;
 }
 
