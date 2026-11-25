@@ -1,4 +1,6 @@
 import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
+import { InspectorTabButton } from '../../vendor/stacki/src/app/shell/InspectorTabButton';
+import { inspectorTabOfKey, type InspectorTabId } from '../../vendor/stacki/src/app/inspectorTabKeys';
 import { assert } from '../../vendor/stacki/shared/core/assert';
 import { can } from '../../vendor/stacki/shared/properties/projectRoles';
 import { dockedWidthPx, isMobileEditor, useEditorLayout, useEditorLayoutSync, useMobileEditor } from './mobileEditor';
@@ -352,6 +354,27 @@ function Inspector({
     </aside>
   );
 }
+// Desktop's S and D (inspectorTabKeys.ts), outside fields. A role with the Settings panel alone has no tabs to switch.
+function useInspectorTabKeys(client: boolean, setTab: (tab: InspectorTabId) => void): void {
+  useEffect(() => {
+    if (client) {
+      return undefined;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      const field = 'input, textarea, select, [contenteditable=true], [contenteditable=plaintext-only], .cm-editor';
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest(field))) {
+        return;
+      }
+      const tab = inspectorTabOfKey(event);
+      if (tab !== undefined) {
+        event.preventDefault();
+        setTab(tab);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [client, setTab]);
+}
 function InspectorTabs({
   client,
   tab,
@@ -362,6 +385,7 @@ function InspectorTabs({
   readonly setTab: (tab: 'style' | 'settings') => void;
 }) {
   const translate = useTranslate();
+  useInspectorTabKeys(client, setTab);
   return (
     <>
       {' '}
@@ -376,12 +400,8 @@ function InspectorTabs({
               width: 'calc(50% - 11px)',
             }}
           />
-          <button className={tab === 'style' ? 'on' : ''} onClick={() => setTab('style')}>
-            {translate('shell.rightTabs.style')}
-          </button>
-          <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>
-            {translate('shell.rightTabs.settings')}
-          </button>
+          <InspectorTabButton tab="style" label={translate('shell.rightTabs.style')} active={tab === 'style'} select={setTab} />
+          <InspectorTabButton tab="settings" label={translate('shell.rightTabs.settings')} active={tab === 'settings'} select={setTab} />
         </div>
       )}
     </>

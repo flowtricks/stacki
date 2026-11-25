@@ -12,6 +12,8 @@ const keys = new Set([
   'g',
   'backspace',
   'delete',
+  // S switches the right panel to Style; D (above) to Settings, as on Desktop (inspectorTabKeys.ts).
+  's',
   // The device keys, one per toolbar position (usePreviewSizing useDeviceShortcuts); sent by
   // their own listener below, in both canvas modes and from the preview mode.
   '1',

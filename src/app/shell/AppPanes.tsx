@@ -1,4 +1,5 @@
 import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
+import { InspectorTabButton } from './InspectorTabButton';
 import { innerSourceOf } from '../../features/props/richTextContent';
 import { sourceRangeForSelection } from '../../features/code/codePanelModel';
 import { FilesCover } from './DesktopFiles';
@@ -514,9 +515,7 @@ export function RightTabs({ app }: { readonly app: ShellView }) {
     <div className="right-tabs" ref={stripRef}>
       {indicator && <span className="right-tabs-indicator" style={indicator} />}
       {tabs.map((tab) => (
-        <button key={tab.id} data-right-tab={tab.id} className={app.rightTab === tab.id ? 'on' : ''} onClick={() => app.setRightTab(tab.id)}>
-          {translate(tab.labelKey)}
-        </button>
+        <InspectorTabButton key={tab.id} tab={tab.id} label={translate(tab.labelKey)} active={app.rightTab === tab.id} select={app.setRightTab} />
       ))}
     </div>
   );

@@ -248,9 +248,12 @@ function forwardShortcut(event: KeyboardEvent): void {
   // ⇧G shows or hides the column guide drawn over this frame. It is replayed
   // as the key "G", which says Shift on its own (src/features/preview/guideSettings.ts).
   const isGuide = !mod && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'g';
+  // S and D switch the right panel to Style and Settings (src/app/inspectorTabKeys.ts). A click on the
+  // page leaves keyboard focus in here, which is exactly when the person reaches for them.
+  const isInspectorTab = !mod && !event.altKey && ['s', 'd'].includes(event.key.toLowerCase());
   // The parent owns component/defaults navigation even while this frame has focus.
   const isClose = !mod && !event.altKey && !event.shiftKey && event.key === 'Escape';
-  if (isDelete || isDuplicate || isClassJump || isProperties || isGuide || isClose) {
+  if (isDelete || isDuplicate || isClassJump || isProperties || isGuide || isClose || isInspectorTab) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: mod }, '*');
