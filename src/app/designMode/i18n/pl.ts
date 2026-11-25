@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModePl: DesignCatalog = {
   'mode.name': 'Tryb projektowania',
-  'mode.description': 'Testuj układy na kopii strony: swobodnie przeciągaj, zmieniaj style i właściwości. Nic nie zapisuje się w Twoim projekcie.',
   'mode.badge': 'Tryb projektowania',
   'mode.badgeTip': 'Edytujesz kopie strony. Nic z tego nie zapisuje się w Twoim projekcie.',
   'mode.exit': 'Wyjdź',

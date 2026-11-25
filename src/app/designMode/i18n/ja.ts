@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeJa: DesignCatalog = {
   'mode.name': 'デザインモード',
-  'mode.description': 'ページのコピーでレイアウトを試せます。ドラッグ、スタイル変更、プロパティの切り替えも自由です。プロジェクトには何も保存されません。',
   'mode.badge': 'デザインモード',
   'mode.badgeTip': 'ページのコピーを編集しています。ここでの変更はプロジェクトに保存されません。',
   'mode.exit': '終了',

@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeIt: DesignCatalog = {
   'mode.name': 'Modalità design',
-  'mode.description': 'Prova layout su una copia della pagina: trascina, cambia stili e prop liberamente. Nel tuo progetto non viene salvato nulla.',
   'mode.badge': 'Modalità design',
   'mode.badgeTip': 'Stai modificando copie della pagina. Niente di ciò che fai qui viene salvato nel progetto.',
   'mode.exit': 'Esci',

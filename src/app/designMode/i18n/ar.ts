@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeAr: DesignCatalog = {
   'mode.name': 'وضع التصميم',
-  'mode.description': 'جرّب التخطيطات على نسخة من الصفحة: اسحب وغيّر الأنماط وبدّل الخصائص بحرية. لا يُحفظ أي شيء في مشروعك.',
   'mode.badge': 'وضع التصميم',
   'mode.badgeTip': 'أنت تعدّل نسخًا من الصفحة. لا يُحفظ أي شيء هنا في مشروعك.',
   'mode.exit': 'خروج',

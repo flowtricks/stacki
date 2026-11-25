@@ -3,8 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeDe: DesignCatalog = {
   'mode.name': 'Design-Modus',
-  'mode.description':
-    'Probiere Layouts auf einer Kopie der Seite aus: Ziehe Elemente, ändere Stile und Props nach Belieben. In deinem Projekt wird nichts gespeichert.',
   'mode.badge': 'Design-Modus',
   'mode.badgeTip': 'Du bearbeitest Kopien der Seite. Nichts davon wird in deinem Projekt gespeichert.',
   'mode.exit': 'Beenden',

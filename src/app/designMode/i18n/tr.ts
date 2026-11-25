@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeTr: DesignCatalog = {
   'mode.name': 'Tasarım modu',
-  'mode.description': 'Sayfanın bir kopyasında düzen deneyin: özgürce sürükleyin, stilleri ve prop’ları değiştirin. Projenize hiçbir şey kaydedilmez.',
   'mode.badge': 'Tasarım modu',
   'mode.badgeTip': 'Sayfanın kopyalarını düzenliyorsunuz. Buradaki hiçbir şey projenize kaydedilmez.',
   'mode.exit': 'Çık',

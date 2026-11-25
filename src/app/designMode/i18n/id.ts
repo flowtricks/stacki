@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeId: DesignCatalog = {
   'mode.name': 'Mode desain',
-  'mode.description': 'Coba tata letak pada salinan halaman: seret, ubah gaya, dan ganti prop dengan bebas. Tidak ada yang disimpan ke proyek Anda.',
   'mode.badge': 'Mode desain',
   'mode.badgeTip': 'Anda sedang mengedit salinan halaman. Tidak ada yang di sini disimpan ke proyek Anda.',
   'mode.exit': 'Keluar',

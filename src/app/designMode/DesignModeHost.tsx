@@ -1,19 +1,21 @@
 // Design mode (experimental; docs/design-mode/REMOVE.md lists how to take it out): where it meets the app.
 //
-// The app mounts this once (src/app/shell/AppShell.tsx, one marked line). Importing it registers the "Design
-// mode" row of the AI composer's canvas modes menu (src/lib/canvasModes.ts). While Design mode is on, this
+// The app mounts this once (src/app/shell/AppShell.tsx, one marked line). While mounted it registers the "Design
+// mode" row of the AI panel header's Modes menu (src/features/ai/panelModes.ts), which turns every other mode off
+// when this one goes on and this one off when another does. While Design mode is on, this
 // covers the editor (everything but the AI panel) with the design workspace and keeps the editor from acting:
 // the window is held (src/ui/busyLock.ts), so the menu's Undo, Redo, Paste, Insert and Reload do nothing to the
 // project; the editor's selection is cleared, so its keyboard shortcuts have nothing to act on; and the keys
-// Design mode uses are taken before the editor's listeners hear them.
+// Design mode uses, with the editor's chords that would still act under the cover (designCoveredKeys.ts), are
+// taken before the editor's listeners hear them.
 //
 // What it is handed is a read-only view of the app (DesignHostSource): the open page, its model, the scan, the
 // dev server address, the left panel and the toast. No write of the editor is in reach.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ShellView } from '../App';
-import { registerCanvasMode } from '../../lib/canvasModes';
+import { registerPanelMode } from '../../features/ai/panelModes';
 import { breakpointLabel } from '../../lib/breakpointLabel';
-import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useLocale, useTranslate } from '../../lib/i18n/useTranslate';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { holdWindow } from '../../ui/busyLock';
 import TipAnchor from '../../ui/TipAnchor';
@@ -38,6 +40,7 @@ import {
   setView,
   startDesignMode,
   startOver,
+  subscribeDesignActive,
   undo,
   useDesignState,
   type StartOutcome,
@@ -52,6 +55,7 @@ import {
   selectParent,
   toggleHiddenSelection,
 } from './runtime/designGestures';
+import { reachesCoveredEditor } from './model/designCoveredKeys';
 import { captureFrame } from './runtime/designCapture';
 import { sendFrameToAi } from './runtime/designHandoff';
 import { frameDocument as sessionFrameDocument, serializeFrame } from './runtime/designSession';
@@ -73,19 +77,8 @@ export type DesignHostSource = Pick<
   'project' | 'devUrl' | 'pageUrlPath' | 'currentPage' | 'pageState' | 'scan' | 'leftTab' | 'setLeftTab' | 'selectedId' | 'setSelectedId' | 'showToast'
 >;
 
-let toggleFromMenu: (() => void) | undefined;
-
-// The row in the AI composer's canvas modes menu; nothing else of the panel knows Design mode.
-if (DESIGN_MODE_ENABLED) {
-  registerCanvasMode({
-    id: 'design',
-    label: (locale) => designWord(locale, 'mode.name'),
-    description: (locale) => designWord(locale, 'mode.description'),
-    icon: <DesignModeIcon size={16} />,
-    isActive: isDesignModeActive,
-    toggle: () => toggleFromMenu?.(),
-  });
-}
+/** Where Design mode sits in the Modes menu: after comment pins (10). */
+const MODES_MENU_ORDER = 20;
 
 function pageOf(app: DesignHostSource, words: DesignWords): DesignPage | undefined {
   const current = app.currentPage;
@@ -168,21 +161,32 @@ export function DesignModeHost({ app }: { readonly app: DesignHostSource }) {
 function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
   const state = useDesignState();
   const words = useDesignWords();
+  const { locale } = useLocale();
   const latest = useRef({ app, words });
   latest.current = { app, words };
+  // The Modes menu's row, registered again when the language changes so its name and the button follow it.
   useEffect(() => {
-    toggleFromMenu = () => {
-      if (isDesignModeActive()) {
-        void exitDesignMode();
-      } else {
-        void enterDesignMode(latest.current.app, latest.current.words);
-      }
-    };
-    return () => {
-      toggleFromMenu = undefined;
-      void exitDesignMode();
-    };
-  }, []);
+    if (!DESIGN_MODE_ENABLED) {
+      return undefined;
+    }
+    return registerPanelMode({
+      id: 'design',
+      order: MODES_MENU_ORDER,
+      label: () => designWord(locale, 'mode.name'),
+      icon: () => <DesignModeIcon size={16} />,
+      isActive: isDesignModeActive,
+      setActive: (active) => {
+        if (active === 'off') {
+          void exitDesignMode();
+        } else {
+          void enterDesignMode(latest.current.app, latest.current.words);
+        }
+      },
+      subscribe: subscribeDesignActive,
+    });
+  }, [locale]);
+  // Leaving the project ends the mode.
+  useEffect(() => () => void exitDesignMode(), []);
   return state.phase === 'off' ? undefined : <DesignWorkspace app={app} />;
 }
 
@@ -489,7 +493,15 @@ function useDesignKeys({ active }: { readonly active: boolean }, canvasSize: () 
       return undefined;
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!designHasFocus() || editableTarget(event.target) || designState().editingText !== undefined) {
+      // Wherever focus is, the AI panel included: these would change or open the editor under the cover.
+      const target = event.target;
+      const inCodeEditor = target instanceof HTMLElement && target.closest('.cm-editor') !== null;
+      if (reachesCoveredEditor(event, { typing: editableTarget(target), inCodeEditor })) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      if (!designHasFocus() || editableTarget(target) || designState().editingText !== undefined) {
         return;
       }
       const handled = handleKey(event, canvasSize);

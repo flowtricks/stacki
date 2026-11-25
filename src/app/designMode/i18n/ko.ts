@@ -3,8 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeKo: DesignCatalog = {
   'mode.name': '디자인 모드',
-  'mode.description':
-    '페이지 사본에서 레이아웃을 시험해 보세요. 자유롭게 드래그하고, 스타일을 바꾸고, prop을 전환할 수 있습니다. 프로젝트에는 아무것도 저장되지 않습니다.',
   'mode.badge': '디자인 모드',
   'mode.badgeTip': '페이지 사본을 편집하고 있습니다. 여기서 한 작업은 프로젝트에 저장되지 않습니다.',
   'mode.exit': '나가기',

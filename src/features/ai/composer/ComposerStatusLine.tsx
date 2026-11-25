@@ -15,7 +15,6 @@ import { agentBadge } from '../agentSwitch';
 import { rememberChoice, resetRememberedSettings, setChatOption, type AiState } from '../aiStore';
 import type { ChatView } from '../chatReducer';
 import { AccountMenu } from './AccountMenu';
-import { CanvasModesMenu } from './CanvasModesMenu';
 import { ContextRing } from './ContextRing';
 import { optionById, type ComposerSettings } from './composerSettings';
 import { ModeMenu } from './ModeMenu';
@@ -66,7 +65,6 @@ export function ComposerStatusLine({
     <div className="ai-status-line">
       <ModelMenu settings={settings} />
       {modeKnown && <ModeMenu settings={settings} />}
-      <CanvasModesMenu />
       <span className="ai-status-spacer" />
       <ContextRing chat={chatId} agent={agent} usage={usage} running={running} compacting={view.compaction?.status === 'in_progress'} />
       <AccountMenu agent={agent} chat={chatId} started={started} badges={agentBadges} />

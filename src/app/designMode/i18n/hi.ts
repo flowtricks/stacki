@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeHi: DesignCatalog = {
   'mode.name': 'डिज़ाइन मोड',
-  'mode.description': 'पेज की कॉपी पर लेआउट आज़माएँ: बेझिझक खींचें, स्टाइल और प्रॉप बदलें। आपके प्रोजेक्ट में कुछ भी सहेजा नहीं जाता।',
   'mode.badge': 'डिज़ाइन मोड',
   'mode.badgeTip': 'आप पेज की कॉपी संपादित कर रहे हैं। यहाँ का कुछ भी आपके प्रोजेक्ट में सहेजा नहीं जाता।',
   'mode.exit': 'बाहर निकलें',

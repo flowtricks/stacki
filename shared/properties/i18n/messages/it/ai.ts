@@ -120,10 +120,7 @@ export const messages = {
   },
   'ai.composer.attach.remove': 'Rimuovi allegato',
   'ai.composer.attach.total': 'Queste immagini sono troppo grandi per essere inviate insieme. Rimuovine prima una.',
-  'ai.composer.attach.unsupported': 'Allega immagini o file di questo progetto.',
-  'ai.composer.canvasModes': 'Modalità del canvas',
-  'ai.composer.canvasModes.chip': 'Canvas', // same
-  'ai.composer.canvasModes.title': 'Lavora sul canvas in un’altra modalità',
+  'ai.composer.attach.unsupported': 'Allega immagini o file di questo progetto.', // same
   'ai.composer.commands': 'Comandi',
   'ai.composer.default': 'Predefinito',
   'ai.composer.dictate': 'Detta',

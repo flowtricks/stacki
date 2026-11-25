@@ -3,7 +3,9 @@
 // only what a sandbox needs: shared contracts, the UI kit, the canvas's read-only request channel, the AI panel's
 // draft and screenshot, and nothing of the editor's edit queue, gestures, saves or IPC writes. (3) It calls no preload
 // method but the menu listener and no `fetch`; the frame's relay fetches only the two read-only routes. (4) What the
-// app hands it is the read-only view REMOVE.md names.
+// app hands it is the read-only view REMOVE.md names. (5) The AI panel's Modes menu, which Design mode shares with
+// comment pins, and comment pins themselves know nothing of Design mode, so taking it out leaves them as they are.
+// (6) The insert palette's letters Design mode keeps from the editor are the editor's own.
 //
 // Method: a bounded scan of the source trees' text. Each rule also checks a known-bad line, so a pattern that
 // matches nothing cannot pass vacuously.
@@ -83,9 +85,10 @@ const RENDERER_IMPORTS_ALLOWED = new Set([
   'src/features/ai/aiStore',
   'src/features/ai/screenshot/draftAttachments',
   'src/features/style/components/ColorSwatch',
+  'src/features/ai/panelModes',
+  'src/app/railShortcuts',
   'src/ipc/useProjectBreakpoints',
   'src/lib/breakpointLabel',
-  'src/lib/canvasModes',
   'src/lib/i18n/useTranslate',
   'src/ui/busyLock',
   'src/ui/central/CentralIcon',
@@ -101,6 +104,8 @@ const RENDERER_IMPORTS_ALLOWED = new Set([
 /** Named imports limited to read-only members of a module that also has others. */
 const NAMED_ONLY: Readonly<Record<string, readonly string[]>> = {
   'src/features/ai/aiBridge': ['aiScreenshot'],
+  'src/features/ai/panelModes': ['registerPanelMode'],
+  'src/app/railShortcuts': ['PREVIEW_SHORTCUT', 'railActionOf'],
   'src/editor/canvasQuery': ['hasCanvas', 'tellCanvas'],
   'src/app/App': ['ShellView'],
 };
@@ -183,4 +188,25 @@ test('the app hands Design mode a read-only view', () => {
     'setSelectedId',
     'showToast',
   ]);
+});
+
+/** The Modes menu and comment pins: what Design mode shares a menu with, and must be able to leave behind. */
+const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/ModesMenu.tsx', 'src/app/shell/DesktopPins.tsx'];
+
+test('the Modes menu and comment pins know nothing of Design mode', () => {
+  const names = /design ?mode|designMode/i;
+  assert.ok(names.test('registerPanelMode(DESIGN_MODE)') === false && names.test('Design mode'), 'the pattern sees the name');
+  const files = [...SHARED_WITH, ...sourceFiles().filter((file) => file.startsWith('src/features/ai/pins/'))];
+  assert.ok(files.length > SHARED_WITH.length, 'the pins folder is read');
+  for (const file of files) {
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), names, file);
+  }
+});
+
+test("the palette letters Design mode keeps from the editor are the editor's", () => {
+  const read = (file: string, pattern: RegExp): readonly string[] =>
+    [...(pattern.exec(fs.readFileSync(path.join(ROOT, file), 'utf8'))?.[1] ?? '').matchAll(/'(\w)'/g)].map((match) => match[1] ?? '').sort();
+  const editor = read('src/app/model/appKeys.ts', /INSERT_PALETTE_KEYS[^=]*= new Set\(\[([^\]]*)\]\)/);
+  assert.ok(editor.length > 0, "the editor's list is read");
+  assert.deepEqual(read('src/app/designMode/model/designCoveredKeys.ts', /DESIGN_PALETTE_LETTERS[^=]*= \[([^\]]*)\]/), editor);
 });

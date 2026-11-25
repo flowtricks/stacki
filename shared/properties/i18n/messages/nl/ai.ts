@@ -120,10 +120,7 @@ export const messages = {
   },
   'ai.composer.attach.remove': 'Bijlage verwijderen',
   'ai.composer.attach.total': 'Deze afbeeldingen zijn samen te groot om te versturen. Verwijder er eerst een.',
-  'ai.composer.attach.unsupported': 'Voeg afbeeldingen of bestanden uit dit project bij.',
-  'ai.composer.canvasModes': 'Canvasmodi',
-  'ai.composer.canvasModes.chip': 'Canvas', // same
-  'ai.composer.canvasModes.title': 'In een andere modus op het canvas werken',
+  'ai.composer.attach.unsupported': 'Voeg afbeeldingen of bestanden uit dit project bij.', // same
   'ai.composer.commands': 'Opdrachten',
   'ai.composer.default': 'Standaard',
   'ai.composer.dictate': 'Dicteren',

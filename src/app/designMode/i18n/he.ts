@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeHe: DesignCatalog = {
   'mode.name': 'מצב עיצוב',
-  'mode.description': 'אפשר לנסות פריסות על עותק של הדף: לגרור, לעצב מחדש ולהחליף props בחופשיות. שום דבר לא נשמר בפרויקט.',
   'mode.badge': 'מצב עיצוב',
   'mode.badgeTip': 'העריכה מתבצעת בעותקים של הדף. שום דבר כאן לא נשמר בפרויקט.',
   'mode.exit': 'יציאה',

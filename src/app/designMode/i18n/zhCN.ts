@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeZhCN: DesignCatalog = {
   'mode.name': '设计模式',
-  'mode.description': '在页面副本上尝试布局：随意拖动、调整样式和切换属性。任何内容都不会保存到项目中。',
   'mode.badge': '设计模式',
   'mode.badgeTip': '你正在编辑页面副本。这里的任何内容都不会保存到项目中。',
   'mode.exit': '退出',

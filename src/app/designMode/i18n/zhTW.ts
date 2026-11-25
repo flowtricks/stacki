@@ -3,7 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeZhTW: DesignCatalog = {
   'mode.name': '設計模式',
-  'mode.description': '在頁面副本上嘗試版面配置：隨意拖移、調整樣式和切換 prop。任何內容都不會儲存到專案。',
   'mode.badge': '設計模式',
   'mode.badgeTip': '你正在編輯頁面副本。這裡的任何內容都不會儲存到專案。',
   'mode.exit': '結束',

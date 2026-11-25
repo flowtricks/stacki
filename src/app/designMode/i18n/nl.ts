@@ -3,8 +3,6 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeNl: DesignCatalog = {
   'mode.name': 'Ontwerpmodus',
-  'mode.description':
-    'Probeer layouts uit op een kopie van de pagina: sleep, pas stijlen aan en wissel props zoals je wilt. Er wordt niets in je project opgeslagen.',
   'mode.badge': 'Ontwerpmodus',
   'mode.badgeTip': 'Je bewerkt kopieën van de pagina. Niets hiervan wordt in je project opgeslagen.',
   'mode.exit': 'Sluiten',

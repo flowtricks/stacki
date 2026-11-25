@@ -6,9 +6,17 @@ project.
 
 ## Switching it off without removing it
 
-Set `DESIGN_MODE_ENABLED` to `false` in `shared/designMode/designModeContract.ts`. The AI composer's
-canvas modes menu then has no Design mode row (and hides itself if no other mode is registered), the canvas
-frame installs no listener, and the dev server plugin has no hooks.
+Set `DESIGN_MODE_ENABLED` to `false` in `shared/designMode/designModeContract.ts`. The AI panel header's
+Modes menu then has no Design mode row (comment pins stay; with no mode registered the button is not drawn),
+the canvas frame installs no listener, and the dev server plugin has no hooks.
+
+## The Modes menu
+
+Design mode shares the header's one Modes menu with comment pins. It registers its row from its own host
+(`src/app/designMode/DesignModeHost.tsx`, with `registerPanelMode` from `src/features/ai/panelModes.ts`), and
+the menu, its registry and comment pins know nothing of it (the boundary test holds that). The registry keeps
+one mode on at a time: turning Design mode on ends comment mode (an open pin is kept, saved when it has
+content), and turning comment pins on leaves Design mode (its frames are saved as a draft first).
 
 ## Why it cannot write
 
@@ -22,6 +30,11 @@ frame installs no listener, and the dev server plugin has no hooks.
   Astro's container API inside the running dev server: nothing is written, not even a temporary file.
 - While it is on, the window is held (`src/ui/busyLock.ts`), so the menu's Undo, Redo, Paste, Insert and
   Reload do nothing to the project, and the editor's selection is cleared, so its shortcuts have no target.
+- The editor's chords that need no selection are taken before it hears them (`model/designCoveredKeys.ts`):
+  the insert palette (⌘F, ⌘E, ⌘K, outside code editors), the left rail's ⌥ chords except the AI panel's, and
+  the preview chord (⌥⇧P). Not covered: a Stacki app's own ⌘⌥⇧ number command, which stays the app's.
+- Comment pins cannot be on at the same time (above), and write only to Stacki's own data folder either way.
+  The Files panel's reader (`FilesKeeper`) only reads.
 - Drafts are kept in the app's own IndexedDB (database `stacki-design-mode`, in Stacki's user data folder,
   on macOS `~/Library/Application Support/Stacki/IndexedDB/`), never in the project.
 
@@ -47,9 +60,7 @@ frame installs no listener, and the dev server plugin has no hooks.
      and the comment line above it.
 3. Run `npm run build:runtime` (the dev server's generated config is written again at its next start).
 
-Kept on purpose (shared with other canvas modes, such as comment pins): `src/lib/canvasModes.ts`,
-`src/features/ai/composer/CanvasModesMenu.tsx`, its two lines in `ComposerStatusLine.tsx` and the three
-`ai.composer.canvasModes*` keys in every `shared/properties/i18n/messages/*/ai.ts`. The menu hides itself
-when no mode is registered; delete them too only if no canvas mode is left.
+Kept: the Modes menu and its registry (`src/features/ai/panelModes.ts`, `sessions/ModesMenu.tsx`), which
+belong to comment pins too. Nothing outside the list above changes.
 
 Drafts already saved stay in the app's IndexedDB until its data is cleared; nothing reads them.

@@ -9,7 +9,6 @@
 // holds every module of this folder to that.
 import { useSyncExternalStore } from 'react';
 import { DESIGN_SANDBOX_FRAME_NAME } from '../../../../shared/designMode/designModeContract';
-import { noteCanvasModesChanged } from '../../../lib/canvasModes';
 import { prepareBaseline, type DesignComponentEntry, type PageModelView } from '../model/designPrepare';
 import { DesignHistory, bodyStateOf, restoreBodyState, type BodyState, type SelectionState } from '../model/designHistory';
 import { ElementIdMint, designIdOf, elementByDesignId } from '../model/designDom';
@@ -115,6 +114,18 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/** Tells `listener` each time Design mode goes on or off; returns the unsubscribe. */
+export function subscribeDesignActive(listener: () => void): () => void {
+  let last = isDesignModeActive();
+  return subscribe(() => {
+    const active = isDesignModeActive();
+    if (active !== last) {
+      last = active;
+      listener();
+    }
+  });
+}
+
 export function designState(): DesignState {
   return state;
 }
@@ -142,7 +153,6 @@ export async function startDesignMode(start: DesignStart): Promise<StartOutcome>
     return 'started';
   }
   setState(() => ({ ...OFF, phase: 'starting', page: start.page }));
-  noteCanvasModesChanged();
   const draft = await loadDraft(start.page);
   if (draft !== undefined && designState().phase === 'starting') {
     restoreDraft(draft);
@@ -154,7 +164,6 @@ export async function startDesignMode(start: DesignStart): Promise<StartOutcome>
   }
   if (!snapshot.ok) {
     setState(() => OFF);
-    noteCanvasModesChanged();
     return snapshot.reason === 'no-canvas' ? 'no-canvas' : 'failed';
   }
   const baseline = makeBaseline(snapshot.value.html, snapshot.value.url, start.model, start.components);
@@ -163,7 +172,6 @@ export async function startDesignMode(start: DesignStart): Promise<StartOutcome>
   const record = newRecord(start.page.title, widthPx, viewportHeightPx, 0);
   frames.set(record.id, { record, baseline: baseline.id, initialHTML: baseline.html, document: undefined, mint: undefined });
   setState((current) => ({ ...current, phase: 'on', frames: [record], view: fittedView([record]) }));
-  noteCanvasModesChanged();
   return 'started';
 }
 
@@ -201,7 +209,6 @@ function restoreDraft(draft: DesignDraft): void {
   }
   const records = draft.frames.map((saved) => saved.record);
   setState((current) => ({ ...current, phase: 'on', frames: records, view: fittedView(records), restoredAtMs: draft.savedAtMs }));
-  noteCanvasModesChanged();
 }
 
 /** Leaves Design mode; the frames are saved first, so coming back to this page brings them back. */
@@ -216,7 +223,6 @@ export async function exitDesignMode(): Promise<void> {
   live = undefined;
   frameCounter = 0;
   setState(() => OFF);
-  noteCanvasModesChanged();
 }
 
 /** Throws the saved draft and the frames away and copies the page again. */
