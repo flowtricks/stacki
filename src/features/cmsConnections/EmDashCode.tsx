@@ -49,7 +49,8 @@ export function EmDashCode({
   };
   return (
     <div className="emdash-code" data-wrap={wrap}>
-      <CodeBlock text={text} language={language} label={label} />
+      {/* Shell arguments can be uncolored. Give them spans too so the word-wrap rule can keep them whole. */}
+      <CodeBlock text={text} language={language} label={label} keepTokensTogether={wrap === 'words'} />
       <button
         type="button"
         className="ghost emdash-code-copy"

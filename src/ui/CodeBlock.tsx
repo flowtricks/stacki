@@ -28,13 +28,20 @@ interface CodeProps {
  * A highlighted, read-only block of code. A block with a `label` is a named
  * stop in the tab order, so a keyboard can scroll it.
  */
-export function CodeBlock({ text, language, filename, className, label }: CodeProps & { readonly label?: string | undefined }) {
+export function CodeBlock({
+  text,
+  language,
+  filename,
+  className,
+  label,
+  keepTokensTogether,
+}: CodeProps & { readonly label?: string | undefined; readonly keepTokensTogether?: boolean | undefined }) {
   const lines = useCodeLines(text, language ?? languageFor(filename));
   const focus = label === undefined ? {} : { 'aria-label': label, tabIndex: 0 };
   return (
     <pre className={codeClassName('code-block', className)} {...focus}>
       <code>
-        <CodeLines lines={lines} />
+        <CodeLines lines={lines} keepTokensTogether={keepTokensTogether} />
       </code>
     </pre>
   );
@@ -51,9 +58,9 @@ export function CodeInline({ text, language, filename, className }: CodeProps) {
 }
 
 /** The tokens of one line, for a host that lays its lines out itself, as a diff does. */
-export function CodeTokens({ line }: { readonly line: CodeLine | undefined }) {
+export function CodeTokens({ line, keepTokensTogether }: { readonly line: CodeLine | undefined; readonly keepTokensTogether?: boolean | undefined }) {
   return line?.map((token, index) =>
-    token.style === undefined ? (
+    token.style === undefined && (keepTokensTogether !== true || /\s/.test(token.text)) ? (
       <React.Fragment key={index}>{token.text}</React.Fragment>
     ) : (
       <span key={index} className="code-token" style={token.style}>
@@ -133,11 +140,11 @@ async function colourInBatches(
   publish(coloured);
 }
 
-function CodeLines({ lines }: { readonly lines: readonly CodeLine[] }) {
+function CodeLines({ lines, keepTokensTogether }: { readonly lines: readonly CodeLine[]; readonly keepTokensTogether?: boolean | undefined }) {
   return lines.map((line, index) => (
     <React.Fragment key={index}>
       {index > 0 && '\n'}
-      <CodeTokens line={line} />
+      <CodeTokens line={line} keepTokensTogether={keepTokensTogether} />
     </React.Fragment>
   ));
 }
