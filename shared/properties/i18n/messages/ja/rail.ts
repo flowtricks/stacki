@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': 'コンポーネント',
   'rail.editorPanels': 'エディターパネル',
   'rail.elements': '要素を追加',
+  'rail.files': 'ファイル',
   'rail.history': 'Git', // same
   'rail.more': 'その他',
   'rail.moveDown': '下へ移動',

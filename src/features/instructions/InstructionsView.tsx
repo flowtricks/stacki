@@ -25,7 +25,17 @@ import { CloseIcon } from '../../ui/Icons';
 import { editableHTML } from '../../ui/htmlFieldModel';
 import { markdownHTML, parseMarkdown, TASK_CLASS, TASK_DONE_CLASS } from '../../ui/markdownBlocks';
 import { codeHighlightRules, paintCodeBlocks } from './codeBlockHighlights';
-import { changedOnDisk, edited, isDirty, openSession, resolved, saved, shouldSave, type ConflictChoice, type DocumentSession } from './documentSession';
+import {
+  changedOnDisk,
+  edited,
+  isDirty,
+  openSession,
+  resolved,
+  saved,
+  shouldSave,
+  type ConflictChoice,
+  type DocumentSession,
+} from '../../editor/documentSession';
 import { frontmatterView } from './frontmatterFields';
 import { isCodexAgentFile } from '../../../shared/properties/instructions';
 import { onInstructionsChanged, readInstruction, writeInstruction } from './instructionsBridge';

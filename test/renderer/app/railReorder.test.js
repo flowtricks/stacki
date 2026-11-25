@@ -148,7 +148,7 @@ const ids = (group) => [...document.querySelectorAll(`[data-rail-group="${group}
 const button = (id) => document.querySelector(`[data-rail-id="${id}"]`);
 const stored = () => localStorage.getItem(STORAGE_KEY);
 // Add elements leads the rail (src/app/railDefaults.ts), so Pages is the second button: 36px lower than the first.
-const DEFAULT_TOP = ['elements', 'pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'components', 'apps', 'code'];
+const DEFAULT_TOP = ['elements', 'pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'components', 'apps', 'code', 'files'];
 const DEFAULT_BOTTOM = ['selectors', 'audits', 'projectSettings', 'ai'];
 
 function pointer(target, type, x, y, extra = {}) {
@@ -293,7 +293,7 @@ test('Alt+arrows reorder a focused button, move it between lists, and announce t
   await press(button('pages'), 'ArrowDown', { altKey: true });
   assert.deepEqual(ids('top').slice(0, 3), ['elements', 'navigator', 'pages']);
   assert.equal(document.activeElement, button('pages'), 'focus stays on the moved button');
-  assert.match(document.querySelector('.rail-live').textContent, /^Pages: top group, position 3 of 10$/);
+  assert.match(document.querySelector('.rail-live').textContent, /^Pages: top group, position 3 of 11$/);
   await press(button('pages'), 'ArrowUp', { altKey: true });
   assert.deepEqual(ids('top').slice(0, 3), ['elements', 'pages', 'navigator']);
   await press(button('pages'), 'ArrowRight', { altKey: true });

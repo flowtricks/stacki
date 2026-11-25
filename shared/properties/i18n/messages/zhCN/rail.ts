@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': '组件',
   'rail.editorPanels': '编辑器面板',
   'rail.elements': '添加元素',
+  'rail.files': '文件',
   'rail.history': 'Git', // same
   'rail.more': '更多',
   'rail.moveDown': '下移',

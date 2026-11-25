@@ -12,6 +12,11 @@ import type { RailContainer } from './railOrder';
 import { AgentIcon, InstructionsIcon, LockIcon, PlugIcon } from '../ui/Icons';
 import { FEATURE_ICONS, type FeatureIconComponent } from './featureIcons';
 import { shortcutOf } from './railShortcuts';
+import { centralIcon } from '../ui/central/CentralIcon';
+import { folder as centralFolder } from '../ui/central/centralGeometry';
+
+// A folder at the rail's size: the Files panel lists the project's folders. Central's own drawing (docs/central-icons.md).
+const FilesRailIcon = centralIcon(centralFolder, 20);
 
 export const RAIL_PANEL_TABS = [
   // Add elements is gated by `panel:elements` (shared/properties/projectRoles.ts); inserting through the palette (⌘K) is not.
@@ -25,6 +30,8 @@ export const RAIL_PANEL_TABS = [
   { id: 'variables', titleKey: 'rail.variables', shortcut: shortcutOf('variables'), Icon: FEATURE_ICONS['panel:variables'] },
   { id: 'selectors', titleKey: 'rail.selectors', shortcut: shortcutOf('selectors'), Icon: FEATURE_ICONS['panel:selectors'] },
   { id: 'code', titleKey: 'rail.code', shortcut: shortcutOf('code'), Icon: FEATURE_ICONS['panel:code'] },
+  // Files has no access feature of its own: it edits raw source, so a role sees it with `code:edit` (roleAccess.ts).
+  { id: 'files', titleKey: 'rail.files', shortcut: shortcutOf('files'), Icon: FilesRailIcon },
   { id: 'history', titleKey: 'rail.history', shortcut: shortcutOf('history'), Icon: FEATURE_ICONS['panel:history'] },
   { id: 'apps', titleKey: 'rail.apps', shortcut: shortcutOf('apps'), Icon: FEATURE_ICONS['panel:apps'] },
   { id: 'audits', titleKey: 'rail.audits', shortcut: shortcutOf('audits'), Icon: FEATURE_ICONS['panel:audits'] },

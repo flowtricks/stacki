@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': 'Componentes',
   'rail.editorPanels': 'Painéis do editor',
   'rail.elements': 'Adicionar elementos',
+  'rail.files': 'Arquivos',
   'rail.history': 'Git', // same
   'rail.more': 'Mais',
   'rail.moveDown': 'Mover para baixo',

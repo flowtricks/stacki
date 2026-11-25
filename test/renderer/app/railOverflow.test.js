@@ -292,8 +292,8 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   const tall = labels();
   assert.equal(
     tall.length,
-    11,
-    'ten panels in the top list, Add elements first (Style selectors and Audits start in the foot list, Properties is closed), then the pinned app',
+    12,
+    'eleven panels in the top list (Files after Code), Add elements first (Style selectors and Audits start in the foot list, Properties is closed), then the pinned app',
   );
   // Room for four rows: three buttons and More, above the anchored Settings row (36px: its button and the gap, jsdom's fallback).
   // Desktop's rail has 10px of top padding in CSS; jsdom has none.
@@ -304,11 +304,11 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   await act(async () => more.click());
   await settle();
   const rows = [...document.querySelectorAll('.more-menu-item')].map((row) => row.textContent);
-  assert.deepEqual(rows, ['Navigator', 'Assets', 'CMS', 'Variables', 'Git', 'Components', 'Apps', 'SSecret']);
+  assert.deepEqual(rows, ['Navigator', 'Assets', 'CMS', 'Variables', 'Git', 'Components', 'Apps', 'Files', 'SSecret']);
   // A row's shortcut is told in a tooltip, not printed (src/ui/shortcutTip.tsx); the row carries it for screen readers.
   assert.deepEqual(
     [...document.querySelectorAll('.more-menu-item')].map((row) => row.getAttribute('aria-keyshortcuts') ?? ''),
-    ['Z', 'J', 'Alt+C', 'Alt+V', 'Alt+H', 'Shift+A', 'E', ''],
+    ['Z', 'J', 'Alt+C', 'Alt+V', 'Alt+H', 'Shift+A', 'E', 'Alt+F', ''],
   );
   assert.ok(document.querySelector('.more-menu-item svg'), 'rows show their icons');
   await act(async () => [...document.querySelectorAll('.more-menu-item')].find((row) => row.textContent === 'Assets').click());

@@ -1,7 +1,7 @@
 // The rail's keyboard shortcuts, in one table that the keys, the tooltips and the Settings root all read, so the
 // chord a person sees is the chord that works and no two actions share one. A letter alone opens a panel
 // (matched on the typed letter); ⌥ plus a letter opens one matched on the physical key, because Option rewrites
-// the typed letter ("ç" for C). Free ⌥ letters: B D F G J K N O Q R T U W X Y Z. Taken elsewhere: ⌥P is the
+// the typed letter ("ç" for C). Free ⌥ letters: B D G J K N O Q R T U W X Y Z. Taken elsewhere: ⌥P is the
 // interactive preview (appShortcuts.ts), Alt+arrows reorder rail buttons, ⌘⌥⇧ digits are app commands.
 import type { SettingsViewId } from '../lib/settingsSections';
 
@@ -17,6 +17,7 @@ export type RailAction =
   | 'variables'
   | 'selectors'
   | 'code'
+  | 'files'
   | 'history'
   | 'apps'
   | 'audits'
@@ -44,6 +45,7 @@ export const RAIL_SHORTCUTS: readonly RailShortcut[] = [
   { action: 'selectors', letter: 'g', alt: false, shift: false },
   { action: 'apps', letter: 'e', alt: false, shift: false },
   { action: 'cms', letter: 'c', alt: true, shift: false },
+  { action: 'files', letter: 'f', alt: true, shift: false },
   { action: 'variables', letter: 'v', alt: true, shift: false },
   { action: 'history', letter: 'h', alt: true, shift: false },
   { action: 'instructions', letter: 'i', alt: true, shift: false },

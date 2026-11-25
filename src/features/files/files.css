@@ -1,0 +1,282 @@
+/* The Files panel and the file editor over the canvas. Controls are fills, never borders (docs: backgrounds, not
+   borders); the one scroll container of each keeps a stable gutter (docs/scroll-gutter.md). */
+.files-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.files-tree {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  outline: none;
+  padding-block-end: 12px;
+}
+.files-tree[data-drop-root='true'] {
+  background: var(--accent-soft);
+}
+.files-tree-space {
+  position: relative;
+}
+
+.files-row {
+  position: absolute;
+  inset-inline: 4px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline-end: 8px;
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+.files-row:hover {
+  background: var(--bg-hover);
+}
+.files-row[data-selected='true'] {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.files-tree:focus-visible .files-row[data-focused='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.files-row[data-open-file='true'] .files-name {
+  color: var(--text);
+}
+.files-row[data-protected='true'],
+.files-row[data-cut='true'] {
+  opacity: 0.6;
+}
+.files-row[data-drop='true'] {
+  background: var(--accent-soft);
+}
+.files-row-more,
+.files-results-more {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.files-chevron {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+}
+.files-chevron[data-open='true'] svg {
+  transform: rotate(90deg);
+}
+
+.files-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.files-dirty {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.files-name-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding-inline: 4px;
+  border: none;
+  border-radius: 3px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+}
+.files-name-input[aria-invalid='true'] {
+  background: color-mix(in srgb, #ff5a5a 22%, transparent);
+}
+
+.files-menu-anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.files-loading {
+  padding: 4px 12px;
+}
+.files-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+
+.files-results {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 4px 12px;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.files-result {
+  width: 100%;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: start;
+}
+.files-result:hover,
+.files-result:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.files-result-folder {
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.files-results-more {
+  padding: 6px 8px;
+}
+
+.files-icon-button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* The editor over the canvas. */
+.files-editor {
+  flex-direction: column;
+}
+.files-editor-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.files-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding-inline: 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.files-editor-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.files-editor-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: start;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.files-editor-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.files-editor-status {
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.files-editor-conflict {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding-inline: 8px;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in srgb, #ffb020 20%, transparent);
+  color: var(--text);
+  font-size: 11px;
+}
+.files-editor-save {
+  height: 24px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+.files-editor-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.files-editor-body > .cm-host {
+  flex: 1;
+  min-height: 0;
+}
+.files-editor-live > * {
+  flex: 1;
+  min-height: 0;
+}
+.files-editor-media {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.files-editor-media img,
+.files-editor-media video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: repeating-conic-gradient(var(--bg-hover) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
+}
+.files-editor-body > .cm-host .cm-editor {
+  height: 100%;
+}
+.files-editor-live .code-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}

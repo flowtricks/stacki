@@ -21,7 +21,8 @@ export interface RenameHost {
   /** The configured component folders, project-relative (`src/components`). */
   readonly roots: readonly string[];
   readonly plan: (request: ComponentRenameRequest) => Promise<Result<ComponentRenameSummary, ComponentOpError>>;
-  readonly apply: (component: ScanComponent, request: ComponentRenameRequest, change: 'rename' | 'move' | 'both') => void;
+  /** Answers whether the component moved (a refusal is reported by the host). */
+  readonly apply: (component: ScanComponent, request: ComponentRenameRequest, change: 'rename' | 'move' | 'both') => Promise<boolean>;
 }
 
 export interface PaletteManagement {

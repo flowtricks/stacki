@@ -16,6 +16,7 @@ import { type InsertPlace, insertGesture } from '../../editor/editGestures';
 import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
+import { focusedMenuEditTarget } from '../../ui/menuEditTarget';
 import { menuPasteClaimed } from '../../ui/menuPasteClaim';
 import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type PseudoPick, type RightTab, type ToastKind } from '../appTypes';
 import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
@@ -567,6 +568,11 @@ export function menuCopy(menu: MenuEdits): void {
     runNativeEdit('copy');
     return;
   }
+  const panel = focusedMenuEditTarget(document.activeElement ?? undefined);
+  if (panel !== undefined) {
+    panel.copy();
+    return;
+  }
   const copyable = structuralSelection(menu.selectedIdRef.current, menu.pseudoPickRef.current);
   if (copyable === undefined) {
     return;
@@ -591,6 +597,11 @@ export function menuPaste(menu: MenuEdits): void {
   }
   if (inEditable()) {
     runNativeEdit('paste');
+    return;
+  }
+  const panel = focusedMenuEditTarget(document.activeElement ?? undefined);
+  if (panel !== undefined) {
+    panel.paste();
     return;
   }
   if (menuPasteClaimed()) {

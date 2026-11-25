@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': '컴포넌트',
   'rail.editorPanels': '에디터 패널',
   'rail.elements': '요소 추가',
+  'rail.files': '파일',
   'rail.history': 'Git', // same
   'rail.more': '더 보기',
   'rail.moveDown': '아래로 이동',

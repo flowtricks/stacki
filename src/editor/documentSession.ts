@@ -1,4 +1,4 @@
-// One open instructions file, as a value: the text on disk the editor started
+// One open text file (an Instructions file, a file the Files panel opened), as a value: the text on disk the editor started
 // from (`base`), the text the person has now (`draft`), and an outside change
 // that met unsaved edits (`conflict`). The view owns the session in state and
 // runs these transitions; they never touch the disk. The rules:
@@ -11,8 +11,8 @@
 // - Otherwise it is a conflict, and the person chooses: keep theirs, keep
 //   mine (saved over theirs), or merge both when the changes do not overlap
 //   (`mergeTyping`, the code editor's three-way merge).
-import { assert } from '../../../shared/core/assert';
-import { mergeTyping } from '../../../shared/engine/codePatch';
+import { assert } from '../../shared/core/assert';
+import { mergeTyping } from '../../shared/engine/codePatch';
 
 export interface DocumentSession {
   readonly file: string;

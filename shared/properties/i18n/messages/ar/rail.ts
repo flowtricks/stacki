@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': 'المكوّنات',
   'rail.editorPanels': 'لوحات المحرّر',
   'rail.elements': 'إضافة عناصر',
+  'rail.files': 'الملفات',
   'rail.history': 'Git', // same
   'rail.more': 'المزيد',
   'rail.moveDown': 'نقل لأسفل',

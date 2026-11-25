@@ -78,6 +78,7 @@ export type LeftTab =
   | 'variables'
   | 'selectors'
   | 'code'
+  | 'files'
   | 'history'
   | 'apps'
   | 'audits'

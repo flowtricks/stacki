@@ -147,13 +147,13 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
     () => ({
       roots,
       plan: (request: ComponentRenameRequest) => planProjectComponentRename(projectPath, request),
-      apply: (component: ScanComponent, request: ComponentRenameRequest, change: 'rename' | 'move' | 'both'): void => {
-        const run = async (): Promise<void> => {
+      apply: (component: ScanComponent, request: ComponentRenameRequest, change: 'rename' | 'move' | 'both'): Promise<boolean> => {
+        const run = async (): Promise<boolean> => {
           await flushSave();
           const done = await renameProjectComponent(projectPath, request);
           if (!done.ok) {
             fail(done.error.message);
-            return;
+            return false;
           }
           let undoToken = done.value.undo;
           const reopened = await reloadAfterRename(request);
@@ -178,8 +178,12 @@ export function useComponentManagement(app: ShellView): PaletteManagement {
             },
           });
           assert(reopened === undefined || reopened === true, 'A reload reports nothing or that it reopened');
+          return true;
         };
-        void run().catch((error: unknown) => fail(cleanError(error)));
+        return run().catch((error: unknown) => {
+          fail(cleanError(error));
+          return false;
+        });
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the reload helper reads the latest app state through refs on `app`

@@ -6,7 +6,7 @@
 import type { RailOrder } from './railOrder';
 
 export const DEFAULT_RAIL_ORDER: RailOrder = {
-  top: ['elements', 'pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'properties', 'components', 'apps', 'code'],
+  top: ['elements', 'pages', 'navigator', 'assets', 'cms', 'variables', 'history', 'properties', 'components', 'apps', 'code', 'files'],
   bottom: ['selectors', 'audits', 'projectSettings', 'ai'],
   settings: ['secrets', 'mcp', 'instructions', 'agents'],
 };

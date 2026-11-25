@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': 'कंपोनेंट',
   'rail.editorPanels': 'एडिटर पैनल',
   'rail.elements': 'एलिमेंट जोड़ें',
+  'rail.files': 'फ़ाइलें',
   'rail.history': 'Git', // same
   'rail.more': 'और',
   'rail.moveDown': 'नीचे ले जाएँ',

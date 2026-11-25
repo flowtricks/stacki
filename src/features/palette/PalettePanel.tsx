@@ -561,7 +561,7 @@ function RenameDialogHost(props: {
       onClose={props.onClose}
       onApply={(request, change) => {
         props.onClose();
-        props.rename.apply(component, request, change);
+        void props.rename.apply(component, request, change);
       }}
     />
   );

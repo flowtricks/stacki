@@ -8,6 +8,10 @@ import type { SettingsViewId } from './settingsSections';
 /** The feature behind a panel id (`pages` → `panel:pages`); undefined for a panel no role restricts. */
 export function panelFeature(id: string): AccessFeature | undefined {
   assert(id.length > 0, 'A panel id is never empty');
+  // The Files panel lists and edits every file in the project, which is raw source: it follows `code:edit`.
+  if (id === 'files') {
+    return 'code:edit';
+  }
   const feature = ACCESS_FEATURES.find((item) => item === `panel:${id}`);
   assert(feature === undefined || feature.startsWith('panel:'), 'A panel feature is a panel');
   return feature;

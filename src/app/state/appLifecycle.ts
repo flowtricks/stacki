@@ -1,4 +1,5 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { settleOpenEditor } from '../../features/files/fileEditorControl';
 import { useErrorToasts } from '../../ui/errorNotices';
 import { usePageTitles } from '../../features/pages/usePageTitles';
 import { astroChangeMessages } from '../../../shared/properties/astroFileChanges';
@@ -581,6 +582,10 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
   // reload has to survive it. Anything unsaved goes to disk first.
   const leaveProject = useCallback(
     async (next: string | undefined = undefined) => {
+      // The Files editor's unsaved text is the person's to save or discard first; staying keeps the project open.
+      if ((await settleOpenEditor()) === 'cancel') {
+        return;
+      }
       try {
         await flushSave();
       } catch (error: unknown) {

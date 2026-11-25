@@ -10,7 +10,7 @@ import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { html } from '@codemirror/lang-html';
-import { syntaxHighlighting, HighlightStyle, indentOnInput, LanguageDescription } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, indentOnInput, LanguageDescription, StreamLanguage } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { astroHighlight } from './astroHighlight';
 import { codeIndentExtensions } from './codeEditorIndent';
@@ -456,6 +456,18 @@ function codeEditorRangeWithin(range: CodeEditorRange | undefined, length: numbe
   return range;
 }
 
+// A file with no grammar in the app (YAML, .env, a log): one token per line and no colour, rather than the JavaScript
+// grammar misreading it. Built from CodeMirror's own stream parser, so no dependency is added.
+const plainTextLanguage = StreamLanguage.define<undefined>({
+  name: 'plaintext',
+  startState: () => undefined,
+  token: (stream) => {
+    stream.skipToEnd();
+    // eslint-disable-next-line stacki/no-null -- CodeMirror's stream parser says "no style" with null.
+    return null;
+  },
+});
+
 export function codeEditorLanguage(language: string | undefined): LanguageSupport {
   if (language === 'astro' || language === 'html') {
     // HTML supplies structural editing while the official Astro TextMate
@@ -467,6 +479,9 @@ export function codeEditorLanguage(language: string | undefined): LanguageSuppor
   }
   if (language === 'toml') {
     return new LanguageSupport(tomlLanguage);
+  }
+  if (language === 'plaintext') {
+    return new LanguageSupport(plainTextLanguage);
   }
   if (language === 'markdown') {
     // MDX is mostly prose: highlight headings and fences instead of parsing it all as JS.

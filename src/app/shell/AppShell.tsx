@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { FilesTab } from './DesktopFiles';
 import { DesktopPageSettings } from './PageSettingsDesktop';
 import { CanvasTextFormatBar } from './CanvasTextFormatBar';
 import { CanvasTextSourceCue } from './CanvasTextSourceCue';
@@ -552,6 +553,7 @@ function LeftPanelBody({ app, tab }: { readonly app: ShellView; readonly tab: Le
       {tab === 'variables' && <VariablesPanel project={app.project} place={variablePlace(app)} selected={app.varsGroup} onSelect={app.setVarsGroup} />}
       {tab === 'selectors' && <SelectorsPanel project={app.project} showToast={app.showToast} onRecordUndo={app.pushCommand} />}
       {tab === 'code' && <CodeTab app={app} />}
+      {tab === 'files' && <FilesTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}
       {tab === 'apps' && <AppsTab app={app} />}
       {tab === 'audits' && <AuditsTab app={app} />}

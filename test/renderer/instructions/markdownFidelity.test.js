@@ -27,7 +27,7 @@ buildSync({
       export { editableHTML } from './src/ui/htmlFieldModel';
       export { splitFrontmatter } from './shared/properties/instructions';
       export * as fields from './src/features/instructions/frontmatterFields';
-      export * as session from './src/features/instructions/documentSession';`,
+      export * as session from './src/editor/documentSession';`,
     resolveDir: ROOT,
     loader: 'ts',
   },

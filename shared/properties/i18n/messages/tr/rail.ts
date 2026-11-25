@@ -14,6 +14,7 @@ export const messages = {
   'rail.components': 'Bileşenler',
   'rail.editorPanels': 'Düzenleyici panelleri',
   'rail.elements': 'Öğe ekle',
+  'rail.files': 'Dosyalar',
   'rail.history': 'Git', // same
   'rail.more': 'Daha fazla',
   'rail.moveDown': 'Aşağı taşı',
