@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readVariables } from '../../../vendor/stacki/electron/project/cssVarModel';
 import { checksum, type createRooms } from '../collaboration/rooms';
-import { readSource, walk } from '../project/projectServer';
-import { record, string } from '../../shared/validation';
+import { editableSource, readListedSource, readSource, supportedPath, walk } from '../project/projectServer';
+import { MAX_SOURCE, record, string } from '../../shared/validation';
 import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
 import { batchedRead } from '../../shared/batchedRead';
@@ -11,6 +11,7 @@ import { described } from '../../../vendor/stacki/shared/properties/i18n/message
 import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/projectMetadata';
 
 type Rooms = ReturnType<typeof createRooms>;
+const SCAN_BYTES_MAX = 32_000_000;
 export function variableRoutes(root: string, rooms: Rooms) {
   const read = cachedVariableReader();
   return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) => {
@@ -60,9 +61,10 @@ async function variableSources(root: string, rooms: Pick<Rooms, 'read'>) {
   }
   let total = 0;
   const entries = await batchedRead(paths, async (file) => {
-    const text = await rooms.read(file);
+    // A file Studio cannot edit is still read: left out, a rename would miss its references without a word.
+    const text = (await editableSource(root, file)) ? await rooms.read(file) : await readListedSource(root, file, SCAN_BYTES_MAX);
     total += Buffer.byteLength(text);
-    if (total > 32_000_000) {
+    if (total > SCAN_BYTES_MAX) {
       throw new Error('Variable scan exceeds 32 MB');
     }
     return [file, text] as const;
@@ -86,6 +88,12 @@ async function editVariables(rooms: Rooms, before: Map<string, string>, input: R
       const changed = described('variables.error.collaboratorChanged');
       return { ok: false, error: changed.message, errorRef: changed.messageRef };
     }
+  }
+  // All or nothing: an edit that reaches a file Studio cannot write is refused whole.
+  const locked = changed.find(([file, text]) => !supportedPath(file) || Math.max(text.length, Buffer.byteLength(before.get(file) ?? '')) > MAX_SOURCE);
+  if (locked !== undefined) {
+    const refused = described('variables.error.fileNotEditable', { file: locked[0] });
+    return { ok: false, error: refused.message, errorRef: refused.messageRef };
   }
   const targets = await Promise.all(changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })));
   for (const { room, text } of targets) {

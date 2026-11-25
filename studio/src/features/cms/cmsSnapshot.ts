@@ -1,16 +1,17 @@
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { walk, safePath } from '../project/projectServer';
+import { walk, safePath, editableSource, listedPath, readListedSource } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
 import { batchedRead } from '../../shared/batchedRead';
-import { sourcePath, string } from '../../shared/validation';
+import { string } from '../../shared/validation';
 import { stopServiceAndWait } from '../../../vendor/stacki/electron/content/contentConfig';
 import { createHash } from 'node:crypto';
 import { SerialQueue } from '../../shared/serialQueue';
 import { PROJECT_FOLDERS_FILE } from '../../../vendor/stacki/shared/properties/projectFolders';
 
 export const CMS_SOURCE = /\.(astro|json|md|mdx|mdoc|markdown|css|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/i;
+const SCAN_BYTES_MAX = 32_000_000;
 export async function cmsSources(root: string, rooms?: ReturnType<typeof createRooms>) {
   const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
   if (paths.length > 2000) {
@@ -20,10 +21,14 @@ export async function cmsSources(root: string, rooms?: ReturnType<typeof createR
   const entries = await batchedRead(
     paths.filter((file) => CMS_SOURCE.test(file)),
     async (file) => {
-      sourcePath(file);
-      const source = rooms ? await rooms.read(file) : string(await readFile(await safePath(root, file), 'utf8'));
+      // A file Studio cannot edit is still read, so entries and references in it are seen. Saving one is refused (commitCms).
+      const source = (await editableSource(root, file))
+        ? rooms
+          ? await rooms.read(file)
+          : string(await readFile(await safePath(root, file), 'utf8'))
+        : await readListedSource(root, file, SCAN_BYTES_MAX);
       size += Buffer.byteLength(source);
-      if (size > 32_000_000) {
+      if (size > SCAN_BYTES_MAX) {
         throw new Error('CMS scan exceeds 32 MB');
       }
       return [file, source] as const;
@@ -115,7 +120,7 @@ async function stageSources(root: string, stage: string, snapshot: Awaited<Retur
   }
   // Asset placeholders allow import resolution without copying binary uploads.
   await batchedRead(snapshot.paths, async (file) => {
-    const destination = await safePath(stage, file);
+    const destination = await listedPath(stage, file);
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(destination, snapshot.sources.get(file) ?? '');
   });

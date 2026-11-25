@@ -1,10 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'node:path';
-import { MAX_SOURCE, sourcePath, string } from '../../shared/validation';
+import { MAX_SOURCE, string } from '../../shared/validation';
 
 // Stacki's synchronous CSS engine operates only on this request's bounded snapshot.
 // It cannot touch disk; validated changes are committed through Studio's rooms.
 export const VARIABLE_ROOT = '/studio';
+// The whole snapshot's bound, which one file in it cannot pass.
+const SNAPSHOT_FILE_CHARS_MAX = 32_000_000;
 export const MAIN_LIMITS = { cssVariableFileBytesMax: MAX_SOURCE };
 const workspace = new AsyncLocalStorage<Map<string, string>>();
 export function withVariableWorkspace<T>(files: Map<string, string>, run: () => T): T {
@@ -17,8 +19,10 @@ function files() {
   }
   return current;
 }
+// Only the snapshot's own keys are ever read or replaced; which of them may be saved is decided before the commit
+// (variableServer.ts). Refusing a name here would make the engine skip that file, and a rename miss it.
 function relative(absolute: string) {
-  return sourcePath(path.relative(VARIABLE_ROOT, absolute).split(path.sep).join('/'));
+  return path.relative(VARIABLE_ROOT, absolute).split(path.sep).join('/');
 }
 function readFileSync(absolute: string, _encoding: 'utf8') {
   const text = files().get(relative(absolute));
@@ -32,7 +36,7 @@ export function writeProjectText(absolute: string, text: string) {
   if (!files().has(file)) {
     throw new Error('Variables can only edit existing project source');
   }
-  files().set(file, string(text));
+  files().set(file, string(text, SNAPSHOT_FILE_CHARS_MAX));
 }
 export interface VariableEntry {
   readonly name: string;

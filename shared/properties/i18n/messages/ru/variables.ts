@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Соавтор изменил этот файл. Обновите и попробуйте снова.',
   'variables.error.delete': 'Не удалось удалить.',
   'variables.error.duplicate': 'Не удалось дублировать.',
+  'variables.error.fileNotEditable': 'Файл {file} нельзя изменить в Studio (из-за имени или размера), поэтому ничего не изменено.',
   'variables.error.headingCannotContainCommentEnd': 'Заголовок не может содержать «*/».',
   'variables.error.headingNeedsName': 'Заголовку нужно имя.',
   'variables.error.headingNotComment': 'Этот заголовок больше не является комментарием.',

@@ -22,6 +22,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'غيّر أحد المتعاونين هذا المصدر. حدّث الصفحة وحاول مرة أخرى.',
   'variables.error.delete': 'تعذّر الحذف.',
   'variables.error.duplicate': 'تعذّر التكرار.',
+  'variables.error.fileNotEditable': 'لا يمكن تعديل {file} في Studio (بسبب اسمه أو حجمه)، لذلك لم يتغيّر شيء.',
   'variables.error.headingCannotContainCommentEnd': 'لا يمكن أن يحتوي العنوان على "*/".',
   'variables.error.headingNeedsName': 'يحتاج العنوان إلى اسم.',
   'variables.error.headingNotComment': 'لم يعد هذا العنوان تعليقًا.',

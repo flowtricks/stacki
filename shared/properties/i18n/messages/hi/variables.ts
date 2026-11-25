@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'किसी सहयोगी ने यह सोर्स बदल दिया है। रीफ़्रेश करके फिर कोशिश करें।',
   'variables.error.delete': 'इसे हटाया नहीं जा सका।',
   'variables.error.duplicate': 'इसकी डुप्लिकेट नहीं बनाई जा सकी।',
+  'variables.error.fileNotEditable': '{file} को Studio में संपादित नहीं किया जा सकता (नाम या आकार के कारण), इसलिए कुछ नहीं बदला गया।',
   'variables.error.headingCannotContainCommentEnd': 'हेडिंग में "*/" नहीं हो सकता।',
   'variables.error.headingNeedsName': 'हेडिंग का नाम होना ज़रूरी है।',
   'variables.error.headingNotComment': 'वह हेडिंग अब कमेंट नहीं रही।',

@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Un colaborador cambió este código fuente. Actualiza e inténtalo de nuevo.',
   'variables.error.delete': 'No se pudo eliminar.',
   'variables.error.duplicate': 'No se pudo duplicar.',
+  'variables.error.fileNotEditable': '{file} no se puede editar en Studio (por su nombre o tamaño), así que no se cambió nada.',
   'variables.error.headingCannotContainCommentEnd': 'Un encabezado no puede contener "*/".',
   'variables.error.headingNeedsName': 'Un encabezado necesita un nombre.',
   'variables.error.headingNotComment': 'Ese encabezado ya no es un comentario.',

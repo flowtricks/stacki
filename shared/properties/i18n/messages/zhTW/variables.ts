@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': '協作者已變更此來源。請重新整理後再試一次。',
   'variables.error.delete': '無法刪除。',
   'variables.error.duplicate': '無法複製。',
+  'variables.error.fileNotEditable': '由於名稱或大小，無法在 Studio 中編輯 {file}，因此未做任何變更。',
   'variables.error.headingCannotContainCommentEnd': '標題不能包含「*/」。',
   'variables.error.headingNeedsName': '標題需要名稱。',
   'variables.error.headingNotComment': '該標題已不再是註解。',

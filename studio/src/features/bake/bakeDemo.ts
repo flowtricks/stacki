@@ -7,7 +7,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Result } from '../../../vendor/stacki/shared/core/result';
 import { MEDIA_EXT } from '../assets/assetStateTypes';
-import { walk } from '../project/projectServer';
+import { supportedPath, walk } from '../project/projectServer';
 import { BAKE_RUNTIME_DIRECTORY } from './bakeProtocol';
 import { ASSET_URL_LIMITS, BAKE_ASSET_URLS_FILE, matchAssetURLs, parseAssetURLs, type HashedFile } from './bakeAssetURLs';
 import { bakeSite as bakeDocuments, type BakeError, type BakeOptions, type BakeReport } from './bakeSite';
@@ -47,7 +47,7 @@ async function emittedFiles(out: string): Promise<string[]> {
 }
 
 async function writeAssetURLs(options: Pick<BakeOptions, 'root' | 'out' | 'base'>): Promise<void> {
-  const sources = (await walk(options.root, 'src')).filter((file) => MEDIA_EXT.test(file)).slice(0, ASSET_URL_LIMITS.entriesMax);
+  const sources = (await walk(options.root, 'src')).filter((file) => MEDIA_EXT.test(file) && supportedPath(file)).slice(0, ASSET_URL_LIMITS.entriesMax);
   const urls = matchAssetURLs(await hashed(options.root, sources), await hashed(options.out, await emittedFiles(options.out)), options.base);
   const text = JSON.stringify(urls);
   // Read back with the browser's parser, so a map it would refuse never ships.

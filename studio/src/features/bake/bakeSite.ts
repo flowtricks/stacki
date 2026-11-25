@@ -13,7 +13,7 @@ import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/project
 import { scanStyleBlocks } from '../../../vendor/stacki/electron/previewServer/styleBlockScan';
 import { assetCatalog } from '../assets/assetCatalog';
 import { scanProjectVariables } from '../variables/variableServer';
-import { scanProject, walk } from '../project/projectServer';
+import { scanProject, supportedPath, walk } from '../project/projectServer';
 import { routeFor } from '../project/projectClient';
 import { MAX_SOURCE, sourcePath } from '../../shared/validation';
 import { astroEntry, runBuild, type BakeError, type BuildRequest } from './bakeBuild';
@@ -494,10 +494,11 @@ async function pageTexts(out: string, pages: readonly BakePage[]): Promise<Reado
   return texts;
 }
 
-async function readSources(root: string, entryFiles: readonly string[]): Promise<Result<Readonly<Record<string, string>>, BakeError>> {
+export async function readSources(root: string, entryFiles: readonly string[]): Promise<Result<Readonly<Record<string, string>>, BakeError>> {
   // Content entries are rooms like any page: a Collections edit is a source edit.
   const entries = [...new Set(entryFiles)].filter((file) => file.startsWith('src/') && /\.(md|json|ya?ml)$/.test(file));
-  const files = [...(await walk(root, 'src')).filter((file) => /\.(astro|css)$/.test(file)), ...entries];
+  // The demo holds what Studio can open: its scan lists no other file (scanProject).
+  const files = [...(await walk(root, 'src')).filter((file) => /\.(astro|css)$/.test(file)), ...entries].filter(supportedPath);
   if (files.length > BAKE_LIMITS.sourceFilesMax) {
     return err({ code: 'too-many-sources', message: `The site has ${files.length} source files; a bake holds at most ${BAKE_LIMITS.sourceFilesMax}` });
   }

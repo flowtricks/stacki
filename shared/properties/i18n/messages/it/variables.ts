@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Un collaboratore ha modificato questo sorgente. Aggiorna e riprova.',
   'variables.error.delete': 'Impossibile eliminarlo.',
   'variables.error.duplicate': 'Impossibile duplicarlo.',
+  'variables.error.fileNotEditable': '{file} non può essere modificato in Studio (per il nome o le dimensioni), quindi non è stato cambiato nulla.',
   'variables.error.headingCannotContainCommentEnd': 'Un’intestazione non può contenere "*/".',
   'variables.error.headingNeedsName': 'Un’intestazione richiede un nome.',
   'variables.error.headingNotComment': 'Questa intestazione non è più un commento.',

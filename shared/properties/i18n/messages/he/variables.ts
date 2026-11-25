@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'משתף פעולה שינה את המקור הזה. יש לרענן ולנסות שוב.',
   'variables.error.delete': 'לא ניתן למחוק את זה.',
   'variables.error.duplicate': 'לא ניתן לשכפל את זה.',
+  'variables.error.fileNotEditable': 'לא ניתן לערוך את {file} ב-Studio (בגלל השם או הגודל), ולכן שום דבר לא השתנה.',
   'variables.error.headingCannotContainCommentEnd': 'כותרת לא יכולה להכיל "*/".',
   'variables.error.headingNeedsName': 'כותרת צריכה שם.',
   'variables.error.headingNotComment': 'הכותרת הזו כבר אינה הערה.',

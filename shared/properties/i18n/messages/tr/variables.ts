@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Bir ortak çalışan bu kaynağı değiştirdi. Yenileyip tekrar deneyin.',
   'variables.error.delete': 'Silinemedi.',
   'variables.error.duplicate': 'Çoğaltılamadı.',
+  'variables.error.fileNotEditable': '{file} adı veya boyutu nedeniyle Studio’da düzenlenemiyor; bu yüzden hiçbir şey değiştirilmedi.',
   'variables.error.headingCannotContainCommentEnd': 'Başlık “*/” içeremez.',
   'variables.error.headingNeedsName': 'Başlığın bir adı olmalı.',
   'variables.error.headingNotComment': 'Bu başlık artık bir yorum değil.',

@@ -15,6 +15,9 @@ import { componentGroup, configOf, folderHolding, foldersFor, isCustomized } fro
 
 export async function safePath(root: string, relative: string): Promise<string> {
   filePath(relative);
+  return containedPath(root, relative);
+}
+async function containedPath(root: string, relative: string): Promise<string> {
   const absolute = path.resolve(root, relative);
   const canonicalRoot = await realpath(root);
   // Walk existing ancestors before creating anything. Reject symlinks rather than
@@ -53,6 +56,34 @@ export function supportedPath(relative: string): boolean {
   } catch {
     return false;
   }
+}
+/**
+ * A path `walk` lists, whatever characters its name holds. For reading it, and for building a throwaway copy of the project to read:
+ * what Studio may write in the project stays `safePath`'s. It stays under src/ or public/, with no dot segment and no link.
+ */
+export async function listedPath(root: string, relative: string): Promise<string> {
+  const segments = relative.split('/');
+  const inside = segments.length > 1 && (segments[0] === 'src' || segments[0] === 'public');
+  // A backslash separates folders on Windows, where it could climb out through a segment.
+  const clean = segments.every(
+    (segment) => segment !== '' && !segment.startsWith('.') && !segment.includes('\0') && !segment.includes(path.sep === '/' ? '/' : '\\'),
+  );
+  if (!inside || !clean) {
+    throw new Error('Invalid project path');
+  }
+  return containedPath(root, relative);
+}
+/** The text of a file `walk` lists, for a scan that has to see every file to be complete. */
+export async function readListedSource(root: string, relative: string, bytesMax: number): Promise<string> {
+  const absolute = await listedPath(root, relative);
+  if ((await stat(absolute)).size > bytesMax) {
+    throw new Error(`${relative} exceeds the scan limit`);
+  }
+  return readFile(absolute, 'utf8');
+}
+/** Whether Studio can edit this file: a path its routes accept, within the editing limit. */
+export async function editableSource(root: string, relative: string): Promise<boolean> {
+  return supportedPath(relative) && (await stat(await safePath(root, relative))).size <= MAX_SOURCE;
 }
 export async function preparePath(root: string, relative: string) {
   const absolute = await safePath(root, relative);

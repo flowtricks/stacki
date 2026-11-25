@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Ein Mitarbeiter hat diese Quelle geändert. Aktualisiere und versuche es erneut.',
   'variables.error.delete': 'Das konnte nicht gelöscht werden.',
   'variables.error.duplicate': 'Das konnte nicht dupliziert werden.',
+  'variables.error.fileNotEditable': '{file} lässt sich in Studio nicht bearbeiten (wegen Name oder Größe), daher wurde nichts geändert.',
   'variables.error.headingCannotContainCommentEnd': 'Eine Überschrift darf kein "*/" enthalten.',
   'variables.error.headingNeedsName': 'Eine Überschrift braucht einen Namen.',
   'variables.error.headingNotComment': 'Diese Überschrift ist kein Kommentar mehr.',

@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': '共同作業者がこのソースを変更しました。更新してもう一度お試しください。',
   'variables.error.delete': '削除できませんでした。',
   'variables.error.duplicate': '複製できませんでした。',
+  'variables.error.fileNotEditable': '{file} は名前またはサイズのため Studio で編集できません。何も変更されていません。',
   'variables.error.headingCannotContainCommentEnd': '見出しに「*/」は使用できません。',
   'variables.error.headingNeedsName': '見出しには名前が必要です。',
   'variables.error.headingNotComment': 'その見出しはコメントではなくなっています。',

@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Współpracownik zmienił to źródło. Odśwież i spróbuj ponownie.',
   'variables.error.delete': 'Nie udało się tego usunąć.',
   'variables.error.duplicate': 'Nie udało się tego zduplikować.',
+  'variables.error.fileNotEditable': 'Nie można edytować pliku {file} w Studio (z powodu nazwy lub rozmiaru), więc nic nie zostało zmienione.',
   'variables.error.headingCannotContainCommentEnd': 'Nagłówek nie może zawierać "*/".',
   'variables.error.headingNeedsName': 'Nagłówek potrzebuje nazwy.',
   'variables.error.headingNotComment': 'Ten nagłówek nie jest już komentarzem.',

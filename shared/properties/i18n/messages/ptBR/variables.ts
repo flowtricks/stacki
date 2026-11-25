@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Um colaborador alterou esta fonte. Atualize e tente novamente.',
   'variables.error.delete': 'Não foi possível excluir.',
   'variables.error.duplicate': 'Não foi possível duplicar.',
+  'variables.error.fileNotEditable': 'Não é possível editar {file} no Studio (por causa do nome ou do tamanho), então nada foi alterado.',
   'variables.error.headingCannotContainCommentEnd': 'Um título não pode conter "*/".',
   'variables.error.headingNeedsName': 'Um título precisa de um nome.',
   'variables.error.headingNotComment': 'Esse título não é mais um comentário.',

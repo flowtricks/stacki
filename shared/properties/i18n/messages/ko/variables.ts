@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': '공동 작업자가 이 소스를 변경했습니다. 새로고침 후 다시 시도하세요.',
   'variables.error.delete': '삭제할 수 없습니다.',
   'variables.error.duplicate': '복제할 수 없습니다.',
+  'variables.error.fileNotEditable': '{file}은(는) 이름이나 크기 때문에 Studio에서 편집할 수 없어 아무것도 변경되지 않았습니다.',
   'variables.error.headingCannotContainCommentEnd': '제목에는 "*/"를 포함할 수 없습니다.',
   'variables.error.headingNeedsName': '제목에 이름이 필요합니다.',
   'variables.error.headingNotComment': '해당 제목은 더 이상 주석이 아닙니다.',

@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'A collaborator changed this source. Refresh and try again.',
   'variables.error.delete': 'Could not delete that.',
   'variables.error.duplicate': 'Could not duplicate that.',
+  'variables.error.fileNotEditable': '{file} can’t be edited in Studio (its name or size), so nothing was changed.',
   'variables.error.headingCannotContainCommentEnd': 'A heading cannot contain "*/".',
   'variables.error.headingNeedsName': 'A heading needs a name.',
   'variables.error.headingNotComment': 'That heading is no longer a comment.',

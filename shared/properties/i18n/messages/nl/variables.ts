@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Een medewerker heeft deze bron gewijzigd. Ververs en probeer het opnieuw.',
   'variables.error.delete': 'Dat kon niet worden verwijderd.',
   'variables.error.duplicate': 'Dat kon niet worden gedupliceerd.',
+  'variables.error.fileNotEditable': '{file} kan niet in Studio worden bewerkt (door de naam of grootte), dus er is niets gewijzigd.',
   'variables.error.headingCannotContainCommentEnd': 'Een kop mag geen "*/" bevatten.',
   'variables.error.headingNeedsName': 'Een kop heeft een naam nodig.',
   'variables.error.headingNotComment': 'Die kop is geen opmerking meer.',

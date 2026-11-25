@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': '协作者更改了此源代码。请刷新后重试。',
   'variables.error.delete': '无法删除。',
   'variables.error.duplicate': '无法创建副本。',
+  'variables.error.fileNotEditable': '由于名称或大小，无法在 Studio 中编辑 {file}，因此未做任何更改。',
   'variables.error.headingCannotContainCommentEnd': '标题不能包含“*/”。',
   'variables.error.headingNeedsName': '标题需要名称。',
   'variables.error.headingNotComment': '该标题已不再是注释。',

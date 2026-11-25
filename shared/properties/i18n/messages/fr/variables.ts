@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Un collaborateur a modifié cette source. Actualisez et réessayez.',
   'variables.error.delete': 'Impossible de supprimer cet élément.',
   'variables.error.duplicate': 'Impossible de dupliquer cet élément.',
+  'variables.error.fileNotEditable': '{file} ne peut pas être modifié dans Studio (à cause de son nom ou de sa taille), rien n’a donc été changé.',
   'variables.error.headingCannotContainCommentEnd': 'Un titre ne peut pas contenir "*/".',
   'variables.error.headingNeedsName': 'Un titre a besoin d’un nom.',
   'variables.error.headingNotComment': 'Ce titre n’est plus un commentaire.',

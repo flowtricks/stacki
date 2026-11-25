@@ -15,6 +15,7 @@ export const messages = {
   'variables.error.collaboratorChanged': 'Kolaborator mengubah sumber ini. Segarkan dan coba lagi.',
   'variables.error.delete': 'Tidak dapat menghapusnya.',
   'variables.error.duplicate': 'Tidak dapat menduplikasinya.',
+  'variables.error.fileNotEditable': '{file} tidak dapat diedit di Studio (karena nama atau ukurannya), jadi tidak ada yang diubah.',
   'variables.error.headingCannotContainCommentEnd': 'Judul tidak boleh berisi "*/".',
   'variables.error.headingNeedsName': 'Judul memerlukan nama.',
   'variables.error.headingNotComment': 'Judul itu bukan lagi komentar.',

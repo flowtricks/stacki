@@ -3,16 +3,20 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { aliasMap } from '../../../vendor/stacki/electron/content/cmsRefs';
 import { instanceCounts, instancesIn } from '../../../vendor/stacki/electron/properties/componentUsage';
 import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/palette/paletteModel';
-import { walk, readSource } from '../project/projectServer';
+import { walk, readListedSource, supportedPath } from '../project/projectServer';
 import { packageComponentFiles } from '../../../vendor/stacki/electron/lib/componentSources';
 import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { readProjectFolders } from '../../../vendor/stacki/electron/lib/projectFolders';
 import { configOf, folderHolding, foldersFor, type ProjectFolders } from '../../../vendor/stacki/shared/properties/projectFolders';
 
+const USAGE_BYTES_MAX = 20_000_000;
+
 export async function scanComponentUsage(root: string, selected?: string) {
   const folders = configOf(readProjectFolders(root));
   const paths = (await walk(root, 'src')).filter((file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file));
-  const targets = [...packageComponentFiles(root), ...paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'))];
+  // Only a component Studio lists is counted; every file is searched, or a count would be short.
+  const own = paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/') && supportedPath(file));
+  const targets = [...packageComponentFiles(root), ...own];
   if (selected && !targets.includes(selected)) {
     throw new Error('Select a component inside this project');
   }
@@ -27,9 +31,9 @@ export async function scanComponentUsage(root: string, selected?: string) {
   }[] = [];
   let size = 0;
   for (const file of paths) {
-    const text = await readSource(root, file);
+    const text = await readListedSource(root, file, USAGE_BYTES_MAX);
     size += text.length;
-    if (size > 20_000_000) {
+    if (size > USAGE_BYTES_MAX) {
       throw new Error('Component usage scan exceeds 20 MB of source');
     }
     sources.push({ file, text, counts: instanceCounts(text, path.resolve(root, file), aliases) });
