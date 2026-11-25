@@ -1128,3 +1128,41 @@ test('deleting a <style> block from the Navigator writes the file without it and
     assert.equal(fs.readFileSync(file, 'utf8'), before, `${name}: undo restores every byte`);
   }
 });
+
+// A component's content restated with line breaks, as the Content field and the canvas write it (setNodeInline: fresh
+// children, the node's own source dropped). Reported: Enter at the end of a long Paragraph's text was refused as an
+// editor error. Each shape a typed break makes is written here and read back.
+test('a component content restated with line breaks applies in every position', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const words = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.';
+  const page = (inner: string) => `---\nimport Paragraph from "../components/Paragraph.astro";\n---\n<Paragraph>\n  ${inner}\n</Paragraph>\n`;
+  let made = 0;
+  const id = () => `g${String(++made).padStart(32, '0')}`;
+  const text = (value: string) => ({ kind: 'text', id: id(), value });
+  const br = () => ({ kind: 'element', id: id(), name: 'br', props: {}, children: undefined });
+  const shapes: readonly (readonly [string, readonly unknown[]])[] = [
+    ['at the end', [text(words), br()]],
+    ['in the middle', [text('Lorem ipsum'), br(), text(' dolor')]],
+    ['at the start', [br(), text(words)]],
+    ['twice at the end', [text(words), br(), br()]],
+    ['two lines and a third', [text('One'), br(), text('Two'), br(), text('Three')]],
+    ['joined back', [text('OneTwo')]],
+  ];
+  const shape = (nodes: readonly PageNode[]) =>
+    nodes.map((child) => (child.kind === 'text' ? child.value : child.kind === 'element' ? child.name : child.kind));
+  for (const [what, children] of shapes) {
+    fs.writeFileSync(file, page(words));
+    const shown = await read(harness, file);
+    const component = nodeAt(shown, [0]);
+    assert.ok(component.kind === 'component');
+    const restated = parsePageNode({ ...Object.fromEntries(Object.entries(component).filter(([key]) => key !== 'source')), children });
+    const applied = await edit(harness, file, shown.checksum, { tag: 'replace-node', target: refAt(shown, [0]), node: restated });
+    assert.ok(applied.ok, `${what} applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+    const echo = nodeAt(await read(harness, file), [0]);
+    assert.ok(echo.kind === 'component');
+    assert.ok(restated.kind === 'component');
+    assert.deepEqual(shape(echo.children ?? []), shape(restated.children ?? []), what);
+  }
+});
