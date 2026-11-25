@@ -212,9 +212,9 @@
   flex: 1;
 }
 
-  left: 0; /* physical: marks are drawn in the canvas plane, whose origin is its top-left corner */
+.dm-marks {
   position: absolute;
-  inset-inline-start: 0;
+  left: 0; /* physical: marks are drawn in the canvas plane, whose origin is its top-left corner */
   top: 0;
   pointer-events: none;
 }
