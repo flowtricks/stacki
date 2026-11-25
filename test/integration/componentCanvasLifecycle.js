@@ -40,8 +40,15 @@ function writeFixture(project) {
   writeFixture(project);
   const app = await electron.launch({
     // A mock keychain (never the person's login keychain) and hidden windows; HOME is left as it is.
-    args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '', NODE_OPTIONS: `--require ${repoPath('test/helpers/hideDockPreload.js')}` },
+    args: [
+      '-r',
+      repoPath('test/helpers/hiddenFlowPreload.js'),
+      repoPath('dist/electron/main.js'),
+      '--use-mock-keychain',
+      `--user-data-dir=${path.join(root, 'user-data')}`,
+      project,
+    ],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
   });
   const results = {};
   const shot = async (name) => {

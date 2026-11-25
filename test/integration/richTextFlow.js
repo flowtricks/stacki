@@ -97,7 +97,14 @@ function writeFixture(project) {
   const page = () => fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8');
   const app = await electron.launch({
     // A mock keychain: a test app never asks the person's macOS keychain for anything (its own settings folder, the real HOME).
-    args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
+    args: [
+      '-r',
+      repoPath('test/helpers/hiddenFlowPreload.js'),
+      repoPath('dist/electron/main.js'),
+      '--use-mock-keychain',
+      `--user-data-dir=${path.join(root, 'user-data')}`,
+      project,
+    ],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
   });
   const results = {};

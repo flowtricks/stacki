@@ -11,7 +11,7 @@
 // Method: a generated fixture project in a temporary directory (the Studio fixture's Lumos site, its installed packages
 // cloned beside it, copy-on-write on macOS), never the owner's projects. The built app (`npm run build:electron`,
 // `npx vite build`) is launched by Playwright with its own user data directory, a mock keychain (never the person's
-// login keychain) and hidden windows (test/helpers/hideDockPreload.js), opened on the fixture, and driven with real
+// login keychain) and hidden windows (test/helpers/hiddenFlowPreload.js), opened on the fixture, and driven with real
 // clicks and keys; HOME is left as it is. Files are read from disk to check what was written. Outside the gate (it starts the dev server):
 // `node test/integration/componentCanvasFlow.js <screenshot directory>`.
 const assert = require('node:assert/strict');
@@ -86,8 +86,15 @@ function writeFixture(project) {
   const buttonBefore = read('src/components/Button.astro');
   const app = await electron.launch({
     // A mock keychain (never the person's login keychain) and hidden windows; HOME is left as it is.
-    args: [repoPath('dist/electron/main.js'), '--use-mock-keychain', `--user-data-dir=${path.join(root, 'user-data')}`, project],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '', NODE_OPTIONS: `--require ${repoPath('test/helpers/hideDockPreload.js')}` },
+    args: [
+      '-r',
+      repoPath('test/helpers/hiddenFlowPreload.js'),
+      repoPath('dist/electron/main.js'),
+      '--use-mock-keychain',
+      `--user-data-dir=${path.join(root, 'user-data')}`,
+      project,
+    ],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
   });
   const results = {};
   // Captured by main (capturePage), which never waits on the page: a window behind others still answers.
