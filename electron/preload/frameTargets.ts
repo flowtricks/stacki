@@ -41,12 +41,10 @@ let lastPointer: { readonly x: number; readonly y: number } | undefined;
 
 // Tells the app what the pointer is over, when that changed.
 function reportHover(picked: ReturnType<typeof nodeAt>, element: Element | undefined): void {
-  // What a hover draws is what a click would pick, except bare text: untagged words among tagged siblings are no hover target
-  // of their own, so the hover is their owner's (the Heading around `Our wild<br><strong>work</strong>`), as over any other part of it.
-  const scoped = picked.textOwner === undefined ? picked : { ...picked, path: picked.textOwner };
+  // What a hover draws is what a click would pick.
   // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
-  const deep = deepHoverAt(element, scoped.path);
-  const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
+  const deep = deepHoverAt(element, picked.path);
+  const { path: nodePath, occurrence, pseudo } = deep === undefined ? picked : { ...deep, pseudo: undefined };
   if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
     lastHover = { path: nodePath, occurrence, pseudo };
     // A deep hover says how to label its node, which the editor's tree of the open file cannot.
@@ -80,7 +78,14 @@ const nodeAt = (
   target: Node | undefined,
   x?: number,
   y?: number,
-): { path: string | undefined; occurrence: number; outside: boolean; pseudo: PseudoLayer | undefined; textOwner?: string } => {
+): {
+  path: string | undefined;
+  occurrence: number;
+  outside: boolean;
+  pseudo: PseudoLayer | undefined;
+  /** The bare text run under the pointer, inside the node `path` names: only a double click asks for it. */
+  textPath?: string;
+} => {
   const tagged = taggedFor(target, x, y);
   // Whether anything at all was under the pointer, focus aside. No path
   // means the canvas could not place the click; `outside` means it could,
@@ -106,13 +111,13 @@ const nodeAt = (
       return { path: thin.path, occurrence: occurrenceOf(thin.path, thin.el), outside: false, pseudo: undefined };
     }
   }
-  // Words beside a tagged sibling — the text around a <strong> — have no
-  // element to hit, so the pointer is checked against them directly.
+  // Words beside a tagged sibling (the text around a <strong> or a <br>) have no element of their own, and are
+  // no target on the canvas: a hover, a click, a right click and a drag there are their owner's. The run is
+  // still named, for the double click that edits it; the Navigator selects it by its own row.
   if (best && x !== undefined && y !== undefined) {
     const text = inlineTextPathAt(best, x, y);
     if (text) {
-      // A bare text node among tagged siblings has no tag of its own: a click still picks it, but a hover is its owner's (hoverTarget).
-      return { path: text, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined, textOwner: best };
+      return { path: best, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined, textPath: text };
     }
   }
   // The space between a loop's items is the element holding them as far as the
@@ -440,8 +445,10 @@ const listenForPointer = () => {
       // With the occurrence: a component inside a loop renders once per
       // item, and opening it means the one under the cursor.
       forgetKeptBoxes();
-      const { path: nodePath, occurrence } = nodeAtEvent(event);
-      postLocated('avb:open-node', { path: nodePath || undefined, occurrence, pressedAtMs: pressedAtMsOf(event) });
+      const picked = nodeAtEvent(event);
+      // A double click on bare words still asks for those words (the editor takes the caret to their field).
+      const nodePath = picked.textPath ?? picked.path;
+      postLocated('avb:open-node', { path: nodePath || undefined, occurrence: picked.occurrence, pressedAtMs: pressedAtMsOf(event) });
     },
     true,
   );
