@@ -5061,6 +5061,11 @@
   gap: var(--space-3);
   padding: var(--space-4);
 }
+/* A transform or filter function with no controls, shown whole (it may be one long matrix()). */
+.embed-editor_raw-layer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 /* The fields here are the panel's fields. They used to be dropped to the medium
    control size on the grounds that a full-height input reads chunky beside a thin
    slider — but this editor opens over the panel, a row above the same control at

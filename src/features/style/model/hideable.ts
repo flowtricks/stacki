@@ -47,6 +47,12 @@ function splitRuns(value: string): Array<{ text: string; hidden: boolean }> {
     }
   };
   while (i < text.length) {
+    // A quoted string may hold `/*` (a url()): it opens no comment.
+    const quoted = quotedEnd(text, i);
+    if (quoted !== undefined) {
+      i = quoted;
+      continue;
+    }
     if (!text.startsWith('/*', i)) {
       i++;
       continue;
@@ -73,6 +79,23 @@ function splitRuns(value: string): Array<{ text: string; hidden: boolean }> {
   }
   pushVisible(text.length);
   return runs;
+}
+
+// The index just past the quoted string opening at `start`, or undefined when none
+// opens there or it never closes.
+function quotedEnd(text: string, start: number): number | undefined {
+  const quote = text.charAt(start);
+  if (quote !== '"' && quote !== "'") {
+    return undefined;
+  }
+  for (let i = start + 1; i < text.length; i += 1) {
+    if (text.charAt(i) === '\\') {
+      i += 1;
+    } else if (text.charAt(i) === quote) {
+      return i + 1;
+    }
+  }
+  return undefined;
 }
 
 /**

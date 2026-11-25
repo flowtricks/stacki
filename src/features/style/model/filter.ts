@@ -7,6 +7,7 @@
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { isShadowLength, splitTopLevelSpaces } from './background';
+import { rawLayer, splitFunctionList, type RawLayer } from './rawLayer';
 
 export type FilterType = 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hue-rotate' | 'invert' | 'saturate' | 'sepia' | 'drop-shadow';
 
@@ -19,6 +20,8 @@ export type Filter = {
   blur: string;
   color: string; // drop-shadow only
 };
+/** A row of the filter list: an editable layer, or a function kept as written. */
+export type FilterLayer = Filter | RawLayer;
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type FilterPatch = Pick<Filter, 'amount'> | Pick<Filter, 'x'> | Pick<Filter, 'y'> | Pick<Filter, 'blur'> | Pick<Filter, 'color'>;
@@ -96,40 +99,38 @@ function normalizeAmount(type: FilterType, inner: string): string {
 }
 
 /** Parse a `filter` value into ordered layers (`none`/'' → empty). */
-export function parseFilters(value: string): Filter[] {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'none') {
-    return [];
-  }
-  const out: Filter[] = [];
-  for (const call of splitTopLevelSpaces(trimmed).filter((token) => token.includes('('))) {
+export function parseFilters(value: string): FilterLayer[] {
+  return splitFunctionList(value).map((call) => {
     const name = functionName(call);
-    if (!isFilterType(name)) {
-      continue;
+    if (!call.endsWith(')') || !isFilterType(name)) {
+      return rawLayer(call);
     }
     if (name === 'drop-shadow') {
-      const lens: string[] = [];
-      let color = '';
-      for (const argument of splitTopLevelSpaces(innerOf(call))) {
-        if (isShadowLength(argument)) {
-          lens.push(argument);
-        } else {
-          color = argument;
-        }
-      }
-      out.push({
-        type: name,
-        amount: '',
-        x: lens[0] ?? '0px',
-        y: lens[1] ?? '0px',
-        blur: lens[2] ?? '0px',
-        color: color || DROP_DEFAULT.color,
-      });
-    } else {
-      out.push({ ...blankFilter(name), amount: normalizeAmount(name, innerOf(call)) });
+      return dropShadowLayer(innerOf(call)) ?? rawLayer(call);
     }
+    return { ...blankFilter(name), amount: normalizeAmount(name, innerOf(call)) };
+  });
+}
+
+// Two or three lengths and at most one colour; any other shape (a var() holding the
+// whole shadow, or standing for a length) has no field to sit in.
+function dropShadowLayer(inner: string): Filter | undefined {
+  const lengths: string[] = [];
+  const others: string[] = [];
+  for (const argument of splitTopLevelSpaces(inner)) {
+    (isShadowLength(argument) ? lengths : others).push(argument);
   }
-  return out;
+  if (lengths.length < 2 || lengths.length > 3 || others.length > 1) {
+    return undefined;
+  }
+  return {
+    type: 'drop-shadow',
+    amount: '',
+    x: lengths[0] ?? '0px',
+    y: lengths[1] ?? '0px',
+    blur: lengths[2] ?? '0px',
+    color: others[0] ?? DROP_DEFAULT.color,
+  };
 }
 
 function serializeOne(filter: Filter): string {
@@ -144,8 +145,11 @@ function serializeOne(filter: Filter): string {
 }
 
 /** Serialize layers back to a `filter` value ('' when empty). */
-export function serializeFilters(list: Filter[]): string {
-  return list.map(serializeOne).filter(Boolean).join(' ');
+export function serializeFilters(list: readonly FilterLayer[]): string {
+  return list
+    .map((layer) => (layer.type === 'raw' ? layer.text : serializeOne(layer)))
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** A new layer of `type`, seeded with that type's default. */

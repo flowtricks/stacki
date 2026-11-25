@@ -2077,6 +2077,7 @@
     "src/features/style/model/queryReach.ts",
     "src/features/style/model/queryWidth.ts",
     "src/features/style/model/queryWrapper.ts",
+    "src/features/style/model/rawLayer.ts",
     "src/features/style/model/resolved.ts",
     "src/features/style/model/rootColors.ts",
     "src/features/style/model/sections.ts",

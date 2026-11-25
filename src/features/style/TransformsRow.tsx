@@ -1,5 +1,7 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { add as centralAdd, filter as centralFilter, more as centralMore } from '../../ui/central/centralGeometry';
+import { add as centralAdd, code as centralCode, filter as centralFilter, more as centralMore } from '../../ui/central/centralGeometry';
+import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
+import type { RawLayer } from './model/rawLayer';
 // Layered 2D and 3D transforms — move, scale, rotate, skew — each axis a
 // number with a unit, and the filters row beside them (EffectsSection.tsx).
 
@@ -22,11 +24,12 @@ import {
   hasZ,
   IDENTITY,
   type Transform,
+  type TransformLayer,
   type TransformPatch,
   type TransformType,
 } from './model/transform';
 import { transformAxisIcon, transformTypeIcon, LockIcon, UnlockIcon } from './transformIcons';
-import { parseFilters, serializeFilters, blankFilter, filterLabel, type Filter } from './model/filter';
+import { parseFilters, serializeFilters, blankFilter, filterLabel, type FilterLayer } from './model/filter';
 import FilterEditor from './FilterFields';
 import { useExternalDraft } from './model/fieldHooks';
 import { displayOf } from './model/styleDisplay';
@@ -49,6 +52,16 @@ export const MoreIcon = centralIcon(centralMore);
 export const TransformPlusIcon = centralIcon(centralAdd);
 
 export const FilterGlyph = centralIcon(centralFilter);
+const RawGlyph = centralIcon(centralCode);
+
+// A function the panel has no controls for: its code is its label, and opening it
+// shows that code, read only. It still moves, hides and removes like any layer.
+const rawRow = (layer: RawLayer) => ({ preview: <RawGlyph />, label: <CodeInline text={layer.text} language="css" /> });
+const RawLayerView = ({ layer }: { readonly layer: RawLayer }) => (
+  <div className="embed-editor_type-shadow-editor">
+    <CodeBlock text={layer.text} language="css" className="embed-editor_raw-layer" />
+  </div>
+);
 
 // The Filters / Backdrop filters row: a stack of filter functions (blur/brightness/…/
 // drop-shadow) edited as one CSS `filter` value. Mirrors TransformsRow.
@@ -59,8 +72,8 @@ export function FiltersRow({ prop, label, props }: { prop: string; label: string
   // Shared by Filters and Backdrop filters, so both get the eye from here.
   const rows = parseHideable(display.present ? display.value : '', ' ', parseFilters);
   const layers = rows.map((row) => row.item);
-  const write = (next: Array<Hideable<Filter>>, options: WriteOptions) => writeValue(prop, serializeHideable(next, ' ', serializeFilters), options, props);
-  const stack = useLayerRows({ rows, blank: blankFilter, write });
+  const write = (next: Array<Hideable<FilterLayer>>, options: WriteOptions) => writeValue(prop, serializeHideable(next, ' ', serializeFilters), options, props);
+  const stack = useLayerRows<FilterLayer>({ rows, blank: blankFilter, write });
   const { openIndex } = stack;
   const openLayer = openIndex === undefined ? undefined : layers[openIndex];
   return (
@@ -92,12 +105,16 @@ export function FiltersRow({ prop, label, props }: { prop: string; label: string
           if (layer === undefined) {
             throw new Error(`Filter layer ${i} is missing`);
           }
-          return { preview: <FilterGlyph />, label: filterLabel(layer, translate) };
+          return layer.type === 'raw' ? rawRow(layer) : { preview: <FilterGlyph />, label: filterLabel(layer, translate) };
         }}
       />
       {openIndex !== undefined && stack.anchorElement && openLayer ? (
         <LayerPopover anchorEl={stack.anchorElement} ariaLabel={label} onClose={stack.close}>
-          <FilterEditor filter={openLayer} busy={busy} onChange={(next, live) => stack.update(openIndex, { live }, () => next)} />
+          {openLayer.type === 'raw' ? (
+            <RawLayerView layer={openLayer} />
+          ) : (
+            <FilterEditor filter={openLayer} busy={busy} onChange={(next, live) => stack.update(openIndex, { live }, () => next)} />
+          )}
         </LayerPopover>
       ) : undefined}
     </div>
@@ -428,12 +445,12 @@ export function TransformsRow({ props }: { props: Props }) {
   const layers = rows.map((row) => row.item);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLButtonElement>(null);
-  const put = (next: Array<Hideable<Transform>>, distance: string, options: WriteOptions) => {
+  const put = (next: Array<Hideable<TransformLayer>>, distance: string, options: WriteOptions) => {
     const value = withSelfPerspective(serializeHideable(next, ' ', serializeTransforms), distance);
     writeValue('transform', value, options, props);
   };
-  const write = (next: Array<Hideable<Transform>>, options: WriteOptions) => put(next, selfPerspective, options);
-  const stack = useLayerRows({ rows, blank: blankTransform, write });
+  const write = (next: Array<Hideable<TransformLayer>>, options: WriteOptions) => put(next, selfPerspective, options);
+  const stack = useLayerRows<TransformLayer>({ rows, blank: blankTransform, write });
   const { openIndex } = stack;
   const openLayer = openIndex === undefined ? undefined : layers[openIndex];
   return (
@@ -458,7 +475,15 @@ export function TransformsRow({ props }: { props: Props }) {
       />
       {openIndex !== undefined && stack.anchorElement && openLayer ? (
         <LayerPopover anchorEl={stack.anchorElement} ariaLabel={translate('style.transformsRow.transform')} onClose={stack.close}>
-          <TransformEditor layer={openLayer} busy={busy} onChange={(patch, live) => stack.update(openIndex, { live }, (item) => ({ ...item, ...patch }))} />
+          {openLayer.type === 'raw' ? (
+            <RawLayerView layer={openLayer} />
+          ) : (
+            <TransformEditor
+              layer={openLayer}
+              busy={busy}
+              onChange={(patch, live) => stack.update(openIndex, { live }, (item) => (item.type === 'raw' ? item : { ...item, ...patch }))}
+            />
+          )}
         </LayerPopover>
       ) : undefined}
       {settingsOpen && settingsRef.current ? (
@@ -478,12 +503,12 @@ export function TransformsRow({ props }: { props: Props }) {
 }
 
 // A row of the transform list: its type's glyph and its label.
-export function transformRow(layers: Transform[], i: number, translate: Translator) {
+export function transformRow(layers: readonly TransformLayer[], i: number, translate: Translator) {
   const layer = layers[i];
   if (layer === undefined) {
     throw new Error(`Transform layer ${i} is missing`);
   }
-  return { preview: transformTypeIcon(layer.type), label: transformLabel(layer, translate) };
+  return layer.type === 'raw' ? rawRow(layer) : { preview: transformTypeIcon(layer.type), label: transformLabel(layer, translate) };
 }
 
 // The transforms header: the label, the settings (⋯) toggle, and add.

@@ -196,9 +196,9 @@ const check = (what, condition, detail) => {
   {
     check('an empty value has no layers', rowsOf('filter', '').length === 0);
     check('and serializes back to empty', textOf('filter', []) === '');
-    // A value this property's parser cannot read is left out of the model
-    // rather than turned into a broken layer.
-    check('an unreadable layer is skipped', rowsOf('filter', 'blur(5px) wat(1)').length === 1, JSON.stringify(rowsOf('filter', 'blur(5px) wat(1)')));
+    // A function this property's parser has no controls for is kept as written
+    // (rawLayers.test.js): leaving it out deleted it on the next write.
+    check('an unreadable layer is kept as written', textOf('filter', rowsOf('filter', 'blur(5px) wat(1)')) === 'blur(5px) wat(1)');
     // An unterminated comment must not swallow the rest silently as a layer.
     check('an unterminated comment does not crash', Array.isArray(rowsOf('filter', 'blur(5px) /* invert(1)')));
   }

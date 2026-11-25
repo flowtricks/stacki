@@ -3,7 +3,8 @@
 // splitting on TOP-LEVEL spaces/commas only so calc()/var() with inner separators
 // survive. Mirrors lib/text-shadow.ts (the layered text-shadow model).
 
-import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
+import { splitTopLevelCommas } from './background';
+import { rawLayer, splitFunctionList, type RawLayer } from './rawLayer';
 import { assert } from '../../../../shared/core/assert';
 import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
 import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
@@ -11,6 +12,8 @@ import type { MessageKey, Translator } from '../../../../shared/properties/i18n/
 export type TransformType = 'move' | 'scale' | 'rotate' | 'skew';
 /** One transform layer: a type + its per-axis values (skew ignores z). */
 export type Transform = { type: TransformType; x: string; y: string; z: string };
+/** A row of the transform list: an editable layer, or a function kept as written. */
+export type TransformLayer = Transform | RawLayer;
 // One control's edit. Each member names the fields that control owns — an
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4); a retype
 // replaces the whole layer.
@@ -57,40 +60,63 @@ const functionArguments = (call: string): string[] => {
 };
 
 /** Parse a `transform` value into ordered layers (`none`/'' → empty). */
-export function parseTransforms(value: string): Transform[] {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'none') {
-    return [];
-  }
-  const calls = splitTopLevelSpaces(trimmed).filter((token) => token.includes('('));
-  const out: Transform[] = [];
+export function parseTransforms(value: string): TransformLayer[] {
+  const calls = splitFunctionList(value);
+  const out: TransformLayer[] = [];
   let i = 0;
   // Every branch advances `i` by at least one, so the loop runs at most calls.length times.
   while (i < calls.length) {
     const call = calls[i];
     assert(call !== undefined, 'parseTransforms: index within calls');
-    const name = functionName(call);
-    const args = functionArguments(call);
-    if (name.startsWith('translate')) {
-      out.push(translateLayer(name, args));
+    const kind = editableKind(call);
+    if (kind === undefined) {
+      out.push(rawLayer(call));
       i += 1;
-    } else if (name.startsWith('scale')) {
-      out.push(scaleLayer(name, args));
-      i += 1;
-    } else if (name.startsWith('rotate')) {
+    } else if (kind === 'rotate') {
       const run = rotateRun(calls, i);
+      assert(run.next > i, 'parseTransforms: a rotate run consumes its first call');
       out.push(run.transform);
-      // A rotate function the run can't fold (`rotate3d`) is dropped like an unknown one.
-      i = Math.max(run.next, i + 1);
-    } else if (name.startsWith('skew')) {
-      out.push(skewLayer(name, args));
-      i += 1;
+      i = run.next;
     } else {
-      i += 1; // unknown function — drop it
+      const layerOf = kind === 'move' ? translateLayer : kind === 'scale' ? scaleLayer : skewLayer;
+      out.push(layerOf(functionName(call), functionArguments(call)));
+      i += 1;
     }
   }
   assert(out.length <= calls.length, 'parseTransforms: at most one layer per function');
   return out;
+}
+
+// The functions the panel edits, with how many arguments each may hold. Any other
+// count only means something through a var() that expands to several.
+const EDITABLE_FUNCTIONS: ReadonlyMap<string, { readonly type: TransformType; readonly min: number; readonly max: number }> = new Map([
+  ['translate', { type: 'move', min: 1, max: 2 }],
+  ['translatex', { type: 'move', min: 1, max: 1 }],
+  ['translatey', { type: 'move', min: 1, max: 1 }],
+  ['translatez', { type: 'move', min: 1, max: 1 }],
+  ['translate3d', { type: 'move', min: 3, max: 3 }],
+  ['scale', { type: 'scale', min: 1, max: 2 }],
+  ['scalex', { type: 'scale', min: 1, max: 1 }],
+  ['scaley', { type: 'scale', min: 1, max: 1 }],
+  ['scalez', { type: 'scale', min: 1, max: 1 }],
+  ['scale3d', { type: 'scale', min: 3, max: 3 }],
+  ['rotate', { type: 'rotate', min: 1, max: 1 }],
+  ['rotatex', { type: 'rotate', min: 1, max: 1 }],
+  ['rotatey', { type: 'rotate', min: 1, max: 1 }],
+  ['rotatez', { type: 'rotate', min: 1, max: 1 }],
+  ['skew', { type: 'skew', min: 1, max: 2 }],
+  ['skewx', { type: 'skew', min: 1, max: 1 }],
+  ['skewy', { type: 'skew', min: 1, max: 1 }],
+]);
+
+// The layer type a call can be edited as, or undefined to keep it as written.
+function editableKind(call: string): TransformType | undefined {
+  const known = call.includes('(') && call.endsWith(')') ? EDITABLE_FUNCTIONS.get(functionName(call)) : undefined;
+  if (known === undefined) {
+    return undefined;
+  }
+  const count = functionArguments(call).length;
+  return count >= known.min && count <= known.max ? known.type : undefined;
 }
 
 function translateLayer(name: string, args: readonly string[]): Transform {
@@ -131,24 +157,29 @@ function scaleLayer(name: string, args: readonly string[]): Transform {
   return transform;
 }
 
+const ROTATE_AXES: ReadonlyMap<string, { readonly axis: 'x' | 'y' | 'z'; readonly order: number }> = new Map([
+  ['rotatex', { axis: 'x', order: 0 }],
+  ['rotatey', { axis: 'y', order: 1 }],
+  ['rotatez', { axis: 'z', order: 2 }],
+  ['rotate', { axis: 'z', order: 2 }],
+]);
+
 // Fold a consecutive run of rotateX/Y/Z (how we serialize) into one layer, starting at
-// `start`; `next` is the index of the first function the run did not consume.
+// `start`; `next` is the index of the first function the run did not consume. A layer
+// writes X, Y, Z in that order, so a repeated or earlier axis starts the next layer:
+// folding it in would drop a turn or change which one applies first.
 function rotateRun(calls: readonly string[], start: number): { readonly transform: Transform; readonly next: number } {
   const transform: Transform = { type: 'rotate', x: '0deg', y: '0deg', z: '0deg' };
+  let order = -1;
   let i = start;
-  while (i < calls.length && functionName(calls[i] ?? '').startsWith('rotate')) {
-    const rotateCall = calls[i] ?? '';
-    const rotateName = functionName(rotateCall);
-    const rotateArguments = functionArguments(rotateCall);
-    if (rotateName === 'rotatex') {
-      transform.x = rotateArguments[0] ?? '0deg';
-    } else if (rotateName === 'rotatey') {
-      transform.y = rotateArguments[0] ?? '0deg';
-    } else if (rotateName === 'rotatez' || rotateName === 'rotate') {
-      transform.z = rotateArguments[0] ?? '0deg';
-    } else {
+  while (i < calls.length) {
+    const call = calls[i] ?? '';
+    const turn = editableKind(call) === 'rotate' ? ROTATE_AXES.get(functionName(call)) : undefined;
+    if (turn === undefined || turn.order <= order) {
       break;
     }
+    transform[turn.axis] = functionArguments(call)[0] ?? '0deg';
+    order = turn.order;
     i += 1;
   }
   return { transform, next: i };
@@ -187,8 +218,11 @@ function serializeOne(transform: Transform): string {
 }
 
 /** Serialize layers back to a `transform` value ('' when empty). */
-export function serializeTransforms(list: Transform[]): string {
-  return list.map(serializeOne).filter(Boolean).join(' ');
+export function serializeTransforms(list: readonly TransformLayer[]): string {
+  return list
+    .map((layer) => (layer.type === 'raw' ? layer.text : serializeOne(layer)))
+    .filter(Boolean)
+    .join(' ');
 }
 
 /** A new layer of `type`, all axes at identity. */
