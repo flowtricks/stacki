@@ -34,6 +34,8 @@
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
+  /* Lines of like length, so a short title or sentence never leaves one word alone on the last. */
+  text-wrap: balance;
 }
 .ui-empty-state-description {
   margin: 0;
@@ -41,6 +43,7 @@
   color: var(--text-dim);
   font-size: 12px;
   line-height: 17px;
+  text-wrap: balance;
 }
 .ui-empty-state-action {
   display: flex;

@@ -15,9 +15,13 @@ import { TipButton } from './TipButton';
 
 export function SessionsFilter() {
   const translate = useTranslate();
-  const { filter } = useAiState();
+  const { filter, chats } = useAiState();
   const trigger = useMenuTrigger();
   const on = isCustomFilter(filter);
+  // With no chats at all, archived ones included, there is nothing to filter, so there is no button.
+  if (chats.length === 0) {
+    return undefined;
+  }
   return (
     <>
       <TipButton

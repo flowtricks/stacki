@@ -220,6 +220,8 @@ export interface AiState {
   /** The project's chats in display order (pinned first within a section, then by rank), archived ones included. */
   readonly chats: readonly ChatSummary[];
   readonly sections: readonly ChatSection[];
+  /** Whether `chats` and `sections` are what the project holds; meaningful once `loaded`. A failed read is not an empty project. */
+  readonly chatsRead: 'ok' | 'failed';
   readonly filter: ChatListFilter;
   readonly visibility: PanelVisibility;
   /** Each agent's own CLI: installed, signed in (the guided setup, agentSetup.ts). */
@@ -250,6 +252,7 @@ const INITIAL: AiState = {
   remembered: NO_REMEMBERED_SETTINGS,
   chats: [],
   sections: [],
+  chatsRead: 'ok',
   filter: DEFAULT_CHAT_FILTER,
   visibility: 'hidden',
   setups: new Map(),
@@ -308,6 +311,8 @@ export async function loadAiProject(projectPath: string): Promise<void> {
     remembered: agents.ok ? agents.value.remembered : current.remembered,
     chats: chats.ok ? chats.value.chats : current.chats,
     sections: chats.ok ? chats.value.sections : current.sections,
+    // A failed re-read keeps the list already shown; only a first read that fails leaves it unknown.
+    chatsRead: chats.ok || (current.loaded && current.chatsRead === 'ok') ? 'ok' : 'failed',
     drafts: chats.ok ? withStoredDrafts(current.drafts, chats.value.chats, readStoredDrafts(projectPath)) : current.drafts,
     ...failureFields(firstFailure(agents, chats)),
   }));
@@ -1007,7 +1012,7 @@ async function changeSections(action: SectionAction): Promise<ChatList | undefin
 
 /** The main process's list replaces the renderer's whole: replies to list changes are never merged. */
 function applyList(list: ChatList): void {
-  update((current) => ({ ...current, chats: list.chats, sections: list.sections }));
+  update((current) => ({ ...current, chats: list.chats, sections: list.sections, chatsRead: 'ok' }));
 }
 
 // ---------------------------------------------------------------------------

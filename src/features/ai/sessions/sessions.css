@@ -17,6 +17,10 @@
   flex: 1;
   min-width: 0;
 }
+/* With nothing to search yet, the filter keeps its place at the end of the row. */
+.ai-sessions-tools > .ai-filter-button:only-child {
+  margin-inline-start: auto;
+}
 .ai-list {
   display: flex;
   flex-direction: column;
@@ -103,7 +107,8 @@
 .ai-section-empty {
   list-style: none;
   padding-block: 4px;
-  padding-inline: 26px 8px;
+  /* In line with the section's name and the rows' marks. */
+  padding-inline: 8px;
   color: var(--text-faint);
   font-size: 11.5px;
 }
@@ -301,26 +306,16 @@
   list-style: none;
 }
 
-/* The list's empty and filtered-out states (a quiet mark, one line and the way on), and the foot's "New section",
-   a quiet text button at the end of the list in the rows' own inset. */
-.ai-sessions-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding-block: 32px 16px;
-  padding-inline: 16px;
-  color: var(--text-faint);
-  font-size: 12px;
-  text-align: center;
+/* A card with the list to itself sits in the true middle: the scrollbar's room is kept on both sides. */
+.ai-list:has(> .ui-empty-state:only-child) {
+  scrollbar-gutter: stable both-edges;
 }
-.ai-sessions-empty p {
-  margin: 0;
-  max-width: 240px;
-}
-.ai-sessions-empty-icon {
-  color: var(--text-faint);
-  opacity: 0.8;
+/* The list's cards (ListStates.tsx, the shared EmptyState) keep to a readable width however wide the panel is,
+   and their one action's words wrap in the middle of the button in a long language. */
+.ai-list > .ui-empty-state {
+  width: 100%;
+  max-width: 360px;
+  margin-inline: auto;
 }
 .ai-sessions-start,
 .ai-new-section {
@@ -333,9 +328,20 @@
   font-size: 12px;
 }
 .ai-sessions-start {
+  justify-content: center;
   padding: 5px 10px;
-  background: var(--bg-input);
+  background: var(--bg-active);
   color: var(--text);
+  text-align: center;
+  text-wrap: balance;
+}
+/* The keyboard's ring, as the app's switch draws it, outside the fill so the primary stays blue under it. */
+.ai-sessions-start:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ai-sessions-start > svg {
+  flex: none;
 }
 /* The empty list's New chat is the panel's one primary action: blue, and blue it stays (aiShell.css .ai-primary). */
 .ai-sessions-start.ai-primary {
