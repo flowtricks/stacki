@@ -302,7 +302,7 @@ export const messages = {
   'settings.roles.components.hiddenOwn': 'hidden',
   'settings.roles.components.hide': 'Hide {name}',
   'settings.roles.components.info':
-    'Hidden components leave this role’s search and Add menus. Admin can still add them by hand from the Components panel; other roles can’t add them at all. Ones already on a page stay editable.',
+    'Hidden components leave this role’s search and Add menus. Admin can still add them from the Components panel; other roles can’t. Ones already on pages stay editable.',
   'settings.roles.components.missing': 'Rules for paths that no longer exist',
   'settings.roles.components.noMatch': 'No components match.',
   'settings.roles.components.none': 'This project has no components yet.',
