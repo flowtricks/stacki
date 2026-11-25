@@ -284,6 +284,10 @@ function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Re
   const own = textOf(bytes, projected.span);
   const hunks = placedHunks(print(previous), print(next), own);
   if (!hunks.ok) {
+    const content = contentDraft(authored, anchor, { projected, previous, next, print });
+    if (content !== undefined) {
+      return content;
+    }
     // What an "editor error" report needs: the node's own bytes and the two printings the change was placed between.
     console.warn('A node restatement could not be placed on its bytes:', {
       reason: hunks.error,
@@ -296,6 +300,53 @@ function replaceDraft(authored: Authored, anchor: AnchorRef, next: PageNode): Re
   }
   const moved = shiftedHunks(hunks.value, projected.span.start);
   return ok({ anchor, operation: { tag: 'rewrite-node', hunks: moved } });
+}
+
+/**
+ * A tag whose content alone changed (the same name and attributes), when the change found between two printings of
+ * it cannot be placed on the file's bytes: content people or earlier saves laid out other than the printer would
+ * (indented more or less, with tabs, the closing tag on the last line). The bytes between its tags are replaced by
+ * the new content as printed, and nothing else: its tags, its indentation and every line around it stay as written.
+ * Undefined when anything but the content changed, or the tag has no content to replace.
+ */
+function contentDraft(
+  authored: Authored,
+  anchor: AnchorRef,
+  nodes: {
+    readonly projected: NonNullable<ReturnType<typeof nodeAtPath>>;
+    readonly previous: PageNode;
+    readonly next: PageNode;
+    readonly print: (node: PageNode) => string;
+  },
+): Result<IntentDraft, RejectionReason> | undefined {
+  const { projected, previous, next, print } = nodes;
+  if ((previous.kind !== 'element' && previous.kind !== 'component') || next.kind !== previous.kind || next.name !== previous.name) {
+    return undefined;
+  }
+  if (JSON.stringify(next.props ?? {}) !== JSON.stringify(previous.props ?? {}) || previous.children === undefined || next.children === undefined) {
+    return undefined;
+  }
+  const bytes = authored.snapshot.bytes;
+  const open = openTagEnd(bytes, projected);
+  const close = open.selfClosing ? undefined : closeTagStart(bytes, projected, open.end);
+  if (close === undefined || close < open.end) {
+    return undefined;
+  }
+  // The content as the printer writes it, read between bare tags so no attribute can be mistaken for the end of one.
+  const bare = print({ ...next, props: {}, attrOrder: [] } as PageNode); // eslint-disable-line no-restricted-syntax -- the same node without its attributes: every field was validated when `next` was parsed.
+  const opening = `<${next.name}>`;
+  const closing = bare.lastIndexOf(`</${next.name}>`);
+  if (!bare.startsWith(opening) || closing < opening.length) {
+    return undefined;
+  }
+  // The whitespace the file put inside the tags stays as written (its first line's indent, the closing tag's line):
+  // only the words and markup between them are the printer's.
+  const written = textOf(bytes, toByteSpan(open.end, close));
+  const leading = /^\s*/.exec(written)?.[0] ?? '';
+  const trailing = written.trim() === '' ? '' : (/\s*$/.exec(written)?.[0] ?? '');
+  const inner = `${leading}${bare.slice(opening.length, closing).trim()}${trailing}`;
+  assert(open.end <= close, 'The content lies between the tags');
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks: [{ span: toByteSpan(open.end, close), text: inner }] } });
 }
 
 /**
