@@ -139,6 +139,9 @@ export const messages = {
   'ai.composer.attach.remove': 'Usuń załącznik',
   'ai.composer.attach.total': 'Te obrazy są zbyt duże, by wysłać je razem. Najpierw usuń jeden.',
   'ai.composer.attach.unsupported': 'Załącz obrazy lub pliki z tego projektu.',
+  'ai.composer.canvasModes': 'Tryby canvasu',
+  'ai.composer.canvasModes.chip': 'Canvas', // same
+  'ai.composer.canvasModes.title': 'Pracuj na canvasie w innym trybie',
   'ai.composer.commands': 'Polecenia',
   'ai.composer.default': 'Domyślny',
   'ai.composer.dictate': 'Dyktuj',

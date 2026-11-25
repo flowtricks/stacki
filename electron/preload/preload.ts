@@ -20,12 +20,16 @@ import { listenForQueries, startWhenReady } from './frameQueries';
 import { rememberScrollAcrossRecovery } from './frameScrollMemory';
 import { reportErrorOverlay } from './frameErrorOverlay';
 import { installPageScrollReport } from './frameScrollbar';
+import { isDesignModeSandbox, listenForDesignModeRequests } from './designMode/designModeFrame'; // Design mode (experimental): src/app/designMode/REMOVE.md
 
 // A Stacki app's frame (stacki-app:) is the app's own sandboxed document: it
 // gets neither half. It talks to Stacki only through postMessage and the RPC.
 if (location.protocol === 'stacki-app:') {
   // Nothing to install.
+} else if (isDesignModeSandbox()) {
+  // Design mode (experimental): its sandbox copies are the renderer's own documents, so they get neither half.
 } else if (!process.isMainFrame) {
+  listenForDesignModeRequests(); // Design mode (experimental): src/app/designMode/REMOVE.md
   const post = (message: unknown) => window.parent.postMessage(message, '*');
   // Registered first, so a double click on an image is heard before text editing (which takes the nearest words of a
   // stretched link) and before the one that opens a component.

@@ -123,6 +123,9 @@ export const messages = {
   'ai.composer.attach.remove': 'Anhang entfernen',
   'ai.composer.attach.total': 'Diese Bilder sind zu groß, um sie zusammen zu senden. Entferne zuerst eines.',
   'ai.composer.attach.unsupported': 'Hänge Bilder oder Dateien aus diesem Projekt an.',
+  'ai.composer.canvasModes': 'Canvas-Modi',
+  'ai.composer.canvasModes.chip': 'Canvas', // same
+  'ai.composer.canvasModes.title': 'In einem anderen Modus auf dem Canvas arbeiten',
   'ai.composer.commands': 'Befehle',
   'ai.composer.default': 'Standard',
   'ai.composer.dictate': 'Diktieren',

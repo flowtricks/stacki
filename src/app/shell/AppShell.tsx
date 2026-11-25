@@ -84,6 +84,7 @@ import { SettingsButton } from './WelcomeView';
 import { SettingsBackScope } from '../SettingsBackScope';
 import { PageLoadLine } from '../../features/preview/PageLoadLine';
 import { useCodeChips } from '../../features/style/codeChips/CodeChips';
+import { DesignModeHost } from '../designMode/DesignModeHost'; // Design mode (experimental): src/app/designMode/REMOVE.md
 
 // The editor around an open project.
 export function AppShell({ app }: { readonly app: ShellView }) {
@@ -166,6 +167,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
       <AppOverlays app={app} />
       <AuditsHost app={app} />
       <AiHost app={app} />
+      <DesignModeHost app={app} /> {/* Design mode (experimental): src/app/designMode/REMOVE.md */}
     </div>
   );
 }
