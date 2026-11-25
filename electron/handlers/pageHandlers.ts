@@ -144,7 +144,8 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
     assert(report.checksum === planned.value.checksum, 'The batch wrote the bytes it planned');
     noteAppWrite(pagePath);
     const reply = { ...parsePageSource(pagePath, text), checksum: report.checksum };
-    return { ok: true as const, ...reply, inverse: report.inverse };
+    // The batch's own splices, not the write's: that one is a diff of the two files.
+    return { ok: true as const, ...reply, inverse: planned.value.inverse };
   });
 
   // A visual edit planned against the bytes the renderer sends and never

@@ -142,7 +142,7 @@ async function mountApp(root, files, build, options = {}) {
         if (report.tag !== 'applied') {
           return { ok: false, error: { code: 'filesystem', message: report.tag } };
         }
-        return { ok: true, ...read(pagePath), inverse: report.inverse };
+        return { ok: true, ...read(pagePath), inverse: planned.value.inverse };
       },
       importPathFor: async ({ targetPath }) => ({
         relative: '../' + path.relative(path.join(root, 'src'), targetPath).split(path.sep).join('/'),

@@ -16,7 +16,7 @@ import { toIntent, type RejectionReason, type SourceEdit } from '../../shared/en
 import { planIntent } from '../../shared/engine/planner';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { ByteString } from '../../shared/core/span';
-import { applySplices, inverseEdits } from '../../shared/engine/splice';
+import { applySplices, composedSplices, inverseEdits } from '../../shared/engine/splice';
 import { candidateOf } from '../../shared/engine/documentActor';
 import { rebaseIntent, type CommitRecord } from '../../shared/engine/rebase';
 import type { Snapshot } from '../../shared/page/snapshot';
@@ -66,13 +66,11 @@ export function previewEdit(file: string, bytes: ByteString, authoredChecksum: D
  * as the actor would build and rebase it after the ones before it had been
  * committed, and its candidate is checked as a write would check it, so a
  * batch accepts nothing its edits would be refused alone. The first refusal
- * refuses the batch; nothing is written. */
-export function previewEdits(
-  file: string,
-  bytes: ByteString,
-  authoredChecksum: Digest,
-  edits: readonly Edit[],
-): Result<{ readonly bytes: ByteString; readonly checksum: Digest }, RejectionReason> {
+ * refuses the batch; nothing is written. `inverse` is made of the edits' own
+ * splices, never a diff of the two files: the renderer carries each node's
+ * handle through it, and the selection follows those handles
+ * (src/editor/nodeHandles.ts). */
+export function previewEdits(file: string, bytes: ByteString, authoredChecksum: Digest, edits: readonly Edit[]): Result<EditPreviewed, RejectionReason> {
   assert(edits.length > 0, 'A batch holds at least one edit');
   const path = toFilePath(file);
   const authored = NODE_PROJECTOR.snapshot(path, bytes);
@@ -105,5 +103,10 @@ export function previewEdits(
     current = candidate.value;
   }
   assert(chain.length === edits.length, 'Every edit of a batch was planned');
-  return ok({ bytes: current.bytes, checksum: current.checksum });
+  const splices = composedSplices(
+    authored.bytes,
+    chain.map((commit) => commit.splices),
+  );
+  assert(NODE_PROJECTOR.hash(applySplices(authored.bytes, splices)) === current.checksum, 'The composed splices write the planned bytes');
+  return ok({ bytes: current.bytes, checksum: current.checksum, inverse: inverseEdits(splices) });
 }
