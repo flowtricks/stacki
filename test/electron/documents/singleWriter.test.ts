@@ -98,6 +98,15 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/handlers/devServers.ts': {
     writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
   },
+  'electron/project/explorerOps.ts': {
+    renameSync: {
+      count: 4,
+      reason:
+        'the Files panel renames and moves entries (a case-only rename passes through a free name in the same folder); a move writes no bytes, and a taken name is refused or answered first',
+    },
+    copyFileSync: { count: 1, reason: 'the Files panel copies a file to a new name with COPYFILE_EXCL, so nothing is ever replaced' },
+    symlinkSync: { count: 1, reason: 'a link inside a copied or imported folder is copied as a link, never followed' },
+  },
   'electron/project/pageRelocationWrite.ts': {
     createFileExclusive: {
       count: 1,

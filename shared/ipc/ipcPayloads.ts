@@ -1,3 +1,4 @@
+import { FILE_EXPLORER_PAYLOADS } from './fileExplorer';
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
@@ -310,6 +311,8 @@ export const IPC_PAYLOADS = {
   ...AI_PAYLOADS,
   // Settings > Agents (shared/ipc/projectAgentChannels.ts).
   ...AGENT_PAYLOADS,
+  // The Files panel (shared/ipc/fileExplorer.ts).
+  ...FILE_EXPLORER_PAYLOADS,
   'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
   'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
   'instructions:list': object({ ...project }),

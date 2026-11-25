@@ -453,6 +453,20 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
   // The phone preview: the project and the mode its dev server restarts in (shared/ipc/devNetwork.ts).
   'dev:setNetwork': { projectPath: '/site', mode: 'network' },
+  // The Files panel (shared/ipc/fileExplorer.ts; its bad shapes are in fileExplorer.test.ts).
+  'files:list': { projectPath: '/site', path: 'src' },
+  'files:read': { projectPath: '/site', path: '.env' },
+  'files:write': { projectPath: '/site', path: 'notes.txt', text: 'hello', byteOrderMark: false, base: 'c'.repeat(64) },
+  'files:create': { projectPath: '/site', parent: '', name: 'notes.txt', kind: 'file' },
+  'files:rename': { projectPath: '/site', path: 'notes.txt', name: 'readme.txt' },
+  'files:transfer': { projectPath: '/site', paths: ['notes.txt'], target: 'src', mode: 'move', collision: 'refuse' },
+  'files:trash': { projectPath: '/site', paths: ['notes.txt'] },
+  'files:import': { projectPath: '/site', sources: ['/Users/me/logo.svg'], target: 'public', collision: 'refuse' },
+  'files:reveal': { projectPath: '/site', path: '' },
+  'files:find': { projectPath: '/site', query: 'ci' },
+  'files:watch': { projectPath: '/site', directories: ['', 'src'] },
+  'files:guardClose': { unsaved: true },
+  'files:allowClose': { proceed: false },
   // The Astro copy of a plain website (shared/ipc/astroCopy.ts; its bad shapes are in astroCopyContract.test.ts).
   'project:checkAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },
   'project:createAstroCopy': { sourcePath: '/sites/shop', parentPath: '/sites', name: 'shop-astro' },

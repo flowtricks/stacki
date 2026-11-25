@@ -19,6 +19,7 @@ import type { CrashRecord } from './app/crashLog';
 import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { registerDictationHandlers } from './handlers/dictationHandlers';
+import { registerFileExplorerHandlers } from './handlers/fileExplorerHandlers';
 import { MODEL_SCHEME, MODEL_SCHEME_PRIVILEGES, serveModelRequest } from './app/dictationProtocol';
 import { whisperRoot } from './app/dictationStore';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
@@ -475,11 +476,19 @@ function createWindow() {
   // fresh start and belongs on the welcome screen, not back in the project this
   // one had. (A reload doesn't come through here, which is the difference the
   // reopen above is asking about.)
-  mainWindow.on('close', () => bootStore?.flush());
+  mainWindow.on('close', (event) => {
+    // The Files editor's unsaved text is settled first (save, discard or stay); the renderer answers files:allowClose.
+    if (fileExplorer.holdClose()) {
+      event.preventDefault();
+      return;
+    }
+    bootStore?.flush();
+  });
   mainWindow.on('closed', () => {
     openProjectRoot = undefined;
     folderQueue.hold();
     stopWatchingProject();
+    fileExplorer.stopWatching();
     devServers.stop();
     stopAllServices();
     stopAllPreviews();
@@ -876,20 +885,21 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  // A quit waits for the Files editor's unsaved text like a close does; nothing is stopped until it may go on.
+  if (fileExplorer.holdClose()) {
+    quitAfterSettle = true;
+    event.preventDefault();
+    return;
+  }
   stopWatchingProject();
   devServers.stop();
+  stopAllServices();
+  stopAllPreviews();
+  cleanupTerminals();
+  aiServices.stopAll();
+  fileExplorer.stopWatching();
 });
-// Reading a project's content config leaves a process behind holding its
-// schemas; they go when the app does.
-app.on('before-quit', () => stopAllServices());
-// The preview checkouts live inside the user's projects, so leaving one behind
-// leaves a stray folder in a place they will notice.
-app.on('before-quit', () => stopAllPreviews());
-// A pty outlives the window that opened it unless it is killed.
-app.on('before-quit', () => cleanupTerminals());
-// An agent and the tools it started outlive the app unless they are stopped.
-app.on('before-quit', () => aiServices.stopAll());
 
 // ---------------------------------------------------------------------------
 // The renderer's window: what the main process tells it, and its dialogs
@@ -1432,4 +1442,19 @@ registerAppDataHandlers(host, {
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });
 // Dictation's model lives in the app data folder, never in a project; the download runs only when the person agreed to it.
+// The Files panel. Its guard holds a close or quit while the editor has unsaved text; once the renderer settles it,
+// the window closes, or the app quits when a quit asked.
+let quitAfterSettle = false;
+const fileExplorer = registerFileExplorerHandlers(host, {
+  closeAfterSettle: () => {
+    if (quitAfterSettle) {
+      app.quit();
+      return;
+    }
+    mainWindow?.close();
+  },
+  keepOpen: () => {
+    quitAfterSettle = false;
+  },
+});
 registerDictationHandlers(host, { root: () => whisperRoot(app.getPath('userData')), fetch: (url, init) => fetch(url, init) });

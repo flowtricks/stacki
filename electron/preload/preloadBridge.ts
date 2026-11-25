@@ -598,5 +598,29 @@ function eventBridge() {
     nativePaste: invoke('native:paste'),
     nativeUndo: invoke('native:undo'),
     nativeRedo: invoke('native:redo'),
+    // The Files panel (shared/ipc/fileExplorer.ts).
+    listFiles: invoke('files:list'),
+    readFile: invoke('files:read'),
+    writeFile: invoke('files:write'),
+    createFileEntry: invoke('files:create'),
+    renameFileEntry: invoke('files:rename'),
+    transferFileEntries: invoke('files:transfer'),
+    trashFileEntries: invoke('files:trash'),
+    importFileEntries: invoke('files:import'),
+    revealFileEntry: invoke('files:reveal'),
+    findFiles: invoke('files:find'),
+    watchFiles: invoke('files:watch'),
+    guardFilesClose: invoke('files:guardClose'),
+    allowFilesClose: invoke('files:allowClose'),
+    onFilesChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('files:changed', listener);
+      return () => ipcRenderer.removeListener('files:changed', listener);
+    },
+    onFilesCloseRequested: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('files:closeRequested', listener);
+      return () => ipcRenderer.removeListener('files:closeRequested', listener);
+    },
   } satisfies Partial<PreloadBridge>;
 }

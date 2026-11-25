@@ -133,7 +133,9 @@ test('the complete channel inventory matches real main and terminal registration
   // Publish's Add Worker setup adds one (publish:workerSetup), 324 in all.
   // A folder from outside the app adds two (project:inspectFolder for a window drop, project:takeOpenedFolders for
   // the icon and the command line; shared/ipc/folderOpen.ts), 326 in all.
-  assert.equal(harness.handlers.size, 326);
+  // The Files panel adds thirteen (files:list, :read, :write, :create, :rename, :transfer, :trash, :import, :reveal, :find,
+  // :watch, :guardClose and :allowClose; shared/ipc/fileExplorer.ts), 339 in all.
+  assert.equal(harness.handlers.size, 339);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

@@ -792,9 +792,29 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
 ```
 
 - Built-in `admin` and `client` are always present, admin first. Admin has every feature, stores no
-  `access`, and must name at least one member: the parser refuses a file that would leave no admin,
-  and the Roles tab refuses a save that would make the person saving it non-admin. `developer`
-  (Studio's old label) and `designer` (its old stored value) read as admin.
+  `access`, and must name a member as soon as any other role does: the parser refuses a file where
+  another role lists a member while admin lists none (`adminMembershipRefusal`), and the Roles tab
+  refuses a save that would make the person saving it non-admin. `developer` (Studio's old label)
+  and `designer` (its old stored value) read as admin.
+- Unclaimed: a file in which no role lists any member, admin included, is valid (`rolesClaimed` is
+  false), so a framework can ship its roles without naming a real person to every user. Its role
+  definitions, `defaultRole`, access, app permissions, pins and component rules load and are kept,
+  but access is exactly that of no file: `resolveRole` gives everyone the file's admin role (its pins
+  and component rules apply), the default role restricts nobody, the CLI's MCP server needs no
+  `--role`, and Studio's sign-in policy keeps `AUTH_BOOTSTRAP_ADMIN` as it does with no file
+  (`editorPolicy.ts`). It never changes who may sign in or edit. The first admin added claims it.
+  Editing one: Desktop's Roles tab and the Components panel change it as read and never add the
+  signed-in login (that happens only when creating a new file while signed in); the last admin may
+  be removed only while no other role has members; adding a member to another role while admin is
+  empty is refused (`roles.error.adminFirst`), and hosted Studio's invite form starts on admin.
+  Example:
+  `{ "version": 1, "defaultRole": "client", "roles": [{ "id": "admin", "name": "Admin", "members": [] },
+  { "id": "client", "name": "Client", "members": [], "access": ["panel:pages", "panel:cms", "publish"] }] }`.
+- Older versions refuse an unclaimed file as invalid (`At least one person must be an admin`):
+  Desktop still acts as admin, but its Roles tab reports the file unreadable and its next change
+  replaces the file with the built-in roles (losing the shipped definitions); hosted Studio keeps
+  the same sign-in rules as with no file, but every hosted write acts as the built-in Client role,
+  the owner's included; every `stacki` command refuses with `invalid-file`. Nobody gains access.
 - `client` without `access` gets `CLIENT_DEFAULT_ACCESS`, Studio's former Client mode: Pages,
   Navigator, Components, Assets, CMS, Git and the Settings panel; creating, renaming and deleting
   pages; publishing; Editor settings. It lacks `page:layout`, so its edits stay inside the page layout.
@@ -2965,3 +2985,55 @@ The worker reads the model through `stacki-model://whisper/<model>/<revision>/<f
 only manifest files of an installed model. Messages between the page and the Whisper worker are a
 boundary too: `parseToWorker` and `parseFromWorker` (`whisperWorkerProtocol.ts`) bound audio to the
 30-second window and text to `segmentCharsMax`.
+
+## Files panel
+
+The Files panel (`src/features/files/`, Desktop's host `src/app/shell/DesktopFiles.tsx`) lists, opens, edits, creates,
+renames, moves, copies, trashes, imports, reveals and finds every file and folder of the open project, VS Code's Explorer
+as the model. Its contract is `shared/ipc/fileExplorer.ts`; main's side is `electron/project/explorerPaths.ts` (where a
+path lands), `explorerOps.ts` (what is done), `explorerWatch.ts` (live changes) and `electron/handlers/fileExplorerHandlers.ts`.
+
+Channels: `files:list`, `files:read`, `files:write`, `files:create`, `files:rename`, `files:transfer` (move or copy),
+`files:trash`, `files:import` (files dropped from the operating system), `files:reveal`, `files:find`, `files:watch`,
+`files:guardClose` and `files:allowClose`; events `files:changed` (`{ directories }`) and `files:closeRequested`. Every
+reply but the last three is `{ ok, value } | { ok, error }` with an `ExplorerError` (`code`, the taken `names` of a
+collision, and for `filesystem` the system's error code; never a path or file contents).
+
+- **Paths.** An `ExplorerPath` is project-relative with `/`, no empty, `.` or `..` segment, no backslash or control
+  character, at most 4,096 units and 128 segments; `''` is the root. Main accepts a request only for the project it has
+  open, resolves every path with `realpathSync.native` and refuses one whose real location is outside the project
+  (`outside`). An entry acted on as itself (rename, move, copy source, trash) is never followed: a link is renamed,
+  moved or trashed as a link, and its parent's real location must be inside the project.
+- **Dot-folders and `.git`.** Nothing is hidden: dotfiles, `.stacki`, `.github`, `.vscode`, `.astro` and `.git` are all
+  listed, expandable and readable, and find matches their names. `.git` and `.stacki/io` (the document actors' locks
+  and staging) are read-only from the panel: no write, create, rename, move, copy into, or trash, whatever the case of
+  the spelling, and also when a link resolves into them (`protected`). Find does not walk the inside of `.git` or
+  `node_modules` (generated and large), but matches their own names.
+- **Bounds.** A listing returns at most 5,000 entries, folders first in natural order, with the folder's `totalCount`;
+  text opens up to 8 MiB; a batch names at most 1,000 items; a copy is walked first and refused past 20,000 entries or
+  2 GiB; at most 512 folders are watched (the expanded ones and the open file's); a find visits at most 100,000 entries
+  and returns 200 matches, saying when it stopped early.
+- **Reading and saving.** A file opens as text only when it is strict UTF-8 with no NUL in its first 8 KiB; anything else
+  is `binary` or `too-large` (never decoded lossily, never written), and images, video and audio are `media`, previewed
+  through the `stacki-asset` scheme. A leading byte-order mark is a flag, not text, and is put back on save. The editor
+  edits `\n` text and puts each untouched line's own break back (`shared/core/lineBreaks.ts`), so a save changes only
+  the bytes the person edited. `files:write` goes through the file's document actor and is witnessed by the checksum the
+  text was read with: a file that changed since is `conflict`, never written over. Saves are explicit (⌘S / Ctrl+S or
+  Save). Unsaved text is settled (save, discard or stay) before the editor shows another file or closes, before the
+  project closes (`leaveProject`), and before the window closes or the app quits (main holds `close` and `before-quit`
+  while `files:guardClose` says text is unsaved, asks with `files:closeRequested`, and goes on after `files:allowClose`).
+  An outside change reloads a clean editor and is a conflict (keep mine, use theirs, or merge) for a dirty one.
+- **Single writer.** A file the canvas has open (the page, or the component drilled into) is not edited by the panel's
+  writer: the file editor shows the Code panel's editor for it, which writes through `page:edit`. A Files save of any
+  other file is announced as the project watcher announces an outside edit (`fs:changed`, `css:changed`, `cms:changed`).
+- **Never overwrite.** Create and rename refuse a taken name (`exists`); a rename that differs only in case and finds the
+  same entry goes through a free name in the same folder, so it works on case-insensitive disks. Move, copy and import
+  answer `collision` with the taken names; the renderer asks and sends `keep-both` ("name copy.ext", "name copy 2.ext")
+  or `replace` (the old entry goes to the Trash first). Copies are created with `COPYFILE_EXCL`; links inside a copied
+  folder are copied as links. Deleting is `shell.trashItem`, after the app's own confirm dialog.
+- **References.** A page or page folder under the pages folder moves through `page:move` / `pagefolder:rename` (links,
+  imports, `.stacki/pages.json`), and a component file under a component folder through `component:rename` (imports,
+  tags, `.stacki/components.json` recipe keys, roles); both keep their own Undo. Every other move is plain: no code is
+  rewritten. Plain renames and moves record an Undo step that moves the entries back (refused, never forced, when the
+  old name was taken meanwhile).
+- **Access.** The panel follows `code:edit` (`src/lib/roleAccess.ts`). Its shortcut is ⌥F. Studio has no Files panel yet.

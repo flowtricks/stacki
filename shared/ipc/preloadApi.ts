@@ -332,6 +332,19 @@ interface InvokeChannels {
   readonly nativePaste: 'native:paste';
   readonly nativeUndo: 'native:undo';
   readonly nativeRedo: 'native:redo';
+  readonly listFiles: 'files:list';
+  readonly readFile: 'files:read';
+  readonly writeFile: 'files:write';
+  readonly createFileEntry: 'files:create';
+  readonly renameFileEntry: 'files:rename';
+  readonly transferFileEntries: 'files:transfer';
+  readonly trashFileEntries: 'files:trash';
+  readonly importFileEntries: 'files:import';
+  readonly revealFileEntry: 'files:reveal';
+  readonly findFiles: 'files:find';
+  readonly watchFiles: 'files:watch';
+  readonly guardFilesClose: 'files:guardClose';
+  readonly allowFilesClose: 'files:allowClose';
 }
 
 type InvokeSurface = {
@@ -386,4 +399,8 @@ export type PreloadBridge = InvokeSurface & {
   /** A Markdown file the Instructions panel lists changed outside the app, or the hidden paths did: `{ files }`, project-relative. */
   readonly onInstructionsChanged: (callback: (data: unknown) => void) => () => void;
   readonly onMenu: (channel: string, callback: (data?: unknown) => void) => () => void;
+  /** Folders the Files panel follows changed on disk (shared/ipc/fileExplorer.ts parseFilesChanged). */
+  readonly onFilesChanged: (callback: (data: unknown) => void) => () => void;
+  /** The window wants to close while the Files editor holds unsaved text: settle it, then answer `files:allowClose`. */
+  readonly onFilesCloseRequested: (callback: () => void) => () => void;
 };
