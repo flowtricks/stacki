@@ -75,6 +75,7 @@ async function panelEnvironment() {
         `export { setHost, getHost } from './src/features/style/model/host'`,
         `export { setCanvasFrame, receiveCanvasReply, noteCanvasRendered } from './src/editor/canvasQuery'`,
         `export { toggleFollowMode } from './src/features/style/embed/contextFollow'`,
+        `export { setInlineDefault } from './src/features/style/model/inlineDefault'`,
       ].join('\n'),
       resolveDir: ROOT,
       loader: 'tsx',
@@ -273,6 +274,8 @@ async function mountStylePanel(fixture) {
     },
     /** The canvas announces a rendering (the frame patched, or showed a stand-in ahead of one). */
     noteRendered: () => env.noteCanvasRendered(),
+    /** Where a new selection starts, as Design mode sets it (model/inlineDefault.ts). */
+    inlineDefault: (next) => env.setInlineDefault(next),
     /** The "0" key: what model/appKeys.ts calls for it, with the open project. True when it toggled. */
     followToggleKey: () => env.toggleFollowMode(env.getHost().projectPath),
     settle: () => settle(container),

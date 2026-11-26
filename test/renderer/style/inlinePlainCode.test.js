@@ -86,7 +86,7 @@ const baseCard = () => ({
 let card;
 function Probe() {
   const inline = model.useInlineState();
-  card = model.useInlineCard(baseCard(), inline, { deselect: noop, setSaveError: noop });
+  card = model.useInlineCard(baseCard(), inline, { deselect: noop, setSaveError: noop, showBase: noop });
   return undefined;
 }
 
