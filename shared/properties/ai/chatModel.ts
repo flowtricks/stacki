@@ -176,6 +176,8 @@ export type ChatEvent =
       readonly until?: number | undefined;
       /** The subagent call that said it (Claude's `parentToolUseId`); absent for the agent's own words and in chats stored before subagents were told apart. */
       readonly parent?: string | undefined;
+      /** The id of the message it belongs to (ACP `messageId`); absent when the adapter gave none, and in older chats. */
+      readonly message?: string;
     }
   | {
       readonly kind: 'tool';
@@ -447,6 +449,7 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
         at: optionalCount(value['at'], 'text.at'),
         until: optionalCount(value['until'], 'text.until'),
         parent: value['parent'] === undefined ? undefined : identifier(value['parent']),
+        ...(value['message'] === undefined ? {} : { message: identifier(value['message']) }),
       };
     case 'compaction':
       return {

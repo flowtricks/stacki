@@ -2,12 +2,16 @@
 // in fixed columns so every row lines up whatever its numbers (a status dot, the task, the model it runs
 // on, its time in a right-aligned column of tabular figures), and while it works a single line of what
 // it is doing now. It shows only while the run has subagents; once all have finished it folds to one
-// quiet line ("3 agents finished") that opens again on a click. A row takes the person to that
+// quiet line ("3 agents finished") that opens again on a click. Its head counts each state apart ("2 agents
+// working · 1 done") and says finished only when every agent is done. A state is told by its mark's shape and
+// words, not colour alone: a turning arc and a ticking time at work, a hollow ring while starting, a warning mark
+// when it needs the person, a check when done, a cross when it did not finish, a square when stopped, a dash when
+// the agent's end is not reported. A row takes the person to that
 // subagent's unit in the transcript (SubagentCard.tsx) and opens it. It has no other controls: it
 // observes, it does not orchestrate.
 import { memo, useId } from 'react';
 import type { ChatOption } from '../../../../shared/properties/ai/chatModel';
-import { ChevronDownIcon, ChevronRightIcon } from '../../../ui/Icons';
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import type { Translator } from '../../../lib/i18n/localeContext';
@@ -16,7 +20,6 @@ import { elapsedSince, formatDuration } from '../chatStatus';
 import { commandName } from '../runningWork';
 import {
   chosenModelName,
-  isWorking,
   sessionModelName,
   stripState,
   subagentName,
@@ -25,6 +28,7 @@ import {
   type SubagentList,
   type SubagentModel,
   type SubagentStatus,
+  type SubagentTally,
 } from '../subagents';
 import { relativeTitle } from './paths';
 import { useNow } from './ticker';
@@ -53,8 +57,8 @@ export const SubagentStrip = memo(function SubagentStrip({ list, chatId, project
       return (
         <div className="ai-agents ai-agents-live" role="region" aria-label={translate('ai.subagents.label')}>
           <div className="ai-agents-head">
-            <LoaderDots dotPx={3} />
-            <span>{translate('ai.subagents.running', { count: state.active })}</span>
+            {state.tally.working > 0 && <LoaderDots dotPx={3} />}
+            <span>{tallyLabel(state.tally, translate)}</span>
           </div>
           <Rows list={state.list} projectPath={projectPath} options={options} onOpen={onOpen} />
         </div>
@@ -66,8 +70,8 @@ export const SubagentStrip = memo(function SubagentStrip({ list, chatId, project
         <div className="ai-agents" role="region" aria-label={translate('ai.subagents.label')}>
           <button className="ai-agents-head" aria-expanded={expanded} aria-controls={expanded ? bodyId : undefined} onClick={() => change({ open: !expanded })}>
             {expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
-            <span>{translate('ai.subagents.finished', { count: state.finished })}</span>
-            {state.failed > 0 && <span className="ai-agents-failed">{translate('ai.subagents.failed', { count: state.failed })}</span>}
+            <span>{tallyLabel({ ...state.tally, failed: 0 }, translate)}</span>
+            {state.tally.failed > 0 && <span className="ai-agents-failed">{translate('ai.subagents.failed', { count: state.tally.failed })}</span>}
           </button>
           {state.kind === 'review' && (
             <div id={bodyId}>
@@ -83,6 +87,30 @@ export const SubagentStrip = memo(function SubagentStrip({ list, chatId, project
     }
   }
 });
+
+/**
+ * The head's words: "3 agents finished" when every one is done, else each state that has agents, counted apart
+ * ("2 agents working · 1 needs you · 1 done"). Nothing says finished while an agent works.
+ */
+export function tallyLabel(tally: SubagentTally, translate: Translator): string {
+  const others = tally.working + tally.queued + tally.waiting + tally.failed + tally.stopped + tally.unreported;
+  if (others === 0) {
+    return tally.done === 0 ? '' : translate('ai.subagents.finished', { count: tally.done });
+  }
+  const parts: readonly (readonly [number, MessageKey])[] = [
+    [tally.working, 'ai.subagents.running'],
+    [tally.waiting, 'ai.subagents.head.waiting'],
+    [tally.queued, 'ai.subagents.head.starting'],
+    [tally.unreported, 'ai.subagents.head.started'],
+    [tally.done, 'ai.subagents.head.done'],
+    [tally.failed, 'ai.subagents.failed'],
+    [tally.stopped, 'ai.subagents.head.stopped'],
+  ];
+  return parts
+    .filter(([count]) => count > 0)
+    .map(([count, key]) => translate(key, { count }))
+    .join(' · ');
+}
 
 function Rows({
   list,
@@ -124,14 +152,18 @@ export function SubagentRow({
   const name = displayName(agent, projectPath, translate);
   const model = agentModelLabel(agent, options);
   return (
-    <button className={`ai-agent ai-agent-${agent.status.kind}`} title={agentTooltip(name, agent.role, model)} onClick={() => onOpen(agent.call)}>
+    <button
+      className={`ai-agent ai-agent-${agent.status.kind}`}
+      title={agentTooltip([name, agent.role, model, statusTip(agent.status, translate)])}
+      onClick={() => onOpen(agent.call)}
+    >
       <SubagentDot status={agent.status} />
       <span className="ai-agent-name">{name}</span>
       <span className="ai-agent-model">{model}</span>
       <span className="ai-agent-time-cell">
         <SubagentTime status={agent.status} />
       </span>
-      {isWorking(agent.status) && <span className="ai-agent-doing">{statusLine(agent, translate)}</span>}
+      {agent.status.kind !== 'done' && <span className="ai-agent-doing">{statusLine(agent, translate)}</span>}
     </button>
   );
 }
@@ -169,6 +201,7 @@ export function followUpWord(status: SubagentStatus, work: { readonly calls: num
       return work.calls > 0 ? translate('ai.subagents.status.done') : translate('ai.followUp.sent');
     case 'failed':
     case 'stopped':
+    case 'unreported':
       return statusLabel(status, translate);
     default: {
       const exhaustive: never = status;
@@ -194,8 +227,16 @@ export function modelLabel(model: SubagentModel, options: readonly ChatOption[])
   }
 }
 
-function agentTooltip(name: string, role: string | undefined, model: string): string {
-  return [name, role, model].filter((part): part is string => part !== undefined && part !== '').join(' · ');
+export function agentTooltip(parts: readonly (string | undefined)[]): string {
+  return parts.filter((part): part is string => part !== undefined && part !== '').join(' · ');
+}
+
+/** What a state means when its word cannot say it all: an agent whose end no event reports. */
+export function statusTip(status: SubagentStatus, translate: Translator): string | undefined {
+  if (status.kind === 'running' && status.end === 'reply') {
+    return translate('ai.subagents.status.backgroundTip');
+  }
+  return status.kind === 'unreported' ? translate('ai.subagents.status.unreportedTip') : undefined;
 }
 
 const STATUS_LABELS = {
@@ -205,9 +246,13 @@ const STATUS_LABELS = {
   done: 'ai.subagents.status.done',
   failed: 'ai.subagents.status.failed',
   stopped: 'ai.subagents.status.stopped',
+  unreported: 'ai.subagents.status.unreported',
 } as const satisfies Readonly<Record<SubagentStatus['kind'], MessageKey>>;
 
 export function statusLabel(status: SubagentStatus, translate: Translator): string {
+  if (status.kind === 'running' && status.end === 'reply') {
+    return translate('ai.subagents.status.background');
+  }
   return translate(STATUS_LABELS[status.kind]);
 }
 
@@ -220,10 +265,15 @@ export function statusLine(agent: Subagent, translate: Translator): string {
     case 'waiting':
       return `${statusLabel(agent.status, translate)} · ${doing}`;
     case 'running':
-      return doing;
+      if (agent.status.end === 'own') {
+        return doing;
+      }
+      // Before anything of its work arrived there is nothing to add to where it runs.
+      return agent.activity.kind === 'starting' ? statusLabel(agent.status, translate) : `${statusLabel(agent.status, translate)} · ${doing}`;
     case 'done':
     case 'failed':
     case 'stopped':
+    case 'unreported':
       return statusLabel(agent.status, translate);
     default: {
       const exhaustive: never = agent.status;
@@ -232,10 +282,16 @@ export function statusLine(agent: Subagent, translate: Translator): string {
   }
 }
 
-/** The status dot, announced in words so it is not colour alone. */
+/** The status mark: its shape tells the state, so it never rests on colour, and it is announced in words. */
 export function SubagentDot({ status }: { readonly status: SubagentStatus }) {
   const translate = useTranslate();
-  return <span className={`ai-agent-dot ai-agent-dot-${status.kind}`} role="img" aria-label={statusLabel(status, translate)} />;
+  return (
+    <span className={`ai-agent-dot ai-agent-dot-${status.kind}`} role="img" aria-label={statusLabel(status, translate)}>
+      {status.kind === 'done' && <CheckIcon size={11} />}
+      {status.kind === 'failed' && <CloseIcon size={11} />}
+      {status.kind === 'waiting' && <WarningTriangleIcon size={11} />}
+    </span>
+  );
 }
 
 /** Elapsed time while it works (one shared ticker), its duration once done, nothing when the stamps are missing. */
@@ -244,10 +300,13 @@ const DURATION_SHOWN_MS_MIN = 100;
 
 export function SubagentTime({ status }: { readonly status: SubagentStatus }) {
   switch (status.kind) {
-    case 'queued':
     case 'running':
     case 'waiting':
       return status.startedAt === undefined ? undefined : <Elapsed startedAt={status.startedAt} />;
+    // Nothing runs yet, or nothing says it still does: no clock ticks.
+    case 'queued':
+    case 'unreported':
+      return undefined;
     case 'done':
     case 'failed':
     case 'stopped':

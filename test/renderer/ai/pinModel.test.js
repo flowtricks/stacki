@@ -109,7 +109,7 @@ const sent = (number, mode = 'subagents', turn = TURN) => ({ number, delivery: {
 test('one message, a subagent per pin: each pin reads its own subagent, the rest of the run its turn', () => {
   const start = [{ kind: 'turn-start', turn: TURN, at: 1 }, userPins];
   const before = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1), before, 'running'), { kind: 'working' }, 'before any subagent, the coordinator is working');
+  assert.deepEqual(model.pinProgress(sent(1), before, 'running'), { kind: 'working', end: 'own' }, 'before any subagent, the coordinator is working');
   const view = reduceChat(EMPTY_CHAT, [
     ...start,
     agentCall('a1', 'Pin 1: Bigger heading', 'in_progress'),
@@ -119,19 +119,27 @@ test('one message, a subagent per pin: each pin reads its own subagent, the rest
     { kind: 'permission', turn: TURN, request: 'p1', call: 'e4', title: 'Edit Hero.astro', options: [{ id: 'y', name: 'Allow', kind: 'allow_once' }] },
     { ...child('e4', 'a4'), toolKind: 'edit', toolName: 'Edit' },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), view, 'running'), { kind: 'working' });
+  assert.deepEqual(model.pinProgress(sent(1), view, 'running'), { kind: 'working', end: 'own' });
   assert.deepEqual(model.pinProgress(sent(2), view, 'running'), { kind: 'done' });
   assert.deepEqual(model.pinProgress(sent(3), view, 'running'), { kind: 'queued' }, 'a pin of a later wave waits while others run');
-  assert.deepEqual(model.pinProgress(sent(4), view, 'running'), { kind: 'attention', reason: 'permission' }, 'a question inside its subagent needs the person');
+  assert.deepEqual(
+    model.pinProgress(sent(4), view, 'running'),
+    { kind: 'attention', reason: 'permission', request: 'p1' },
+    'a permission inside its subagent needs the person, and names the card that answers it',
+  );
   assert.equal(model.pinSubagentCall(view, TURN, 1), 'a1');
   const ended = reduceChat(view, [
     agentCall('a1', 'Pin 1: Bigger heading', 'failed'),
     { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), ended, 'running'), { kind: 'attention', reason: 'failed' });
-  assert.deepEqual(model.pinProgress(sent(3), ended, 'running'), { kind: 'done' }, 'a pin the coordinator handled itself is done with the turn');
+  assert.deepEqual(model.pinProgress(sent(1), ended, 'running'), { kind: 'unfinished', reason: 'failed' });
+  assert.deepEqual(
+    model.pinProgress(sent(3), ended, 'running'),
+    { kind: 'unfinished', reason: 'not-started' },
+    'other pins had subagents and this one none: it is not claimed done',
+  );
   const stopped = reduceChat(view, [{ kind: 'turn-end', turn: TURN, stop: 'cancelled', message: undefined, at: 9 }]);
-  assert.equal(model.pinProgress(sent(3), stopped, 'running').kind, 'attention');
+  assert.deepEqual(model.pinProgress(sent(3), stopped, 'running'), { kind: 'unfinished', reason: 'not-started' });
   assert.deepEqual(model.pinProgress(sent(1), undefined, 'running'), { kind: 'sent' }, 'a chat not open here says only sent');
   assert.deepEqual(model.pinProgress({ number: 1, delivery: { kind: 'draft' } }, view, 'running'), { kind: 'draft' });
 });
@@ -153,34 +161,40 @@ test('finished: only a pin whose work is confirmed done, and never past a turn t
     agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
     { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 9 },
   ]);
-  assert.equal(model.pinFinished(sent(1), failed), false, 'a turn that ended in an error vouches for none of its pins');
-  assert.equal(model.pinFinished(sent(3), failed), false);
+  assert.equal(model.pinFinished(sent(1), failed), true, 'a subagent whose call returned its own result finished, whatever came after');
+  assert.equal(model.pinFinished(sent(3), failed), false, 'a pin with no subagent is not vouched for');
+  const inBackground = reduceChat(EMPTY_CHAT, [
+    ...start,
+    agentCall('a1', 'Pin 1: Bigger heading', 'completed', { output: 'Async agent launched successfully.\nagentId: a1b2c3d4' }),
+    { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 9 },
+  ]);
+  assert.equal(model.pinFinished(sent(1), inBackground), false, 'one sent to the background is not finished by its launch');
   const well = reduceChat(EMPTY_CHAT, [
     ...start,
     agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
     { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
   ]);
-  assert.equal(model.pinFinished(sent(3), well), true, 'a pin the coordinator handled itself is finished when the turn ended well');
+  assert.equal(model.pinFinished(sent(3), well), false, 'a pin never started while others were is not finished');
   const single = (stop) => reduceChat(EMPTY_CHAT, [...start, { kind: 'turn-end', turn: TURN, stop, message: undefined, at: 9 }]);
   assert.equal(model.pinFinished(sent(1, 'single'), single('end_turn')), true);
   assert.equal(model.pinFinished(sent(1, 'single'), single('cancelled')), false);
   assert.equal(model.pinFinished(sent(1, 'single'), reduceChat(EMPTY_CHAT, start)), false, 'its own turn still running');
 });
 
-test('one message per pin: queued until its turn, then its turn decides, and a held run needs the person', () => {
+test('one message per pin: queued until its turn, then its turn decides, and a held run is on hold', () => {
   const waiting = { number: 2, delivery: { kind: 'sent', chat: CHAT, turn: undefined, mode: 'single', at: 1 } };
   assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'running'), { kind: 'queued' });
-  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'paused'), { kind: 'attention', reason: 'paused' });
+  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'paused'), { kind: 'held' });
   const start = [
     { kind: 'turn-start', turn: TURN, at: 1 },
     { ...userPins, parts: [{ kind: 'pins', mode: 'single', pins: [] }] },
   ];
   const running = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), running, 'running'), { kind: 'working' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), running, 'running'), { kind: 'working', end: 'own' });
   const done = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 3 }]);
   assert.deepEqual(model.pinProgress(sent(1, 'single'), done, 'running'), { kind: 'done' });
   const failed = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'error', message: 'x', at: 3 }]);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed, 'running'), { kind: 'attention', reason: 'failed' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed, 'running'), { kind: 'unfinished', reason: 'failed' });
 });
 
 test('a send: images in pin order with their notes, briefs naming them, words without paths', () => {

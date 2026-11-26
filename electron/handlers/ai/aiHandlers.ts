@@ -20,6 +20,7 @@ import { AgentHost, NEW_CHAT_TITLE, type AgentHostDeps } from './agentHost';
 import { AgentSetup } from './agentSetup';
 import { described } from './aiMessages';
 import { UnreadableFile, type LedgerFiles } from './changeLedger';
+import { closeInterruptedTurns } from './chatEvents';
 import {
   ChatStore,
   chainOperations,
@@ -210,7 +211,8 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       return err({ code: 'chat-missing' as const, ...described('ai.error.chatMissing') });
     }
     const transcript = chats().read(root, input.chat);
-    return ok({ summary: summaryOf(record), events: transcript.events, full: transcript.full });
+    const events = closeInterruptedTurns(transcript.events, agentHost().runningTurn(root, input.chat));
+    return ok({ summary: summaryOf(record), events, full: transcript.full });
   });
   host.ipcMain.handle('ai:prompt', (_event, input) => {
     const root = open(input.projectPath);

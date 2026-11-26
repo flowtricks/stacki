@@ -11,6 +11,7 @@
 import { assert } from '../../core/assert';
 import type { Brand } from '../../core/brand';
 import { toArray, toRecord } from '../../core/record';
+import { AGENT_IDS, type AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
 import { PIN_LIMITS, PIN_SEND_MODES, type PinSendMode } from './commentPinBrief';
 import { toChatId, toTurnId, type ChatId, type TurnId } from './chatModel';
@@ -109,6 +110,13 @@ export interface PinEdit {
   readonly images: readonly PinImageRef[];
 }
 
+/** A pin's own model: which agent's list it came from, its value there and its name there. */
+export interface PinModel {
+  readonly agent: AgentId;
+  readonly value: string;
+  readonly name: string;
+}
+
 export interface CommentPin {
   readonly id: PinId;
   /** The number on the pin and in the message: unique on the board. */
@@ -124,6 +132,8 @@ export interface CommentPin {
   readonly edit: PinEdit | undefined;
   readonly anchor: PinAnchor;
   readonly place: PinPlace;
+  /** The model chosen for this pin's run; absent runs it on the chat's model, as every older pin does. */
+  readonly model?: PinModel;
   /** Whether "Send all" takes it. */
   readonly included: boolean;
   readonly delivery: PinDelivery;
@@ -246,10 +256,20 @@ export function parsePin(input: unknown): CommentPin {
     place: parsePinPlace(value['place']),
     included: flag(value['included'], 'pin.included'),
     delivery: parsePinDelivery(value['delivery']),
+    ...(value['model'] === undefined ? {} : { model: parsePinModel(value['model']) }),
   };
   assert(pin.number >= 1, 'parsePin: numbers start at one');
   assert(pin.updatedAt >= pin.createdAt, 'parsePin: a pin is changed after it is made');
   return pin;
+}
+
+export function parsePinModel(input: unknown): PinModel {
+  const value = object(input, 'pin.model');
+  return {
+    agent: oneOf(value['agent'], AGENT_IDS, 'pin.model.agent'),
+    value: nonEmpty(value['value'], PIN_LIMITS.modelCharsMax, 'pin.model.value'),
+    name: nonEmpty(value['name'], PIN_LIMITS.modelCharsMax, 'pin.model.name'),
+  };
 }
 
 /** Unsaved changes: words and images bounded as a pin's own are. */

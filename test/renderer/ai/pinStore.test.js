@@ -60,7 +60,7 @@ const place = (file) => ({
 });
 const summary = (agent) => ({ id: CHAT, agent, title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false });
 
-function install({ agent = 'claude', board = { version: 1, pins: [] }, images = [], prompt } = {}) {
+function install({ agent = 'claude', board = { version: 1, pins: [] }, images = [], prompt, options = [] } = {}) {
   const calls = [];
   let turns = 0;
   const record = (name, reply) => async (payload) => {
@@ -73,8 +73,10 @@ function install({ agent = 'claude', board = { version: 1, pins: [] }, images = 
       aiAgents: record('aiAgents', () => ({
         trusted: true,
         agents: [{ agent, state: 'ready', adapterVersion: '1.0.0', running: false, downloadMegabytes: 1 }],
-        options: [],
+        options: options.length === 0 ? [] : [{ agent, options }],
       })),
+      aiSetOption: record('aiSetOption', () => ok({ set: true })),
+      aiSteer: record('aiSteer', () => ok({})),
       aiChats: record('aiChats', () => ({ chats: [summary(agent)], sections: [] })),
       aiChatRead: record('aiChatRead', () => ok({ summary: summary(agent), events: [], full: false })),
       aiChatUpdate: record('aiChatUpdate', () => ok(summary(agent))),
@@ -248,7 +250,7 @@ test('Claude: each pin is deleted as its own subagent finishes well; the others 
   push([agentEvent(turn, 'a1', 1, 'failed')]);
   push([agentEvent(turn, 'a3', 3, 'completed'), { kind: 'turn-end', turn, stop: 'end_turn', message: undefined, at: 9 }]);
   assert.equal(pinOf(three), undefined);
-  assert.equal(pins.progressOf(pinOf(one)).kind, 'attention', 'a failed pin stays with its status');
+  assert.deepEqual(pins.progressOf(pinOf(one)), { kind: 'unfinished', reason: 'failed' }, 'a failed pin stays with its status');
   pins.deletePin(one);
   assert.equal(pins.pinState().listOpen, false, 'the list closes once no pin is left');
   stop();
@@ -402,7 +404,7 @@ test('Send all to Codex: one message per pin, the next after a turn that ended w
   assert.equal(fake.named('aiPrompt').length, 2, 'held after a turn that did not end well');
   assert.equal(pins.pinState().run.held, 'paused');
   const third = pins.pinState().board.pins.find((pin) => pin.number === 3);
-  assert.deepEqual(pins.progressOf(third), { kind: 'attention', reason: 'paused' });
+  assert.deepEqual(pins.progressOf(third), { kind: 'held' }, 'a pin not sent yet waits; nothing asks the person about it');
   assert.equal(await pins.continueRun(translate), true);
   assert.equal(fake.named('aiPrompt').length, 3);
   stop();
@@ -456,4 +458,86 @@ test('a moved pin keeps its words, unsaved changes and number; Undo puts it back
   await errorNotices.runToastRecovery(toasts.at(-1).recovery[0]);
   assert.equal(pinOf(id)?.anchor.path, '0.1', 'Undo puts it back');
   unsubscribe();
+});
+
+const modelOptions = (values) => [
+  { id: 'model', name: 'Model', category: 'model', currentValue: values[0], choices: values.map((value) => ({ value, name: value.toUpperCase() })) },
+];
+const endOfTurn = (turn, stop = 'end_turn') => [{ kind: 'turn-end', turn, stop, message: undefined, at: 9 }];
+const startOfTurn = (turn, words = 'Pin') => [
+  { kind: 'turn-start', turn, at: 1 },
+  { kind: 'user', turn, text: words, attachments: [], at: 1 },
+];
+const deliver = (events) => ai.receiveEvents({ projectPath: PROJECT, chat: CHAT, events });
+const choose = (id, agent, value) => pins.setPinModel(id, { agent, value, name: value.toUpperCase() });
+
+test('a pin’s model goes with a one-message send; one not available falls back with a toast', async () => {
+  const fake = await start({ agent: 'claude', options: modelOptions(['default', 'opus', 'haiku', 'claude-opus-4-8']) });
+  const { toasts, unsubscribe } = collectToasts();
+  const one = pinned('One', 'src/pages/index.astro', '0.1');
+  const two = pinned('Two', 'src/pages/index.astro', '0.2');
+  pinned('Three', 'src/pages/index.astro', '0.3');
+  choose(one, 'claude', 'haiku');
+  choose(two, 'claude', 'claude-opus-4-8');
+  assert.equal(await pins.sendAllPins(translate), true);
+  const brief = fake.named('aiPrompt')[0].payload.pins;
+  assert.deepEqual(
+    brief.pins.map((pin) => [pin.model, pin.modelName]),
+    [
+      ['haiku', 'HAIKU'],
+      [undefined, undefined],
+      [undefined, undefined],
+    ],
+    'a model its subagent cannot take is left to the chat',
+  );
+  assert.ok(toasts.some((toast) => String(toast.message).includes('ai.pins.model.unavailable')));
+  assert.equal(fake.named('aiSetOption').length, 0, 'the chat’s own model is never touched');
+  unsubscribe();
+});
+
+test('one message per pin: each runs on its own model, and the chat’s model comes back afterwards', async () => {
+  const fake = await start({ agent: 'codex', options: modelOptions(['base', 'small']) });
+  const stop = pins.followChats();
+  const one = pinned('One', 'src/pages/index.astro', '0.1');
+  pinned('Two', 'src/pages/index.astro', '0.2');
+  choose(one, 'codex', 'small');
+  assert.equal(await pins.sendAllPins(translate), true);
+  const order = () =>
+    fake.calls
+      .filter((call) => call.name === 'aiSetOption' || call.name === 'aiPrompt')
+      .map((call) => (call.name === 'aiSetOption' ? call.payload.value : `send:${call.payload.pins.pins[0].model ?? 'chat'}`));
+  assert.deepEqual(order(), ['small', 'send:small'], 'the model is set before that pin goes');
+  deliver([...startOfTurn(turnId(1)), ...endOfTurn(turnId(1))]);
+  await settle();
+  assert.deepEqual(order(), ['small', 'send:small', 'base', 'send:chat'], 'the pin without a choice runs on the chat’s model');
+  deliver([...startOfTurn(turnId(2)), ...endOfTurn(turnId(2))]);
+  await settle();
+  assert.equal(pins.pinState().run, undefined);
+  assert.equal(order().length, 4, 'already back on the chat’s model: not set again');
+  stop();
+});
+
+test('a pin that asks does not hold the pins behind it, and its question keeps it on the board', async () => {
+  const fake = await start({ agent: 'codex' });
+  const stop = pins.followChats();
+  const one = pinned('One', 'src/pages/index.astro', '0.1');
+  pinned('Two', 'src/pages/index.astro', '0.2');
+  assert.equal(await pins.sendAllPins(translate), true);
+  deliver([
+    { kind: 'turn-start', turn: turnId(1), at: 1 },
+    {
+      kind: 'user',
+      turn: turnId(1),
+      text: 'Pin',
+      attachments: [],
+      at: 1,
+      parts: [{ kind: 'pins', mode: 'single', pins: [{ number: 1, comment: 'One', pageLabel: 'Home', elementLabel: 'Heading', image: undefined }] }],
+    },
+    { kind: 'text', turn: turnId(1), role: 'agent', text: 'Question for pin 1: Which?\n- A\n- B', at: 2 },
+    ...endOfTurn(turnId(1)),
+  ]);
+  await settle();
+  assert.equal(fake.named('aiPrompt').length, 2, 'the next pin went');
+  assert.equal(pins.progressOf(pinOf(one)).kind, 'attention');
+  stop();
 });

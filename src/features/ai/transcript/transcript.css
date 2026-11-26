@@ -719,37 +719,71 @@ button.ai-agents-head:hover {
 .ai-agent:hover {
   background: var(--bg-hover);
 }
+/* A state's mark: each has a shape of its own, so none rests on colour. All are fills. The box is the dot
+   column's own width; an icon a little larger than it stays centred on it. */
 .ai-agent-dot {
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 7px;
   height: 7px;
+}
+.ai-agent-dot > svg {
+  flex: none;
+}
+/* At work: a turning arc. Still, under reduced motion, it stays an open arc. The arc turns inside the box,
+   so the mark's own place never moves. */
+.ai-agent-dot-running::before {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--text-faint);
-}
-.ai-agent-dot-running {
-  background: var(--accent);
-}
-.ai-agent-dot-waiting {
-  background: var(--amber);
-}
-.ai-agent-dot-done {
-  background: var(--green);
-}
-.ai-agent-dot-failed {
-  background: var(--red);
-}
-.ai-agent-dot-stopped {
-  background: var(--text-dim);
+  background: conic-gradient(from 0deg, transparent 25%, var(--accent) 100%);
+  mask: radial-gradient(farthest-side, transparent 55%, #000 58%);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ai-agent-dot-running {
-    animation: ai-agent-pulse 1.6s ease-in-out infinite;
+  .ai-agent-dot-running::before {
+    animation: ai-agent-turn 0.9s linear infinite;
   }
 }
+/* The pulse of a running step's mark (steps.css). */
 @keyframes ai-agent-pulse {
   50% {
     opacity: 0.4;
   }
+}
+@keyframes ai-agent-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Starting: a hollow ring. */
+.ai-agent-dot-queued {
+  border-radius: 50%;
+  background: radial-gradient(farthest-side, transparent 50%, var(--text-faint) 55%, var(--text-faint) 80%, transparent 85%);
+}
+.ai-agent-dot-waiting {
+  color: var(--amber);
+}
+.ai-agent-dot-done {
+  color: var(--green);
+}
+.ai-agent-dot-failed {
+  color: var(--red);
+}
+/* Stopped: a square. End not reported: a dash. */
+.ai-agent-dot-stopped::before,
+.ai-agent-dot-unreported::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--text-dim);
+}
+.ai-agent-dot-unreported::before {
+  height: 2px;
 }
 .ai-agent-name {
   min-width: 0;

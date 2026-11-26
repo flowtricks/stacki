@@ -808,7 +808,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   assert.equal(row.querySelector('.ai-agent-name').textContent, 'Tidy Hero.astro');
   assert.equal(row.querySelector('.ai-agent-model').textContent, '', 'no model asked for and none reported: no name to show');
   assert.match(row.getAttribute('title'), /general-purpose/, 'its role is in the row’s tooltip');
-  assert.equal(row.querySelector('.ai-agent-dot').getAttribute('aria-label'), 'Running');
+  assert.equal(row.querySelector('.ai-agent-dot').getAttribute('aria-label'), 'Working');
   assert.match(row.querySelector('.ai-agent-time').textContent, /^\d[\d.]*s$/, 'its elapsed time');
   assert.equal(row.querySelector('.ai-agent-doing').textContent, 'Editing Hero.astro');
   const chat = container.querySelector('.ai-transcript');

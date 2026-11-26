@@ -737,6 +737,35 @@ export async function steerPrompt(chat: ChatId): Promise<boolean> {
 }
 
 /**
+ * Sends a reply the panel wrote for the person (a choice picked for a pin's question), leaving their draft as it
+ * is. Idle: a message of its own. While the agent works: into the running turn (`whileRunning: 'steer'`) or after
+ * it (`'queue'`); a refused steer queues too, so the answer is never lost. True when it was sent or is waiting.
+ */
+export async function sendReply(chat: ChatId, text: string, options: { readonly whileRunning: 'steer' | 'queue' }): Promise<boolean> {
+  assert(text.trim() !== '', 'sendReply: a reply has words');
+  if (state.views.get(chat)?.running === undefined) {
+    return sendPrompt(chat, text);
+  }
+  const draft = draftFromText(text);
+  if (options.whileRunning === 'queue') {
+    return enqueue(chat, draft);
+  }
+  const reply = await submitSteer(chat, { text, parts: undefined, attachments: [] });
+  if (reply.ok || reply.error.code === 'delivered') {
+    return true;
+  }
+  const queueable = reply.error.code === 'unsupported' || reply.error.code === 'agent-failed' || reply.error.code === 'busy';
+  if (queueable && enqueue(chat, draft)) {
+    if (state.views.get(chat)?.running === undefined) {
+      void sendNextQueued(chat); // The turn ended while the steer was in flight.
+    }
+    return true;
+  }
+  reportSendFailure(reply.error);
+  return false;
+}
+
+/**
  * Sets the draft aside until the running turn ends (⌘⏎). With no turn running there is nothing to wait
  * for, so it sends. A queue that is full refuses the message and keeps the draft.
  */
@@ -887,17 +916,19 @@ export async function answerPermission(chat: ChatId, request: PermissionRequestI
   }
 }
 
-export async function setChatOption(chat: ChatId, option: string, value: string): Promise<void> {
+/** Changes one of the chat's settings. True when the agent took it; a refusal is shown as a toast. */
+export async function setChatOption(chat: ChatId, option: string, value: string): Promise<boolean> {
   const reply = await aiSetOption({ projectPath: requireProject(), chat, option, value });
   if (!reply.ok) {
     fail(reply.error);
-    return;
+    return false;
   }
   // The main process remembers a change that went through; this copy follows so the next new chat shows it at once.
   const agent = state.chats.find((candidate) => candidate.id === chat)?.agent;
   if (agent !== undefined) {
     update((current) => ({ ...current, remembered: applyRemember(current.remembered, agent, { kind: 'set', option, value }) }));
   }
+  return true;
 }
 
 /** A choice made before the chat has a session (or any pick in a menu): remembered for `agent`'s next new chats, last writer wins. */

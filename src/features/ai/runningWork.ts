@@ -58,7 +58,15 @@ export interface RunningWork {
 export type ChipState =
   | { readonly kind: 'hidden' }
   | { readonly kind: 'working'; readonly agents: number; readonly commands: number }
-  | { readonly kind: 'finished'; readonly agents: number; readonly commands: number; readonly failed: number };
+  /** `agents` and `commands` finished; the others did not, and are never counted as finished. */
+  | {
+      readonly kind: 'finished';
+      readonly agents: number;
+      readonly commands: number;
+      readonly failed: number;
+      readonly stopped: number;
+      readonly unreported: number;
+    };
 
 export const EMPTY_RUNNING: RunningWork = { running: [], runningOmitted: 0, finished: [], finishedOmitted: 0, agentsRunning: 0, commandsRunning: 0 };
 
@@ -89,7 +97,7 @@ export function deriveRunningWork(view: ChatView, work: SubagentWork): RunningWo
     if (task.kind === 'command' && item !== undefined) {
       open.add(task.call);
       commandsRunning += 1;
-      running.push({ kind: 'command', key: task.call, command: commandOf(item), status: { kind: 'running', startedAt: item.at } });
+      running.push({ kind: 'command', key: task.call, command: commandOf(item), status: { kind: 'running', startedAt: item.at, end: 'own' } });
     }
   }
   for (const item of finishedCommands(view.items, current, open)) {
@@ -120,10 +128,23 @@ export function chipState(work: RunningWork): ChipState {
   if (work.finished.length === 0) {
     return { kind: 'hidden' };
   }
-  const agents = work.finished.filter((item) => item.kind === 'agent').length;
-  const failed = work.finished.filter((item) => item.status.kind === 'failed').length;
-  assert(failed <= work.finished.length, 'chipState: failures are a subset');
-  return { kind: 'finished', agents, commands: work.finished.length - agents, failed };
+  const ofKind = (kind: SubagentStatus['kind']): number => work.finished.filter((item) => item.status.kind === kind).length;
+  const done = work.finished.filter((item) => item.status.kind === 'done');
+  const agents = done.filter((item) => item.kind === 'agent').length;
+  const counts = { failed: ofKind('failed'), stopped: ofKind('stopped'), unreported: ofKind('unreported') };
+  assert(done.length + counts.failed + counts.stopped + counts.unreported === work.finished.length, 'chipState: every row is counted once');
+  return { kind: 'finished', agents, commands: done.length - agents, ...counts };
+}
+
+/** The mark the finished chip wears: failed when anything failed, done only when everything is. */
+export function chipMark(state: Extract<ChipState, { readonly kind: 'finished' }>): SubagentStatus {
+  if (state.failed > 0) {
+    return { kind: 'failed', durationMs: undefined };
+  }
+  if (state.stopped > 0) {
+    return { kind: 'stopped', durationMs: undefined };
+  }
+  return state.unreported > 0 ? { kind: 'unreported' } : { kind: 'done', durationMs: undefined };
 }
 
 /** The chip's words: "3 agents working", "2 agents working, 1 background command", "3 agents finished". Hidden: empty. */
@@ -140,7 +161,18 @@ export function chipLabel(state: ChipState, translate: Translator): string {
       return state.agents > 0 ? agents : commands;
     }
     case 'finished':
-      return state.agents > 0 ? translate('ai.subagents.finished', { count: state.agents }) : translate('ai.tasks.finished', { count: state.commands });
+      if (state.agents > 0) {
+        return translate('ai.subagents.finished', { count: state.agents });
+      }
+      if (state.commands > 0) {
+        return translate('ai.tasks.finished', { count: state.commands });
+      }
+      if (state.failed > 0) {
+        return translate('ai.subagents.failed', { count: state.failed });
+      }
+      return state.stopped > 0
+        ? translate('ai.subagents.head.stopped', { count: state.stopped })
+        : translate('ai.subagents.head.started', { count: state.unreported });
     default: {
       const exhaustive: never = state;
       return exhaustive;

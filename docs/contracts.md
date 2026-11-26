@@ -2789,22 +2789,51 @@ words, component, width, image indexes). The renderer sends the pins' images as 
 a path or a locator. A pin naming an image the message lacks is `invalid`; pins never steer (`ai.error.pinsSteer`).
 
 **Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
-Agent call per pin titled `Pin <n>: …` and give the waves `pinWaves` computed (pins naming a file in common never in
-one wave, in number order, at most 4 per wave), so two subagents never edit one file at once; each pin's progress is
-read from its subagent (`pinProgress`: queued, working, needs you on a waiting permission, failed or stopped, done),
-or from the turn when the agent made the change itself. Codex (`single`): its subagents report one call and forward
-none of their work, so Stacki sends one message per pin; the next goes only after the turn before ended `end_turn`,
-a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). Checkpoints: Claude's pins
-share one turn's changes card; Codex's get one card each. Stop is the chat's own Stop, and permission requests reach
-the person as in any turn.
+Agent call per pin titled `Pin <n>: …`, in the waves `pinWaves` computed: pins start together in number order, at most
+`PIN_LIMITS.concurrencyMax` (4) at once, all calls of a wave in one message; the rest read "Waiting". Pins that change
+one file run together. What keeps their edits: the subagents are one Claude Code process, whose edit tools replace an
+exact passage in the file as it is and refuse a file changed since the agent read it; the instructions forbid whole-file
+rewrites, writing files with shell commands and project-wide rewrites. That safety is the CLI's, asked for in words:
+Stacki does not see or gate those writes. The reply's changes card and its undo cover all the pins together. Codex
+(`single`) cannot run pins at the same time: a chat's session takes one turn at a time, and Codex's own subagents send
+the panel nothing but their start, so Stacki sends one message per pin; the next goes after the turn before ended
+`end_turn`, a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). One pin cannot be
+stopped on its own with either agent: Stop is the chat's own and stops the reply and every pin in it.
 
-**Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin whose work
-is confirmed finished well leaves the board by itself (marker, open box, list row, and its images with the save): a
-Claude pin when its own subagent completes (mid-run, each on its own) or, done by the coordinator, when the turn ended
-`end_turn`; never past a turn that ended any other way; a Codex pin when its own turn ended `end_turn`. Failed,
-stopped, waiting and running pins stay with their status. A finished pin holding words typed after the send and not
-saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts` `loadChatView`),
-so pins that finished while the app was closed go too. The chat's message keeps its own words and thumbnail.
+**A pin's model.** A draft's box has a model dropdown (`PinModelPicker.tsx`), following the chat's model unless the
+person picks; the choice is the pin's `model` (`{ agent, value, name }`, parsed with the board; absent on older pins).
+A subagent takes only `SUBAGENT_MODELS` (`opus`, `sonnet`, `haiku`, `fable`), so Claude lists only those; its brief and
+sent pin carry `model` and `modelName`, the instructions ask for it as the Agent call's `model`, and the sent card
+names what the call really asked for when it differs. For one message per pin Stacki sets the chat's model option
+before each pin's message and puts the chat's own back when the run ends or is held. A model no longer available runs
+on the chat's, said in a toast. Effort is not per pin: it stays the chat's setting.
+
+**How a sent pin stands** (`pinModel.ts` `pinProgress`). In order: an open question about it; a permission card its
+work waits on; its newest subagent, in the send's reply or any later one (a person can have it resumed or restarted);
+else the reply it is in. "Needs you" is only ever the first two, so there is always something to answer: the badge
+shows the card, or opens the message box on that pin. A question is a written line, `Question for pin <n>: …`, with the
+choices listed under it (`pinQuestionsOf`; the instructions ask for it): neither agent can show a question card here
+(Claude's question tool is off for a client without ACP `elicitation`). Words that ask without that form are not
+detected. The pin shows the question, its choices as buttons and Reply. A reply opens with the pin's quoted words
+(`pinReplyLead`) and answers that pin; a message opening with no pin's words answers every question before it. A pin
+not done reads "Didn't finish", "Stopped" or "Not started"; a pin waiting in a held run reads "On hold".
+
+**When an agent has finished** (`subagents.ts`). A call that returned its result finished. A call that returned the
+background launch note did not: Claude's adapter reports a background agent's end only to JetBrains clients, but for
+Stacki it holds the turn open until every agent that turn started or woke has finished. So while that turn runs the
+agent reads "In the background" (its tooltip says its end is not reported); a turn that ends `end_turn` proves it
+finished; any other end means it did not. A follow-up that wakes an agent moves it to the follow-up's turn. Codex's
+"Start subagent" call proves only the start ("Started"). A chat read back with a turn nothing runs any more is given an
+error end (`closeInterruptedTurns`). Chunks of different ACP `messageId`s are separate messages. The strip, the cards,
+the Running panel and pin badges all read the same `deriveSubagentWork`; each state has its own mark shape, and the
+strip's head counts each apart, saying "finished" only when all are done. Proofs: `test/renderer/ai/pinLifecycle.test.js`.
+
+**Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin that reads
+done leaves the board by itself (marker, open box, list row, and its images with the save). Failed, stopped, not
+started, asking, waiting and running pins stay with their status. A finished pin holding words typed after the send
+and not saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts`
+`loadChatView`), so pins that finished while the app was closed go too. The chat's message keeps its own words and
+thumbnail.
 
 **Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's words and names, its
 status (opening its subagent when it has one) and its thumbnail at the row's end; no pin numbers (the chat refers to

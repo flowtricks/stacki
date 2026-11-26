@@ -73,7 +73,7 @@ test('parallel subagents: each gathers its own calls however they interleave, an
   assert.deepEqual(audit.agent.status, { kind: 'done', durationMs: 58_000 }, 'from its start to its end');
   assert.equal(audit.agent.result, 'The hero has a stray margin.\n\nDetails follow.', 'its report, without the prompt it was shown');
   assert.equal(model.resultSummary(audit.agent.result), 'The hero has a stray margin.');
-  assert.deepEqual(build.agent.status, { kind: 'running', startedAt: 2010 });
+  assert.deepEqual(build.agent.status, { kind: 'running', startedAt: 2010, end: 'own' });
   assert.deepEqual(build.agent.activity, { kind: 'command', command: 'npm run build' }, 'what it is doing now');
   assert.equal(build.agent.result, undefined, 'no result while it works');
 

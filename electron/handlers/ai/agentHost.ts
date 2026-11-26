@@ -761,6 +761,12 @@ export class AgentHost {
     return ok({ started: true });
   }
 
+  /** The turn running in `chat` now, or undefined when none is. */
+  runningTurn(root: string, chat: ChatId): TurnId | undefined {
+    const runtime = this.chats.get(chat);
+    return runtime === undefined || runtime.root !== root ? undefined : runtime.turn;
+  }
+
   cancel(root: string, chat: ChatId): void {
     const runtime = this.chats.get(chat);
     if (runtime === undefined || runtime.root !== root) {

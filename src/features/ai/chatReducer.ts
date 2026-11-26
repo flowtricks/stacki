@@ -118,6 +118,8 @@ export type TranscriptItem =
       readonly until: number | undefined;
       /** The subagent call that said it; undefined for the agent's own words. Drawn only in that subagent's transcript. */
       readonly parent: string | undefined;
+      /** The id of the message it belongs to; absent when the adapter gave none. */
+      readonly message?: string;
     }
   | ToolItem
   | PermissionItem
@@ -340,12 +342,35 @@ function appendText(view: ChatView, event: Extract<ChatEvent, { readonly kind: '
   const parent = event.parent;
   const index = ownLastIndex(view.items, parent);
   const last = index === -1 ? undefined : view.items[index];
-  if (last?.kind === 'text' && last.turn === event.turn && last.role === event.role && last.parent === parent) {
+  const message = event.message === undefined ? {} : { message: event.message };
+  if (last?.kind === 'text' && last.turn === event.turn && last.role === event.role && last.parent === parent && last.message === event.message) {
     const items = [...view.items];
-    items[index] = { ...last, text: last.text + event.text, at: last.at ?? event.at, until: stamp ?? last.until };
+    const text = last.text + paragraphBreak(last, event) + event.text;
+    items[index] = { ...last, text, at: last.at ?? event.at, until: stamp ?? last.until };
     return { ...view, items };
   }
-  return push(view, (id) => ({ kind: 'text', id, turn: event.turn, role: event.role, text: event.text, at: event.at, until: stamp, parent }));
+  return push(view, (id) => ({ kind: 'text', id, turn: event.turn, role: event.role, text: event.text, at: event.at, until: stamp, parent, ...message }));
+}
+
+/** A pause longer than any between the chunks of one message as it streams. */
+const MESSAGE_PAUSE_MS_MIN = 1_500;
+
+/**
+ * What goes between two chunks of a transcript stored without message ids (chats from before Stacki kept them):
+ * a blank line when they are plainly two messages (the first ended a sentence with nothing after it, a pause
+ * followed, and the next opens a new one), else nothing. With message ids two messages never join at all.
+ */
+function paragraphBreak(
+  last: { readonly text: string; readonly until?: number | undefined; readonly message?: string },
+  next: { readonly text: string; readonly at?: number | undefined },
+): '' | '\n\n' {
+  if (last.message !== undefined || last.until === undefined || next.at === undefined) {
+    return '';
+  }
+  if (next.at - last.until < MESSAGE_PAUSE_MS_MIN || !/[.!?:]$/u.test(last.text)) {
+    return '';
+  }
+  return /^(?:\*\*|\p{Lu})/u.test(next.text) ? '\n\n' : '';
 }
 
 /**

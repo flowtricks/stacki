@@ -168,8 +168,8 @@ test('the chip shows only while something runs or the current run just finished,
   const both = await mount(chip(viewOf(['long', 'background'])));
   assert.equal(both.container.querySelector('.ai-running-chip').textContent, '1 agent working, 1 background command');
   const finished = await mount(chip(viewOf(['failed'], 'end_turn')));
-  assert.equal(finished.container.querySelector('.ai-running-chip').textContent, '1 agent finished1 failed');
-  assert.ok(finished.container.querySelector('.ai-running-chip .ai-agents-failed'), 'the failure is its own red part');
+  assert.equal(finished.container.querySelector('.ai-running-chip').textContent, '1 failed', 'a failed agent is never counted as finished');
+  assert.ok(finished.container.querySelector('.ai-running-chip .ai-agent-dot-failed'), 'and the chip wears the failed mark');
   for (const { container } of [live, both, finished]) {
     assertDesignerFriendly(container, 'the chip');
   }

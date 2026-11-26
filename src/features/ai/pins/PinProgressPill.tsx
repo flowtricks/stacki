@@ -1,12 +1,14 @@
-// How a pin stands, as a small filled pill: Draft, Queued, Working, Done, Needs you, Sent. "Needs you" says why in
-// the app's tooltip (a question waits in the chat, the work did not finish, it was stopped, or the run is held),
-// never in a line of text under it.
+// How a pin stands, as a small filled pill: Draft, Queued, Working, Done, Needs you, Didn't finish, Stopped, Not
+// started, On hold, Started, Sent. The app's tooltip says more (why a pin needs the person or was not done), never
+// a line of text under it. "Needs you" always has something to answer (pinAnswer.ts).
 import { createPortal } from 'react-dom';
 import type { MessageKey, Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { PIN_LIMITS } from '../../../../shared/properties/ai/commentPinBrief';
 import FittedTooltip from '../../../ui/FittedTooltip';
+import { CheckIcon, CloseIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
-import type { AttentionReason, PinProgress } from './pinModel';
+import type { PinProgress, UnfinishedReason } from './pinModel';
 
 const LABELS = {
   draft: 'ai.pins.progress.draft',
@@ -15,14 +17,20 @@ const LABELS = {
   done: 'ai.pins.progress.done',
   attention: 'ai.pins.progress.attention',
   sent: 'ai.pins.progress.sent',
-} as const satisfies Record<PinProgress['kind'], MessageKey>;
+  held: 'ai.pins.progress.held',
+  unreported: 'ai.pins.progress.started',
+} as const satisfies Record<Exclude<PinProgress['kind'], 'unfinished'>, MessageKey>;
 
-const REASONS = {
+const ATTENTION_TIPS = {
   permission: 'ai.pins.attention.permission',
-  failed: 'ai.pins.attention.failed',
-  stopped: 'ai.pins.attention.stopped',
-  paused: 'ai.pins.attention.paused',
-} as const satisfies Record<AttentionReason, MessageKey>;
+  question: 'ai.pins.attention.question',
+} as const satisfies Record<Extract<PinProgress, { readonly kind: 'attention' }>['reason'], MessageKey>;
+
+const UNFINISHED = {
+  failed: { label: 'ai.pins.progress.failed', tip: 'ai.pins.attention.failed' },
+  stopped: { label: 'ai.pins.progress.stopped', tip: 'ai.pins.attention.stopped' },
+  'not-started': { label: 'ai.pins.progress.notStarted', tip: 'ai.pins.progress.notStartedTip' },
+} as const satisfies Record<UnfinishedReason, { readonly label: MessageKey; readonly tip: MessageKey }>;
 
 const TIPS = {
   draft: 'ai.pins.progress.draftTip',
@@ -30,16 +38,27 @@ const TIPS = {
   working: 'ai.pins.progress.workingTip',
   done: 'ai.pins.progress.doneTip',
   sent: 'ai.pins.progress.sentTip',
-} as const satisfies Record<Exclude<PinProgress['kind'], 'attention'>, MessageKey>;
+  held: 'ai.pins.attention.paused',
+  unreported: 'ai.subagents.status.unreportedTip',
+} as const satisfies Record<Exclude<PinProgress['kind'], 'attention' | 'unfinished'>, MessageKey>;
 
 /** The pill's words. */
 export function progressLabel(progress: PinProgress, translate: Translator): string {
-  return translate(LABELS[progress.kind]);
+  return translate(progress.kind === 'unfinished' ? UNFINISHED[progress.reason].label : LABELS[progress.kind]);
 }
 
-/** The pill's tooltip: what the state means, and for "Needs you", why. */
+/** The pill's tooltip: what the state means; for "Needs you", what waits; for a pin not done, why. */
 export function progressTip(progress: PinProgress, translate: Translator): string {
-  return progress.kind === 'attention' ? translate(REASONS[progress.reason]) : translate(TIPS[progress.kind]);
+  if (progress.kind === 'attention') {
+    return translate(ATTENTION_TIPS[progress.reason]);
+  }
+  if (progress.kind === 'unfinished') {
+    return translate(UNFINISHED[progress.reason].tip);
+  }
+  if (progress.kind === 'queued') {
+    return translate(TIPS.queued, { count: PIN_LIMITS.concurrencyMax });
+  }
+  return progress.kind === 'working' && progress.end === 'reply' ? translate('ai.subagents.status.backgroundTip') : translate(TIPS[progress.kind]);
 }
 
 export function PinProgressPill({ progress }: { readonly progress: PinProgress }) {
@@ -66,6 +85,9 @@ function PinPill({ tone, label, tip }: { readonly tone: PinProgress['kind'] | 'd
     <>
       <span className={`ai-pin-progress is-${tone}`} onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide} aria-label={`${label}: ${tip}`}>
         {tone === 'working' && <span className="ai-pin-progress-dot" aria-hidden="true" />}
+        {tone === 'done' && <CheckIcon size={10} />}
+        {tone === 'attention' && <WarningTriangleIcon size={10} />}
+        {tone === 'unfinished' && <CloseIcon size={10} />}
         {label}
       </span>
       {tooltip.value !== undefined &&

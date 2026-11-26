@@ -386,8 +386,8 @@ test('a failed agent and a stopped agent are finished, with the failure and the 
       ['Ran migrate.mjs', 'failed'],
     ],
   );
-  assert.deepEqual(running.chipState(failedModel), { kind: 'finished', agents: 1, commands: 0, failed: 1 });
-  assert.equal(running.chipLabel(running.chipState(failedModel), translate), '1 agent finished');
+  assert.deepEqual(running.chipState(failedModel), { kind: 'finished', agents: 0, commands: 0, failed: 1, stopped: 0, unreported: 0 });
+  assert.equal(running.chipLabel(running.chipState(failedModel), translate), '1 failed', 'a failed agent is not called finished');
 
   const stopped = chatOf(RUNNING_FIXTURE, 'stopped', 'cancelled');
   const stoppedModel = running.deriveRunningWork(stopped, subagents.deriveSubagentWork(stopped));

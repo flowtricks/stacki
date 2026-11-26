@@ -89,7 +89,7 @@ const entry = (number: number, file: string, images: readonly number[]) => ({
   images,
 });
 
-test('one turn of pins: the agent gets every instruction and image, each pin its own subagent, shared files in waves', async (context) => {
+test('one turn of pins: the agent gets every instruction and image, each pin its own subagent, all at once', async (context) => {
   const { root, store, host, events, until } = fakeHost();
   context.after(() => host.stopAll());
   store.trust(root);
@@ -110,12 +110,12 @@ test('one turn of pins: the agent gets every instruction and image, each pin its
   assert.match(said, /Got 2 images and 2 notes/, 'the images and their notes reached the agent');
   const starts = all.flatMap((event) => (event.kind === 'tool' && event.toolName === 'Agent' && event.status === 'in_progress' ? [event.title] : []));
   assert.deepEqual(starts, ['Pin 1: Make the change', 'Pin 2: Make the change', 'Pin 3: Make the change']);
-  // Pin 3 shares index.astro with pin 1: it starts only after pin 1 finished.
+  // Pins 1 and 3 share index.astro and still run together: every call starts before any finishes.
   // A call's later updates carry its id, not its tool name: the order is read by call id.
-  const pin1Done = all.findIndex((event) => event.kind === 'tool' && event.call === 'agent1' && event.status === 'completed');
-  const pin3Start = all.findIndex((event) => event.kind === 'tool' && event.call === 'agent3');
-  assert.ok(pin1Done >= 0, 'pin 1 finished');
-  assert.ok(pin3Start > pin1Done, 'a pin on a file another pin edits waits for the wave before');
+  const firstDone = all.findIndex((event) => event.kind === 'tool' && /^agent/.test(event.call) && event.status === 'completed');
+  const lastStart = all.findIndex((event) => event.kind === 'tool' && event.call === 'agent3');
+  assert.ok(firstDone >= 0, 'a pin finished');
+  assert.ok(lastStart < firstDone, 'all three subagents are at work before the first one finishes');
   const children = all.filter((event) => event.kind === 'tool' && event.parent !== undefined);
   assert.equal(children.length, 3, 'each subagent’s own work names it as parent');
   const user = all.find((event) => event.kind === 'user');
@@ -139,4 +139,45 @@ test('a pin naming an image the message lacks is refused before anything runs', 
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, 'invalid');
   assert.equal(events().filter((event) => event.kind === 'user').length, 0);
+});
+
+test('four pins on one file run at the same time and every edit is kept; each subagent is asked for its own model', async (context) => {
+  const { root, store, host, events, until } = fakeHost();
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const file = path.join(root, 'src', 'pages', 'index.astro');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, 'slot 1\nslot 2\nslot 3\nslot 4\n');
+  const chat = store.create(root, 'claude', 'New chat', 1);
+  assert.ok(chat !== undefined);
+  // The stand-in subagents are told the file by the brief, relative to their working folder, the project.
+  const pins = [1, 2, 3, 4].map((number) => ({
+    ...entry(number, 'src/pages/index.astro', []),
+    ...(number === 2 ? { model: 'haiku', modelName: 'Haiku' } : {}),
+  }));
+  const started = await host.prompt(root, chat.id, 'Comments on 4 pins', [], { pins: parsePinBrief({ mode: 'subagents', pins }) });
+  assert.ok(started.ok, JSON.stringify(started));
+  await until(() => events().some((event) => event.kind === 'turn-end'));
+  assert.equal(fs.readFileSync(file, 'utf8'), 'done 1\ndone 2\ndone 3\ndone 4\n', 'no edit overwrote another');
+  const all = events();
+  const stale = all.filter((event) => event.kind === 'tool' && /^stale/.test(event.call));
+  assert.equal(stale.length, 3, 'the reads overlapped: three edits found the file changed and were redone');
+  const asked = all.flatMap((event) => (event.kind === 'tool' && event.agentModel !== undefined ? [[event.call, event.agentModel]] : []));
+  assert.deepEqual(asked, [['agent2', 'haiku']], 'the chosen model reached that pin’s subagent, and no other');
+  const user = all.find((event) => event.kind === 'user');
+  assert.ok(user !== undefined && user.kind === 'user');
+  const part = user.parts?.find((candidate) => candidate.kind === 'pins');
+  assert.ok(part !== undefined && part.kind === 'pins');
+  assert.deepEqual(
+    part.pins.map((pin) => pin.modelName),
+    [undefined, 'Haiku', undefined, undefined],
+    'the sent message keeps the chosen model’s name',
+  );
+});
+
+test('a subagent send refuses a model its subagents cannot take', () => {
+  const bad = { ...entry(1, 'src/pages/index.astro', []), model: 'claude-opus-4-8', modelName: 'Opus 4.8' };
+  assert.throws(() => parsePinBrief({ mode: 'subagents', pins: [bad] }), /cannot run that model/);
+  assert.equal(parsePinBrief({ mode: 'single', pins: [bad] }).pins[0]?.model, 'claude-opus-4-8');
+  assert.throws(() => parsePinBrief({ mode: 'single', pins: [{ ...bad, modelName: '' }] }), /modelName/);
 });

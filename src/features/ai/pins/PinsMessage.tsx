@@ -2,12 +2,18 @@
 // a locator or the instructions the agent was given), how it stands, and the crop it was sent with at the row's end.
 // No pin numbers: nothing in the chat refers to them (subagent titles drop theirs, subagents.ts subagentName). Every
 // row's words start at the card's text edge, under its title, with or without an image. How a pin stands is read from
-// the transcript (its subagent, or its own turn); a pin still on the board opens on the canvas, and one with a
-// subagent opens that subagent's transcript from its status.
+// the transcript (pinModel.ts pinProgress); a pin still on the board opens on the canvas, and one with a subagent
+// opens that subagent's transcript from its status. A pin that needs the person is answered right there: its badge
+// goes to what waits (pinAnswer.ts), and a question shows its words, its choices as buttons and Reply. A pin sent
+// with its own model names it quietly beside the badge.
 import type { ChatAttachmentName, ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { PinSendMode, SentPin } from '../../../../shared/properties/ai/commentPinBrief';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import type { ChatView } from '../chatReducer';
+import { useState } from 'react';
+import { isSubagentModel, type PinQuestion } from '../../../../shared/properties/ai/commentPinBrief';
+import { chosenModelName, deriveSubagentWork } from '../subagents';
+import { answerPinQuestion, goToPinAnswer } from './pinAnswer';
 import { pinProgress, pinSubagentCall } from './pinModel';
 import { PinProgressPill } from './PinProgressPill';
 import { jumpToPin, sentPinOf, usePinState } from './pinStore';
@@ -24,6 +30,56 @@ export interface PinsMessageProps {
   readonly onOpenSubagent: ((call: string) => void) | undefined;
 }
 
+// A pin's question: its words, each choice as a button that sends it, and Reply for an answer in the person's own words.
+function PinAsk({ chat, pin, asked, onReply }: { readonly chat: ChatId; readonly pin: SentPin; readonly asked: PinQuestion; readonly onReply: () => void }) {
+  const translate = useTranslate();
+  // The question a choice is on its way for, so one press is one answer; a later question has its buttons again.
+  const [sending, setSending] = useState<string | undefined>(undefined);
+  const busy = sending === asked.question;
+  const choose = (choice: string): void => {
+    setSending(asked.question);
+    void answerPinQuestion(chat, pin, choice).then((sent) => {
+      if (!sent) {
+        setSending(undefined);
+      }
+    });
+  };
+  return (
+    <span className="ai-pin-ask" role="group" aria-label={asked.question}>
+      <span className="ai-pin-ask-words">{asked.question}</span>
+      <span className="ai-pin-ask-choices">
+        {asked.choices.map((choice) => (
+          <button key={choice} type="button" className="ai-pin-ask-choice" disabled={busy} onClick={() => choose(choice)}>
+            {choice}
+          </button>
+        ))}
+        <button type="button" className={asked.choices.length === 0 ? 'primary ai-pin-ask-reply' : 'ai-pin-ask-choice is-reply'} onClick={onReply}>
+          {translate('ai.pins.reply')}
+        </button>
+      </span>
+    </span>
+  );
+}
+
+// The model the person chose for a pin, as a quiet name; when its subagent ran on another one, the name it ran on,
+// with the tooltip saying what was asked for.
+function PinModelTag({ pin, view, call }: { readonly pin: SentPin; readonly view: ChatView; readonly call: string | undefined }) {
+  const translate = useTranslate();
+  if (pin.model === undefined || pin.modelName === undefined) {
+    return undefined;
+  }
+  const ran = call === undefined || !isSubagentModel(pin.model) ? undefined : deriveSubagentWork(view).units.get(call)?.agent.model;
+  if (ran === undefined || (ran.kind === 'chosen' && ran.id === pin.model)) {
+    return <span className="ai-pins-message-model">{pin.modelName}</span>;
+  }
+  const actual = ran.kind === 'chosen' ? chosenModelName(ran.id, view.options) : translate('ai.pins.model.chatPlain');
+  return (
+    <span className="ai-pins-message-model is-different" title={translate('ai.pins.model.differed', { asked: pin.modelName, actual })}>
+      {actual}
+    </span>
+  );
+}
+
 export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenSubagent }: PinsMessageProps) {
   const translate = useTranslate();
   // The board, so a pin still on it can be opened on the canvas; its progress is the transcript's.
@@ -35,9 +91,15 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
         <ol className="ai-pins-message-list">
           {pins.map((pin) => {
             const thumbnail = pin.image === undefined ? undefined : attachments[pin.image]?.thumbnail;
-            const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view, 'running');
             const onBoard = sentPinOf(chat, turn, pin.number);
+            const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view, 'running');
             const call = mode === 'subagents' ? pinSubagentCall(view, turn, pin.number) : undefined;
+            const open =
+              progress.kind === 'attention'
+                ? { label: translate('ai.pins.answer', { number: pin.number }), run: () => void goToPinAnswer(chat, pin, progress) }
+                : call !== undefined && onOpenSubagent !== undefined
+                  ? { label: translate('ai.pins.openWork', { number: pin.number }), run: () => onOpenSubagent(call) }
+                  : undefined;
             const words = (
               <>
                 <span className={pin.comment.trim() === '' ? 'ai-pins-message-comment is-empty' : 'ai-pins-message-comment'}>
@@ -62,19 +124,18 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
                     </button>
                   )}
                   <span className="ai-pins-message-foot">
-                    {call !== undefined && onOpenSubagent !== undefined ? (
-                      <button
-                        type="button"
-                        className="ai-pins-message-status"
-                        onClick={() => onOpenSubagent(call)}
-                        aria-label={translate('ai.pins.openWork', { number: pin.number })}
-                      >
+                    {open !== undefined ? (
+                      <button type="button" className="ai-pins-message-status" onClick={open.run} aria-label={open.label}>
                         <PinProgressPill progress={progress} />
                       </button>
                     ) : (
                       <PinProgressPill progress={progress} />
                     )}
+                    <PinModelTag pin={pin} view={view} call={call} />
                   </span>
+                  {progress.kind === 'attention' && progress.reason === 'question' && (
+                    <PinAsk chat={chat} pin={pin} asked={progress.question} onReply={() => void goToPinAnswer(chat, pin, progress)} />
+                  )}
                 </span>
                 {thumbnail !== undefined && <img className="ai-pin-thumb ai-pins-message-thumb" src={thumbnail} alt="" />}
               </li>

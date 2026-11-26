@@ -1,8 +1,7 @@
 // Goal: the comment pins contract holds at every boundary. A stored board reads back whole when good, loses only a
 // damaged pin when not, and is bounded; a board a writer sends is refused whole when any part is bad; the brief a
 // send carries refuses every bad shape and bound; the transcript keeps only words and names; and the schedule of a
-// subagents send never runs two pins that name a file in common at once, never more than the concurrency bound,
-// keeps their order and runs every pin once.
+// subagents send starts every pin at once up to the concurrency bound, in number order, and runs every pin once.
 // Method: known-good values and one known-bad variation each through the parsers; the schedule's properties over
 // seeded random sends (xorshift, so a failing seed reproduces) plus the cases a person meets.
 import assert from 'node:assert/strict';
@@ -11,9 +10,9 @@ import {
   PIN_LIMITS,
   parsePinBrief,
   parseSentPins,
-  pinFiles,
   pinImageNote,
   pinNumberOfTitle,
+  pinQuestionsOf,
   pinWaves,
   sentPinsOf,
   withoutPinNumber,
@@ -222,29 +221,12 @@ test('an image note names its pin on one line within the note bound', () => {
   assert.ok(note.length <= 500);
 });
 
-test('waves: pins that share a file run one after another, the others together', () => {
-  const page = 'src/pages/index.astro';
-  const hero = 'src/components/Hero.astro';
-  const waves = pinWaves([
-    { number: 1, files: [page] },
-    { number: 2, files: ['src/pages/about.astro'] },
-    { number: 3, files: [page, hero] },
-    { number: 4, files: [hero] },
-    { number: 5, files: ['src/pages/blog.astro'] },
+test('waves: every pin starts at once up to the bound, in number order, shared files included; the rest wait', () => {
+  assert.deepEqual(pinWaves([3, 1, 4, 2]), [[1, 2, 3, 4]], 'the four pins of a review all start together');
+  assert.deepEqual(pinWaves([1, 2, 3, 4, 5, 6]), [
+    [1, 2, 3, 4],
+    [5, 6],
   ]);
-  assert.deepEqual(waves, [[1, 2, 5], [3], [4]]);
-  assert.deepEqual(pinFiles({ file: page, componentFile: hero }), [page, hero]);
-  assert.deepEqual(pinFiles({ file: page, componentFile: undefined }), [page]);
-  assert.deepEqual(
-    pinWaves(
-      [1, 2, 3, 4, 5, 6].map((number) => ({ number, files: [`f${number}`] })),
-      4,
-    ),
-    [
-      [1, 2, 3, 4],
-      [5, 6],
-    ],
-  );
 });
 
 function xorshift(seed: number): () => number {
@@ -261,29 +243,39 @@ test('waves hold their properties over random sends', () => {
   for (let seed = 1; seed <= 400; seed += 1) {
     const random = xorshift(seed);
     const count = 1 + Math.floor(random() * PIN_LIMITS.pinsPerSendMax);
-    const work = Array.from({ length: count }, (_, index) => ({
-      number: index + 1,
-      files: [...new Set(Array.from({ length: 1 + Math.floor(random() * 2) }, () => `f${Math.floor(random() * 5)}`))],
-    }));
+    const numbers = Array.from({ length: count }, (_, index) => index + 1);
     const concurrency = 1 + Math.floor(random() * 4);
-    const waves = pinWaves([...work].reverse(), concurrency);
-    const waveOf = new Map<number, number>();
+    const waves = pinWaves([...numbers].reverse(), concurrency);
+    assert.deepEqual(waves.flat(), numbers, `seed ${seed}: every pin runs once, in number order`);
     waves.forEach((wave, index) => {
       assert.ok(wave.length >= 1 && wave.length <= concurrency, `seed ${seed}: a wave holds 1 to ${concurrency}`);
-      const files = wave.flatMap((number) => work[number - 1]?.files ?? []);
-      assert.equal(new Set(files).size, files.length, `seed ${seed}: no file twice in a wave`);
-      for (const number of wave) {
-        assert.ok(!waveOf.has(number), `seed ${seed}: pin ${number} runs once`);
-        waveOf.set(number, index);
-      }
+      assert.ok(index === waves.length - 1 || wave.length === concurrency, `seed ${seed}: a pin waits only when a wave is full`);
     });
-    assert.equal(waveOf.size, count, `seed ${seed}: every pin runs`);
-    for (const left of work) {
-      for (const right of work) {
-        if (left.number < right.number && left.files.some((file) => right.files.includes(file))) {
-          assert.ok((waveOf.get(left.number) ?? 0) < (waveOf.get(right.number) ?? 0), `seed ${seed}: ${left.number} before ${right.number}`);
-        }
-      }
-    }
   }
+});
+
+test('a pin’s model is read whole or the pin is refused; a pin stored before models has none', () => {
+  const chosen = { agent: 'claude', value: 'haiku', name: 'Haiku' };
+  assert.deepEqual(parsePinBoard(board(pin('a', 1, { model: chosen }))).pins[0]?.model, chosen);
+  assert.ok(!('model' in (parsePinBoard(board(pin('a', 1))).pins[0] ?? {})));
+  const bad = [{ ...chosen, agent: 'other' }, { ...chosen, value: '' }, { ...chosen, name: 'x'.repeat(PIN_LIMITS.modelCharsMax + 1) }, 'haiku'];
+  for (const model of bad) {
+    assert.equal(parsePinBoard(board(pin('a', 1, { model }))).pins.length, 0, JSON.stringify(model).slice(0, 60));
+    assert.throws(() => parsePinBoardStrict(board(pin('a', 1, { model }))));
+  }
+});
+
+test('a question is read only from its written form, with bounded words and choices', () => {
+  const text = 'Done with pin 1.\n**Question for pin 2:** How **tall**?\n\n1. Half\n2. `Full`\n\nThanks\n- not a choice';
+  assert.deepEqual(pinQuestionsOf(text), [{ number: 2, question: 'How tall?', choices: ['Half', 'Full'] }]);
+  for (const plain of ['How tall should it be?', 'I have a question for pin 2: none', 'Question for pin 0: x', 'Question for pin 2:']) {
+    assert.deepEqual(pinQuestionsOf(plain), [], plain);
+  }
+  const many = Array.from(
+    { length: 40 },
+    (_, index) => `Question for pin ${index + 1}: ${'w'.repeat(900)}\n${'- a\n- b\n- c\n- d\n- e\n- f\n- g\n- h\n'}`,
+  ).join('\n');
+  const read = pinQuestionsOf(many);
+  assert.ok(read.length <= PIN_LIMITS.questionsPerTextMax);
+  assert.ok(read.every((entry) => entry.question.length <= PIN_LIMITS.questionCharsMax && entry.choices.length <= PIN_LIMITS.choicesMax));
 });

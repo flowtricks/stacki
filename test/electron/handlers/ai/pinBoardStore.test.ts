@@ -111,7 +111,7 @@ const entry = (number: number, file: string, componentFile?: string) => ({
   images: number === 1 ? [0] : [],
 });
 
-test('the instructions for subagents name each pin, its paths and the waves that keep shared files apart', () => {
+test('the instructions for subagents name each pin and its paths, and start pins that share a file together', () => {
   const text = pinInstructions({
     mode: 'subagents',
     pins: [entry(1, 'src/pages/index.astro'), entry(2, 'src/pages/about.astro'), entry(3, 'src/pages/index.astro', 'src/components/Hero.astro')],
@@ -120,7 +120,22 @@ test('the instructions for subagents name each pin, its paths and the waves that
   assert.match(text, /\n<\/comment-pins>$/);
   assert.match(text, /one subagent per pin/);
   assert.match(text, /"Pin <number>: <three to six words>"/);
-  assert.match(text, /Wave 1: pin 1, pin 2\n {2}Wave 2: pin 3/);
+  assert.match(text, /Wave 1: pin 1, pin 2, pin 3\n/, 'pins 1 and 3 share a file and still start together');
+  assert.ok(!text.includes('Wave 2'));
+  assert.match(text, /all of its Agent calls in one single message/);
+  assert.match(text, /never change a file with a shell command/);
+  assert.match(text, /read it again and redo only your own change/);
+  assert.match(text, /Question for pin <number>: /);
+  assert.ok(!text.includes('Model:'), 'no model line unless a pin chose one');
+  const chosen = pinInstructions({
+    mode: 'subagents',
+    pins: [{ ...entry(1, 'src/pages/index.astro'), model: 'haiku', modelName: 'Haiku' }, entry(2, 'src/pages/about.astro')],
+  });
+  assert.match(chosen, /set its Agent call's model parameter to exactly that value/);
+  assert.equal(chosen.match(/\n {2}Model: haiku/g)?.length, 1, 'only the pin that chose it');
+  const five = pinInstructions({ mode: 'subagents', pins: [1, 2, 3, 4, 5].map((number) => entry(number, 'src/pages/index.astro')) });
+  assert.match(five, /Wave 1: pin 1, pin 2, pin 3, pin 4\n {2}Wave 2: pin 5/);
+  assert.match(five, /the first 4 pins are running at the same time and the rest are waiting/);
   assert.match(text, /written in src\/pages\/index\.astro at child path 0\.3/);
   assert.match(text, /an instance of src\/components\/Hero\.astro/);
   assert.match(text, /canvas 768px wide/);

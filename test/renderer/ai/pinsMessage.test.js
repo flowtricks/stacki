@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const output = repoPath('node_modules/.stacki-test/pinsMessage.cjs');
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -21,7 +22,7 @@ esbuild.buildSync({
       "export { Transcript } from './src/features/ai/transcript/TranscriptView';",
       "export { resetTranscriptUi } from './src/features/ai/transcript/transcriptUi';",
       "export { EMPTY_CHAT, reduceChat } from './src/features/ai/chatReducer';",
-      "export { loadAiProject, resetAiStore } from './src/features/ai/aiStore';",
+      "export { loadAiProject, resetAiStore, openChat, aiState, draftText } from './src/features/ai/aiStore';",
       "export { buildPrompt } from './electron/handlers/ai/promptBlocks';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
@@ -153,5 +154,102 @@ test('a message of pins: words and names, a status per pin, no instructions, no 
   assert.ok(!/[{}]/u.test(container.textContent), 'no braces anywhere');
   assert.ok(container.querySelector('[aria-label="Edit"], [aria-label="Resend"]') === null, 'no Edit or Resend on a summary');
   await act(async () => root.unmount());
+  container.remove();
+});
+
+test('a pin that needs the person shows its question with choices and Reply; a pin not started offers nothing to answer', async () => {
+  const prompts = [];
+  const chat = { id: CHAT, agent: 'claude', title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false };
+  window.avb = {
+    aiAgents: async () => ({ trusted: true, agents: [], options: [] }),
+    aiChats: async () => ({ chats: [chat], sections: [] }),
+    aiChatRead: async () => ({ ok: true, value: { summary: chat, events: [], full: false } }),
+    aiChatUpdate: async () => ({ ok: true, value: chat }),
+    aiPrompt: async (payload) => {
+      prompts.push(payload);
+      return { ok: true, value: { turn: `t${'2'.padStart(16, '0')}` } };
+    },
+    aiAck: () => undefined,
+    onAiEvents: () => () => undefined,
+    onAiAgentStatus: () => () => undefined,
+    onAiSetup: () => () => undefined,
+    platform: 'darwin',
+  };
+  ui.resetTranscriptUi();
+  ui.resetAiStore();
+  await ui.loadAiProject('/site');
+  await ui.openChat(CHAT);
+  const brief = { mode: 'subagents', pins: [entry(1, { model: 'haiku', modelName: 'Haiku' }), entry(2)] };
+  const source = { root: '/site', home: '/home', agent: 'claude', embeddedContext: true, commands: new Set(), read: () => undefined };
+  const built = ui.buildPrompt(source, { text: 'Comments on 2 pins', attachments: [], parts: undefined, pins: brief });
+  assert.ok(built.ok);
+  const view = ui.reduceChat(ui.EMPTY_CHAT, [
+    { kind: 'turn-start', turn: TURN, at: 0 },
+    { kind: 'user', turn: TURN, text: 'Comments on 2 pins', attachments: [], at: 0, parts: built.value.sent },
+    agentCall('a1', 'Pin 1: Bigger heading', 'in_progress'),
+    { kind: 'text', turn: TURN, role: 'agent', text: 'Question for pin 1: How big?\n- Twice as big\n- A little bigger', at: 2 },
+    { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 3 },
+  ]);
+  const container = document.body.appendChild(document.createElement('div'));
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      React.createElement(ui.Transcript, {
+        view,
+        reading: { hidden: new Set(), details: undefined, interrupted: false },
+        retryHeldByCard: false,
+        projectPath: '/site',
+        chatId: CHAT,
+        onReview: () => undefined,
+        onOpenSubagent: () => undefined,
+      }),
+    );
+  });
+  const [asking, waiting] = [...container.querySelectorAll('.ai-pins-message-pin')];
+  assert.match(asking.querySelector('.ai-pin-progress').textContent, /Needs you/);
+  assert.equal(asking.querySelector('.ai-pin-ask-words').textContent, 'How big?');
+  assert.deepEqual(
+    [...asking.querySelectorAll('.ai-pin-ask-choices button')].map((button) => button.textContent),
+    ['Twice as big', 'A little bigger', 'Reply'],
+  );
+  const tag = asking.querySelector('.ai-pins-message-model');
+  assert.equal(tag.textContent, 'Chat model', 'its subagent ran without the chosen model: the card says what it ran on');
+  assert.match(tag.getAttribute('title'), /You chose Haiku/);
+  assert.match(waiting.querySelector('.ai-pin-progress').textContent, /Not started/);
+  assert.equal(waiting.querySelector('.ai-pin-ask') ?? undefined, undefined, 'nothing to answer, so nothing asks');
+  // A press, then the state it leads to: the chat opens and the message is sent through promises of their own.
+  const press = async (element, what, read) => {
+    await act(async () => {
+      element.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      await waitFor({ what, read, until: Boolean });
+    });
+  };
+  await press(asking.querySelector('button.ai-pins-message-status'), 'the message box to take the keyboard', () => ui.aiState().composerFocusRequests > 0);
+  assert.equal(ui.draftText(ui.aiState().drafts.get(CHAT)), '“Pin words 1”: ', 'the badge opens the message box on that pin');
+  await press(asking.querySelector('.ai-pin-ask-choice'), 'the choice to be sent', () => prompts.length > 0);
+  assert.equal(prompts.at(-1).text, '“Pin words 1”: Twice as big', 'a choice is sent as the answer about that pin');
+  await act(async () => root.unmount());
+  const second = createRoot(container);
+  await act(async () => {
+    second.render(
+      React.createElement(ui.Transcript, {
+        view: ui.reduceChat(ui.EMPTY_CHAT, [
+          { kind: 'turn-start', turn: TURN, at: 0 },
+          { kind: 'user', turn: TURN, text: 'Comments on 2 pins', attachments: [], at: 0, parts: built.value.sent },
+          { ...agentCall('a1', 'Pin 1: Bigger heading', 'in_progress'), agentModel: 'haiku' },
+        ]),
+        reading: { hidden: new Set(), details: undefined, interrupted: false },
+        retryHeldByCard: false,
+        projectPath: '/site',
+        chatId: CHAT,
+        onReview: () => undefined,
+        onOpenSubagent: () => undefined,
+      }),
+    );
+  });
+  const named = container.querySelector('.ai-pins-message-model');
+  assert.equal(named.textContent, 'Haiku', 'it ran on the chosen model: the card names it quietly');
+  assert.equal(named.getAttribute('title') ?? '', '');
+  await act(async () => second.unmount());
   container.remove();
 });

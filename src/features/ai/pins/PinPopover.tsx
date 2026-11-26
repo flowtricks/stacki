@@ -27,7 +27,8 @@ import { useComposerVoice } from '../composer/useComposerVoice';
 import { AttachmentChips } from '../screenshot/AttachmentChips';
 import { hasPersonContent, workingCopy, type PinProgress } from './pinModel';
 import { addImagesToPin, closePinBox, removePinImage, reopenSentPin, savePinBox, setPinComment, startMovingPin, usePinState } from './pinStore';
-import { PinProgressPill } from './PinProgressPill';
+import { PinBadge } from './PinBadge';
+import { PinModelPicker } from './PinModelPicker';
 import { TipButton } from '../sessions/TipButton';
 
 const CropGlyph = centralIcon(centralCrop);
@@ -195,7 +196,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
             <span className="ai-pin-popover-element">{pin.place.elementLabel}</span>
             <span className="ai-pin-popover-page">{translate('ai.pins.where', { page: pin.place.pageLabel, width })}</span>
           </span>
-          {pin.delivery.kind === 'sent' && <PinProgressPill progress={progress} />}
+          {pin.delivery.kind === 'sent' && <PinBadge pin={pin} progress={progress} />}
           <TipButton
             label={editable && pin.savedAt === undefined ? translate('ai.pins.discard') : translate('ai.pins.close')}
             onClick={() => closePinBox('discard', translate)}
@@ -264,6 +265,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
                 </TipButton>
               )}
               <span className="ai-pin-tools-gap" />
+              <PinModelPicker pin={pin} />
               <MicButton dictation={dictation} />
               {/* The composer's primary action sits last in its row; the pin's is Save, blue at rest, hover and press. */}
               <button type="button" className="primary ai-pin-save" disabled={!canSave} onClick={() => savePinBox()}>

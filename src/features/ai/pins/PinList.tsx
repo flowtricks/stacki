@@ -14,7 +14,8 @@ import { POPUP_MOTION_MS } from '../../../ui/popupLifecycle';
 import { Switch } from '../../../ui/Switch';
 import { TipButton } from '../sessions/TipButton';
 import { commentLine, hasContentToLose, workingCopy } from './pinModel';
-import { DetachedPill, PinProgressPill, UnsavedPill } from './PinProgressPill';
+import { PinBadge } from './PinBadge';
+import { DetachedPill, UnsavedPill } from './PinProgressPill';
 import { cancelRun, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
 import type { CommentPin } from '../../../../shared/properties/ai/commentPins';
 import type { Translator } from '../../../lib/i18n/localeContext';
@@ -120,7 +121,7 @@ function PinRow({
         {image !== undefined && <img className="ai-pin-thumb" src={image} alt="" />}
       </button>
       {detached && <DetachedPill />}
-      {pin.savedAt === undefined ? <UnsavedPill /> : <PinProgressPill progress={progress} />}
+      {pin.savedAt === undefined ? <UnsavedPill /> : <PinBadge pin={pin} progress={progress} />}
       {pin.delivery.kind === 'draft' && pin.savedAt !== undefined && (
         <Switch
           label={translate('ai.pins.include', { number: pin.number })}
