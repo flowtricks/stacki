@@ -5,6 +5,7 @@
 // Navigator and the Style and Settings panels are the editor's own, and follow what is selected here.
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import Menu from '../../ui/Menu';
+import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import type { DesignFrameId } from '../../../shared/ipc/designSession';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import { DesignFrameTile, EMPTY_FRAME, type DesignTileProps } from './DesignFrameTile';
@@ -315,7 +316,7 @@ function FrameMenu({
             kind: 'item',
             id: 'duplicate',
             label: words('menu.duplicate'),
-            shortcut: '⌘D',
+            shortcut: shortcutLabel('D', 'primary', currentDesktopPlatform()),
             onSelect: () => {
               if (mayDuplicate(context)) {
                 duplicateFrame(context, target.frame, placeBeside(session, target.frame, widthPx));
@@ -328,7 +329,7 @@ function FrameMenu({
             kind: 'item',
             id: 'delete',
             label: words('frame.delete'),
-            shortcut: '⌫',
+            shortcut: currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del',
             danger: true,
             disabled: session.frames.length <= 1,
             onSelect: () => removeFrame(context, target.frame),

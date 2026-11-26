@@ -25,8 +25,8 @@ const CHECKS_MIN = 12;
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
-  // Design mode is offered on macOS only, and the run drives the real pointer.
-  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'Design mode is offered on macOS only';
+  // It drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'a pointer probe, macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModePagesSoak: ${unavailable}`);
     return;

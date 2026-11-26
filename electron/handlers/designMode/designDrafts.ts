@@ -20,7 +20,7 @@ import {
   type DesignFrameId,
   type DesignPlace,
 } from '../../../shared/ipc/designSession';
-import { ensurePrivateDirectory } from './designSandbox';
+import { ensurePrivateDirectory, isSecretFile } from './designSandbox';
 import { DESIGN_FRAME_LIMITS, type FileChange, type FrameFiles } from './designFrames';
 
 export const DESIGN_DRAFT_LIMITS = {
@@ -43,15 +43,6 @@ export interface Draft {
 const DRAFTS_FOLDER = 'design-drafts';
 const DRAFT_FILE = 'draft.json';
 const DRAFT_VERSION = 1;
-
-/** A file whose content is a secret: never kept in a draft. */
-export function isSecretFile(rel: string): boolean {
-  const name = rel.split('/').at(-1) ?? rel;
-  if (name.startsWith('.env') || name === '.dev.vars') {
-    return true;
-  }
-  return /\.(pem|key|p12|pfx)$/i.test(name);
-}
 
 export function draftFolder(appDataRoot: string, realRoot: string): string {
   const hash = createHash('sha256').update(path.resolve(realRoot)).digest('hex').slice(0, 32);

@@ -15,7 +15,8 @@ import { lowerDesignFence, observeDesignFence, raiseDesignFence } from '../../li
 import { guardDesignWrites } from '../../lib/designMode/designWriteGuard';
 import { isPathWithin } from '../../lib/platform';
 import type { MainHost } from '../mainHost';
-import { createSandbox, removeSandboxAsync, removeSandboxAtQuit, stopServersIn, sweepSandboxes } from './designSandbox';
+import { stopServersIn } from './designLeftovers';
+import { createSandbox, discardSandbox, removeSandboxAtQuit, sweepSandboxes } from './designSandbox';
 import {
   announceShown,
   beginSession,
@@ -41,7 +42,7 @@ export interface DesignModeOptions {
   readonly appDataRoot: string;
   /** Runs `listener` once as the app quits. */
   readonly onQuit: (listener: () => void) => void;
-  /** The computer's platform: Design mode is offered on macOS only (designModeAvailable). */
+  /** The computer's platform: Design mode is offered on the systems Stacki ships on (designModeAvailable). */
   readonly platform: NodeJS.Platform;
 }
 
@@ -83,8 +84,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
       try {
         keepDraft(appDataRoot, await capture(closing));
       } finally {
-        await stopServersIn(closing.sandbox.root);
-        await removeSandboxAsync(closing.sandbox.root);
+        await discardSandbox(closing.sandbox.root, await stopServersIn(closing.sandbox.root));
       }
     })().catch(() => undefined);
     return ending;
