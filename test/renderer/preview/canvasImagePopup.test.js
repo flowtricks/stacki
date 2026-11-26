@@ -319,13 +319,12 @@ async function runInElectron({ window, project, options }) {
     // 3b. A Card with a link stretches the link over the whole card, and a cover Card's picture takes no pointer: the
     // double click lands on something else and still means the image.
     await escapeAndClose('the popup closes before the cover Card');
-    await doubleClick('#card-cover .card_visual', 'double click the cover Card image');
-    check('a double click over the cover overlay opens the popup', (await until('the cover popup', popupOpen)) === true);
+    // The picture just changed, so the canvas may still swap frames: pressed within the reopen's bound.
+    check('a double click over the cover overlay opens the popup', await reopen('#card-cover .card_visual', 'double click the cover Card image'));
     await shot('3b-cover-popup');
     await escapeAndClose('the cover popup closes');
-    await doubleClick('#card-link .card_visual', 'double click the linked Card image');
+    check('a double click on a linked Card image opens the popup', await reopen('#card-link .card_visual', 'double click the linked Card image'));
     await shot('3c-linked');
-    check('a double click on a linked Card image opens the popup', (await until('the linked popup', popupOpen)) === true);
     await escapeAndClose('the linked popup closes');
     // 3d. Words win: on a cover Card the heading sits over the picture. A double click on the words is text editing,
     // and only the picture area no words cover opens the popup.
