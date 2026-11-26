@@ -271,15 +271,18 @@ test('a plain <p> takes line breaks by default, written over the paragraph and n
     let written;
     const formatter = format.canvasTextFormatter(nodes, (id, children) => {
       written = { id, children };
+      return true;
     });
-    assert.equal(formatter.richText(first.id, 'A <strong>bold</strong> word', 'line'), true);
+    const owner = formatter.contentOwner(first.id, 'line');
+    const opened = [formatter.content(owner)];
+    assert.equal(formatter.richText(owner, 'A <strong>bold</strong> word', opened), 'written');
     assert.equal(written.id, paragraph.id, 'the paragraph, not the layout');
     assert.deepEqual(
       written.children.map((node) => node.name ?? node.value),
       ['A ', 'strong', ' word'],
     );
     written = undefined;
-    assert.equal(formatter.richText(first.id, '<p>A</p><p>B</p>', 'line'), false, 'blocks are never written into a line of words');
+    assert.equal(formatter.richText(owner, '<p>A</p><p>B</p>', opened), 'refused', 'blocks are never written into a line of words');
     assert.equal(written, undefined);
   });
 });
