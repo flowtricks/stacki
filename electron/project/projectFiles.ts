@@ -5,7 +5,7 @@ import { toRecord } from '../../shared/core/record';
 import * as path from 'path';
 import { PAGE_MD_RE } from '../documents/pageRequests';
 import * as fs from 'fs';
-import { isWin, toPosix, readJson, parseRecord, parseOptionalString } from '../lib/mainHelpers';
+import { toPosix, readJson, parseRecord, parseOptionalString } from '../lib/mainHelpers';
 import { ASTRO_CONFIG_FILES } from '../../shared/properties/astroSourceDirectory';
 import { walkFolderSliced, type WalkProblem } from './projectWalk';
 import { runSync, type SlicedWork } from '../lib/slicedWork';
@@ -126,16 +126,16 @@ export function isAstroProject(directory: string): boolean {
   return false;
 }
 
-// The project's own `astro` command in node_modules/.bin. On Windows npm, pnpm and Yarn leave `astro.cmd`, while Bun
-// leaves `astro.exe` (and no .cmd), so whichever is there is the one; when neither is, the path npm would have made.
-export function localAstroBin(projectPath: string): string {
+// The project's own `astro` command in node_modules/.bin. On Windows npm, pnpm and Yarn leave `astro.cmd` while Bun
+// leaves only `astro.exe`; when neither is there the answer is the first name, which does not exist.
+export function localAstroBin(projectPath: string, platform: NodeJS.Platform = process.platform): string {
   const folder = path.join(projectPath, 'node_modules', '.bin');
-  if (!isWin) {
-    return path.join(folder, 'astro');
+  const shim = path.join(folder, platform === 'win32' ? 'astro.cmd' : 'astro');
+  if (platform !== 'win32') {
+    return shim;
   }
   const executable = path.join(folder, 'astro.exe');
-  const shim = path.join(folder, 'astro.cmd');
-  return fs.existsSync(shim) || !fs.existsSync(executable) ? shim : executable;
+  return !fs.existsSync(shim) && fs.existsSync(executable) ? executable : shim;
 }
 
 // Astro has to be installed for a page to be rendered at all; without it the

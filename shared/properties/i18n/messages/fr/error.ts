@@ -89,6 +89,8 @@ export const messages = {
   'error.pages.devServerStatus': 'Le serveur de développement a renvoyé {status}',
   'error.project.chooseInside': 'Choisissez un élément à l’intérieur du projet, pas le projet lui-même.',
   'error.project.gone': 'Cet élément n’existe plus.',
+  'error.project.managerMissing': '{manager} n’est pas installé. Installez-le ou choisissez npm.',
+  'error.project.npmMissing': 'npm est introuvable. Installez Node.js (qui inclut npm), puis réessayez.',
   'error.project.outside': 'Cet élément est en dehors du projet.',
   'error.projectSettings.changed': 'Les réglages du projet ont changé. Rechargez avant d’enregistrer.',
   'error.projectSettings.changedDuringSave': 'Les réglages du projet ont changé pendant l’enregistrement. Rechargez pour les examiner.',

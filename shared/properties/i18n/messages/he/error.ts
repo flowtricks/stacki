@@ -90,6 +90,8 @@ export const messages = {
   'error.pages.devServerStatus': 'שרת הפיתוח החזיר {status}',
   'error.project.chooseInside': 'יש לבחור משהו בתוך הפרויקט, לא את הפרויקט עצמו.',
   'error.project.gone': 'זה כבר לא קיים.',
+  'error.project.managerMissing': '{manager} לא מותקן. התקינו אותו או בחרו ב-npm.',
+  'error.project.npmMissing': 'npm לא נמצא. התקינו את Node.js (כולל npm) ונסו שוב.',
   'error.project.outside': 'זה נמצא מחוץ לפרויקט.',
   'error.projectSettings.changed': 'הגדרות הפרויקט השתנו. יש לטעון מחדש לפני השמירה.',
   'error.projectSettings.changedDuringSave': 'הגדרות הפרויקט השתנו במהלך השמירה. יש לטעון מחדש כדי לבדוק אותן.',

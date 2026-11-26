@@ -88,22 +88,30 @@ export interface ExecutableCommand extends Omit<PublishCommand, 'executable'> {
 export function resolvePublishExecutable(
   root: string,
   command: ExecutableCommand,
+  platform: NodeJS.Platform = process.platform,
 ): {
   readonly executable: string;
   readonly arguments: readonly string[];
 } {
+  // Bun on Windows is a program of its own, with no JavaScript entry to hand to Node. Started by name without a
+  // shell, `bun.exe` is found on PATH.
+  if (platform === 'win32') {
+    if (command.executable === 'bun') {
+      return { executable: 'bun.exe', arguments: command.arguments };
+    }
+  }
   const local = path.join(root, 'node_modules', '.bin', command.executable);
-  if (process.platform !== 'win32' && existsSync(local)) {
+  if (platform !== 'win32' && existsSync(local)) {
     return { executable: local, arguments: command.arguments };
   }
   const installed = installedPublishTool(root, command.executable);
   if (installed) {
     return {
-      executable: process.platform === 'win32' ? 'node.exe' : 'node',
+      executable: platform === 'win32' ? 'node.exe' : 'node',
       arguments: [installed, ...command.arguments],
     };
   }
-  if (process.platform !== 'win32') {
+  if (platform !== 'win32') {
     return {
       executable: existsSync(local) ? local : command.executable,
       arguments: command.arguments,

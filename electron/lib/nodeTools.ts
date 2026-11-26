@@ -89,6 +89,7 @@ export function nodeDirectoryGuesses(home: string) {
         path.join(home, '.local/bin'),
         path.join(home, '.npm-global/bin'),
         path.join(home, 'n/bin'),
+        path.join(home, '.bun/bin'), // Bun's own installer
       ];
   // Version managers keep one directory per version — take the newest, so a
   // project needing a modern Node still gets one.

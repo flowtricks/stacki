@@ -86,6 +86,8 @@ export const messages = {
   'error.pages.devServerStatus': 'डेव सर्वर ने {status} लौटाया',
   'error.project.chooseInside': 'प्रोजेक्ट के भीतर कुछ चुनें, प्रोजेक्ट को नहीं।',
   'error.project.gone': 'वह अब मौजूद नहीं है।',
+  'error.project.managerMissing': '{manager} इंस्टॉल नहीं है। इसे इंस्टॉल करें या npm चुनें।',
+  'error.project.npmMissing': 'npm नहीं मिला। Node.js (जिसमें npm शामिल है) इंस्टॉल करें और फिर से कोशिश करें।',
   'error.project.outside': 'वह प्रोजेक्ट के बाहर है।',
   'error.projectSettings.changed': 'प्रोजेक्ट सेटिंग बदल गई हैं। सहेजने से पहले रीलोड करें।',
   'error.projectSettings.changedDuringSave': 'सहेजते समय प्रोजेक्ट सेटिंग बदल गईं। देखने के लिए रीलोड करें।',

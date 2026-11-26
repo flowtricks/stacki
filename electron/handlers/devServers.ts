@@ -658,7 +658,7 @@ export class DevServers {
       }
     }
 
-    // Looked up again: the install is what may have made it, and under Bun it is `astro.exe`, not `astro.cmd`.
+    // Asked again, not remembered: which file it is depends on what the install made.
     return localAstroBin(projectPath);
   }
 

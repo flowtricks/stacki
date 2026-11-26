@@ -96,6 +96,8 @@ export const messages = {
   'error.pages.devServerStatus': 'أعاد خادم التطوير {status}',
   'error.project.chooseInside': 'اختر شيئًا داخل المشروع، وليس المشروع نفسه.',
   'error.project.gone': 'لم يعد ذلك موجودًا.',
+  'error.project.managerMissing': '‏{manager} غير مثبّت. ثبّته أو اختر npm.',
+  'error.project.npmMissing': 'تعذّر العثور على npm. ثبّت Node.js (الذي يتضمن npm) ثم حاول مرة أخرى.',
   'error.project.outside': 'ذلك خارج المشروع.',
   'error.projectSettings.changed': 'تغيّرت إعدادات المشروع. أعد التحميل قبل الحفظ.',
   'error.projectSettings.changedDuringSave': 'تغيّرت إعدادات المشروع أثناء الحفظ. أعد التحميل لفحصها.',

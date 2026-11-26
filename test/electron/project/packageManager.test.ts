@@ -3,19 +3,22 @@
 // A new site is created only with a manager from the tested list, at the IPC boundary too.
 // Method: parse valid, versioned, unknown, malformed and oversized fields, then detect inside
 // temporary project folders that combine fields and lockfiles, and pin each install command.
-// Nothing is installed.
+// Detection walks up to the filesystem root, so every folder sits under one with an npm lockfile:
+// a stray lockfile above the temp folder cannot change an answer. Nothing is installed.
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { detectPackageManager, installArguments } from '#dist/electron/project/packageManager.js';
+import { commandNeedsShell } from '#dist/electron/lib/platform.js';
+import { resolvePublishExecutable } from '#dist/electron/project/publishExecutable.js';
 import {
   CREATE_PACKAGE_MANAGERS,
   PACKAGE_MANAGERS,
   packageManagerLabel,
   parseCreatePackageManager,
-  packageManagerProgram,
+  scaffolderManager,
   parsePackageManagerField,
 } from '#dist/shared/properties/packageManager.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
@@ -27,8 +30,11 @@ const starter = (packageManager: string | undefined) => ({
 });
 
 async function project(context: TestContext, files: Readonly<Record<string, string>>) {
-  const directory = await mkdtemp(path.join(tmpdir(), 'stacki-package-manager-'));
-  context.after(() => rm(directory, { recursive: true, force: true }));
+  const root = await mkdtemp(path.join(tmpdir(), 'stacki-package-manager-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, 'package-lock.json'), '{}');
+  const directory = path.join(root, 'project');
+  await mkdir(directory);
   for (const [name, content] of Object.entries(files)) {
     await writeFile(path.join(directory, name), content);
   }
@@ -54,11 +60,11 @@ test('a new site can be created with npm, pnpm or bun, and nothing else yet', ()
   assert.equal(parseCreatePackageManager('pnpm'), 'pnpm');
   assert.equal(parseCreatePackageManager('bun'), 'bun');
   for (const input of [undefined, 7, '', 'yarn', 'BUN', 'PNPM', ' npm']) {
-    assert.throws(() => parseCreatePackageManager(input), /expected npm, pnpm or bun/, String(input));
+    assert.throws(() => parseCreatePackageManager(input), /expected one of npm, pnpm, bun$/, String(input));
   }
   assert.equal(parseIpcPayload('project:createStarter', starter('pnpm')).packageManager, 'pnpm');
   assert.equal(parseIpcPayload('project:createStarter', starter(undefined)).packageManager, undefined);
-  assert.throws(() => parseIpcPayload('project:createStarter', starter('yarn')), /npm, pnpm or bun/);
+  assert.throws(() => parseIpcPayload('project:createStarter', starter('yarn')), /expected one of npm, pnpm, bun/);
 });
 
 test('each package manager installs dependencies with its own command', () => {
@@ -98,10 +104,26 @@ test('lockfiles decide when the field is absent, unknown or unreadable', async (
   }
 });
 
-test('Bun is started as itself on Windows, the Node shims as .cmd files', () => {
-  assert.equal(packageManagerProgram('bun', { windows: true }), 'bun');
-  assert.equal(packageManagerProgram('pnpm', { windows: true }), 'pnpm.cmd');
-  assert.equal(packageManagerProgram('npm', { windows: true }), 'npm.cmd');
-  assert.equal(packageManagerProgram('bun', { windows: false }), 'bun');
-  assert.equal(packageManagerProgram('yarn', { windows: false }), 'yarn');
+// Goal: on Windows every manager is found however it was installed (a .cmd shim or an .exe), which only cmd.exe
+// does for a bare name. Method: ask the shell rule about each platform's answer.
+test('on Windows a package manager named bare is started through the shell, and nothing else is', () => {
+  for (const manager of PACKAGE_MANAGERS) {
+    assert.equal(commandNeedsShell(manager, 'win32'), true, manager);
+    assert.equal(commandNeedsShell(manager, 'darwin'), false, manager);
+    assert.equal(commandNeedsShell(manager, 'linux'), false, manager);
+  }
+  for (const command of ['git', 'node', 'bun.exe', 'C:\\Tools\\bun', 'bun create']) {
+    assert.equal(commandNeedsShell(command, 'win32'), false, command);
+  }
+});
+
+test('Bun runs the scaffolder itself; every other manager goes through npm', () => {
+  assert.deepEqual(PACKAGE_MANAGERS.map(scaffolderManager), ['npm', 'npm', 'npm', 'bun']);
+});
+
+// Goal: a Bun site on Windows can add its deploy tool. Method: resolve the command as Windows would; the other
+// managers there are run as JavaScript under Node, which Bun's native program cannot be.
+test('on Windows Bun is resolved to its own program, with its arguments untouched', () => {
+  const command = { executable: 'bun', arguments: ['add', '--dev', 'wrangler'], environment: {} } as const;
+  assert.deepEqual(resolvePublishExecutable(tmpdir(), command, 'win32'), { executable: 'bun.exe', arguments: command.arguments });
 });
