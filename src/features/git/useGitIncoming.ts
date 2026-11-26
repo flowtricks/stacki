@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import { readIncomingGitCommits } from './gitChipBridge';
@@ -13,8 +13,14 @@ export type GitIncomingState =
 const CHECK_INTERVAL_MS = 30_000;
 const checking = { kind: 'checking' } as const;
 
+export interface GitIncoming {
+  readonly state: GitIncomingState;
+  /** Takes a count learned outside the routine check (a pull, or a check the person asked for). */
+  readonly record: (commits: number) => void;
+}
+
 /** Mounted with the project so incoming changes are found even with the Git panel closed. */
-export function useGitIncoming(projectPath: string | undefined, info: IpcResults['git:info'] | undefined): GitIncomingState {
+export function useGitIncoming(projectPath: string | undefined, info: IpcResults['git:info'] | undefined): GitIncoming {
   const repository = info?.isRepo ? info : undefined;
   const branch = repository?.branch;
   const remote = repository?.remote;
@@ -57,5 +63,7 @@ export function useGitIncoming(projectPath: string | undefined, info: IpcResults
       window.clearInterval(timer);
     };
   }, [projectPath, branch, remote, head, key]);
-  return snapshot.key === key ? snapshot.value : checking;
+  // The key travels with the count: one taken for another branch or commit is never shown.
+  const record = useCallback((commits: number) => setSnapshot({ key, value: { kind: 'ready', commits } }), [key]);
+  return { state: snapshot.key === key ? snapshot.value : checking, record };
 }

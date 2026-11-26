@@ -105,7 +105,7 @@ const RENDERER_IMPORTS_ALLOWED = new Set([
 const NAMED_ONLY: Readonly<Record<string, readonly string[]>> = {
   'src/features/ai/aiBridge': ['aiScreenshot'],
   'src/features/ai/panelModes': ['registerPanelMode'],
-  'src/app/railShortcuts': ['PREVIEW_SHORTCUT', 'railActionOf'],
+  'src/app/railShortcuts': ['PREVIEW_SHORTCUT', 'isPullChord', 'railActionOf'],
   'src/editor/canvasQuery': ['hasCanvas', 'tellCanvas'],
   'src/app/App': ['ShellView'],
 };

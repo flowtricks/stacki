@@ -138,7 +138,9 @@ test('GitChip transport failures are values and malformed replies throw', async 
 });
 
 test('GitChip routes every direct Git operation through the parsed bridge', () => {
-  const source = fs.readFileSync(repoPath('src/features/git/GitChip.tsx'), 'utf8');
+  // The panel's controls, the shared session they run on and its merge review.
+  const files = ['GitChip.tsx', 'useGitSession.ts', 'GitSessionDialogs.tsx'];
+  const source = files.map((file) => fs.readFileSync(repoPath(`src/features/git/${file}`), 'utf8')).join('\n');
   assert.doesNotMatch(source, /window\.avb\.git(?:Info|Status|Checkout|Commit|Init|Push|ResolveMerge)/);
   for (const operation of ['readGitStatus', 'checkoutGitBranch', 'commitGitChanges', 'initializeGit', 'resolveGitMerge']) {
     assert.match(source, new RegExp(`\\b${operation}\\(`));

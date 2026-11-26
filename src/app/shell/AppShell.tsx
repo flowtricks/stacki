@@ -35,6 +35,8 @@ import { useComponentRoleRules } from '../roles/componentRoleRules';
 import StructurePanel from '../../features/structure/StructurePanel';
 import PanelBoundary from '../../ui/PanelBoundary';
 import GitChip from '../../features/git/GitChip';
+import { GitSessionDialogs } from '../../features/git/GitSessionDialogs';
+import { DesktopGitContext, TitleBarPull, useDesktopGit, useDesktopGitControls } from './DesktopGitPull';
 import HistoryPanel from '../../features/history/HistoryPanel';
 import { ConfirmHost, confirmDialog } from '../../ui/ConfirmDialog';
 import { UpdatePopupHost } from '../../features/update/UpdatePopup';
@@ -121,76 +123,82 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   const aiButton = useAiRailButton(app);
   // The component canvas (useDesktopComponentCanvas.ts): the title bar, the Components panel and the right panel read it.
   const componentCanvas = useDesktopComponentCanvas(app);
+  // The window's one git session: the title bar's pull button, ⌥⇧G and the Git panel share it (DesktopGitPull.tsx).
+  const git = useDesktopGit(app, componentCanvas);
   return (
-    <ComponentCanvasContext.Provider value={componentCanvas}>
-      <div className="app" data-component-canvas={componentCanvas.state.kind === 'idle' ? undefined : ''}>
-        {app.propertySave.phase === 'saving' && (
-          <div className="property-saving-overlay" role="status">
-            {translate('shell.saving.properties')}
-          </div>
-        )}
-        <TitleBar app={app} />
-        <DefaultsCanvasBar canvas={app.defaultsCanvas} />
-        <div className="main">
-          <LeftRail
-            active={leftTab === 'ai' ? undefined : leftTab}
-            componentOpen={app.componentPropertiesOpen}
-            projectPath={projectPath}
-            onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
-            onOpenSettings={(target) => {
-              // Opens, never toggles: the shortcut for a section must not close Settings that is already showing it.
-              requestSettingsSection(target);
-              app.setLeftTab('projectSettings');
-            }}
-            aiButton={aiButton}
-          />
-          {leftTab && <LeftPanel app={app} tab={leftTab} />}
-          <div className="center">
-            {/* Each pane is its own boundary, so one that throws names itself and the rest of the window keeps working. */}
-            <PanelBoundary name="The canvas" label={translate('recovery.pane.canvas')} resetKey={app.pageUrlPath}>
-              <CanvasPane app={app} />
-            </PanelBoundary>
-            <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
-              <CanvasCovers app={app} />
-              {/* Last, so an expanded chat is on top of any other cover: it is the mode the person just chose. */}
-              <AiCover app={app} />
-            </PanelBoundary>
-            <ComponentCanvasZoom canvas={componentCanvas} />
-            <CanvasFramePopup canvas={componentCanvas} />
-          </div>
-          {app.assetPick?.presentation === 'overlay' && (
-            <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
-              <AssetsPanel
-                project={app.project}
-                showToast={app.showToast}
-                pick={app.assetPick}
-                onPickCancel={() => app.endAssetPick(false)}
-                onRecordUndo={app.pushCommand}
-              />
-            </AssetPickOverlay>
-          )}
-          {app.inPreview && app.previewSource && <PreviewModeView app={app} source={app.previewSource} />}
-          <OldVersionCover app={app} />
-          {app.pageState?.editable && !app.previewRef && (
-            // An open CMS item has nothing to style, so the CMS takes the Style and
-            // Settings panel's width too. Hidden, not unmounted: closing the CMS
-            // returns the panel as it was, on the same tab and scroll.
-            <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
-              <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
-                <RightPanel app={app} />
-              </PanelBoundary>
+    <DesktopGitContext.Provider value={git}>
+      <ComponentCanvasContext.Provider value={componentCanvas}>
+        <div className="app" data-component-canvas={componentCanvas.state.kind === 'idle' ? undefined : ''}>
+          {app.propertySave.phase === 'saving' && (
+            <div className="property-saving-overlay" role="status">
+              {translate('shell.saving.properties')}
             </div>
           )}
+          <TitleBar app={app} />
+          <DefaultsCanvasBar canvas={app.defaultsCanvas} />
+          <div className="main">
+            <LeftRail
+              active={leftTab === 'ai' ? undefined : leftTab}
+              componentOpen={app.componentPropertiesOpen}
+              projectPath={projectPath}
+              onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
+              onOpenSettings={(target) => {
+                // Opens, never toggles: the shortcut for a section must not close Settings that is already showing it.
+                requestSettingsSection(target);
+                app.setLeftTab('projectSettings');
+              }}
+              aiButton={aiButton}
+            />
+            {leftTab && <LeftPanel app={app} tab={leftTab} />}
+            <div className="center">
+              {/* Each pane is its own boundary, so one that throws names itself and the rest of the window keeps working. */}
+              <PanelBoundary name="The canvas" label={translate('recovery.pane.canvas')} resetKey={app.pageUrlPath}>
+                <CanvasPane app={app} />
+              </PanelBoundary>
+              <PanelBoundary name="The canvas cover" label={translate('recovery.pane.canvas')} resetKey={app.leftTab}>
+                <CanvasCovers app={app} />
+                {/* Last, so an expanded chat is on top of any other cover: it is the mode the person just chose. */}
+                <AiCover app={app} />
+              </PanelBoundary>
+              <ComponentCanvasZoom canvas={componentCanvas} />
+              <CanvasFramePopup canvas={componentCanvas} />
+            </div>
+            {app.assetPick?.presentation === 'overlay' && (
+              <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
+                <AssetsPanel
+                  project={app.project}
+                  showToast={app.showToast}
+                  pick={app.assetPick}
+                  onPickCancel={() => app.endAssetPick(false)}
+                  onRecordUndo={app.pushCommand}
+                />
+              </AssetPickOverlay>
+            )}
+            {app.inPreview && app.previewSource && <PreviewModeView app={app} source={app.previewSource} />}
+            <OldVersionCover app={app} />
+            {app.pageState?.editable && !app.previewRef && (
+              // An open CMS item has nothing to style, so the CMS takes the Style and
+              // Settings panel's width too. Hidden, not unmounted: closing the CMS
+              // returns the panel as it was, on the same tab and scroll.
+              <div style={{ display: cmsCovering(app) ? 'none' : 'contents' }}>
+                <PanelBoundary name="The right panel" label={translate('recovery.pane.rightPanel')} resetKey={app.selectedId}>
+                  <RightPanel app={app} />
+                </PanelBoundary>
+              </div>
+            )}
+          </div>
+          {/* Reads the project's files ahead and keeps them current, so the Files panel opens on its tree. */}
+          {canRailTab(role, 'files') && <FilesKeeper key={projectPath} projectPath={projectPath} />}
+          <AppOverlays app={app} />
+          <AuditsHost app={app} />
+          <AiHost app={app} />
+          <PinsHost app={app} />
+          <DesignModeHost app={app} /> {/* Design mode (experimental): docs/design-mode/REMOVE.md */}
+          {/* The merge review of a pull, here so it opens with the Git panel closed. */}
+          <GitSessionDialogs session={git.session} />
         </div>
-        {/* Reads the project's files ahead and keeps them current, so the Files panel opens on its tree. */}
-        {canRailTab(role, 'files') && <FilesKeeper key={projectPath} projectPath={projectPath} />}
-        <AppOverlays app={app} />
-        <AuditsHost app={app} />
-        <AiHost app={app} />
-        <PinsHost app={app} />
-        <DesignModeHost app={app} /> {/* Design mode (experimental): docs/design-mode/REMOVE.md */}
-      </div>
-    </ComponentCanvasContext.Provider>
+      </ComponentCanvasContext.Provider>
+    </DesktopGitContext.Provider>
   );
 }
 
@@ -367,8 +375,11 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
           onOpenBranches={() => app.setLeftTab('history')}
           withBranchChange={app.withBranchChange}
           onBranchSwitched={app.reloadFromDisk}
+          beforeBranch={<TitleBarPull />}
         />
       )}
+      {/* A role that may pull but not publish has no branch chip; the button stands in its place. */}
+      {!canPublish && <TitleBarPull />}
     </div>
   );
 }
@@ -994,25 +1005,8 @@ export function HistoryTab({ app }: { readonly app: ShellView }) {
 }
 
 function HistoryGitControls({ app }: { readonly app: ShellView }) {
-  return (
-    <GitChip
-      key={app.project.path}
-      project={app.project}
-      info={app.gitInfo}
-      refresh={app.refreshGit}
-      busy={app.busy}
-      showToast={app.showToast}
-      flushSave={app.flushSave}
-      incoming={app.gitIncoming}
-      withBranchChange={app.withBranchChange}
-      onWorktreeChanged={async () => {
-        if (app.previewRef) {
-          await app.exitCommitPreview();
-        }
-        await app.reloadFromDisk();
-      }}
-    />
-  );
+  const { session, shortcut } = useDesktopGitControls();
+  return <GitChip key={app.project.path} session={session} incoming={app.gitIncoming} withBranchChange={app.withBranchChange} pullShortcut={shortcut} />;
 }
 
 export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, file: HistoryCommitFile, translate: Translator): Promise<void> {
