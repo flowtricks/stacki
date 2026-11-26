@@ -1,7 +1,7 @@
 // The open project's files, for component, path, class and variable suggestions and for the type checker's roots. A
 // bounded walk that skips dependencies, build output and hidden folders and never follows a folder link (so a linked
-// workspace cannot loop it). A recursive watch says what changed; where a system cannot watch, the walk is repeated
-// after a few seconds instead.
+// workspace cannot loop it). A recursive watch says what changed; where watching is not available or costs too much,
+// the walk is repeated after a few seconds instead.
 import * as fs from 'node:fs';
 import { CODE_INTEL_LIMITS } from '../../../shared/ipc/codeIntel';
 import { assert } from '../../../shared/core/assert';
@@ -96,6 +96,11 @@ function ignoredChange(relative: string): boolean {
 }
 
 function watchFolder(root: string, noted: (relative: string | undefined, event: string) => void): fs.FSWatcher | undefined {
+  // On Linux, Node makes a recursive watch out of one watch per file, `node_modules` included, which a large project
+  // cannot afford: the walk is repeated instead.
+  if (process.platform === 'linux') {
+    return undefined;
+  }
   try {
     const watcher = fs.watch(root, { recursive: true, persistent: false }, (event, file) => {
       noted(typeof file === 'string' ? slashed(file) : undefined, event);
