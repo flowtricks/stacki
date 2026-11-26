@@ -53,7 +53,7 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
   useStackAboveAnchor(surface, { active, anchor: props.anchor });
   const container = useOpenedContainer(mode, { active });
   const content = typeof props.children === 'function' ? props.children(lifecycle) : props.children;
-  if (!active) {
+  if (!active || container === undefined) {
     return undefined;
   }
   const body = (
@@ -120,11 +120,11 @@ export default Popup;
  * confirm dialog its delete asked) moved into that modal and went with it when the modal closed, its owner still
  * thinking it open, so its button took two clicks to open it again. A container that left the document is chosen again.
  */
-function useOpenedContainer(mode: 'modal' | 'popover', { active }: { readonly active: boolean }): HTMLElement {
+function useOpenedContainer(mode: 'modal' | 'popover', { active }: { readonly active: boolean }): HTMLElement | undefined {
   const chosen = useRef<HTMLElement | undefined>(undefined);
   if (!active) {
-    chosen.current = undefined;
-    return popupLayer();
+    chosen.current = undefined; // Closed: nothing is drawn, and the next opening chooses again.
+    return undefined;
   }
   const held = chosen.current;
   if (held !== undefined && held.isConnected) {
