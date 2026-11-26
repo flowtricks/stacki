@@ -53,6 +53,7 @@ import { usePrewarm } from './prewarm';
 import { agentBadge, type AgentBadge } from './agentSwitch';
 import { SetupCard } from './SetupCard';
 import { TrustCard } from './TrustCard';
+import { McpSignInCard } from './McpSignInCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
@@ -295,6 +296,12 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
           details={reading.interrupted ? reading.details : undefined}
         />
       )}
+      <McpSignInCard
+        projectPath={projectPath}
+        agent={agent}
+        items={view.items}
+        eligible={hold === undefined && state.trusted && availability?.state === 'ready'}
+      />
       <RunningChip view={view} chatId={chatId} projectPath={projectPath} />
       <ChatComposer chat={chatId} agent={agent} view={view} draft={draft} projectPath={projectPath} disabled={blocked} state={state} />
     </>

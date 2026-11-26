@@ -3,6 +3,7 @@
 // and each pushed event with the parsers below before a component sees it.
 // Pushes: `ai:events` (batched transcript events, acknowledged with the
 // one-way `ai:ack`) and `ai:agentStatus` (an agent's availability changed).
+import { parseMcpAuthRequest, type McpAuthReply } from '../properties/mcp';
 import { assert } from '../core/assert';
 import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { boolean, count, list, object, optional, pathText, record, text } from '../core/boundary';
@@ -364,6 +365,8 @@ export const AI_PAYLOADS = {
   'ai:remember': object({ projectPath, agent: parseAgentId, action: parseRememberAction }),
   'ai:review': object({ projectPath, chat, turn: (input: unknown) => toTurnId(text(input)), path: pathText, action: reviewAction }),
   'ai:setup': object({ projectPath, agent: parseAgentId, action: (input: unknown) => parseSetupAction(input) }),
+  /** Where the project's MCP servers stand for each agent, and signing in to one (shared/properties/mcp.ts). */
+  'ai:mcpAuth': object({ projectPath, request: (input: unknown) => parseMcpAuthRequest(input) }),
 } as const;
 
 /** The one-way acknowledgement: event characters the renderer has applied. Never negative or NaN. */
@@ -529,6 +532,7 @@ export interface AiResults {
   readonly 'ai:remember': Result<RememberedSettings, AiFailure>;
   readonly 'ai:review': ReviewOutcome;
   readonly 'ai:setup': SetupState;
+  readonly 'ai:mcpAuth': McpAuthReply;
 }
 
 // ---------------------------------------------------------------------------

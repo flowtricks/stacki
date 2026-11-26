@@ -1,0 +1,42 @@
+/* A server's sign-in row (McpSignInControl.tsx), on a server's card and above the AI composer. Fills, never borders. */
+.mcp-signin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.mcp-signin-text {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+}
+.mcp-signin-label {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-signin-state {
+  color: var(--text-faint);
+}
+.mcp-signin-button {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+/* The AI panel's card: the servers the chat's agent cannot use until the person signs in. */
+.ai-mcp-signins {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}

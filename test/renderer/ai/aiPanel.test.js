@@ -1115,7 +1115,7 @@ test('a sign-in that could not be checked blocks nothing: no card, a quiet note 
   assert.equal(container.querySelector('.ai-composer.is-blocked') ?? undefined, undefined, 'typing and sending are open');
   await act(async () => ai.setDraft(CHAT, () => ai.draftFromText('hello')));
   assert.equal(container.querySelector('.ai-send').disabled, false);
-  const note = container.querySelector('button.ai-sign-in-note');
+  const note = container.querySelector('button.ai-sign-in-chip');
   assert.equal(note.textContent, 'Sign-in not checked');
   assert.match(note.getAttribute('title'), /You can keep typing and sending/);
   const checks = () => calls.filter((call) => call.name === 'aiSetup' && call.payload.action.kind === 'detect').length;
@@ -1138,9 +1138,46 @@ test('a key, token or cloud sign-in is named quietly, without a value; an accoun
   fakeMain({ trusted: true, account: { name: undefined, plan: undefined, email: undefined, source: 'api-key' } });
   const { container, root } = await mount();
   context.after(() => act(() => root.unmount()));
-  const note = container.querySelector('.ai-sign-in-note');
+  const note = container.querySelector('.ai-sign-in-chip');
   assert.equal(note.textContent, 'API key');
   assert.equal(note.tagName, 'SPAN', 'it only tells');
   assert.match(note.getAttribute('title'), /Codex is using an API key, not an account sign-in\. Usage may be billed to that key\./);
   assert.equal(ai.accountLabel('claude', { name: undefined, plan: undefined, email: undefined, source: 'cloud' }, ai.ENGLISH_TRANSLATE), 'Cloud sign-in');
+});
+
+test('a chat whose agent needs a server sign-in says so above the composer, with Sign in right there', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  const { listeners } = fakeMain({ trusted: true });
+  const asked = [];
+  let state = 'connected';
+  window.avb.onAiMcpAuth = () => () => undefined;
+  window.avb.aiMcpAuth = async ({ request }) => {
+    asked.push(request);
+    if (request.kind === 'signIn') {
+      return { servers: [{ agent: 'codex', name: request.name, state: 'signing-in' }] };
+    }
+    return {
+      servers: [
+        { agent: 'codex', name: 'figma', state },
+        { agent: 'claude', name: 'other', state: 'needs-sign-in' },
+      ],
+    };
+  };
+  const { container, root } = await mount();
+  context.after(() => act(() => root.unmount()));
+  assert.equal(container.querySelector('.ai-mcp-signins') ?? undefined, undefined, 'nothing while this agent can use its servers');
+  // The agent meets the server it cannot use: the panel asks again.
+  state = 'needs-sign-in';
+  await push(listeners, [
+    { kind: 'turn-start', turn: TURN, at: 1 },
+    { kind: 'tool', turn: TURN, call: 'call-1', title: 'figma', toolKind: 'other', status: 'failed', toolName: 'mcp__figma__get_design' },
+  ]);
+  const note = container.querySelector('.ai-mcp-signins');
+  assert.match(note.textContent, /figma.*Needs sign-in/);
+  assert.doesNotMatch(note.textContent, /other/, 'only this chat’s agent');
+  assert.equal(asked.at(-1).freshness, 'fresh');
+  await click(button(note, 'Sign in'));
+  assert.deepEqual(asked.at(-1), { kind: 'signIn', agent: 'codex', name: 'figma' });
+  assert.match(container.querySelector('.ai-mcp-signins').textContent, /Waiting for your browser/);
 });

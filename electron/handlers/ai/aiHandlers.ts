@@ -19,6 +19,9 @@ import { buildShellEnv } from '../../lib/shellEnvironment';
 import type { MainHost } from '../mainHost';
 import { AgentHost, NEW_CHAT_TITLE, type AgentHostDeps } from './agentHost';
 import { AgentSetup } from './agentSetup';
+import { findCli } from './agentRegistry';
+import { McpSignIn, type ProjectServer } from './mcpSignIn';
+import { readMcpListing } from '../../content/mcpFiles';
 import { described } from './aiMessages';
 import { UnreadableFile, type LedgerFiles } from './changeLedger';
 import { closeInterruptedTurns } from './chatEvents';
@@ -147,6 +150,25 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   host.ipcMain.handle('ai:setup', (_event, input) => {
     open(input.projectPath);
     return agentSetup().act(input.agent, input.action);
+  });
+  // Signing in to the project's MCP servers, through each agent's own CLI (mcpSignIn.ts).
+  let signIns: McpSignIn | undefined;
+  const mcpSignIn = (): McpSignIn => {
+    signIns ??= new McpSignIn({
+      findCli: (agent) => findCli(agent, { environment: buildShellEnv() }),
+      environment: agentEnvironment,
+      projectServers: signInServers,
+      // As the agent host reads it: with "ask before allowing agents" off, working in the project is the allowance.
+      trusted: (root) => chats().readIndex(root).trusted || !options.askBeforeTrust(),
+      openExternal: (url) => void host.shell.openExternal(url),
+      publish: (projectPath, entry, notice) => host.send('ai:mcpAuthState', { projectPath, entry, notice }),
+      changed: (agent) => agentHost().reloadTools(agent),
+    });
+    return signIns;
+  };
+  host.ipcMain.handle('ai:mcpAuth', async (_event, input) => {
+    const root = open(input.projectPath);
+    return mcpSignIn().act(root, input.request);
   });
   host.ipcMain.handle('ai:agents', (_event, input) => agentHost().agents(open(input.projectPath)));
   host.ipcMain.handle('ai:installAgent', (_event, input) => agentHost().install(input.agent, open(input.projectPath)));
@@ -302,6 +324,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     stopAll: () => {
       recorder.release();
       setup?.stopAll();
+      signIns?.stopAll();
       agents?.stopAll();
     },
     invalidateMentions: () => mentions.invalidate(),
@@ -405,4 +428,20 @@ function projectFiles(host: Pick<MainHost, 'shell'>): LedgerFiles {
     },
     trash: (file) => host.shell.trashItem(file),
   };
+}
+
+/**
+ * The project's `.mcp.json` servers as a sign-in sees them: a remote address with no Authorization header of its
+ * own may take one; a local command, a header token and an unreadable entry never do. An unreadable file is none.
+ */
+export function signInServers(projectRoot: string): readonly ProjectServer[] {
+  const listing = readMcpListing(projectRoot);
+  if (!listing.ok) {
+    return [];
+  }
+  return listing.value.servers.map((server) => {
+    const remote = server.status === 'server' && server.summary.transport !== 'stdio' ? server.summary : undefined;
+    const ownToken = remote?.headers.some((header) => header.name.toLowerCase() === 'authorization') === true;
+    return { name: server.name, kind: remote !== undefined && !ownToken ? 'oauth-capable' : 'other' };
+  });
 }

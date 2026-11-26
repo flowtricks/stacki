@@ -21,7 +21,7 @@ import {
   type SetupDeps,
 } from '#dist/electron/handlers/ai/agentSetup.js';
 import { parseSetupState, type SetupState } from '#dist/shared/ipc/aiChat.js';
-import { waitFor } from '../../../helpers/waitFor.js';
+import { waitFor, waitForSteady } from '../../../helpers/waitFor.js';
 
 /** What a test changes about the setup; the rest is the fake's. */
 type Overrides = {
@@ -117,8 +117,8 @@ test('a check that could not be made is retried a bounded number of times, then 
   const setup = fake.make({ statusRetryDelaysMs: [5, 5] });
   await setup.act('claude', { kind: 'detect' });
   await waitFor({ what: 'the first check and two retries', read: () => fake.states.length === 3, until: Boolean });
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  assert.equal(fake.runs(), 3, 'no further try on its own');
+  const settled = await waitForSteady({ what: 'no further try on its own', read: fake.runs, until: (runs: number) => runs >= 3, steadyPollCount: 4 });
+  assert.equal(settled, 3);
   assert.equal(STATUS_RETRY_DELAYS_MS.length, 2, 'the bound the app ships with');
   // Asked again (a chat opens, the window is focused, the note is pressed): a new round.
   await setup.act('claude', { kind: 'detect' });

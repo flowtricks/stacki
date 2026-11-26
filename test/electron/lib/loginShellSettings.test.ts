@@ -113,11 +113,10 @@ test('the parser keeps listed names between the two marks and nothing else', () 
 
 test('a startup file that never returns, floods, exits early or a missing shell: the app’s environment, within bounds', posix, async (context) => {
   const hung = fakeShell(context, 'exec /bin/sleep 30');
-  const started = Date.now();
-  // Long enough for the system to start a new script, short against the 30 s the startup file would take.
+  // Long enough for the system to start a new script, short against the 30 s the startup file would take: the
+  // "timed-out" line below is what shows the bound ended the wait.
   const settings = hung.settings({}, 3_000);
   assert.deepEqual(await settings.environmentFor('claude'), hung.base);
-  assert.ok(Date.now() - started < 15_000, 'given up at the bound');
   assert.deepEqual(await settings.environmentFor('claude'), hung.base);
   assert.deepEqual(hung.starts(), ['-ilc'], 'not asked again');
   assert.match(hung.lines.join('\n'), /were not read \(timed-out\)/);
@@ -135,10 +134,10 @@ test('a startup file that never returns, floods, exits early or a missing shell:
 
 test('a startup file that leaves something running does not hold the answer back', posix, async (context) => {
   const fake = fakeShell(context, "export CODEX_HOME='/fake/codex'", 'eval "$2"\nexec /bin/sleep 30');
-  const started = Date.now();
+  // Waiting for the shell to end would run into the bound and give the app's environment, without this value.
   const codex = await fake.settings().environmentFor('codex');
   assert.equal(codex['CODEX_HOME'], '/fake/codex');
-  assert.ok(Date.now() - started < 5_000);
+  assert.deepEqual(fake.lines, []);
 });
 
 test('Windows reads nothing and starts no shell', async () => {

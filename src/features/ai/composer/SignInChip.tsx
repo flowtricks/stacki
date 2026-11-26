@@ -7,12 +7,12 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { runSetup } from '../aiStore';
 import { signInSourceText } from '../signInSource';
 
-export function SignInNote({ agent, setup }: { readonly agent: AgentId; readonly setup: SetupState | undefined }) {
+export function SignInChip({ agent, setup }: { readonly agent: AgentId; readonly setup: SetupState | undefined }) {
   const translate = useTranslate();
   if (setup?.step === 'unchecked') {
     const hint = translate('ai.signInCheck.hint', { agent: agentLabel(agent) });
     return (
-      <button type="button" className="ghost ai-chip ai-chip-quiet ai-sign-in-note" title={hint} onClick={() => void runSetup(agent, { kind: 'detect' })}>
+      <button type="button" className="ghost ai-chip ai-chip-quiet ai-sign-in-chip" title={hint} onClick={() => void runSetup(agent, { kind: 'detect' })}>
         <span className="ai-chip-text">{translate('ai.signInCheck.chip')}</span>
       </button>
     );
@@ -22,7 +22,7 @@ export function SignInNote({ agent, setup }: { readonly agent: AgentId; readonly
   }
   const { label, hint } = signInSourceText(setup.account.source, agentLabel(agent), translate);
   return (
-    <span className="ai-chip ai-chip-quiet ai-sign-in-note is-static" title={hint} aria-label={`${label}. ${hint}`}>
+    <span className="ai-chip ai-chip-quiet ai-sign-in-chip is-static" title={hint} aria-label={`${label}. ${hint}`}>
       <span className="ai-chip-text">{label}</span>
     </span>
   );

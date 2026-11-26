@@ -4,10 +4,16 @@
 // shared by every project; a card's Codex chip adds or removes that one server there, after a confirmation that
 // says so, and servers that are only in Codex are listed with an Add to project button.
 //
+// A server that needs signing in says so on its card with a Sign in button: each agent's own CLI signs in, in
+// the browser (ui/mcpSignIn/, electron/handlers/ai/mcpSignIn.ts), and a server just added is offered it.
+//
 // Every change names the revision it was authored against; a file that changed on disk is refused and the person
 // reloads. The lists reload when the window regains focus. Nothing here runs a command: pasted text is parsed
-// as data (shared/properties/mcpCommand.ts).
-import { useState } from 'react';
+// as data (shared/properties/mcpCommand.ts). Only the sign-in rows run anything, and only the agent's CLI.
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
+import { McpSignInControl, offerMcpSignIn, useMcpSignInAllowed, useMcpSignInToasts } from '../../ui/mcpSignIn/McpSignInControl';
+import { checkMcpSignIn, loadMcpSignIns, useMcpSignInEntries } from '../../ui/mcpSignIn/mcpSignInStore';
 import { err, ok } from '../../../shared/core/result';
 import type { McpCodexState, McpListing, McpServerItem } from '../../../shared/properties/mcp';
 import { MCP_PROVIDERS } from '../../../shared/properties/mcpProviders';
@@ -47,6 +53,57 @@ function sameNames(current: ReadonlySet<string>, next: ReadonlySet<string>): boo
   return current.size === next.size && [...current].every((name) => next.has(name));
 }
 
+/**
+ * Where this project's servers stand for each agent, read when the tab opens, when the file changes and when the
+ * window is focused again (a server signed in to elsewhere shows as it is).
+ */
+function useServerSignIns(
+  projectPath: string,
+  revision: string | undefined,
+): {
+  readonly rows: (name: string, label: (agent: AgentId) => string) => ReactNode;
+  readonly offer: (agent: AgentId, name: string) => void;
+} {
+  const translate = useTranslate();
+  const allowed = useMcpSignInAllowed();
+  useMcpSignInToasts();
+  const entries = useMcpSignInEntries(projectPath);
+  const first = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!allowed || revision === undefined) {
+      return;
+    }
+    // The first read may use what was said a moment ago; a changed file is asked about again.
+    const changed = first.current !== undefined && first.current !== revision;
+    first.current = revision;
+    void loadMcpSignIns(projectPath, changed ? 'fresh' : 'cached');
+  }, [allowed, projectPath, revision]);
+  useEffect(() => {
+    if (!allowed) {
+      return undefined;
+    }
+    const reload = (): void => void loadMcpSignIns(projectPath, 'cached');
+    window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
+  }, [allowed, projectPath]);
+  return {
+    rows: (name, label) =>
+      allowed &&
+      entries
+        .filter((entry) => entry.name === name)
+        .map((entry) => <McpSignInControl key={entry.agent} projectPath={projectPath} entry={entry} label={label(entry.agent)} />),
+    offer: (agent, name) => {
+      if (allowed) {
+        void checkMcpSignIn(projectPath, agent, name).then((entry) => {
+          if (entry !== undefined) {
+            offerMcpSignIn(projectPath, entry, translate);
+          }
+        });
+      }
+    },
+  };
+}
+
 export default function McpTab({ projectPath }: { readonly projectPath: string }) {
   const translate = useTranslate();
   const listing = useProjectChannel(projectPath, readMcp, sameListing);
@@ -65,6 +122,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
   const [failure, setFailure] = useState<MessageKey | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [codexOpen, setCodexOpen] = useState(false);
+  const signIns = useServerSignIns(projectPath, listing.state.kind === 'ready' ? listing.state.value.revision : undefined);
 
   if (listing.state.kind === 'loading') {
     return <McpCardsSkeleton />;
@@ -159,6 +217,15 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
     listing.replace(next);
     env.reload();
   };
+  // A server just added is asked about at once, and a sign-in offered when it needs one.
+  const added = (next: McpListing): void => {
+    applied(next);
+    for (const server of next.servers) {
+      if (!current.servers.some((existing) => existing.name === server.name)) {
+        signIns.offer('claude', server.name);
+      }
+    }
+  };
   const reveal = async (name: string) => {
     const read = await revealMcpServer(projectPath, current.revision, name);
     if (!read.ok) {
@@ -249,6 +316,9 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
     setBusy(false);
     if (result.ok) {
       codex.replace(result.value);
+      if (adding) {
+        signIns.offer('codex', name);
+      }
     } else {
       setFailure(MCP_ERROR_KEYS[result.error.code]);
     }
@@ -288,7 +358,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
   const onlyInCodex: readonly McpServerItem[] =
     codexState?.state === 'ready' ? codexState.servers.filter((server) => !current.servers.some((own) => own.name === server.name)) : [];
   const stale = failure === 'settings.mcp.error.changed' || failure === 'settings.mcp.error.notFound';
-  const addProps = { projectPath, listing: current, envNames, onAdded: applied, onFailure: setFailure };
+  const addProps = { projectPath, listing: current, envNames, onAdded: added, onFailure: setFailure };
 
   return (
     <div className="secrets mcp">
@@ -338,6 +408,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
                 onRemove={() => void remove(item.name)}
                 onToggleCodex={() => void toggleCodex(item.name)}
                 onOpenJson={() => void pick('json')}
+                signIns={signIns.rows(item.name, (agent) => agentLabel(agent))}
               />
             ))}
           </div>
@@ -376,6 +447,7 @@ export default function McpTab({ projectPath }: { readonly projectPath: string }
                       <span className="mcp-chip mcp-chip-muted">{translate(PROBLEM_KEYS[item.problem.code])}</span>
                     )}
                   </div>
+                  {signIns.rows(item.name, (agent) => agentLabel(agent))}
                 </div>
               ))}
             </div>

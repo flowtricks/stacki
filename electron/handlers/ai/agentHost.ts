@@ -861,6 +861,20 @@ export class AgentHost {
     assert(!this.signIn.has(agent), 'noteSignedIn: the agent is no longer waiting');
   }
 
+  /**
+   * What the agent can reach changed (a server was signed in to or out of): an idle adapter read the old state when
+   * its sessions started, so it is let go and the next message starts a fresh one, which resumes the chat's session.
+   * An adapter with a turn running is left to finish.
+   */
+  reloadTools(agent: AgentId): void {
+    this.dropWarm(agent);
+    for (const process of [...this.processes.values()]) {
+      if (process.agent === agent && !this.isBusy(process)) {
+        this.stop(process);
+      }
+    }
+  }
+
   /** A chat being deleted: its turn is stopped and its runtime forgotten. */
   forget(root: string, chat: ChatId): void {
     this.cancel(root, chat);

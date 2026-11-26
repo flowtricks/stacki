@@ -2596,6 +2596,26 @@ git or the window; values are never logged or stored. A read that fails leaves t
 Windows reads nothing: user and system variables already reach the app, and variables set only in a
 PowerShell profile are not read. A custom Codex provider's own `env_key` variable cannot be listed.
 
+**MCP server sign-in** (`ai:mcpAuth`, push `ai:mcpAuthState`; `shared/properties/mcp.ts`,
+`mcpSignIn.ts`). The MCP tab and a note above the AI composer sign servers in through the agent's own
+CLI, in the project folder, with the environment the agent's sessions start in, so the token lands
+where they read it and lasts across chats and restarts; Stacki handles no token. Claude: status from
+the `Status:` line of `claude mcp get <name>`; sign in with `claude mcp login <name> --no-browser` in
+a pseudo-terminal (it gives up without one; nothing is typed); `claude mcp logout <name>`. Those
+refuse a `.mcp.json` server not yet approved in Claude's own screen, so each gets
+`--settings {"enabledMcpjsonServers":["<name>"]}`: one server, one command, written nowhere; a
+rejected server stays rejected. Codex: `codex mcp list --json` (`auth_status`),
+`codex mcp login <name> [--no-browser]`, `codex mcp logout <name>`. A CLI whose help lists no
+`mcp login` is too old and says so. With `--no-browser` main opens the printed page itself, only an
+https address without a user name; the page never reaches the window or a log, and the CLI receives
+the localhost callback. States: `none` (local commands, servers with their own Authorization header,
+and whatever the CLI says needs none), `needs-sign-in`, `connected`, `signing-in` (at most
+`signInMsMax`), `unknown`, `not-checked` (the project may not run agents yet, so no Claude server is
+contacted until the person presses Check), `unsupported-cli`, `blocked`. After a sign-in or sign-out
+idle adapters are restarted. Only names the project's `.mcp.json` or Codex lists are shown. Roles:
+the rows need the AI panel's access (`panel:ai` and `code:edit`). Design mode refuses the channel.
+Studio has neither the MCP tab nor the panel; a host without the bridge draws nothing.
+
 **Trust and opening.** Opening the panel in a project allows agents there and is remembered, unless
 Settings → AI "Ask before allowing agents in a new project" is on (then the trust card asks first).
 Every new chat still starts in the agent's asking mode. An agent starting in a project also runs that

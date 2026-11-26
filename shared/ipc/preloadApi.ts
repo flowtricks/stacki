@@ -316,6 +316,7 @@ interface InvokeChannels {
   readonly aiRemember: 'ai:remember';
   readonly aiReview: 'ai:review';
   readonly aiSetup: 'ai:setup';
+  readonly aiMcpAuth: 'ai:mcpAuth';
   readonly startTerminal: 'terminal:start';
   readonly resizeTerminal: 'terminal:resize';
   readonly closeTerminal: 'terminal:close';
@@ -373,6 +374,8 @@ export type PreloadBridge = InvokeSurface & {
   readonly onAiAgentStatus: (callback: (data: unknown) => void) => () => void;
   /** A guided setup step moved on (shared/ipc/aiChat.ts SetupState). */
   readonly onAiSetup: (callback: (data: unknown) => void) => () => void;
+  /** A server sign-in moved on (shared/properties/mcp.ts McpAuthPush). */
+  readonly onAiMcpAuth: (callback: (data: unknown) => void) => () => void;
   readonly terminalClipboardImage: (bytes: Uint8Array, mime: string) => Promise<unknown>;
   readonly onAssetsChanged: (callback: () => void) => () => void;
   /** `.stacki/apps/` changed: the folders whose files moved (shared/properties/appFolders.ts AppFoldersChange). */

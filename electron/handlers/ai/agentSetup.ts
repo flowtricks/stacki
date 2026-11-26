@@ -783,9 +783,11 @@ function installFailureText(agent: AgentId, command: SetupCommand, output: strin
   return described('ai.setupError.installFailed', { agent: label });
 }
 
-function spawnPipeProcess(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>): SetupProcess {
+/** `cwd` is the folder the command runs in; the app's own by default. */
+export function spawnPipeProcess(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>, cwd?: string): SetupProcess {
   const child = spawn(command.command, [...command.args], {
     env: { ...environment },
+    ...(cwd === undefined ? {} : { cwd }),
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     // A cmd.exe command line (windowsCommand.ts) is already quoted: Node must not quote it again.
@@ -822,7 +824,11 @@ function errorExit(error: unknown): number {
   return toRecord(error)?.['code'] === 'ENOENT' ? 127 : -1;
 }
 
-async function spawnPseudoTerminal(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>): Promise<SetupProcess> {
+export async function spawnPseudoTerminal(
+  command: SetupCommand,
+  environment: Readonly<Record<string, string | undefined>>,
+  cwd: string = os.homedir(),
+): Promise<SetupProcess> {
   const pty = await import('node-pty');
   // On Windows node-pty takes the arguments as one ready command line, which is how a verbatim one is handed over.
   const args = command.argumentStyle === 'verbatim' ? command.args.join(' ') : [...command.args];
@@ -830,7 +836,7 @@ async function spawnPseudoTerminal(command: SetupCommand, environment: Readonly<
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
-    cwd: os.homedir(),
+    cwd,
     env: definedEnvironment({ ...environment, BROWSER: 'none' }),
   });
   return {
