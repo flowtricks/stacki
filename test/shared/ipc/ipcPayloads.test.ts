@@ -464,6 +464,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'files:transfer': { projectPath: '/site', paths: ['notes.txt'], target: 'src', mode: 'move', collision: 'refuse' },
   'files:trash': { projectPath: '/site', paths: ['notes.txt'] },
   'files:import': { projectPath: '/site', sources: ['/Users/me/logo.svg'], target: 'public', collision: 'refuse' },
+  'design:session': { op: 'state' }, // Design mode (experimental): docs/design-mode/REMOVE.md
   'files:reveal': { projectPath: '/site', path: '' },
   'files:find': { projectPath: '/site', query: 'ci' },
   'files:watch': { projectPath: '/site', directories: ['', 'src'] },

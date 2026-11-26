@@ -100,6 +100,8 @@ import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
 import { registerBreakpointSyncHandlers } from './handlers/breakpointSyncHandlers';
 import { registerGitHandlers } from './handlers/gitHandlers';
 import { registerPageHandlers } from './handlers/pageHandlers';
+import { registerDesignModeHandlers } from './handlers/designMode/designModeHandlers'; // Design mode (experimental): docs/design-mode/REMOVE.md
+import { designFenceState } from './lib/designMode/designFence'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import { allowLoopbackFraming } from './app/previewFraming';
 import { registerPageTemplateHandlers } from './handlers/pageTemplateHandlers';
 import { registerPreviewHandlers } from './handlers/previewHandlers';
@@ -187,7 +189,8 @@ function relaunchApp() {
   try {
     // openProjectRoot is set whenever a project's watcher starts, i.e. on open.
     if (openProjectRoot) {
-      fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');
+      const fence = designFenceState(); // Design mode (experimental): docs/design-mode/REMOVE.md
+      fs.writeFileSync(reopenFile(), JSON.stringify({ path: fence.kind === 'on' ? fence.realRoot : openProjectRoot }), 'utf8'); // Design mode (experimental): docs/design-mode/REMOVE.md
     }
   } catch {
     /* worst case the reload lands on the welcome screen */
@@ -1400,6 +1403,7 @@ registerGitHandlers(host);
 registerGitRepositoryHandlers(host);
 registerImageConversionHandler(host);
 registerPageHandlers(host, { current: () => devServers.current(), restart: (projectPath) => devServers.restartForNewIntegration(projectPath) });
+registerDesignModeHandlers(host, { appDataRoot: app.getPath('userData'), onQuit: (listener) => app.on('will-quit', listener) }); // Design mode (experimental): docs/design-mode/REMOVE.md
 registerPageTemplateHandlers(
   host,
   {

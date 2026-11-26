@@ -33,6 +33,7 @@ interface InvokeChannels {
   readonly createAstroCopy: 'project:createAstroCopy';
   readonly inspectFolder: 'project:inspectFolder';
   readonly takeOpenedFolders: 'project:takeOpenedFolders';
+  readonly designSession: 'design:session'; // Design mode (experimental): docs/design-mode/REMOVE.md
   readonly createStarter: 'project:createStarter';
   readonly scanProject: 'project:scan';
   readonly listProjectClasses: 'project:classes';

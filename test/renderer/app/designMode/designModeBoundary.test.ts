@@ -1,30 +1,36 @@
-// Goal: Design mode stays removable and can never write. (1) Nothing outside its folders reaches it except the
-// integration points docs/design-mode/REMOVE.md lists, each exactly where it says. (2) Its renderer modules import
-// only what a sandbox needs: shared contracts, the UI kit, the canvas's read-only request channel, the AI panel's
-// draft and screenshot, and nothing of the editor's edit queue, gestures, saves or IPC writes. (3) It calls no preload
-// method but the menu listener and no `fetch`; the frame's relay fetches only the two read-only routes. (4) What the
-// app hands it is the read-only view REMOVE.md names. (5) The AI panel's mode buttons, which Design mode shares with
-// comment pins, and comment pins themselves know nothing of Design mode, so taking it out leaves them as they are.
-// (6) The insert palette's letters Design mode keeps from the editor are the editor's own.
+// Goal: Design mode stays removable and its fence stays shut. (1) Nothing outside its own folders reaches it but the
+// integration points docs/design-mode/REMOVE.md lists, each with the number of lines it names. (2) The fence's list
+// of channels that may run on the sandbox names only real channels, and none of those that act outside a copy of
+// the project: git, publishing, the terminal, the AI agent, Stacki apps, secrets, settings, recents, MCP writes,
+// remote content writes. (3) Its renderer code calls no preload method but its own channel. (4) The AI panel's mode
+// buttons, which it shares with comment pins, and comment pins themselves know nothing of it.
 //
-// Method: a bounded scan of the source trees' text. Each rule also checks a known-bad line, so a pattern that
-// matches nothing cannot pass vacuously.
+// Method: a bounded scan of the source trees' text, and the built IPC payload table for the channel names. Each rule
+// also checks a known-bad line, so a pattern that matches nothing cannot pass vacuously.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { IPC_PAYLOADS } from '#dist/shared/ipc/ipcPayloads.js';
+import { DESIGN_CHANNELS } from '#dist/electron/lib/designMode/designFence.js';
 
 // Tests run from the repository root (scripts/gate/runTests.ts).
 const ROOT = process.cwd();
-const FEATURE_FOLDERS = ['src/app/designMode', 'electron/preload/designMode', 'electron/previewServer/designMode', 'shared/designMode'];
+const FEATURE_PATHS = ['src/app/designMode/', 'electron/handlers/designMode/', 'electron/lib/designMode/', 'shared/ipc/designSession.ts'];
 const SCANNED = ['src', 'electron', 'shared', 'scripts', 'studio/src', 'studio/scripts'];
 const FILES_MAX = 20_000;
 
-/** The integration points REMOVE.md lists: file, and the exact lines that name Design mode. */
+/** The integration points REMOVE.md lists: file, and how many of its lines reach Design mode. */
 const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'src/app/shell/AppShell.tsx': 2,
-  'electron/preload/preload.ts': 3,
-  'electron/preview/markerConfig.ts': 2,
+  'electron/main.ts': 5,
+  'electron/lib/ipcRegistrar.ts': 3,
+  'electron/preload/preloadBridge.ts': 1,
+  'shared/ipc/ipcPayloads.ts': 2,
+  'shared/ipc/ipcResults.ts': 3,
+  'shared/ipc/preloadApi.ts': 1,
+  'src/features/style/embed/useInlineTarget.ts': 5,
+  'src/features/style/model/inlineDefault.ts': 5,
 };
 
 function sourceFiles(): readonly string[] {
@@ -48,14 +54,16 @@ function sourceFiles(): readonly string[] {
 }
 
 function inFeature(file: string): boolean {
-  return FEATURE_FOLDERS.some((folder) => file.startsWith(folder + '/'));
+  return FEATURE_PATHS.some((feature) => file === feature || file.startsWith(feature));
 }
 
-/** Lines that reach Design mode's code: an import or require of a designMode path, or a path string naming its files. */
-const REACHES = /designMode\/|DesignModeHost|designModeRenderPlugin|listenForDesignModeRequests|isDesignModeSandbox/;
+/** Lines that reach Design mode: its folders, its channel, its fence, the Inline styles default it sets. */
+const REACHES =
+  /designMode\/|designSession|DesignSession|DesignModeHost|designFenceState|DESIGN_SESSION|checkDesignFence|inlineDefault|InlineDefault|Design mode \(experimental/;
 
 test('only the listed integration points reach Design mode from outside its folders', () => {
   assert.ok(REACHES.test("import { DesignModeHost } from '../designMode/DesignModeHost';"), 'the pattern sees an import');
+  assert.ok(!REACHES.test("import { holdWindow } from '../../ui/busyLock';"), 'the pattern skips other imports');
   const found = new Map<string, number>();
   for (const file of sourceFiles().filter((candidate) => !inFeature(candidate))) {
     const lines = fs
@@ -69,90 +77,51 @@ test('only the listed integration points reach Design mode from outside its fold
   assert.deepEqual(Object.fromEntries(found), INTEGRATION_POINTS);
 });
 
-/** Modules outside the feature its renderer code may import, by path from src/ or shared/. */
-const RENDERER_IMPORTS_ALLOWED = new Set([
-  'react',
-  'shared/designMode/designModeContract',
-  'shared/designMode/designIds',
-  'shared/core/i18n/locales',
-  'shared/ipc/aiChat',
-  'shared/page/pageNode',
-  'shared/properties/ai/aiLimits',
-  'src/app/App',
-  'src/editor/canvasQuery',
-  'src/editor/pageView',
-  'src/features/ai/aiBridge',
-  'src/features/ai/aiStore',
-  'src/features/ai/screenshot/draftAttachments',
-  'src/features/style/components/ColorSwatch',
-  'src/features/ai/panelModes',
-  'src/app/railShortcuts',
-  'src/ipc/useProjectBreakpoints',
-  'src/lib/breakpointLabel',
-  'src/lib/i18n/useTranslate',
-  'src/ui/busyLock',
-  'src/ui/central/CentralIcon',
-  'src/ui/central/centralGeometry',
-  'src/ui/Dropdown',
-  'src/ui/Menu',
-  'src/ui/PanelBoundary',
-  'src/ui/SegmentedControl',
-  'src/ui/Switch',
-  'src/ui/TipAnchor',
-]);
+/** Channel families that act outside a copy of the project: never on the fence's list. */
+const NEVER = [
+  /^git:/,
+  /^github:/,
+  /^publish:(?!state$|availability$)/,
+  /^terminal:/,
+  /^apps:(?!list$|folders$|checkUpdates$|storageWatch$)/,
+  /^secrets:(?!list$)/,
+  /^preview:(atCommit|stop)$/,
+  /^studio:(?!status$)/,
+  /^emdash:install/,
+  /^ai:(prompt|steer|setup|prewarm|compact|installAgent|trust|remember|review|permission|diff)$/,
+  /^settings:set$/,
+  /^recents:(add|remove|refreshThumb)$/,
+  /^mcp:(apply|applyCodex|saveText|reveal|revealCodex)$/,
+  /^cmsRemote:(create|delete|move|write|act|restore|upload)$/,
+  /^cmsConnections:(save|remove|sanityLogin)$/,
+  /^mediaHosting:(?!connections$|list$)/,
+  /^content:remoteEdit$/,
+  /^project:(setEnv|openDialog|openSiteDialog|parentDialog|pickFolder|createAstro|createAstroCopy|createStarter)$/,
+  /^dev:setNetwork$/,
+  /^update:act$/,
+];
 
-/** Named imports limited to read-only members of a module that also has others. */
-const NAMED_ONLY: Readonly<Record<string, readonly string[]>> = {
-  'src/features/ai/aiBridge': ['aiScreenshot'],
-  'src/features/ai/panelModes': ['registerPanelMode'],
-  'src/app/railShortcuts': ['PREVIEW_SHORTCUT', 'isPullChord', 'railActionOf'],
-  'src/editor/canvasQuery': ['hasCanvas', 'tellCanvas'],
-  'src/app/App': ['ShellView'],
-};
-
-const IMPORT = /^import\s+(?:type\s+)?([\s\S]*?)\s+from\s+'([^']+)';/gm;
-
-function importsOf(file: string): readonly { readonly names: string; readonly target: string }[] {
-  const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
-  return [...text.matchAll(IMPORT)].map((match) => {
-    const specifier = match[2] ?? '';
-    const target = specifier.startsWith('.')
-      ? path
-          .relative(ROOT, path.resolve(path.dirname(path.join(ROOT, file)), specifier))
-          .split(path.sep)
-          .join('/')
-      : specifier;
-    return { names: match[1] ?? '', target: target.replace(/\.(ts|tsx|css)$/, '') };
-  });
-}
-
-test("Design mode's renderer imports only sandbox-safe modules, and no member of them that writes", () => {
-  assert.equal(importsOf('src/app/designMode/DesignModeHost.tsx').length > 5, true, 'the import pattern reads the host');
-  const files = sourceFiles().filter((file) => file.startsWith('src/app/designMode/') && /\.tsx?$/.test(file));
-  assert.ok(files.length > 10);
-  for (const file of files) {
-    for (const { names, target } of importsOf(file)) {
-      if (target.startsWith('src/app/designMode/') || target.endsWith('.css') || target.startsWith('src/app/designMode')) {
-        continue;
-      }
-      assert.ok(RENDERER_IMPORTS_ALLOWED.has(target), `${file} imports ${target}, which is not on the sandbox list`);
-      const only = NAMED_ONLY[target];
-      if (only !== undefined) {
-        const named = names
-          .replace(/[{}]/g, '')
-          .split(',')
-          .map((name) => name.replace(/^type\s+/, '').trim())
-          .filter((name) => name !== '');
-        for (const name of named) {
-          assert.ok(only.includes(name), `${file} imports ${name} from ${target}`);
-        }
-      }
+test("the fence's channels are real channels, and none of them acts outside the copy", () => {
+  const real = new Set(Object.keys(IPC_PAYLOADS));
+  assert.ok(real.has('git:commit') && real.has('page:edit'), 'the payload table is read');
+  assert.ok(
+    NEVER.some((pattern) => pattern.test('git:push')),
+    'the deny patterns see git',
+  );
+  for (const channel of DESIGN_CHANNELS) {
+    assert.ok(real.has(channel), `${channel} is a channel`);
+    for (const pattern of NEVER) {
+      assert.ok(!pattern.test(channel), `${channel} may not run in Design mode`);
     }
   }
+  // Every channel the app has is either let through or refused: a new one is refused until it is listed here.
+  const refused = [...real].filter((channel) => !DESIGN_CHANNELS.has(channel));
+  assert.ok(refused.length > 100, 'most of what reaches past the project is refused');
 });
 
-test('Design mode calls no preload method but the menu listener, fetches nothing itself, and never saves breakpoints', () => {
+test("Design mode's renderer calls no preload method but its own channel", () => {
   const files = sourceFiles().filter((file) => file.startsWith('src/app/designMode/'));
+  assert.ok(files.length > 8, 'the feature is read');
   const avb = /window\.avb\.(\w+)/g;
   assert.deepEqual(
     [...'window.avb.pageEdit('.matchAll(avb)].map((match) => match[1]),
@@ -162,32 +131,10 @@ test('Design mode calls no preload method but the menu listener, fetches nothing
   for (const file of files) {
     const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
     for (const match of text.matchAll(avb)) {
-      assert.equal(match[1], 'onMenu', `${file} calls window.avb.${match[1] ?? ''}`);
+      assert.equal(match[1], 'designSession', `${file} calls window.avb.${match[1] ?? ''}`);
     }
-    assert.doesNotMatch(text, /\bfetch\(|XMLHttpRequest|\.save\(|ipcRenderer/, `${file} reaches a channel of its own`);
+    assert.doesNotMatch(text, /\bfetch\(|XMLHttpRequest|ipcRenderer/, `${file} reaches a channel of its own`);
   }
-  const relay = fs.readFileSync(path.join(ROOT, 'electron/preload/designMode/designModeFrame.ts'), 'utf8');
-  const relayed = [...relay.matchAll(/await relayed\(request\.nonce, ([^,]+),/g)].map((match) => match[1]);
-  assert.deepEqual(relayed, ['DESIGN_RENDER_ROUTE', "'/__avb/preview?' + query.toString()"], 'the frame relays the two read-only routes only');
-});
-
-test('the app hands Design mode a read-only view', () => {
-  const host = fs.readFileSync(path.join(ROOT, 'src/app/designMode/DesignModeHost.tsx'), 'utf8');
-  const picked = /Pick<\s*ShellView,\s*([^>]+)>/.exec(host)?.[1] ?? '';
-  const names = [...picked.matchAll(/'(\w+)'/g)].map((match) => match[1]).sort();
-  assert.deepEqual(names, [
-    'currentPage',
-    'devUrl',
-    'leftTab',
-    'pageState',
-    'pageUrlPath',
-    'project',
-    'scan',
-    'selectedId',
-    'setLeftTab',
-    'setSelectedId',
-    'showToast',
-  ]);
 });
 
 /** The mode buttons and comment pins: what Design mode shares the header with, and must be able to leave behind. */
@@ -195,18 +142,10 @@ const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/
 
 test('the mode buttons and comment pins know nothing of Design mode', () => {
   const names = /design ?mode|designMode/i;
-  assert.ok(names.test('registerPanelMode(DESIGN_MODE)') === false && names.test('Design mode'), 'the pattern sees the name');
+  assert.ok(names.test('Design mode') && !names.test('registerPanelMode(PINS)'), 'the pattern sees the name');
   const files = [...SHARED_WITH, ...sourceFiles().filter((file) => file.startsWith('src/features/ai/pins/'))];
   assert.ok(files.length > SHARED_WITH.length, 'the pins folder is read');
   for (const file of files) {
-    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), names, file);
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, file), 'utf8'), names, `${file} names Design mode`);
   }
-});
-
-test("the palette letters Design mode keeps from the editor are the editor's", () => {
-  const read = (file: string, pattern: RegExp): readonly string[] =>
-    [...(pattern.exec(fs.readFileSync(path.join(ROOT, file), 'utf8'))?.[1] ?? '').matchAll(/'(\w)'/g)].map((match) => match[1] ?? '').sort();
-  const editor = read('src/app/model/appKeys.ts', /INSERT_PALETTE_KEYS[^=]*= new Set\(\[([^\]]*)\]\)/);
-  assert.ok(editor.length > 0, "the editor's list is read");
-  assert.deepEqual(read('src/app/designMode/model/designCoveredKeys.ts', /DESIGN_PALETTE_LETTERS[^=]*= \[([^\]]*)\]/), editor);
 });

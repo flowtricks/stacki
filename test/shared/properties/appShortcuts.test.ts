@@ -283,8 +283,7 @@ test('no Stacki, menu, browser or OS shortcut is in the reserved app range', () 
       )
       .sort(),
     // appKeys.ts reads a plain 0 (no modifier) for Follow canvas size (aca5b5c5): outside Mod+Alt+Shift, so outside the range.
-    // Design mode (experimental, docs/design-mode/REMOVE.md) reads Shift+1 (zoom to fit) and Mod+0 (100%): outside the range.
-    ['electron/preload/frameDesign.ts', 'src/app/designMode/DesignModeHost.tsx', 'src/app/model/appKeys.ts', 'src/ui/richTextCommands.ts'],
+    ['electron/preload/frameDesign.ts', 'src/app/model/appKeys.ts', 'src/ui/richTextCommands.ts'],
     'a new digit shortcut is checked against the range here first',
   );
   const forward = /\/\^Digit\(\[([\d-]+)\]\)\$\//.exec(readFileSync(join(ROOT, 'electron/preload/frameDesign.ts'), 'utf8'));

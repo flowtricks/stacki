@@ -1,0 +1,224 @@
+/* Design mode (experimental; docs/design-mode/REMOVE.md). Fills, never outlines; the app's tokens throughout, so
+   both themes follow. The bar and the board sit in a fixed layer over the canvas column, placed by the column's
+   measured box (useCanvasColumn.ts), so their physical left and top are screen positions in every language. */
+
+.dm-bar {
+  position: fixed;
+  z-index: 230;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.dm-bar > *,
+.dm-bar .dm-frames {
+  pointer-events: auto;
+}
+.dm-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dm-frames {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 50%;
+  height: 32px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: none;
+}
+.dm-tab {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+.dm-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.dm-tab.is-active {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.dm-tab-name {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+}
+.dm-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-inline-end: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-faint);
+  opacity: 0;
+}
+.dm-tab:hover .dm-tab-close,
+.dm-tab-close:focus-visible {
+  opacity: 1;
+}
+.dm-tab-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.dm-tab-input {
+  width: 140px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.dm-icon,
+.dm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dm-icon {
+  width: 32px;
+}
+.dm-button {
+  padding: 0 12px;
+}
+.dm-icon:hover:not(:disabled),
+.dm-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.dm-button.is-primary,
+.dm-button.is-primary:hover:not(:disabled),
+.dm-button.is-primary:active:not(:disabled),
+.dm-button.is-primary:focus-visible {
+  background: var(--accent);
+  color: #fff;
+}
+.dm-button.is-confirming {
+  background: var(--bg-active);
+}
+.dm-icon:disabled,
+.dm-button:disabled {
+  opacity: 0.5;
+}
+
+.dm-board {
+  position: fixed;
+  z-index: 225;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+.dm-board-plane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.dm-board-plane:active {
+  cursor: grabbing;
+}
+.dm-board-world {
+  position: absolute;
+  left: 0; /* physical: the board is a plane panned by transform from its top-left corner in every language */
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 64px;
+  transform-origin: 0 0;
+}
+.dm-board-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.dm-board-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 24px;
+  font-weight: 600;
+}
+.dm-board-count {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.dm-board-picture,
+.dm-board-skeleton {
+  display: block;
+  width: 1200px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+}
+.dm-board-skeleton.ui-skeleton {
+  height: 800px;
+  background: var(--bg-active);
+}
+.dm-board-frame.is-active .dm-board-picture,
+.dm-board-frame.is-active .dm-board-skeleton {
+  box-shadow:
+    0 0 0 6px var(--accent),
+    0 8px 32px rgb(0 0 0 / 0.3);
+}
+.dm-board-frame:hover .dm-board-picture {
+  box-shadow:
+    0 0 0 6px var(--bg-active),
+    0 8px 32px rgb(0 0 0 / 0.3);
+}
+
+/* Hidden while the canvas is pictured for the board and the AI (designCapture.ts). */
+.dm-capturing .dm-bar {
+  visibility: hidden;
+}
