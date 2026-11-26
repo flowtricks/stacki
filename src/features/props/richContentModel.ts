@@ -260,3 +260,35 @@ export function isDOMElement(node: Node | undefined): node is Element {
   const ElementType = node?.ownerDocument?.defaultView?.Element;
   return !!ElementType && node instanceof ElementType;
 }
+
+/**
+ * Content without the breaks at its very end, nor the blank text after them, also inside the inline markup the content
+ * ends with (`<strong>words<br></strong>`): a break with nothing after it shows nothing. Breaks between words, a blank
+ * line in the middle included, are kept.
+ */
+export function withoutTrailingBreaks(nodes: readonly InlineNode[], depth = 0): InlineNode[] {
+  assert(depth <= LIMITS.treeDepthMax, 'RichContent: trailing-break depth limit exceeded');
+  const out = [...nodes];
+  for (let guard = 0; guard <= nodes.length && out.length > 0; guard++) {
+    const last = out[out.length - 1];
+    assert(last !== undefined, 'RichContent: the last node exists');
+    if (last.kind === 'element' && last.name === 'br') {
+      out.pop();
+    } else if (last.kind === 'text' && last.value.trim() === '' && out.length > 1) {
+      out.pop();
+    } else if (last.kind === 'element' && last.children !== undefined && last.children.length > 0) {
+      const inner = withoutTrailingBreaks(last.children, depth + 1);
+      if (inner.length === last.children.length) {
+        break;
+      }
+      if (inner.length > 0) {
+        out[out.length - 1] = { ...last, children: inner };
+        break;
+      }
+      out.pop(); // Markup that held only breaks holds nothing.
+    } else {
+      break;
+    }
+  }
+  return out;
+}

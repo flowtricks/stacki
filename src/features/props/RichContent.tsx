@@ -13,7 +13,7 @@ import type { ImportNeed } from '../../editor/dataSample';
 import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
 import { insertAtRange } from './fieldFocus';
-import { CARET_BREAK_ATTRIBUTE, LITERAL_ATTRIBUTE, isDOMElement, nodesToHtml, isChippable } from './richContentModel';
+import { CARET_BREAK_ATTRIBUTE, LITERAL_ATTRIBUTE, isDOMElement, nodesToHtml, isChippable, withoutTrailingBreaks } from './richContentModel';
 import type { InlineNode } from './richContentModel';
 import { richApplyLink, richContentNodes, richExec, richReadStates, richWrapTag, type FormatState, type RichTarget } from './richFormat';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type Bubble, type BubblePosition } from './RichFormatButtons';
@@ -106,7 +106,7 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
  * browser shows a last empty line only with something after it), so the words typed next landed before it: the end
  * gets a second break marked as the caret's (CARET_BREAK_ATTRIBUTE), which the field never reads back.
  */
-function richLineBreak(host: HTMLElement | undefined): void {
+export function richLineBreak(host: HTMLElement | undefined): void {
   const selection = window.getSelection();
   const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
   if (host === undefined || range === undefined || !host.contains(range.endContainer)) {
@@ -117,11 +117,26 @@ function richLineBreak(host: HTMLElement | undefined): void {
   after.setStart(range.endContainer, range.endOffset);
   after.setEnd(host, host.childNodes.length);
   const rest = Array.from(after.cloneContents().childNodes);
-  const atEnd = rest.every((node) => (node.nodeType === 3 ? (node.textContent ?? '') === '' : isDOMElement(node) && node.hasAttribute(CARET_BREAK_ATTRIBUTE)));
+  // Nothing follows the caret but the caret's own break and the empty ends of markup the caret sits in (`</strong>`).
+  const shows = (node: Node): boolean =>
+    (node.textContent ?? '') !== '' ||
+    (isDOMElement(node) &&
+      (node.tagName === 'BR' ? !node.hasAttribute(CARET_BREAK_ATTRIBUTE) : node.querySelector(`br:not([${CARET_BREAK_ATTRIBUTE}]), img`) !== null));
+  const atEnd = rest.every((node) => !shows(node));
   const held = rest.some((node) => isDOMElement(node) && node.hasAttribute(CARET_BREAK_ATTRIBUTE));
   if (atEnd && !held) {
     // Built here rather than by insertHTML, which drops a second break at the end and leaves the caret before the first.
     range.deleteContents();
+    // At the end of inline markup (the last word bold), the break and what is typed next go after the markup, not
+    // inside it: the next line is plain words, as it is after Enter anywhere else.
+    let outer: Node | undefined;
+    for (let node: Node | undefined = range.endContainer; node !== undefined && node !== host; node = node.parentNode ?? undefined) {
+      outer = node.parentNode === host ? node : outer;
+    }
+    if (outer !== undefined && isDOMElement(outer) && outer.tagName !== 'BR') {
+      range.setStartAfter(outer);
+      range.collapse(true);
+    }
     const line = document.createElement('br');
     const caret = document.createElement('br');
     caret.setAttribute(CARET_BREAK_ATTRIBUTE, '');
@@ -201,7 +216,9 @@ function richEmit(state: RichState, onChange: RichContentProps['onChange']): voi
   if (!element) {
     return;
   }
-  const next = richContentNodes(element);
+  // A break with nothing after it shows nothing on the page: it is not written, however the words after it went. The
+  // field keeps its empty last line while it is being typed in, and the break comes back with the next word.
+  const next = withoutTrailingBreaks(richContentNodes(element));
   // Canonical, not el.innerHTML: the app hands the nodes back with ids
   // added and the browser normalises markup as you type, so only the
   // serialised form is comparable on the way back in.

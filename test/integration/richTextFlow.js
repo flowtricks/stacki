@@ -466,6 +466,43 @@ async function keyPass(window, canvas, page, results) {
   await window.keyboard.type('panel');
   await waitForFile(plain, (text) => /<br \/>\s*panel/.test(text)).catch(() => undefined);
   results.plainPanel = { source: plain(), ok: /<br \/>\s*panel/.test(plain()), toast: await toast() };
+  // The Navigator follows the box keystroke by keystroke: the words typed show there while the box still has focus.
+  const typedAt = Date.now();
+  await window.keyboard.type('zq');
+  results.navigatorLive = await waitFor({
+    what: 'the Navigator shows the words typed',
+    read: () => window.evaluate(() => (document.body.innerText.match(/panelzq/g) ?? []).length),
+    until: (count) => count >= 2,
+  })
+    .then(() => Date.now() - typedAt)
+    .catch(() => 'never');
+  results.boxFocused = await window.evaluate(() => document.activeElement?.classList.contains('rich-content') === true);
+  // The last line deleted from the box (Shift Home, Backspace): its break goes too, in the file and the Navigator.
+  await window.evaluate(() => {
+    const box = document.querySelector('.rich-content');
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.data.includes('panelzq')) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        document.getSelection().removeAllRanges();
+        document.getSelection().addRange(range);
+        return;
+      }
+    }
+  });
+  await window.keyboard.press('Backspace');
+  await waitFor({ what: 'the line is gone from the file', read: plain, until: (text) => !text.includes('panel') }).catch(() => undefined);
+  results.lastLineDeleted = { source: plain(), ok: !/panel/.test(plain()) && !/<br \/>\s*$/.test(plain()), toast: await toast() };
+  // Typing again on the kept empty line brings the break back with the words.
+  await window.keyboard.type('again');
+  await waitFor({ what: 'the words are back', read: plain, until: (text) => /<br \/>\s*again$/.test(text) }).catch(() => undefined);
+  results.retyped = { source: plain(), ok: /<br \/>\s*again$/.test(plain()) };
+  // Undo puts the line deletion back step by step; redo takes it again.
+  await window.keyboard.press(`${mod}+z`);
+  results.undo = plain();
+  await window.keyboard.press(`${mod}+Shift+z`);
+  results.redo = plain();
   await window.screenshot({ path: path.join(SHOTS, 'keys-panel.png') });
   // 8. The Edit rich text dialog on an empty RichText: the + in its gutter, the placeholder and caret at the text edge.
   await window.getByText('RichText', { exact: true }).nth(1).click();
