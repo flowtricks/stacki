@@ -483,10 +483,11 @@ function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
 }
 
 // The canvas root's class field: the classes the root draws with, written to the root's "Apply to" scope (Frame
-// settings); names a class cannot have are refused there. At This component with no list of its own, every component's
-// show as borrowed (orange). Removing the last of those sets this component to no classes: there is nothing of its own
-// to clear, and clearing would leave the borrowed class where it was. Removing the last of a list of its own, or its
-// Reset, clears the list, and a wider one shows. Exported for its regression test.
+// settings), this component's unless the person picked every component's; names a class cannot have are refused there.
+// At This component its label says where they come from, as every setting's does: orange while every component's show
+// as borrowed, blue once this component sets its own (its Reset removes that, and the borrowed ones return), plain
+// where neither sets any. Removing a chip edits what shows: removing the last one under every component's classes sets
+// this component to none, so what was removed stays removed. Exported for its regression test.
 export function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, translate: Translator): CanvasInstanceSettings {
   const project = state.settings.classes ?? [];
   const atComponent = state.scopes.background === COMPONENT_SCOPE;
@@ -495,11 +496,15 @@ export function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, 
   const classes = inherited ? project : (own ?? []);
   assert(classes.length <= CANVAS_LIMITS.rootClassesMax, 'The canvas root carries a bounded number of classes');
   const none = atComponent && own?.length === 0;
+  const extra: PropFieldExtra | undefined = inherited
+    ? { provenance: { tone: 'inherited', tip: translate('componentCanvas.panel.scope.project') } }
+    : own === undefined
+      ? undefined
+      : { reset: () => canvas.editRootClasses(undefined) };
   return {
     kind: 'root',
     value: classes.length > 0 ? classes.join(' ') : none ? '' : undefined,
-    extras: (name) =>
-      name === 'class' && inherited ? { provenance: { tone: 'inherited', tip: translate('componentCanvas.panel.scope.project') } } : undefined,
+    extras: (name) => (name === 'class' ? extra : undefined),
     onSetProp: (name, value) => {
       if (name !== 'class') {
         return; // The root's only field: anything else is the generated page's and is never written.
@@ -508,7 +513,7 @@ export function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, 
       if (text !== '') {
         canvas.editRootClasses([...new Set(text.split(/\s+/))]);
       } else {
-        canvas.editRootClasses(inherited ? [] : undefined);
+        canvas.editRootClasses(atComponent && project.length > 0 ? [] : undefined);
       }
     },
   };

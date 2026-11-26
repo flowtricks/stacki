@@ -24,6 +24,8 @@ export interface CanvasOpen {
    * Props start at the frame, sizes at all frames, the background at the frame (all components for the root).
    */
   readonly scopes: CanvasScopes;
+  /** The scope the canvas root's settings are at: this component's, until the person picks every component's. */
+  readonly rootScope: typeof COMPONENT_SCOPE | typeof PROJECT_SCOPE;
   readonly scale: number;
   /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
   readonly framePanel: 'shown' | 'hidden';
@@ -124,8 +126,11 @@ export interface ComponentCanvasControl {
   readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
-  /** How this component's frames are laid out on its canvas (side by side, stacked or wrapping). */
-  readonly setArrangement: (arrange: CanvasArrangement) => void;
+  /**
+   * How one level's direct children are laid out (CANVAS_LEVEL, or a group's key): side by side, stacked or
+   * wrapping; undefined goes back to the level's default. This component's own, whatever the root scope.
+   */
+  readonly setArrangement: (level: string, arrange: CanvasArrangement | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;
   readonly hideFramePanel: () => void;
   /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */

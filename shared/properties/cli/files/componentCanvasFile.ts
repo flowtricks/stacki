@@ -8,6 +8,8 @@ const COMPONENT_PATH = '^(?:src/|node_modules/)[^\\u0000]*\\.astro$';
 const PROP_NAME = '^[A-Za-z_$][\\w$-]{0,99}$';
 // Sorted `name` or `name=URI-encoded value` pairs joined by `&`; the empty key is every frame. parseFrameKey checks the order.
 const FRAME_KEY = '^(?:[A-Za-z_$][\\w$-]*(?:=[^&]*)?(?:&[A-Za-z_$][\\w$-]*(?:=[^&]*)?)*)?$';
+// A layout's level: the canvas, or a group's frame key (never empty, which is every frame).
+const LEVEL_KEY = `^(?:\\*canvas|(?=.)${FRAME_KEY.slice(1, -1)})$`;
 const COMMANDS = ['components rename', 'components move', 'components delete'] as const;
 // componentCanvas.ts CLASS_NAME, bounded; `stacki-` names are the canvas's own and refused by the parser.
 const CLASS_NAME = `^-?[A-Za-z_][\\w-]{0,${CANVAS_LIMITS.classNameCharsMax - 1}}$`;
@@ -89,7 +91,16 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
           ),
           arrange: field(
             text(6, { pattern: '^(?:row|column|wrap)$' }),
-            'How the frames that sit together are laid out: column (stacked) or wrap (rows that wrap at the Desktop width); absent or row: side by side.',
+            'Older files: one layout for every level. Read as what each level shows; the app writes layouts in its place on the next layout edit.',
+          ),
+          layouts: field(
+            mapOf(
+              text(6, { pattern: '^(?:row|column|wrap)$' }),
+              CANVAS_LIMITS.entriesMax,
+              'a level: *canvas is the canvas (its html), else a group, as sorted name=value pairs joined by &',
+              LEVEL_KEY,
+            ),
+            'How the direct children of each level are laid out: row (side by side), column (stacked) or wrap (rows that wrap at the Desktop width). Absent: a group is a row; the canvas is a column when it has groups, else a row. No level inherits another.',
           ),
           split: field(
             arrayOf(text(CANVAS_LIMITS.propNameCharsMax, { pattern: PROP_NAME }), CANVAS_LIMITS.splitPropsMax, { unique: true }),

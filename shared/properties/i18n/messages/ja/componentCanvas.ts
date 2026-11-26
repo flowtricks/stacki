@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': '横に並べる',
   'componentCanvas.panel.layout.wrap': '折り返し',
   'componentCanvas.panel.mixed': '混在',
+  'componentCanvas.panel.overriddenHere': 'このコンポーネントには独自の値があるため、この変更はここには反映されません。',
   'componentCanvas.panel.pixels': '{side}（ピクセル）',
   'componentCanvas.panel.root.about': 'すべてのフレームの背後にあるキャンバスで、ページの html 要素です。そのクラスは設定パネルにあります。',
   'componentCanvas.panel.root.title': 'キャンバス',

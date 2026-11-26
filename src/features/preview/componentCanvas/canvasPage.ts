@@ -36,7 +36,14 @@ import type { CanvasBox, CanvasInstance } from './componentCanvasSession';
 /** A group box as the page draws it (canvasGroups.ts), its header already in words. */
 export type CanvasPageItem =
   | { readonly kind: 'frame'; readonly key: string; readonly caption: string }
-  | { readonly kind: 'group'; readonly key: string; readonly header: string; readonly children: readonly CanvasPageItem[] };
+  | {
+      readonly kind: 'group';
+      readonly key: string;
+      readonly header: string;
+      /** How its direct children are laid out; absent: side by side. */
+      readonly arrange?: CanvasArrangement;
+      readonly children: readonly CanvasPageItem[];
+    };
 
 export interface CanvasPageFrame {
   readonly key: string;
@@ -68,7 +75,7 @@ export interface CanvasPageInput {
   readonly frames: readonly CanvasPageFrame[];
   /** How the frames are grouped into boxes; absent: no boxes, the frames in their rows. */
   readonly groups?: readonly CanvasPageItem[];
-  /** How the frames (and groups) that sit together are laid out; absent: side by side (DEFAULT_ARRANGEMENT). */
+  /** How the top-level groups and frames are laid out; absent: down the page with groups or rows, else side by side. */
   readonly arrange?: CanvasArrangement;
 }
 
@@ -87,11 +94,13 @@ export function canvasPageSource(input: CanvasPageInput): string {
   const markup = new Map(input.frames.map((frame) => [frame.key, { frame, instance: instanceMarkup(input, recipe, frame, imports) }]));
   assert(markup.size === input.frames.length, 'Each frame has a key of its own');
   const world = worldMarkup(input, markup);
-  const arrange = input.arrange ?? DEFAULT_ARRANGEMENT;
+  const flowDefault: CanvasArrangement = world.flow === 'column' ? 'column' : DEFAULT_ARRANGEMENT;
+  const arrange = input.arrange ?? flowDefault;
   assert(CANVAS_ARRANGEMENTS.includes(arrange), 'A canvas page is laid out one of the canvas’s ways');
   // The default is no attribute, so a canvas nobody arranged is drawn exactly as before the choice existed. On the root,
   // whose attributes the editor's in-place update of a rewritten page carries over; the <body> is scaffolding it leaves.
-  const arranged = arrange === DEFAULT_ARRANGEMENT ? '' : ` data-stacki-arrange="${arrange}"`;
+  // Each group says its own on its element.
+  const arranged = arrange === flowDefault ? '' : ` data-stacki-arrange="${arrange}"`;
   // A canvas set to Transparent paints nothing of its own, so what shows is the site page's background under its theme
   // (canvasChrome.ts pageBackground), never the frame behind the page.
   const surface = input.surface === 'transparent' ? undefined : input.surface;
@@ -340,7 +349,10 @@ function worldMarkup(input: CanvasPageInput, frames: ReadonlyMap<string, Written
     }
     // A real element of the page, as a frame is: the editor selects it as a div, and the Navigator lists it as one.
     const children = item.children.map((child) => write(child, depth + 1)).join('\n');
-    const named = `data-group={${escapedLiteral(item.key)}} data-label={${escapedLiteral(item.header)}} data-depth="${String(depth)}"`;
+    const own = item.arrange ?? DEFAULT_ARRANGEMENT;
+    assert(CANVAS_ARRANGEMENTS.includes(own), 'A group is laid out one of the canvas’s ways');
+    const laid = own === DEFAULT_ARRANGEMENT ? '' : ` data-arrange="${own}"`;
+    const named = `data-group={${escapedLiteral(item.key)}} data-label={${escapedLiteral(item.header)}} data-depth="${String(depth)}"${laid}`;
     return `<${CANVAS_GROUP_TAG} ${named}>\n${children}\n</${CANVAS_GROUP_TAG}>`;
   };
   const html = items.map((item) => write(item, 0)).join('\n');

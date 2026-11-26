@@ -39,12 +39,13 @@ import {
   settingLevel,
   canvasRoot,
   withRootEdit,
-  withShownRootEdit,
-  hasOwnCanvasRoot,
+  rootOverrides,
   PROJECT_ROOT,
-  arrangementOf,
+  levelArrangement,
+  CANVAS_LEVEL,
+  chosenLayouts,
   settingMixed,
-  withArrangement,
+  withLevelArrangement,
 } from '#dist/shared/properties/componentCanvas.js';
 import { COMPONENT_CANVAS_FILE_SCHEMA } from '#dist/shared/properties/cli/files/componentCanvasFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
@@ -352,27 +353,21 @@ test('renaming a variable renames it in every background, and leaves longer name
   );
 });
 
-// The owner's report: theme-dark was set on the canvas root at All components while the component's own list
-// (theme-invert) replaced it, so the panel showed theme-dark and the canvas stayed light.
-test('a project root edit shows on the canvas it was made on: that component’s own value of the setting goes', () => {
-  const card = 'src/components/Card.astro';
+// A wider edit never drops a narrower value: a component's own root setting is the person's override (a blue label they
+// reset), so an All components edit leaves it, and the app says why nothing changed on that canvas.
+test('a project root edit leaves a component’s own value, and says when that value hides it', () => {
   let file = withRootEdit(EMPTY_CANVAS_FILE, { kind: 'component', file: button }, { kind: 'classes', value: ['theme-invert'] });
-  file = withRootEdit(file, { kind: 'component', file: button }, { kind: 'background', value: '#000' });
-  file = withRootEdit(file, { kind: 'component', file: card }, { kind: 'classes', value: ['theme-brand'] });
-  const themed = withShownRootEdit(file, PROJECT_ROOT, button, { kind: 'classes', value: ['theme-dark'] });
-  assert.deepEqual(canvasRoot(themed, button).classes, ['theme-dark'], 'what was typed is what the canvas draws');
-  assert.equal(canvasRoot(themed, button).background, '#000', 'the other setting stays the component’s own');
-  assert.deepEqual(canvasRoot(themed, card).classes, ['theme-brand'], 'another component keeps its own');
-  // Removing at All components reverts the canvas too, rather than bringing back the hidden list.
-  const removed = withShownRootEdit(file, PROJECT_ROOT, button, { kind: 'classes', value: undefined });
-  assert.deepEqual(canvasRoot(removed, button).classes, []);
-  assert.equal(hasOwnCanvasRoot(removed, button), true, 'its background is still its own');
-  const bare = withShownRootEdit(removed, PROJECT_ROOT, button, { kind: 'background', value: undefined });
-  assert.equal(hasOwnCanvasRoot(bare, button), false);
-  // The negative space: an edit at this component leaves the project's alone.
-  const own = withShownRootEdit(themed, { kind: 'component', file: button }, button, { kind: 'classes', value: ['u-wide'] });
-  assert.deepEqual(own.classes, ['theme-dark']);
-  assert.deepEqual(canvasRoot(own, button).classes, ['u-wide']);
+  file = withRootEdit(file, PROJECT_ROOT, { kind: 'classes', value: ['theme-dark'] });
+  assert.deepEqual(canvasRoot(file, button).classes, ['theme-invert']);
+  assert.equal(rootOverrides(file, button, 'classes'), true);
+  assert.equal(rootOverrides(file, button, 'background'), false);
+  // None is a value of its own too: it holds over the project's classes until it is reset.
+  const none = withRootEdit(file, { kind: 'component', file: button }, { kind: 'classes', value: [] });
+  assert.deepEqual(canvasRoot(none, button).classes, []);
+  assert.equal(rootOverrides(none, button, 'classes'), true);
+  const reset = withRootEdit(none, { kind: 'component', file: button }, { kind: 'classes', value: undefined });
+  assert.deepEqual(canvasRoot(reset, button).classes, ['theme-dark']);
+  assert.equal(rootOverrides(reset, button, 'classes'), false);
 });
 
 test('the canvas root: classes and surface from the component, else the project; bounded, and older files still read', () => {
@@ -550,27 +545,57 @@ test('an empty text stored by an older version is no value: the wider one shows 
   assert.equal(resolved.props['size'], 2);
 });
 
-test('a component’s arrangement: stored only when not side by side, read back, refused when unknown', () => {
-  const button = 'src/components/Button.astro';
-  assert.equal(arrangementOf(undefined), 'row', 'a canvas nobody arranged is side by side');
-  const wrapped = withArrangement(EMPTY_CANVAS_FILE, button, 'wrap');
-  assert.deepEqual(wrapped.components[button], { arrange: 'wrap' });
-  const text = serializeComponentCanvas(wrapped);
-  assert.ok(parseComponentCanvasSource(text).ok);
-  assert.equal(arrangementOf(parseComponentCanvasFile(JSON.parse(text)).components[button]), 'wrap');
+test('each level has its own layout: none reaches another, the default is no setting, and unknown values are refused', () => {
+  const levels = { groups: ['variant=main', 'variant=arrow', 'emphasis=primary&variant=arrow'], stacked: true };
+  const shown = (file: Parameters<typeof withLevelArrangement>[0]) =>
+    [CANVAS_LEVEL, ...levels.groups].map((level) => levelArrangement(file.components[button], level, levels).value);
+  assert.deepEqual(shown(EMPTY_CANVAS_FILE), ['column', 'row', 'row', 'row'], 'grouped: the canvas goes down, groups across');
+  assert.equal(levelArrangement(undefined, CANVAS_LEVEL, { groups: [], stacked: false }).value, 'row', 'frames alone sit side by side');
+  const top = withLevelArrangement(EMPTY_CANVAS_FILE, button, CANVAS_LEVEL, 'row', levels);
+  assert.deepEqual(shown(top), ['row', 'row', 'row', 'row']);
+  assert.deepEqual(top.components[button], { layouts: { [CANVAS_LEVEL]: 'row' } }, 'across is a choice for a canvas that goes down');
+  const one = withLevelArrangement(top, button, 'variant=arrow', 'column', levels);
+  assert.deepEqual(shown(one), ['row', 'row', 'column', 'row'], 'one group changes alone, its own groups too');
+  const text = serializeComponentCanvas(one);
+  const parsed = parseComponentCanvasSource(text);
+  assert.ok(parsed.ok);
+  assert.deepEqual(shown(parsed.value), shown(one), 'read back');
   assert.equal(
     checkValue({ kind: 'object', fields: COMPONENT_CANVAS_FILE_SCHEMA.fields }, JSON.parse(text), 'componentCanvas'),
     undefined,
     'the CLI accepts it',
   );
-  // Back to the default: the key goes, and with nothing else the component leaves the file.
-  assert.deepEqual(withArrangement(wrapped, button, 'row').components, {});
-  const stacked = withArrangement(withSplit(EMPTY_CANVAS_FILE, button, ['variant']), button, 'column');
-  assert.deepEqual(stacked.components[button], { split: ['variant'], arrange: 'column' }, 'other settings stay');
-  // A hand-written default reads as none; anything else is refused.
-  assert.deepEqual(parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 'row' } } }).components[button], {});
+  // Reset, or choosing the default, removes that level's setting alone; the last one takes the component with it.
+  const back = withLevelArrangement(one, button, CANVAS_LEVEL, undefined, levels);
+  assert.deepEqual(back.components[button], { layouts: { 'variant=arrow': 'column' } });
+  assert.deepEqual(withLevelArrangement(back, button, 'variant=arrow', 'row', levels).components, {});
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: { [CANVAS_LEVEL]: 'grid' } } } }), /row, column or wrap/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: [] } } }));
   assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 'grid' } } }), /row, column or wrap/);
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 2 } } }), /row, column or wrap/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: { '': 'row' } } } }), /keyed/);
+  const many = Object.fromEntries(Array.from({ length: CANVAS_LIMITS.entriesMax + 1 }, (_, index) => [`a=${String(index)}`, 'row']));
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: many } } }), /levels/);
+});
+
+test('a canvas arranged before levels had their own looks the same, and its first layout edit keeps every level', () => {
+  const levels = { groups: ['variant=main', 'variant=arrow'], stacked: true };
+  const old = (arrange: string) => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange } } });
+  const shown = (file: ReturnType<typeof old>, at = levels) =>
+    [CANVAS_LEVEL, ...at.groups].map((level) => levelArrangement(file.components[button], level, at).value);
+  // As each was drawn: stacked reached every level; wrap reached the groups, and a top level only where it went across.
+  assert.deepEqual(shown(old('column')), ['column', 'column', 'column']);
+  assert.deepEqual(shown(old('wrap')), ['column', 'wrap', 'wrap']);
+  assert.deepEqual(shown(old('wrap'), { groups: [], stacked: false }), ['wrap']);
+  assert.deepEqual(shown(old('row')), ['column', 'row', 'row']);
+  assert.equal(levelArrangement(old('wrap').components[button], CANVAS_LEVEL, levels).chosen, false);
+  assert.equal(levelArrangement(old('wrap').components[button], 'variant=main', levels).chosen, true, 'a saved choice reads as set');
+  const edited = withLevelArrangement(old('wrap'), button, 'variant=arrow', 'column', levels);
+  assert.deepEqual(shown(edited), ['column', 'wrap', 'column']);
+  assert.equal(edited.components[button]?.arrange, undefined, 'the single value is gone');
+  // Reset is never a silent no-op over the old value: the level goes to its default and stays there.
+  const reset = withLevelArrangement(old('column'), button, 'variant=main', undefined, levels);
+  assert.deepEqual(shown(reset), ['column', 'row', 'column']);
+  assert.deepEqual(chosenLayouts(reset.components[button], levels), { [CANVAS_LEVEL]: 'column', 'variant=arrow': 'column' });
 });
 
 test('frames that differ are told apart from frames that agree, a frame’s own value among them', () => {

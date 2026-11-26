@@ -98,13 +98,23 @@ export interface CanvasRoot {
 }
 
 /**
- * How a canvas lays out the frames (and the groups) that sit together: side by side in one row, stacked in one column,
- * or side by side wrapping into rows at a fixed width. Groups of the first split value always go down the canvas.
+ * How a canvas lays out what sits together at one level: side by side in one row, stacked in one column, or side by
+ * side wrapping into rows at a fixed width. A level is the canvas itself (its <html>, CANVAS_LEVEL: the top-level groups
+ * and frames) or one group (its key: that group's direct children). Each level has its own choice; none is inherited.
+ * Levels nest no deeper than the split (CANVAS_LIMITS.splitPropsMax).
  */
 export const CANVAS_ARRANGEMENTS = ['row', 'column', 'wrap'] as const;
 export type CanvasArrangement = (typeof CANVAS_ARRANGEMENTS)[number];
-/** What a canvas with no arrangement chosen does: side by side, as every canvas did before the choice existed. */
+/** The canvas's own level key. Never a frame key (a group's level is one), and not `` since a file's keys are not empty. */
+export const CANVAS_LEVEL = '*canvas';
+/** What a group nobody arranged does, and the canvas too unless it has groups or rows: side by side. */
 export const DEFAULT_ARRANGEMENT = 'row' as const satisfies CanvasArrangement;
+
+/** The levels a canvas has now: its groups' keys, and whether its top level goes down the page (it has groups or rows). */
+export interface CanvasLevels {
+  readonly groups: readonly string[];
+  readonly stacked: boolean;
+}
 
 export interface ComponentCanvas {
   /** The props that get their own frames, in layout order; absent: the canvas chooses (defaultSplit). */
@@ -112,8 +122,13 @@ export interface ComponentCanvas {
   readonly frames?: Readonly<Record<string, FrameEntry>>;
   /** This component's canvas root, over the project's. */
   readonly root?: CanvasRoot;
-  /** How its frames are laid out; absent: DEFAULT_ARRANGEMENT, which is never stored. */
+  /**
+   * How every level was laid out, as saved before each level had its own choice: read as what each of them shows, and
+   * turned into `layouts` by the first layout edit (withLevelArrangement).
+   */
   readonly arrange?: Exclude<CanvasArrangement, typeof DEFAULT_ARRANGEMENT>;
+  /** Each level's own layout, by level key (CANVAS_LEVEL or a group's); absent: the level's default. */
+  readonly layouts?: Readonly<Record<string, CanvasArrangement>>;
 }
 
 export interface ComponentCanvasFile {
@@ -140,7 +155,7 @@ export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: 
 const PROP_NAME = /^[A-Za-z_$][\w$-]*$/;
 const COMPONENT_FILE = /^(?:src\/|node_modules\/)[^\0]*\.astro$/;
 const ENTRY_FIELDS = new Set(['props', 'unset', 'assets', 'literals', 'content', 'width', 'height', 'background']);
-const COMPONENT_FIELDS = new Set(['split', 'frames', 'root', 'arrange']);
+const COMPONENT_FIELDS = new Set(['split', 'frames', 'root', 'arrange', 'layouts']);
 const ROOT_FIELDS = new Set(['background', 'classes']);
 // A class name as a selector can name it without escapes; `stacki-` is the canvas's own (`stacki-designer`).
 const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
@@ -259,12 +274,30 @@ function parseComponentSettings(input: unknown, file: string): ComponentCanvas {
   }
   const root = value['root'] === undefined ? undefined : parseCanvasRoot(value['root'], file);
   const arrange = value['arrange'] === undefined ? undefined : parseArrangement(value['arrange'], file);
+  const layouts = value['layouts'] === undefined ? undefined : parseLayouts(value['layouts'], file);
   return {
     ...(split === undefined ? {} : { split }),
     ...(framesInput === undefined ? {} : { frames }),
     ...(root === undefined ? {} : { root }),
     ...(arrange === undefined ? {} : { arrange }),
+    ...(layouts === undefined ? {} : { layouts }),
   };
+}
+
+function parseLayouts(input: unknown, file: string): Readonly<Record<string, CanvasArrangement>> {
+  const entries = Object.entries(record(input));
+  if (entries.length > CANVAS_LIMITS.entriesMax) {
+    throw new Error(`Component canvas: ${file} lays out more than ${CANVAS_LIMITS.entriesMax} levels`);
+  }
+  return Object.fromEntries(
+    entries.map(([level, value]) => {
+      const arrangement = CANVAS_ARRANGEMENTS.find((candidate) => candidate === value);
+      if (arrangement === undefined) {
+        throw new Error(`Component canvas: ${file} arranges its frames as row, column or wrap`);
+      }
+      return [parseLevel(level), arrangement];
+    }),
+  );
 }
 
 // A stored arrangement: one of the choices. The default is written as no key at all, and read as none if a person
@@ -277,6 +310,16 @@ function parseArrangement(input: unknown, file: string): ComponentCanvas['arrang
     return undefined;
   }
   throw new Error(`Component canvas: ${file} arranges its frames as row, column or wrap`);
+}
+
+function parseLevel(level: string): string {
+  if (level === CANVAS_LEVEL) {
+    return level;
+  }
+  if (level === '') {
+    throw new Error(`Component canvas: the canvas’s own layout is keyed ${CANVAS_LEVEL}`);
+  }
+  return parseFrameKey(level);
 }
 
 function parseSplit(input: unknown, file: string): readonly string[] {
@@ -465,6 +508,7 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
 }
 
 function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
+  const layouts = settings.layouts;
   const frames = settings.frames;
   return {
     ...(settings.split === undefined ? {} : { split: settings.split }),
@@ -480,6 +524,7 @@ function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
     // Classes keep their order: a later class wins a tie in the cascade, as on <html> itself.
     ...(settings.root === undefined ? {} : { root: settings.root }),
     ...(settings.arrange === undefined ? {} : { arrange: settings.arrange }),
+    ...(layouts === undefined ? {} : { layouts: Object.fromEntries(Object.entries(layouts).sort(([left], [right]) => (left < right ? -1 : 1))) }),
   };
 }
 
@@ -1038,18 +1083,61 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
   return withComponentSettings(file, component, { ...file.components[component], split });
 }
 
-/** The file with how a component's frames are laid out; the default arrangement is no setting. */
-export function withArrangement(file: ComponentCanvasFile, component: string, arrange: CanvasArrangement): ComponentCanvasFile {
-  canvasComponentFile(component);
-  assert(CANVAS_ARRANGEMENTS.includes(arrange), 'An arrangement is one of the canvas’s choices');
-  const next = withComponentSettings(file, component, { ...file.components[component], arrange: arrange === DEFAULT_ARRANGEMENT ? undefined : arrange });
-  assert(arrangementOf(next.components[component]) === arrange, 'The arrangement written is the one read back');
-  return next;
+/** What a level nobody arranged does: the canvas goes down the page when it has groups or rows; else side by side. */
+export function defaultArrangement(level: string, levels: CanvasLevels): CanvasArrangement {
+  return level === CANVAS_LEVEL && levels.stacked ? 'column' : DEFAULT_ARRANGEMENT;
 }
 
-/** How a component's frames are laid out: its stored choice, else the default. */
-export function arrangementOf(settings: ComponentCanvas | undefined): CanvasArrangement {
-  return settings?.arrange ?? DEFAULT_ARRANGEMENT;
+/**
+ * The layouts a component's canvas has chosen, by level. A single `arrange` saved before levels had their own stands for
+ * each level the canvas has now, as it drew them: every group, and the canvas itself, except that wrapping never
+ * reached a top level that goes down the page.
+ */
+export function chosenLayouts(settings: ComponentCanvas | undefined, levels: CanvasLevels): Readonly<Record<string, CanvasArrangement>> {
+  const before = settings?.arrange;
+  if (before === undefined) {
+    return settings?.layouts ?? {};
+  }
+  assert(levels.groups.length <= CANVAS_LIMITS.entriesMax, 'A canvas has a bounded number of levels');
+  const top = before === 'wrap' && levels.stacked ? [] : [CANVAS_LEVEL];
+  return { ...Object.fromEntries([...top, ...levels.groups].map((level) => [level, before])), ...settings?.layouts };
+}
+
+/** How one level is laid out, and whether that is a choice saved for it (else the level's default). */
+export function levelArrangement(
+  settings: ComponentCanvas | undefined,
+  level: string,
+  levels: CanvasLevels,
+): { readonly value: CanvasArrangement; readonly chosen: boolean } {
+  const held = chosenLayouts(settings, levels)[level];
+  return held === undefined ? { value: defaultArrangement(level, levels), chosen: false } : { value: held, chosen: true };
+}
+
+/**
+ * The file with one level laid out as `arrangement`, or back at its default with `undefined`. Choosing the default is
+ * no setting. Every other level keeps what it shows.
+ */
+export function withLevelArrangement(
+  file: ComponentCanvasFile,
+  component: string,
+  level: string,
+  arrangement: CanvasArrangement | undefined,
+  levels: CanvasLevels,
+): ComponentCanvasFile {
+  canvasComponentFile(component);
+  parseLevel(level);
+  const settings = file.components[component];
+  const layouts: Record<string, CanvasArrangement> = { ...chosenLayouts(settings, levels) };
+  if (arrangement === undefined || arrangement === defaultArrangement(level, levels)) {
+    delete layouts[level];
+  } else {
+    layouts[level] = arrangement;
+  }
+  assert(Object.keys(layouts).length <= CANVAS_LIMITS.entriesMax, 'A canvas lays out a bounded number of levels');
+  const next = withComponentSettings(file, component, { ...settings, arrange: undefined, layouts });
+  const shown = levelArrangement(next.components[component], level, levels).value;
+  assert(shown === (arrangement ?? defaultArrangement(level, levels)), 'The arrangement written is the one read back');
+  return next;
 }
 
 // The file with one component's settings replaced. `settings` is everything the component keeps: a writer starts from
@@ -1077,7 +1165,7 @@ function keepsSetting(key: string, value: unknown): boolean {
   if (value === undefined) {
     return false;
   }
-  // A chosen split of no props is a choice (one frame), as is an arrangement; empty frames or an empty root say nothing.
+  // A chosen split of no props is a choice (one frame), as is an arrangement; empty frames, layouts or root say nothing.
   if (key === 'split' || key === 'arrange') {
     return true;
   }
@@ -1123,26 +1211,9 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
   return next;
 }
 
-/**
- * A root setting edited on one component's canvas (`component`, the one in front of the person), at the scope chosen
- * there. Set or cleared for the project, that component's own value of the same setting goes too: its own replaces the
- * project's (CanvasRoot), so left in place the edit would not show on the canvas it was made on. Other components keep
- * theirs.
- */
-export function withShownRootEdit(file: ComponentCanvasFile, target: RootTarget, component: string, edit: RootEdit): ComponentCanvasFile {
-  const written = withRootEdit(file, target, edit);
-  if (target.kind === 'component' || written.components[component]?.root?.[edit.kind] === undefined) {
-    return written;
-  }
-  const shown = withRootEdit(written, { kind: 'component', file: component }, { kind: edit.kind, value: undefined });
-  assert(shown.components[component]?.root?.[edit.kind] === undefined, 'A project edit shows on the canvas it was made on');
-  return shown;
-}
-
-/** Whether a component's canvas root sets anything of its own, over the project's. */
-export function hasOwnCanvasRoot(file: ComponentCanvasFile, component: string): boolean {
-  const own = file.components[component]?.root;
-  return own?.background !== undefined || own?.classes !== undefined;
+/** Whether this component's own value of a root setting replaces the project's, so a project edit does not show on it. */
+export function rootOverrides(file: ComponentCanvasFile, component: string, setting: RootEdit['kind']): boolean {
+  return file.components[component]?.root?.[setting] !== undefined;
 }
 
 /** Where a canvas root setting comes from: the component, the project, or nowhere. */

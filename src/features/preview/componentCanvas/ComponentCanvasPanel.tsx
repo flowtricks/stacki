@@ -4,10 +4,11 @@
 // setting wins over a wider one. Where frames a section reaches keep a value of their own, its label is the Style
 // panel's orange, and Reset gives them all the value shown. Which props get their own frames and the frames' preview
 // values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type KeyboardEvent } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import {
-  arrangementOf,
+  levelArrangement,
+  CANVAS_LEVEL,
   CANVAS_LIMITS,
   canvasRoot,
   type CanvasArrangement,
@@ -28,6 +29,7 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import ColorSwatch from '../../style/components/ColorSwatch';
 import VariableConnect from '../../style/VariableConnect';
 import { prettyComponentName } from './frameLabel';
+import { canvasLevels, groupFrames } from './canvasGroups';
 import { CanvasSectionHeading } from './CanvasScopeControl';
 import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type CanvasSection, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
@@ -74,17 +76,20 @@ function FrameSection({ canvas, state }: { readonly canvas: ComponentCanvasContr
         <CanvasSectionHeading canvas={canvas} state={state} section="background" title={translate('componentCanvas.panel.background')} />
         <BackgroundField canvas={canvas} state={state} />
       </section>
-      <LayoutSection canvas={canvas} state={state} />
+      {/* Only a group has children to lay out: a frame, or the component in it, has no Layout. */}
+      {state.picked.kind === 'group' && <LayoutSection canvas={canvas} state={state} level={state.picked.key} />}
     </>
   );
 }
 
-// How this component's frames are laid out on its canvas: one choice for the whole canvas, so the section has no
-// "Apply to". Side by side is what a canvas nobody arranged shows.
-function LayoutSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
+// How the selected level's direct children are laid out: the canvas's own (while <html> is selected) or a group's.
+// It is always this component's setting, so it has no "Apply to": a level somebody chose is a set value (blue, with
+// Reset back to its default); one nobody chose is plain.
+function LayoutSection({ canvas, state, level }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen; readonly level: string }) {
   const translate = useTranslate();
   const title = translate('componentCanvas.panel.layout');
-  const value = arrangementOf(state.settings.components[state.component.file]);
+  const levels = canvasLevels(groupFrames(state.layout.frames), state.layout.frames);
+  const { value, chosen } = levelArrangement(state.settings.components[state.component.file], level, levels);
   const options: readonly { readonly value: CanvasArrangement; readonly label: string }[] = [
     { value: 'row', label: translate('componentCanvas.panel.layout.row') },
     { value: 'column', label: translate('componentCanvas.panel.layout.column') },
@@ -97,16 +102,20 @@ function LayoutSection({ canvas, state }: { readonly canvas: ComponentCanvasCont
   return (
     <section className="component-canvas-section" aria-label={title}>
       <div className="component-canvas-heading-row">
-        <span className="component-canvas-heading-title">{title}</span>
+        <span className="component-canvas-heading-title">
+          <ResetLabel label={title} active={chosen} onReset={() => canvas.setArrangement(level, undefined)} />
+        </span>
       </div>
       <div className="props-field">
         <SegmentedControl
+          // A level of its own: the highlight never slides over from the level shown before.
+          key={level}
           ariaLabel={title}
           value={value}
           options={options}
           onChange={(next) => {
             if (next !== value) {
-              canvas.setArrangement(next);
+              canvas.setArrangement(level, next);
             }
           }}
         />
@@ -132,7 +141,7 @@ function RootSection({ canvas, state }: { readonly canvas: ComponentCanvasContro
         />
         <BackgroundField canvas={canvas} state={state} />
       </section>
-      <LayoutSection canvas={canvas} state={state} />
+      <LayoutSection canvas={canvas} state={state} level={CANVAS_LEVEL} />
     </>
   );
 }
@@ -276,7 +285,13 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
     <div className="props-field">
       <FieldTitle>
         {inherited ? (
-          <span className="prop-label embed-editor_prop-orange component-canvas-inherited">{label}</span>
+          <span
+            className="prop-label embed-editor_prop-orange component-canvas-inherited"
+            // The canvas root borrows only from every component's canvas, and says so.
+            title={rootScope ? translate('componentCanvas.panel.scope.project') : undefined}
+          >
+            {label}
+          </span>
         ) : (
           <ResetLabel
             label={label}
@@ -287,7 +302,19 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
           />
         )}
       </FieldTitle>
-      <div className="component-canvas-color">
+      <div
+        className="component-canvas-color"
+        // A colour borrowed from every component's canvas shows only as the empty field's placeholder: Backspace or Delete
+        // there removes it here (Transparent, the page's own background), as in the class field. Read on the row, since
+        // what is typed into is the variable editor drawn over the input.
+        onKeyDownCapture={(event) => {
+          const borrowed = scope === COMPONENT_SCOPE && inherited;
+          if (borrowed && !event.repeat && emptyTextField(event) && (event.key === 'Backspace' || event.key === 'Delete')) {
+            event.preventDefault();
+            commit('transparent');
+          }
+        }}
+      >
         <ColorSwatch
           value={value ?? 'transparent'}
           ariaLabel={label}
@@ -312,6 +339,19 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
       </div>
     </div>
   );
+}
+
+// Whether a key landed in an empty text field of the row itself, not in a popover opened from it (a portal's events
+// reach the row through React, from outside its element).
+function emptyTextField(event: KeyboardEvent<HTMLElement>): boolean {
+  const target = event.target;
+  if (!(target instanceof Element) || !event.currentTarget.contains(target)) {
+    return false;
+  }
+  if (target instanceof HTMLInputElement) {
+    return target.value === '';
+  }
+  return target.matches('[contenteditable="true"]') && target.textContent === '';
 }
 
 // The background's text, with the Style panel's variable button beside it: a picked variable is written as

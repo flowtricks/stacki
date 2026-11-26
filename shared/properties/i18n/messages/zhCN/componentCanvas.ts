@@ -39,6 +39,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': '并排',
   'componentCanvas.panel.layout.wrap': '换行',
   'componentCanvas.panel.mixed': '混合',
+  'componentCanvas.panel.overriddenHere': '此组件有自己的值，因此这项更改不会在这里显示。',
   'componentCanvas.panel.pixels': '{side}（像素）',
   'componentCanvas.panel.root.about': '所有框架背后的画布，即页面的 html 元素。它的类可在设置面板中找到。',
   'componentCanvas.panel.root.title': '画布',

@@ -39,6 +39,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Berdampingan',
   'componentCanvas.panel.layout.wrap': 'Bungkus',
   'componentCanvas.panel.mixed': 'Campuran',
+  'componentCanvas.panel.overriddenHere': 'Komponen ini punya nilai sendiri, jadi perubahan ini tidak terlihat di sini.',
   'componentCanvas.panel.pixels': '{side} dalam piksel',
   'componentCanvas.panel.root.about': 'Kanvas di belakang semua frame: elemen html halaman. Kelasnya ada di panel Pengaturan.',
   'componentCanvas.panel.root.title': 'Kanvas',

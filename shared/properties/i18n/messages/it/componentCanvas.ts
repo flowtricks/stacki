@@ -43,6 +43,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Affiancati',
   'componentCanvas.panel.layout.wrap': 'A capo',
   'componentCanvas.panel.mixed': 'Misto',
+  'componentCanvas.panel.overriddenHere': 'Questo componente ha un valore proprio, quindi questa modifica non si vede qui.',
   'componentCanvas.panel.pixels': '{side} in pixel',
   'componentCanvas.panel.root.about': 'Il canvas dietro tutti i frame: l’elemento html della pagina. Le sue classi si trovano nel pannello Impostazioni.',
   'componentCanvas.panel.root.title': 'Canvas', // same

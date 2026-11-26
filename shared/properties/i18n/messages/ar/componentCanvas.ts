@@ -54,6 +54,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'جنبًا إلى جنب',
   'componentCanvas.panel.layout.wrap': 'التفاف',
   'componentCanvas.panel.mixed': 'مختلط',
+  'componentCanvas.panel.overriddenHere': 'لهذا المكوّن قيمة خاصة به، لذا لن يظهر هذا التغيير هنا.',
   'componentCanvas.panel.pixels': '{side} بالبكسل',
   'componentCanvas.panel.root.about': 'اللوحة خلف جميع الإطارات: عنصر html في الصفحة. تجد أصنافها في لوحة الإعدادات.',
   'componentCanvas.panel.root.title': 'اللوحة',

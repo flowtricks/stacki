@@ -39,6 +39,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': '나란히',
   'componentCanvas.panel.layout.wrap': '줄바꿈',
   'componentCanvas.panel.mixed': '혼합',
+  'componentCanvas.panel.overriddenHere': '이 컴포넌트에는 자체 값이 있어 이 변경 사항이 여기에 표시되지 않습니다.',
   'componentCanvas.panel.pixels': '{side}(픽셀)',
   'componentCanvas.panel.root.about': '모든 프레임 뒤에 있는 캔버스로, 페이지의 html 요소입니다. 캔버스의 클래스는 설정 패널에 있습니다.',
   'componentCanvas.panel.root.title': '캔버스',

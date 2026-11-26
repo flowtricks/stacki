@@ -138,18 +138,19 @@ ${scaffold}[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LI
   return css;
 }
 
-// The component's arrangement (canvasPage.ts data-stacki-arrange; none is side by side): stacked puts what sits together in a
-// column, groups and frames alike; wrap lets a row of frames break at the wrap width. Groups of the first split value
-// go down the canvas whichever is chosen (body[data-flow="column"]).
+// Each level's arrangement (canvasPage.ts), on the one element that holds that level's direct children, so no level
+// reaches another's: the canvas's own on the root (data-stacki-arrange, over the page's flow), a group's on the group
+// (data-arrange; none is side by side). Stacked puts what sits there in a column; wrap breaks its row at the wrap width.
 function arrangementRules(): string {
-  const column = 'html[data-stacki-ready][data-stacki-arrange="column"] > body';
-  const wrap = 'html[data-stacki-ready][data-stacki-arrange="wrap"] > body';
+  const root = (value: string): string => `html[data-stacki-ready][data-stacki-arrange="${value}"] > body`;
+  const group = (value: string): string => `html[data-stacki-ready] > body stacki-group[data-arrange="${value}"]`;
   const groupPadding = CHROME_LIMITS.groupPaddingPx * 2;
   return [
-    `${column} { flex-direction: column !important; }`,
-    `${column} stacki-group { flex-direction: column !important; }`,
-    `${wrap}:not([data-flow="column"]) { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx)}px !important; }`,
-    `${wrap} stacki-group { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx + groupPadding)}px !important; }`,
+    `${root('row')}, ${root('wrap')} { flex-direction: row !important; }`,
+    `${root('column')} { flex-direction: column !important; }`,
+    `${root('wrap')} { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx)}px !important; }`,
+    `${group('column')} { flex-direction: column !important; }`,
+    `${group('wrap')} { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx + groupPadding)}px !important; }`,
   ].join('\n');
 }
 
@@ -462,12 +463,12 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   function relabel() { labelledAt = null; sizes.textContent = ''; frameSizes(view.scale); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
-  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading'] });
+  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading', 'data-arrange'] });
   // The site's styles arrive in <head> after this script runs (the dev server injects them): settle again as they do.
   if (document.head) new MutationObserver(queue).observe(document.head, { childList: true });
   // An edit of the canvas root's classes changes <html> alone, in place: the page's background follows its theme. Only
   // what a theme can hang on is watched, never the attributes this script sets on the root.
-  new MutationObserver(queue).observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-stacki-surface'] });
+  new MutationObserver(queue).observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-stacki-surface', 'data-stacki-arrange'] });
   window.addEventListener('load', queue);
   window.addEventListener('wheel', function (event) {
     event.preventDefault();

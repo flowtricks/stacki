@@ -43,6 +43,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Nebeneinander',
   'componentCanvas.panel.layout.wrap': 'Umbrechen',
   'componentCanvas.panel.mixed': 'Gemischt',
+  'componentCanvas.panel.overriddenHere': 'Diese Komponente hat einen eigenen Wert, daher ist diese Änderung hier nicht zu sehen.',
   'componentCanvas.panel.pixels': '{side} in Pixeln',
   'componentCanvas.panel.root.about': 'Die Canvas hinter allen Frames: das html-Element der Seite. Ihre Klassen findest du im Einstellungen-Panel.',
   'componentCanvas.panel.root.title': 'Canvas', // same

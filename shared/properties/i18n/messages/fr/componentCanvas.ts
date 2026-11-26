@@ -43,6 +43,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Côte à côte',
   'componentCanvas.panel.layout.wrap': 'Retour à la ligne',
   'componentCanvas.panel.mixed': 'Mixte',
+  'componentCanvas.panel.overriddenHere': 'Ce composant a sa propre valeur, ce changement ne s’affiche donc pas ici.',
   'componentCanvas.panel.pixels': '{side} en pixels',
   'componentCanvas.panel.root.about': 'Le canevas derrière tous les cadres : l’élément html de la page. Ses classes se trouvent dans le panneau Réglages.',
   'componentCanvas.panel.root.title': 'Canevas',
