@@ -1262,7 +1262,8 @@ test('the swap list puts the caret in its search field, and a press back in the 
   await waitUntil('the swap list opens again', () => list() !== undefined);
   await act(async () => void document.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   await waitUntil('Escape closes it', () => list() === undefined);
-  assert.ok(record.view.hasFocus);
+  // The caret is handed back as the list finishes closing, which can be a step after it leaves the page.
+  await waitUntil('the editor has the caret back', () => record.view.hasFocus);
   assert.equal(record.view.state.selection.main.head, 'Use '.length + 1, 'the caret sits right after the chip');
   model.setMentionIndexSource(undefined);
 });
