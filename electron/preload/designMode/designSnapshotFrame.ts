@@ -19,7 +19,6 @@ import {
 } from '../../../shared/ipc/designSnapshot';
 import { PATH_ATTR, inScope, pathsOf, regions, runsOf } from '../frameRegions';
 import { isElement } from '../frameBasics';
-import { occurrenceOf } from '../frameReports';
 import { FontInliner, freezeViewportUnits, rebaseCssURLs } from './designSnapshotCss';
 
 /** Whether this document is one of the canvas's frames, where the preload installs nothing. */
@@ -209,10 +208,16 @@ function markNodes(source: HTMLElement, target: HTMLElement): void {
       });
     }
   }
+  // A node addressed only by its tag (a link among a line's words) has no runs: its copies are its tagged
+  // elements, counted in document order as a click counts them. Counted in one pass: asking per element
+  // would walk the whole page once for each.
+  const counted = new Map<string, number>();
   for (const element of Array.from(source.querySelectorAll(`[${PATH_ATTR}]`))) {
     for (const nodePath of pathsOf(element)) {
-      if (inScope(nodePath)) {
-        mark(element, nodePath, occurrenceOf(nodePath, element));
+      if (inScope(nodePath) && !regions.has(nodePath)) {
+        const copy = counted.get(nodePath) ?? 0;
+        counted.set(nodePath, copy + 1);
+        mark(element, nodePath, copy);
       }
     }
   }
@@ -309,7 +314,22 @@ function inlineStylesheets(source: HTMLElement, target: HTMLElement): void {
   });
 }
 
+/** Fonts already read for this document: a snapshot follows every change, and a font does not change under it. */
+const fontData = new Map<string, string>();
+
 async function fetchFontDataURL(url: string): Promise<string | undefined> {
+  const held = fontData.get(url);
+  if (held !== undefined) {
+    return held;
+  }
+  const data = await readFontDataURL(url);
+  if (data !== undefined && fontData.size < DESIGN_SNAPSHOT_LIMITS.fontsMax) {
+    fontData.set(url, data);
+  }
+  return data;
+}
+
+async function readFontDataURL(url: string): Promise<string | undefined> {
   const response = await fetch(url, { cache: 'force-cache', credentials: 'same-origin' });
   if (!response.ok) {
     return undefined;
