@@ -1,4 +1,5 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useDefaultsMenu } from './defaultsMenu';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
@@ -34,6 +35,7 @@ interface MenuProps {
 }
 
 export function ContextMenu(props: MenuProps) {
+  const defaultsMenu = useDefaultsMenu();
   const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   useMenuPosition(ref, props.position);
@@ -76,7 +78,7 @@ export function ContextMenu(props: MenuProps) {
         disabled={!props.canChange}
         onSelect={() => props.onAction('delete')}
       />
-      {props.component && (
+      {props.component && defaultsMenu === 'offered' && (
         <>
           <div className="ctx-divider" role="separator" />
           <MenuItem label={translate('structure.menu.setDefaults')} disabled={!props.canSetDefaults} onSelect={() => props.onAction('defaults')} />

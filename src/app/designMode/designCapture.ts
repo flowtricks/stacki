@@ -1,50 +1,71 @@
-// Design mode (experimental, removable: docs/design-mode/REMOVE.md): each frame's picture, for the AI.
+// Design mode (experimental, removable: docs/design-mode/REMOVE.md): a frame's picture, for the AI.
 //
-// Taken only when the frames are sent. The canvas shows one frame alone, as wide as it fits, with no outline, name
-// or bar over it, and the AI panel's own screenshot channel pictures that part of the window (nothing is written).
-// So a picture holds its frame and nothing else of Design mode.
+// The picture is all the AI is given of a design, so it holds the whole page. A frame's document is already laid out
+// at the page's full height (its screen units stay one screen's, and fixed and sticky elements sit once), so the
+// canvas shows that one frame alone and its camera walks down it, picturing what is on screen through the AI panel's
+// own screenshot channel (window capture, nothing written) and putting the pieces together. A page much taller than
+// it is wide is cut into slices, top to bottom, so none is shrunk past reading.
 import { aiScreenshot } from '../../features/ai/aiBridge';
-import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignSessionState } from '../../../shared/ipc/designSession';
+import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignPlace } from '../../../shared/ipc/designSession';
+import { sliceHeights } from './designSlices';
 import { designView, updateDesignView } from './designStore';
 
-/** Widest picture kept: enough for the AI to read a layout, small enough to keep several. */
-const PICTURE_WIDTH_PX_MAX = 1_600;
-/** After the camera moves to a frame, the time its document has to be drawn there. */
+/** Widest picture kept: enough to read a desktop page. */
+const PICTURE_WIDTH_PX_MAX = 1_440;
+/** After the camera moves, the time what it now shows has to be drawn. */
 const DRAW_MS = 150;
+/** The longest a frame's fonts and pictures are waited for. */
+const READY_MS_MAX = 3_000;
+/** Screens one page is walked in: past the tallest frame at the shortest canvas. */
+const STEPS_MAX = 200;
 
-export interface FramePicture {
-  readonly frame: DesignFrameId;
-  readonly name: string;
-  readonly image: string;
+/** Waits for the frame's fonts and pictures, so none is missing from the picture. */
+async function ready(frame: Document): Promise<void> {
+  const loaded = Promise.all([frame.fonts.ready, ...Array.from(frame.images, (image) => (image.complete ? undefined : image.decode().catch(() => undefined)))]);
+  await Promise.race([loaded, new Promise((resolve) => window.setTimeout(resolve, READY_MS_MAX))]);
 }
 
-/** The top of every frame that has a document, one at a time. */
-export async function pictureFrames(projectPath: string, session: Extract<DesignSessionState, { kind: 'on' }>): Promise<readonly FramePicture[]> {
+/**
+ * The whole of frame `frame` as PNG data URLs, top to bottom. Undefined when the frame has no document or the window
+ * could not be pictured: half a page is never sent as the page.
+ */
+export async function pictureFrame(
+  projectPath: string,
+  frame: { readonly id: DesignFrameId; readonly at: DesignPlace },
+): Promise<readonly string[] | undefined> {
   const before = designView().camera;
-  const pictures: FramePicture[] = [];
   document.documentElement.classList.add('dm-capturing');
   try {
-    for (const frame of session.frames) {
-      const widthPx = designView().snapshots.get(frame.id)?.viewportWidthPx;
-      const plane = document.querySelector('.dm-plane');
-      if (widthPx === undefined || widthPx < 1 || plane === null) {
-        continue;
-      }
-      const zoom = Math.min(1, plane.clientWidth / widthPx);
-      const camera = { x: -frame.at.x * zoom, y: -frame.at.y * zoom, zoom };
-      updateDesignView((view) => ({ ...view, photo: frame.id, camera, selection: { kind: 'none' } }));
-      await drawn();
-      const body = document.querySelector(`.dm-tile[data-dm-tile="${frame.id}"] .dm-body`);
-      const image = body === null ? undefined : await captureBox(projectPath, body.getBoundingClientRect(), plane.getBoundingClientRect());
-      if (image !== undefined) {
-        pictures.push({ frame: frame.id, name: frame.name, image });
-      }
+    updateDesignView((view) => ({ ...view, photo: frame.id, selection: { kind: 'none' } }));
+    await drawn();
+    const plane = document.querySelector('.dm-plane');
+    const body = document.querySelector<HTMLElement>(`.dm-tile[data-dm-tile="${frame.id}"] .dm-body`);
+    const shown = body?.querySelector<HTMLIFrameElement>('.dm-document')?.contentDocument ?? undefined;
+    if (plane === null || body === null || shown === undefined) {
+      return undefined;
     }
+    await ready(shown);
+    const widthPx = body.offsetWidth;
+    const heightPx = body.offsetHeight;
+    const zoom = Math.min(1, plane.clientWidth / widthPx);
+    const pieces: Piece[] = [];
+    // Walked a canvas-full at a time, in the page's own pixels.
+    const stepPx = plane.clientHeight / zoom;
+    for (let step = 0; step < STEPS_MAX && step * stepPx < heightPx - 1; step += 1) {
+      const topPx = step * stepPx;
+      updateDesignView((view) => ({ ...view, camera: { x: -frame.at.x * zoom, y: -(frame.at.y + topPx) * zoom, zoom } }));
+      await drawn();
+      const piece = await capture(projectPath, body.getBoundingClientRect(), plane.getBoundingClientRect(), zoom);
+      if (piece === undefined) {
+        return undefined;
+      }
+      pieces.push(piece);
+    }
+    return await assemble(pieces, widthPx, heightPx);
   } finally {
     document.documentElement.classList.remove('dm-capturing');
     updateDesignView((view) => ({ ...view, photo: undefined, camera: before }));
   }
-  return pictures;
 }
 
 /** Resolves once what changed is on screen. */
@@ -54,40 +75,62 @@ function drawn(): Promise<void> {
   });
 }
 
-/** The part of `box` inside `clip`, as a PNG data URL, or undefined when none of it is on screen or it failed. */
-async function captureBox(projectPath: string, box: DOMRect, clip: DOMRect): Promise<string | undefined> {
-  const left = Math.max(box.left, clip.left, 0);
-  const top = Math.max(box.top, clip.top, 0);
-  const right = Math.min(box.right, clip.right, window.innerWidth);
-  const bottom = Math.min(box.bottom, clip.bottom, window.innerHeight);
+/** One screenful: the picture, and the band of the page it shows, in the page's pixels. */
+interface Piece {
+  readonly image: HTMLImageElement;
+  readonly topPx: number;
+  readonly heightPx: number;
+  readonly widthPx: number;
+}
+
+async function capture(projectPath: string, box: DOMRect, clip: DOMRect, zoom: number): Promise<Piece | undefined> {
+  const left = Math.ceil(Math.max(box.left, clip.left, 0));
+  const top = Math.ceil(Math.max(box.top, clip.top, 0));
+  const right = Math.floor(Math.min(box.right, clip.right, window.innerWidth));
+  const bottom = Math.floor(Math.min(box.bottom, clip.bottom, window.innerHeight));
   if (right - left < 1 || bottom - top < 1) {
     return undefined;
   }
-  const rect = { x: Math.floor(left), y: Math.floor(top), width: Math.floor(right - left), height: Math.floor(bottom - top) };
-  const shot = await aiScreenshot({ projectPath, rect });
+  const shot = await aiScreenshot({ projectPath, rect: { x: left, y: top, width: right - left, height: bottom - top } });
   if (!shot.ok) {
     return undefined;
   }
-  const scaled = await scaledPng(`data:${shot.value.mimeType};base64,${shot.value.data}`);
-  return scaled !== undefined && scaled.length <= DESIGN_SESSION_LIMITS.imageCharsMax ? scaled : undefined;
-}
-
-async function scaledPng(source: string): Promise<string | undefined> {
   const image = new Image();
-  image.src = source;
+  image.src = `data:${shot.value.mimeType};base64,${shot.value.data}`;
   try {
     await image.decode();
   } catch {
     return undefined;
   }
-  const scale = Math.min(1, PICTURE_WIDTH_PX_MAX / Math.max(1, image.naturalWidth));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const context = canvas.getContext('2d');
-  if (context === null) {
-    return undefined;
+  return { image, topPx: (top - box.top) / zoom, heightPx: (bottom - top) / zoom, widthPx: (right - left) / zoom };
+}
+
+async function assemble(pieces: readonly Piece[], widthPx: number, heightPx: number): Promise<readonly string[] | undefined> {
+  const scale = Math.min(1, PICTURE_WIDTH_PX_MAX / widthPx);
+  const slices: string[] = [];
+  let sliceTopPx = 0;
+  for (const slicePx of sliceHeights(widthPx, heightPx)) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(widthPx * scale));
+    canvas.height = Math.max(1, Math.round(slicePx * scale));
+    const context = canvas.getContext('2d');
+    if (context === null) {
+      return undefined;
+    }
+    for (const piece of pieces) {
+      if (piece.topPx < sliceTopPx + slicePx && piece.topPx + piece.heightPx > sliceTopPx) {
+        context.drawImage(piece.image, 0, (piece.topPx - sliceTopPx) * scale, piece.widthPx * scale, piece.heightPx * scale);
+      }
+    }
+    let data = canvas.toDataURL('image/png');
+    if (data.length > DESIGN_SESSION_LIMITS.imageCharsMax) {
+      data = canvas.toDataURL('image/jpeg', 0.85);
+    }
+    if (data.length > DESIGN_SESSION_LIMITS.imageCharsMax) {
+      return undefined;
+    }
+    slices.push(data);
+    sliceTopPx += slicePx;
   }
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/png');
+  return slices;
 }

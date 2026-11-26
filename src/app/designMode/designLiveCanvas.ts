@@ -3,7 +3,7 @@
 //
 // The editor's own preview frame keeps rendering the site's copy underneath Design mode's canvas. This asks it for
 // snapshots (shared/ipc/designSnapshot.ts) and says when what it shows may have changed.
-import { parseDesignCanvasMessage, type DesignSnapshot, type DesignSnapshotFailure } from '../../../shared/ipc/designSnapshot';
+import { parseDesignCanvasMessage, type DesignCanvasMessage, type DesignSnapshot, type DesignSnapshotFailure } from '../../../shared/ipc/designSnapshot';
 
 /** How long a snapshot may take before the request is given up. */
 const SNAPSHOT_WAIT_MS_MAX = 6_000;
@@ -15,6 +15,34 @@ export type SnapshotResult =
 export function liveCanvasWindow(): Window | undefined {
   const frame = document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]');
   return frame instanceof HTMLIFrameElement ? (frame.contentWindow ?? undefined) : undefined;
+}
+
+/** The path of the page the preview is asked to show, as its address spells it. */
+export function livePagePath(): string | undefined {
+  const frame = document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]');
+  return frame instanceof HTMLIFrameElement ? pathOfAddress(frame.src) : undefined;
+}
+
+export function pathOfAddress(address: string): string | undefined {
+  try {
+    return new URL(address).pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether two paths name one page: escapes and a trailing slash aside. */
+export function samePage(left: string, right: string): boolean {
+  const plain = (value: string): string => {
+    let decoded = value;
+    try {
+      decoded = decodeURI(value);
+    } catch {
+      // A path that is not well formed is compared as it is written.
+    }
+    return decoded.replace(/\/+$/, '');
+  };
+  return plain(left) === plain(right);
 }
 
 let nonce = 0;
@@ -51,6 +79,21 @@ export function requestSnapshot(): Promise<SnapshotResult> {
 
 /** The canvas's own messages that say it shows something new: a rendering, or its styles replaced. */
 const CHANGE_TYPES: ReadonlySet<string> = new Set(['avb:render', 'avb:canvas-ready', 'stacki:design-changed']);
+
+/** Calls `report` with what each live preview changes on the preview's page. */
+export function watchLivePreviews(report: (message: Extract<DesignCanvasMessage, { readonly type: 'stacki:design-live' }>) => void): () => void {
+  const receive = (event: MessageEvent<unknown>): void => {
+    if (event.source === null || event.source !== liveCanvasWindow()) {
+      return;
+    }
+    const message = parseDesignCanvasMessage(event.data);
+    if (message?.type === 'stacki:design-live') {
+      report(message);
+    }
+  };
+  window.addEventListener('message', receive);
+  return () => window.removeEventListener('message', receive);
+}
 
 /** Calls `changed` whenever the live canvas may show something new. Asks the canvas to say what it shows now. */
 export function watchLiveCanvas(changed: () => void): () => void {

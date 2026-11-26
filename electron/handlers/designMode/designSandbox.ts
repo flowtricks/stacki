@@ -108,7 +108,10 @@ export function ensurePrivateDirectory(directory: string): void {
 /** Whether `rel` (project-relative, forward slashes) is a dependency, build or cache folder or inside one. */
 export function isSkippedPath(rel: string): boolean {
   const parts = rel.split('/');
-  if (parts.some((part) => DESIGN_SKIPPED_NAMES.has(part))) {
+  // Inside the site's own public/ and src/, a folder is the site's whatever it is called: `public/work/dist/a.png`
+  // is a picture the page shows. Only packages and history are left out there.
+  const own = parts[0] === 'public' || parts[0] === 'src';
+  if (parts.some((part) => (own ? part === 'node_modules' || part === '.git' : DESIGN_SKIPPED_NAMES.has(part)))) {
     return true;
   }
   return DESIGN_SKIPPED_ENDINGS.some((ending) => rel === ending || rel.endsWith(`/${ending}`) || rel.startsWith(`${ending}/`) || rel.includes(`/${ending}/`));

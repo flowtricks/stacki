@@ -7,7 +7,7 @@
 import { DESIGN_SNAPSHOT_LIMITS, type DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import type { DesignFrameId } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
-import { requestSnapshot, type SnapshotResult } from './designLiveCanvas';
+import { livePagePath, pathOfAddress, requestSnapshot, samePage, type SnapshotResult } from './designLiveCanvas';
 import { designView, updateDesignView } from './designStore';
 
 /** Changes closer together than this are one change. */
@@ -36,6 +36,18 @@ export function reportCaptureRefusals(listener: typeof onRefused): void {
   onRefused = listener;
 }
 
+let hold: 'held' | 'free' = 'free';
+
+/** While an element is being dragged its frame is not replaced: the drag restyles the document on screen. */
+export function holdCaptures(next: 'held' | 'free'): void {
+  if (hold !== next) {
+    hold = next;
+    if (next === 'free' && wanted) {
+      arm();
+    }
+  }
+}
+
 /** The live canvas may show something new. */
 export function noteCanvasChange(): void {
   lastChangeMs = performance.now();
@@ -57,9 +69,13 @@ function capture(): Promise<void> {
   if (running !== undefined) {
     return running;
   }
+  if (hold === 'held') {
+    return Promise.resolve();
+  }
   const view = designView();
-  // While the copy is being rewritten the canvas shows neither frame.
-  if (view.session.kind !== 'on' || view.switching !== undefined || view.phase === 'leaving') {
+  // While the copy is being rewritten the canvas shows neither frame, and while the person's page is being opened
+  // again it shows another.
+  if (view.session.kind !== 'on' || view.switching !== undefined || view.phase === 'leaving' || view.returning === 'returning') {
     return Promise.resolve();
   }
   const frame = view.session.active;
@@ -91,7 +107,17 @@ export function snapshotCharsHeld(snapshots: ReadonlyMap<DesignFrameId, DesignSn
 function store(frame: DesignFrameId, snapshot: DesignSnapshot): void {
   const view = designView();
   const session = view.session;
-  if (session.kind !== 'on' || session.active !== frame || view.switching !== undefined) {
+  if (hold === 'held') {
+    wanted = true;
+    return;
+  }
+  if (session.kind !== 'on' || session.active !== frame || view.switching !== undefined || view.returning === 'returning') {
+    return;
+  }
+  // A preview still on the page before this one answers with that page.
+  const shownPath = livePagePath();
+  const takenPath = pathOfAddress(snapshot.url);
+  if (shownPath !== undefined && takenPath !== undefined && !samePage(shownPath, takenPath)) {
     return;
   }
   const held = view.snapshots.get(frame);

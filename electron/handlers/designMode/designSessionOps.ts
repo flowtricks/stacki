@@ -10,7 +10,6 @@ import {
   DESIGN_SESSION_LIMITS,
   defaultFramePlace,
   nextDesignFrameId,
-  type DesignFrameChanges,
   type DesignFrameId,
   type DesignPlace,
   type DesignSessionState,
@@ -18,7 +17,7 @@ import {
 import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import { readDraft, removeDraft, saveDraft } from './designDrafts';
 import { copySnapshot, readSnapshot, removeSnapshot, saveSnapshot } from './designSnapshots';
-import { applyFrame, captureChanges, describeChanges, type FrameFiles } from './designFrames';
+import { applyFrame, captureChanges, type FrameFiles } from './designFrames';
 import type { DesignSandbox } from './designSandbox';
 
 export interface Frame {
@@ -258,14 +257,4 @@ export async function startOver(appDataRoot: string, session: Session, frameName
   await applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: NO_FILES });
   removeDraft(appDataRoot, session.realRoot);
   return { ...session, frames: [firstFrame(frameName)], active: 'f1', stale: false };
-}
-
-/** Every frame's changes as text for the AI. Expects a captured session. */
-export function changesOf(session: Session): readonly DesignFrameChanges[] {
-  return session.frames.map((frame) => ({
-    id: frame.id,
-    name: frame.name,
-    text: describeChanges(session.sandbox.base, frame.files, DESIGN_SESSION_LIMITS.changesCharsMax),
-    changedFiles: frame.files.size,
-  }));
 }

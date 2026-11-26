@@ -5,18 +5,98 @@
 
 .dm-bar {
   position: fixed;
-  /* Above the floating and expanded AI window (250): Exit must always be in reach. */
+  /* Above the floating and expanded AI window (250): close must always be in reach. */
   z-index: 260;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 6px;
-  padding: 0 16px 16px;
+  padding: 0 8px 16px;
   box-sizing: border-box;
   pointer-events: none;
+  container-type: inline-size;
 }
-.dm-bar > * {
+/* One solid bar. Every fill in it is opaque, in every state, so a bright page never shows through a control. */
+.dm-shell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg-panel);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
   pointer-events: auto;
+}
+.dm-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dm-status {
+  padding: 0 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dm-icon,
+.dm-send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dm-shell .dm-icon {
+  width: 32px;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+.dm-shell .dm-icon:hover:not(:disabled),
+.dm-shell .dm-icon:focus-visible {
+  background: color-mix(in srgb, var(--text) 12%, var(--bg-panel));
+  color: var(--text);
+}
+.dm-shell .dm-icon:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 18%, var(--bg-panel));
+}
+.dm-shell .dm-icon:disabled {
+  background: var(--bg-panel);
+  color: var(--text-faint);
+}
+/* Blue stays blue in every state. */
+.dm-shell .dm-send,
+.dm-shell .dm-send:hover:not(:disabled),
+.dm-shell .dm-send:active:not(:disabled),
+.dm-shell .dm-send:focus-visible,
+.dm-shell .dm-send:disabled {
+  padding: 0 12px;
+  background: var(--accent);
+  color: #fff;
+}
+@container (max-width: 400px) {
+  .dm-name-text {
+    display: none;
+  }
+}
+
+/* The top toolbar's size, guide and breakpoint controls act on the preview under the canvas, so they are put away;
+   the pointer button stays (on, it shows the shown frame live, scripts running, in the preview itself). */
+body:has(.dm-bar) .preview-size-controls,
+body:has(.dm-bar) .preview-toolbar .device-btns:not(.is-interaction),
+body:has(.dm-bar) .preview-toolbar-more {
+  display: none;
 }
 /* The title bar's "View as" chip would end the mode's own preview, bringing publishing and pulling back over a copy
    that can do neither; the bar below already names the mode, and Exit ends it. */
@@ -155,7 +235,8 @@ body:has(.dm-bar) .toast-stack {
 }
 .dm-body {
   position: relative;
-  overflow: hidden;
+  /* Not clipped: the document is exactly its size, and a handle on the page's edge must be whole to be pressed. */
+  overflow: visible;
   background: #fff;
 }
 .dm-tile.is-selected .dm-body {
@@ -214,6 +295,16 @@ body:has(.dm-bar) .toast-stack {
   top: 100%;
   cursor: nwse-resize;
 }
+.dm-size {
+  position: absolute;
+  top: 0;
+  width: max-content;
+  inset-inline-start: 0;
+  background: var(--accent);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 .dm-guide {
   position: absolute;
   background: var(--accent);
@@ -237,6 +328,7 @@ body:has(.dm-bar) .toast-stack {
 
 /* While a frame is photographed for the AI: the frame alone, with nothing of Design mode over it. */
 .dm-capturing .dm-bar,
+.dm-capturing .toast-stack,
 .dm-canvas.is-photo .dm-title,
 .dm-canvas.is-photo .dm-outline,
 .dm-canvas.is-photo .dm-guide {

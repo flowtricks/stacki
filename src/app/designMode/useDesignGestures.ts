@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefOb
 import { parseDesignFrameId, type DesignFrameId, type DesignPlace } from '../../../shared/ipc/designSession';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import { nodeAtFramePoint, nodeBox } from './designFrameDom';
+import { holdCaptures } from './designCaptureQueue';
 import {
   clearSelection,
   clampPlace,
@@ -133,6 +134,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     const held = press.current;
     press.current = undefined;
     plane.current?.removeAttribute('data-dm-dragging');
+    holdCaptures('free');
     unlisten.current?.();
     unlisten.current = undefined;
     return held;
@@ -243,6 +245,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
         return;
       }
       held.grip = gripElement(document, node, held.handle ?? 'move');
+      holdCaptures('held');
       if (held.grip === undefined) {
         return;
       }

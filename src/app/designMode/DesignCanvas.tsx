@@ -10,9 +10,11 @@ import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import { DesignFrameTile, EMPTY_FRAME, type DesignTileProps } from './DesignFrameTile';
 import { fitCamera, zoomAt } from './designCamera';
 import { noteCanvasChange, reportCaptureRefusals } from './designCaptureQueue';
-import { watchLiveCanvas } from './designLiveCanvas';
+import { exitDesignMode } from './designActions';
+import { watchLiveCanvas, watchLivePreviews } from './designLiveCanvas';
+import { applyLiveReport } from './designLiveApply';
 import { duplicateFrame, mayDuplicate, placeBeside, removeFrame, renameFrame, selectFrame, type DesignOpsContext, type OnSession } from './designFrameOps';
-import { designView, updateDesignView, useDesignView, type DesignView } from './designStore';
+import { designView, framePicture, updateDesignView, useDesignView, type DesignView } from './designStore';
 import { tileAt, useDesignGestures, type DesignDrag, type DesignHover } from './useDesignGestures';
 import { useDesignKeys } from './useDesignKeys';
 import { useCanvasColumn } from './useCanvasColumn';
@@ -30,7 +32,8 @@ const ZOOM_PER_PX = 1 / 300;
 export function DesignCanvas({ context, session }: { readonly context: DesignOpsContext; readonly session: OnSession }) {
   const words = useDesignWords();
   const view = useDesignView();
-  const area = useCanvasColumn('.main > .center .preview-frame-wrap');
+  // With the pointer button on, the preview itself is shown: the shown frame live, links and scripts working.
+  const area = useCanvasColumn('.main > .center .preview-frame-wrap:not([data-canvas-interactive="true"])');
   const plane = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<ContextTarget | undefined>(undefined);
   const [renaming, setRenaming] = useState<DesignFrameId | undefined>(undefined);
@@ -112,6 +115,7 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
           session={session}
           target={menu}
           onRename={() => setRenaming(menu.frame)}
+          onSend={(frame) => void exitDesignMode(context.app(), context.words(), 'send', frame)}
           onClose={() => {
             setMenu(undefined);
             plane.current?.focus({ preventScroll: true });
@@ -137,19 +141,28 @@ function tilesOf(
   const tiles: TileData[] = session.frames.map((frame) => ({
     frame,
     at: drag?.kind === 'move' && drag.frame === frame.id ? drag.at : frame.at,
-    snapshot: view.snapshots.get(frame.id),
+    snapshot: framePicture(view, session.frames, frame),
     mark: selected === frame.id ? 'selected' : (view.switching ?? session.active) === frame.id ? 'active' : 'none',
     hover: hover?.frame === frame.id ? hover.node : undefined,
     picked: picked?.frame === frame.id ? picked.node : undefined,
     hidden: view.photo !== undefined && view.photo !== frame.id,
     guides: drag?.kind === 'element' && drag.frame === frame.id ? drag.pull.guides : [],
+    size: drag?.kind === 'element' && drag.frame === frame.id ? drag.pull.size : undefined,
   }));
   if (drag?.kind === 'copy') {
     const source = session.frames.find((frame) => frame.id === drag.source);
     if (source !== undefined) {
       const name = context.words()('frame.copy', { name: source.name });
       const frame = { ...source, id: drag.id, name, at: drag.at };
-      tiles.push({ frame, at: drag.at, snapshot: view.snapshots.get(source.id), mark: 'selected', hover: undefined, picked: undefined, ghost: true });
+      tiles.push({
+        frame,
+        at: drag.at,
+        snapshot: framePicture(view, session.frames, source),
+        mark: 'selected',
+        hover: undefined,
+        picked: undefined,
+        ghost: true,
+      });
     }
   }
   // In id order, so a frame's document is never moved in the page, which would load it again.
@@ -178,8 +191,32 @@ function useLiveCanvas(context: DesignOpsContext): void {
   const words = useDesignWords();
   const app = context.app();
   const source = app.pageState?.source;
-  const scope = `${app.editedRel ?? ''}|${app.focusPath ?? ''}|${app.currentPage?.path ?? ''}`;
+  const scope = `${app.editedRel ?? ''}|${app.focusPath ?? ''}|${app.currentPage?.path ?? ''}|${app.pageUrlPath ?? ''}`;
+  // What was picked on the page before is not on this one.
+  const pageKey = `${app.currentPage?.path ?? ''}|${app.pageUrlPath ?? ''}`;
+  useEffect(() => {
+    updateDesignView((view) => (view.selection.kind === 'element' ? { ...view, selection: { kind: 'none' } } : view));
+  }, [pageKey]);
   useEffect(() => watchLiveCanvas(noteCanvasChange), []);
+  // A panel's live preview restyles the shown frame in place.
+  useEffect(
+    () =>
+      watchLivePreviews((message) => {
+        const view = designView();
+        if (view.session.kind !== 'on' || view.switching !== undefined || view.returning === 'returning') {
+          return;
+        }
+        const shown = document.querySelectorAll<HTMLIFrameElement>(`.dm-tile[data-dm-tile="${view.session.active}"] .dm-document`);
+        for (const frame of shown) {
+          if (frame.contentDocument !== null) {
+            applyLiveReport(frame.contentDocument, message);
+          }
+        }
+        // The outlines are measured again where the restyling moved things.
+        updateDesignView((current) => ({ ...current, liveRevision: current.liveRevision + 1 }));
+      }),
+    [],
+  );
   useEffect(() => noteCanvasChange(), [source, scope, app.devStatus]);
   const told = useRef(false);
   useEffect(() => {
@@ -226,12 +263,14 @@ function FrameMenu({
   session,
   target,
   onRename,
+  onSend,
   onClose,
 }: {
   readonly context: DesignOpsContext;
   readonly session: OnSession;
   readonly target: ContextTarget;
   readonly onRename: () => void;
+  readonly onSend: (frame: DesignFrameId) => void;
   readonly onClose: () => void;
 }) {
   const words = useDesignWords();
@@ -259,6 +298,7 @@ function FrameMenu({
             },
           },
           { kind: 'item', id: 'rename', label: words('frame.rename'), onSelect: onRename },
+          { kind: 'item', id: 'send', label: words('bar.send'), onSelect: () => onSend(target.frame) },
           {
             kind: 'item',
             id: 'delete',

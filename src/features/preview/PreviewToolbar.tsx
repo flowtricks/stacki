@@ -254,7 +254,7 @@ function interactionItems(interaction: PreviewToolbarProps['interaction'], trans
     return [];
   }
   const button = (
-    <div className="device-btns guide-btns">
+    <div className="device-btns guide-btns is-interaction">
       <button
         type="button"
         aria-label={translate('preview.interact.label')}

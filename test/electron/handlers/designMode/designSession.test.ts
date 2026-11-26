@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createSandbox, ensurePrivateDirectory, sweepSandboxes, sandboxesRoot } from '#dist/electron/handlers/designMode/designSandbox.js';
-import { applyFrame, captureChanges, describeFile } from '#dist/electron/handlers/designMode/designFrames.js';
+import { applyFrame, captureChanges } from '#dist/electron/handlers/designMode/designFrames.js';
 import { draftFolder, isSecretFile, readDraft, saveDraft } from '#dist/electron/handlers/designMode/designDrafts.js';
 import { createDesignSessions } from '#dist/electron/handlers/designMode/designModeHandlers.js';
 import {
@@ -135,7 +135,7 @@ test('a sandbox a crash left behind is swept, with its .env; private folders are
   assertPrivate(folder);
 });
 
-test('frames: what live differs by is captured, applied both ways, and described as hunks', async () => {
+test('frames: what live differs by is captured and applied both ways', async () => {
   const { project, appData } = scratch();
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
@@ -153,8 +153,6 @@ test('frames: what live differs by is captured, applied both ways, and described
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: blue; }\n');
   assert.ok(!fs.existsSync(path.join(live, 'src/pages/index.astro')));
   await assert.rejects(applyFrame({ base, live, from: new Map(), to: new Map([['../escape.txt', { kind: 'delete' }]]) }), /inside the copy/);
-  const hunk = describeFile('a.css', 'one\ntwo\nthree\n', 'one\nTWO\nthree\n');
-  assert.equal(hunk, 'a.css @@ line 2\n- two\n+ TWO');
 });
 
 test('drafts keep no secrets, notice a changed project, and refuse a kept path that climbs', async () => {
@@ -316,8 +314,7 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: green; }\n');
   await ask({ op: 'frame-switch', frame: 'f2' });
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: purple; }\n');
-  const changes = await ask({ op: 'changes' });
-  assert.ok(changes.kind === 'changes' && changes.frames[1]?.text.includes('+ .title { color: purple; }'));
+  assert.throws(() => parseDesignSessionRequest({ op: 'changes' }), /unknown op/, 'no source change is ever described');
   assert.deepEqual(await ask({ op: 'exit', handoff: { text: 'Rebuild it like this', images: [], names: [] } }), { kind: 'left', realRoot: project });
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: undefined }, 'not while the copy is still open');
   checkDesignFence('project:close', project);

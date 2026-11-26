@@ -22,6 +22,8 @@ export interface DesignTileProps {
   readonly mark: 'none' | 'active' | 'selected';
   readonly hover: DesignNodeAt | undefined;
   readonly picked: DesignNodeAt | undefined;
+  /** While an element here is being resized: the size it is drawn at. */
+  readonly size?: { readonly width: number; readonly height: number } | undefined;
   /** Snap lines of an element being dragged in this frame. */
   readonly guides?: readonly SnapGuide[];
   /** A copy being dragged, not yet a frame. */
@@ -68,6 +70,11 @@ export function DesignFrameTile(props: DesignTileProps) {
         )}
         {measure !== undefined && <Outline measure={measure} node={props.hover} kind="hover" />}
         {measure !== undefined && <Outline measure={measure} node={props.picked} kind="picked" />}
+        {props.size !== undefined && (
+          <div className="dm-size" style={{ fontSize: 11 / zoom, padding: `${String(2 / zoom)}px ${String(6 / zoom)}px` }}>
+            {`${String(props.size.width)} × ${String(props.size.height)}`}
+          </div>
+        )}
         {props.guides?.map((guide) => (
           <div
             key={`${guide.axis}${String(guide.at)}`}

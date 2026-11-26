@@ -3,12 +3,17 @@
 // copied, and offers to cancel. Nothing in it is edited: there is no copy to edit yet.
 import { useEffect, useRef, useState } from 'react';
 import type { DesignFrameView } from '../../../shared/ipc/designSession';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { brush, close } from '../../ui/central/centralGeometry';
 import { cancelDesignMode } from './designActions';
 import { fitCamera } from './designCamera';
 import { DesignFrameTile, EMPTY_FRAME } from './DesignFrameTile';
-import { useDesignView } from './designStore';
+import { framePicture, useDesignView } from './designStore';
 import { useCanvasColumn } from './useCanvasColumn';
 import { useDesignWords } from './i18n/designWords';
+
+const ModeIcon = centralIcon(brush);
+const CloseIcon = centralIcon(close);
 
 export function DesignOpeningCanvas({ frames }: { readonly frames: readonly DesignFrameView[] }) {
   const words = useDesignWords();
@@ -36,7 +41,7 @@ export function DesignOpeningCanvas({ frames }: { readonly frames: readonly Desi
                 frame={frame}
                 at={frame.at}
                 zoom={camera.zoom}
-                snapshot={view.snapshots.get(frame.id)}
+                snapshot={framePicture(view, frames, frame)}
                 mark="none"
                 hover={undefined}
                 picked={undefined}
@@ -48,14 +53,19 @@ export function DesignOpeningCanvas({ frames }: { readonly frames: readonly Desi
           </div>
         </div>
       </div>
-      <div className="dm-bar" data-design-mode="" style={column.style} role="toolbar" aria-label={words('bar.label')}>
-        <span className="dm-badge">{words('bar.label')}</span>
-        <span className="dm-button dm-status" role="status">
-          {words('enter.copying')}
-        </span>
-        <button type="button" className="dm-button dm-exit" onClick={() => void cancelDesignMode()}>
-          <span>{words('bar.exit')}</span>
-        </button>
+      <div className="dm-bar" data-design-mode="" style={column.style}>
+        <div className="dm-shell" role="toolbar" aria-label={words('bar.label')}>
+          <span className="dm-name">
+            <ModeIcon size={16} />
+            <span className="dm-name-text">{words('bar.label')}</span>
+          </span>
+          <span className="dm-status" role="status">
+            {words('enter.copying')}
+          </span>
+          <button type="button" className="dm-icon dm-exit" aria-label={words('bar.close')} onClick={() => void cancelDesignMode()}>
+            <CloseIcon size={16} />
+          </button>
+        </div>
       </div>
     </>
   );

@@ -23,10 +23,6 @@ export const DESIGN_SESSION_LIMITS = {
   /** A page's project-relative path. */
   pageCharsMax: 1_000,
   projectNameCharsMax: 400,
-  /** Changed files described per frame. */
-  changedFilesMax: 400,
-  /** The described change of one frame, as text. */
-  changesCharsMax: 60_000,
   /** One frame's picture for the AI, a PNG data URL. */
   imageCharsMax: 4_000_000,
   /** How far from the canvas's origin a frame may be placed, in canvas pixels. */
@@ -79,18 +75,10 @@ export type DesignEnterRefusal = (typeof DESIGN_ENTER_REFUSALS)[number];
 /** What Send to AI hands to the AI panel once the window is back on the project. */
 export interface DesignHandoff {
   readonly text: string;
-  /** PNG data URLs, one per frame that has a picture. */
+  /** PNG (or JPEG) data URLs: one frame's whole page, top to bottom. */
   readonly images: readonly string[];
-  /** Each picture's frame name, in the same order. */
+  /** Each picture's name, in the same order. */
   readonly names: readonly string[];
-}
-
-export interface DesignFrameChanges {
-  readonly id: DesignFrameId;
-  readonly name: string;
-  /** Each changed file as a short hunk of removed and added lines. */
-  readonly text: string;
-  readonly changedFiles: number;
 }
 
 export type DesignSessionRequest =
@@ -120,7 +108,6 @@ export type DesignSessionRequest =
   | { readonly op: 'frame-move'; readonly frame: DesignFrameId; readonly at: DesignPlace }
   | { readonly op: 'frame-snapshot'; readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }
   | { readonly op: 'frame-snapshots' }
-  | { readonly op: 'changes' }
   | { readonly op: 'start-over'; readonly frameName: string; readonly page: string | undefined };
 
 export type DesignSessionReply =
@@ -139,8 +126,7 @@ export type DesignSessionReply =
       readonly frames: readonly DesignFrameView[];
       readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[];
     }
-  | { readonly kind: 'snapshots'; readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] }
-  | { readonly kind: 'changes'; readonly frames: readonly DesignFrameChanges[] };
+  | { readonly kind: 'snapshots'; readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] };
 
 const FRAME_ID = /^f[1-9]\d{0,5}$/;
 
@@ -202,7 +188,7 @@ function frameName(input: unknown): string {
 
 function image(input: unknown): string {
   const value = bounded(input, DESIGN_SESSION_LIMITS.imageCharsMax, 'Design frame image');
-  if (!value.startsWith('data:image/png;base64,')) {
+  if (!value.startsWith('data:image/png;base64,') && !value.startsWith('data:image/jpeg;base64,')) {
     throw new Error('Design frame image: expected a PNG data URL');
   }
   return value;
@@ -243,7 +229,6 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
     case 'state':
     case 'take-handoff':
     case 'frame-snapshots':
-    case 'changes':
     case 'cancel':
       return { op };
     case 'preview':
@@ -317,16 +302,6 @@ function parseState(input: unknown): DesignSessionState {
   };
 }
 
-function frameChanges(input: unknown): DesignFrameChanges {
-  const value = record(input);
-  return {
-    id: parseDesignFrameId(value['id']),
-    name: frameName(value['name']),
-    text: bounded(value['text'], DESIGN_SESSION_LIMITS.changesCharsMax, 'Design frame changes'),
-    changedFiles: count(value['changedFiles']),
-  };
-}
-
 function boundedList(input: unknown, itemsMax: number, what: string): readonly unknown[] {
   if (!Array.isArray(input)) {
     throw new Error(`${what}: expected a list`);
@@ -378,8 +353,6 @@ export function parseDesignSessionReply(input: unknown): DesignSessionReply {
       const frames = boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design preview').map(frameView);
       return { kind, frames, snapshots: frameSnapshots(value['snapshots']) };
     }
-    case 'changes':
-      return { kind, frames: boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design changes').map(frameChanges) };
     default:
       throw new Error(`Design session: unknown reply ${JSON.stringify(kind)}`);
   }

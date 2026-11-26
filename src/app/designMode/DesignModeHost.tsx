@@ -20,7 +20,9 @@ import { DESIGN_MODE_ENABLED, type DesignSessionState } from '../../../shared/ip
 import { designSession } from './designBridge';
 import { DESIGN_NOTICE_KEY, cancelDesignMode, enterDesignMode, exitDesignMode, type DesignHostSource, type DesignNotice } from './designActions';
 import { installState, type DesignOpsContext } from './designFrameOps';
+import { useReturnToPage } from './designReturn';
 import { setAiHold } from '../../features/ai/aiHold';
+import { setDefaultsMenu } from '../../features/structure/defaultsMenu';
 import { draftHandoff } from './designHandoff';
 import { applyDesignRole, clearDesignRole } from './designRole';
 import { designView, isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
@@ -67,7 +69,7 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
         setActive: (active) => {
           const { app: current, words: currentWords } = latest.current;
           if (active === 'on') {
-            void enterDesignMode(current, currentWords);
+            void enterDesignMode(current, currentWords, () => latest.current.app);
           } else if (designView().phase === 'entering') {
             void cancelDesignMode();
           } else {
@@ -90,7 +92,11 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
     }
     // The agent cannot work on the copy (main refuses it): the AI panel offers nothing it would refuse.
     setAiHold(holdReason);
-    return () => setAiHold(undefined);
+    setDefaultsMenu('withheld');
+    return () => {
+      setAiHold(undefined);
+      setDefaultsMenu('offered');
+    };
   }, [on, holdReason]);
   // The mode's look holds for as long as the mode does: whatever ends the preview while the window is on the copy
   // (publishing and pulling would come back with it) is answered by showing it again.
@@ -99,7 +105,7 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
       applyDesignRole(roleName);
     }
   }, [on, roleName, role.id]);
-  useReopenedPage(app, view.session);
+  useReturnToPage(app);
   useUnselectedFrame(app.selectedId);
   if (view.session.kind !== 'on') {
     return view.opening === undefined ? undefined : <DesignOpeningCanvas frames={view.opening.frames} />;
@@ -197,22 +203,4 @@ function takeNotice(): DesignNotice | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** The copy opens on its home page; this goes back to the page the person was on, once. */
-function useReopenedPage(app: DesignHostSource, session: DesignSessionState): void {
-  const done = useRef<string | undefined>(undefined);
-  const page = session.kind === 'on' ? session.page : undefined;
-  const liveRoot = session.kind === 'on' ? session.liveRoot : undefined;
-  const { scan, currentPage, selectPage } = app;
-  useEffect(() => {
-    if (page === undefined || liveRoot === undefined || done.current === liveRoot || scan === undefined) {
-      return;
-    }
-    done.current = liveRoot;
-    const target = scan.pages.find((entry) => entry.name === page);
-    if (target !== undefined && currentPage?.name !== page) {
-      void selectPage(target).catch(() => undefined);
-    }
-  }, [page, liveRoot, scan, currentPage, selectPage]);
 }

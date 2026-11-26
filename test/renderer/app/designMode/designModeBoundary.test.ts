@@ -23,6 +23,7 @@ const FEATURE_PATHS = [
   'electron/preload/designMode/',
   'shared/ipc/designSession.ts',
   'shared/ipc/designSnapshot.ts',
+  'src/features/structure/defaultsMenu.ts',
 ];
 const SCANNED = ['src', 'electron', 'shared', 'scripts', 'studio/src', 'studio/scripts'];
 const FILES_MAX = 20_000;
@@ -108,6 +109,8 @@ const NEVER = [
   /^content:remoteEdit$/,
   /^project:(setEnv|openDialog|openSiteDialog|parentDialog|pickFolder|createAstro|createAstroCopy|createStarter)$/,
   /^dev:setNetwork$/,
+  // The project's own settings (insertion defaults, the column guide) are not for a design to change.
+  /^project:(writeMetadata|createDefaultsCanvas)$/,
   /^update:act$/,
 ];
 
@@ -132,7 +135,8 @@ test("the fence's channels are real channels, and none of them acts outside the 
 test("Design mode's renderer calls no preload method but its own channel", () => {
   const files = sourceFiles().filter((file) => file.startsWith('src/app/designMode/'));
   assert.ok(files.length > 8, 'the feature is read');
-  const avb = /window\.avb\.(\w+)/g;
+  // A call: reading a plain value off the bridge (the platform's name) reaches no channel.
+  const avb = /window\.avb\.(\w+)\(/g;
   assert.deepEqual(
     [...'window.avb.pageEdit('.matchAll(avb)].map((match) => match[1]),
     ['pageEdit'],

@@ -1,4 +1,4 @@
-// Goal: the arithmetic of dragging an element in a Design mode frame: a computed translate is read or refused,
+// Goal: the arithmetic of dragging an element in a Design mode frame and of cutting its picture: a computed translate is read or refused,
 // lengths are written in rem, and a drag snaps to the nearest edge or middle within reach and no further.
 //
 // Method: the real module, bundled by test/helpers/rendererModule.js, on plain boxes, with the negative space
@@ -34,4 +34,18 @@ test('a drag snaps edges and middles within reach, and not beyond it', () => {
   const far = snapMove(box, { x: 180, y: 120 }, [other], 6);
   assert.deepEqual(far, { offset: { x: 180, y: 120 }, guides: [] });
   assert.deepEqual(snapMove(box, { x: 3, y: 4 }, [], 6), { offset: { x: 3, y: 4 }, guides: [] });
+});
+
+const { SLICES_MAX, sliceHeights } = load('src/app/designMode/designSlices.ts');
+
+test('a tall page is cut into ordered slices that add up to it, at most six', () => {
+  assert.deepEqual(sliceHeights(800, 900), [900]);
+  assert.deepEqual(sliceHeights(800, 3_300), [1_100, 1_100, 1_100]);
+  const long = sliceHeights(800, 30_001);
+  assert.equal(long.length, SLICES_MAX);
+  assert.equal(
+    long.reduce((total, height) => total + height, 0),
+    30_001,
+  );
+  assert.throws(() => sliceHeights(0, 100), /has a size/);
 });
