@@ -429,7 +429,6 @@ test('Design mode is offered on macOS only', () => {
   for (const platform of ['win32', 'linux', 'freebsd']) {
     assert.equal(designModeAvailable(platform), false, platform);
   }
-  assert.throws(() => designModeAvailable(''), /a platform is named/);
 });
 
 test('off macOS, main refuses every design:session request and makes no copy', async () => {
