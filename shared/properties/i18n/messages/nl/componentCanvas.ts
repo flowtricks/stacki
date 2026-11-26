@@ -16,8 +16,8 @@ export const messages = {
   'componentCanvas.level.defaults': 'Ingesteld in de componentstandaarden (Componentstandaarden instellen). Stel hier een waarde in om die te vervangen.',
   'componentCanvas.level.frame': 'Dit frame heeft een eigen waarde',
   'componentCanvas.level.mixed': {
-    one: 'Het {count} frame hier toont een andere waarde. Een waarde die je hier instelt, geldt voor elk frame hier.',
-    other: 'De {count} frames hier tonen verschillende waarden. Een waarde die je hier instelt, geldt voor allemaal.',
+    one: 'Het {count} frame hier toont een andere waarde. Een waarde die je hier instelt, laat de eigen waarde van een frame ongewijzigd.',
+    other: 'De {count} frames hier tonen verschillende waarden. Een waarde die je hier instelt, laat de eigen waarde van elk frame ongewijzigd.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} frame hier houdt een eigen waarde. Reset om het deze waarde te geven.',

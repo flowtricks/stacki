@@ -17,8 +17,8 @@ export const messages = {
     'Impostato nei valori predefiniti del componente (Imposta i valori predefiniti del componente). Imposta un valore qui per sostituirlo.',
   'componentCanvas.level.frame': 'Questo frame ha un proprio valore',
   'componentCanvas.level.mixed': {
-    one: 'Il {count} frame qui mostra un valore diverso. Un valore impostato qui viene applicato a tutti i frame qui.',
-    other: 'I {count} frame qui mostrano valori diversi. Un valore impostato qui viene applicato a tutti.',
+    one: 'Il {count} frame qui mostra un valore diverso. Un valore impostato qui lascia invariato il valore proprio di un frame.',
+    other: 'I {count} frame qui mostrano valori diversi. Un valore impostato qui lascia invariato il valore proprio di ogni frame.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} frame qui mantiene un proprio valore. Reimposta per assegnargli questo.',

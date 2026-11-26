@@ -16,7 +16,7 @@ export const messages = {
   'componentCanvas.level.defaults': '在组件默认值（设置组件默认值）中设置。在此处设置值即可替换它。',
   'componentCanvas.level.frame': '此框架有自己的值',
   'componentCanvas.level.mixed': {
-    other: '此处的 {count} 个框架显示不同的值。在此处设置的值会应用到所有这些框架。',
+    other: '此处的 {count} 个框架显示不同的值。在此处设置的值不会更改各框架自身的值。',
   },
   'componentCanvas.level.overrides': {
     other: '此处有 {count} 个框架保留自己的值。重置即可让它们使用此值。',

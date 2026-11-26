@@ -16,7 +16,7 @@ export const messages = {
   'componentCanvas.level.defaults': '컴포넌트 기본값(컴포넌트 기본값 설정)에 설정되어 있습니다. 바꾸려면 여기에서 값을 설정하세요.',
   'componentCanvas.level.frame': '이 프레임에는 자체 값이 있습니다',
   'componentCanvas.level.mixed': {
-    other: '여기의 프레임 {count}개에 서로 다른 값이 표시됩니다. 여기에서 설정한 값은 모두에 적용됩니다.',
+    other: '여기의 프레임 {count}개에 서로 다른 값이 표시됩니다. 여기에서 값을 설정해도 각 프레임의 자체 값은 그대로 유지됩니다.',
   },
   'componentCanvas.level.overrides': {
     other: '여기에서 프레임 {count}개가 자체 값을 유지합니다. 재설정하면 이 값이 적용됩니다.',

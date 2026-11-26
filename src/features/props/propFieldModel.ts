@@ -248,7 +248,9 @@ export function usePropFieldModel(props: PropFieldProps) {
     dataContext,
   } = props;
   // Over things that differ the field says so in place of a value (propFieldExtras.ts mixed).
-  const mixed = usePropFieldExtra(props.field.name)?.mixed;
+  const extra = usePropFieldExtra(props.field.name);
+  const mixed = extra?.mixed;
+  const hostReset = extra?.reset;
   const placeholderFor = (target: FieldDefinition) =>
     mixed !== undefined && target.name === props.field.name
       ? mixed
@@ -333,6 +335,7 @@ export function usePropFieldModel(props: PropFieldProps) {
     resetRefusal,
     isColor,
     mixed,
+    hostReset,
   };
 }
 
@@ -409,6 +412,11 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
   const { translate, setMenuPosition, onChange, setCustom, value, field, isSet, showExpr, required, resetPlan } = state;
   const reset = () => {
     setMenuPosition(undefined);
+    // The host's own Reset (a canvas field's frames keeping their own values) replaces clearing the field.
+    if (state.hostReset !== undefined) {
+      state.hostReset();
+      return;
+    }
     // A preview's reset always removes what is set here, so what shows without it comes back.
     if (state.policy === 'preview') {
       onChange(undefined, true);
@@ -444,8 +452,8 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
   };
   const onLabelClick = (event: React.MouseEvent<HTMLSpanElement>) => {
     // A field switched to a value has something to offer even before anything
-    // is set: the way back to its control.
-    if (!isSet && !showExpr) {
+    // is set: the way back to its control; so has one whose host resets it.
+    if (!isSet && !showExpr && state.hostReset === undefined) {
       return;
     }
     if (event.altKey) {
@@ -457,7 +465,7 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
   };
   // The label's context menu is the same menu, opened where the click was.
   const onLabelContextMenu = (event: React.MouseEvent<HTMLSpanElement>) => {
-    if (!isSet && !showExpr) {
+    if (!isSet && !showExpr && state.hostReset === undefined) {
       return;
     }
     event.preventDefault();

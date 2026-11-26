@@ -30,12 +30,13 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
   const { name, type, isSet, showExpr, onLabelClick, onLabelContextMenu, required, missingRequired, deprecated } = state;
   // Set is the overridden state: the label takes the accent, as a value the
   // instance gives rather than the component's default.
-  const provenance = usePropFieldExtra(state.field.name)?.provenance;
+  const extra = usePropFieldExtra(state.field.name);
+  const provenance = extra?.provenance;
   const inherited = provenance?.tone === 'inherited';
   const classes = ['prop-label', ...(inherited ? ['inherited'] : isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
   const ownTitle = isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined;
   // A value given from elsewhere has nothing here to reset: the label only says where it is set.
-  const resets = provenanceResets(provenance);
+  const resets = provenanceResets(provenance) || extra?.reset !== undefined;
 
   return (
     <span

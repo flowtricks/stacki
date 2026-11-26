@@ -17,6 +17,7 @@ import {
   canvasContent,
   frameKey,
   keyPairs,
+  overridesIn,
   resolveFrame,
   scopeHolds,
   settingLevel,
@@ -180,7 +181,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
               action: splitAction(state, { name, count: candidate.values.length }, { canvas, translate, onRefused: (text) => app.showToast(text, 'info') }),
             };
       if (!split && values.mixed.has(name)) {
-        return { ...action, ...mixedExtra(state, name, translate) };
+        return { ...action, ...mixedExtra(canvas, state, name, translate) };
       }
       return {
         ...action,
@@ -214,20 +215,35 @@ function panelValuesOf(app: ShellView, state: CanvasOpen, frame: ModelFrame): Fr
     values.schema.map((field) => field.name).filter((name) => splitPartOf(frame, name) === undefined && settingMixed(settings, frames, scope, `prop:${name}`)),
   );
   assert(mixed.size <= values.schema.length, 'Only the panel’s own fields are mixed');
-  const props = Object.fromEntries(Object.entries(values.props).filter(([name]) => !mixed.has(name)));
+  // A value the scope holds itself is shown (what is being typed stays under the caret); the label still says the frames
+  // differ. Only where the scope holds nothing does the field say Mixed in place of one frame's value.
+  const props = Object.fromEntries(Object.entries(values.props).filter(([name]) => !mixed.has(name) || entryAt(settings, scope, `prop:${name}`)));
   return { ...values, props, mixed };
 }
 
-// A prop whose frames in scope differ: the field says Mixed, and its label says how many frames an edit reaches. Reset
-// stays where the scope itself holds a value (it clears it there and below).
-function mixedExtra(state: CanvasOpen, name: string, translate: Translator): Pick<PropFieldExtra, 'mixed' | 'provenance'> {
+// A prop whose frames in scope differ: the field says Mixed, and its label how many frames there are and which keep a
+// value of their own (an edit here leaves those as they are). Where frames keep their own, Reset gives them the scope's
+// value (resetOverrides); a scope that holds a value of its own resets it as any field does.
+function mixedExtra(
+  canvas: ComponentCanvasControl,
+  state: CanvasOpen,
+  name: string,
+  translate: Translator,
+): Pick<PropFieldExtra, 'mixed' | 'provenance' | 'reset'> {
   const scope = state.scopes.props;
-  const count = state.layout.frames.filter((candidate) => scopeHolds(scope, candidate.key)).length;
+  const keys = state.layout.frames.map((candidate) => candidate.key);
+  const count = keys.filter((key) => scopeHolds(scope, key)).length;
   assert(count > 1, 'Only several frames can hold different values');
-  const own = entryAt(state.settings.components[state.component.file], scope, `prop:${name}`);
+  const settings = state.settings.components[state.component.file];
+  const setting: FrameSetting = `prop:${name}`;
+  const kept = overridesIn(settings, keys, scope, setting).length;
+  const differ = translate('componentCanvas.level.mixed', { count });
+  const tip = kept === 0 ? differ : `${differ} ${translate('componentCanvas.level.overrides', { count: kept })}`;
+  const own = entryAt(settings, scope, setting);
   return {
-    mixed: translate('componentCanvas.panel.mixed'),
-    provenance: { tone: own ? 'noted' : 'inherited', tip: translate('componentCanvas.level.mixed', { count }) },
+    ...(own ? {} : { mixed: translate('componentCanvas.panel.mixed') }),
+    provenance: { tone: own ? 'noted' : 'inherited', tip },
+    ...(kept === 0 ? {} : { reset: () => canvas.resetOverrides('props', setting) }),
   };
 }
 

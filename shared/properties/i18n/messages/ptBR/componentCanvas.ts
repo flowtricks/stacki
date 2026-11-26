@@ -16,8 +16,8 @@ export const messages = {
   'componentCanvas.level.defaults': 'Definido nos padrões do componente (Definir padrões do componente). Defina um valor aqui para substituí-lo.',
   'componentCanvas.level.frame': 'Este quadro tem seu próprio valor',
   'componentCanvas.level.mixed': {
-    one: 'O {count} quadro aqui mostra um valor diferente. Um valor definido aqui vai para todos os quadros daqui.',
-    other: 'Os {count} quadros aqui mostram valores diferentes. Um valor definido aqui vai para todos eles.',
+    one: 'O {count} quadro aqui mostra um valor diferente. Um valor definido aqui mantém inalterado o valor próprio de um quadro.',
+    other: 'Os {count} quadros aqui mostram valores diferentes. Um valor definido aqui mantém inalterado o valor próprio de cada quadro.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} quadro aqui mantém o próprio valor. Redefina para dar a ele este valor.',

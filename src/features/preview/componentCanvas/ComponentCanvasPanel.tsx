@@ -137,8 +137,8 @@ function RootSection({ canvas, state }: { readonly canvas: ComponentCanvasContro
   );
 }
 
-// Whether the frames a section's scope reaches show different values for `setting`: its field then says Mixed, and an
-// edit gives them all the one value (useDesktopComponentCanvas.ts withScopeEdit).
+// Whether the frames a section's scope reaches show different values for `setting`: its field then says Mixed rather
+// than one frame's value. An edit writes the scope's value only; a frame with its own keeps it.
 function mixed(state: CanvasOpen, section: CanvasSection, setting: FrameSetting): boolean {
   const scope = state.scopes[section];
   if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
@@ -148,31 +148,33 @@ function mixed(state: CanvasOpen, section: CanvasSection, setting: FrameSetting)
   return settingMixed(state.settings.components[state.component.file], frames, scope, setting);
 }
 
-// What the label's tip says while the field is Mixed: how many frames differ, and that an edit reaches them all.
-function mixedTip(state: CanvasOpen, section: CanvasSection, translate: Translator): string {
-  const scope = state.scopes[section];
-  const count = state.layout.frames.filter((candidate) => scopeHolds(scope, candidate.key)).length;
-  assert(count > 1, 'Only several frames can show different values');
-  return translate('componentCanvas.level.mixed', { count });
+interface Overrides {
+  /** What the label's tip says: that the frames differ, and which keep a value of their own. */
+  readonly tip: string | undefined;
+  /** How many frames in scope keep a value a narrower scope gives them: what Reset can give the scope's value. */
+  readonly count: number;
 }
 
-// The frames a section's scope reaches that keep a value of their own for `setting`, said in the label's tip.
-function overridden(state: CanvasOpen, section: CanvasSection, setting: FrameSetting, translate: Translator): string | undefined {
+// The frames a section's scope reaches that keep a value of their own for `setting`, and whether they differ, said in
+// the label's tip. Reset (resetOverrides) gives those frames the scope's value; frames that differ only through a
+// sibling scope have nothing here to reset.
+function overridden(state: CanvasOpen, section: CanvasSection, setting: FrameSetting, translate: Translator): Overrides {
   const scope = state.scopes[section];
   if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
-    return undefined;
-  }
-  if (mixed(state, section, setting)) {
-    return mixedTip(state, section, translate);
+    return { tip: undefined, count: 0 };
   }
   const frames = state.layout.frames.map((candidate) => candidate.key);
   const found = overridesIn(state.settings.components[state.component.file], frames, scope, setting);
+  const reached = frames.filter((key) => scopeHolds(scope, key)).length;
+  const differ = mixed(state, section, setting) ? translate('componentCanvas.level.mixed', { count: reached }) : undefined;
   if (found.length === 0) {
-    return undefined;
+    return { tip: differ, count: 0 };
   }
   const count = translate('componentCanvas.level.overrides', { count: found.length });
   // The selected frame among them is why it does not change: said first.
-  return found.some((entry) => entry.frame === state.frame) ? `${translate('componentCanvas.level.frame')}. ${count}` : count;
+  const own = found.some((entry) => entry.frame === state.frame) ? `${translate('componentCanvas.level.frame')}. ${count}` : count;
+  assert(found.length <= reached, 'Only frames in scope keep their own value');
+  return { tip: differ === undefined ? own : `${differ} ${own}`, count: found.length };
 }
 
 function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height'; readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
@@ -188,7 +190,7 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
   const shownMixed = dragged === undefined && lengths.length > 1;
   const value = dragged ?? (shownMixed ? (lengths.every((length) => length !== 'hug') ? 'mixed' : 'unknown') : resolveFrame(settings, scope)[side]);
   const own = settings?.frames?.[scope]?.[side] !== undefined;
-  const tip = overridden(state, 'size', side, translate);
+  const { tip, count } = overridden(state, 'size', side, translate);
   // Hug over all frames is what no setting says, so it is written as no setting rather than as "hug".
   const set = (next: FrameLength) => canvas.edit({ kind: 'field', field: side, value: next === 'hug' && scope === '' ? undefined : next });
   return (
@@ -196,10 +198,10 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
       <FieldTitle>
         <ResetLabel
           label={label}
-          active={own || tip !== undefined}
+          active={own || count > 0}
           tone={tip === undefined ? undefined : 'overridden'}
           tip={tip}
-          onReset={() => (tip === undefined ? canvas.edit({ kind: 'field', field: side, value: undefined }) : canvas.resetOverrides('size', side))}
+          onReset={() => (count === 0 ? canvas.edit({ kind: 'field', field: side, value: undefined }) : canvas.resetOverrides('size', side))}
         />
       </FieldTitle>
       <div className="component-canvas-length">
@@ -257,7 +259,7 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
     ? { value: rootOwn ?? (scope === COMPONENT_SCOPE ? root.background : undefined) }
     : frameBackground(state.settings, resolveFrame(settings, scope), state.component.file);
   const own = rootScope ? rootOwn !== undefined : settings?.frames?.[scope]?.background !== undefined;
-  const tip = overridden(state, 'background', 'background', translate);
+  const { tip, count } = overridden(state, 'background', 'background', translate);
   const inherited = !own && shown.value !== undefined && tip === undefined;
   // Frames in scope that differ show no one colour: the swatch is empty and the field says Mixed.
   const differ = !rootScope && mixed(state, 'background', 'background');
@@ -278,10 +280,10 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
         ) : (
           <ResetLabel
             label={label}
-            active={own || tip !== undefined}
+            active={own || count > 0}
             tone={tip === undefined ? undefined : 'overridden'}
             tip={tip}
-            onReset={() => (tip === undefined ? canvas.edit({ kind: 'background', value: undefined }) : canvas.resetOverrides('background', 'background'))}
+            onReset={() => (count === 0 ? canvas.edit({ kind: 'background', value: undefined }) : canvas.resetOverrides('background', 'background'))}
           />
         )}
       </FieldTitle>

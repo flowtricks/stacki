@@ -16,7 +16,7 @@ export const messages = {
   'componentCanvas.level.defaults': '在元件預設值（設定元件預設值）中設定。在此處設定值即可取代它。',
   'componentCanvas.level.frame': '此框架有自己的值',
   'componentCanvas.level.mixed': {
-    other: '此處的 {count} 個框架顯示不同的值。在此處設定的值會套用到所有這些框架。',
+    other: '此處的 {count} 個框架顯示不同的值。在此處設定的值不會變更各框架自身的值。',
   },
   'componentCanvas.level.overrides': {
     other: '此處有 {count} 個框架保留自己的值。重設即可讓它們使用此值。',

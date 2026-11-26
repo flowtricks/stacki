@@ -15,7 +15,6 @@ import {
   parseComponentCanvasSource,
   canvasAssetUses,
   withFrameEdit,
-  withScopeEdit,
   canvasRoot,
   PROJECT_ROOT,
   withRootEdit,
@@ -289,21 +288,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           setState({ ...current, scopes: { ...current.scopes, [section]: scope } });
         }
       },
-      edit: (edit: FrameEdit) =>
-        update((current) => {
-          const component = current.component.file;
-          // An edit reaches every frame its scope does, those with a value of their own too (withScopeEdit).
-          const frames = current.layout.frames.map((frame) => frame.key);
-          if (edit.kind === 'background') {
-            const target = rootTarget(current.scopes.background, current);
-            // A root scope holds the canvas root's background (and its classes, editRootClasses).
-            return target === undefined
-              ? (file) => withScopeEdit(file, component, current.scopes.background, frames, edit)
-              : (file) => withRootEdit(file, target, { kind: 'background', value: edit.value });
-          }
-          // Sizes go to the size scope; a frame's size is never set at a root scope.
-          return edit.kind === 'field' ? (file) => withScopeEdit(file, component, current.scopes.size, frames, edit) : undefined;
-        }),
+      edit: (edit: FrameEdit) => update((current) => frameSettingChange(current, edit)),
       resetOverrides: (section, setting) =>
         update((current) => {
           const scope = current.scopes[section];
@@ -355,11 +340,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       editValues: (scope, edits, pace) => {
         assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
         if (edits.length > 0) {
-          updatePaced(pace ?? 'settled', (current) => {
-            const component = current.component.file;
-            const frames = current.layout.frames.map((frame) => frame.key);
-            return (file) => edits.reduce((next, edit) => withScopeEdit(next, component, scope, frames, edit), file);
-          });
+          updatePaced(pace ?? 'settled', (current) => valuesChange(current, scope, edits));
         }
       },
       hideFramePanel: () => {
@@ -389,6 +370,31 @@ function settingsIo(project: string): CanvasSettingsIo {
       return saved.source ?? source;
     },
   };
+}
+
+/**
+ * What a size or background edit from Frame settings writes: the value at its section's scope and nothing else. A
+ * narrower scope's own value (a frame's own width) survives it and still wins on its frames, which the field then says
+ * (Mixed, orange, with Reset). A background at a root scope goes to the canvas root. Exported for its regression test.
+ */
+export function frameSettingChange(current: CanvasOpen, edit: FrameEdit): CanvasChange | undefined {
+  const component = current.component.file;
+  if (edit.kind === 'background') {
+    const target = rootTarget(current.scopes.background, current);
+    // A root scope holds the canvas root's background (and its classes, editRootClasses).
+    return target === undefined
+      ? (file) => withFrameEdit(file, component, current.scopes.background, edit)
+      : (file) => withRootEdit(file, target, { kind: 'background', value: edit.value });
+  }
+  // Sizes go to the size scope; a frame's size is never set at a root scope.
+  return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
+}
+
+/** Preview values from the Settings panel, written at `scope` only: narrower values survive, as for sizes. Exported for its test. */
+export function valuesChange(current: CanvasOpen, scope: string, edits: readonly FrameEdit[]): CanvasChange {
+  assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
+  const component = current.component.file;
+  return (file) => edits.reduce((next, edit) => withFrameEdit(next, component, scope, edit), file);
 }
 
 // The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit.

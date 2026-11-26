@@ -16,7 +16,7 @@ export const messages = {
   'componentCanvas.level.defaults': 'Diatur di bawaan komponen (Atur bawaan komponen). Atur nilai di sini untuk menggantinya.',
   'componentCanvas.level.frame': 'Frame ini punya nilainya sendiri',
   'componentCanvas.level.mixed': {
-    other: '{count} frame di sini menampilkan nilai yang berbeda. Nilai yang diatur di sini diterapkan ke semuanya.',
+    other: '{count} frame di sini menampilkan nilai yang berbeda. Nilai yang diatur di sini membiarkan nilai milik tiap frame sebagaimana adanya.',
   },
   'componentCanvas.level.overrides': {
     other: '{count} frame di sini tetap memakai nilainya sendiri. Reset untuk memberinya nilai ini.',

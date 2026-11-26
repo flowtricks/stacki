@@ -41,10 +41,8 @@ import {
   withRootEdit,
   PROJECT_ROOT,
   arrangementOf,
-  editSetting,
   settingMixed,
   withArrangement,
-  withScopeEdit,
 } from '#dist/shared/properties/componentCanvas.js';
 import { COMPONENT_CANVAS_FILE_SCHEMA } from '#dist/shared/properties/cli/files/componentCanvasFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
@@ -550,45 +548,15 @@ test('a component’s arrangement: stored only when not side by side, read back,
   assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 2 } } }), /row, column or wrap/);
 });
 
-test('an edit to a scope reaches every frame in it, its own values and a winning sibling’s included', () => {
+test('frames that differ are told apart from frames that agree, a frame’s own value among them', () => {
   const button = 'src/components/Button.astro';
   const frames = ['emphasis=primary&variant=main', 'emphasis=secondary&variant=main', 'variant=link'];
-  // The first frame keeps its own width.
   const file = withFrameEdit(EMPTY_CANVAS_FILE, button, frames[0] ?? '', { kind: 'field', field: 'width', value: 200 });
-  const before = file.components[button];
-  assert.equal(settingMixed(before, frames, '', 'width'), true, 'one frame’s own width differs from the others’ hug');
-  assert.equal(settingMixed(before, frames, 'variant=link', 'width'), false, 'one frame never differs from itself');
-  assert.equal(settingMixed(before, frames, '', 'height'), false, 'all hug');
-  // All frames: the frame's own width goes, and every frame takes the new one.
-  const wide = withScopeEdit(file, button, '', frames, { kind: 'field', field: 'width', value: 300 });
-  for (const frame of frames) {
-    assert.equal(resolveFrame(wide.components[button], frame).width, 300, `${frame} takes the scope’s width`);
-  }
-  assert.equal(wide.components[button]?.frames?.[frames[0] ?? ''], undefined, 'the frame’s own entry, left empty, is removed');
-  assert.equal(settingMixed(wide.components[button], frames, '', 'width'), false);
-  // Clearing clears at the scope and below; nothing is written for the frames.
-  const cleared = withScopeEdit(wide, button, '', frames, { kind: 'field', field: 'width', value: undefined });
-  assert.equal(resolveFrame(cleared.components[button], frames[0] ?? '').width, 'hug');
-  // A sibling scope outside the one edited, with more pairs than it, still wins on the frame they share: that frame is
-  // given the value at its own key, and the sibling's entry itself is left alone.
-  const arrows = ['direction=back&emphasis=secondary&variant=arrow', 'direction=forward&emphasis=secondary&variant=arrow'];
-  const sibling = withFrameEdit(EMPTY_CANVAS_FILE, button, 'direction=back&emphasis=secondary', { kind: 'background', value: 'red' });
-  assert.equal(settingMixed(sibling.components[button], arrows, 'variant=arrow', 'background'), true);
-  const painted = withScopeEdit(sibling, button, 'variant=arrow', arrows, { kind: 'background', value: 'blue' });
-  const settings = painted.components[button];
-  for (const frame of arrows) {
-    assert.equal(resolveFrame(settings, frame).background, 'blue', `${frame} takes the scope’s background`);
-  }
-  assert.equal(settings?.frames?.['direction=back&emphasis=secondary']?.background, 'red', 'the sibling scope itself is untouched');
-  assert.equal(settings?.frames?.[arrows[0] ?? '']?.background, 'blue', 'the frame it won on has the value of its own');
-  assert.equal(settingMixed(settings, arrows, 'variant=arrow', 'background'), false);
-  // Props: a frame's own value goes under an all-frames value.
+  const settings = file.components[button];
+  assert.equal(settingMixed(settings, frames, '', 'width'), true, 'one frame’s own width differs from the others’ hug');
+  assert.equal(settingMixed(settings, frames, 'variant=link', 'width'), false, 'one frame never differs from itself');
+  assert.equal(settingMixed(settings, frames, '', 'height'), false, 'all hug');
   const labelled = withFrameEdit(EMPTY_CANVAS_FILE, button, 'variant=link', { kind: 'prop', name: 'label', value: 'Own' });
   assert.equal(settingMixed(labelled.components[button], frames, '', 'prop:label'), true);
-  const everywhere = withScopeEdit(labelled, button, '', frames, { kind: 'prop', name: 'label', value: 'All' });
-  assert.equal(settingMixed(everywhere.components[button], frames, '', 'prop:label'), false);
-  assert.equal(resolveFrame(everywhere.components[button], 'variant=link').props['label'], 'All');
-  assert.equal(editSetting({ kind: 'inherit', name: 'label' }), 'prop:label');
-  assert.equal(editSetting({ kind: 'content', value: undefined }), 'content');
-  assert.equal(editSetting({ kind: 'field', field: 'height', value: 'hug' }), 'height');
+  assert.equal(settingMixed(labelled.components[button], frames, 'variant=main', 'prop:label'), false, 'outside the scope it does not count');
 });

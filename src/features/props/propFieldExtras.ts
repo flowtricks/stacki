@@ -28,6 +28,11 @@ export interface PropFieldExtra {
    * this word where a value would be, and no choice is marked; whatever is set then goes to all of them.
    */
   readonly mixed?: string;
+  /**
+   * Reset as the host does it, in place of clearing this field's own value: offered even where nothing is set here (a
+   * canvas field over frames that keep their own values, which Reset gives the field's value).
+   */
+  readonly reset?: () => void;
 }
 
 /**

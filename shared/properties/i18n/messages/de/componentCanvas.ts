@@ -17,8 +17,8 @@ export const messages = {
     'In den Komponenten-Standardwerten festgelegt (Komponenten-Standardwerte festlegen). Lege hier einen Wert fest, um ihn zu ersetzen.',
   'componentCanvas.level.frame': 'Dieser Frame hat einen eigenen Wert',
   'componentCanvas.level.mixed': {
-    one: 'Der {count} Frame hier zeigt einen anderen Wert. Ein hier festgelegter Wert gilt für jeden Frame hier.',
-    other: 'Die {count} Frames hier zeigen unterschiedliche Werte. Ein hier festgelegter Wert gilt für alle.',
+    one: 'Der {count} Frame hier zeigt einen anderen Wert. Ein hier festgelegter Wert lässt den eigenen Wert eines Frames unverändert.',
+    other: 'Die {count} Frames hier zeigen unterschiedliche Werte. Ein hier festgelegter Wert lässt den eigenen Wert jedes Frames unverändert.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} Frame hier behält seinen eigenen Wert. Setze zurück, um ihm diesen zu geben.',

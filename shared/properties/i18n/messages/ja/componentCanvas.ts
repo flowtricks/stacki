@@ -18,7 +18,7 @@ export const messages = {
     'コンポーネントのデフォルト（「コンポーネントのデフォルトを設定」）で設定されています。置き換えるには、ここで値を設定してください。',
   'componentCanvas.level.frame': 'このフレームには独自の値があります',
   'componentCanvas.level.mixed': {
-    other: 'ここの {count} フレームは異なる値を表示しています。ここで設定した値は、そのすべてに適用されます。',
+    other: 'ここの {count} フレームは異なる値を表示しています。ここで値を設定しても、各フレーム独自の値はそのまま保持されます。',
   },
   'componentCanvas.level.overrides': {
     other: 'ここの {count} フレームは独自の値を保持しています。リセットするとこの値になります。',

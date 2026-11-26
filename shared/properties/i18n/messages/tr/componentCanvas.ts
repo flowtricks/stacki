@@ -16,8 +16,8 @@ export const messages = {
   'componentCanvas.level.defaults': 'Bileşen varsayılanlarında ayarlandı (Bileşen varsayılanlarını ayarla). Değiştirmek için burada bir değer ayarlayın.',
   'componentCanvas.level.frame': 'Bu çerçevenin kendi değeri var',
   'componentCanvas.level.mixed': {
-    one: 'Buradaki {count} çerçeve farklı bir değer gösteriyor. Burada ayarlanan değer buradaki her çerçeveye uygulanır.',
-    other: 'Buradaki {count} çerçeve farklı değerler gösteriyor. Burada ayarlanan değer hepsine uygulanır.',
+    one: 'Buradaki {count} çerçeve farklı bir değer gösteriyor. Burada ayarlanan değer, bir çerçevenin kendi değerini olduğu gibi bırakır.',
+    other: 'Buradaki {count} çerçeve farklı değerler gösteriyor. Burada ayarlanan değer, her çerçevenin kendi değerini olduğu gibi bırakır.',
   },
   'componentCanvas.level.overrides': {
     one: 'Buradaki {count} çerçeve kendi değerini koruyor. Ona bu değeri vermek için sıfırlayın.',

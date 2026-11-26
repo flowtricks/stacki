@@ -16,10 +16,10 @@ export const messages = {
   'componentCanvas.level.defaults': 'Ustawione w wartościach domyślnych komponentu (Ustaw wartości domyślne komponentu). Ustaw tutaj wartość, aby ją zastąpić.',
   'componentCanvas.level.frame': 'Ta ramka ma własną wartość',
   'componentCanvas.level.mixed': {
-    one: '{count} ramka tutaj pokazuje inną wartość. Wartość ustawiona tutaj trafi do każdej ramki tutaj.',
-    few: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj trafi do wszystkich.',
-    many: '{count} ramek tutaj pokazuje różne wartości. Wartość ustawiona tutaj trafi do wszystkich.',
-    other: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj trafi do wszystkich.',
+    one: '{count} ramka tutaj pokazuje inną wartość. Wartość ustawiona tutaj nie zmienia własnej wartości ramki.',
+    few: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj nie zmienia własnej wartości żadnej z ramek.',
+    many: '{count} ramek tutaj pokazuje różne wartości. Wartość ustawiona tutaj nie zmienia własnej wartości żadnej z ramek.',
+    other: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj nie zmienia własnej wartości żadnej z ramek.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} ramka tutaj zachowuje własną wartość. Zresetuj, aby nadać jej tę wartość.',

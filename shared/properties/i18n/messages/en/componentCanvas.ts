@@ -16,8 +16,8 @@ export const messages = {
   'componentCanvas.level.defaults': 'Set in the component defaults (Set component defaults). Set a value here to replace it.',
   'componentCanvas.level.frame': 'This frame has its own value',
   'componentCanvas.level.mixed': {
-    one: 'The {count} frame here shows a different value. A value set here goes to every frame here.',
-    other: 'The {count} frames here show different values. A value set here goes to all of them.',
+    one: 'The {count} frame here shows a different value. A value set here leaves a frame’s own value as it is.',
+    other: 'The {count} frames here show different values. A value set here leaves each frame’s own value as it is.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} frame here keeps its own value. Reset to give it this one.',

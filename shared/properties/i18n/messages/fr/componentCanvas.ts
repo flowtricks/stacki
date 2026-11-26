@@ -17,8 +17,8 @@ export const messages = {
     'Défini dans les valeurs par défaut du composant (Définir les valeurs par défaut du composant). Définissez une valeur ici pour la remplacer.',
   'componentCanvas.level.frame': 'Ce cadre a sa propre valeur',
   'componentCanvas.level.mixed': {
-    one: 'Le {count} cadre ici affiche une valeur différente. Une valeur définie ici s’applique à tous les cadres ici.',
-    other: 'Les {count} cadres ici affichent des valeurs différentes. Une valeur définie ici s’applique à chacun d’eux.',
+    one: 'Le {count} cadre ici affiche une valeur différente. Une valeur définie ici laisse la valeur propre d’un cadre telle quelle.',
+    other: 'Les {count} cadres ici affichent des valeurs différentes. Une valeur définie ici laisse la valeur propre de chaque cadre telle quelle.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} cadre ici conserve sa propre valeur. Réinitialisez pour lui donner celle-ci.',

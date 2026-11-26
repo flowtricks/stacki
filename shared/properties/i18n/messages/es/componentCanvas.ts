@@ -17,8 +17,8 @@ export const messages = {
     'Definido en los valores por defecto del componente (Definir valores por defecto del componente). Define un valor aquí para reemplazarlo.',
   'componentCanvas.level.frame': 'Este marco tiene su propio valor',
   'componentCanvas.level.mixed': {
-    one: 'El {count} marco de aquí muestra un valor distinto. Un valor definido aquí se aplica a todos los marcos de aquí.',
-    other: 'Los {count} marcos de aquí muestran valores distintos. Un valor definido aquí se aplica a todos ellos.',
+    one: 'El {count} marco de aquí muestra un valor distinto. Un valor definido aquí deja sin cambios el valor propio de un marco.',
+    other: 'Los {count} marcos de aquí muestran valores distintos. Un valor definido aquí deja sin cambios el valor propio de cada marco.',
   },
   'componentCanvas.level.overrides': {
     one: '{count} marco aquí conserva su propio valor. Restablece para darle este.',
