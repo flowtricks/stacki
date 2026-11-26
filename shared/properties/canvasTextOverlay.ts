@@ -10,6 +10,8 @@ export type CanvasTextOverlayEvent =
       readonly key: string;
       /** The editing element's box in the frame's own pixels, so the host can anchor a cue to it. Absent from an older frame. */
       readonly rect?: CanvasTextBox;
+      /** The block editor, which draws its own cue in the page (frameTextEditing.ts). */
+      readonly blocks?: true;
     }
   | { readonly type: 'avb:text-inactive'; readonly session: string };
 
@@ -29,6 +31,7 @@ export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent |
       session: pathText(data['session']),
       key: pathText(data['key']),
       ...(data['rect'] === undefined ? {} : { rect: parseBox(data['rect']) }),
+      ...(data['blocks'] === true ? { blocks: true as const } : {}),
     };
   }
   if (data['type'] === 'avb:text-inactive') {

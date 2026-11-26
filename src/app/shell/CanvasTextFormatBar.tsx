@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom';
 import { useLiveValue } from '../../ui/liveValue';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type BubblePosition } from '../../features/props/RichFormatButtons';
 import { canvasRichPlus, canvasTextSelection, type CanvasRichPlusState, type CanvasTextSelectionState } from '../../features/preview/canvasTextSelection';
-import { BlockInsertButton, pickMedia } from '../../ui/HtmlField';
+import { BLOCK_PLUS_PX, BlockInsertButton, pickMedia } from '../../ui/HtmlField';
 import { HtmlLinkEditor } from '../../ui/HtmlLinkEditor';
 
 export function CanvasTextFormatBar() {
@@ -23,11 +23,23 @@ export function CanvasTextFormatBar() {
   );
 }
 
+const PLUS_GAP_PX = 8;
+
+// Left of the empty block, where there is no text; with no room there (a block at the canvas's own left edge), at the
+// far end of the block's own empty line. Either way it covers no words. In the window's pixels, so its size does not
+// follow the canvas's zoom.
+export function plusPlace(plus: Pick<CanvasRichPlusState, 'box' | 'leftMin'>): { readonly left: number; readonly top: number } {
+  const beside = plus.box.x - BLOCK_PLUS_PX - PLUS_GAP_PX;
+  const inside = plus.box.x + Math.max(0, plus.box.w - BLOCK_PLUS_PX - PLUS_GAP_PX);
+  const top = plus.box.y + Math.floor((plus.box.h - BLOCK_PLUS_PX) / 2);
+  return { left: beside >= plus.leftMin ? beside : inside, top };
+}
+
 // The `+` beside an empty block of rich text being typed on the canvas: the rich text dialog's menu, in its order. An
 // image or a video comes from the asset picker, or an address typed in the field it opens beside the block.
 function CanvasRichPlus({ plus }: { readonly plus: CanvasRichPlusState }) {
   const [address, setAddress] = useState<'link' | 'image' | 'video'>();
-  const place = { left: Math.max(4, plus.box.x - 28), top: plus.box.y + Math.max(0, Math.floor((plus.box.h - 20) / 2)) };
+  const place = plusPlace(plus);
   const insert = (kind: 'link' | 'image' | 'video', value: string) => {
     setAddress(undefined);
     plus.choose(kind === 'link' ? { kind: 'link', href: value } : { kind: 'media', media: kind, address: value });

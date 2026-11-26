@@ -38,6 +38,9 @@ export function createCanvasTextOverlay(options: {
       const containerElement = document.createElement('div');
       containerElement.id = 'stacki-canvas-text-editor';
       containerElement.hidden = true;
+      if (message.blocks) {
+        containerElement.dataset['blocks'] = '';
+      }
       if (target.label.startsWith('Shared')) {
         containerElement.dataset['shared'] = target.label.startsWith('Shared CMS') ? 'cms' : 'variable';
       }

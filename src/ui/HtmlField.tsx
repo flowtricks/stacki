@@ -35,6 +35,7 @@ import { PlusIcon } from './Icons';
 import './contentInputs.css';
 import './richText.css';
 import { useTranslate } from '../lib/i18n/useTranslate';
+import TipAnchor from './TipAnchor';
 
 interface Props {
   readonly value: string;
@@ -297,6 +298,9 @@ export type BlockInsertChoice =
   | { readonly kind: 'link' }
   | { readonly kind: 'media'; readonly media: 'image' | 'video' };
 
+/** The `+` button's side, as `.html-block-plus` draws it (richText.css): what placing it is measured with. */
+export const BLOCK_PLUS_PX = 24;
+
 // The `+` and the menu it opens, in the order a writer reaches for them: the headings, then paragraph, quote, image,
 // link and video, then the other common rich text blocks. Shared by the rich text dialog and the canvas.
 export function BlockInsertButton(props: { readonly style?: CSSProperties; readonly onChoose: (choice: BlockInsertChoice) => void }) {
@@ -320,19 +324,22 @@ export function BlockInsertButton(props: { readonly style?: CSSProperties; reado
   ];
   return (
     <>
-      <button
-        type="button"
-        className="html-block-plus"
-        style={props.style}
-        aria-label={translate('ui.htmlField.insertBlock')}
-        aria-haspopup="menu"
-        aria-expanded={anchor !== undefined}
-        // The caret stays in the empty block: the menu's choice acts on it.
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => setAnchor(anchor === undefined ? event.currentTarget : undefined)}
-      >
-        <PlusIcon size={14} />
-      </button>
+      {/* No tip over the open menu: it names the button, and the menu is already saying what it does. */}
+      <TipAnchor text={anchor === undefined ? translate('ui.htmlField.insertBlock') : undefined}>
+        <button
+          type="button"
+          className="html-block-plus"
+          style={props.style}
+          aria-label={translate('ui.htmlField.insertBlock')}
+          aria-haspopup="menu"
+          aria-expanded={anchor !== undefined}
+          // The caret stays in the empty block: the menu's choice acts on it.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => setAnchor(anchor === undefined ? event.currentTarget : undefined)}
+        >
+          <PlusIcon size={16} />
+        </button>
+      </TipAnchor>
       <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={() => setAnchor(undefined)} />
     </>
   );
@@ -384,7 +391,7 @@ function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlac
   };
   return (
     <>
-      {place !== undefined && <BlockInsertButton style={{ top: place.top + Math.max(0, Math.floor((place.height - 20) / 2)) }} onChoose={choose} />}
+      {place !== undefined && <BlockInsertButton style={{ top: place.top + Math.max(0, Math.floor((place.height - BLOCK_PLUS_PX) / 2)) }} onChoose={choose} />}
       {media && (
         <HtmlLinkEditor
           bubble={{ kind: 'edit', href: '', place: media.place }}

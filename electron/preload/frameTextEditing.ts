@@ -23,9 +23,11 @@ export function holdTextEditing(root: HTMLElement): () => void {
 }
 
 /**
- * The look of an element being typed in, for both editors: no focus ring of the browser's own (the editor's cue is
- * drawn over the canvas), the browser's caret, and the text cursor over the select mode's arrow. `whiteSpace` is set
- * by the editor that shows typed newlines.
+ * The look of an element being typed in, for both editors: no focus ring of the browser's own, the browser's caret,
+ * and the text cursor over the select mode's arrow. `whiteSpace` is set by the editor that shows typed newlines.
+ * The block editor's cue is a thin ring drawn here, in the page (green over a component's rich text, blue over a line
+ * of words): its content grows and shrinks as it is typed, which an outline measured by the app would trail behind.
+ * The plain text editor's cue is the app's own outline over the canvas.
  */
 export function styleTextEditor(whiteSpace: string | undefined): void {
   if (!stylesheet) {
@@ -35,6 +37,8 @@ export function styleTextEditor(whiteSpace: string | undefined): void {
   const preserved = whiteSpace === undefined ? '' : ` white-space: ${whiteSpace} !important;`;
   stylesheet.replaceSync(
     `[data-avb-text-editor] { outline: none !important; caret-color: auto !important;${preserved} }` +
+      '[data-avb-text-editor][data-avb-text-blocks] { outline: 1px solid #0099ff !important; outline-offset: 3px !important; }' +
+      '[data-avb-text-editor][data-avb-text-blocks="rich"] { outline-color: #30c158 !important; }' +
       '[data-avb-text-editor], [data-avb-text-editor] * { cursor: text !important; }',
   );
 }

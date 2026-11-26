@@ -279,8 +279,11 @@ function showRichPlus(message: { readonly session: string; readonly rect?: Canva
   }
   const origin = frame.getBoundingClientRect();
   const scale = frame.clientWidth > 0 ? origin.width / frame.clientWidth : 1;
+  // The canvas around the sized frame: left of it is a panel, which the `+` stays clear of.
+  const canvas = frame.closest('.frame-sized')?.parentElement?.getBoundingClientRect();
   canvasRichPlus.set({
     session: options.session,
+    leftMin: canvas?.left ?? 0,
     box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
     // The menu took focus out of the frame; it goes back to the frame first, since a page's script may not take it.
     hold: () => options.current.current?.post({ type: 'avb:rich-hold', session: options.session }),
