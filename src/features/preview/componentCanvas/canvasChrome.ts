@@ -28,8 +28,15 @@ export const CHROME_LIMITS = {
   frameGapPx: 16,
   subgroupGapPx: 24,
   groupGapPx: 32,
+  /** Where wrapped frames start a new row: the Desktop width, the widest a hugging frame grows. */
+  wrapWidthPx: 1_440,
   zoomMin: 0.05,
   zoomMax: 4,
+  /**
+   * The least a caption or heading shrinks to on screen, against its size at 100%, when the canvas is zoomed out past
+   * the room it keeps for them: 9px captions, still read at a glance. Below it, a label that has no room is hidden.
+   */
+  labelScaleMin: 0.75,
   /** On screen, how near the selected frame's right or bottom edge a press resizes it, either side of the edge. */
   resizeEdgeScreenPx: 6,
   /** On screen, how near the size a hugging frame had a drag may end and leave it hugging. */
@@ -100,6 +107,7 @@ html[data-stacki-ready] { height: 100% !important; overflow: hidden !important; 
 ${surface === undefined ? '' : `html[data-stacki-ready][data-stacki-surface] { background: ${withFallback(surface, grey)} !important; }`}
 html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 64px !important; border: 0 !important; box-sizing: content-box !important; display: flex !important; flex-flow: row nowrap !important; gap: ${String(CHROME_LIMITS.frameGapPx)}px !important; align-items: flex-start !important; justify-content: flex-start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
 html[data-stacki-ready] > body[data-flow="column"] { flex-direction: column !important; gap: ${String(CHROME_LIMITS.groupGapPx)}px !important; }
+${arrangementRules()}
 html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
 html[data-stacki-resize="x"], html[data-stacki-resize="x"] * { cursor: ew-resize !important; }
 html[data-stacki-resize="y"], html[data-stacki-resize="y"] * { cursor: ns-resize !important; }
@@ -113,12 +121,12 @@ ${scaffold} { flex: 0 0 auto !important; display: block !important; position: re
 ${scaffold}::before { content: attr(data-label) !important; ${type} bottom: 100% !important; top: auto !important; margin: 0 0 ${String(CHROME_LIMITS.captionGapPx)}px !important; max-width: 100% !important; height: ${String(CHROME_LIMITS.captionHeightPx)}px !important; font: 400 12px/${String(CHROME_LIMITS.captionHeightPx)}px ${FONT_STACK} !important; color: ${label} !important; }
 ${scaffold}::after { content: none !important; }
 ${scaffold}[data-heading] { margin-top: ${String(HEADING_ROOM_PX)}px !important; }
-${scaffold}[data-heading]::before { height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; max-width: none !important; font: ${HEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].heading} !important; }
+${scaffold}[data-heading]::before { height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; max-width: 100% !important; font: ${HEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].heading} !important; }
 ${typeColorRules('light')}
 ${typeColorRules('dark')}
 html[data-stacki-ready] > body stacki-frame[data-frame][data-selected]::before { color: #2f80ff !important; }
 ${scaffold}[data-target] { outline-color: #2f80ff !important; }
-${scaffold}[data-under-tag]::before, ${group}[data-group][data-under-tag]::before { visibility: hidden !important; }
+${scaffold}[data-under-tag]::before, ${group}[data-group][data-under-tag]::before, ${scaffold}[data-crowded]::before, ${group}[data-group][data-crowded]::before { visibility: hidden !important; }
 ${scaffold}[data-fixed-width] { max-width: none !important; clip-path: ${CLIP_SIDES} !important; }
 ${scaffold}[data-fixed-height] { clip-path: ${CLIP_BOTTOM} !important; }
 ${scaffold}[data-fixed-width][data-fixed-height] { clip-path: ${CLIP_BOTH} !important; }
@@ -128,6 +136,21 @@ ${scaffold}[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LI
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
+}
+
+// The component's arrangement (canvasPage.ts data-stacki-arrange; none is side by side): stacked puts what sits together in a
+// column, groups and frames alike; wrap lets a row of frames break at the wrap width. Groups of the first split value
+// go down the canvas whichever is chosen (body[data-flow="column"]).
+function arrangementRules(): string {
+  const column = 'html[data-stacki-ready][data-stacki-arrange="column"] > body';
+  const wrap = 'html[data-stacki-ready][data-stacki-arrange="wrap"] > body';
+  const groupPadding = CHROME_LIMITS.groupPaddingPx * 2;
+  return [
+    `${column} { flex-direction: column !important; }`,
+    `${column} stacki-group { flex-direction: column !important; }`,
+    `${wrap}:not([data-flow="column"]) { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx)}px !important; }`,
+    `${wrap} stacki-group { flex-wrap: wrap !important; max-width: ${String(CHROME_LIMITS.wrapWidthPx + groupPadding)}px !important; }`,
+  ].join('\n');
 }
 
 // The type's colours over a light or a dark canvas, whatever the app's theme: the script says which it drew on.
@@ -186,19 +209,44 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     if (world.style.getPropertyValue('transform') !== transform) world.style.setProperty('transform', transform, 'important');
     frameSizes(view.scale);
   }
-  // Outlines keep their width on screen at any zoom; the spacing never changes with it. The editor's tag over the
-  // selection keeps its size on screen, so zoomed out it reaches over captions and headings nearby: those it covers
-  // are hidden while it does (hideUnderTag), never drawn under it.
+  // Outlines keep their width on screen at any zoom; the spacing never changes with it. Captions and headings keep their
+  // size on screen too, as a design tool's frame names do: their type, height and gap are written for the zoom, so they
+  // read the same zoomed out as at 100%. Each is cut short at its box's width, so it never runs over the next frame's.
+  // Zoomed out far enough, the room the canvas keeps above a frame (a few of its own pixels, under its group's heading)
+  // can no longer hold them at that size: they then shrink, as little as keeps every label clear of the others and of
+  // its neighbours' boxes (labelScale), but never below labelScaleMin, so they stay readable. A label that would still
+  // overlap is hidden, headings kept before captions (crowd). The editor's tag over the selection keeps its size on
+  // screen as well, so zoomed out it reaches over captions and headings nearby: those it covers are hidden while it
+  // does (hideUnderTag), never drawn under it.
   var sizes = document.createElement('style');
   sizes.setAttribute('data-stacki-chrome', '');
   (document.head || root).appendChild(sizes);
+  var SCAFFOLD = 'html[data-stacki-ready] > body stacki-frame[data-frame]', GROUP = 'html[data-stacki-ready] > body stacki-group';
+  // The labels' size on screen against their size at 100%: 1 while they fit, less once the canvas is zoomed out past it.
+  var typeScale = 1, labelledAt = null;
+  function typeRule(selector, font, line, unit, gap) {
+    var px = function (value) { return Math.round(value * unit * 1000) / 1000 + 'px !important'; };
+    return selector + '::before { font-size: ' + px(font) + '; line-height: ' + px(line) + '; height: ' + px(line) + ';' + (gap ? ' margin-bottom: ' + px(gap) + ';' : '') + ' }';
+  }
   function frameSizes(scale) {
     var thin = Math.round(1000 / scale) / 1000;
-    var boxes = 'html[data-stacki-ready] > body stacki-frame[data-frame], html[data-stacki-ready] > body stacki-group';
-    var rule = '@layer ${CHROME_LAYER} { ' + boxes.split(', ').map(function (box) { return box + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; }'; }).join(' ');
+    var boxes = [SCAFFOLD, GROUP];
+    var rule = '@layer ${CHROME_LAYER} { ' + boxes.map(function (box) { return box + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; }'; }).join(' ');
     // The frames a scope choice would change, while it is pointed at: twice as strong.
-    rule += ' html[data-stacki-ready] > body stacki-frame[data-frame][data-target] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; } }';
-    if (sizes.textContent !== rule) sizes.textContent = rule;
+    rule += ' ' + SCAFFOLD + '[data-target] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; }';
+    // The same selectors as the page's own type rules (chromeStyles), later in the same layer, so these sizes win.
+    // Chosen again only for a new zoom (or new frames, relabel): a pan moves every box alike and changes no overlap.
+    var next = scale === labelledAt ? typeScale : labelScale(scale), unit = next / scale;
+    labelledAt = scale;
+    rule += ' ' + typeRule(SCAFFOLD, 12, ${String(CHROME_LIMITS.captionHeightPx)}, unit, ${String(CHROME_LIMITS.captionGapPx)});
+    rule += ' ' + typeRule(SCAFFOLD + '[data-heading]', 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0);
+    rule += ' ' + typeRule(GROUP, 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0);
+    rule += ' ' + typeRule(GROUP + ':not([data-depth="0"])', 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0) + ' }';
+    if (sizes.textContent !== rule) {
+      sizes.textContent = rule;
+      typeScale = next;
+      crowd(scale);
+    }
     hideUnderTag();
   }
   // The element the editor's tag sits on: the selected frame's component, its box, or a group's box.
@@ -211,19 +259,64 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     }
     return null;
   }
-  // Where a box's caption or heading is on screen: a frame's above it, a group's inside its padding at the top.
-  function labelRect(box, scale) {
-    var bounds = box.getBoundingClientRect();
+  // Where a box's caption or heading is on screen, at type times its size at 100%, cut short at the box's width: a
+  // frame's above it, a group's inside its padding at the top. The bounds are the box's own, when already measured.
+  function labelRect(box, scale, type, bounds) {
+    bounds = bounds || box.getBoundingClientRect();
     var isGroup = box.tagName.toLowerCase() === 'stacki-group';
     var heading = isGroup || box.hasAttribute('data-heading');
-    var height = (heading ? ${String(CHROME_LIMITS.headingHeightPx)} : ${String(CHROME_LIMITS.captionHeightPx)}) * scale;
-    var width = Math.min(textWidth(box, isGroup ? (box.getAttribute('data-depth') === '0' ? '600 13px' : '500 13px') : heading ? '600 13px' : '400 12px') * scale, heading ? Infinity : bounds.width);
+    var height = (heading ? ${String(CHROME_LIMITS.headingHeightPx)} : ${String(CHROME_LIMITS.captionHeightPx)}) * type;
+    var text = textWidth(box, isGroup ? (box.getAttribute('data-depth') === '0' ? '600 13px' : '500 13px') : heading ? '600 13px' : '400 12px') * type;
     if (isGroup) {
       var inset = ${String(CHROME_LIMITS.groupPaddingPx)} * scale;
-      return { left: bounds.left + inset, top: bounds.top + inset, right: bounds.left + inset + width, bottom: bounds.top + inset + height };
+      var room = Math.max(bounds.width - 2 * inset, 0);
+      return { left: bounds.left + inset, top: bounds.top + inset, right: bounds.left + inset + Math.min(text, room), bottom: bounds.top + inset + height };
     }
-    var bottom = bounds.top - ${String(CHROME_LIMITS.captionGapPx)} * scale;
-    return { left: bounds.left, top: bottom - height, right: bounds.left + width, bottom: bottom };
+    var bottom = bounds.top - ${String(CHROME_LIMITS.captionGapPx)} * type;
+    return { left: bounds.left, top: bottom - height, right: bounds.left + Math.min(text, bounds.width), bottom: bottom };
+  }
+  function overlaps(a, b) { return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; }
+  // The boxes in the order their labels are kept: group headings first (the outermost first), then frames' captions.
+  function boxesByRank() {
+    var all = [].slice.call(document.querySelectorAll('stacki-frame, stacki-group'));
+    var rank = function (box) { return box.tagName.toLowerCase() === 'stacki-group' ? Number(box.getAttribute('data-depth')) || 0 : ${String(CANVAS_LIMITS.splitPropsMax + 1)}; };
+    return all.sort(function (a, b) { return rank(a) - rank(b); });
+  }
+  // Each box's label at the type size, and whether it would overlap a label kept before it, or a box that is neither its own
+  // nor around it. A group's heading may reach over what the group holds, never over its neighbours.
+  function placeLabels(scale, type, all, rects) {
+    var kept = [], crowded = [];
+    for (var i = 0; i < all.length; i++) {
+      var box = all[i], label = labelRect(box, scale, type, rects[i]), over = false;
+      var isGroup = box.tagName.toLowerCase() === 'stacki-group';
+      for (var k = 0; k < kept.length && !over; k++) over = overlaps(label, kept[k]);
+      for (var b = 0; b < all.length && !over; b++) {
+        var other = all[b];
+        if (other === box || other.contains(box) || (isGroup && box.contains(other))) continue;
+        over = overlaps(label, rects[b]);
+      }
+      crowded.push(over);
+      if (!over) kept.push(label);
+    }
+    return crowded;
+  }
+  // The largest label size, from their size at 100% down to the least they shrink to, at which no label overlaps: a few
+  // steps, the zoom's own size among them where it is larger (the canvas's spacing always holds labels at that size).
+  var TYPE_MIN = ${String(CHROME_LIMITS.labelScaleMin)};
+  function labelScale(scale) {
+    if (scale >= 1) return 1;
+    var all = boxesByRank(), rects = all.map(function (box) { return box.getBoundingClientRect(); });
+    var steps = [1, 0.9, 0.8, Math.max(scale, TYPE_MIN)];
+    for (var i = 0; i < steps.length; i++) {
+      if (steps[i] >= scale && placeLabels(scale, steps[i], all, rects).indexOf(true) < 0) return steps[i];
+    }
+    return Math.max(scale, TYPE_MIN);
+  }
+  // Labels that overlap even at the size chosen are hidden.
+  function crowd(scale) {
+    var all = boxesByRank(), rects = all.map(function (box) { return box.getBoundingClientRect(); });
+    var crowded = placeLabels(scale, typeScale, all, rects);
+    for (var i = 0; i < all.length; i++) flag(all[i], 'data-crowded', crowded[i]);
   }
   function hideUnderTag() {
     var anchor = tag && view ? tagged() : null;
@@ -235,7 +328,7 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     }
     var all = document.querySelectorAll('stacki-frame, stacki-group');
     for (var i = 0; i < all.length; i++) {
-      var label = cover ? labelRect(all[i], view.scale) : null;
+      var label = cover ? labelRect(all[i], view.scale, typeScale) : null;
       flag(all[i], 'data-under-tag', !!label && label.left < cover.right && cover.left < label.right && label.top < cover.bottom && cover.top < label.bottom);
     }
   }
@@ -264,9 +357,15 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   (document.head || root).appendChild(room);
   var measure = document.createElement('canvas').getContext('2d');
   var widened = {};
+  // Measured once per label and font: the labels' fit is weighed many times over at each zoom.
+  var measured = {};
   function textWidth(element, font) {
-    measure.font = font + ' ${FONT_STACK}';
-    return Math.ceil(measure.measureText(element.getAttribute('data-label') || '').width) + 1;
+    var text = element.getAttribute('data-label') || '', key = font + '|' + text;
+    if (!(key in measured)) {
+      measure.font = font + ' ${FONT_STACK}';
+      measured[key] = Math.ceil(measure.measureText(text).width) + 1;
+    }
+    return measured[key];
   }
   function captionRoom() {
     if (!measure) return;
@@ -358,7 +457,9 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     if (text !== told) { told = text; post({ event: 'sizes', frames: sizes }); }
   }
   var queued = false;
-  function settle() { queued = false; eager(); apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); tellSizes(); }
+  function settle() { queued = false; eager(); apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); tellSizes(); if (view) relabel(); }
+  // After the frames change size or place, the labels' size is chosen again for the zoom as it is.
+  function relabel() { labelledAt = null; sizes.textContent = ''; frameSizes(view.scale); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
   new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading'] });
@@ -525,7 +626,7 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     }
   });
   if (typeof ResizeObserver === 'function') {
-    var refit = new ResizeObserver(function () { captionRoom(); tellSizes(); if (!moved) fit(); });
+    var refit = new ResizeObserver(function () { captionRoom(); tellSizes(); if (!moved) fit(); if (view) relabel(); });
     refit.observe(world);
     refit.observe(root);
   }

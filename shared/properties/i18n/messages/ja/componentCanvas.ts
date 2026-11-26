@@ -14,11 +14,17 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '未設定',
   'componentCanvas.level.all': 'すべてのフレームに設定',
+  'componentCanvas.level.defaults':
+    'コンポーネントのデフォルト（「コンポーネントのデフォルトを設定」）で設定されています。置き換えるには、ここで値を設定してください。',
   'componentCanvas.level.frame': 'このフレームには独自の値があります',
+  'componentCanvas.level.mixed': {
+    other: 'ここの {count} フレームは異なる値を表示しています。ここで設定した値は、そのすべてに適用されます。',
+  },
   'componentCanvas.level.overrides': {
     other: 'ここの {count} フレームは独自の値を保持しています。リセットするとこの値になります。',
   },
   'componentCanvas.level.part': 'すべての {part} フレームに設定',
+  'componentCanvas.level.sample': 'この必須 prop にキャンバスが与えるサンプルです。置き換えるには、ここで値を設定してください。',
   'componentCanvas.menu.open': 'キャンバスで開く',
   'componentCanvas.notice.truncated':
     '{total} フレーム中、最初の {shown} フレームを表示しています。残りを表示するには、個別のフレームを持つプロパティを減らしてください。',
@@ -31,6 +37,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': '高さ',
   'componentCanvas.panel.hug': 'コンテンツに合わせる',
+  'componentCanvas.panel.layout': 'レイアウト',
+  'componentCanvas.panel.layout.column': '縦に並べる',
+  'componentCanvas.panel.layout.row': '横に並べる',
+  'componentCanvas.panel.layout.wrap': '折り返し',
+  'componentCanvas.panel.mixed': '混在',
   'componentCanvas.panel.pixels': '{side}（ピクセル）',
   'componentCanvas.panel.root.about': 'すべてのフレームの背後にあるキャンバスで、ページの html 要素です。そのクラスは設定パネルにあります。',
   'componentCanvas.panel.root.title': 'キャンバス',

@@ -13,11 +13,16 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'belum diatur',
   'componentCanvas.level.all': 'Diatur untuk semua frame',
+  'componentCanvas.level.defaults': 'Diatur di bawaan komponen (Atur bawaan komponen). Atur nilai di sini untuk menggantinya.',
   'componentCanvas.level.frame': 'Frame ini punya nilainya sendiri',
+  'componentCanvas.level.mixed': {
+    other: '{count} frame di sini menampilkan nilai yang berbeda. Nilai yang diatur di sini diterapkan ke semuanya.',
+  },
   'componentCanvas.level.overrides': {
     other: '{count} frame di sini tetap memakai nilainya sendiri. Reset untuk memberinya nilai ini.',
   },
   'componentCanvas.level.part': 'Diatur untuk setiap frame {part}',
+  'componentCanvas.level.sample': 'Contoh yang diberikan kanvas untuk prop wajib ini. Atur nilai di sini untuk menggantinya.',
   'componentCanvas.menu.open': 'Buka di kanvas',
   'componentCanvas.notice.truncated': 'Menampilkan {shown} frame pertama dari {total}. Berikan frame sendiri ke lebih sedikit prop untuk melihat sisanya.',
   'componentCanvas.pageName': 'Kanvas {name}',
@@ -29,6 +34,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Tinggi',
   'componentCanvas.panel.hug': 'Ikuti isi',
+  'componentCanvas.panel.layout': 'Layout', // same
+  'componentCanvas.panel.layout.column': 'Bertumpuk',
+  'componentCanvas.panel.layout.row': 'Berdampingan',
+  'componentCanvas.panel.layout.wrap': 'Bungkus',
+  'componentCanvas.panel.mixed': 'Campuran',
   'componentCanvas.panel.pixels': '{side} dalam piksel',
   'componentCanvas.panel.root.about': 'Kanvas di belakang semua frame: elemen html halaman. Kelasnya ada di panel Pengaturan.',
   'componentCanvas.panel.root.title': 'Kanvas',

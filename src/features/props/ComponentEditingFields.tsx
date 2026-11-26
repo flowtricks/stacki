@@ -14,7 +14,7 @@ import type { InlineNode } from './richContentModel';
 import { richTextNodes, richTextView, sameRichContent, type RichTextCodeReason } from './richTextContent';
 import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 import { ResetLabel } from '../../ui/ResetLabel';
-import type { PropFieldProvenance } from './propFieldExtras';
+import { provenanceResets, type PropFieldProvenance } from './propFieldExtras';
 import './propFieldExtras.css';
 
 export { sameRichContent } from './richTextContent';
@@ -59,7 +59,12 @@ export function RichTextContentField(props: {
           <span className="prop-label">{props.label}</span>
         ) : (
           <span className={props.provenance?.tone === 'inherited' ? 'prop-label-holder inherited' : 'prop-label-holder'} title={props.provenance?.tip}>
-            <ResetLabel label={props.label} active={props.own === true} onReset={props.onReset} />
+            {provenanceResets(props.provenance) ? (
+              <ResetLabel label={props.label} active={props.own === true} onReset={props.onReset} />
+            ) : (
+              // Given from elsewhere: marked as the frame's when it shows words, with nothing here to reset.
+              <span className={`prop-label${props.provenance?.tone === 'given' ? ' set' : ''}`}>{props.label}</span>
+            )}
           </span>
         )}
         <TipAnchor text={tip}>

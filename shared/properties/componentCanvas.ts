@@ -97,12 +97,23 @@ export interface CanvasRoot {
   readonly classes?: readonly string[];
 }
 
+/**
+ * How a canvas lays out the frames (and the groups) that sit together: side by side in one row, stacked in one column,
+ * or side by side wrapping into rows at a fixed width. Groups of the first split value always go down the canvas.
+ */
+export const CANVAS_ARRANGEMENTS = ['row', 'column', 'wrap'] as const;
+export type CanvasArrangement = (typeof CANVAS_ARRANGEMENTS)[number];
+/** What a canvas with no arrangement chosen does: side by side, as every canvas did before the choice existed. */
+export const DEFAULT_ARRANGEMENT = 'row' as const satisfies CanvasArrangement;
+
 export interface ComponentCanvas {
   /** The props that get their own frames, in layout order; absent: the canvas chooses (defaultSplit). */
   readonly split?: readonly string[];
   readonly frames?: Readonly<Record<string, FrameEntry>>;
   /** This component's canvas root, over the project's. */
   readonly root?: CanvasRoot;
+  /** How its frames are laid out; absent: DEFAULT_ARRANGEMENT, which is never stored. */
+  readonly arrange?: Exclude<CanvasArrangement, typeof DEFAULT_ARRANGEMENT>;
 }
 
 export interface ComponentCanvasFile {
@@ -129,7 +140,7 @@ export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: 
 const PROP_NAME = /^[A-Za-z_$][\w$-]*$/;
 const COMPONENT_FILE = /^(?:src\/|node_modules\/)[^\0]*\.astro$/;
 const ENTRY_FIELDS = new Set(['props', 'unset', 'assets', 'literals', 'content', 'width', 'height', 'background']);
-const COMPONENT_FIELDS = new Set(['split', 'frames', 'root']);
+const COMPONENT_FIELDS = new Set(['split', 'frames', 'root', 'arrange']);
 const ROOT_FIELDS = new Set(['background', 'classes']);
 // A class name as a selector can name it without escapes; `stacki-` is the canvas's own (`stacki-designer`).
 const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
@@ -247,7 +258,25 @@ function parseComponentSettings(input: unknown, file: string): ComponentCanvas {
     frames[parseFrameKey(key)] = parseFrameEntry(entry, file);
   }
   const root = value['root'] === undefined ? undefined : parseCanvasRoot(value['root'], file);
-  return { ...(split === undefined ? {} : { split }), ...(framesInput === undefined ? {} : { frames }), ...(root === undefined ? {} : { root }) };
+  const arrange = value['arrange'] === undefined ? undefined : parseArrangement(value['arrange'], file);
+  return {
+    ...(split === undefined ? {} : { split }),
+    ...(framesInput === undefined ? {} : { frames }),
+    ...(root === undefined ? {} : { root }),
+    ...(arrange === undefined ? {} : { arrange }),
+  };
+}
+
+// A stored arrangement: one of the choices. The default is written as no key at all, and read as none if a person
+// wrote it by hand, so the file still says one thing one way.
+function parseArrangement(input: unknown, file: string): ComponentCanvas['arrange'] {
+  if (input === 'column' || input === 'wrap') {
+    return input;
+  }
+  if (input === DEFAULT_ARRANGEMENT) {
+    return undefined;
+  }
+  throw new Error(`Component canvas: ${file} arranges its frames as row, column or wrap`);
 }
 
 function parseSplit(input: unknown, file: string): readonly string[] {
@@ -450,6 +479,7 @@ function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
         }),
     // Classes keep their order: a later class wins a tie in the cascade, as on <html> itself.
     ...(settings.root === undefined ? {} : { root: settings.root }),
+    ...(settings.arrange === undefined ? {} : { arrange: settings.arrange }),
   };
 }
 
@@ -976,6 +1006,96 @@ function clearingEdit(setting: FrameSetting): FrameEdit {
   return { kind: 'inherit', name };
 }
 
+/** The setting an edit changes. */
+export function editSetting(edit: FrameEdit): FrameSetting {
+  switch (edit.kind) {
+    case 'prop':
+    case 'asset':
+    case 'literal':
+    case 'unset':
+    case 'inherit':
+      return `prop:${edit.name}`;
+    case 'content':
+      return 'content';
+    case 'field':
+      return edit.field;
+    case 'background':
+      return 'background';
+    default: {
+      const exhaustive: never = edit;
+      return exhaustive;
+    }
+  }
+}
+
+// Whether an edit gives the setting a value (rather than clearing what the scope says, so a wider value shows).
+function editGives(edit: FrameEdit): boolean {
+  switch (edit.kind) {
+    case 'prop':
+    case 'asset':
+    case 'literal':
+    case 'unset':
+      return true;
+    case 'inherit':
+      return false;
+    case 'content':
+    case 'field':
+    case 'background':
+      return edit.value !== undefined;
+    default: {
+      const exhaustive: never = edit;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * The file with an edit made to every frame of `frames` that `scope` reaches, as an edit to several things at once is:
+ * written at the scope, and what narrower entries say about the setting dropped, so none of those frames keeps a value
+ * of its own over it. A frame an entry outside the scope still wins on (a sibling scope that sorts after it) is given
+ * the value at its own key. Clearing the setting clears it at the scope and below; a sibling's value then shows.
+ */
+export function withScopeEdit(file: ComponentCanvasFile, component: string, scope: string, frames: readonly string[], edit: FrameEdit): ComponentCanvasFile {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A scope edit reaches a bounded number of frames');
+  const setting = editSetting(edit);
+  const written = withFrameEdit(withoutOverrides(file, component, scope, setting), component, scope, edit);
+  if (!editGives(edit)) {
+    return written;
+  }
+  const reached = frames.filter((frame) => scopeHolds(scope, frame));
+  const result = reached.reduce((next, frame) => {
+    const from = resolveFrame(next.components[component], frame).origins.get(setting);
+    return from === scope || from === frame ? next : withFrameEdit(next, component, frame, edit);
+  }, written);
+  assert(
+    reached.every((frame) => [scope, frame].includes(resolveFrame(result.components[component], frame).origins.get(setting) ?? '')),
+    'Every frame a scope edit reaches takes its value',
+  );
+  return result;
+}
+
+/**
+ * Whether the frames of `frames` that `scope` reaches show different values for `setting`: the field that edits them
+ * all then says Mixed rather than one frame's value.
+ */
+export function settingMixed(settings: ComponentCanvas | undefined, frames: readonly string[], scope: string, setting: FrameSetting): boolean {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A canvas has a bounded number of frames');
+  const shown = new Set(frames.filter((frame) => scopeHolds(scope, frame)).map((frame) => settingText(resolveFrame(settings, frame), setting)));
+  assert(shown.size <= frames.length, 'A frame shows one value for a setting');
+  return shown.size > 1;
+}
+
+// One frame's value for a setting, as text that is equal exactly when the values are.
+function settingText(frame: ResolvedFrame, setting: FrameSetting): string {
+  if (setting === 'width' || setting === 'height' || setting === 'background' || setting === 'content') {
+    // A side or value that is absent is left out of the object, so absent and absent compare equal.
+    return JSON.stringify({ value: frame[setting] });
+  }
+  const name = setting.slice('prop:'.length);
+  assert(name.length > 0, 'A prop setting names its prop');
+  return JSON.stringify({ prop: frame.props[name], asset: frame.assets[name], literal: frame.literals[name], unset: frame.unset.has(name) });
+}
+
 /** The file with the props a component splits by set; `undefined` goes back to the default choice. */
 export function withSplit(file: ComponentCanvasFile, component: string, split: readonly string[] | undefined): ComponentCanvasFile {
   canvasComponentFile(component);
@@ -983,6 +1103,20 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
     parseSplit(split, component);
   }
   return withComponentSettings(file, component, { ...file.components[component], split });
+}
+
+/** The file with how a component's frames are laid out; the default arrangement is no setting. */
+export function withArrangement(file: ComponentCanvasFile, component: string, arrange: CanvasArrangement): ComponentCanvasFile {
+  canvasComponentFile(component);
+  assert(CANVAS_ARRANGEMENTS.includes(arrange), 'An arrangement is one of the canvas’s choices');
+  const next = withComponentSettings(file, component, { ...file.components[component], arrange: arrange === DEFAULT_ARRANGEMENT ? undefined : arrange });
+  assert(arrangementOf(next.components[component]) === arrange, 'The arrangement written is the one read back');
+  return next;
+}
+
+/** How a component's frames are laid out: its stored choice, else the default. */
+export function arrangementOf(settings: ComponentCanvas | undefined): CanvasArrangement {
+  return settings?.arrange ?? DEFAULT_ARRANGEMENT;
 }
 
 // The file with one component's settings replaced. `settings` is everything the component keeps: a writer starts from
@@ -1010,8 +1144,11 @@ function keepsSetting(key: string, value: unknown): boolean {
   if (value === undefined) {
     return false;
   }
-  // A chosen split of no props is a choice (one frame); empty frames or an empty root say nothing.
-  return key === 'split' || Object.values(value as object).some((held) => held !== undefined);
+  // A chosen split of no props is a choice (one frame), as is an arrangement; empty frames or an empty root say nothing.
+  if (key === 'split' || key === 'arrange') {
+    return true;
+  }
+  return Object.values(value as object).some((held) => held !== undefined);
 }
 
 /** The file with the project's canvas background set, or cleared with `undefined` (the app's own grey again). */

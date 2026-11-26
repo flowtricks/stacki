@@ -28,9 +28,18 @@ export interface FramePanelValues {
   readonly imports: string;
   /** Each of those names and its project file. */
   readonly bindings: ReadonlyMap<string, string>;
-  /** The default slot as this scope shows it. */
-  readonly content: { readonly html: string; readonly own: boolean };
+  /** The default slot as this scope shows it; `defaults` when its words are the component defaults' alone. */
+  readonly content: { readonly html: string; readonly own: boolean; readonly given?: 'defaults' };
+  /**
+   * Where each value shown that the scope's own entry does not hold comes from, when that is not a wider scope (whose
+   * label says so itself): the component defaults, or the canvas's sample for a required prop. Nothing at the scope
+   * holds these, so nothing there resets them.
+   */
+  readonly givenBy: ReadonlyMap<string, GivenSource>;
 }
+
+/** Where a value the frame is given, and no scope sets, comes from. */
+export type GivenSource = 'defaults' | 'sample';
 
 export interface FramePanelInput {
   readonly schema: readonly FieldDefinition[];
@@ -65,20 +74,26 @@ export function framePanelValues(input: FramePanelInput): FramePanelValues {
   const fields = fieldsOf(input);
   assert(fields.length >= schema.length, 'The panel keeps every field of the component');
   const given: Record<string, Attr> = {};
+  const givenBy = new Map<string, GivenSource>();
   for (const field of fields) {
-    const attribute = Object.hasOwn(own, field.name) ? undefined : givenAttribute(field, { shown, defaults, names });
-    if (attribute !== undefined) {
-      given[field.name] = attribute;
+    const held = Object.hasOwn(own, field.name) ? undefined : givenAttribute(field, { shown, defaults, names });
+    if (held !== undefined) {
+      given[field.name] = held.attribute;
+      if (held.source !== 'scope') {
+        givenBy.set(field.name, held.source);
+      }
     }
   }
+  assert(givenBy.size <= fields.length, 'A frame is given at most one value per field');
   const html = shown.content ?? defaultContent(defaults);
   return {
     props: { ...given, ...own },
     schema: fields,
     imports: names.frontmatter(),
     bindings: names.files(),
+    givenBy,
     // Words the frame shows are set, wherever they come from; empty is nothing set.
-    content: { html, own: entry?.content !== undefined || html !== '' },
+    content: { html, own: entry?.content !== undefined || html !== '', ...(shown.content === undefined && html !== '' ? { given: 'defaults' as const } : {}) },
   };
 }
 
@@ -117,14 +132,21 @@ interface Resting {
   readonly names: NameTable;
 }
 
-// The value a field the scope sets nothing for is given anyway, as an attribute: a wider scope's, the component
-// defaults', or the canvas's sample for a required prop; undefined where only the component's own code would give one.
-function givenAttribute(field: FieldDefinition, { shown, defaults, names }: Resting): Attr | undefined {
+// The value a field the scope sets nothing for is given anyway, as an attribute, and where from: a wider scope's, the
+// component defaults', or the canvas's sample for a required prop; undefined where only the component's own code would
+// give one.
+function givenAttribute(
+  field: FieldDefinition,
+  { shown, defaults, names }: Resting,
+): { readonly attribute: Attr; readonly source: 'scope' | GivenSource } | undefined {
   const name = field.name;
   if (shown.unset.has(name)) {
     return undefined;
   }
-  for (const held of [shown, defaults]) {
+  for (const [source, held] of [
+    ['scope', shown],
+    ['defaults', defaults],
+  ] as const) {
     const value = held.props?.[name];
     const asset = held.assets?.[name];
     const literal = held.literals?.[name];
@@ -138,12 +160,14 @@ function givenAttribute(field: FieldDefinition, { shown, defaults, names }: Rest
             : undefined;
     if (values !== undefined) {
       // With the panel's own names for its files, so a list or a picture edited from here keeps its imports.
-      return defaultAttributes(values, (file) => names.name(file)).find(([held]) => held === name)?.[1];
+      const attribute = defaultAttributes(values, (file) => names.name(file)).find(([written]) => written === name)?.[1];
+      return attribute === undefined ? undefined : { attribute, source };
     }
   }
   // What the canvas draws for a required prop nothing gives (canvasModel.ts); an element id's made-up one is not worth showing.
   const sample = field.optional === false && field.default === undefined && name !== 'id' ? sampleValue(field) : undefined;
-  return sample === undefined ? undefined : defaultAttributes({ props: { [name]: sample } }, (file) => names.name(file))[0]?.[1];
+  const attribute = sample === undefined ? undefined : defaultAttributes({ props: { [name]: sample } }, (file) => names.name(file))[0]?.[1];
+  return attribute === undefined ? undefined : { attribute, source: 'sample' };
 }
 
 // The slot's markup where no scope sets it: the defaults' words, or their plain-text children. Children that are

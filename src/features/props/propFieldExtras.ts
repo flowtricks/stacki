@@ -23,12 +23,27 @@ export interface PropFieldExtra {
   readonly lockedReason?: string;
   /** Where the value shown comes from when it is not simply this field's own: the label says so on hover. */
   readonly provenance?: PropFieldProvenance;
+  /**
+   * The several things the field edits hold different values (a canvas field over frames that differ): the field shows
+   * this word where a value would be, and no choice is marked; whatever is set then goes to all of them.
+   */
+  readonly mixed?: string;
 }
 
-/** `inherited`: nothing is set here and the label turns orange. `noted`: set here, with something to say about it. */
+/**
+ * `inherited`: nothing is set here and the label turns orange. `noted`: set here, with something to say about it.
+ * `given`: nothing is set here either, but the value is the field's own as far as the person is concerned (a component
+ * default): the label is marked as set. Neither `inherited` nor `given` offers Reset, since there is nothing here for it
+ * to clear; the tip says where the value is set instead.
+ */
 export interface PropFieldProvenance {
-  readonly tone: 'inherited' | 'noted';
+  readonly tone: 'inherited' | 'noted' | 'given';
   readonly tip: string;
+}
+
+/** Whether a field's label offers Reset: only where something is set at the field's own level. */
+export function provenanceResets(provenance: PropFieldProvenance | undefined): boolean {
+  return provenance === undefined || provenance.tone === 'noted';
 }
 
 export type PropFieldExtras = (name: string) => PropFieldExtra | undefined;

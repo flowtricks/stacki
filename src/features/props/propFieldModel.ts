@@ -3,6 +3,7 @@
 // placeholder (PropField.tsx).
 
 import { PropValuePolicyContext } from './propValuePolicy';
+import { usePropFieldExtra } from './propFieldExtras';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { Translator } from '../../../shared/properties/i18n/messageRef';
@@ -246,8 +247,14 @@ export function usePropFieldModel(props: PropFieldProps) {
 
     dataContext,
   } = props;
+  // Over things that differ the field says so in place of a value (propFieldExtras.ts mixed).
+  const mixed = usePropFieldExtra(props.field.name)?.mixed;
   const placeholderFor = (target: FieldDefinition) =>
-    policy === 'defaults' && !showsFallback ? '' : propFieldPlaceholder(target, assetContext, branchDefault);
+    mixed !== undefined && target.name === props.field.name
+      ? mixed
+      : policy === 'defaults' && !showsFallback
+        ? ''
+        : propFieldPlaceholder(target, assetContext, branchDefault);
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
@@ -325,6 +332,7 @@ export function usePropFieldModel(props: PropFieldProps) {
     resetPlan,
     resetRefusal,
     isColor,
+    mixed,
   };
 }
 

@@ -141,6 +141,7 @@ const control = {
   coverRight: noop,
   zoom: noop,
   setSplit: noop,
+  setArrangement: noop,
   editValues: noop,
   editRootClasses: noop,
 };
@@ -233,9 +234,10 @@ test('a selection change reaches Frame settings in the same commit, with no elem
 
 // The owner's report: with All frames chosen, pressing Fixed did nothing. The field showed the selected frame's own
 // value (a Hug an older This-frame default had stored), which wins on that frame, so the all-frames write never showed.
-// The size fields now show the target's own value, start Fixed at the frame's drawn size, and say quietly (orange,
-// with Reset) that a frame keeps its own; the canvas shows the change on every other frame.
-test('Fixed at All frames shows Fixed at once, from the drawn size, and says which frame keeps its own', async (context) => {
+// The size fields now start Fixed at the frame's drawn size and write it where the scope says (the host gives every
+// frame in scope the value, withScopeEdit). Frames in scope that still differ (one Hug, the others fixed) are said as
+// they are: neither choice marked, the label orange with how many frames an edit reaches, rather than one frame's value.
+test('Fixed at All frames writes from the drawn size, and frames that differ are said to be Mixed', async (context) => {
   const { state: opened } = openCanvas();
   const link = opened.layout.frames[1].key;
   const settings = { version: 1, components: { [BUTTON]: { split: ['variant', 'emphasis'], frames: { [link]: { width: 'hug' } } } } };
@@ -261,10 +263,24 @@ test('Fixed at All frames shows Fixed at once, from the drawn size, and says whi
     settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 'hug' } } } } },
   };
   await draw(after);
-  assert.equal(pressed(), 'Fixed', 'the field shows what All frames is now, not the selected frame’s own Hug');
-  assert.equal(width().querySelector('input')?.value, '183');
+  assert.equal(pressed(), undefined, 'one frame hugs and the others are fixed: neither is marked');
+  assert.equal(width().querySelector('input') ?? undefined, undefined, 'no one size to show');
   const label = width().querySelector('.prop-label');
-  assert.match(label.className, /embed-editor_prop-orange/, 'a frame keeping its own value is said in orange');
-  assert.match(label.title, /^This frame has its own value\. 1 frame here keeps its own value/, 'and why the selected frame did not change');
+  assert.match(label.className, /embed-editor_prop-orange/, 'frames that differ are said in orange');
+  assert.match(label.title, /frames here show different values\. A value set here goes to all of them\./, 'and that an edit reaches them all');
+  // Every frame fixed, at different sizes: Fixed, with the pixels left empty and saying Mixed.
+  const sized = {
+    ...base,
+    settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 240 } } } } },
+  };
+  await draw(sized);
+  assert.equal(pressed(), 'Fixed');
+  assert.equal(width().querySelector('input')?.value, '');
+  assert.equal(width().querySelector('input')?.placeholder, 'Mixed');
+  // Every frame the same: the value itself.
+  const same = { ...base, settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 } } } } } };
+  await draw(same);
+  assert.equal(pressed(), 'Fixed');
+  assert.equal(width().querySelector('input')?.value, '183');
   canvas.noteComponentCanvas({ kind: 'idle' });
 });

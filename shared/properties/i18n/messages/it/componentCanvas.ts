@@ -13,12 +13,19 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'non impostato',
   'componentCanvas.level.all': 'Impostato per tutti i frame',
+  'componentCanvas.level.defaults':
+    'Impostato nei valori predefiniti del componente (Imposta i valori predefiniti del componente). Imposta un valore qui per sostituirlo.',
   'componentCanvas.level.frame': 'Questo frame ha un proprio valore',
+  'componentCanvas.level.mixed': {
+    one: 'Il {count} frame qui mostra un valore diverso. Un valore impostato qui viene applicato a tutti i frame qui.',
+    other: 'I {count} frame qui mostrano valori diversi. Un valore impostato qui viene applicato a tutti.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} frame qui mantiene un proprio valore. Reimposta per assegnargli questo.',
     other: '{count} frame qui mantengono un proprio valore. Reimposta per assegnare loro questo.',
   },
   'componentCanvas.level.part': 'Impostato per ogni frame {part}',
+  'componentCanvas.level.sample': 'Un esempio che il canvas assegna a questa prop obbligatoria. Imposta un valore qui per sostituirlo.',
   'componentCanvas.menu.open': 'Apri nel canvas',
   'componentCanvas.notice.truncated': 'Vengono mostrati i primi {shown} frame su {total}. Assegna frame propri a meno props per vedere gli altri.',
   'componentCanvas.pageName': 'Canvas di {name}',
@@ -31,6 +38,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Altezza',
   'componentCanvas.panel.hug': 'Al contenuto',
+  'componentCanvas.panel.layout': 'Layout', // same
+  'componentCanvas.panel.layout.column': 'Impilati',
+  'componentCanvas.panel.layout.row': 'Affiancati',
+  'componentCanvas.panel.layout.wrap': 'A capo',
+  'componentCanvas.panel.mixed': 'Misto',
   'componentCanvas.panel.pixels': '{side} in pixel',
   'componentCanvas.panel.root.about': 'Il canvas dietro tutti i frame: l’elemento html della pagina. Le sue classi si trovano nel pannello Impostazioni.',
   'componentCanvas.panel.root.title': 'Canvas', // same

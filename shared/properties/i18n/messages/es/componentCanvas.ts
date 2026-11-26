@@ -13,12 +13,19 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'sin definir',
   'componentCanvas.level.all': 'Definido para todos los marcos',
+  'componentCanvas.level.defaults':
+    'Definido en los valores por defecto del componente (Definir valores por defecto del componente). Define un valor aquí para reemplazarlo.',
   'componentCanvas.level.frame': 'Este marco tiene su propio valor',
+  'componentCanvas.level.mixed': {
+    one: 'El {count} marco de aquí muestra un valor distinto. Un valor definido aquí se aplica a todos los marcos de aquí.',
+    other: 'Los {count} marcos de aquí muestran valores distintos. Un valor definido aquí se aplica a todos ellos.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} marco aquí conserva su propio valor. Restablece para darle este.',
     other: '{count} marcos aquí conservan su propio valor. Restablece para darles este.',
   },
   'componentCanvas.level.part': 'Definido para cada marco {part}',
+  'componentCanvas.level.sample': 'Un ejemplo que el lienzo da a esta prop obligatoria. Define un valor aquí para reemplazarlo.',
   'componentCanvas.menu.open': 'Abrir en el lienzo',
   'componentCanvas.notice.truncated': 'Se muestran los primeros {shown} de {total} marcos. Da marcos propios a menos props para ver el resto.',
   'componentCanvas.pageName': 'Lienzo de {name}',
@@ -31,6 +38,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Alto',
   'componentCanvas.panel.hug': 'Al contenido',
+  'componentCanvas.panel.layout': 'Disposición',
+  'componentCanvas.panel.layout.column': 'Apilados',
+  'componentCanvas.panel.layout.row': 'Uno al lado del otro',
+  'componentCanvas.panel.layout.wrap': 'Ajustar en filas',
+  'componentCanvas.panel.mixed': 'Mixto',
   'componentCanvas.panel.pixels': '{side} en píxeles',
   'componentCanvas.panel.root.about': 'El lienzo situado detrás de todos los marcos: el elemento html de la página. Sus clases están en el panel de ajustes.',
   'componentCanvas.panel.root.title': 'Lienzo',

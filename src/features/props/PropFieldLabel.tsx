@@ -2,7 +2,7 @@
 // reset menu (PropField.tsx).
 
 import { createPortal } from 'react-dom';
-import { usePropFieldExtra } from './propFieldExtras';
+import { provenanceResets, usePropFieldExtra } from './propFieldExtras';
 import FittedTooltip from '../../ui/FittedTooltip';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -34,9 +34,16 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
   const inherited = provenance?.tone === 'inherited';
   const classes = ['prop-label', ...(inherited ? ['inherited'] : isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
   const ownTitle = isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined;
+  // A value given from elsewhere has nothing here to reset: the label only says where it is set.
+  const resets = provenanceResets(provenance);
 
   return (
-    <span className={classes.join(' ')} title={provenance?.tip ?? ownTitle} onClick={onLabelClick} onContextMenu={onLabelContextMenu}>
+    <span
+      className={classes.join(' ')}
+      title={provenance?.tip ?? ownTitle}
+      onClick={resets ? onLabelClick : undefined}
+      onContextMenu={resets ? onLabelContextMenu : undefined}
+    >
       <FieldTypeIcon type={type} name={name} />
       {name}
       {required && (
