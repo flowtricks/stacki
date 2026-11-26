@@ -90,7 +90,7 @@ function writeFixture(project) {
     await window.getByRole('menuitem', { name: 'Open in canvas' }).click();
     await canvas.locator('stacki-frame').nth(4).waitFor({ timeout: WAIT_MS });
     // Frame settings out of the way of the frames, so every corner is canvas.
-    const close = window.getByRole('button', { name: 'Close frame settings' });
+    const close = window.getByRole('button', { name: 'Minimize frame settings' });
     if ((await close.count()) > 0) {
       await close.click();
     }
