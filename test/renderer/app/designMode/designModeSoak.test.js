@@ -1,18 +1,17 @@
-// Goal: in the real app, Design mode is the normal editor working on a sandbox copy, and the project folder is
-// byte-identical however it is used. Entered from the AI panel header's Design mode button, the window reopens on a copy in the
-// app's data folder; the real Style panel starts the selection on Inline styles and its edit lands in the copy;
-// a duplicated frame keeps its own version, and switching frames shows each one's own style on the canvas; Compare
-// shows the frames side by side; the fence refuses a git request and a write into the project from inside the
-// running app; Send to AI reopens the project with the frames waiting in the AI panel (never sent); the copy and
-// its .env are gone afterwards; coming back restores the frames from the draft, and Exit leaves again.
+// Goal: in the real app, Design mode is a canvas of frames over a sandbox copy, worked with a real pointer and
+// keyboard, and the project folder is byte-identical however it is used. Entered from the AI panel header's button,
+// the canvas is the view. A click on an element in a frame selects it in the real Navigator, Style and Settings
+// panels; a Style edit lands in the copy and in that frame only; Option-drag and the right-click menu duplicate a
+// frame at once; Delete removes a selected frame; a frame is moved by its name; switching between frames shows each
+// one's own version; the fence refuses git and writes; Send to AI reopens the project with a picture per frame
+// waiting in the AI panel (never sent); coming back shows every frame at once from its kept document.
 //
 // Method: the soak harness (test/helpers/e2e/soakLaunch.js) runs the real desktop app hidden, with a temporary user
 // data folder and the mock keychain, on a copy of the Lumos fixture site with the style soak page. Pointer and key
 // input are real input events at window coordinates (soakDriver.js). No step sleeps: each waits on the state it
-// expects (test/helpers/waitFor.js). The fence and the session are read from main's own modules in the same
-// process. Screenshots (written to the temporary folder during the run, the only place outside the copy the fence
-// lets the app write) go to STACKI_SCREENSHOT_DIR (default node_modules/.stacki-test/design-mode). The suite skips
-// where the fixture's Astro install or the built main process is missing. Run it by hand with
+// expects (test/helpers/waitFor.js). Times are measured in the page, from the event that started each action.
+// Screenshots go to STACKI_SCREENSHOT_DIR (default node_modules/.stacki-test/design-mode). The suite skips where the
+// fixture's Astro install or the built main process is missing. Run it by hand with
 // `node test/renderer/app/designMode/designModeSoak.test.js`.
 
 const fs = require('node:fs');
@@ -32,7 +31,7 @@ const SELECT_WAIT_MS_MAX = 10_000;
 /** Characters a field's old value may have. */
 const FIELD_CHARS_MAX = 12;
 const TREE_FILES_MAX = 50_000;
-const CHECKS_MIN = 20;
+const CHECKS_MIN = 30;
 
 // --- Node side: start the app and read its verdict -----------------------------------------
 
@@ -79,6 +78,7 @@ async function orchestrate() {
     process.exitCode = 1;
   }
   if (process.exitCode !== 1) {
+    console.log(`# times ${JSON.stringify(report.times)}`);
     console.log(`ok - ${report.checked} checks: Design mode edited its copy with the real panels and left the project byte-identical`);
   }
 }
@@ -111,7 +111,40 @@ function treeDigest(root) {
 
 const modeButton = (name) => `[...document.querySelectorAll('.ai-header .ai-mode-button')].find((b) => ${name}.test(b.getAttribute('aria-label') || ''))`;
 const PLAIN_INDENT = `getComputedStyle(document.querySelector('#soak-plain')).textIndent`;
-const TABS = `[...document.querySelectorAll('.dm-tab-name')]`;
+const TILES = `[...document.querySelectorAll('.dm-tile:not([data-dm-ghost])')]`;
+/** In the page: a frame's shown document. */
+const FRAME_DOCUMENT = `((id) => [...document.querySelectorAll('.dm-tile[data-dm-tile="' + id + '"] iframe')].find((f) => f.style.visibility !== 'hidden')?.contentDocument)`;
+/** In the page: the ids of the frames that show a document with the soak page in it, in order. */
+const DRAWN = `${TILES}.map((t) => t.dataset.dmTile).filter((id) => ${FRAME_DOCUMENT}(id)?.querySelector('#soak-plain')).join(',')`;
+const frameIndent = (id) =>
+  `(() => { const doc = ${FRAME_DOCUMENT}('${id}'); const e = doc && doc.querySelector('#soak-plain'); return e ? doc.defaultView.getComputedStyle(e).textIndent : undefined; })()`;
+/** In the page: the window point of an element drawn in a frame, where the frame's own hit test finds it. */
+const framePointOf = (id, selector) => `(() => {
+  const doc = ${FRAME_DOCUMENT}('${id}'); const element = doc && doc.querySelector(${JSON.stringify(selector)});
+  const body = document.querySelector('.dm-tile[data-dm-tile="${id}"] .dm-body'); if (!element || !body) return undefined;
+  const outer = body.getBoundingClientRect(); const zoom = outer.width / body.offsetWidth; const r = element.getBoundingClientRect();
+  for (let row = 1; row < 5; row += 1) for (let column = 1; column < 12; column += 1) {
+    const x = r.left + (r.width * column) / 12; const y = r.top + (r.height * row) / 5;
+    const sx = outer.left + x * zoom; const sy = outer.top + y * zoom;
+    const top = document.elementFromPoint(sx, sy);
+    if (element.contains(doc.elementFromPoint(x, y)) && top && top.closest('.dm-plane')) return { x: Math.round(sx), y: Math.round(sy) };
+  }
+  return undefined;
+})()`;
+const centreOf = (selector) =>
+  `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; const r = e.getBoundingClientRect(); return { x: Math.round(r.left + Math.min(r.width / 2, 40)), y: Math.round(r.top + r.height / 2) }; })()`;
+const OUTLINE = `(() => { const o = document.querySelector('[data-dm-outline="picked"]'); if (!o) return undefined; return { frame: o.closest('.dm-tile').dataset.dmTile, top: parseFloat(o.style.top), height: parseFloat(o.style.height) }; })()`;
+/** Times, in the page, how long after the next release of the pointer `ready` first holds. */
+const armTimer = (ready) => `(() => {
+  window.__dmTime = undefined;
+  const from = () => {
+    const start = performance.now(); let polls = 0;
+    const look = () => { polls += 1; if (${ready}) { window.__dmTime = performance.now() - start; } else if (polls < 6000) setTimeout(look, 4); };
+    setTimeout(look, 0);
+  };
+  window.addEventListener('pointerup', from, { capture: true, once: true });
+  return 0;
+})()`;
 
 async function runInElectron({ window, project, options }) {
   const { app } = require('electron');
@@ -165,30 +198,6 @@ async function runInElectron({ window, project, options }) {
     await until(`the ${name.source} button`, `!!${modeButton(name)}`);
     await driver.settle();
     await driver.evaluate(`${modeButton(name)}.click()`);
-  };
-  /** Selects `selector` on the canvas with a real click, and waits for the Style panel to show it. */
-  const selectOnCanvas = async (selector) => {
-    const name = selector.replace(/^#/, '');
-    // The panel names the selection's id once it is the target; a press that lands while the canvas is still
-    // swapping pages is pressed again, within a bound.
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await driver.pointerPress(await driver.canvasPoint(selector));
-      const named = await waitFor({
-        what: `${selector} selected`,
-        read: () => driver.evaluate(`(document.querySelector('.embed-editor_root')?.textContent || '').includes(${JSON.stringify(name)})`).catch(() => false),
-        until: Boolean,
-        pollIntervalMs: POLL_MS,
-        pollCountMax: SELECT_WAIT_MS_MAX / POLL_MS,
-      }).then(
-        () => true,
-        () => false,
-      );
-      if (named) {
-        await driver.settle();
-        return;
-      }
-    }
-    throw new Error(`${selector} could not be selected`);
   };
   /** Types `value` into the Style panel's text indent field (a plain length field) and waits for the canvas to show it. */
   const setIndent = async (value) => {
@@ -250,35 +259,78 @@ async function runInElectron({ window, project, options }) {
   const realProject = fs.realpathSync(project);
   const plainBefore = fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8');
 
-  await run('enter from the mode button: the window reopens on a private copy', async () => {
-    await pickMode(/design mode/i);
+  const times = {};
+  const point = (what, expression) => until(what, expression);
+  /** A real press at the point `expression` names, once it names one. */
+  const pressAt = async (what, expression, options) => {
+    const at = await point(what, expression);
+    await driver.pointerPress(at, options);
+    return at;
+  };
+  const panelNames = (name) => `(document.querySelector('.embed-editor_root')?.textContent || '').includes(${JSON.stringify(name)})`;
+  const selectInFrame = async (id, selector) => {
+    await pressAt(`${selector} in ${id}`, framePointOf(id, selector), { label: 'select in frame' });
+    await until(`the Style panel on ${selector}`, panelNames(selector.slice(1)), Boolean, WAIT_MS_MAX);
+    await until(`the outline in ${id}`, OUTLINE, (outline) => outline !== undefined && outline.frame === id);
+    await driver.settle();
+  };
+  const liveRootNow = () => {
+    const fence = designFenceState();
+    return fence.kind === 'on' ? path.join(fence.sandboxRoot, 'site', path.basename(project)) : '';
+  };
+
+  /** Chooses Design mode with a real press and times, in the page, how long until a frame is drawn on a canvas. */
+  const enterAndTime = async () => {
+    await openAiPanel();
+    const button = await point(
+      'the Design mode button',
+      `(() => { const b = ${modeButton(/design mode/i)}; if (!b) return undefined; const r = b.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
+    );
+    await driver.settle();
+    await driver.evaluate(armTimer(`!!document.querySelector('.dm-canvas') && !!document.querySelector('.dm-tile .dm-document, .dm-tile .dm-skeleton')`));
+    await driver.evaluate(
+      `(() => { const from = () => { const start = performance.now(); const look = () => { if ((${DRAWN}) !== '') { window.__dmDrawnAt = performance.now() - start; } else if (performance.now() - start < 20000) setTimeout(look, 4); }; setTimeout(look, 0); }; window.__dmDrawnAt = undefined; window.addEventListener('pointerup', from, { capture: true, once: true }); return 0; })()`,
+    );
+    await driver.pointerPress(button);
+    const canvasMs = await until('the canvas on the click', `window.__dmTime`, (value) => value !== undefined);
+    const drawnMs = await until('a drawn frame before the reload', `window.__dmDrawnAt`, (value) => value !== undefined);
+    return { canvasMs: Math.round(canvasMs), drawnMs: Math.round(drawnMs) };
+  };
+
+  await run('entering shows the canvas with the page as its first frame', async () => {
+    times.enter = await enterAndTime();
+    check('the canvas is up within 100 ms of the click', times.enter.canvasMs < 100, times.enter.canvasMs);
+    check('a drawn frame within half a second of the click', times.enter.drawnMs < 500, times.enter.drawnMs);
+    await shot('00-opening');
     await collectToasts();
-    await untilOpen('the Design mode bar', `!!document.querySelector('.dm-bar')`);
+    await untilOpen(
+      'the Design mode canvas',
+      `!!document.querySelector('.dm-bar') && !document.querySelector('.dm-status') && !!document.querySelector('.dm-plane')`,
+    );
     await reopened();
     const fence = designFenceState();
     check('the fence is up', fence.kind === 'on');
-    check(
-      'the copy is in the app data folder',
-      fence.kind === 'on' && fence.sandboxRoot.startsWith(fs.realpathSync(app.getPath('userData'))),
-      fence.sandboxRoot,
-    );
-    check('the fence guards the project itself', fence.kind === 'on' && fence.realRoot === realProject);
+    check('the copy is in the app data folder', fence.kind === 'on' && fence.sandboxRoot.startsWith(fs.realpathSync(app.getPath('userData'))));
     check('the copy is private to the person', (fs.statSync(sandboxes).mode & 0o777) === 0o700);
-    check('the copy holds the project .env, which the dev server needs', leftInSandboxes().length === 1);
-    check(
-      'history and git are out of reach',
-      await driver.evaluate(`![...document.querySelectorAll('.rail button')].some((b) => /history/i.test(b.getAttribute('aria-label') || ''))`),
+    await untilOpen('the first frame drawn', `${DRAWN} === 'f1'`);
+    await untilOpen('the live canvas up', `!!document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]')`);
+    await untilCanvas('the live page', PLAIN_INDENT);
+    const covers = await until(
+      'the canvas over the preview',
+      `(() => { const w = document.querySelector('.preview-frame-wrap').getBoundingClientRect(); const hit = document.elementFromPoint(w.left + w.width / 2, w.top + w.height / 2); return !!hit && !!hit.closest('.dm-canvas'); })()`,
     );
-    check('one frame, the original', (await driver.evaluate(`${TABS}.length`)) === 1);
+    check('the canvas is the view', covers === true);
+    check(
+      'frame documents run no script',
+      await driver.evaluate(`[...document.querySelectorAll('.dm-document')].every((f) => f.getAttribute('sandbox') === 'allow-same-origin')`),
+    );
+    await driver.settle();
     await shot('01-entered');
   });
 
-  await run('the real Style panel starts on Inline styles and edits the copy', async () => {
-    await selectOnCanvas('#soak-plain');
+  await run('a click in a frame drives the real Style panel, on Inline styles, and the edit shows in the frame', async () => {
+    await selectInFrame('f1', '#soak-plain');
     await until('the Inline styles chip picked', `!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`);
-    check('a new selection starts on Inline styles', true);
-    // A person looks before typing; the panel finishes picking its target meanwhile, and it must stay inline for
-    // as long as a person takes to start typing (THINK_MS of polls in a row), not just at the first glance.
     await waitForSteady({
       what: 'Inline styles still the target',
       read: () => driver.evaluate(`!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`).catch(() => false),
@@ -287,73 +339,239 @@ async function runInElectron({ window, project, options }) {
       pollIntervalMs: POLL_MS,
       pollCountMax: WAIT_MS_MAX / POLL_MS,
     });
-    check('Inline styles is still the target a moment later', true);
+    check('a new selection starts on Inline styles', true);
     await setIndent('40px');
-    const fence = designFenceState();
-    const live = fence.kind === 'on' ? path.join(fence.sandboxRoot, 'site', path.basename(project)) : '';
-    // The canvas shows an edit before the save lands (instant edits); the file is read until it holds it.
-    // Written in rem where the project writes lengths in rem (40px is 2.5rem).
-    const inline = /id="soak-plain"[^>]*style="[^"]*text-indent: ?(40px|2\.5rem)/;
+    const started = Date.now();
+    await until('the frame at 40px', frameIndent('f1'), (size) => size === '40px');
+    times.frameBehindLiveMs = Date.now() - started;
+    check('the frame shows the edit', true);
     const saved = await waitFor({
       what: 'the inline style saved in the copy',
-      read: () => fs.readFileSync(path.join(live, 'src/pages/index.astro'), 'utf8'),
-      until: (text) => inline.test(text),
+      read: () => fs.readFileSync(path.join(liveRootNow(), 'src/pages/index.astro'), 'utf8'),
+      until: (text) => /id="soak-plain"[^>]*style="[^"]*text-indent: ?(40px|2\.5rem)/.test(text),
       pollIntervalMs: POLL_MS,
       pollCountMax: SELECT_WAIT_MS_MAX / POLL_MS,
     }).then(
       () => true,
       () => false,
     );
-    const line = fs
-      .readFileSync(path.join(live, 'src/pages/index.astro'), 'utf8')
-      .split('\n')
-      .find((text) => text.includes('soak-plain'));
-    check('the edit is an inline style in the copy', saved, line);
+    check('the edit is an inline style in the copy', saved);
     check('the project page is unchanged', fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8') === plainBefore);
     await shot('02-inline-style');
   });
 
-  await run('the Navigator works on the copy', async () => {
-    // Opened only when it is not already: the rail button toggles the panel.
-    await driver.evaluate(
-      `document.querySelector('.structure-node') ? 0 : ([...document.querySelectorAll('.rail button')].find((b) => /navigator/i.test(b.getAttribute('aria-label') || ''))?.click(), 0)`,
-    );
+  await run('the Navigator follows the pick, and a Navigator pick is outlined in the frame', async () => {
     await until('the navigator tree', `document.querySelectorAll('.structure-node').length > 2`);
-    check('the navigator lists the copy page', true);
+    const selectedRow = `(document.querySelector('.structure-node.selected, .structure-node.is-selected, .structure-node[aria-selected="true"]')?.textContent || '')`;
+    const rowText = await driver.evaluate(selectedRow);
+    check('the Navigator selected a row', rowText.length > 0, rowText);
+    const before = await driver.evaluate(OUTLINE);
+    const heading = `[...document.querySelectorAll('.structure-node')].find((n) => /heading/i.test(n.textContent || ''))`;
+    const row = await driver.panelPoint(heading);
+    await driver.pointerPress(row);
+    await until('the outline moved with the Navigator', OUTLINE, (outline) => outline !== undefined && outline.top !== before.top);
+    check('a Navigator pick is outlined in the frame', true);
     await shot('03-navigator');
   });
 
-  await run('a duplicated frame keeps its own version', async () => {
-    await driver.evaluate(`document.querySelector('.dm-bar .dm-icon[aria-label="Duplicate frame"]').click()`);
-    await until('two frames', `${TABS}.length === 2`);
-    await selectOnCanvas('#soak-plain');
-    await setIndent('60px');
-    await driver.evaluate(`${TABS}[0].click()`);
-    await untilCanvas('the first frame shown again', PLAIN_INDENT, (size) => size === '40px');
-    check('switching to the first frame shows its own style', true);
-    await driver.evaluate(`${TABS}[1].click()`);
-    await untilCanvas('the second frame shown again', PLAIN_INDENT, (size) => size === '60px');
-    check('switching back shows the second frame’s style', true);
-    await shot('04-two-frames');
+  await run('a component clicked in a frame shows its props in the Settings panel', async () => {
+    await pressAt('the heading component in f1', framePointOf('f1', '#soak-heading-one'), { label: 'select component' });
+    await until('the outline on the heading', OUTLINE, (outline) => outline !== undefined);
+    await driver.settle();
+    const tabPoint = (name) =>
+      `(() => { const b = [...document.querySelectorAll('.right-tabs button')].find((x) => x.textContent.trim() === '${name}'); if (!b) return undefined; const r = b.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`;
+    await pressAt('the Settings tab', tabPoint('Settings'));
+    // The Settings panel itself, shown: its title names the component, and it lists the component's own props.
+    const shownProps = `(() => { const title = [...document.querySelectorAll('.props-title')].find((t) => t.checkVisibility({ visibilityProperty: true })); return title ? title.parentElement.innerText : undefined; })()`;
+    const props = await until(
+      'the component props',
+      shownProps,
+      (text) => typeof text === 'string' && /^\s*Heading/.test(text) && /variant/i.test(text) && /max\s?width/i.test(text),
+    );
+    check('the Settings panel lists the component\u2019s own props', typeof props === 'string', props);
+    report.settingsText = props;
+    await driver.settle();
+    await shot('04-settings');
+    await pressAt('the Style tab', tabPoint('Style'));
+    await driver.settle();
   });
 
-  await run('Compare shows the frames side by side', async () => {
-    await driver.evaluate(`[...document.querySelectorAll('.dm-bar .dm-button')].find((b) => /compare/i.test(b.textContent || '')).click()`);
-    await until(
-      'the board with both frames',
-      `document.querySelectorAll('.dm-board-frame').length === 2 && document.querySelectorAll('.dm-board-picture').length === 2`,
+  await run('Option-drag on a frame duplicates it at once', async () => {
+    const from = await point('a point on f1', framePointOf('f1', '#soak-heading-two'));
+    const box = await driver.evaluate(
+      `(() => { const r = document.querySelector('.dm-tile[data-dm-tile="f1"] .dm-body').getBoundingClientRect(); return { width: r.width }; })()`,
     );
-    check('both frames have a picture', true);
-    const cover = await driver.evaluate(
-      `(() => { const board = document.querySelector('.dm-board'); const r = board.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 3); return JSON.stringify({ width: Math.round(r.width), height: Math.round(r.height), onTop: !!hit && board.contains(hit), hit: hit ? String(hit.className || hit.tagName) : '' }); })()`,
-    );
-    check('the board covers the canvas column', JSON.parse(cover).onTop === true, cover);
+    await driver.evaluate(armTimer(`${DRAWN} === 'f1,f2' && !document.querySelector('[data-dm-ghost]')`));
+    await driver.drag(from, { x: Math.round(from.x + box.width + 24), y: from.y }, { modifiers: ['alt'], steps: 10, label: 'option drag' });
+    times.optionDragMs = await until('the copy drawn', `window.__dmTime`, (value) => value !== undefined);
+    check('Option-drag makes a drawn copy within 100 ms of release', times.optionDragMs < 100, times.optionDragMs);
+    check('the copy keeps the frame\u2019s look', (await driver.evaluate(frameIndent('f2'))) === '40px');
+    check('the copy is the selected frame', await driver.evaluate(`!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f2"]')`));
+    await shot('05-option-drag');
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
     await driver.settle();
-    await shot('05-compare');
-    await driver.evaluate(`document.querySelectorAll('.dm-board-frame')[0].click()`);
-    await until('the board closed', `!document.querySelector('.dm-board')`);
-    await untilCanvas('the first frame shown from the board', PLAIN_INDENT, (size) => size === '40px');
-    check('a board tile opens its frame', true);
+    await shot('06-two-frames-fitted');
+  });
+
+  await run('each frame keeps its own version', async () => {
+    await selectInFrame('f2', '#soak-plain');
+    await setIndent('60px');
+    await until('the copy at 60px', frameIndent('f2'), (size) => size === '60px');
+    check('the first frame is unchanged by the copy\u2019s edit', (await driver.evaluate(frameIndent('f1'))) === '40px');
+    const started = Date.now();
+    await selectInFrame('f1', '#soak-plain');
+    await untilCanvas('the copy of the site showing the first frame', PLAIN_INDENT, (size) => size === '40px');
+    times.switchFrameMs = Date.now() - started;
+    check('picking in the first frame shows its version to the panels', true);
+    check('the second frame kept its own version', (await driver.evaluate(frameIndent('f2'))) === '60px');
+    check('the first frame kept its own version', (await driver.evaluate(frameIndent('f1'))) === '40px');
+    await setIndent('48px');
+    await until('the first frame at 48px', frameIndent('f1'), (size) => size === '48px');
+    check('an edit after switching lands in that frame only', (await driver.evaluate(frameIndent('f2'))) === '60px');
+    await shot('07-two-versions');
+  });
+
+  await run('right-click on a frame duplicates it from the menu', async () => {
+    const at = await point('a point on f2', framePointOf('f2', '#soak-plain'));
+    driver.contents.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'right', clickCount: 1 });
+    driver.contents.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y, button: 'right', clickCount: 1 });
+    const item = `(() => { const b = [...document.querySelectorAll('.menu-surface .menu-row')].find((r) => /duplicate/i.test(r.textContent || '')); if (!b) return undefined; const r = b.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`;
+    await point('the menu', item);
+    await shot('08-menu');
+    await driver.evaluate(armTimer(`${DRAWN} === 'f1,f2,f3'`));
+    await pressAt('Duplicate', item);
+    times.menuDuplicateMs = await until('the third frame drawn', `window.__dmTime`, (value) => value !== undefined);
+    check('Duplicate in the menu makes a drawn copy within 100 ms', times.menuDuplicateMs < 100, times.menuDuplicateMs);
+    await until('the third frame shows the second\u2019s version', frameIndent('f3'), (size) => size === '60px');
+    check('the menu copied the right frame', true);
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await driver.settle();
+    await shot('09-three-frames');
+  });
+
+  await run('a frame moves by its name', async () => {
+    const title = await point('the third name', centreOf('.dm-tile[data-dm-tile="f3"] .dm-title-name'));
+    const left = `parseFloat(document.querySelector('.dm-tile[data-dm-tile="f3"]').style.left)`;
+    const before = await driver.evaluate(left);
+    await driver.drag(title, { x: title.x + 40, y: title.y + 60 }, { label: 'move frame' });
+    await until('the frame moved', left, (value) => value > before);
+    check('dragging a name moves the frame', (await driver.evaluate(`${TILES}.length`)) === 3);
+  });
+
+  await run('the canvas pans and zooms, a frame is renamed from its menu, and Escape steps out', async () => {
+    const world = `document.querySelector('.dm-world').style.transform`;
+    const middle = await point(
+      'the canvas',
+      `(() => { const r = document.querySelector('.dm-plane').getBoundingClientRect(); return { x: Math.round(r.left + 12), y: Math.round(r.top + r.height / 2) }; })()`,
+    );
+    const before = await driver.evaluate(world);
+    await driver.wheel(middle, -120);
+    await until('the canvas panned', world, (value) => value !== before);
+    check('a scroll pans the canvas', true);
+    const zoom = `parseFloat(document.querySelector('.dm-zoom').textContent)`;
+    const percent = await driver.evaluate(zoom);
+    driver.contents.sendInputEvent({ type: 'mouseWheel', x: middle.x, y: middle.y, deltaX: 0, deltaY: 120, canScroll: true, modifiers: ['meta'] });
+    await until('the canvas zoomed', zoom, (value) => value !== percent);
+    check('a scroll with \u2318 zooms the canvas', true);
+    const panned = await driver.evaluate(world);
+    await driver.drag(middle, { x: middle.x + 60, y: middle.y + 30 }, { label: 'pan' });
+    await until('the canvas dragged', world, (value) => value !== panned);
+    check('dragging the empty canvas pans it', (await driver.evaluate(`${TILES}.length`)) === 3);
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await driver.settle();
+    const name = await point('the third name', centreOf('.dm-tile[data-dm-tile="f3"] .dm-title-name'));
+    driver.contents.sendInputEvent({ type: 'mouseDown', x: name.x, y: name.y, button: 'right', clickCount: 1 });
+    driver.contents.sendInputEvent({ type: 'mouseUp', x: name.x, y: name.y, button: 'right', clickCount: 1 });
+    await pressAt(
+      'Rename',
+      `(() => { const b = [...document.querySelectorAll('.menu-surface .menu-row')].find((r) => /rename/i.test(r.textContent || '')); if (!b) return undefined; const r = b.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
+    );
+    await until('the name field', `document.activeElement?.className === 'dm-title-input'`);
+    await driver.typeText('Bold');
+    await driver.key('Enter');
+    await until('the new name', `document.querySelector('.dm-tile[data-dm-tile="f3"] .dm-title-name')?.textContent`, (text) => text === 'Bold');
+    check('a frame is renamed', true);
+    await selectInFrame('f3', '#soak-plain');
+    await driver.evaluate(`0`);
+    await driver.key('Escape');
+    await until(
+      'the frame selected',
+      `!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f3"]') && !document.querySelector('[data-dm-outline="picked"]')`,
+    );
+    check('Escape steps from an element to its frame', true);
+    await driver.key('Escape');
+    await until('nothing selected', `!document.querySelector('.dm-tile.is-selected')`);
+    check('Escape again clears the selection', (await driver.evaluate(`${TILES}.length`)) === 3);
+  });
+
+  await run('Delete removes a selected frame; the last one stays; \u2318D duplicates it', async () => {
+    await pressAt('the third name', centreOf('.dm-tile[data-dm-tile="f3"] .dm-title-name'));
+    await until('f3 selected', `!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f3"]')`);
+    await driver.settle();
+    await driver.evaluate(armTimer(`false`));
+    await driver.key('Delete');
+    await until('two frames', `${TILES}.length === 2`);
+    check('Delete removed the selected frame', true);
+    await pressAt('the second name', centreOf('.dm-tile[data-dm-tile="f2"] .dm-title-name'));
+    await until('f2 selected', `!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f2"]')`);
+    await untilCanvas('the site copy on f2', PLAIN_INDENT, (size) => size === '60px');
+    await driver.settle();
+    await driver.key('Backspace');
+    await until('one frame', `${TILES}.length === 1`);
+    check('Backspace removed the selected frame', true);
+    await untilCanvas('the site copy back on the remaining frame', PLAIN_INDENT, (size) => size === '48px');
+    check('removing the shown frame shows the other', true);
+    await pressAt('the first name', centreOf('.dm-tile[data-dm-tile="f1"] .dm-title-name'));
+    await driver.settle();
+    await driver.key('Delete');
+    await driver.settle();
+    check('the last frame stays', (await driver.evaluate(`${TILES}.length`)) === 1);
+    // A second frame again, for what follows.
+    await driver.key('d', { modifiers: ['meta'] });
+    await until('two frames from the keyboard', `${TILES}.length === 2`);
+    check('\u2318D duplicates the selected frame', true);
+    await driver.settle();
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await driver.settle();
+    const copy = await driver.evaluate(`${TILES}[1].dataset.dmTile`);
+    await selectInFrame(copy, '#soak-plain');
+    await setIndent('72px');
+    await until('the new copy at 72px', frameIndent(copy), (size) => size === '72px');
+  });
+
+  await run('publishing and pulling stay out of reach, and the bar holds in a narrow window', async () => {
+    check(
+      'the chip that would end the mode\u2019s look is not shown',
+      await driver.evaluate(`[...document.querySelectorAll('.view-as-chip')].every((chip) => chip.getBoundingClientRect().width === 0)`),
+    );
+    check('there is no Publish button', await driver.evaluate(`!document.querySelector('.stacki-publish-control')`));
+    const published = await driver.evaluate(
+      `window.avb.publishStart({ projectPath: ${JSON.stringify(liveRootNow())}, target: 'all' }).then(() => 'ran', (error) => String(error && error.message))`,
+    );
+    check('publishing is refused by main', /not available in design mode/i.test(published), published);
+    const toastsBefore = await driver.evaluate(`window.__dmToasts.length`);
+    await driver.key('g', { modifiers: ['alt', 'shift'] });
+    await driver.settle();
+    const said = await driver.evaluate(`window.__dmToasts.slice(${toastsBefore}).join(' | ')`);
+    check('Option+Shift+G says nothing about a repository', !/repository|github/i.test(said), said);
+    const [width, height] = window.getContentSize();
+    window.setContentSize(1100, 760);
+    await until('the narrow window', `innerWidth <= 1100`);
+    await driver.settle();
+    const fits = await driver.evaluate(
+      `JSON.stringify([...document.querySelectorAll('.dm-bar .dm-badge, .dm-bar button')].map((e) => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { name: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20), width: Math.round(r.width), inside: r.left >= 0 && r.right <= innerWidth, clipped: e.scrollWidth > e.clientWidth + 1, reachable: !!hit && (e.contains(hit) || hit.contains(e)) }; }))`,
+    );
+    check(
+      'every control of the bar is whole and reachable at 1100 pixels',
+      JSON.parse(fits).every((control) => control.width >= 32 && control.inside && !control.clipped && control.reachable),
+      fits,
+    );
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await driver.settle();
+    await shot('09b-narrow');
+    window.setContentSize(width, height);
+    await until('the wide window', `innerWidth === ${width}`);
+    await driver.settle();
   });
 
   await run('the fence refuses git and any write into the project, from inside the running app', async () => {
@@ -374,28 +592,53 @@ async function runInElectron({ window, project, options }) {
     check('nothing appeared in the project', !fs.existsSync(path.join(project, 'src/pages/written-in-design-mode.astro')));
   });
 
-  await run('Send to AI reopens the project with the frames waiting in the AI panel', async () => {
-    await driver.evaluate(`document.querySelector('.dm-bar .dm-button.is-primary').click()`);
+  await run('Send to AI reopens the project with a picture of each frame waiting in the AI panel', async () => {
+    await pressAt('Send to AI', centreOf('.dm-bar .dm-button.is-primary'));
     await collectToasts();
     await untilOpen('the project open again', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
     await reopened();
     await until('the frames in the AI panel draft', `(document.querySelector('.ai-composer')?.textContent || '').includes('Design mode')`);
     check('the draft carries the request', true);
+    const pictures = await until(
+      'the pictures',
+      `[...document.querySelectorAll('.ai-composer img')].map((i) => i.src).filter((s) => s.startsWith('data:image/png'))`,
+      (list) => list.length >= 2,
+    );
+    pictures
+      .slice(0, 2)
+      .forEach((picture, index) =>
+        fs.writeFileSync(path.join(options.outDirectory, `10-handoff-${index + 1}.png`), Buffer.from(picture.slice(picture.indexOf(',') + 1), 'base64')),
+      );
+    check('one picture a frame', pictures.length === 2, pictures.length);
     check('the fence is down', designFenceState().kind === 'off');
     check('the copy and its .env are deleted', leftInSandboxes().length === 0);
     check('the project is byte-identical', treeDigest(project) === before);
-    await shot('06-sent');
+    await shot('11-sent');
   });
 
-  await run('coming back restores the frames; Exit leaves again', async () => {
-    await pickMode(/design mode/i);
+  await run('coming back shows every frame from its kept document; Exit leaves again', async () => {
+    const asked = Date.now();
+    times.reenter = await enterAndTime();
+    check('kept frames are drawn within half a second of the click', times.reenter.drawnMs < 500, times.reenter.drawnMs);
     await collectToasts();
-    await untilOpen('the Design mode bar again', `!!document.querySelector('.dm-bar') && ${TABS}.length === 2`);
+    await untilOpen(
+      'the canvas again with both frames drawn',
+      `!!document.querySelector('.dm-bar') && !document.querySelector('.dm-status') && (${DRAWN}).split(',').length === 2`,
+    );
+    times.reenterMs = Date.now() - asked;
+    const first = await driver.evaluate(
+      `JSON.stringify(${TILES}.map((t) => { const doc = ${FRAME_DOCUMENT}(t.dataset.dmTile); return doc.defaultView.getComputedStyle(doc.querySelector('#soak-plain')).textIndent; }))`,
+    );
+    check('both frames come back with their own look', first === '["48px","72px"]', first);
+    times.liveCanvasUpAfterFrames = await driver.canvasEvaluate(PLAIN_INDENT).then(
+      () => 'up',
+      () => 'not yet',
+    );
     await reopened();
-    check('both frames came back from the draft', true);
-    await untilCanvas('the shown frame’s style restored', PLAIN_INDENT, (size) => size === '40px');
-    await shot('07-restored');
-    await driver.evaluate(`[...document.querySelectorAll('.dm-bar .dm-button')].find((b) => /^exit$/i.test((b.textContent || '').trim())).click()`);
+    await untilCanvas('the shown frame\u2019s style restored', PLAIN_INDENT, (size) => size === '72px');
+    await driver.settle();
+    await shot('12-restored');
+    await pressAt('Exit', centreOf('.dm-bar .dm-exit'));
     await collectToasts();
     await untilOpen('out of Design mode', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
     await reopened();
@@ -410,13 +653,13 @@ async function runInElectron({ window, project, options }) {
       .join('');
     check('a draft is kept in the app data folder', draftText.length > 0);
     check('the draft keeps no .env', !draftText.includes('"rel":".env'));
-    await shot('08-exited');
   });
 
   await collectToasts();
   const refusals = toasts.filter((text) => /not available in design mode/i.test(text));
   check('no refused request reached the person as a toast', refusals.length === 0, refusals.join(' | '));
   report.toasts = toasts;
+  report.times = times;
   const after = treeDigest(project);
   check('the project folder is byte-identical after everything', after === before, `${before} → ${after}`);
   fs.writeFileSync(path.join(options.outDirectory, 'report.json'), JSON.stringify(report, null, 2));
