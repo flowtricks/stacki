@@ -137,7 +137,7 @@ body:has(.dm-bar) .toast-stack {
   font-weight: 600;
   text-overflow: ellipsis;
 }
-.dm-title-note {
+.dm-title-changes {
   color: var(--text-faint);
 }
 .dm-title-input {
@@ -226,7 +226,7 @@ body:has(.dm-bar) .toast-stack {
 }
 .dm-guide.is-y {
   left: 0; /* physical: a snap line across the whole page */
-  right: 0;
+  right: 0; /* physical: its other end */
   height: var(--dm-line);
 }
 .dm-menu-anchor {

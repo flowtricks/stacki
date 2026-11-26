@@ -58,7 +58,7 @@ export function DesignFrameTile(props: DesignTileProps) {
             {frame.name}
           </span>
         )}
-        {frame.changedFiles > 0 && <span className="dm-title-note">{words('frame.changes', { count: frame.changedFiles })}</span>}
+        {frame.changedFiles > 0 && <span className="dm-title-changes">{words('frame.changes', { count: frame.changedFiles })}</span>}
       </div>
       <div className="dm-body" data-dm-part="body" style={{ width: widthPx, height: heightPx }}>
         {snapshot === undefined ? (
