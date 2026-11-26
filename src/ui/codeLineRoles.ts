@@ -22,7 +22,24 @@ const COMMENT_NODES: ReadonlySet<string> = new Set(['BlockComment', 'Comment']);
 /** The classifier for an editor language; a language with no parser here has no such lines. */
 export function codeLineClassifier(language: string | undefined): CodeLineClassifier {
   const parser = parserFor(language);
-  return parser === undefined ? noRoles : (text) => rolesFrom(parser, text);
+  if (parser === undefined) {
+    return noRoles;
+  }
+  const markup = language === 'astro' || language === 'html';
+  return (text) => (markup ? withPreserved(rolesFrom(parser, text), text) : rolesFrom(parser, text));
+}
+
+// A line that starts inside <pre> or <textarea> shows its whitespace on the page: it is content, as in a string.
+const PRESERVED_ELEMENT = /<(pre|textarea)(?=[\s/>])[\s\S]*?(?:<\/\1\s*>|$)/gi;
+
+function withPreserved(roles: CodeLineRoles, text: string): CodeLineRoles {
+  const starts = lineStarts(text);
+  const verbatim = new Set(roles.verbatim);
+  for (const match of text.matchAll(PRESERVED_ELEMENT)) {
+    addInnerLines(verbatim, starts, { from: match.index, to: match.index + match[0].length });
+  }
+  assert(verbatim.size < starts.length, 'withPreserved: the first line never starts inside an element');
+  return { verbatim, comment: roles.comment };
 }
 
 function parserFor(language: string | undefined): Parser | undefined {

@@ -367,8 +367,6 @@ export const messages = {
   'ai.message.retryTitle': 'Chiedi di nuovo',
   'ai.message.showLess': 'Mostra meno',
   'ai.message.showMore': 'Mostra di più',
-  'ai.modes.active': '{mode}: attivo',
-  'ai.modes.menu': 'Modalità',
   'ai.notice.cannotContinue': '{agent} non ha potuto continuare la conversazione precedente, quindi questa chat ne avvia una nuova.',
   'ai.notice.cannotFork': '{agent} non può portare la conversazione precedente in un fork, quindi questa chat ne avvia una nuova.',
   'ai.notice.chatFull': 'Questa chat è piena; i nuovi messaggi non vengono più salvati. Avvia una nuova chat.',

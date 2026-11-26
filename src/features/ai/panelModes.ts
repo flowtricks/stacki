@@ -1,23 +1,23 @@
-// The AI panel's Modes menu: ways of working that change how the canvas behaves while the chat is open (comment
-// pins, pins/pinStore.ts). Each mode registers itself here, on its own; the header's Modes button
-// (sessions/ModesMenu.tsx) lists whatever is registered and knows none of them by name. Why a registry: a mode
-// can be added or removed (an experiment that ships for a while, then goes) by adding or deleting the one file
-// that registers it, and the menu, the header and the other modes stay as they are. With no mode registered
-// the button is not drawn.
+// The AI panel's modes: ways of working that change how the canvas behaves while the chat is open (comment pins,
+// pins/pinStore.ts). Each mode registers itself here, on its own; the header (sessions/ModeButtons.tsx) draws one
+// button per registered mode and knows none of them by name. Why a registry: a mode can be added or removed (an
+// experiment that ships for a while, then goes) by adding or deleting the one file that registers it, and the
+// header and the other modes stay as they are. A mode that is not registered has no button.
 //
 // A mode is on or off. Turning one on turns the others off, so the canvas is never asked to be two things at once.
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { Translator } from '../../lib/i18n/localeContext';
 
-/** Modes registered at once. Why: the menu is a short list, and more would mean modes nobody can find. */
+/** Modes registered at once. Why: each is a button in the header, and more would crowd the chat's title out. */
 export const PANEL_MODES_MAX = 8;
 
 export interface PanelMode {
-  /** Stable: the menu row's key, and how a test finds it. */
+  /** Stable: the button's key. */
   readonly id: string;
-  /** Where the row sits: lower first. Ties keep registration order. */
+  /** Where its button sits: lower first (before "+"). Ties keep registration order. */
   readonly order: number;
+  /** The mode's name: its button's tooltip and accessible name. */
   readonly label: (translate: Translator) => string;
   readonly icon: () => ReactNode;
   readonly isActive: () => boolean;
@@ -30,11 +30,11 @@ let modes: readonly PanelMode[] = [];
 const listeners = new Set<() => void>();
 let version = 0;
 
-/** Adds a mode to the menu; returns its removal. A second registration of an id replaces the first. */
+/** Adds a mode (its header button); returns its removal. A second registration of an id replaces the first. */
 export function registerPanelMode(mode: PanelMode): () => void {
   assert(mode.id.length > 0, 'registerPanelMode: a mode has an id');
   const others = modes.filter((entry) => entry.id !== mode.id);
-  assert(others.length < PANEL_MODES_MAX, 'registerPanelMode: the menu is bounded');
+  assert(others.length < PANEL_MODES_MAX, 'registerPanelMode: the modes are bounded');
   modes = [...others, mode].sort((left, right) => left.order - right.order);
   const unsubscribe = mode.subscribe(changed);
   changed();

@@ -115,6 +115,8 @@ export const messages = {
     other: 'Sposta {count} elementi',
   },
   'workspace.files.undo.rename': 'Rinomina {name}',
+  'workspace.notifications.copied': 'Copiato',
+  'workspace.notifications.copy': 'Copia',
   'workspace.notifications.dismiss': 'Ignora notifica',
   'workspace.notifications.label': 'Notifiche',
   'workspace.notifications.loadMore': 'Carica altre ({count})',

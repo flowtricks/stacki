@@ -399,8 +399,6 @@ export const messages = {
   'ai.message.retryTitle': 'Zapytaj ponownie',
   'ai.message.showLess': 'Pokaż mniej',
   'ai.message.showMore': 'Pokaż więcej',
-  'ai.modes.active': 'Włączono: {mode}',
-  'ai.modes.menu': 'Tryby',
   'ai.notice.cannotContinue': '{agent} nie mógł kontynuować wcześniejszej rozmowy, więc ten czat rozpoczyna nową.',
   'ai.notice.cannotFork': '{agent} nie może przenieść wcześniejszej rozmowy do rozgałęzienia, więc ten czat rozpoczyna nową.',
   'ai.notice.chatFull': 'Ten czat jest pełny; nowe wiadomości nie są już zapisywane. Rozpocznij nowy czat.',

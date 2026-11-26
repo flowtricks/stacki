@@ -204,11 +204,62 @@ function useRichSync(nodes: readonly InlineNode[], state: RichState) {
     if (!element) {
       return;
     }
-    if (html !== lastEmittedRef.current) {
-      element.innerHTML = html;
+    if (html === lastEmittedRef.current) {
+      return;
+    }
+    const focused = element.ownerDocument.activeElement === element;
+    // Our own edit coming back in the page's spelling of it (a space the browser typed as U+00A0, template whitespace,
+    // a break with nothing after it left out) is the same words: the field keeps what is typed, and the caret stays.
+    if (focused && sameWords(html, lastEmittedRef.current ?? '')) {
       lastEmittedRef.current = html;
+      return;
+    }
+    // A real change while typing (an undo, the file changed): the words are replaced and the caret kept where it was in them.
+    const caret = focused ? caretOffset(element) : undefined;
+    element.innerHTML = html;
+    lastEmittedRef.current = html;
+    if (caret !== undefined) {
+      placeCaret(element, caret);
     }
   }, [html, hostRef, lastEmittedRef]);
+}
+
+/** Whether two spellings of the field's HTML hold the same words and markup, whitespace and trailing breaks aside. */
+export function sameWords(left: string, right: string): boolean {
+  const words = (html: string) =>
+    html
+      .replace(/<br data-rich-caret="">/g, '')
+      .replace(/&nbsp;|\u00A0/g, ' ')
+      .replace(/(?:<br>\s*)+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  return words(left) === words(right);
+}
+
+// The caret as a count of characters before it, and back: the same place in the words after they are written again.
+function caretOffset(element: HTMLElement): number | undefined {
+  const selection = element.ownerDocument.getSelection();
+  if (!selection?.rangeCount || !element.contains(selection.getRangeAt(0).endContainer)) {
+    return undefined;
+  }
+  const range = element.ownerDocument.createRange();
+  range.selectNodeContents(element);
+  range.setEnd(selection.getRangeAt(0).endContainer, selection.getRangeAt(0).endOffset);
+  return range.toString().length;
+}
+
+function placeCaret(element: HTMLElement, offset: number): void {
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let left = offset;
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0;
+    if (left <= length) {
+      element.ownerDocument.getSelection()?.collapse(node, left);
+      return;
+    }
+    left -= length;
+  }
+  element.ownerDocument.getSelection()?.collapse(element, element.childNodes.length);
 }
 function richEmit(state: RichState, onChange: RichContentProps['onChange']): void {
   const { hostRef, lastEmittedRef } = state;

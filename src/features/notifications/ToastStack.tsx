@@ -3,7 +3,7 @@ import { checkCircle as centralCheckCircle, close as centralClose, info as centr
 import { createPortal } from 'react-dom';
 import { useToastHost } from './useToastHost';
 import { runToastRecovery } from '../../ui/errorNotices';
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useToastInteraction } from './useToastInteraction';
 import { TOAST_LIMIT, type ToastNotice } from './useToastStack';
 import { useToastLayout } from './useToastLayout';
@@ -126,10 +126,41 @@ function ToastCard({
           <span className="toast-message">{notice.message}</span>
           {action}
           <ToastRecoveryActions notice={notice} close={close} />
+          {notice.kind === 'error' && <ToastCopy message={notice.message} />}
         </div>
         <ToastClose close={close} />
       </div>
     </div>
+  );
+}
+
+// Copies the message so an error can be pasted into a search, an issue or a chat. The toast stays up, and the
+// button says "Copied" for a moment so the click is seen to have worked.
+const COPIED_LABEL_MS = 2000;
+
+function ToastCopy({ message }: { readonly message: string }) {
+  const translate = useTranslate();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setCopied(false), COPIED_LABEL_MS);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className="toast-copy"
+      onClick={() => {
+        navigator.clipboard.writeText(message).then(
+          () => setCopied(true),
+          () => setCopied(false),
+        );
+      }}
+    >
+      {translate(copied ? 'workspace.notifications.copied' : 'workspace.notifications.copy')}
+    </button>
   );
 }
 

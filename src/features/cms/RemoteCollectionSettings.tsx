@@ -257,10 +257,12 @@ async function deleteWholeCollection(context: {
 }
 
 function CollectionName(props: { readonly settings: CollectionSettings; readonly name: string; readonly onName: (name: string) => void }) {
+  // The caption names the input, never the (i) before it (src/ui/captionLabel.ts).
+  const inputId = useId();
   const translate = useTranslate();
   return (
     <section className="remote-cms-settings-section">
-      <label className="remote-cms-settings-label">
+      <label className="remote-cms-settings-label" htmlFor={inputId}>
         <span>
           {translate('cmsRemote.collection.name')}
           <InfoHint
@@ -271,7 +273,7 @@ function CollectionName(props: { readonly settings: CollectionSettings; readonly
             }
           />
         </span>
-        <input value={props.name} onChange={(event) => props.onName(event.target.value)} />
+        <input id={inputId} value={props.name} onChange={(event) => props.onName(event.target.value)} />
       </label>
     </section>
   );

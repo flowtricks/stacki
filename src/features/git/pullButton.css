@@ -1,0 +1,49 @@
+/* The title bar's pull button, beside the branch chip. A fill, never a border. It never shrinks: the branch name beside
+   it is what gives way (branchIndicator.css). Its parts keep fixed boxes, so a pull starting changes no width. */
+.stacki-pull-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: var(--titlebar-control-height);
+  min-width: 0;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* An arrow and its number read the same way in a right-to-left interface. */
+  direction: ltr;
+}
+.stacki-pull-button:hover:not([aria-disabled='true']) {
+  background: var(--bg-hover);
+}
+.stacki-pull-button:active:not([aria-disabled='true']) {
+  background: var(--bg-pressed);
+}
+.stacki-pull-button[aria-disabled='true'] {
+  cursor: default;
+}
+.stacki-pull-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+}
+.stacki-pull-mark > .mini-spinner {
+  box-sizing: border-box;
+}
+/* When the bar runs short, the button's room comes out of a long branch name, so the project name, the address and the
+   other buttons are not squeezed by it. The 44px is the button (about 36px) and the gap beside it. */
+@container titlebar (max-width: 1100px) {
+  .stacki-pull-button ~ .stacki-branch-chip {
+    max-width: calc(160px - 44px);
+  }
+}

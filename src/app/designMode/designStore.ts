@@ -1,7 +1,7 @@
 // Design mode (experimental, removable: docs/design-mode/REMOVE.md): the renderer's view of the session.
 //
 // Main owns the session (electron/handlers/designMode); this holds its last answered state, the frames' pictures
-// for the board, and what the window is doing about it, so the Modes menu, the bar and the board read one value.
+// for the board, and what the window is doing about it, so the header button, the bar and the board read one value.
 // Framework-free; React reads it through `useDesignStore`.
 import { useSyncExternalStore } from 'react';
 import type { DesignFrameId, DesignSessionState } from '../../../shared/ipc/designSession';
@@ -49,7 +49,7 @@ export function subscribeDesignView(listener: () => void): () => void {
   };
 }
 
-/** Whether the Modes menu shows Design mode as on: on, or on its way. */
+/** Whether the header button shows Design mode as on: on, or on its way. */
 export function isDesignModeActive(): boolean {
   return view.session.kind === 'on' || view.phase === 'entering';
 }

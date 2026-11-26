@@ -1,47 +1,32 @@
 import type { GitIncomingState } from './useGitIncoming';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { IpcResults, WireGitInfo } from '../../../shared/ipc/ipcResults';
+import { gitValue, type GitHost, type GitSession, type PendingConflict, type RunAction } from './useGitSession';
 import { assert } from '../../../shared/core/assert';
-import { cleanErrorKeepingReference, type Failure } from '../../lib/cleanError';
-import { translateErrorText, translateFailure, translateReference } from '../../lib/i18n/translateErrorText';
-import { withReferencedMessage } from '../../../shared/core/i18n/referencedMessage';
-import { deleteBranchAction, mergeBranchAction, tidyUp } from './gitActions';
-import { checkoutGitBranch, commitGitChanges, initializeGit, pullGitBranch, readGitStatus, resolveGitMerge } from './gitChipBridge';
+import { translateFailure, translateReference } from '../../lib/i18n/translateErrorText';
+import { deleteBranchAction, mergeBranchAction } from './gitActions';
+import { checkoutGitBranch, commitGitChanges, initializeGit, readGitStatus } from './gitChipBridge';
 import { BranchIcon } from '../../ui/Icons';
 import { SkeletonRows } from '../../ui/Skeleton';
-import type { Conflict, ConflictChoices } from './gitConflictModel';
 import GitChipView from './GitChipView';
 import { buildCommitSubject } from './commitType';
 import { commitTypeConvention, useCommitType, type CommitTypeControl } from './CommitTypePicker';
 import type { CommitConvention } from './commitType';
-import MergeConflictModal from './MergeConflictModal';
 import SwitchBranchModal from './SwitchBranchModal';
 
-type ToastKind = 'error' | 'success' | 'info';
-type ShowToast = (message: string, kind: ToastKind) => void;
-type ActionWork = () => Promise<void>;
-type RunAction = (work: ActionWork, successMessage: string | undefined, label?: string) => Promise<boolean>;
-
-interface GitProject {
-  readonly path: string;
-  readonly name: string;
-}
-
 interface GitChipProps {
-  readonly info: IpcResults['git:info'] | undefined;
-  readonly refresh: () => Promise<unknown>;
-  readonly busy: string | undefined;
-  readonly project: GitProject;
-  readonly showToast: ShowToast;
-  readonly flushSave: () => Promise<unknown>;
+  /** The shared lock, pull path and merge review (useGitSession.ts); its review is drawn by GitSessionDialogs. */
+  readonly session: GitSession;
   readonly incoming?: GitIncomingState;
-  readonly onWorktreeChanged?: (() => Promise<unknown>) | undefined;
   readonly withBranchChange?: <Value>(work: () => Promise<Value>) => Promise<Value>;
+  /** The chord that pulls from anywhere, where the editor has one; the pull button's tooltip names it. */
+  readonly pullShortcut?: string | undefined;
 }
 
-interface RepositoryProps extends GitChipProps {
+interface RepositoryProps extends Pick<GitHost, 'project' | 'showToast'>, Omit<GitChipProps, 'session'> {
+  readonly session: GitSession;
   readonly translate: Translator;
   readonly info: WireGitInfo;
   readonly runAction: RunAction;
@@ -50,99 +35,35 @@ interface RepositoryProps extends GitChipProps {
   readonly setError: React.Dispatch<React.SetStateAction<string | undefined>>;
 }
 
-type PendingConflict = Conflict & { readonly deleteAfter: boolean };
 interface SwitchTarget {
   readonly branch: string;
   readonly files: readonly string[];
 }
 
-async function gitValue<Value>(pending: Promise<{ readonly ok: true; readonly value: Value } | Failure>): Promise<Value> {
-  const result = await pending;
-  if (!result.ok) {
-    // The reference rides in the message so `runAction` can show our own sentences in the person's language.
-    throw new Error(withReferencedMessage(result.error, result.errorRef));
-  }
-  return result.value;
-}
-
-function useActionRunner({
-  flushSave,
-  refresh,
-  onWorktreeChanged,
-  showToast,
-  externalBusy,
-  translate,
-}: {
-  readonly flushSave: () => Promise<unknown>;
-  readonly refresh: () => Promise<unknown>;
-  readonly onWorktreeChanged: (() => Promise<unknown>) | undefined;
-  readonly showToast: ShowToast;
-  readonly externalBusy: string | undefined;
-  readonly translate: Translator;
-}) {
-  const [busy, setBusy] = useState<string | undefined>(undefined);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const pending = useRef(false);
-  const runAction = useCallback<RunAction>(
-    async (work, successMessage, label = translate('git.busy.working')) => {
-      if (pending.current || externalBusy) {
-        return false;
-      }
-      // A synchronous lock also covers repeated clicks before React rerenders.
-      pending.current = true;
-      setBusy(label);
-      setError(undefined);
-      try {
-        await flushSave();
-        await work();
-        await refresh();
-        await onWorktreeChanged?.();
-        if (successMessage) {
-          showToast(successMessage, 'success');
-        }
-        return true;
-      } catch (caught: unknown) {
-        const message = translateErrorText(cleanErrorKeepingReference(caught), translate);
-        setError(message);
-        showToast(message, 'error');
-        return false;
-      } finally {
-        pending.current = false;
-        setBusy(undefined);
-      }
-    },
-    [externalBusy, flushSave, onWorktreeChanged, refresh, showToast, translate],
-  );
-  return { busy, error, setError, runAction } as const;
-}
-
-export default function GitChip(props: GitChipProps) {
+export default function GitChip({ session, ...rest }: GitChipProps) {
   const translate = useTranslate();
-  const { info, refresh } = props;
-  const action = useActionRunner({
-    flushSave: props.flushSave,
-    refresh,
-    onWorktreeChanged: props.onWorktreeChanged,
-    showToast: props.showToast,
-    externalBusy: props.busy,
-    translate,
-  });
+  const { host, busy, setError, runAction } = session;
+  // A failure from before the panel opened was already said by its toast; the panel opens clean.
+  useEffect(() => setError(undefined), [setError]);
+  const { info, project, showToast } = host;
   if (!info) {
     return <SkeletonRows count={1} />;
   }
   if (!info.isRepo) {
-    return <InitializeGitChip projectPath={props.project.path} busy={action.busy ?? props.busy} runAction={action.runAction} translate={translate} />;
+    return <InitializeGitChip projectPath={project.path} busy={busy} runAction={runAction} translate={translate} />;
   }
   return (
     <RepositoryGitChip
-      {...props}
+      {...rest}
+      session={session}
+      project={project}
+      showToast={showToast}
       translate={translate}
       info={info}
-      refresh={refresh}
-      runAction={action.runAction}
-      busy={action.busy ?? props.busy}
-      error={action.error}
-      setError={action.setError}
+      runAction={runAction}
+      busy={busy}
+      error={session.error}
+      setError={setError}
     />
   );
 }
@@ -176,7 +97,7 @@ function InitializeGitChip({
 }
 
 function RepositoryGitChip(props: RepositoryProps) {
-  const state = useRepositoryState();
+  const state = useRepositoryState(props.session);
   useChangedFiles(props, state);
   const commitType = useCommitType(props.project);
   const actions = useRepositoryActions(props, state, commitType);
@@ -206,15 +127,15 @@ function RepositoryGitChip(props: RepositoryProps) {
         onRefreshFiles={() => state.setSelectionRevision((value) => value + 1)}
         onPick={state.setPicked}
         onCommit={commit}
-        onPull={() => pullFromGitHub(props, state)}
+        onPull={() => props.session.pull(incomingCommits(props.incoming))}
         incoming={props.incoming ?? { kind: 'checking' }}
+        pullShortcut={props.pullShortcut}
+        pullAccess={props.session.host.pullAccess}
       />
       <GitModals
         {...props}
         switchTo={state.switchTo}
-        conflict={state.conflict}
         setSwitchTo={state.setSwitchTo}
-        setConflict={state.setConflict}
         parkThenSwitch={actions.parkThenSwitch}
         commitThenSwitch={actions.commitThenSwitch}
         switchConvention={commitTypeConvention(commitType)}
@@ -223,28 +144,14 @@ function RepositoryGitChip(props: RepositoryProps) {
   );
 }
 
-function pullFromGitHub(props: RepositoryProps, state: ActionState): void {
-  void props.runAction(
-    async () => {
-      const result = await gitValue(pullGitBranch(props.project.path, props.info.branch));
-      if ('conflicted' in result) {
-        state.setConflict({ ...result, deleteAfter: false });
-      } else if ('dirty' in result) {
-        props.showToast(props.translate('git.pull.dirty'), 'error');
-      } else {
-        props.showToast(props.translate(result.changed ? 'git.pull.done' : 'git.pull.upToDate'), 'success');
-      }
-    },
-    undefined,
-    props.translate('git.busy.pulling'),
-  );
+function incomingCommits(incoming: GitIncomingState | undefined): number | undefined {
+  return incoming?.kind === 'ready' ? incoming.commits : undefined;
 }
 
-function useRepositoryState() {
+function useRepositoryState({ setConflict }: GitSession) {
   const [commitMessage, setCommitMessage] = useState('');
   const [newBranch, setNewBranch] = useState('');
   const [switchTo, setSwitchTo] = useState<SwitchTarget | undefined>(undefined);
-  const [conflict, setConflict] = useState<PendingConflict | undefined>(undefined);
   // The files picked for a partial commit; undefined until the picker loads them.
   const [picked, setPicked] = useState<readonly string[] | undefined>(undefined);
   const [changed, setChanged] = useState<IpcResults['git:status']>([]);
@@ -254,7 +161,6 @@ function useRepositoryState() {
     commitMessage,
     newBranch,
     switchTo,
-    conflict,
     changed,
     picked,
     picking,
@@ -467,64 +373,14 @@ function useCommitAction(props: RepositoryProps, state: CommitState, commitType:
 
 interface ModalProps extends RepositoryProps {
   readonly switchTo: SwitchTarget | undefined;
-  readonly conflict: PendingConflict | undefined;
   readonly setSwitchTo: React.Dispatch<React.SetStateAction<SwitchTarget | undefined>>;
-  readonly setConflict: React.Dispatch<React.SetStateAction<PendingConflict | undefined>>;
   readonly parkThenSwitch: (branch: string) => Promise<boolean>;
   readonly commitThenSwitch: (branch: string, message: string) => Promise<boolean>;
   readonly switchConvention: CommitConvention;
 }
 
 function GitModals(props: ModalProps) {
-  return (
-    <>
-      {props.conflict && <ConflictModal {...props} conflict={props.conflict} />}
-      {props.switchTo && <CheckoutModal {...props} switchTo={props.switchTo} />}
-    </>
-  );
-}
-
-function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict }) {
-  const resolve = async (choices: ConflictChoices): Promise<void> => {
-    const done = await props.runAction(() => resolveConflict(props, choices), undefined, props.translate('git.busy.merging'));
-    if (done) {
-      props.setConflict(undefined);
-    }
-  };
-  return (
-    <MergeConflictModal
-      conflict={props.conflict}
-      branches={props.info.branches}
-      trunk={props.info.trunk ?? 'main'}
-      busy={props.busy}
-      onCancel={() => props.setConflict(undefined)}
-      onResolve={(choices) => {
-        // runAction reports its own failures (a toast and the chip's error).
-        void resolve(choices);
-      }}
-    />
-  );
-}
-
-async function resolveConflict(props: ModalProps & { readonly conflict: PendingConflict }, choices: ConflictChoices): Promise<void> {
-  const result = await gitValue(resolveGitMerge(props.project.path, props.conflict.branch, choices));
-  assert(result.ok, 'Merge resolution must complete');
-  assert(result.into !== undefined, 'Merge resolution requires a target branch');
-  if (result.parkedError !== undefined) {
-    props.showToast(translateReference(result.parkedError, result.parkedErrorRef, props.translate), 'error');
-  }
-  if (props.conflict.deleteAfter) {
-    await tidyUp({
-      projectPath: props.project.path,
-      branch: props.conflict.branch,
-      into: result.into,
-      changed: true,
-      showToast: props.showToast,
-      translate: props.translate,
-    });
-  } else {
-    props.showToast(props.translate('git.action.merge.done', { branch: props.conflict.branch, into: result.into }), 'success');
-  }
+  return props.switchTo && <CheckoutModal {...props} switchTo={props.switchTo} />;
 }
 
 function CheckoutModal(props: ModalProps & { readonly switchTo: SwitchTarget }) {

@@ -115,6 +115,8 @@ export const messages = {
     other: '{count} Elemente verschieben',
   },
   'workspace.files.undo.rename': '{name} umbenennen',
+  'workspace.notifications.copied': 'Kopiert',
+  'workspace.notifications.copy': 'Kopieren',
   'workspace.notifications.dismiss': 'Benachrichtigung schließen',
   'workspace.notifications.label': 'Benachrichtigungen',
   'workspace.notifications.loadMore': 'Mehr laden ({count})',

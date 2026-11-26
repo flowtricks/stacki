@@ -15,7 +15,8 @@ import { RUNTIME_PATHS } from '../lib/runtimePaths';
 import { commandNeedsShell, sameFilesystemPath } from '../lib/platform';
 import { createKeyedQueue } from '../lib/serialQueue';
 import type { DevServer } from '../lib/mainTypes';
-import { SHORT_COMMAND, errorMessage, isWin, parseOptionalString, parseRecord, readJson, toPosix } from '../lib/mainHelpers';
+import { SHORT_COMMAND, errorMessage, parseOptionalString, parseRecord, readJson, toPosix } from '../lib/mainHelpers';
+import { localAstroBin } from '../project/projectFiles';
 import { findFreePort, nodeCliCommand, resolveNodeBin, run, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { previewSupportFiles, renderComponentPreviewPage } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
@@ -645,21 +646,20 @@ export class DevServers {
       );
     }
 
-    const binName = isWin ? 'astro.cmd' : 'astro';
-    const localBin = path.join(projectPath, 'node_modules', '.bin', binName);
-    if (!fs.existsSync(localBin)) {
+    if (!fs.existsSync(localAstroBin(projectPath))) {
       // Dependencies missing or incomplete — install with the right PM first.
       await installDependencies(this.host, projectPath);
       assertActive();
       this.host.send('progress', PROGRESS_CLEARED);
-      if (!fs.existsSync(localBin)) {
+      if (!fs.existsSync(localAstroBin(projectPath))) {
         throw new Error(
           'astro is not installed in this project (no node_modules/.bin/astro after install). ' + 'Is astro listed in package.json dependencies?',
         );
       }
     }
 
-    return localBin;
+    // Looked up again: the install is what may have made it, and under Bun it is `astro.exe`, not `astro.cmd`.
+    return localAstroBin(projectPath);
   }
 
   private async failureDetail(projectPath: string, localBin: string, startedAtMs: number): Promise<string> {

@@ -1,14 +1,14 @@
 # Design mode (experimental): how it works, why it cannot write, and how to take it out
 
 Design mode is the normal editor working on a sandbox: a private copy of the project in Stacki's own data folder.
-Turning it on (the AI panel's Modes menu) copies the project and opens the copy through the app's own project
+Turning it on (the AI panel header's Design mode button) copies the project and opens the copy through the app's own project
 switch, so the Navigator, the Style and Settings panels, Add elements, Components, Assets and the canvas all work
 on it for real. Frames are versions of that copy: duplicate one, change it, switch between them, compare them side
 by side, and send them to the AI. Nothing is saved to the project.
 
 ## Switching it off without removing it
 
-Set `DESIGN_MODE_ENABLED` to `false` in `shared/ipc/designSession.ts`. The Modes menu then has no Design mode row,
+Set `DESIGN_MODE_ENABLED` to `false` in `shared/ipc/designSession.ts`. The header then has no Design mode button (comment pins keep theirs),
 and main refuses to begin a session.
 
 ## Why it cannot write to the project
@@ -27,9 +27,10 @@ and main refuses to begin a session.
 - **Writes are fenced.** `electron/lib/designMode/designWriteGuard.ts` wraps every Node file system call that
   creates, changes or removes a file. While the mode is on, a write outside the copy, Stacki's data folder and the
   temporary folder fails with EACCES before it runs, whatever code path made it.
-- **The window shows what can work.** Features a copy cannot give (history and git, publishing, apps, project
+- **The window shows what can work.** Features a copy cannot give (history and git, with the title
+  bar's pull button and ⌥⇧G, publishing, apps, project
   secrets and MCP settings, roles, the command line) are hidden through the app's own "View as" preview
-  (`src/app/designMode/designRole.ts`). The AI panel stays, for the Modes menu; sending a prompt is refused.
+  (`src/app/designMode/designRole.ts`). The AI panel stays, for its mode buttons; sending a prompt is refused.
 - **The copy does not outlive the session.** It is deleted, with its `.env`, when the window leaves it, when the app
   quits, and, for a copy a crash left behind, the next time the app starts.
 - **Undo history from before is cleared**, on the way in and on the way out: the window reloads, as it does for any
@@ -74,5 +75,8 @@ byte-identical afterwards.
 3. Optionally delete `design-drafts/` (and `design-sandboxes/`, which is empty unless the app crashed during a
    session) from Stacki's user data folder: once the feature is gone nothing reads or sweeps them.
 
-Kept on purpose: the Modes menu and its registry (`src/features/ai/panelModes.ts`, `sessions/ModesMenu.tsx`), which
-belong to comment pins too. Nothing outside the lists above changes.
+Kept on purpose: the mode buttons and their registry (`src/features/ai/panelModes.ts`, `sessions/ModeButtons.tsx`),
+which belong to comment pins too. Nothing outside the lists above changes.
+
+Left behind: the `brush` entry of `src/ui/central/centralGeometry.tsx` (Central's "brush, color"), which only
+Design mode draws (its header button). Delete that entry too, unless another icon has come to use it.

@@ -352,8 +352,6 @@ export const messages = {
   'ai.message.retryTitle': 'Tanya lagi',
   'ai.message.showLess': 'Tampilkan lebih sedikit',
   'ai.message.showMore': 'Tampilkan lebih banyak',
-  'ai.modes.active': '{mode} aktif',
-  'ai.modes.menu': 'Mode',
   'ai.notice.cannotContinue': '{agent} tidak dapat melanjutkan percakapan sebelumnya, jadi obrolan ini memulai yang baru.',
   'ai.notice.cannotFork': '{agent} tidak dapat membawa percakapan sebelumnya ke fork, jadi obrolan ini memulai yang baru.',
   'ai.notice.chatFull': 'Obrolan ini penuh; pesan baru tidak lagi disimpan. Mulai obrolan baru.',

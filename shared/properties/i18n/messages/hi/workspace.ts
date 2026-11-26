@@ -114,6 +114,8 @@ export const messages = {
     other: '{count} आइटम ले जाना',
   },
   'workspace.files.undo.rename': '{name} का नाम बदलना',
+  'workspace.notifications.copied': 'कॉपी हो गया',
+  'workspace.notifications.copy': 'कॉपी करें',
   'workspace.notifications.dismiss': 'सूचना हटाएँ',
   'workspace.notifications.label': 'सूचनाएँ',
   'workspace.notifications.loadMore': 'और लोड करें ({count})',

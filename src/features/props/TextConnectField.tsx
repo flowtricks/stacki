@@ -21,6 +21,7 @@ import type { RichContext } from './RichContent';
 import { FIELD_UNFOCUSED } from './fieldFocus';
 import { propNamed } from '../../editor/loopProps';
 import { connectedPath, connectedPieces, disconnectedText, type TextPiece } from './textConnect';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export interface TextConnectFieldProps {
   /** The selected node: words, or an expression the panel shows as a connection. */
@@ -63,7 +64,7 @@ export default function TextConnectField(props: TextConnectFieldProps) {
   };
   return (
     <div className="props-field" style={{ marginTop: 8 }}>
-      <label onClick={(event) => event.preventDefault()}>
+      <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
         <span
           className={`prop-label${path === undefined ? '' : ' set'}`}
           title={path === undefined ? undefined : translate('props.textConnect.disconnectHint')}

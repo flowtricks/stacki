@@ -10,7 +10,7 @@
 // renderer parses replies before it trusts them.
 import { boolean, count, pathText, record, text } from '../core/boundary';
 
-/** The single switch. False: no Modes menu row, and main answers every request as if nothing were open. */
+/** The single switch. False: no header button, and main answers every request as if nothing were open. */
 export const DESIGN_MODE_ENABLED = true;
 
 export const DESIGN_SESSION_LIMITS = {

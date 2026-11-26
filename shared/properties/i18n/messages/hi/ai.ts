@@ -367,8 +367,6 @@ export const messages = {
   'ai.message.retryTitle': 'फिर से पूछें',
   'ai.message.showLess': 'कम दिखाएँ',
   'ai.message.showMore': 'और दिखाएँ',
-  'ai.modes.active': '{mode} चालू है',
-  'ai.modes.menu': 'मोड',
   'ai.notice.cannotContinue': '{agent} पिछली बातचीत जारी नहीं रख सका, इसलिए यह चैट नई शुरू होती है।',
   'ai.notice.cannotFork': '{agent} पिछली बातचीत को फ़ोर्क में नहीं ले जा सकता, इसलिए यह चैट नई शुरू होती है।',
   'ai.notice.chatFull': 'यह चैट भर गई है; नए संदेश अब सहेजे नहीं जाते। नई चैट शुरू करें।',

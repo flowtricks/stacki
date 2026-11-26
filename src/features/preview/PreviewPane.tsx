@@ -57,6 +57,11 @@ interface PreviewPaneProps {
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
   readonly canvasPathOf?: PreviewRuntimeProps['canvasPathOf'];
+  /**
+   * A node that stands for the whole page as shown (the component canvas's <html> root): it is outlined around the
+   * pane's viewport at every hover, selection and re-measure, never around the box the frame measures for it.
+   */
+  readonly canvasWholePath?: string | undefined;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onEditImage?: PreviewRuntimeProps['onEditImage'];
@@ -263,7 +268,7 @@ function DesignPreview({
         {/* First in the layer, so the outlines and spacing bands paint over it. */}
         {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
         <PreviewOverlays
-          {...measuredOutlines(runtime)}
+          {...measuredOutlines(runtime, { path: props.canvasWholePath, viewport: sizing.viewport })}
           {...(dragging ? { hoverPath: undefined } : {})}
           scale={scale}
           viewport={{ w: sizing.viewport.width, h: sizing.viewport.height }}
@@ -285,9 +290,13 @@ function DesignPreview({
 }
 
 // What the frame measured and reports, as the outlines draw it.
-function measuredOutlines(runtime: Runtime) {
+function measuredOutlines(
+  runtime: Runtime,
+  whole: { readonly path: string | undefined; readonly viewport: { readonly width: number; readonly height: number } },
+) {
+  const viewportBox = { x: 0, y: 0, w: whole.viewport.width, h: whole.viewport.height };
   return {
-    rects: runtime.rects,
+    rects: whole.path === undefined ? runtime.rects : { ...runtime.rects, [whole.path]: [viewportBox] },
     spacing: runtime.spacing,
     // A click being judged is drawn as the selection already (previewRuntime.ts PendingSelection).
     selOcc: runtime.pendingSelection === undefined ? runtime.selOcc : runtime.pendingSelection.occurrence,

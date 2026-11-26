@@ -174,6 +174,21 @@ function forwardShortcut(event: KeyboardEvent): void {
     }
     return;
   }
+  // ⌥⇧G pulls from GitHub (railShortcuts.ts PULL_SHORTCUT, held to this by test), in the editor and the live
+  // preview alike, as the preview toggle is. A field in the page, or the canvas's text editor, keeps it.
+  if (isPullKey(event)) {
+    if (!eventInField(event)) {
+      event.preventDefault();
+      if (!event.repeat) {
+        try {
+          window.parent.postMessage({ type: 'avb:shortcut', name: 'pull' }, '*');
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return;
+  }
   // The app command range (shared/properties/appShortcuts.ts APP_RESERVED_SHORTCUTS,
   // held to this list by test/shared/properties/appShortcuts.test.ts): an app's
   // command runs from the canvas too, in the editor and the live preview alike.
@@ -284,6 +299,17 @@ function isPreviewKey(event: KeyboardEvent): boolean {
     return false;
   }
   return event.shiftKey && event.code === 'KeyP';
+}
+
+// Option, Shift and G, the pull chord (useGitPullKey in the app).
+function isPullKey(event: KeyboardEvent): boolean {
+  if (!event.altKey || !event.shiftKey) {
+    return false;
+  }
+  if (event.metaKey || event.ctrlKey || event.isComposing) {
+    return false;
+  }
+  return event.code === 'KeyG';
 }
 
 // A digit 1 to 9 with no modifier: the device keys. Shift is ruled out by the key itself (it

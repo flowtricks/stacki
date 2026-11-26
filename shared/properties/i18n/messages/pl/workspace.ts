@@ -122,6 +122,8 @@ export const messages = {
     other: 'Przenieś {count} elementu',
   },
   'workspace.files.undo.rename': 'Zmień nazwę {name}',
+  'workspace.notifications.copied': 'Skopiowano',
+  'workspace.notifications.copy': 'Kopiuj',
   'workspace.notifications.dismiss': 'Zamknij powiadomienie',
   'workspace.notifications.label': 'Powiadomienia',
   'workspace.notifications.loadMore': 'Wczytaj więcej ({count})',

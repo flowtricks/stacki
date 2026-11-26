@@ -1,5 +1,5 @@
 // Goal: in the real app, Design mode is the normal editor working on a sandbox copy, and the project folder is
-// byte-identical however it is used. Entered from the AI panel's Modes menu, the window reopens on a copy in the
+// byte-identical however it is used. Entered from the AI panel header's Design mode button, the window reopens on a copy in the
 // app's data folder; the real Style panel starts the selection on Inline styles and its edit lands in the copy;
 // a duplicated frame keeps its own version, and switching frames shows each one's own style on the canvas; Compare
 // shows the frames side by side; the fence refuses a git request and a write into the project from inside the
@@ -109,8 +109,7 @@ function treeDigest(root) {
   return `${files} files ${hash.digest('hex')}`;
 }
 
-const MENU_ROWS = `[...document.querySelectorAll('[role^="menuitem"]')].filter((e) => e.getClientRects().length > 0)`;
-const modeRow = (name) => `${MENU_ROWS}.findLast((r) => ${name}.test(r.textContent || ''))`;
+const modeButton = (name) => `[...document.querySelectorAll('.ai-header .ai-mode-button')].find((b) => ${name}.test(b.getAttribute('aria-label') || ''))`;
 const PLAIN_INDENT = `getComputedStyle(document.querySelector('#soak-plain')).textIndent`;
 const TABS = `[...document.querySelectorAll('.dm-tab-name')]`;
 
@@ -158,16 +157,14 @@ async function runInElectron({ window, project, options }) {
   };
   const openAiPanel = () =>
     driver.evaluate(
-      `document.querySelector('.ai-modes-button') ? 0 : ([...document.querySelectorAll('.rail button')].find((b) => /AI/.test(b.getAttribute('aria-label') || ''))?.click(), 0)`,
+      `document.querySelector('.ai-mode-button') ? 0 : ([...document.querySelectorAll('.rail button')].find((b) => /AI/.test(b.getAttribute('aria-label') || ''))?.click(), 0)`,
     );
-  /** Opens the AI panel header's Modes menu and picks the row matching `name`. */
+  /** Clicks the AI panel header's mode button named `name`. */
   const pickMode = async (name) => {
     await openAiPanel();
-    await until('the Modes button', `!!document.querySelector('.ai-modes-button')`);
+    await until(`the ${name.source} button`, `!!${modeButton(name)}`);
     await driver.settle();
-    await driver.evaluate(`document.querySelector('.ai-modes-button').click()`);
-    await until(`the ${name.source} row`, `!!${modeRow(name)}`);
-    await driver.evaluate(`${modeRow(name)}.click()`);
+    await driver.evaluate(`${modeButton(name)}.click()`);
   };
   /** Selects `selector` on the canvas with a real click, and waits for the Style panel to show it. */
   const selectOnCanvas = async (selector) => {
@@ -253,7 +250,7 @@ async function runInElectron({ window, project, options }) {
   const realProject = fs.realpathSync(project);
   const plainBefore = fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8');
 
-  await run('enter from the Modes menu: the window reopens on a private copy', async () => {
+  await run('enter from the mode button: the window reopens on a private copy', async () => {
     await pickMode(/design mode/i);
     await collectToasts();
     await untilOpen('the Design mode bar', `!!document.querySelector('.dm-bar')`);

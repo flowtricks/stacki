@@ -124,7 +124,11 @@ test('the Git panel commits as typed by default, and with the picked type once c
   fs.mkdirSync(directory, { recursive: true });
   const outfile = path.join(directory, 'panel.cjs');
   await esbuild.build({
-    stdin: { contents: `export {default as Controls} from ${sourceSpecifier('src/features/git/GitChip.tsx')};`, resolveDir: repoPath('src'), loader: 'tsx' },
+    stdin: {
+      contents: `export {default as Controls} from ${sourceSpecifier('src/features/git/GitPanelControls.tsx')};`,
+      resolveDir: repoPath('src'),
+      loader: 'tsx',
+    },
     outfile,
     bundle: true,
     format: 'cjs',

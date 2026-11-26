@@ -907,7 +907,15 @@ Settings tabs are plain S and D (`src/app/inspectorTabKeys.ts`). ⌥I, ⌥R, ⌥
 toggle the panel closed when that view is showing; ⌥A toggles the AI chat. Each follows the role (no access, no key)
 and is ignored while typing in a field, a code editor or canvas text, so macOS dead keys (⌥E, ⌥N, ⌥U, ⌥I) still type
 there. With keyboard focus in the canvas, outside interact mode, the frame forwards them (`avb:shortcut` `panel` in
-Desktop, `studio:key` in Studio). It is the project's settings,
+Desktop, `studio:key` in Studio).
+
+Desktop alone also has ⌥⇧G (Alt+Shift+G), pull from GitHub, under the same typing rule and forwarded from the canvas in
+both modes (`avb:shortcut` `pull`). The chord, the title bar's pull button (drawn only while there is something to pull)
+and the Git panel share one session and lock (`src/features/git/useGitSession.ts`), so one pull runs at a time and the
+merge review opens with the panel closed. A pull is refused over the component defaults page, the component canvas, a
+property save, Design mode and the busy cover, and a role without `panel:history` has neither. Nothing pulls by itself.
+
+Settings (⌥Z) is the project's settings,
 apart from the app's own Settings screen (`src/app/settings`). Its Secrets view edits one of the project's dev env files
 at a time (`SECRETS_FILE_NAMES`: `.env`, `.env.local`, `.env.development`, `.env.development.local`, the
 dev server's load order), picked in a dropdown that opens on `.env`. `.env.production` is not listed.
@@ -2724,15 +2732,16 @@ in jsdom).
 
 ## Comment pins
 
-Comment mode (the AI panel header's Modes menu, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
+Comment mode (a button in the AI panel's header, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
 pins, each a small message of its own, and "Send all" sends the included ones to the chat open in the panel. Desktop
 only: the shell's host (`src/app/shell/DesktopPins.tsx`) registers the mode, so Studio and the demo never offer it.
 
-**Modes menu.** `registerPanelMode({ id, order, label, tooltip, icon, isActive, setActive, subscribe })` adds a row
-and returns its removal; the header's button (`sessions/ModesMenu.tsx`) lists whatever is registered, shows the one
-that is on (pressed, accent) and is not drawn when nothing is registered. Turning one mode on turns the others off
+**Mode buttons.** `registerPanelMode({ id, order, label, icon, isActive, setActive, subscribe })` adds a mode and
+returns its removal; the header (`sessions/ModeButtons.tsx`) draws one icon button per registered mode, in `order`,
+right before "+", its tooltip and accessible name the mode's `label`, pressed (`aria-pressed`, accent) while it is
+on; clicking it again turns the mode off. A mode that is not registered has no button. Turning one mode on turns the others off
 (`setPanelMode`). At most `PANEL_MODES_MAX` (8). Comment pins register `comment-pins` at order 10
-(`pins/commentMode.tsx`); another mode registers from its own file and removing that file leaves the menu working.
+(`pins/commentMode.tsx`); another mode registers from its own file and removing that file removes only its button.
 
 **Contract** (`shared/properties/ai/commentPinBrief.ts` under the chat model, `commentPins.ts` above it). A pin is
 `{ id, number, createdAt, updatedAt, comment, images, anchor, place, included, delivery }`: `anchor` is the canvas

@@ -6,8 +6,11 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import type { MainMessageKey } from '../lib/mainLocale';
 
-/** What the View menu's reload items ask for: the site preview refreshed (⌘R, ⇧⌘R), or Stacki itself reloaded (the escape hatch). */
-export type ReloadCommand = 'refreshSite' | 'reloadStacki';
+/**
+ * What the View menu's reload items ask for: the site preview refreshed (⌘R), refreshed after the HTTP cache is cleared (⇧⌘R), or
+ * Stacki itself reloaded (the escape hatch).
+ */
+export type ReloadCommand = 'refreshSite' | 'hardRefreshSite' | 'reloadStacki';
 
 export interface ApplicationMenuOptions {
   readonly isMac: boolean;
@@ -64,7 +67,7 @@ export function buildApplicationMenuTemplate(options: ApplicationMenuOptions): M
       label: translate('menu.view.title'),
       submenu: [
         { label: translate('menu.view.reload'), accelerator: 'CmdOrCtrl+R', click: () => options.reload('refreshSite') }, // i18n-ignore: keyboard accelerator.
-        { label: translate('menu.view.forceReload'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('refreshSite') }, // i18n-ignore: keyboard accelerator.
+        { label: translate('menu.view.forceReload'), accelerator: 'Shift+CmdOrCtrl+R', click: () => options.reload('hardRefreshSite') }, // i18n-ignore: keyboard accelerator.
         options.isDev
           ? { label: translate('menu.view.reloadAllCode'), accelerator: 'Alt+CmdOrCtrl+R', click: () => options.reload('reloadStacki') } // i18n-ignore: keyboard accelerator.
           : { label: translate('menu.view.reloadAllCode'), click: () => options.reload('reloadStacki') },

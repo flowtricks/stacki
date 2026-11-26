@@ -2,8 +2,8 @@
 // integration points docs/design-mode/REMOVE.md lists, each with the number of lines it names. (2) The fence's list
 // of channels that may run on the sandbox names only real channels, and none of those that act outside a copy of
 // the project: git, publishing, the terminal, the AI agent, Stacki apps, secrets, settings, recents, MCP writes,
-// remote content writes. (3) Its renderer code calls no preload method but its own channel. (4) The AI panel's Modes
-// menu, which it shares with comment pins, and comment pins themselves know nothing of it.
+// remote content writes. (3) Its renderer code calls no preload method but its own channel. (4) The AI panel's mode
+// buttons, which it shares with comment pins, and comment pins themselves know nothing of it.
 //
 // Method: a bounded scan of the source trees' text, and the built IPC payload table for the channel names. Each rule
 // also checks a known-bad line, so a pattern that matches nothing cannot pass vacuously.
@@ -137,10 +137,10 @@ test("Design mode's renderer calls no preload method but its own channel", () =>
   }
 });
 
-/** The Modes menu and comment pins: what Design mode shares a menu with, and must be able to leave behind. */
-const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/ModesMenu.tsx', 'src/app/shell/DesktopPins.tsx'];
+/** The mode buttons and comment pins: what Design mode shares the header with, and must be able to leave behind. */
+const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/ModeButtons.tsx', 'src/app/shell/DesktopPins.tsx'];
 
-test('the Modes menu and comment pins know nothing of Design mode', () => {
+test('the mode buttons and comment pins know nothing of Design mode', () => {
   const names = /design ?mode|designMode/i;
   assert.ok(names.test('Design mode') && !names.test('registerPanelMode(PINS)'), 'the pattern sees the name');
   const files = [...SHARED_WITH, ...sourceFiles().filter((file) => file.startsWith('src/features/ai/pins/'))];

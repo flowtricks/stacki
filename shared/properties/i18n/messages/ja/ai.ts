@@ -352,8 +352,6 @@ export const messages = {
   'ai.message.retryTitle': 'もう一度聞く',
   'ai.message.showLess': '折りたたむ',
   'ai.message.showMore': 'もっと見る',
-  'ai.modes.active': '{mode}：オン',
-  'ai.modes.menu': 'モード',
   'ai.notice.cannotContinue': '{agent} は以前の会話を続けられなかったため、このチャットは新しい会話として開始します。',
   'ai.notice.cannotFork': '{agent} は以前の会話をフォークに引き継げないため、このチャットは新しい会話として開始します。',
   'ai.notice.chatFull': 'このチャットは上限に達したため、新しいメッセージは保存されません。新しいチャットを開始してください。',

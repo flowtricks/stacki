@@ -30,6 +30,7 @@ import { PropHoverPreviewContext, PropValuePolicyContext } from '../props/propVa
 import { suggestedOptions } from './cmsSuggestions';
 import { videoLinkOf } from '../../../shared/properties/linkPreview';
 import { VideoLinkCard } from './VideoLinkCard';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export type CmsScalar = string | number | boolean;
 export type CmsScalarKind = 'string' | 'text' | 'number' | 'boolean';
@@ -191,7 +192,7 @@ export function CmsFieldFrame(props: {
   const translate = useTranslate();
   return (
     <div className="props-field">
-      <label onClick={(event) => event.preventDefault()}>
+      <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
         <span className={`prop-label${props.set ? ' set' : ''}`}>
           <span className="prop-label-icon">{props.icon}</span>
           {props.name}

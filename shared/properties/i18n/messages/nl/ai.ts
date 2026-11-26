@@ -368,8 +368,6 @@ export const messages = {
   'ai.message.retryTitle': 'Opnieuw vragen',
   'ai.message.showLess': 'Minder tonen',
   'ai.message.showMore': 'Meer tonen',
-  'ai.modes.active': '{mode}: aan',
-  'ai.modes.menu': 'Modi',
   'ai.notice.cannotContinue': '{agent} kon het eerdere gesprek niet voortzetten, dus deze chat begint een nieuw gesprek.',
   'ai.notice.cannotFork': '{agent} kan het eerdere gesprek niet meenemen in een fork, dus deze chat begint een nieuw gesprek.',
   'ai.notice.chatFull': 'Deze chat is vol; nieuwe berichten worden niet meer opgeslagen. Begin een nieuwe chat.',

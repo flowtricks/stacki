@@ -145,6 +145,8 @@ export function describePreviewReload(reason: PreviewReloadReason, translate: Tr
 export type ShortcutMessage =
   | { readonly name: 'insert' }
   | { readonly name: 'preview' }
+  /** The pull chord, ⌥⇧G. */
+  | { readonly name: 'pull' }
   /** A rail panel chord, Option and the key `code` (src/app/railShortcuts.ts). */
   | { readonly name: 'panel'; readonly code: string }
   | { readonly name: 'arrow'; readonly key: string }
@@ -178,6 +180,8 @@ export function parseShortcutMessage(input: unknown): ShortcutMessage | undefine
         return { name: 'insert' };
       case 'preview':
         return { name: 'preview' };
+      case 'pull':
+        return { name: 'pull' };
       case 'panel': {
         const code = shortcutKey(value['code']);
         return /^Key[A-Z]$/.test(code) ? { name: 'panel', code } : undefined;

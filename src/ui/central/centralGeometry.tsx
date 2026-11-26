@@ -653,6 +653,35 @@ export const branch = {
   ),
 };
 
+export const brush = {
+  name: 'brush',
+  // Figma variant 5753:62178.
+  compact: (
+    <>
+      <path
+        d="M14.4993 17.5001L20.085 11.9142C20.8661 11.1332 20.8661 9.86688 20.085 9.08583L19.4992 8.50003H17.4992L17.4992 6.50003L14.9135 3.91428C14.1324 3.13322 12.866 3.13323 12.085 3.91431L6.49921 9.50035C5.94706 10.0525 5.9473 10.9478 6.49975 11.4997C7.32842 12.3276 7.32879 13.6705 6.50057 14.4988L3.91386 17.0857C3.13276 17.8668 3.1329 19.1333 3.91417 19.9143L4.08577 20.0858C4.86688 20.8667 6.13305 20.8665 6.91399 20.0855L9.50038 17.499C10.3287 16.6706 11.6718 16.6709 12.4998 17.4996C13.0517 18.0521 13.9471 18.0523 14.4993 17.5001Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M16.5 15.5L8.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Figma variant 5753:62198.
+  standard: (
+    <>
+      <path
+        d="M14.4993 17.5001L20.085 11.9142C20.8661 11.1332 20.8661 9.86688 20.085 9.08583L19.4992 8.50003H17.4992L17.4992 6.50003L14.9135 3.91428C14.1324 3.13322 12.866 3.13323 12.085 3.91431L6.49921 9.50035C5.94706 10.0525 5.9473 10.9478 6.49975 11.4997C7.32842 12.3276 7.32879 13.6705 6.50057 14.4988L3.91386 17.0857C3.13276 17.8668 3.1329 19.1333 3.91417 19.9143L4.08577 20.0858C4.86688 20.8667 6.13305 20.8665 6.91399 20.0855L9.50038 17.499C10.3287 16.6706 11.6718 16.6709 12.4998 17.4996C13.0517 18.0521 13.9471 18.0523 14.4993 17.5001Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M16.5 15.5L8.5 7.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const bubbleText = {
   name: 'bubbleText',
   // Figma variant 8089:37602.
@@ -5360,61 +5389,6 @@ export const toggle = {
     <>
       <rect x="1" y="4.5" width="22" height="15" rx="7.5" stroke="currentColor" />
       <circle cx="8.5" cy="12" r="3" fill="currentColor" />
-    </>
-  ),
-};
-
-export const toolbox = {
-  name: 'toolbox',
-  // Figma variant 6824:59551.
-  compact: (
-    <>
-      <path
-        d="M2.75 10.75H21.25V18.25C21.25 19.3546 20.3546 20.25 19.25 20.25H4.75C3.64543 20.25 2.75 19.3546 2.75 18.25V10.75Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12.75 10.75V4.75C12.75 3.64543 13.6454 2.75 14.75 2.75H17.25C18.3546 2.75 19.25 3.64543 19.25 4.75V10.75"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M12.75 6.75H15.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path
-        d="M4.75 10.75V6.50424C4.75 6.17326 4.83214 5.84745 4.98906 5.55604L6.26295 3.19024C6.40895 2.91909 6.69204 2.75 7 2.75C7.30796 2.75 7.59105 2.91909 7.73705 3.19024L9.01094 5.55604C9.16786 5.84745 9.25 6.17326 9.25 6.50424V10.75"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </>
-  ),
-  // Figma variant 6824:59581.
-  standard: (
-    <>
-      <path
-        d="M2.5 10.5H21.5V18.5C21.5 19.6046 20.6046 20.5 19.5 20.5H4.5C3.39543 20.5 2.5 19.6046 2.5 18.5V10.5Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12.5 10.5V6.5V4.5C12.5 3.39543 13.3954 2.5 14.5 2.5H17.5C18.6046 2.5 19.5 3.39543 19.5 4.5V10.5"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4.5 10.5V6.39547C4.5 6.03384 4.59805 5.67897 4.78372 5.36864L6.24329 2.92907C6.40252 2.66293 6.68986 2.5 7 2.5C7.31014 2.5 7.59748 2.66293 7.75671 2.92907L9.21628 5.36864C9.40195 5.67897 9.5 6.03384 9.5 6.39547V10.5"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M12.5 6.5H15.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };

@@ -1,7 +1,7 @@
 // Design mode (experimental; docs/design-mode/REMOVE.md lists how to take it out): where it meets the app.
 //
-// The app mounts this once (src/app/shell/AppShell.tsx, one marked line). It registers the "Design mode" row of the
-// AI panel header's Modes menu (src/features/ai/panelModes.ts). Turning it on copies the project into a sandbox in
+// The app mounts this once (src/app/shell/AppShell.tsx, one marked line). It registers the "Design mode" button of the
+// AI panel's header (src/features/ai/panelModes.ts). Turning it on copies the project into a sandbox in
 // main and opens the copy (designActions.ts); from then on the window is the normal editor, every panel working on
 // the copy, with three differences this module makes: the bar of frames over the canvas (DesignBar.tsx), the board
 // that shows them side by side (DesignBoard.tsx), and the style panel starting each selection on its Inline styles
@@ -12,7 +12,7 @@ import { registerPanelMode } from '../../features/ai/panelModes';
 import { setInlineDefault } from '../../features/style/model/inlineDefault';
 import { useLocale } from '../../lib/i18n/useTranslate';
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { canvas } from '../../ui/central/centralGeometry';
+import { brush } from '../../ui/central/centralGeometry';
 import PanelBoundary from '../../ui/PanelBoundary';
 import { DESIGN_MODE_ENABLED, type DesignSessionState } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
@@ -25,10 +25,11 @@ import { DesignBoard } from './DesignBoard';
 import { designWord, useDesignWords, type DesignWords } from './i18n/designWords';
 import './designMode.css';
 
-export const DesignModeIcon = centralIcon(canvas);
+/** Design mode's own mark (Central's `brush`): its header button. Only Design mode draws it. */
+export const DesignModeIcon = centralIcon(brush);
 
-/** Where Design mode sits in the Modes menu: after comment pins (10). */
-const MODES_MENU_ORDER = 20;
+/** Where Design mode's header button sits: after comment pins (10), before "+". */
+const MODE_BUTTON_ORDER = 20;
 
 export function DesignModeHost({ app }: { readonly app: DesignHostSource }) {
   const words = useDesignWords();
@@ -48,12 +49,12 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
   const { locale } = useLocale();
   const latest = useRef({ app, words });
   latest.current = { app, words };
-  // The Modes menu's row, registered again when the language changes so its name follows it.
+  // The header button, registered again when the language changes so its name follows it.
   useEffect(
     () =>
       registerPanelMode({
         id: 'design',
-        order: MODES_MENU_ORDER,
+        order: MODE_BUTTON_ORDER,
         label: () => designWord(locale, 'mode.name'),
         icon: () => <DesignModeIcon size={16} />,
         isActive: isDesignModeActive,

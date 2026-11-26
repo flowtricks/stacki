@@ -399,8 +399,6 @@ export const messages = {
   'ai.message.retryTitle': 'Спросить снова',
   'ai.message.showLess': 'Свернуть',
   'ai.message.showMore': 'Развернуть',
-  'ai.modes.active': 'Включено: {mode}',
-  'ai.modes.menu': 'Режимы',
   'ai.notice.cannotContinue': '{agent} не смог продолжить прежний разговор, поэтому в этом чате начат новый.',
   'ai.notice.cannotFork': '{agent} не может перенести прежний разговор в ответвление, поэтому в этом чате начат новый.',
   'ai.notice.chatFull': 'Этот чат заполнен; новые сообщения больше не сохраняются. Начните новый чат.',
