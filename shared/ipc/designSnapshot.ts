@@ -58,7 +58,9 @@ export const DESIGN_NODE_ATTRIBUTE = 'data-dm-node';
 export function designNodeMark(path: string, copy: number): string {
   assert(Number.isSafeInteger(copy), 'A node copy is counted in whole numbers');
   assert(copy >= 0, 'A node copy is counted from zero');
-  return `${encodeURIComponent(path)}:${String(copy)}`;
+  const mark = `${encodeURIComponent(path)}:${String(copy)}`;
+  assert(!mark.includes(' '), 'A mark holds no space, which is what separates marks');
+  return mark;
 }
 
 export interface DesignNodeAt {
@@ -85,6 +87,7 @@ export function deepestDesignNode(attribute: string): DesignNodeAt | undefined {
       best = { path, copy };
     }
   }
+  assert(best === undefined || best.copy >= 0, 'A found node copy is counted from zero');
   return best;
 }
 
