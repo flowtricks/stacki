@@ -23,6 +23,8 @@ import { draftFromText, draftText, preferredAgent, useAiState, type ChatDraft, t
 import { prepareImage } from '../chatImages';
 import { ComposerInput, type ComposerHandle } from '../composer/ComposerInput';
 import { MicButton } from '../composer/MicButton';
+import { DictationLine } from '../composer/VoiceLine';
+import '../composer/composer.css';
 import { useComposerVoice } from '../composer/useComposerVoice';
 import { AttachmentChips } from '../screenshot/AttachmentChips';
 import { hasPersonContent, workingCopy, type PinProgress } from './pinModel';
@@ -71,9 +73,18 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
   const latest = useRef(pin);
   latest.current = pin;
   const draft: ChatDraft = draftFromText(working.comment);
+  // Dictation reads and writes up to the caret, so the words land where the person left it. With no editor in the box
+  // (words arriving just after a send) they join the end.
   const dictation = useComposerVoice({
-    read: () => draftFromText(workingCopy(latest.current).comment),
-    write: (change) => setPinComment(latest.current.id, draftText(change(draftFromText(workingCopy(latest.current).comment)))),
+    read: () => ({ segments: input.current?.beforeCaret() ?? draftFromText(workingCopy(latest.current).comment).segments, attachments: [] }),
+    write: (change) => {
+      const editor = input.current ?? undefined;
+      if (editor === undefined) {
+        setPinComment(latest.current.id, draftText(change(draftFromText(workingCopy(latest.current).comment))));
+      } else {
+        editor.editBeforeCaret((before) => change({ segments: before, attachments: [] }).segments);
+      }
+    },
     // The spoken "send" saves, as Enter does.
     onSend: () => savePinBox(),
     draft,
@@ -82,6 +93,15 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
   const busy = voice.listening || voice.transcribing || loading > 0;
   const canSave = editable && !busy && hasPersonContent(working);
   const focusBox = (): void => focusComposer(input.current ?? undefined);
+  // A box on its way out (it stays mounted for the exit motion), or one whose pin was sent, has no microphone button:
+  // its session ends now. Unmounting ends one too (useDictation).
+  const stopVoice = useRef(voice.stop);
+  stopVoice.current = voice.stop;
+  useEffect(() => {
+    if (closing || !editable) {
+      stopVoice.current();
+    }
+  }, [closing, editable]);
   // Beside the pin, on the side with room, inside the window; measured again whenever the canvas is.
   useLayoutEffect(() => {
     const box = anchor?.getBoundingClientRect();
@@ -94,7 +114,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
       roomRight >= POPOVER_WIDTH_PX + POPOVER_GAP_PX ? box.right + POPOVER_GAP_PX : Math.max(POPOVER_GAP_PX, box.left - POPOVER_GAP_PX - POPOVER_WIDTH_PX);
     const top = Math.min(Math.max(POPOVER_GAP_PX, box.top - POPOVER_GAP_PX), Math.max(POPOVER_GAP_PX, window.innerHeight - height - POPOVER_GAP_PX));
     setPosition((previous) => (previous['left'] === left && previous['top'] === top ? previous : { position: 'fixed', left, top, width: POPOVER_WIDTH_PX }));
-  }, [anchor, layout, working.images.length, working.comment]);
+  }, [anchor, layout, working.images.length, working.comment, voice.listening, voice.transcribing]);
   // The box takes the keyboard when a pin opens, so the person can just type.
   const pinId = pin.id;
   // After the popup has placed its own focus, and out of the canvas frame the click left it in: the frame holds the
@@ -230,8 +250,9 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
               onChange={(text) => setPinComment(pin.id, text)}
               // Enter saves, as Enter sends in the composer; Shift+Enter is a new line there and here.
               onSend={() => savePinBox()}
-              dictationDraft={voice.listening || voice.transcribing ? { text: voice.interim, decoding: voice.decoding } : undefined}
+              dictationDraft={dictating ? { text: voice.interim, decoding: voice.decoding, place: 'caret' } : undefined}
             />
+            {dictating && <DictationLine voice={voice} />}
             <div className="ai-pin-tools">
               <input
                 ref={picker}

@@ -79,6 +79,7 @@ import {
 import { useMentionRows, type MentionSearch } from '../mentions/useMentionRows';
 import '../mentions/mentions.css';
 import { SlashMenu } from './SlashMenu';
+import { joinAtCaret, splitAtCaret } from './caretSegments';
 import { skillsForAgent, slashQueryOf, slashRowName, slashRows, type SlashRow } from './slashRows';
 import { useSlashSkills } from './useSlashSkills';
 
@@ -93,6 +94,10 @@ export interface ComposerFocus {
 /** The focus handle plus the edits the composer's menus make: `insertText('@')` opens the file picker, `insertText('/')` the command menu. */
 export interface ComposerHandle extends ComposerFocus {
   readonly insertText: (text: string) => void;
+  /** The draft up to the caret. */
+  readonly beforeCaret: () => ComposerSegments;
+  /** Rewrites the draft up to the caret, as one edit the draft's owner hears; the caret ends after what was written. */
+  readonly editBeforeCaret: (change: (before: ComposerSegments) => ComposerSegments) => void;
 }
 
 export interface ComposerInputProps {
@@ -543,12 +548,13 @@ export function ComposerInput(props: ComposerInputProps) {
   // The dictation draft follows the prop; it is a decoration, so the document and its history are untouched.
   const draftText = props.dictationDraft?.text ?? NO_DRAFT.text;
   const draftDecoding = props.dictationDraft?.decoding ?? NO_DRAFT.decoding;
+  const draftPlace = props.dictationDraft?.place ?? 'end';
   useEffect(() => {
     const view = viewRef.current;
     if (view !== undefined) {
-      showDictationDraft(view, { text: draftText, decoding: draftDecoding });
+      showDictationDraft(view, { text: draftText, decoding: draftDecoding, place: draftPlace });
     }
-  }, [draftText, draftDecoding]);
+  }, [draftText, draftDecoding, draftPlace]);
 
   useImperativeHandle(
     props.inputRef,
@@ -561,8 +567,21 @@ export function ComposerInput(props: ComposerInputProps) {
           view.dispatch(view.state.replaceSelection(text), { scrollIntoView: true, userEvent: 'input' });
         }
       },
+      beforeCaret: () => {
+        const view = viewRef.current;
+        return view === undefined ? [] : splitAtCaret(editor.readSegments(view.state), view.state.selection.main.head).before;
+      },
+      editBeforeCaret: (change) => {
+        const view = viewRef.current;
+        if (view === undefined) {
+          return;
+        }
+        const split = splitAtCaret(editor.readSegments(view.state), view.state.selection.main.head);
+        const joined = joinAtCaret(change(split.before), split.after);
+        view.dispatch({ ...editor.replaceSegments(view.state, joined.segments), selection: { anchor: joined.caret }, scrollIntoView: true });
+      },
     }),
-    [],
+    [editor],
   );
 
   // A draft that changed from outside replaces the document; one the editor itself reported is already there.

@@ -246,8 +246,12 @@ export function useDictation(options: DictationOptions) {
     stopLevels.current = undefined;
     feed.publish(Array.from({ length: WAVEFORM_BARS }, () => 0));
   }, [feed]);
+  // The box went away: its session ends with it, at whatever step it had reached. The state goes back to idle so that
+  // a step still waiting on the system (the microphone's answer, a download, the meter) opens nothing afterwards.
   useEffect(
     () => () => {
+      stateRef.current = VOICE_IDLE;
+      listenWhenReady.current = false;
       closeRecognition();
       closeLevels();
     },

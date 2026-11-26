@@ -51,7 +51,7 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
 import { addSelectionToDraft } from '../mentions/selectionMention';
-import { VoiceLine } from './VoiceLine';
+import { DictationLine } from './VoiceLine';
 import { MicButton } from './MicButton';
 import { useComposerVoice } from './useComposerVoice';
 import { QueuedPrompts } from './QueuedPrompts';
@@ -359,13 +359,7 @@ export function ChatComposer({
         </div>
         {dictating && (
           <div className="ai-compose-footer-voice">
-            <VoiceLine
-              feed={voice.feed}
-              starting={voice.starting || voice.transcribing}
-              latch={voice.state.kind === 'idle' || voice.state.kind === 'stopping' ? 'pending' : voice.state.latch}
-              interim="" // The words being spoken are drawn in the box itself (dictationDraft.ts); the line keeps its hint.
-              commands={voice.commands}
-            />
+            <DictationLine voice={voice} />
           </div>
         )}
       </div>
