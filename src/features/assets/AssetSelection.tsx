@@ -1,12 +1,10 @@
-import { centralIcon } from '../../ui/central/CentralIcon';
-import { collapse as centralCollapse } from '../../ui/central/centralGeometry';
 import { useEffect, useRef } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { IMAGE_BATCH_MAX } from '../../../shared/ipc/assetConversion';
 import { canConvertAssets } from '../../ipc/editorEnvironment';
 import AssetThumb from '../../ui/AssetThumb';
-import { TrashIcon } from '../../ui/Icons';
+import { CompressIcon, TrashIcon } from '../../ui/Icons';
 import { convertible, selectableAsset, type AssetBatch } from './AssetBatchTools';
 import type { AssetFile } from './assetPaths';
 import type { AssetView } from './assetOrder';
@@ -145,6 +143,3 @@ export function SelectableAssetTile({
     </label>
   );
 }
-
-// The supplied compression glyph points inward toward the reduced dimension.
-const CompressIcon = centralIcon(centralCollapse);

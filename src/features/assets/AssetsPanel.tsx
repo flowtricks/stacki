@@ -23,7 +23,7 @@ import {
   replaceAsset,
   uploadAssets,
 } from './assetPanelBridge';
-import { ChevronRightIcon, CopyIcon, FolderIcon, FolderPlusIcon, TrashIcon, UploadCloudIcon, UploadIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CompressIcon, CopyIcon, FolderIcon, FolderPlusIcon, TrashIcon, UploadCloudIcon, UploadIcon } from '../../ui/Icons';
 import { AssetSources, type SourceNavigation } from './AssetSources';
 import { copyLink, localAssetLink } from './assetLinks';
 import AssetThumb, { TEXT_EXT, preloadFontPreviews } from '../../ui/AssetThumb';
@@ -942,5 +942,5 @@ function clearInput(inputElement: HTMLInputElement): void {
 }
 
 function conversionMenu(file: AssetFile, batch: AssetBatch, translate: Translator) {
-  return [{ label: translate('assets.tile.compress'), onSelect: () => batch.setCompression([file]) }];
+  return [{ label: translate('assets.tile.compress'), icon: <CompressIcon size={13} />, onSelect: () => batch.setCompression([file]) }];
 }
