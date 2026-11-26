@@ -62,12 +62,15 @@ function writeFixture(project) {
     );
   }
   write('src/components/HtmlBlock.astro', '---\nconst { html } = Astro.props;\n---\n<div class="html-block" set:html={html} />\n');
+  // The key pass (RICH_TEXT_KEYS) starts from the bytes a report showed: a break saved earlier, the content indented
+  // other than the printer would, the closing tag on the last line, at depth.
   write(
     'src/pages/index.astro',
-    `---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\nimport LumosRichText from "../components/LumosRichText.astro";\nimport HtmlBlock from "../components/HtmlBlock.astro";\nimport LumosParagraph from "../components/typography/Paragraph.astro";\n---\n<html><body>\n<Paragraph>Words of a paragraph</Paragraph>\n<RichText><h2>Title</h2><p>Hello world</p></RichText>\n<LumosRichText><p>Lumos text</p></LumosRichText>\n<HtmlBlock html="<p>From a prop</p>" />\n<HtmlBlock html={"<p>" + "joined" + "</p>"} />\n<LumosParagraph id="lumos-p">\n  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.${
-      // The key pass starts from a break saved earlier, written open as HTML writes it, on a line of its own.
-      process.env['RICH_TEXT_KEYS'] === '1' ? '<br>\n  Another paragraph' : ''
-    }\n</LumosParagraph>\n<p id="plain-p" class="lead">Plain <strong>words</strong></p>\n<RichText />\n</body></html>\n`,
+    `---\nimport Paragraph from "../components/Paragraph.astro";\nimport RichText from "../components/RichText.astro";\nimport LumosRichText from "../components/LumosRichText.astro";\nimport HtmlBlock from "../components/HtmlBlock.astro";\nimport LumosParagraph from "../components/typography/Paragraph.astro";\n---\n<html><body>\n<Paragraph>Words of a paragraph</Paragraph>\n<RichText><h2>Title</h2><p>Hello world</p></RichText>\n<LumosRichText><p>Lumos text</p></LumosRichText>\n<HtmlBlock html="<p>From a prop</p>" />\n<HtmlBlock html={"<p>" + "joined" + "</p>"} />\n${
+      process.env['RICH_TEXT_KEYS'] === '1'
+        ? '<div>\n  <section>\n    <div>\n        <LumosParagraph id="lumos-p">\n          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.\n        <br />Another paragraph</LumosParagraph>\n    </div>\n  </section>\n</div>'
+        : '<LumosParagraph id="lumos-p">\n  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse varius enim in eros elementum tristique.\n</LumosParagraph>'
+    }\n<p id="plain-p" class="lead">Plain <strong>words</strong></p>\n<RichText />\n</body></html>\n`,
   );
   write(
     '.stacki/components.json',
@@ -381,6 +384,8 @@ async function keyPass(window, canvas, page, results) {
       .waitFor({ state: 'detached', timeout: WAIT_MS })
       .catch(() => undefined);
   };
+  const outside = (text) => text.replace(/<LumosParagraph id="lumos-p">[\s\S]*?<\/LumosParagraph>/, '<P/>');
+  const pageBefore = page();
   // 1. A break saved earlier (`<br>` on its own line), Backspace at the start of the second line: the lines join.
   await step(
     'backspaceSavedBreak',
@@ -388,9 +393,11 @@ async function keyPass(window, canvas, page, results) {
       await open('#lumos-p', 'Another', 'start');
       await window.keyboard.press('Backspace');
     },
-    (text) => !/<br/.test(text) && /tristique\.\s*Another paragraph/.test(text),
+    (text) => !/<br/.test(text) && /pariatur\.\s*Another paragraph/.test(text),
     lumos,
   );
+  results.backspaceSavedBreakOutsideKept = outside(page()) === outside(pageBefore);
+  results.backspaceSavedBreakBytes = /<LumosParagraph id="lumos-p">[\s\S]*?<\/LumosParagraph>/.exec(page())?.[0];
   // 2. A new break at the end and words on it, ⌘ Enter, one more character, then Backspace twice (the character, the break).
   await step(
     'enterThenBackspace',
@@ -459,6 +466,43 @@ async function keyPass(window, canvas, page, results) {
   await window.keyboard.type('panel');
   await waitForFile(plain, (text) => /<br \/>\s*panel/.test(text)).catch(() => undefined);
   results.plainPanel = { source: plain(), ok: /<br \/>\s*panel/.test(plain()), toast: await toast() };
+  // The Navigator follows the box keystroke by keystroke: the words typed show there while the box still has focus.
+  const typedAt = Date.now();
+  await window.keyboard.type('zq');
+  results.navigatorLive = await waitFor({
+    what: 'the Navigator shows the words typed',
+    read: () => window.evaluate(() => (document.body.innerText.match(/panelzq/g) ?? []).length),
+    until: (count) => count >= 2,
+  })
+    .then(() => Date.now() - typedAt)
+    .catch(() => 'never');
+  results.boxFocused = await window.evaluate(() => document.activeElement?.classList.contains('rich-content') === true);
+  // The last line deleted from the box (Shift Home, Backspace): its break goes too, in the file and the Navigator.
+  await window.evaluate(() => {
+    const box = document.querySelector('.rich-content');
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.data.includes('panelzq')) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        document.getSelection().removeAllRanges();
+        document.getSelection().addRange(range);
+        return;
+      }
+    }
+  });
+  await window.keyboard.press('Backspace');
+  await waitFor({ what: 'the line is gone from the file', read: plain, until: (text) => !text.includes('panel') }).catch(() => undefined);
+  results.lastLineDeleted = { source: plain(), ok: !/panel/.test(plain()) && !/<br \/>\s*$/.test(plain()), toast: await toast() };
+  // Typing again on the kept empty line brings the break back with the words.
+  await window.keyboard.type('again');
+  await waitFor({ what: 'the words are back', read: plain, until: (text) => /<br \/>\s*again$/.test(text) }).catch(() => undefined);
+  results.retyped = { source: plain(), ok: /<br \/>\s*again$/.test(plain()) };
+  // Undo puts the line deletion back step by step; redo takes it again.
+  await window.keyboard.press(`${mod}+z`);
+  results.undo = plain();
+  await window.keyboard.press(`${mod}+Shift+z`);
+  results.redo = plain();
   await window.screenshot({ path: path.join(SHOTS, 'keys-panel.png') });
   // 8. The Edit rich text dialog on an empty RichText: the + in its gutter, the placeholder and caret at the text edge.
   await window.getByText('RichText', { exact: true }).nth(1).click();

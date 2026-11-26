@@ -81,7 +81,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': '아주 크게',
   'settings.breakpoints.defaultName.up2': '울트라',
   'settings.breakpoints.desktop': '데스크톱',
-  'settings.breakpoints.desktopNote': '창이 데스크톱 레이아웃보다 좁을 때 이 너비를 맞게 축소해 보여 줍니다. 미디어 쿼리로는 사용되지 않습니다.',
+  'settings.breakpoints.desktopNote': '좁은 창에서 데스크톱을 선택하면 이 너비를 맞게 축소해 보여 줍니다. 미디어 쿼리로는 사용되지 않습니다.',
   'settings.breakpoints.error.desktopFlips': '{name}({limit})이(가) 데스크톱의 반대쪽으로 넘어가게 됩니다.',
   'settings.breakpoints.error.file': '브레이크포인트 파일을 사용할 수 없어 기본값을 표시하고 파일은 그대로 둡니다. {message}',
   'settings.breakpoints.error.name': '이름은 1–{maximum}자이며 서로 달라야 합니다.',

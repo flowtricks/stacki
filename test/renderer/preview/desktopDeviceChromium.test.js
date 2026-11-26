@@ -48,7 +48,8 @@ function Harness() {
   const [device, setDevice] = useState(mode === 'before' ? 'canvas' : 'desktop');
   const dimensions = usePreviewDimensions();
   const sizing = usePreviewSizing(device, dimensions, BREAKPOINT_DEFAULTS, { deviceShortcuts: false, desktopFramePx: 1440 }, setDevice);
-  window.harness = { device, setDevice, width: sizing.viewport.width, scale: sizing.viewport.scale, active: sizing.activeDevice };
+  // setDevice here is a person's choice, as the toolbar's buttons make it.
+  window.harness = { device, setDevice: sizing.pickDevice, width: sizing.viewport.width, scale: sizing.viewport.scale, active: sizing.activeDevice };
   return React.createElement('div', { className: 'preview-frame-wrap', ref: sizing.wrapRef, style: { position: 'absolute', inset: 0 } },
     React.createElement(SizedFrame, { sizing }, React.createElement('iframe', { title: 'Site', srcDoc: PAGE })));
 }
@@ -109,6 +110,13 @@ app.whenReady().then(async () => {
       await win.loadURL('http://127.0.0.1:' + server.address().port + '/?mode=' + mode);
       for (let spin = 0; spin < 200 && !(await host('window.harness !== undefined && document.querySelector(".frame-clip iframe") !== null && document.querySelector(".frame-clip iframe").contentDocument.readyState === "complete"')); spin += 1) { await sleep(20); }
       await sleep(400);
+      if (mode === 'after') {
+        // Desktop as the canvas opens on it, then chosen.
+        output.modes.unchosen = await host(READ);
+        await host('window.harness.setDevice("desktop")');
+        // Waits, bounded by frames, for what the next read checks: the page laid out at the Desktop width.
+        await host('new Promise((resolve) => { let frames = 0; const tick = () => { frames += 1; if (frames > 600 || document.querySelector(".frame-clip iframe").contentWindow.innerWidth === ${DESKTOP_WIDTH_PX}) { requestAnimationFrame(() => resolve(frames)); } else { requestAnimationFrame(tick); } }; requestAnimationFrame(tick); })');
+      }
       output.modes[mode] = await host(READ);
       const image = await win.webContents.capturePage();
       fs.writeFileSync(path.join(DIRECTORY, mode + '-desktop-${PANE.width}.png'), image.toPNG());
@@ -145,6 +153,10 @@ function check(output) {
   }
   if (before.laptop !== true) {
     failures.push('before: the filling page matches (width < 64rem)');
+  }
+  const unchosen = output.modes.unchosen;
+  if (unchosen === undefined || unchosen.innerWidth !== FLUID_PAGE_WIDTH_PX || unchosen.scale !== 1 || unchosen.laptop !== true) {
+    failures.push(`unchosen: the canvas opens at the pane's own width, never scaled (${JSON.stringify(unchosen)})`);
   }
   if (after.device !== 'desktop') {
     failures.push(`after: the device is desktop (${after.device})`);

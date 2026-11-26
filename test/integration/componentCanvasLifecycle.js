@@ -114,7 +114,7 @@ function writeFixture(project) {
     await watch('1-close');
     // 2. Close right after an edit (a split switch rewrites the page) and while it reloads.
     await open();
-    await window.locator('button.component-canvas-split[aria-label^="Give each value of emphasis"]').click();
+    await window.locator('button.prop-field-extra[aria-label^="Give each value of emphasis"]').click();
     await close();
     await watch('2-close-after-edit');
     // 3. Project files change while the canvas is open, then close.

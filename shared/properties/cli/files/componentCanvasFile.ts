@@ -9,6 +9,12 @@ const PROP_NAME = '^[A-Za-z_$][\\w$-]{0,99}$';
 // Sorted `name` or `name=URI-encoded value` pairs joined by `&`; the empty key is every frame. parseFrameKey checks the order.
 const FRAME_KEY = '^(?:[A-Za-z_$][\\w$-]*(?:=[^&]*)?(?:&[A-Za-z_$][\\w$-]*(?:=[^&]*)?)*)?$';
 const COMMANDS = ['components rename', 'components move', 'components delete'] as const;
+// componentCanvas.ts CLASS_NAME, bounded; `stacki-` names are the canvas's own and refused by the parser.
+const CLASS_NAME = `^-?[A-Za-z_][\\w-]{0,${CANVAS_LIMITS.classNameCharsMax - 1}}$`;
+
+const rootClasses: ValueSchema = arrayOf(text(CANVAS_LIMITS.classNameCharsMax, { pattern: CLASS_NAME }), CANVAS_LIMITS.rootClassesMax, { unique: true });
+
+const rootBackground = text(CANVAS_LIMITS.backgroundCharsMax, { charsMin: 1 });
 
 const length = (side: string): ValueSchema =>
   jsonValue(`"hug" (the ${side} follows the component) or a whole number of pixels from ${CANVAS_LIMITS.sizePxMin} to ${CANVAS_LIMITS.sizePxMax}`);
@@ -45,9 +51,20 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
       text(CANVAS_LIMITS.backgroundCharsMax, { charsMin: 1 }),
       "The project canvas background: the surface every component canvas draws on, and what a frame shows where neither it nor its component sets one. A CSS colour, transparent, or var(--name); absent: the app's own canvas grey.",
     ),
+    classes: field(
+      rootClasses,
+      "The project's canvas root classes: put on every component canvas's <html> after the classes the site's layout gives it, so a theme class (theme-dark) re-themes every frame. A component's root.classes replaces this list.",
+    ),
     components: field(
       mapOf(
         objectOf({
+          root: field(
+            objectOf({
+              background: field(rootBackground, "This component's canvas surface, over the project's background."),
+              classes: field(rootClasses, "This component's canvas root classes, replacing the project's list."),
+            }),
+            "This component's canvas root (its page's <html>): each setting here replaces the project's.",
+          ),
           split: field(
             arrayOf(text(CANVAS_LIMITS.propNameCharsMax, { pattern: PROP_NAME }), CANVAS_LIMITS.splitPropsMax, { unique: true }),
             'The props whose values each get a frame, in layout order (the first is the rows); [] is one frame; absent: the variant prop.',

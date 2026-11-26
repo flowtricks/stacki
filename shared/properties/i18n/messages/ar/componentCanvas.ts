@@ -34,7 +34,10 @@ export const messages = {
   'componentCanvas.panel.height': 'الارتفاع',
   'componentCanvas.panel.hug': 'حسب المحتوى',
   'componentCanvas.panel.pixels': '{side} بالبكسل',
+  'componentCanvas.panel.root.about': 'اللوحة خلف جميع الإطارات: عنصر html في الصفحة. تجد أصنافها في لوحة الإعدادات.',
+  'componentCanvas.panel.root.title': 'اللوحة',
   'componentCanvas.panel.scope.all': 'كل الإطارات',
+  'componentCanvas.panel.scope.component': 'هذا المكوّن',
   'componentCanvas.panel.scope.frame': 'هذا الإطار',
   'componentCanvas.panel.scope.hint':
     'أين يُطبَّق الحجم والخلفية وقيم الخصائص التي تعيّنها: على هذا الإطار، أو على كل إطارات قيمة واحدة، أو على كل الإطارات. ويتقدّم إعداد الإطار الخاص على الإعداد الأوسع نطاقًا.',

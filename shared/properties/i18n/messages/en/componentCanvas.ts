@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Height',
   'componentCanvas.panel.hug': 'Hug',
   'componentCanvas.panel.pixels': '{side} in pixels',
+  'componentCanvas.panel.root.about': 'The canvas behind every frame: the page’s html element. Its classes are in the Settings panel.',
+  'componentCanvas.panel.root.title': 'Canvas',
   'componentCanvas.panel.scope.all': 'All frames',
+  'componentCanvas.panel.scope.component': 'This component',
   'componentCanvas.panel.scope.frame': 'This frame',
   'componentCanvas.panel.scope.hint':
     'Where the size, background and prop values you set apply: this frame, every frame of one value, or every frame. A frame’s own setting wins over a wider one.',

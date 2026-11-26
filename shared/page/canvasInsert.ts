@@ -18,9 +18,11 @@
 
 import { assert } from '../core/assert';
 import { LIMITS } from '../core/limits';
+import { twinOf } from './canvasTwin';
 import { HTML_VOID_TAGS } from './htmlTags';
 
-/** What the stand-in is: a plain element built like the writer's, or a labelled block for a component. */
+/** What the canvas shows ahead of the render: an element built like the writer's, a copy of what the
+ * page already rendered, or a component only the server can render (framePendingInsert.ts). */
 export type CanvasInsertNode =
   | {
       readonly kind: 'element';
@@ -30,8 +32,10 @@ export type CanvasInsertNode =
       readonly text: string | undefined;
     }
   | { readonly kind: 'component'; readonly name: string }
-  /** A copy of the elements the node at `from` renders (a duplicate): the frame clones them, subtree and all. */
-  | { readonly kind: 'clone'; readonly from: readonly number[] }
+  /** A copy of the elements the node at `from` renders: the frame clones them, subtree and all. A duplicate,
+   * or a component the page already holds written the same way (canvasTwin.ts), named in `twinOf`, so
+   * the frame can wait for the render when that copy cannot be taken. */
+  | { readonly kind: 'clone'; readonly from: readonly number[]; readonly twinOf?: string }
   /** A plain element put around the node at `from`, which becomes its only child (a wrap). */
   | { readonly kind: 'wrap'; readonly tag: string; readonly from: readonly number[] };
 
@@ -51,9 +55,8 @@ export interface CanvasInsert {
 }
 
 /** The tree an insert is planned over: the editor's model, or Studio's parse. */
-export interface CanvasInsertTreeNode {
+export interface CanvasInsertTreeNode extends CanvasInsertSource {
   readonly id?: string | undefined;
-  readonly kind: string;
   readonly children?: readonly CanvasInsertTreeNode[] | undefined;
 }
 
@@ -61,8 +64,9 @@ export interface CanvasInsertTreeNode {
 export interface CanvasInsertSource {
   readonly kind: string;
   readonly name?: string | undefined;
+  readonly value?: string | undefined;
   readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string | undefined }>> | undefined;
-  readonly children?: readonly { readonly kind: string; readonly value?: string | undefined }[] | undefined;
+  readonly children?: readonly CanvasInsertSource[] | undefined;
 }
 
 /** A place on the page: the parent the node goes inside (undefined for the root list) and its gap. */
@@ -130,8 +134,8 @@ export function planCanvasInsert(
 ): CanvasInsert | undefined {
   assert(Number.isSafeInteger(place.index), 'planCanvasInsert: a gap is an integer');
   assert(place.index >= 0, 'planCanvasInsert: a gap is not negative');
-  const node = standInFor(source);
-  if (node === undefined) {
+  const standIn = standInFor(source);
+  if (standIn === undefined) {
     return undefined;
   }
   const destination = destinationOf(roots, place.parentId);
@@ -149,6 +153,7 @@ export function planCanvasInsert(
   if (parent === undefined || parent.scope !== scope.scope) {
     return undefined;
   }
+  const node = standIn.kind === 'component' ? (copyOfTwin(roots, source, parent.scope, pathOf) ?? standIn) : standIn;
   if (anchor !== undefined) {
     const sibling = destination.list[anchor.index];
     const siblingPath = sibling?.id === undefined ? undefined : splitCanvasPath(pathOf(sibling.id));
@@ -163,6 +168,23 @@ export function planCanvasInsert(
     return undefined;
   }
   return { scope: parent.scope, parent: parent.trail, index: gap, anchor: { path: parent.trail, placement: 'inside' }, node };
+}
+
+// The copy of an instance already rendered on the page, when one is written exactly as `source`, in the same file.
+function copyOfTwin(
+  roots: readonly CanvasInsertTreeNode[],
+  source: CanvasInsertSource,
+  scope: string,
+  pathOf: (id: string) => string | undefined,
+): CanvasInsertNode | undefined {
+  const id = twinOf(roots, source);
+  const found = id === undefined ? undefined : splitCanvasPath(pathOf(id));
+  if (found === undefined || found.scope !== scope || source.name === undefined) {
+    return undefined;
+  }
+  // The frame refuses a copy from the root list (nodeOf): a twin is always a node.
+  assert(found.trail.length > 0, 'copyOfTwin: a twin is a node of the page');
+  return { kind: 'clone', from: found.trail, twinOf: source.name };
 }
 
 /**
@@ -299,18 +321,19 @@ export function parseCanvasInsert(input: unknown): CanvasInsert | undefined {
 
 // --- Internals ---------------------------------------------------------------------
 
+function isComponentName(name: unknown): name is string {
+  return typeof name === 'string' && name.length > 0 && name.length <= CANVAS_INSERT_LIMITS.nameCharsMax && COMPONENT_NAME.test(name);
+}
+
 // What a stand-in is made of: the template's own tag, its plain string attributes and its
-// starting words; a component is a labelled block.
+// starting words; a component is only its name.
 function standInFor(source: CanvasInsertSource): CanvasInsertNode | undefined {
   const name = source.name;
   if (name === undefined) {
     return undefined;
   }
   if (source.kind === 'component') {
-    if (name.length === 0 || name.length > CANVAS_INSERT_LIMITS.nameCharsMax || !COMPONENT_NAME.test(name)) {
-      return undefined;
-    }
-    return { kind: 'component', name };
+    return isComponentName(name) ? { kind: 'component', name } : undefined;
   }
   if (source.kind !== 'element') {
     return undefined;
@@ -484,14 +507,15 @@ function nodeOf(input: unknown): CanvasInsertNode | undefined {
   }
   if (record['kind'] === 'clone') {
     const from = trailOf(record['from']);
-    return from === undefined || from.length === 0 ? undefined : { kind: 'clone', from };
+    const twin = record['twinOf'];
+    if (from === undefined || from.length === 0 || (twin !== undefined && !isComponentName(twin))) {
+      return undefined;
+    }
+    return twin === undefined ? { kind: 'clone', from } : { kind: 'clone', from, twinOf: twin };
   }
   if (record['kind'] === 'component') {
     const name = record['name'];
-    if (typeof name !== 'string' || name.length === 0 || name.length > CANVAS_INSERT_LIMITS.nameCharsMax || !COMPONENT_NAME.test(name)) {
-      return undefined;
-    }
-    return { kind: 'component', name };
+    return isComponentName(name) ? { kind: 'component', name } : undefined;
   }
   if (record['kind'] !== 'element') {
     return undefined;

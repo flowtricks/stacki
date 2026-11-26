@@ -1213,3 +1213,54 @@ test('a break saved in the page and deleted on the canvas applies, whatever the 
     }
   }
 });
+
+// Mixed inline content (text, <br />, more text) as people and earlier saves leave it: indented more or less than the
+// printer would, with tabs, CRLF, the closing tag on the last line, at depth. The printer reprints such a node at its
+// own indentation, so a change found between two printings may not be placeable on the file's bytes; the edit must
+// still apply (never an editor error) and change only this node. Each layout is crossed with each edit kind.
+test('mixed inline content applies every edit kind whatever its indentation', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const words = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor pariatur.';
+  const layouts: readonly (readonly [string, (eol: string) => string])[] = [
+    ['the reported one', (eol) => `<Paragraph>${eol}          ${words}${eol}        <br />Another paragraph</Paragraph>`],
+    ['under-indented', (eol) => `<Paragraph>${eol}${words}${eol}<br />${eol}Another paragraph${eol}</Paragraph>`],
+    ['tabs', (eol) => `<Paragraph>${eol}\t\t\t${words}${eol}\t\t\t<br />${eol}\t\t\tAnother paragraph${eol}\t\t</Paragraph>`],
+    ['one line', () => `<Paragraph>${words}<br />Another paragraph</Paragraph>`],
+    ['break opening the second line', (eol) => `<Paragraph>${eol}    ${words}${eol}    <br>Another paragraph${eol}  </Paragraph>`],
+  ];
+  let made = 0;
+  const id = () => `g${String(++made).padStart(32, '0')}`;
+  const text = (value: string) => ({ kind: 'text', id: id(), value });
+  const br = () => ({ kind: 'element', id: id(), name: 'br', props: {}, children: undefined });
+  const edits: readonly (readonly [string, () => readonly unknown[], RegExp])[] = [
+    ['break deleted from the end of line one', () => [text(`${words}Another paragraph`)], /pariatur\.Another paragraph/],
+    ['line two deleted, break and all', () => [text(words)], /pariatur\.\s*<\/Paragraph>/],
+    ['line two deleted, break kept', () => [text(words), br(), br()], /pariatur\.\s*<br \/>\s*<br \/>\s*<\/Paragraph>/],
+    ['a break added', () => [text('Lorem ipsum'), br(), text(' dolor'), br(), text('Another paragraph')], /Lorem ipsum<br \/> dolor<br \/>/],
+    ['the words edited', () => [text(`${words} More.`), br(), text('Another paragraph')], /More\.\s*<br \/>/],
+  ];
+  for (const eol of ['\n', '\r\n']) {
+    for (const [layout, inner] of layouts) {
+      for (const [what, children, written] of edits) {
+        const before = `---${eol}import Paragraph from "../components/Paragraph.astro";${eol}---${eol}<div>${eol}  <section>${eol}    <div>${eol}      ${inner(eol)}${eol}      <p>Kept</p>${eol}    </div>${eol}  </section>${eol}</div>${eol}`;
+        fs.writeFileSync(file, before);
+        const shown = await read(harness, file);
+        const component = nodeAt(shown, [0, 0, 0, 0]);
+        assert.ok(component.kind === 'component', `${layout}: the paragraph`);
+        const restated = parsePageNode({ ...Object.fromEntries(Object.entries(component).filter(([key]) => key !== 'source')), children: children() });
+        const applied = await edit(harness, file, shown.checksum, { tag: 'replace-node', target: refAt(shown, [0, 0, 0, 0]), node: restated });
+        const label = `${layout} (${eol === '\n' ? 'LF' : 'CRLF'}), ${what}`;
+        assert.ok(applied.ok, `${label} applies (${applied.ok ? '' : JSON.stringify(applied.error)})`);
+        const after = fs.readFileSync(file, 'utf8');
+        assert.match(after, written, label);
+        // Nothing outside the paragraph moved.
+        const start = before.indexOf('<Paragraph>');
+        const end = before.indexOf('</Paragraph>') + '</Paragraph>'.length;
+        assert.equal(after.slice(0, start), before.slice(0, start), `${label}: the bytes before it`);
+        assert.equal(after.slice(after.indexOf('</Paragraph>') + '</Paragraph>'.length), before.slice(end), `${label}: the bytes after it`);
+      }
+    }
+  }
+});

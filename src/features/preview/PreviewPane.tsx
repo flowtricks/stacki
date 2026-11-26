@@ -56,6 +56,7 @@ interface PreviewPaneProps {
   readonly selPseudo?: PseudoLayer | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
+  readonly canvasPathOf?: PreviewRuntimeProps['canvasPathOf'];
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onEditImage?: PreviewRuntimeProps['onEditImage'];
@@ -118,7 +119,8 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const ownDimensions = usePreviewDimensions();
   const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
-  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx }, props.onDevice);
+  const viewKey = [props.projectPath ?? '', props.route ?? '', String(props.refreshKey ?? '')].join('\n');
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx, viewKey }, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
@@ -136,7 +138,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
         crumbs={props.crumbs ?? []}
         {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
         activeDevice={sizing.activeDevice}
-        onDevice={props.onDevice}
+        onDevice={sizing.pickDevice}
         {...(props.device === 'canvas'
           ? {}
           : {
@@ -144,7 +146,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
                 width: sizing.viewport.width,
                 scale: sizing.viewport.scale,
                 onWidth: sizing.setWidth,
-                onFit: () => props.onDevice('desktop'),
+                onFit: () => sizing.pickDevice('desktop'),
               },
             })}
         guide={columnGuide.menu}

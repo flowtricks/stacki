@@ -51,6 +51,13 @@ export function useEditorView() {
     studioRole,
     device,
     setDevice,
+    // A device an app asks for: a pick, as the toolbar's button is (usePreviewSizing DesktopPick).
+    pickDevice: (next: PreviewDevice) => {
+      if (next === 'desktop') {
+        dimensions.setDesktopPick('asked');
+      }
+      setDevice(next);
+    },
     panel: canStudioPanel(studioRole, panel) ? panel : ('navigator' as const),
     setPanel,
     tab: can(studioRole, 'panel:style') ? tab : ('settings' as const),

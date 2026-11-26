@@ -68,7 +68,7 @@ import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/Ca
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { pressWasForEditor, type CanvasPress } from '../../features/preview/canvasEditorPress';
-import { canvasInstanceAt, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { canvasInstanceAt, canvasRootPath, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
@@ -148,6 +148,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
         onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
+        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath } : {})}
         onSelectedClasses={app.receiveClasses}
         onRenderedPaths={app.setRenderedPaths}
         onNodeStates={app.setNodeStates}
@@ -212,7 +213,9 @@ function useCanvasContextMenu(app: ShellView) {
   };
 }
 
-function canvasContextPosition(app: ShellView, path: string | undefined, point: CanvasContextPoint): ContextPosition | undefined {
+function canvasContextPosition(app: ShellView, framePath: string | undefined, point: CanvasContextPoint): ContextPosition | undefined {
+  // On the component canvas's page a right click names what a click there selects: a frame's instance, or the root.
+  const path = framePath !== undefined && atCanvasPage(app) ? canvasPageNodePath(framePath) : framePath;
   const action = canvasClickAction({
     path,
     outside: point.outside,
@@ -232,9 +235,18 @@ function canvasContextPosition(app: ShellView, path: string | undefined, point: 
   return { ...point, nodeId: node.id };
 }
 
+// On the component canvas's page, the node a canvas path stands for: a frame's instance for anything in its frame, the
+// page's root (<html>) for the space between frames; a path in another file's namespace is left as it is.
+function canvasPageNodePath(path: string): string {
+  if (path.includes('|')) {
+    return path;
+  }
+  return canvasInstanceAt(path)?.path ?? canvasRootPath() ?? path;
+}
+
 // Whether the open file is the component canvas's page itself, not an instance opened inside it.
 function atCanvasPage(app: ShellView): boolean {
-  return app.editStack.length <= 1 && isComponentCanvasPage(app.currentPage?.path);
+  return isComponentCanvasPage(app.currentPage?.path) && app.editStack.length <= 1;
 }
 
 // The instance the component defaults page edits, while that page is the open file; undefined anywhere else.
@@ -287,14 +299,10 @@ export function selectCanvasPath(
   };
   if (atCanvasPage(app)) {
     // On the component canvas's own page a frame is one thing: a click anywhere in it (its label, its body, inside its
-    // instance) selects the frame's instance, closed, and a click between frames selects nothing.
+    // instance) selects the frame's instance, closed, and a click between frames selects the canvas itself, its root.
     const instance = canvasInstanceAt(path);
-    const node = instance === undefined || app.model === undefined ? undefined : nodeAtPath(app.model.nodes, trailOf(instance.path));
-    if (node === undefined) {
-      app.setSelectedId(undefined);
-    } else {
-      reveal(node);
-    }
+    const target = instance?.path ?? canvasRootPath();
+    reveal(target === undefined || app.model === undefined ? undefined : nodeAtPath(app.model.nodes, trailOf(target)));
     return;
   }
   const { kind } = canvasClickAction({
@@ -549,7 +557,7 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
       </KeptTabPanel>
       <KeptTabPanel shown={app.rightTab === 'settings'}>
         <PropPreviewContext.Provider value={propPreview}>
-          <PropFieldExtrasContext.Provider value={canvasInstance?.extras}>
+          <PropFieldExtrasContext.Provider value={canvasInstance?.kind === 'instance' ? canvasInstance.extras : undefined}>
             <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
               <PropsPanel {...settingsOf(app, translate, canvasInstance)} />
             </PanelBoundary>
@@ -727,7 +735,25 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
   const handlers = settingsHandlers(app, translate);
   const { onChangeTag, onSetComment, ...kept } = handlers;
   const node = values.node;
-  if (canvasInstance === undefined || node?.kind !== 'component') {
+  if (canvasInstance?.kind === 'root' && node?.kind === 'element') {
+    // The canvas root: its class list is the canvas's own setting, the one field the root has.
+    return {
+      ...values,
+      ...kept,
+      node: { ...node, props: { class: { type: 'string' as const, value: canvasInstance.classes.join(' ') } }, attrOrder: ['class'], children: [] },
+      // The page's own <html>, never a layout: no layout picker, no tag.
+      isLayout: false,
+      schema: [],
+      onSetProp: canvasInstance.onSetProp,
+      // However the class field writes its list (one prop, a patch, or the whole attribute list), it is the root's classes.
+      onSetProps: (_nodeId: string, patch: PropValues) => canvasInstance.onSetProp('class', patch['class']),
+      onReplaceProps: (_nodeId: string, props: Readonly<Record<string, Attr>>) => canvasInstance.onSetProp('class', props['class']),
+      takesSlotText: false,
+      allowAttrs: false,
+      richTextContent: false,
+    };
+  }
+  if (canvasInstance?.kind !== 'instance' || node?.kind !== 'component') {
     return { ...values, ...kept, onChangeTag, onSetComment };
   }
   return {

@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Hoogte',
   'componentCanvas.panel.hug': 'Naar inhoud',
   'componentCanvas.panel.pixels': '{side} in pixels', // same
+  'componentCanvas.panel.root.about': 'Het canvas achter alle frames: het html-element van de pagina. De klassen ervan staan in het paneel Instellingen.',
+  'componentCanvas.panel.root.title': 'Canvas', // same
   'componentCanvas.panel.scope.all': 'Alle frames',
+  'componentCanvas.panel.scope.component': 'Dit component',
   'componentCanvas.panel.scope.frame': 'Dit frame',
   'componentCanvas.panel.scope.hint':
     'Waar het formaat, de achtergrond en de propwaarden die je instelt gelden: voor dit frame, voor elk frame van één waarde of voor alle frames. De eigen instelling van een frame gaat voor op een bredere.',

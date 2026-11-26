@@ -5,7 +5,7 @@
 import type { Attr } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import { PREVIEW_STAMP_ATTRIBUTE, stampData, type PreviewStamp } from '../../shared/page/previewToken';
+import { PREVIEW_STAMP_ATTRIBUTE, PREVIEW_UNMARKED_ATTRIBUTE, stampData, type PreviewStamp } from '../../shared/page/previewToken';
 import type { ParserNode, MapNode, CondNode } from './astroParserTypes';
 import { serializeAttrs } from './astroAttrs';
 import { blockHead } from './astroScan';
@@ -396,7 +396,7 @@ function markedCond(node: CondNode, indent: string, place: MarkedPlace): string 
 function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp }: MarkedPlace) {
   const slotValue = node.props?.['slot'];
   const slotted = slotValue && slotValue.type === 'string' && !!slotValue.value;
-  const tagInPlace = slotted && node.kind === 'element';
+  const tagInPlace = (slotted && node.kind === 'element') || (node.kind === 'element' && node.props?.[PREVIEW_UNMARKED_ATTRIBUTE] !== undefined);
   const slotAttr = slotted ? ` slot="${slotValue.value}"` : '';
   // A slotted node with no element and no props of its own — its markers can
   // only ride inside it, which needs children to ride in.
@@ -406,7 +406,9 @@ function serializeNodeMarkedRoute(node: ParserNode, { path, atRoot, depth, stamp
     Array.isArray(node.children) &&
     node.children.length > 0 &&
     !isInlineRun(node.children, depth + 1);
-  const carryPath = (node.kind === 'element' || node.kind === 'component') && node.name !== 'Fragment' && node.name !== 'slot';
+  // Stacki's own chrome (previewToken.ts PREVIEW_UNMARKED_ATTRIBUTE): no path to carry, and no marker pair around it.
+  const unmarked = node.kind === 'element' && node.props?.[PREVIEW_UNMARKED_ATTRIBUTE] !== undefined;
+  const carryPath = (node.kind === 'element' || node.kind === 'component') && node.name !== 'Fragment' && node.name !== 'slot' && !unmarked;
   // Where the node forwards its rest props, the caller's path for this
   // instance arrives inside the spread, and both want the same attribute. So
   // the one written here names BOTH — its own path and whatever came in on

@@ -72,16 +72,12 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       }
       return splitIntoParagraphs(nodes, { rootId: content.rootId, children: typed, trail: content.trail }, setInline);
     },
+    contentOwner: (textId, breaks) => contentOwnerOf(nodes, textId, breaks)?.id,
     richText: (textId, html, breaks) => {
-      const chain = ancestorsOf(nodes, textId);
-      // A line of words is written over the element whose inline content holds the text (a Paragraph instance, a <p>),
-      // never over an outer component such as the page's layout; rich text over the instance that holds its blocks.
-      const instance =
-        breaks === 'line' ? inlineRootOf(nodes, textId)?.root : [...(chain?.ancestors ?? [])].reverse().find((node) => node.kind === 'component');
+      const instance = contentOwnerOf(nodes, textId, breaks);
       if (instance?.id === undefined || richTextView(html, document).view !== 'rich') {
         return false;
       }
-      assert(chain !== undefined, 'An instance was found among the text’s ancestors');
       const before = plainChildrenHTML(instance.children);
       if (before === undefined) {
         return false; // The content holds more than rich text since the editor opened: never write over it.
@@ -98,6 +94,20 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       return true;
     },
   };
+}
+
+// The node whose children a canvas edit of this text writes. A line of words is written over the element whose inline
+// content holds the text (a Paragraph instance, a <p>), never over an outer component such as the page's layout; rich
+// text over the instance that holds its blocks.
+function contentOwnerOf<Node extends CanvasFormatTree<Node> & InlineCandidate>(
+  nodes: readonly Node[],
+  textId: string,
+  breaks: CanvasTextBreaks | undefined,
+): Node | undefined {
+  if (breaks === 'line') {
+    return inlineRootOf(nodes, textId)?.root;
+  }
+  return [...(ancestorsOf(nodes, textId)?.ancestors ?? [])].reverse().find((node) => node.kind === 'component');
 }
 
 const BREAK: InlineNode = { kind: 'element', name: 'br', props: {}, children: undefined };

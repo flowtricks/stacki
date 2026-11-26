@@ -1154,9 +1154,9 @@ Opening a project without saved guide preferences uses defaults in memory. It do
 (`shared/properties/projectBreakpoints.ts`): Desktop's frame width and an ordered list of `{ id, name?, value, unit }`,
 `unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its only uses are the width of the
 Desktop frame in the side-by-side (all breakpoints) view, the single canvas's Desktop width, and the line that decides on which
-side of Desktop a breakpoint is. The single canvas's Desktop device fills, unframed at scale 1, any pane at or above the desktop
-range (past the widest `down` breakpoint), holding the page short of the first `up` one; only a narrower pane draws that width,
-framed and scaled to fit, as the same number typed into the width box does (`previewFrameWidth`, docs/style-follow-canvas.md). A breakpoint has no stored direction: it is DERIVED from its
+side of Desktop a breakpoint is. The single canvas is the pane's own width and reflows; it draws that Desktop width, framed
+and scaled to fit, only while a pick of Desktop made in a pane too narrow for the desktop layout is held, and the next resize
+of the pane ends the pick (`DesktopPick`, docs/style-follow-canvas.md). A breakpoint has no stored direction: it is DERIVED from its
 number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
 exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
 The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the

@@ -1,4 +1,5 @@
 // First: the preview's link listeners go on before any other module's (previewLinks.ts).
+import { isCanvasTextEditing } from '../../../vendor/stacki/electron/preload/frameTextEditing';
 import './previewLinks';
 import { parentOrigin } from './parentOrigin';
 import { receiveLiveVariables } from '../../../vendor/stacki/electron/preload/frameLiveVariables';
@@ -187,6 +188,10 @@ for (const type of ['click', 'dblclick', 'contextmenu']) {
     type,
     (event) => {
       if (interactive || window.parent === window || !(event.target instanceof Element) || event.target.closest('#studio-live-cursors')) {
+        return;
+      }
+      // In the text being edited the pointer is the editor's (frameTextEditing.ts).
+      if (isCanvasTextEditing(event.target)) {
         return;
       }
       if (type === 'click' && canvasMode === 'interact' && event instanceof MouseEvent) {

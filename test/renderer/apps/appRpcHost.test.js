@@ -296,7 +296,8 @@ test('Desktop maps each command to the shell setter or gesture the UI uses', asy
     device: 'desktop',
     insertables: [{ name: 'Card', path: '/p/src/components/Card.astro' }],
     pathFor: (id) => (id === 'n0' ? '0' : undefined),
-    setDevice: record('setDevice'),
+    // An app asking for a device is a pick of it, as the toolbar's button is.
+    pickDevice: record('pickDevice'),
     requestCanvasWidth: record('requestCanvasWidth'),
     setLeftTab: record('setLeftTab'),
     setRightTab: record('setRightTab'),
@@ -336,7 +337,7 @@ test('Desktop maps each command to the shell setter or gesture the UI uses', asy
   await run(host.history).undo();
   const names = calls.map(([name]) => name);
   for (const name of [
-    'setDevice',
+    'pickDevice',
     'requestCanvasWidth',
     'setLeftTab',
     'setRightTab',

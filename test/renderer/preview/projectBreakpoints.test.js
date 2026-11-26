@@ -185,7 +185,7 @@ test('defaults: 64rem, 48rem and 30rem as width < X, a bar of 1023, 767 and 479,
   assert.equal(desktopField().value, '90rem', 'Desktop has a number: 90rem by default');
   assert.equal(
     document.querySelector('[data-breakpoint="desktop"] .breakpoints-query').textContent,
-    'Used when the window is too narrow for the desktop layout: this width, scaled to fit. Never used as a media query.',
+    'Used when you choose Desktop in a window too narrow for it: this width, scaled to fit. Never used as a media query.',
   );
   assert.equal(document.querySelector('[data-breakpoint="desktop"] .breakpoints-canvas').textContent, '1440px frame');
   assert.ok(document.querySelector('.breakpoints-reset') === null, 'there is no reset button');
