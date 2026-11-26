@@ -438,7 +438,6 @@ export const messages = {
   'ai.pins.detachedTip': 'הרכיב שלו כבר לא נמצא בדף הזה. אפשר לפתוח את הנעץ ולהעביר אותו לרכיב אחר.',
   'ai.pins.discard': 'השלכת הנעץ',
   'ai.pins.discardedToast': 'השינויים בנעץ {number} בוטלו',
-  'ai.pins.done': 'סיום',
   'ai.pins.elementIn': 'רכיב ב-{file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'אין עדיין נעצים',
@@ -454,14 +453,25 @@ export const messages = {
     other: 'נעץ יכול להכיל {count} תמונות לכל היותר.',
   },
   'ai.pins.imagesTooLarge': 'תמונות הנעצים יחד גדולות מדי. יש להסיר כמה קודם.',
-  'ai.pins.include': 'לכלול את נעץ {number} ב„שליחת הכול”',
+  'ai.pins.include': 'לכלול את נעץ {number} בשליחה הבאה',
   'ai.pins.jump': 'מעבר לנעץ {number}',
+  'ai.pins.leave': 'יציאה ממצב תגובות',
   'ai.pins.list': {
     one: 'נעץ אחד',
     two: 'שני נעצים',
     other: '{count} נעצים',
   },
+  'ai.pins.listAttention': {
+    one: 'אחד מחכה לך',
+    two: 'שניים מחכים לך',
+    other: '{count} מחכים לך',
+  },
   'ai.pins.listLabel': 'נעצי תגובות',
+  'ai.pins.listWorking': {
+    one: 'אחד בעבודה',
+    two: 'שניים בעבודה',
+    other: '{count} בעבודה',
+  },
   'ai.pins.marker': 'נעץ {number}: {element}',
   'ai.pins.messageLabel': {
     one: 'הודעה עם נעץ תגובה אחד',
@@ -504,10 +514,10 @@ export const messages = {
   'ai.pins.send.subagents': 'כל הנעצים הכלולים נשלחים בהודעה אחת; כל אחד מקבל סוכן משנה משלו בצ׳אט.',
   'ai.pins.send.tooManyImages': 'יותר מדי תמונות להודעה אחת. יש להסיר כמה תמונות או להשאיר כמה נעצים בחוץ.',
   'ai.pins.send.tooManyPins': 'יותר מדי נעצים להודעה אחת. יש להשאיר כמה בחוץ ולשלוח קודם את השאר.',
-  'ai.pins.sendAll': {
-    one: 'שליחת הכול ({count})',
-    two: 'שליחת הכול ({count})',
-    other: 'שליחת הכול ({count})',
+  'ai.pins.sendCount': {
+    one: 'שליחה',
+    two: 'שליחת {count}',
+    other: 'שליחת {count}',
   },
   'ai.pins.summaryLine': 'נעץ {number}: {comment}',
   'ai.pins.summaryTitle': {

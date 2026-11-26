@@ -423,7 +423,6 @@ export const messages = {
   'ai.pins.detachedTip': 'इसका एलिमेंट अब इस पेज पर नहीं है। इसे दूसरे एलिमेंट पर ले जाने के लिए पिन खोलें।',
   'ai.pins.discard': 'पिन खारिज करें',
   'ai.pins.discardedToast': 'पिन {number} के बदलाव खारिज किए गए',
-  'ai.pins.done': 'हो गया',
   'ai.pins.elementIn': '{file} में एलिमेंट',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'अभी कोई पिन नहीं',
@@ -437,13 +436,22 @@ export const messages = {
     other: 'एक पिन में ज़्यादा से ज़्यादा {count} इमेज हो सकती हैं।',
   },
   'ai.pins.imagesTooLarge': 'पिन की इमेज कुल मिलाकर बहुत बड़ी हैं। पहले कुछ हटाएँ।',
-  'ai.pins.include': '“सभी भेजें” में पिन {number} शामिल करें',
+  'ai.pins.include': 'अगली बार भेजते समय पिन {number} शामिल करें',
   'ai.pins.jump': 'पिन {number} पर जाएँ',
+  'ai.pins.leave': 'कमेंट मोड से बाहर निकलें',
   'ai.pins.list': {
     one: '{count} पिन',
     other: '{count} पिन',
   },
+  'ai.pins.listAttention': {
+    one: '{count} को आपकी ज़रूरत',
+    other: '{count} को आपकी ज़रूरत',
+  },
   'ai.pins.listLabel': 'कमेंट पिन',
+  'ai.pins.listWorking': {
+    one: '{count} पर काम जारी',
+    other: '{count} पर काम जारी',
+  },
   'ai.pins.marker': 'पिन {number}: {element}',
   'ai.pins.messageLabel': {
     one: '{count} कमेंट पिन वाला संदेश',
@@ -485,9 +493,9 @@ export const messages = {
   'ai.pins.send.subagents': 'शामिल किए गए सभी पिन एक ही संदेश में भेजता है; चैट में हर पिन को अपना सबएजेंट मिलता है।',
   'ai.pins.send.tooManyImages': 'एक संदेश के लिए बहुत ज़्यादा इमेज हैं। कुछ इमेज हटाएँ या कुछ पिन छोड़ दें।',
   'ai.pins.send.tooManyPins': 'एक संदेश के लिए बहुत ज़्यादा पिन हैं। कुछ को छोड़ दें और पहले बाकी भेजें।',
-  'ai.pins.sendAll': {
-    one: 'सभी भेजें ({count})',
-    other: 'सभी भेजें ({count})',
+  'ai.pins.sendCount': {
+    one: 'भेजें',
+    other: '{count} भेजें',
   },
   'ai.pins.summaryLine': 'पिन {number}: {comment}',
   'ai.pins.summaryTitle': {

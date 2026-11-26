@@ -425,7 +425,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Son élément n’est plus sur cette page. Ouvrez l’épingle pour la déplacer vers un autre élément.',
   'ai.pins.discard': 'Abandonner l’épingle',
   'ai.pins.discardedToast': 'Modifications de l’épingle {number} abandonnées',
-  'ai.pins.done': 'Terminé',
   'ai.pins.elementIn': 'Élément dans {file}',
   'ai.pins.elementWithText': '{element} « {text} »',
   'ai.pins.empty': 'Aucune épingle pour l’instant',
@@ -439,13 +438,22 @@ export const messages = {
     other: 'Une épingle contient au maximum {count} images.',
   },
   'ai.pins.imagesTooLarge': 'Les images des épingles sont trop volumineuses au total. Retirez-en d’abord.',
-  'ai.pins.include': 'Inclure l’épingle {number} dans Tout envoyer',
+  'ai.pins.include': 'Inclure l’épingle {number} dans le prochain envoi',
   'ai.pins.jump': 'Aller à l’épingle {number}',
+  'ai.pins.leave': 'Quitter le mode commentaire',
   'ai.pins.list': {
     one: '{count} épingle',
     other: '{count} épingles',
   },
+  'ai.pins.listAttention': {
+    one: '{count} à traiter',
+    other: '{count} à traiter',
+  },
   'ai.pins.listLabel': 'Épingles de commentaire',
+  'ai.pins.listWorking': {
+    one: '{count} en cours',
+    other: '{count} en cours',
+  },
   'ai.pins.marker': 'Épingle {number} : {element}',
   'ai.pins.messageLabel': {
     one: 'Message avec {count} épingle de commentaire',
@@ -487,9 +495,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Envoie toutes les épingles incluses en un seul message ; chacune a son propre sous-agent dans la conversation.',
   'ai.pins.send.tooManyImages': 'Trop d’images pour un seul message. Retirez des images ou laissez des épingles de côté.',
   'ai.pins.send.tooManyPins': 'Trop d’épingles pour un seul message. Laissez-en de côté et envoyez d’abord les autres.',
-  'ai.pins.sendAll': {
-    one: 'Tout envoyer ({count})',
-    other: 'Tout envoyer ({count})',
+  'ai.pins.sendCount': {
+    one: 'Envoyer',
+    other: 'Envoyer {count}',
   },
   'ai.pins.summaryLine': 'Épingle {number} : {comment}',
   'ai.pins.summaryTitle': {

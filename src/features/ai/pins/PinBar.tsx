@@ -1,7 +1,13 @@
-// Comment mode's bar over the canvas: says the mode is on (and, while a pin is being moved, where the next click
-// puts it), opens the list of every pin, sends them all, and ends the mode. "Send all" names how many pins it
-// takes and is the only way pins are ever sent; when it cannot send, its tooltip says why (and, for an agent whose
-// subagents the panel cannot follow, that the pins go one message at a time), never a line of text.
+// Comment mode's bar over the canvas: one small pill, as quiet as it can be for what there is to do.
+//   No pins yet       the pin icon and the mode's name, and ✕ to leave the mode.
+//   Pins              the pin icon alone (its tooltip names the mode and says what it does), one count that opens
+//                     the list ("2 pins", or "2 working" / "1 needs you" once every pin is sent), the blue Send for
+//                     the pins that can go ("Send", "Send 3"), and ✕. Send is there only with something to send; when
+//                     it cannot go yet (the agent busy or not set up) it is a quiet button whose tooltip says why,
+//                     never a washed-out blue one.
+//   Moving a pin      where the next click puts it, and Cancel.
+// Only the primary button and hover or open states carry a fill. On a narrow canvas the mode's name drops first
+// (a container query on the bar's own slot), so nothing truncates. ✕ and Escape leave the mode; pins stay.
 //
 // The list (PinList.tsx) reviews every pin on every page: jump to one, include or leave it out of the next send,
 // and delete it; a pin whose work finished well is deleted by itself.
@@ -10,18 +16,19 @@ import { createPortal } from 'react-dom';
 import type { MessageKey } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { bubbleText as centralBubbleText, listMenu as centralList } from '../../../ui/central/centralGeometry';
+import { bubbleText as centralBubbleText, close as centralClose } from '../../../ui/central/centralGeometry';
 import FittedTooltip from '../../../ui/FittedTooltip';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useAiState } from '../aiStore';
 import { setPanelMode } from '../panelModes';
+import { TipButton } from '../sessions/TipButton';
 import { COMMENT_MODE_ID } from './commentMode';
 import { PinList } from './PinList';
-import { sendAllPins, sendReadiness, setPinListOpen, startMovingPin, usePinState, type SendBlock } from './pinStore';
+import { progressOf, sendAllPins, sendReadiness, setPinListOpen, startMovingPin, usePinState, type PinState, type SendBlock } from './pinStore';
 import './pins.css';
 
 const CommentGlyph = centralIcon(centralBubbleText);
-const ListGlyph = centralIcon(centralList);
+const CloseGlyph = centralIcon(centralClose);
 
 const BLOCKS = {
   none: 'ai.pins.send.none',
@@ -32,13 +39,22 @@ const BLOCKS = {
   'not-ready': 'ai.pins.send.notReady',
 } as const satisfies Record<SendBlock, MessageKey>;
 
+/** What the count says: how many saved pins there are, or, once every one is sent, how they stand. */
+function countLabel(pins: PinState, translate: ReturnType<typeof useTranslate>): string {
+  const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined);
+  if (saved.length === 0 || saved.some((pin) => pin.delivery.kind === 'draft')) {
+    return translate('ai.pins.list', { count: saved.length });
+  }
+  const needing = saved.filter((pin) => progressOf(pin).kind === 'attention').length;
+  return needing > 0 ? translate('ai.pins.listAttention', { count: needing }) : translate('ai.pins.listWorking', { count: saved.length });
+}
+
 export function PinBar() {
   const translate = useTranslate();
   const pins = usePinState();
   const ai = useAiState();
   const listButton = useRef<HTMLButtonElement>(null);
   const sendTip = useDelayedTooltip();
-  // What the mode does, told on the mode's own name in the bar (its header button's tooltip is its name).
   const modeTip = useDelayedTooltip();
   const [sending, setSending] = useState(false);
   if (pins.mode !== 'on') {
@@ -46,26 +62,37 @@ export function PinBar() {
   }
   const readiness = sendReadiness(pins, ai);
   const moving = pins.moving === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.moving);
+  const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined).length;
+  const empty = saved === 0 && moving === undefined;
   const tip =
     readiness.kind === 'blocked'
       ? translate(BLOCKS[readiness.reason], { count: readiness.count })
       : readiness.mode === 'single'
         ? translate('ai.pins.send.oneByOne')
         : translate('ai.pins.send.subagents');
+  const sendLabel = translate('ai.pins.sendCount', { count: readiness.count });
+  const leave = (
+    <TipButton className="ai-pin-bar-icon" label={translate('ai.pins.leave')} onClick={() => setPanelMode(COMMENT_MODE_ID, 'off')}>
+      <CloseGlyph size={16} />
+    </TipButton>
+  );
   return (
-    <div className="ai-pin-bar" role="toolbar" aria-label={translate('ai.pins.mode')}>
-      <span className="ai-pin-bar-mode" onMouseEnter={modeTip.show} onMouseLeave={modeTip.hide}>
-        <CommentGlyph size={16} />
-        <span className="ai-pin-bar-mode-name">
-          {moving === undefined ? translate('ai.pins.mode') : translate('ai.pins.moving', { number: moving.number })}
+    <div className="ai-pin-bar-slot">
+      <div className={`ai-pin-bar${empty ? ' is-empty' : ''}`} role="toolbar" aria-label={translate('ai.pins.mode')}>
+        <span className="ai-pin-bar-mode" onMouseEnter={modeTip.show} onMouseLeave={modeTip.hide}>
+          <CommentGlyph size={16} />
+          {moving !== undefined ? (
+            <span className="ai-pin-bar-mode-name">{translate('ai.pins.moving', { number: moving.number })}</span>
+          ) : (
+            empty && <span className="ai-pin-bar-mode-name is-droppable">{translate('ai.pins.mode')}</span>
+          )}
         </span>
-      </span>
-      {moving !== undefined ? (
-        <button type="button" className="ai-pin-bar-button" onClick={() => startMovingPin(undefined)}>
-          {translate('ai.pins.cancelMove')}
-        </button>
-      ) : (
-        <>
+        {moving !== undefined && (
+          <button type="button" className="ai-pin-bar-button" onClick={() => startMovingPin(undefined)}>
+            {translate('ai.pins.cancelMove')}
+          </button>
+        )}
+        {moving === undefined && !empty && (
           <button
             ref={listButton}
             type="button"
@@ -73,14 +100,15 @@ export function PinBar() {
             aria-expanded={pins.listOpen}
             onClick={() => setPinListOpen(pins.listOpen ? 'closed' : 'open')}
           >
-            <ListGlyph size={16} />
-            {translate('ai.pins.list', { count: pins.board.pins.filter((pin) => pin.savedAt !== undefined).length })}
+            {countLabel(pins, translate)}
           </button>
+        )}
+        {moving === undefined && readiness.count > 0 && (
           <button
             type="button"
-            className="primary ai-pin-send"
+            className={readiness.kind === 'ready' ? 'primary ai-pin-send' : 'ai-pin-bar-button ai-pin-send-waiting'}
             aria-disabled={readiness.kind !== 'ready' || sending}
-            aria-label={`${translate('ai.pins.sendAll', { count: readiness.count })}. ${tip}`}
+            aria-label={`${sendLabel}. ${tip}`}
             onMouseEnter={sendTip.show}
             onMouseLeave={sendTip.hide}
             onBlur={sendTip.hide}
@@ -92,29 +120,27 @@ export function PinBar() {
               void sendAllPins(translate).finally(() => setSending(false));
             }}
           >
-            {translate('ai.pins.sendAll', { count: readiness.count })}
+            {sendLabel}
           </button>
-        </>
-      )}
-      <button type="button" className="ai-pin-bar-button" onClick={() => setPanelMode(COMMENT_MODE_ID, 'off')}>
-        {translate('ai.pins.done')}
-      </button>
-      {sendTip.value !== undefined &&
-        createPortal(
-          <FittedTooltip role="tooltip" anchor={sendTip.value}>
-            {tip}
-          </FittedTooltip>,
-          tooltipHost(undefined),
         )}
-      {modeTip.value !== undefined &&
-        moving === undefined &&
-        createPortal(
-          <FittedTooltip role="tooltip" anchor={modeTip.value}>
-            {translate('ai.pins.modeTip')}
-          </FittedTooltip>,
-          tooltipHost(undefined),
-        )}
-      {pins.listOpen && <PinList anchor={listButton.current ?? undefined} />}
+        {moving === undefined && leave}
+        {sendTip.value !== undefined &&
+          createPortal(
+            <FittedTooltip role="tooltip" anchor={sendTip.value}>
+              {tip}
+            </FittedTooltip>,
+            tooltipHost(undefined),
+          )}
+        {modeTip.value !== undefined &&
+          moving === undefined &&
+          createPortal(
+            <FittedTooltip role="tooltip" anchor={modeTip.value}>
+              {empty ? translate('ai.pins.modeTip') : `${translate('ai.pins.mode')}. ${translate('ai.pins.modeTip')}`}
+            </FittedTooltip>,
+            tooltipHost(undefined),
+          )}
+        {pins.listOpen && <PinList anchor={listButton.current ?? undefined} />}
+      </div>
     </div>
   );
 }

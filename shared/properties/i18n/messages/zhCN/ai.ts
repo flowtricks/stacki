@@ -404,7 +404,6 @@ export const messages = {
   'ai.pins.detachedTip': '它对应的元素已不在此页面上。打开图钉，将其移到其他元素。',
   'ai.pins.discard': '放弃图钉',
   'ai.pins.discardedToast': '已放弃对图钉 {number} 的更改',
-  'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': '还没有图钉',
@@ -416,12 +415,19 @@ export const messages = {
     other: '每个图钉最多包含 {count} 张图片。',
   },
   'ai.pins.imagesTooLarge': '图钉中的图片合计过大。请先移除一些。',
-  'ai.pins.include': '将图钉 {number} 纳入“全部发送”',
+  'ai.pins.include': '下次发送时包含图钉 {number}',
   'ai.pins.jump': '转到图钉 {number}',
+  'ai.pins.leave': '退出评论模式',
   'ai.pins.list': {
     other: '{count} 个图钉',
   },
+  'ai.pins.listAttention': {
+    other: '{count} 个需要处理',
+  },
   'ai.pins.listLabel': '评论图钉',
+  'ai.pins.listWorking': {
+    other: '{count} 个处理中',
+  },
   'ai.pins.marker': '图钉 {number}：{element}',
   'ai.pins.messageLabel': {
     other: '包含 {count} 个评论图钉的消息',
@@ -462,8 +468,8 @@ export const messages = {
   'ai.pins.send.subagents': '将所有纳入的图钉合并为一条消息发送；聊天中每个图钉各有一个子代理。',
   'ai.pins.send.tooManyImages': '一条消息中的图片过多。请移除一些图片，或排除部分图钉。',
   'ai.pins.send.tooManyPins': '一条消息中的图钉过多。请先排除一部分，发送其余的。',
-  'ai.pins.sendAll': {
-    other: '全部发送 ({count})',
+  'ai.pins.sendCount': {
+    other: '发送 {count} 个',
   },
   'ai.pins.summaryLine': '图钉 {number}：{comment}',
   'ai.pins.summaryTitle': {

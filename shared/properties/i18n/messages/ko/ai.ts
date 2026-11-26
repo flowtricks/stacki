@@ -406,7 +406,6 @@ export const messages = {
   'ai.pins.detachedTip': '이 핀의 요소가 더 이상 이 페이지에 없습니다. 핀을 열어 다른 요소로 옮기세요.',
   'ai.pins.discard': '핀 버리기',
   'ai.pins.discardedToast': '핀 {number}의 변경 사항을 버렸습니다',
-  'ai.pins.done': '완료',
   'ai.pins.elementIn': '{file}의 요소',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': '아직 핀이 없습니다',
@@ -418,12 +417,19 @@ export const messages = {
     other: '핀 하나에는 이미지를 최대 {count}개까지 넣을 수 있습니다.',
   },
   'ai.pins.imagesTooLarge': '핀 이미지의 전체 크기가 너무 큽니다. 일부를 먼저 제거하세요.',
-  'ai.pins.include': '핀 {number}을(를) 모두 보내기에 포함',
+  'ai.pins.include': '다음 보내기에 핀 {number} 포함',
   'ai.pins.jump': '핀 {number}(으)로 이동',
+  'ai.pins.leave': '댓글 모드 종료',
   'ai.pins.list': {
     other: '핀 {count}개',
   },
+  'ai.pins.listAttention': {
+    other: '확인 필요 {count}개',
+  },
   'ai.pins.listLabel': '댓글 핀',
+  'ai.pins.listWorking': {
+    other: '작업 중 {count}개',
+  },
   'ai.pins.marker': '핀 {number}: {element}',
   'ai.pins.messageLabel': {
     other: '댓글 핀 {count}개가 포함된 메시지',
@@ -464,8 +470,8 @@ export const messages = {
   'ai.pins.send.subagents': '포함된 모든 핀을 메시지 하나로 보냅니다. 채팅에서 핀마다 전용 하위 에이전트가 배정됩니다.',
   'ai.pins.send.tooManyImages': '메시지 하나에 담기에는 이미지가 너무 많습니다. 이미지를 일부 제거하거나 핀 몇 개를 제외하세요.',
   'ai.pins.send.tooManyPins': '메시지 하나에 담기에는 핀이 너무 많습니다. 일부를 제외하고 나머지를 먼저 보내세요.',
-  'ai.pins.sendAll': {
-    other: '모두 보내기 ({count})',
+  'ai.pins.sendCount': {
+    other: '{count}개 보내기',
   },
   'ai.pins.summaryLine': '핀 {number}: {comment}',
   'ai.pins.summaryTitle': {

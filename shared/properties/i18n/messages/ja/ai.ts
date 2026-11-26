@@ -407,7 +407,6 @@ export const messages = {
   'ai.pins.detachedTip': 'このピンの要素はこのページにもうありません。ピンを開いて別の要素に移動してください。',
   'ai.pins.discard': 'ピンを破棄',
   'ai.pins.discardedToast': 'ピン {number} の変更を破棄しました',
-  'ai.pins.done': '完了',
   'ai.pins.elementIn': '{file} 内の要素',
   'ai.pins.elementWithText': '{element}「{text}」',
   'ai.pins.empty': 'ピンはまだありません',
@@ -419,12 +418,19 @@ export const messages = {
     other: '1つのピンに追加できる画像は最大 {count} 件です。',
   },
   'ai.pins.imagesTooLarge': 'ピンの画像の合計が大きすぎます。先にいくつか削除してください。',
-  'ai.pins.include': 'ピン {number} を「すべて送信」に含める',
+  'ai.pins.include': 'ピン {number} を次の送信に含める',
   'ai.pins.jump': 'ピン {number} に移動',
+  'ai.pins.leave': 'コメントモードを終了',
   'ai.pins.list': {
     other: 'ピン {count} 件',
   },
+  'ai.pins.listAttention': {
+    other: '要対応 {count} 件',
+  },
   'ai.pins.listLabel': 'コメントピン',
+  'ai.pins.listWorking': {
+    other: '作業中 {count} 件',
+  },
   'ai.pins.marker': 'ピン {number}：{element}',
   'ai.pins.messageLabel': {
     other: 'コメントピン {count} 件を含むメッセージ',
@@ -465,8 +471,8 @@ export const messages = {
   'ai.pins.send.subagents': '対象のピンをすべて1つのメッセージで送信します。チャットではピンごとに専用のサブエージェントが担当します。',
   'ai.pins.send.tooManyImages': '1つのメッセージに含める画像が多すぎます。画像をいくつか削除するか、一部のピンを除外してください。',
   'ai.pins.send.tooManyPins': '1つのメッセージに含めるピンが多すぎます。一部を除外して、残りを先に送信してください。',
-  'ai.pins.sendAll': {
-    other: 'すべて送信 ({count})',
+  'ai.pins.sendCount': {
+    other: '{count} 件を送信',
   },
   'ai.pins.summaryLine': 'ピン {number}：{comment}',
   'ai.pins.summaryTitle': {

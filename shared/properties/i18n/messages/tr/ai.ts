@@ -423,7 +423,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Öğesi artık bu sayfada değil. İğneyi başka bir öğeye taşımak için açın.',
   'ai.pins.discard': 'İğneyi at',
   'ai.pins.discardedToast': '{number} numaralı iğnedeki değişiklikler atıldı',
-  'ai.pins.done': 'Bitti',
   'ai.pins.elementIn': '{file} içindeki öğe',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Henüz iğne yok',
@@ -437,13 +436,22 @@ export const messages = {
     other: 'Bir iğne en fazla {count} görsel içerebilir.',
   },
   'ai.pins.imagesTooLarge': 'İğnelerin görselleri toplamda çok büyük. Önce bazılarını kaldırın.',
-  'ai.pins.include': '{number} numaralı iğneyi Tümünü gönder’e dahil et',
+  'ai.pins.include': '{number} numaralı iğneyi sonraki gönderime dahil et',
   'ai.pins.jump': '{number} numaralı iğneye git',
+  'ai.pins.leave': 'Yorum modundan çık',
   'ai.pins.list': {
     one: '{count} iğne',
     other: '{count} iğne',
   },
+  'ai.pins.listAttention': {
+    one: '{count} sizi bekliyor',
+    other: '{count} sizi bekliyor',
+  },
   'ai.pins.listLabel': 'Yorum iğneleri',
+  'ai.pins.listWorking': {
+    one: '{count} işleniyor',
+    other: '{count} işleniyor',
+  },
   'ai.pins.marker': 'İğne {number}: {element}',
   'ai.pins.messageLabel': {
     one: '{count} yorum iğnesi içeren mesaj',
@@ -485,9 +493,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Dahil edilen tüm iğneleri tek mesajda gönderir; her biri sohbette kendi alt ajanını alır.',
   'ai.pins.send.tooManyImages': 'Tek mesaj için çok fazla görsel var. Bazı görselleri kaldırın veya bazı iğneleri dışarıda bırakın.',
   'ai.pins.send.tooManyPins': 'Tek mesaj için çok fazla iğne var. Bazılarını dışarıda bırakıp önce kalanları gönderin.',
-  'ai.pins.sendAll': {
-    one: 'Tümünü gönder ({count})',
-    other: 'Tümünü gönder ({count})',
+  'ai.pins.sendCount': {
+    one: 'Gönder',
+    other: 'Gönder ({count})',
   },
   'ai.pins.summaryLine': 'İğne {number}: {comment}',
   'ai.pins.summaryTitle': {

@@ -407,7 +407,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Elemennya tidak lagi ada di halaman ini. Buka pin untuk memindahkannya ke elemen lain.',
   'ai.pins.discard': 'Buang pin',
   'ai.pins.discardedToast': 'Perubahan pada pin {number} dibuang',
-  'ai.pins.done': 'Selesai',
   'ai.pins.elementIn': 'Elemen di {file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Belum ada pin',
@@ -419,12 +418,19 @@ export const messages = {
     other: 'Satu pin memuat paling banyak {count} gambar.',
   },
   'ai.pins.imagesTooLarge': 'Gambar pada pin terlalu besar jika digabungkan. Hapus beberapa terlebih dahulu.',
-  'ai.pins.include': 'Sertakan pin {number} dalam Kirim semua',
+  'ai.pins.include': 'Sertakan pin {number} dalam pengiriman berikutnya',
   'ai.pins.jump': 'Buka pin {number}',
+  'ai.pins.leave': 'Keluar dari mode komentar',
   'ai.pins.list': {
     other: '{count} pin',
   },
+  'ai.pins.listAttention': {
+    other: '{count} perlu Anda',
+  },
   'ai.pins.listLabel': 'Pin komentar',
+  'ai.pins.listWorking': {
+    other: '{count} dikerjakan',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     other: 'Pesan dengan {count} pin komentar',
@@ -465,8 +471,8 @@ export const messages = {
   'ai.pins.send.subagents': 'Mengirim semua pin yang disertakan dalam satu pesan; masing-masing mendapat subagennya sendiri di obrolan.',
   'ai.pins.send.tooManyImages': 'Terlalu banyak gambar untuk satu pesan. Hapus beberapa gambar atau jangan sertakan beberapa pin.',
   'ai.pins.send.tooManyPins': 'Terlalu banyak pin untuk satu pesan. Jangan sertakan beberapa dan kirim sisanya terlebih dahulu.',
-  'ai.pins.sendAll': {
-    other: 'Kirim semua ({count})',
+  'ai.pins.sendCount': {
+    other: 'Kirim {count}',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {

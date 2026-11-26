@@ -426,7 +426,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Sein Element ist nicht mehr auf dieser Seite. Öffne den Pin, um ihn auf ein anderes Element zu verschieben.',
   'ai.pins.discard': 'Pin verwerfen',
   'ai.pins.discardedToast': 'Änderungen an Pin {number} verworfen',
-  'ai.pins.done': 'Fertig',
   'ai.pins.elementIn': 'Element in {file}', // same
   'ai.pins.elementWithText': '{element} „{text}“',
   'ai.pins.empty': 'Noch keine Pins',
@@ -440,13 +439,22 @@ export const messages = {
     other: 'Ein Pin fasst höchstens {count} Bilder.',
   },
   'ai.pins.imagesTooLarge': 'Die Bilder der Pins sind zusammen zu groß. Entferne zuerst einige.',
-  'ai.pins.include': 'Pin {number} bei „Alle senden“ einschließen',
+  'ai.pins.include': 'Pin {number} beim nächsten Senden einschließen',
   'ai.pins.jump': 'Zu Pin {number} springen',
+  'ai.pins.leave': 'Kommentarmodus verlassen',
   'ai.pins.list': {
     one: '{count} Pin',
     other: '{count} Pins',
   },
+  'ai.pins.listAttention': {
+    one: '{count} braucht dich',
+    other: '{count} brauchen dich',
+  },
   'ai.pins.listLabel': 'Kommentar-Pins',
+  'ai.pins.listWorking': {
+    one: '{count} in Arbeit',
+    other: '{count} in Arbeit',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     one: 'Nachricht mit {count} Kommentar-Pin',
@@ -488,9 +496,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Sendet alle eingeschlossenen Pins in einer Nachricht; jeder bekommt im Chat einen eigenen Subagenten.',
   'ai.pins.send.tooManyImages': 'Zu viele Bilder für eine Nachricht. Entferne Bilder oder lass einige Pins weg.',
   'ai.pins.send.tooManyPins': 'Zu viele Pins für eine Nachricht. Lass einige weg und sende zuerst die übrigen.',
-  'ai.pins.sendAll': {
-    one: 'Alle senden ({count})',
-    other: 'Alle senden ({count})',
+  'ai.pins.sendCount': {
+    one: 'Senden',
+    other: '{count} senden',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {

@@ -424,7 +424,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Het element staat niet meer op deze pagina. Open de pin om hem naar een ander element te verplaatsen.',
   'ai.pins.discard': 'Pin weggooien',
   'ai.pins.discardedToast': 'Wijzigingen aan pin {number} verworpen',
-  'ai.pins.done': 'Klaar',
   'ai.pins.elementIn': 'Element in {file}', // same
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Nog geen pins',
@@ -438,13 +437,22 @@ export const messages = {
     other: 'Een pin bevat maximaal {count} afbeeldingen.',
   },
   'ai.pins.imagesTooLarge': 'De afbeeldingen van de pins zijn samen te groot. Verwijder er eerst een paar.',
-  'ai.pins.include': 'Pin {number} meenemen bij Alles versturen',
+  'ai.pins.include': 'Pin {number} meenemen bij de volgende verzending',
   'ai.pins.jump': 'Naar pin {number}',
+  'ai.pins.leave': 'Opmerkingsmodus verlaten',
   'ai.pins.list': {
     one: '{count} pin',
     other: '{count} pins',
   },
+  'ai.pins.listAttention': {
+    one: '{count} wacht op jou',
+    other: '{count} wachten op jou',
+  },
   'ai.pins.listLabel': 'Opmerkingspins',
+  'ai.pins.listWorking': {
+    one: '{count} bezig',
+    other: '{count} bezig',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     one: 'Bericht met {count} opmerkingspin',
@@ -486,9 +494,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Verstuurt alle geselecteerde pins in één bericht; elke pin krijgt een eigen subagent in de chat.',
   'ai.pins.send.tooManyImages': 'Te veel afbeeldingen voor één bericht. Verwijder enkele afbeeldingen of laat een paar pins weg.',
   'ai.pins.send.tooManyPins': 'Te veel pins voor één bericht. Laat er een paar weg en verstuur eerst de rest.',
-  'ai.pins.sendAll': {
-    one: 'Alles versturen ({count})',
-    other: 'Alles versturen ({count})',
+  'ai.pins.sendCount': {
+    one: 'Versturen',
+    other: '{count} versturen',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {

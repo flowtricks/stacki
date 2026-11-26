@@ -404,7 +404,6 @@ export const messages = {
   'ai.pins.detachedTip': '其元素已不在此頁面上。開啟圖釘，將它移到其他元素。',
   'ai.pins.discard': '捨棄圖釘',
   'ai.pins.discardedToast': '已捨棄對圖釘 {number} 的變更',
-  'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element}「{text}」',
   'ai.pins.empty': '尚無圖釘',
@@ -416,12 +415,19 @@ export const messages = {
     other: '每個圖釘最多可有 {count} 張圖片。',
   },
   'ai.pins.imagesTooLarge': '圖釘中的圖片合計太大。請先移除部分圖片。',
-  'ai.pins.include': '將圖釘 {number} 納入「全部傳送」',
+  'ai.pins.include': '下次傳送時納入圖釘 {number}',
   'ai.pins.jump': '前往圖釘 {number}',
+  'ai.pins.leave': '離開註解模式',
   'ai.pins.list': {
     other: '{count} 個圖釘',
   },
+  'ai.pins.listAttention': {
+    other: '{count} 個需要處理',
+  },
   'ai.pins.listLabel': '註解圖釘',
+  'ai.pins.listWorking': {
+    other: '{count} 個處理中',
+  },
   'ai.pins.marker': '圖釘 {number}：{element}',
   'ai.pins.messageLabel': {
     other: '包含 {count} 個註解圖釘的訊息',
@@ -462,8 +468,8 @@ export const messages = {
   'ai.pins.send.subagents': '將所有納入的圖釘以一則訊息傳送；對話中每個圖釘各有一個子代理程式。',
   'ai.pins.send.tooManyImages': '一則訊息中的圖片太多。請移除部分圖片，或排除部分圖釘。',
   'ai.pins.send.tooManyPins': '一則訊息中的圖釘太多。請先排除一部分，傳送其餘圖釘。',
-  'ai.pins.sendAll': {
-    other: '全部傳送 ({count})',
+  'ai.pins.sendCount': {
+    other: '傳送 {count} 個',
   },
   'ai.pins.summaryLine': '圖釘 {number}：{comment}',
   'ai.pins.summaryTitle': {
