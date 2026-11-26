@@ -22,10 +22,12 @@ import {
   changesOf,
   deleteFrame,
   duplicateFrame,
-  imagesOf,
   keepDraft,
+  keepSnapshot,
+  moveFrame,
+  pageSourceOf,
   renameFrame,
-  setFrameImage,
+  snapshotsOf,
   startOver,
   stateOf,
   switchFrame,
@@ -127,7 +129,8 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
       if (!created.ok) {
         return { kind: 'refused', reason: created.reason, folder: created.folder };
       }
-      session = await beginSession({ appDataRoot, realRoot: open, sandbox: created.sandbox, page: request.page, frameName: request.frameName });
+      const { page, frameName, snapshot } = request;
+      session = await beginSession({ appDataRoot, realRoot: open, sandbox: created.sandbox, page, frameName, snapshot });
       raiseDesignFence({ sandboxRoot: created.sandbox.root, realRoot: open, refusal: request.refusal, appDataRoot });
       return { kind: 'entered', liveRoot: created.sandbox.live };
     } finally {
@@ -140,7 +143,9 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
     if (current === undefined) {
       return { kind: 'state', state: { kind: 'off' } };
     }
-    const { next, reply } = await operate(appDataRoot, await capture(current), request);
+    // A snapshot arrives after every change the canvas shows, and a move changes no file: neither reads the copy.
+    const captured = CAPTURE_FREE.has(request.op) ? current : await capture(current);
+    const { next, reply } = await operate(appDataRoot, captured, request);
     // A session that ended while this ran is not brought back.
     session = session === current ? next : session;
     if (request.op === 'exit') {
@@ -168,8 +173,9 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
       case 'frame-switch':
       case 'frame-rename':
       case 'frame-delete':
-      case 'frame-image':
-      case 'frame-images':
+      case 'frame-move':
+      case 'frame-snapshot':
+      case 'frame-snapshots':
       case 'changes':
       case 'start-over': {
         const run = queue.then(() => onSession(request));
@@ -186,7 +192,15 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
   return { answer, end, endAtQuit, observe, current: (): Session | undefined => session };
 }
 
+const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set(['state', 'frame-move', 'frame-snapshot', 'frame-snapshots', 'frame-rename']);
+
 type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' }>;
+
+/** The reply for an operation that may have changed what the copy shows. */
+async function shown(appDataRoot: string, next: Session, page: string | undefined) {
+  keepDraft(appDataRoot, next);
+  return { next, reply: { kind: 'shown', state: stateOf(next), pageSource: await pageSourceOf(next, page) } } as const;
+}
 
 /** One request on a captured session: the session after it, and the reply. */
 async function operate(
@@ -206,23 +220,31 @@ async function operate(
       keepDraft(appDataRoot, session);
       return { next: session, reply: { kind: 'left', realRoot: session.realRoot } };
     case 'frame-duplicate':
-      return saved(duplicateFrame(session, request.name));
-    case 'frame-switch':
-      return saved(await switchFrame(session, request.frame));
+      return saved(await duplicateFrame(appDataRoot, session, request));
+    case 'frame-switch': {
+      const next = await switchFrame(session, request.frame);
+      return shown(appDataRoot, next, request.page);
+    }
+    case 'frame-delete': {
+      const next = await deleteFrame(appDataRoot, session, request.frame);
+      return shown(appDataRoot, next, request.page);
+    }
     case 'frame-rename':
       return saved(renameFrame(session, request.frame, request.name));
-    case 'frame-delete':
-      return saved(await deleteFrame(appDataRoot, session, request.frame));
+    case 'frame-move':
+      return saved(moveFrame(session, request.frame, request.at));
     case 'start-over': {
       const next = await startOver(appDataRoot, session, request.frameName);
       return { next, reply: { kind: 'state', state: stateOf(next) } };
     }
-    case 'frame-image': {
-      const next = setFrameImage(appDataRoot, session, request.frame, request.image);
-      return { next, reply: { kind: 'images', images: imagesOf(next) } };
-    }
-    case 'frame-images':
-      return { next: session, reply: { kind: 'images', images: imagesOf(session) } };
+    case 'frame-snapshot':
+      // A frame removed while its picture was on the way is not brought back.
+      if (session.frames.some((frame) => frame.id === request.frame)) {
+        await keepSnapshot(appDataRoot, session, request.frame, request.snapshot);
+      }
+      return { next: session, reply: { kind: 'kept' } };
+    case 'frame-snapshots':
+      return { next: session, reply: { kind: 'snapshots', snapshots: await snapshotsOf(appDataRoot, session) } };
     case 'changes':
       return { next: session, reply: { kind: 'changes', frames: changesOf(session) } };
     default: {
