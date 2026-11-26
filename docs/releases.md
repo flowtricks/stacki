@@ -47,6 +47,192 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.20
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.20.
+- **Features**
+  - defaults: line break and rich text editing settings
+  - canvas: rich text blocks and + menu on the page
+  - files: add the Files panel's main-process file API
+  - files: add the Files panel and its editor
+  - roles: allow an unclaimed roles file with no members
+  - canvas: add the component canvas settings file and parser
+  - props: line break and rich text settings per field
+  - canvas: open a component canvas from the Components panel
+  - ai: comment pins contract, storage and agent instructions
+  - ai: comment mode with pins on the canvas and Send all
+  - design: add experimental Design mode
+  - inspector: tip Style and Settings with their keys
+  - rail: every panel opens on Option and a letter
+  - canvas: frame settings popover, Open in canvas, safe closing
+  - props: CSS chips in the style prop; highlight every CSS unit
+  - canvas: project canvas background, connectable to a variable
+  - ai: pins save with Save, move by dragging, and keep focus
+  - canvas: closed instances on the canvas, props in Settings
+  - design: run Design mode as the real editor on a sandbox copy
+  - canvas: the canvas is its html root; a frame is one element
+  - navigator: follow what is typed on the canvas, before it is saved
+  - git: pull from the title bar or with Option+Shift+G
+  - ai: one header button per panel mode, and a brush for Design mode
+  - code-intel: add the bounded code intelligence contract
+  - code-intel: answer from any Astro project without running it
+  - code-intel: run it in a bounded utility process
+  - create: let a new site be created with Bun
+  - code-editor: suggestions, errors, hover and signature help
+  - canvas: WIP one edit scope atop Settings and Frame settings
+  - pins: delete finished pins; keep the list open while pins remain
+  - design: keep each frame as a snapshot with a place on the canvas
+  - pins: images at the row's end, no numbers in the chat card
+  - design: make a pan and zoom canvas Design mode's only view
+  - canvas: frames are outlined boxes you can select
+  - pins: a quieter comment-mode bar
+  - canvas: group frames that share a value in nested boxes
+  - publish: offer Netlify as a hosting provider
+  - ai: designer-friendly subagent rows: model, tags, plain wording
+  - canvas: remove the Frame dropdown from Frame settings
+  - ai: a clearer "allow agents" card; a refusal is never silent
+  - canvas: frames and groups are real divs in the Navigator
+  - design: drag and resize elements freely in a frame
+  - publish: show the Netlify mark for the Netlify provider
+  - files: give .astro files the Astro mark
+  - canvas: frame size applies to all frames, with overrides kept
+  - canvas: a background colour paints live while it is dragged
+  - canvas: drag a frame's edge to resize it
+  - design: offer Design mode on macOS only, labelled experimental
+  - design: unlink a component into the elements it renders
+  - canvas: Mixed fields, frame layout, live colours, steady labels
+- **Fixes**
+  - studio: scan files Studio cannot edit instead of failing
+  - preview: a click on the all-breakpoints canvas keeps auto-fit
+  - canvas: restore the auto-fit change 0c09ad3d undid
+  - preview: one Ctrl+wheel notch zooms the canvas one step
+  - preview: drag edge scroll works when body is the scroller
+  - audits: count identical custom audit matches separately
+  - style: show wider sibling query values in a narrower query view
+  - audits: refuse unused CLI flags and skip commented styles
+  - audits: survive huge pages and back-to-back settings saves
+  - audits: never read a url() fragment as a raw colour
+  - ai: bound emoji titles and keep events after a torn line
+  - canvas: restore the rich text files f269d404 rolled back
+  - canvas: rich text editing holds through the real app
+  - files: match the Files panel to the Navigator and app wording
+  - canvas: rich text editing cues and the + over the page
+  - canvas: frames follow component defaults and the selected scope
+  - style: an undo shows in the panel after a background re-read
+  - canvas: build frame props without prop-index writes
+  - files: open the Files panel on its tree, with no loading state
+  - preview: Desktop draws its own width in a narrow canvas
+  - ai: Modes uses Central's toolbox and pins a text bubble
+  - canvas: rich text saves drop canvas classes; + uses logical sides
+  - defaults: canvas clicks select the instance's children
+  - select: an insert that adds imports selects the new node
+  - canvas: never outline a copy that paints nothing
+  - props: Content row first, lined up with the prop rows
+  - canvas: line breaks and rich text keys, as the owner specified
+  - design: lay Design mode out right to left in RTL languages
+  - canvas: a component nested in itself keeps its own bounds
+  - design: keep the gate's layout and adapter rules
+  - design: say which canvas sides are physical, and why
+  - design: restore the marks rule the side markers broke
+  - defaults: save images, lists and fragments in component defaults
+  - defaults: keep default assets through renames and moves
+  - roles: admin-hidden components stay in the Components panel
+  - defaults: keep braces comments in saved component defaults
+  - defaults: a click on the dimmed page saves and closes again
+  - preview: Desktop fills any pane in the desktop range, unframed
+  - edit: a <br> the page wrote open is deleted, not refused
+  - canvas: line breaks in a plain <p>, the whole line, the dialog's +
+  - ai: one clean empty state for the chat list
+  - canvas: bare words select their parent, not the text run
+  - shared: assert invariants of the merged contracts
+  - design: share the header's Modes menu and hold the editor's keys
+  - test: keep a test entry's own userData under the preload
+  - roles: keep the hidden components tip within 30 words
+  - design: fit Design mode to the newer editor
+  - select: select the instance Create component puts in
+  - ai: keep open and dragged pins blue on hover, and fit the graph
+  - ai: refuse pins on the component canvas and the defaults page
+  - test: let a hidden Playwright flow's window draw
+  - canvas: ask whether a canvas page is open before its edit depth
+  - edit: content laid out unlike the printer is edited, not refused
+  - preview: resizing reflows the canvas; only a Desktop pick scales
+  - props: own-frames toggle sits exactly as the {} button
+  - props: no break with nothing after it; Enter after a bold last word
+  - canvas: an inserted component shows only real content
+  - canvas: presses inside the text being edited are the editor's
+  - canvas: a solid + button and a text ring that follows the blocks
+  - preview: the next resize ends a scaled Desktop view
+  - props: the Content field keeps the caret while its saves come back
+  - shared: assert what the new canvas contracts rely on
+  - design: keep edits on Inline styles and keep refusals out of toasts
+  - style: keep the note the Inline styles default had displaced
+  - canvas: gap clicks keep typing; blocks go beside the paragraph
+  - props: a caption row hovers only the control under the pointer
+  - canvas: frames are clear, the surface is the page's own
+  - design: picture frames without the bar, open Compare fitted
+  - props: code views drop the page's indent, and Content code saves
+  - code-editor: keep suggestions asked for while the project loads
+  - code-intel: read each file's tsconfig once between changes
+  - canvas: clean paste, paragraph after a quote, no typing leftovers
+  - canvas: keep typing after the + menu closes and during a reload
+  - code-intel: walk again on Linux instead of watching every file
+  - notifications: keep the error toast's Copy button steady and honest
+  - canvas: every prop control saves to the frame's preview values
+  - create: clean up Bun site creation
+  - preview: show images replaced under the same name
+  - props: the rich text dialog keeps its caret and writes clean blocks
+  - design: copy only the site, off the main thread, within hard bounds
+  - shared: assert the rich block editing invariants
+  - canvas: no canvas edit drops another setting
+  - code-intel: cap the process's memory where it takes effect
+  - canvas: images in rich text select, delete and keep words in blocks
+  - ui: choose a popup's container only while it is open
+  - canvas: scope choices fit the panel
+  - canvas: a spacing-only edit reopens at once; lists keep clean lines
+  - canvas: one click selects, however the pointer drifts
+  - design: hear a drag's release even outside the canvas
+  - design: open the canvas on the click and keep frames apart
+  - canvas: a save is written, or said and the typed words kept
+  - props: rich text imports src/ images so the built site shows them
+  - props: undo and redo in the Content field are the page's own
+  - canvas: a selection change is one paint; Frame settings minimize
+  - canvas: type beside narrow rich text and into wordless rich text
+  - canvas: Fixed at All frames applies; frame images always load
+  - platform: resolve Design mode's roots natively and unbind tests
+  - merge: meet the assertion floor and scale Design mode's timings
+  - canvas: menu undo takes back placed images, dividers and lists
+  - canvas: labels mark what a frame is given; empty fields stay empty
+  - ui: a colour swatch keeps its look under the pointer
+  - props: removing a rich text image removes the import Stacki added
+  - design: satisfy the interface checks the whole tree holds
+  - design: keep the person's page, and answer the owner's reports
+  - merge: replace the Design soaks' pauses and name a DOM element
+  - design: treat any platform but macOS as not offering Design mode
+  - design: find the shown preview without a window global
+  - merge: keep the Unlink suite on macOS and meet the assertion floor
+  - ui: the Navigator search hint is the app's tip, not a native title
+  - canvas: a wider edit keeps frames' own values again
+  - ui: keep panel search boxes full width with a hint wrapper
+  - code-intel: Linux sees changed files again; fix 3 CI-only tests
+- **Performance**
+  - design: snapshot a frame in milliseconds, not seconds
+- **Documentation**
+  - ai: comment pins save, discard, keep and drag
+  - canvas: state the measured component insert range
+  - design: propose the Figma-style canvas, with a handover
+  - publish: describe Netlify publishing and its contract
+  - design: describe the canvas and what removing it takes
+- **CI and build**
+  - ui: regenerate the app UI kit bundle for the rich text strings
+  - ui: regenerate the app UI kit bundle for the merge
+  - ui: regenerate the app UI kit bundle for the new merges
+- **Maintenance**
+  - props: match rich text settings and dialog to the app
+  - studio: format check-project and its metadata test
+  - canvas: groups without cards, spaced and typed by level
+- **Other**
+  - Hard refresh (⇧⌘R) clears the HTTP cache before refreshing the preview
+
 ## 1.4.19
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.19.
