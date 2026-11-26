@@ -31,6 +31,11 @@ export default defineConfig({
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true,
+    // The renderer only ever runs in this app's own Electron, so nothing needs lowering for older browsers. Vite's
+    // default target is older than ES2021, so esbuild rewrote `||=`, and rewriting it while minifying dropped a
+    // variable declaration inside xterm: the first program to ask which terminal modes exist (Codex 0.171) crashed
+    // the parser and its terminal never drew again. terminalBuiltQueries.test.js builds with this file and asks.
+    target: 'es2022',
     commonjsOptions: {
       include: [/node_modules/, /dist[\\/]shared/],
     },
