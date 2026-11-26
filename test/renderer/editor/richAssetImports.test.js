@@ -73,3 +73,17 @@ test('the editors read the import as the file’s path, in the source and in the
     '<p>{hero.src}</p><img src="/src/assets/hero.png" alt="">',
   );
 });
+
+test('only an import the editors added is taken out, and only once nothing names it', () => {
+  const file = 'src/pages/index.astro';
+  const mine = { name: 'hero', path: '../assets/hero.png' };
+  const theirs = { name: 'logo', path: '../assets/logo.png' };
+  assets.noteAddedImports(file, [mine]);
+  const unused = (nodes, frontmatter = '') => [...assets.unusedAddedImports(file, { imports: [mine, theirs], nodes, frontmatter })];
+  const using = { kind: 'element', name: 'img', props: { src: { type: 'expr', value: 'hero.src' } } };
+  assert.deepEqual(unused([]), ['hero'], 'the author’s unused import is never listed');
+  assert.deepEqual(unused([using]), []);
+  assert.deepEqual(unused([], 'const picture = hero;'), []);
+  assert.deepEqual(unused([{ kind: 'element', name: 'div', props: {}, source: '<img src={hero.src}>', children: [] }]), ['hero'], 'old bytes name nothing');
+  assert.deepEqual([...assets.unusedAddedImports('src/pages/about.astro', { imports: [mine], nodes: [], frontmatter: '' })], []);
+});

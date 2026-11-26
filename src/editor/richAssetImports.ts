@@ -200,6 +200,43 @@ function specifierFor(path: string, scope: AssetScope): string {
   return up.length > 0 ? `${up.join('/')}/${rest}` : `./${rest}`;
 }
 
+// The imports the rich text editors added while the app has been open: the only ones they may take out again. Bounded.
+const ADDED_MAX = 500;
+const addedHere = new Set<string>();
+
+const addedKey = (file: string, entry: Pick<ImportDecl, 'name' | 'path'>) => `${file}\n${entry.name}\n${entry.path}`;
+
+/** Remembers imports an edit added to `file`. */
+export function noteAddedImports(file: string, added: readonly ImportDecl[]): void {
+  for (const entry of added) {
+    addedHere.add(addedKey(file, entry));
+    const oldest = addedHere.values().next().value;
+    if (addedHere.size > ADDED_MAX && oldest !== undefined) {
+      addedHere.delete(oldest);
+    }
+  }
+}
+
+/**
+ * The names of the imports the editors added to `file` that nothing names any more, given the page's nodes and the rest
+ * of its frontmatter as an edit leaves them. An import the file already had is never listed. A name that still appears
+ * anywhere, even in text, keeps its import: a spare import is harmless, a missing one breaks the page.
+ */
+export function unusedAddedImports(
+  file: string,
+  page: { readonly imports: readonly ImportDecl[]; readonly nodes: readonly unknown[]; readonly frontmatter: string },
+): ReadonlySet<string> {
+  // The bytes a node was read from are left out: they still show what an edit took away.
+  const written = JSON.stringify(page.nodes, (key, value: unknown) => (key === 'source' || key === 'attrSpans' ? undefined : value));
+  const unused = page.imports
+    .filter((entry) => addedHere.has(addedKey(file, entry)))
+    .filter((entry) => {
+      const name = new RegExp(`(?<![\\w$])${entry.name.replaceAll('$', '\\$')}(?![\\w$])`);
+      return !name.test(written) && !name.test(page.frontmatter);
+    });
+  return new Set(unused.map((entry) => entry.name));
+}
+
 // How many numbered names are tried before giving up.
 const BINDING_SUFFIX_MAX = 100;
 

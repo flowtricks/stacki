@@ -334,6 +334,11 @@ export function frontmatterGesture(
   };
 }
 
+// A joined gesture names the node it rewrites whole, as either of its halves does.
+function restatement(restates: string | undefined): { readonly restates?: string } {
+  return restates === undefined ? {} : { restates };
+}
+
 /** Two gestures as one undo step: the requests of both, in order, or none
  * when either has no intent form; the effects one after the other. */
 export function sequence(first: EditGesture, second: EditGesture): EditGesture {
@@ -341,7 +346,7 @@ export function sequence(first: EditGesture, second: EditGesture): EditGesture {
     coalesceKey: first.coalesceKey,
     urgency: first.urgency,
     stream: undefined,
-    ...(second.restates === undefined ? {} : { restates: second.restates }),
+    ...restatement(second.restates ?? first.restates),
     request: (refOf, origin) => {
       const before = first.request(refOf, origin);
       const after = second.request(refOf, origin);

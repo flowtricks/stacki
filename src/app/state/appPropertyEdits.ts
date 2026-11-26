@@ -3,7 +3,7 @@
 
 import { projectRelativePath } from '../../lib/projectPath';
 import { namesInScope } from '../../editor/dataScope';
-import { assetScopeOf, authoredSourcePaths, withAssetImports } from '../../editor/richAssetImports';
+import { assetScopeOf, authoredSourcePaths, noteAddedImports, unusedAddedImports, withAssetImports } from '../../editor/richAssetImports';
 import { canAddComponent } from '../../features/palette/componentVisibility';
 import { currentRole } from '../../lib/currentRole';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -825,15 +825,34 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
       // space on save and send a different value back to the focused field.
       Reflect.deleteProperty(next, 'source');
       const restated = nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false });
-      const added = imported?.added ?? [];
-      if (model === undefined || added.length === 0) {
+      if (model === undefined || !('imports' in model) || project === undefined || file === undefined) {
         return commitEdit(restated);
       }
-      const importing = frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (current) => ({
-        ...current,
-        imports: [...current.imports, ...added.filter((entry) => !current.imports.some((known) => known.name === entry.name))],
-      }));
-      return commitEdit(sequence(importing, restated));
+      const relative = projectRelativePath(project, file, window.avb.platform);
+      const added = imported?.added ?? [];
+      noteAddedImports(relative, added);
+      // An import these editors added goes again with the last image or video that named it.
+      const unused = unusedAddedImports(relative, {
+        imports: model.imports,
+        nodes: restated.apply(model).nodes,
+        frontmatter: model.extraFrontmatter,
+      });
+      if (added.length === 0 && unused.size === 0) {
+        return commitEdit(restated);
+      }
+      const importing = frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (current) =>
+        'imports' in current
+          ? {
+              ...current,
+              imports: [
+                ...current.imports.filter((entry) => !unused.has(entry.name)),
+                ...added.filter((entry) => !current.imports.some((known) => known.name === entry.name)),
+              ],
+            }
+          : current,
+      );
+      // A new import is written ahead of the content that names it; one no longer named, after the content let go of it.
+      return commitEdit(added.length > 0 ? sequence(importing, restated) : sequence(restated, importing));
     },
     [commitEdit, pageStateRef, projectRef],
   );
