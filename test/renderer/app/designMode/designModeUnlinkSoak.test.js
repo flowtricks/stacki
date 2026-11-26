@@ -25,6 +25,8 @@ const OPEN_WAIT_MS_MAX = 90_000;
 const POLL_MS = 100;
 /** Captures of a redrawn element before it counts as different. */
 const PAINT_POLLS_MAX = 100;
+/** Captures in a row that must agree before an element's picture is the one compared against. */
+const PAINT_STEADY_POLLS = 3;
 const TREE_FILES_MAX = 50_000;
 const CHECKS_MIN = 20;
 
@@ -242,7 +244,7 @@ async function runInElectron({ window, project, options }) {
   const { app } = require('electron');
   const { createDriver } = require('../../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../../helpers/e2e/panelRecorder.js');
-  const { waitFor } = require('../../../helpers/waitFor.js');
+  const { waitFor, waitForSteady } = require('../../../helpers/waitFor.js');
   const { designFenceState } = require('#dist/electron/lib/designMode/designFence.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [] };
@@ -299,6 +301,22 @@ async function runInElectron({ window, project, options }) {
     const rect = await until('the frame on screen', finder);
     const image = await driver.contents.capturePage(rect);
     return { rect, bitmap: image.toBitmap(), png: image.toPNG() };
+  };
+  /** A capture that several in a row agree on: one caught part painted is never what a later one is held to. */
+  const steadyPixels = async (what, finder) => {
+    let last;
+    await waitForSteady({
+      what: `${what}: the element painted and still`,
+      read: async () => {
+        last = await framePixels(finder);
+        return crypto.createHash('sha1').update(last.bitmap).digest('hex');
+      },
+      until: Boolean,
+      steadyPollCount: PAINT_STEADY_POLLS,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: PAINT_POLLS_MAX,
+    });
+    return last;
   };
   /** Pans the canvas, with the wheel, until `selector` in f1 is on screen. */
   const reveal = async (selector) => {
@@ -379,7 +397,7 @@ async function runInElectron({ window, project, options }) {
     await clearView();
     const stylesBefore = await until(`${name}'s styles`, frameStyles('f1', styled));
     const pixelsBefore = await framePixels();
-    const regionBefore = await framePixels(elementRect(styledRoot));
+    const regionBefore = await steadyPixels(`${name} before`, elementRect(styledRoot));
     fs.writeFileSync(path.join(options.outDirectory, `${name}-before.png`), pixelsBefore.png);
     check(`${name}: drawn inside its component (no page node of its own)`, (await driver.evaluate(markedInFrame('f1', selector))) === false);
     await rightClickIn(selector);
@@ -418,7 +436,10 @@ async function runInElectron({ window, project, options }) {
       () => true,
       () => false,
     );
-    check(`${name}: the unlinked element is pixel-identical`, identical);
+    const detail = identical
+      ? undefined
+      : `largest channel difference ${String(largestDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap))}`;
+    check(`${name}: the unlinked element is pixel-identical`, identical, detail);
     return page;
   };
 
