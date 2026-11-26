@@ -372,3 +372,69 @@ test('moving: a pin keeps its number, words, images and unsaved changes; a sent 
   assert.deepEqual(moved.edit, editing.edit);
   assert.throws(() => model.movePinAnchor({ ...editing, delivery: { kind: 'sent', chat: CHAT, turn: TURN, mode: 'single', at: 1 } }, target));
 });
+
+// The pin's model list: model names only, one row per model, the chat's own row being the one that follows it.
+const CHAT_ROW = model.PIN_FOLLOWS_CHAT;
+const named = (value, name, description) => ({ value, name, description });
+const modelOption = (currentValue, choices) => [{ id: 'model', name: 'Model', category: 'model', currentValue, choices }];
+const CLAUDE = [
+  named('default', 'Default (recommended)', 'Opus 5.5 · Best for everyday, complex tasks'),
+  named('opus', 'Opus 5.5'),
+  named('fable', 'Fable 5.2'),
+  named('sonnet', 'Sonnet 5.5'),
+  named('haiku', 'Haiku 5.5'),
+];
+function rowsFor(options, pin = {}, { agent = 'claude', mode = 'subagents' } = {}) {
+  const choices = model.pinModelChoices(mode, options);
+  const resolved = model.resolvePinModel(pin, agent, options);
+  const listed = model.pinModelRows({ choices, options, resolved, unnamed: 'Chat model' });
+  return {
+    rows: listed.rows.map((row) => `${row.value || '(chat)'} ${row.label}`),
+    selected: listed.selected || '(chat)',
+    shown: listed.rows.find((row) => row.value === listed.selected)?.label,
+  };
+}
+
+test('the chat’s model is one row: an untouched pin is on it, and picking it follows the chat', () => {
+  assert.deepEqual(rowsFor(modelOption('sonnet', CLAUDE)), {
+    rows: ['opus Opus 5.5', 'fable Fable 5.2', '(chat) Sonnet 5.5', 'haiku Haiku 5.5'],
+    selected: '(chat)',
+    shown: 'Sonnet 5.5',
+  });
+  const other = rowsFor(modelOption('sonnet', CLAUDE), { model: { agent: 'claude', value: 'opus', name: 'Opus 5.5' } });
+  assert.equal(other.selected, 'opus');
+  assert.equal(other.shown, 'Opus 5.5');
+  assert.ok(other.rows.includes(`${CHAT_ROW || '(chat)'} Sonnet 5.5`), 'the way back to following the chat');
+});
+
+test('a pin that chose the chat’s own model keeps that choice, on the one row for it', () => {
+  const same = rowsFor(modelOption('sonnet', CLAUDE), { model: { agent: 'claude', value: 'sonnet', name: 'Sonnet 5.5' } });
+  assert.deepEqual(same.rows, ['opus Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5']);
+  assert.equal(same.selected, 'sonnet', 'stored as chosen: it stays on this model when the chat changes');
+  const moved = rowsFor(modelOption('haiku', CLAUDE), { model: { agent: 'claude', value: 'sonnet', name: 'Sonnet 5.5' } });
+  assert.equal(moved.selected, 'sonnet');
+});
+
+test('a chat on Claude’s Default is found by the model it stands for, without the tagline', () => {
+  assert.deepEqual(rowsFor(modelOption('default', CLAUDE)), {
+    rows: ['(chat) Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5'],
+    selected: '(chat)',
+    shown: 'Opus 5.5',
+  });
+});
+
+test('a chat model that is no choice, or has no known name, gets one row of its own, first', () => {
+  const full = rowsFor(modelOption('claude-opus-4-8', [...CLAUDE, named('claude-opus-4-8', 'Opus 4.8')]));
+  assert.deepEqual(full.rows, ['(chat) Opus 4.8', 'opus Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5']);
+  const unknown = rowsFor(modelOption('something-new', CLAUDE));
+  assert.equal(unknown.rows[0], '(chat) Chat model');
+  assert.equal(unknown.shown, 'Chat model');
+  assert.equal(unknown.rows.length, 5);
+});
+
+test('Codex lists every model once, and a choice that cannot be used shows the chat’s model', () => {
+  const codex = modelOption('gpt-b', [named('gpt-a', 'GPT A'), named('gpt-b', 'GPT B')]);
+  assert.deepEqual(rowsFor(codex, {}, { agent: 'codex', mode: 'single' }), { rows: ['gpt-a GPT A', '(chat) GPT B'], selected: '(chat)', shown: 'GPT B' });
+  const gone = rowsFor(codex, { model: { agent: 'claude', value: 'opus', name: 'Opus 5.5' } }, { agent: 'codex', mode: 'single' });
+  assert.equal(gone.shown, 'GPT B');
+});

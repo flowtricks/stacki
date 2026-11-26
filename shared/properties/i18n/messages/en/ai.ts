@@ -478,7 +478,6 @@ export const messages = {
   'ai.pins.placeholder': 'Describe the change…',
   'ai.pins.popover': 'Pin {number}',
   'ai.pins.model': 'Model for this pin',
-  'ai.pins.model.chat': 'Chat model: {model}',
   'ai.pins.model.chatPlain': 'Chat model',
   'ai.pins.model.differed': 'You chose {asked}, but this pin ran on {actual}.',
   'ai.pins.model.unavailable': '{model} isn’t available here, so that pin uses the chat’s model.',

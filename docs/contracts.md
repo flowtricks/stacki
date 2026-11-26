@@ -2900,8 +2900,10 @@ the panel nothing but their start, so Stacki sends one message per pin; the next
 `end_turn`, a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). One pin cannot be
 stopped on its own with either agent: Stop is the chat's own and stops the reply and every pin in it.
 
-**A pin's model.** A draft's box has a model dropdown (`PinModelPicker.tsx`), following the chat's model unless the
-person picks; the choice is the pin's `model` (`{ agent, value, name }`, parsed with the board; absent on older pins).
+**A pin's model.** A draft's box has a model dropdown (`PinModelPicker.tsx`) of model names, one row per model
+(`pinModelRows`). An untouched pin follows the chat's model, whose row is the checked one; picking that row makes a pin
+follow the chat again, and a pin that had chosen that same model keeps its choice. A chat model that is not among the
+choices, or has no known name ("Chat model"), gets its own row, first. The choice is the pin's `model` (`{ agent, value, name }`, parsed with the board; absent on older pins).
 A subagent takes only `SUBAGENT_MODELS` (`opus`, `sonnet`, `haiku`, `fable`), so Claude lists only those; its brief and
 sent pin carry `model` and `modelName`, the instructions ask for it as the Agent call's `model`, and the sent card
 names what the call really asked for when it differs. For one message per pin Stacki sets the chat's model option

@@ -457,7 +457,6 @@ export const messages = {
   'ai.pins.placeholder': '変更内容を入力…',
   'ai.pins.popover': 'ピン {number}',
   'ai.pins.model': 'このピンのモデル',
-  'ai.pins.model.chat': 'チャットのモデル: {model}',
   'ai.pins.model.chatPlain': 'チャットのモデル',
   'ai.pins.model.differed': '{asked} を選びましたが、このピンは {actual} で実行されました。',
   'ai.pins.model.unavailable': '{model} はここでは使えないため、そのピンはチャットのモデルを使います。',

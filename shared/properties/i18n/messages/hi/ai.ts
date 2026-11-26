@@ -478,7 +478,6 @@ export const messages = {
   'ai.pins.placeholder': 'बदलाव के बारे में बताएँ…',
   'ai.pins.popover': 'पिन {number}',
   'ai.pins.model': 'इस पिन का मॉडल',
-  'ai.pins.model.chat': 'चैट मॉडल: {model}',
   'ai.pins.model.chatPlain': 'चैट मॉडल',
   'ai.pins.model.differed': 'आपने {asked} चुना था, पर यह पिन {actual} पर चला।',
   'ai.pins.model.unavailable': '{model} यहाँ उपलब्ध नहीं है, इसलिए वह पिन चैट का मॉडल इस्तेमाल करता है।',

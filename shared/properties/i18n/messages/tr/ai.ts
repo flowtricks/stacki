@@ -478,7 +478,6 @@ export const messages = {
   'ai.pins.placeholder': 'Değişikliği açıklayın…',
   'ai.pins.popover': 'İğne {number}',
   'ai.pins.model': 'Bu iğnenin modeli',
-  'ai.pins.model.chat': 'Sohbet modeli: {model}',
   'ai.pins.model.chatPlain': 'Sohbet modeli',
   'ai.pins.model.differed': '{asked} seçtiniz, ancak bu iğne {actual} ile çalıştı.',
   'ai.pins.model.unavailable': '{model} burada kullanılamıyor, bu yüzden o iğne sohbetin modelini kullanır.',

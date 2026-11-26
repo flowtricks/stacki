@@ -523,7 +523,6 @@ export const messages = {
   'ai.pins.placeholder': 'Opisz zmianę…',
   'ai.pins.popover': 'Pinezka {number}',
   'ai.pins.model': 'Model dla tej pinezki',
-  'ai.pins.model.chat': 'Model czatu: {model}',
   'ai.pins.model.chatPlain': 'Model czatu',
   'ai.pins.model.differed': 'Wybrany model to {asked}, ale ta pinezka działała na modelu {actual}.',
   'ai.pins.model.unavailable': 'Model {model} nie jest tu dostępny, więc ta pinezka używa modelu czatu.',

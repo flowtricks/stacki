@@ -480,7 +480,6 @@ export const messages = {
   'ai.pins.placeholder': 'Décrivez la modification…',
   'ai.pins.popover': 'Épingle {number}',
   'ai.pins.model': 'Modèle pour cette épingle',
-  'ai.pins.model.chat': 'Modèle de la conversation : {model}',
   'ai.pins.model.chatPlain': 'Modèle de la conversation',
   'ai.pins.model.differed': 'Vous avez choisi {asked}, mais cette épingle a été traitée avec {actual}.',
   'ai.pins.model.unavailable': '{model} n’est pas disponible ici, cette épingle utilise donc le modèle de la conversation.',

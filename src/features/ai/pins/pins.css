@@ -623,13 +623,15 @@ button.ai-pin-ask-choice:disabled {
   cursor: default;
 }
 
-/* The pin's model: quiet, beside the box's tools, giving way to them when the box is narrow. */
+/* The pin's model: quiet, beside the box's tools, as wide as the model's name. Only a name longer than the row's free
+   room is cut short. */
 .ai-pin-tools .ai-pin-model {
   flex: 0 1 auto;
   width: auto;
   min-width: 0;
-  max-width: 128px;
   height: 28px;
+  gap: 4px;
+  padding-inline: 4px;
   background: transparent;
   color: var(--text-dim);
   font-size: 11px;

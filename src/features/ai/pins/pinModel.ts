@@ -36,7 +36,7 @@ import {
 import type { ChatOption, PermissionRequestId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { PromptAttachment } from '../../../../shared/ipc/aiChat';
 import type { ChatView, TranscriptItem } from '../chatReducer';
-import { deriveSubagentWork, type SubagentStatus, type SubagentWork } from '../subagents';
+import { deriveSubagentWork, sessionModelName, type SubagentStatus, type SubagentWork } from '../subagents';
 
 // ---------------------------------------------------------------------------
 // The board
@@ -638,6 +638,56 @@ export function resolvePinModel(pin: Pick<CommentPin, 'model'>, agent: AgentId, 
   const known = options.some((option) => option.id === 'model' || option.category === 'model');
   const usable = known ? listed.some((choice) => choice.value === chosen.value) : mode === 'single' || isSubagentModel(chosen.value);
   return usable ? { kind: 'chosen', model: { value: chosen.value, name: chosen.name } } : { kind: 'unavailable', name: chosen.name };
+}
+
+/** The row value that leaves a pin following the chat's model: no model id is empty. */
+export const PIN_FOLLOWS_CHAT = '';
+
+export interface PinModelRows {
+  /** One row per model: the value is the model's id, or `PIN_FOLLOWS_CHAT` on the chat's own model. */
+  readonly rows: readonly { readonly value: string; readonly label: string }[];
+  /** The row of the model the pin runs on. */
+  readonly selected: string;
+}
+
+/**
+ * The rows of a pin's model list, labelled with model names only. The chat's model is not listed a second time: its
+ * own row is the one that follows the chat, so picking it makes the pin follow again. A pin that chose that same
+ * model keeps its choice (the row then carries the model's id), so what is stored keeps its meaning. When the
+ * chat's model is not one of the choices, or has no known name (`unnamed` then stands for it), it gets a row of its
+ * own, first.
+ */
+export function pinModelRows({
+  choices,
+  options,
+  resolved,
+  unnamed,
+}: {
+  readonly choices: readonly PinModelChoice[];
+  readonly options: readonly ChatOption[];
+  readonly resolved: ResolvedPinModel;
+  readonly unnamed: string;
+}): PinModelRows {
+  const option = options.find((candidate) => candidate.id === 'model' || candidate.category === 'model');
+  const name = sessionModelName(options);
+  // By id first. A chat on "Default" names the model it stands for, which is then found by that name.
+  const own =
+    choices.find((choice) => choice.value === option?.currentValue) ??
+    choices.find((choice) => name !== undefined && choice.name.toLowerCase() === name.toLowerCase());
+  const chosen = resolved.kind === 'chosen' ? resolved.model.value : undefined;
+  const rows = choices.map((choice) => {
+    if (choice !== own) {
+      return { value: choice.value, label: choice.name };
+    }
+    // The "Default" entry's own name is no model's name.
+    const label = choice.value === 'default' && name !== undefined ? name : choice.name;
+    return { value: chosen === choice.value ? choice.value : PIN_FOLLOWS_CHAT, label };
+  });
+  const all = own === undefined ? [{ value: PIN_FOLLOWS_CHAT, label: name ?? unnamed }, ...rows] : rows;
+  const selected = chosen ?? PIN_FOLLOWS_CHAT;
+  assert(all.filter((row) => row.value === PIN_FOLLOWS_CHAT).length <= 1, 'pinModelRows: at most one row follows the chat');
+  assert(choices.length === 0 || all.some((row) => row.value === selected), 'pinModelRows: the effective model is listed');
+  return { rows: all, selected };
 }
 
 export interface PinMessage {

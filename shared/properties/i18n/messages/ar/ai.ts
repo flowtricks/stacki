@@ -565,7 +565,6 @@ export const messages = {
   'ai.pins.placeholder': 'صف التغيير…',
   'ai.pins.popover': 'الدبوس {number}',
   'ai.pins.model': 'نموذج هذا الدبوس',
-  'ai.pins.model.chat': 'نموذج الدردشة: {model}',
   'ai.pins.model.chatPlain': 'نموذج الدردشة',
   'ai.pins.model.differed': 'اخترت {asked}، لكن هذا الدبوس عمل بنموذج {actual}.',
   'ai.pins.model.unavailable': '{model} غير متاح هنا، لذا يستخدم ذلك الدبوس نموذج الدردشة.',

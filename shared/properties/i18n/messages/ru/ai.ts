@@ -523,7 +523,6 @@ export const messages = {
   'ai.pins.placeholder': 'Опишите изменение…',
   'ai.pins.popover': 'Метка {number}',
   'ai.pins.model': 'Модель для этой метки',
-  'ai.pins.model.chat': 'Модель чата: {model}',
   'ai.pins.model.chatPlain': 'Модель чата',
   'ai.pins.model.differed': 'Вы выбрали {asked}, но эта метка выполнялась на {actual}.',
   'ai.pins.model.unavailable': 'Модель {model} здесь недоступна, поэтому эта метка использует модель чата.',

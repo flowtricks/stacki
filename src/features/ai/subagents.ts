@@ -226,8 +226,10 @@ export function sessionModelName(options: readonly ChatOption[]): string | undef
   if (choice === undefined) {
     return undefined;
   }
-  // Claude's "Default" entry names the model it resolves to in its description.
-  return choice.value === 'default' && choice.description !== undefined && choice.description !== '' ? choice.description : choice.name;
+  // Claude's "Default" entry names the model it resolves to in its description, before a tagline
+  // ("Opus 5.5 · Best for everyday, complex tasks", Claude Code 2.1.332).
+  const described = choice.value === 'default' ? choice.description?.split('·')[0]?.trim() : undefined;
+  return described === undefined || described === '' ? choice.name : described;
 }
 
 /**

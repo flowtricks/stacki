@@ -457,7 +457,6 @@ export const messages = {
   'ai.pins.placeholder': 'Jelaskan perubahannya…',
   'ai.pins.popover': 'Pin {number}', // same
   'ai.pins.model': 'Model untuk pin ini',
-  'ai.pins.model.chat': 'Model obrolan: {model}',
   'ai.pins.model.chatPlain': 'Model obrolan',
   'ai.pins.model.differed': 'Anda memilih {asked}, tetapi pin ini dijalankan dengan {actual}.',
   'ai.pins.model.unavailable': '{model} tidak tersedia di sini, jadi pin itu memakai model obrolan.',

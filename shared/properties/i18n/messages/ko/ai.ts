@@ -456,7 +456,6 @@ export const messages = {
   'ai.pins.placeholder': '변경할 내용을 설명하세요…',
   'ai.pins.popover': '핀 {number}',
   'ai.pins.model': '이 핀의 모델',
-  'ai.pins.model.chat': '채팅 모델: {model}',
   'ai.pins.model.chatPlain': '채팅 모델',
   'ai.pins.model.differed': '선택한 모델은 {asked}이지만 이 핀은 {actual} 모델로 실행되었습니다.',
   'ai.pins.model.unavailable': '{model} 모델은 여기서 사용할 수 없어 해당 핀은 채팅 모델을 사용합니다.',

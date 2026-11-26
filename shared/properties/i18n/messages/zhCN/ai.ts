@@ -454,7 +454,6 @@ export const messages = {
   'ai.pins.placeholder': '描述要做的更改…',
   'ai.pins.popover': '图钉 {number}',
   'ai.pins.model': '此图钉的模型',
-  'ai.pins.model.chat': '聊天模型：{model}',
   'ai.pins.model.chatPlain': '聊天模型',
   'ai.pins.model.differed': '你选择了 {asked}，但此图钉实际使用的是 {actual}。',
   'ai.pins.model.unavailable': '{model} 在此处不可用，因此该图钉使用聊天的模型。',

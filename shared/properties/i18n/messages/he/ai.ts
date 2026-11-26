@@ -498,7 +498,6 @@ export const messages = {
   'ai.pins.placeholder': 'תיאור השינוי…',
   'ai.pins.popover': 'נעץ {number}',
   'ai.pins.model': 'מודל לנעץ הזה',
-  'ai.pins.model.chat': 'מודל הצ׳אט: {model}',
   'ai.pins.model.chatPlain': 'מודל הצ׳אט',
   'ai.pins.model.differed': 'בחרת ב-{asked}, אבל הנעץ הזה רץ עם {actual}.',
   'ai.pins.model.unavailable': '{model} לא זמין כאן, לכן הנעץ הזה משתמש במודל של הצ׳אט.',
