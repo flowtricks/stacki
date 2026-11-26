@@ -3128,8 +3128,9 @@ intelligence process parses it again, and main and the renderer parse its answer
 
 The answers come from `electron/lib/codeIntel/`, run as an Electron utility process
 (`serviceProcess.ts`) that `host.ts` starts on the first question, stops when the project closes or
-changes or after ten idle minutes, times out, and restarts a bounded number of times. Main never reads
-types itself.
+changes or after five idle minutes, times out, and restarts a bounded number of times. Main never reads
+types itself. Its memory is bounded twice: V8 ends it at its heap limit, and it ends itself after an
+answer that leaves it holding more than `residentMegabytesMax` in all, which counts toward the restarts.
 
 It reads the project and runs none of it:
 

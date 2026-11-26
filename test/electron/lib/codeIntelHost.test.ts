@@ -5,9 +5,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createIntelHost, type IntelChild } from '#dist/electron/lib/codeIntel/host.js';
+import { intelligenceProcess, type ForkedProcess } from '#dist/electron/lib/codeIntel/utilityChild.js';
 import { parseServiceMessage } from '#dist/electron/lib/codeIntel/messages.js';
 import { CODE_INTEL_LIMITS, parseCodeIntelRequest, type CodeIntelRequest } from '#dist/shared/ipc/codeIntel.js';
 import { toExplorerPath } from '#dist/shared/ipc/fileExplorer.js';
+
+// What `fork` hands back, as far as the wrapper uses it here.
+const stoppedProcess: ForkedProcess = { kill: () => true, on: () => undefined, once: () => undefined, postMessage: () => {} };
 
 interface FakeChild extends IntelChild {
   readonly sent: { readonly id: number; readonly request: CodeIntelRequest }[];
@@ -136,6 +140,20 @@ test('an answer that does not parse ends the process', async () => {
   child().answer({ kind: 'run', code: '1' });
   assert.equal((await asked).kind, 'unavailable');
   assert.equal(child().killed, true);
+});
+
+test('the utility process is started with a heap limit V8 takes', () => {
+  const started: { module: string; options: unknown }[] = [];
+  const child = intelligenceProcess({
+    fork: (module, _args, options) => {
+      started.push({ module, options });
+      return stoppedProcess;
+    },
+  });
+  child.kill();
+  assert.match(started[0]?.module ?? '', /serviceProcess\.js$/);
+  // Bare, a utility process ignores the flag; only `--js-flags` reaches V8 (measured: 4 GB against 1 GB).
+  assert.match(JSON.stringify(started[0]?.options), new RegExp(`"--js-flags=--max-old-space-size=${CODE_INTEL_LIMITS.heapMegabytesMax}"`));
 });
 
 test('stop, project change and idleness end the process', async () => {
