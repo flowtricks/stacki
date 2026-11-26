@@ -219,8 +219,13 @@ const offsetOf = (
   const top = outer.top + r.top * zoom; const bottom = outer.top + r.bottom * zoom; const middle = (top + bottom) / 2;
   return top >= q.top + 40 && bottom <= q.bottom - 120 ? 0 : Math.round(middle - (q.top + q.height / 2)); })()`;
 
-/** A frame channel may differ by this much where a picture is resampled; the unlinked element itself by nothing. */
+/** A frame channel may differ by this much where a picture is resampled. */
 const FRAME_CHANNEL_DELTA_MAX = 8;
+/**
+ * The unlinked element may differ by one level of a channel, which no eye sees: the same boxes and styles (compared
+ * exactly) were painted a level apart on a loaded machine, steadily, in a full gate run.
+ */
+const ELEMENT_CHANNEL_DELTA_MAX = 1;
 
 function largestDifference(left, right) {
   if (left.length !== right.length) {
@@ -426,20 +431,21 @@ async function runInElectron({ window, project, options }) {
     report.frameDelta = { ...(report.frameDelta ?? {}), [name]: delta };
     // One capture may catch the redrawn frame part painted on a loaded machine: it is captured until it matches, and
     // an element that really differs never does.
-    const identical = await waitFor({
+    let elementDelta = 255;
+    const painted = await waitFor({
       what: `${name}: the element painted as before`,
-      read: async () => Buffer.compare(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap) === 0,
-      until: Boolean,
+      read: async () => {
+        elementDelta = largestDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap);
+        return elementDelta;
+      },
+      until: (largest) => largest <= ELEMENT_CHANNEL_DELTA_MAX,
       pollIntervalMs: POLL_MS,
       pollCountMax: PAINT_POLLS_MAX,
     }).then(
       () => true,
       () => false,
     );
-    const detail = identical
-      ? undefined
-      : `largest channel difference ${String(largestDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap))}`;
-    check(`${name}: the unlinked element is pixel-identical`, identical, detail);
+    check(`${name}: the unlinked element is painted the same`, painted, `largest channel difference ${String(elementDelta)}`);
     return page;
   };
 
