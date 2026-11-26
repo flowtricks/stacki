@@ -93,10 +93,19 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     dragRef.current = next;
     setDrag(next);
   }, []);
-  const cancel = useCallback(() => {
+  const unlisten = useRef<(() => void) | undefined>(undefined);
+  const end = useCallback((): Press | undefined => {
+    const held = press.current;
     press.current = undefined;
+    unlisten.current?.();
+    unlisten.current = undefined;
+    return held;
+  }, []);
+  const cancel = useCallback(() => {
+    end();
     showDrag(undefined);
-  }, [showDrag]);
+  }, [end, showDrag]);
+  useEffect(() => () => unlisten.current?.(), []);
   // Escape lets go of a drag without doing it.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -115,9 +124,11 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
       return;
     }
     const camera = designView().camera;
-    if (camera === undefined || press.current !== undefined) {
+    if (camera === undefined) {
       return;
     }
+    // A press whose release never arrived is let go of, so it is never finished by a later one.
+    cancel();
     // The canvas takes the keyboard, so Delete and Escape act on what is picked here; a field being typed in commits.
     event.preventDefault();
     plane.current?.focus({ preventScroll: true });
@@ -137,6 +148,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
       camera,
       state: 'pressed',
     };
+    unlisten.current = listenUntilRelease();
   };
 
   const dragTo = (held: Press, dx: number, dy: number): void => {
@@ -160,7 +172,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
       } else if (session.kind === 'on' && mayDuplicate(context)) {
         showDrag({ kind: 'copy', source: held.target.frame, id: nextFrameId(session), at });
       } else {
-        press.current = undefined;
+        end();
       }
       return;
     }
@@ -171,15 +183,21 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     }
   };
 
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
-    const held = press.current;
-    if (held === undefined) {
+  /** The pointer over the canvas with nothing pressed: what a click would pick. */
+  const onHover = (event: PointerEvent<HTMLDivElement>): void => {
+    if (press.current === undefined) {
       const tile = tileAt(event.target);
       const node = tile?.part === 'body' && !event.altKey ? nodeUnder(tile, event.clientX, event.clientY) : undefined;
       const next = tile === undefined || node === undefined ? undefined : { frame: tile.frame, node };
       setHover((current) =>
         current?.frame === next?.frame && current?.node.path === next?.node.path && current?.node.copy === next?.node.copy ? current : next,
       );
+    }
+  };
+
+  const onPressMove = (event: globalThis.PointerEvent): void => {
+    const held = press.current;
+    if (held === undefined || held.pointer !== event.pointerId) {
       return;
     }
     const dx = event.clientX - held.x;
@@ -193,7 +211,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     dragTo(held, dx, dy);
   };
 
-  const click = (held: Press, event: PointerEvent<HTMLDivElement>): void => {
+  const click = (held: Press, event: globalThis.PointerEvent): void => {
     if (held.target === 'board') {
       clearSelection(context);
       return;
@@ -209,12 +227,14 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     selectFrame(context, held.target.frame);
   };
 
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
-    const held = press.current;
-    if (held === undefined || held.pointer !== event.pointerId) {
+  const onRelease = (event: globalThis.PointerEvent): void => {
+    if (press.current?.pointer !== event.pointerId) {
       return;
     }
-    press.current = undefined;
+    const held = end();
+    if (held === undefined) {
+      return;
+    }
     const done = dragRef.current;
     showDrag(undefined);
     if (held.state === 'pressed') {
@@ -228,14 +248,29 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     }
   };
 
+  // The rest of a press is heard on the window: a drag may leave the canvas, and its release must still arrive
+  // there if the canvas loses the pointer's capture.
+  const listeners = useRef({ onPressMove, onRelease });
+  listeners.current = { onPressMove, onRelease };
+  const listenUntilRelease = (): (() => void) => {
+    const move = (event: globalThis.PointerEvent): void => listeners.current.onPressMove(event);
+    const release = (event: globalThis.PointerEvent): void => listeners.current.onRelease(event);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', release, true);
+    window.addEventListener('pointercancel', cancel, true);
+    return () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', release, true);
+      window.removeEventListener('pointercancel', cancel, true);
+    };
+  };
+
   return {
     drag,
     hover,
     handlers: {
       onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel: cancel,
+      onPointerMove: onHover,
       onPointerLeave: () => setHover(undefined),
     },
   };
