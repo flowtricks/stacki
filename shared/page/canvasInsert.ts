@@ -182,6 +182,8 @@ function copyOfTwin(
   if (found === undefined || found.scope !== scope || source.name === undefined) {
     return undefined;
   }
+  // The frame refuses a copy from the root list (nodeOf): a twin is always a node.
+  assert(found.trail.length > 0, 'copyOfTwin: a twin is a node of the page');
   return { kind: 'clone', from: found.trail, twinOf: source.name };
 }
 

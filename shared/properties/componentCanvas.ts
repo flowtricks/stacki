@@ -143,6 +143,7 @@ function canvasFileOf(
   project: { readonly background: string | undefined; readonly classes: readonly string[] | undefined },
   components: Readonly<Record<string, ComponentCanvas>>,
 ): ComponentCanvasFile {
+  assert(Object.keys(components).length <= CANVAS_LIMITS.componentsMax, 'The canvas file keeps settings for a bounded number of components');
   return {
     version: 1,
     ...(project.background === undefined ? {} : { background: project.background }),
@@ -809,7 +810,9 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
   }
   canvasComponentFile(target.file);
   const settings = file.components[target.file] ?? {};
-  return withComponentSettings(file, target.file, { ...settings, root: edited(settings.root ?? {}) });
+  const next = withComponentSettings(file, target.file, { ...settings, root: edited(settings.root ?? {}) });
+  assert(edit.kind !== 'background' || next.components[target.file]?.root?.background === background, 'The component’s own background is what was set');
+  return next;
 }
 
 /** Where a canvas root setting comes from: the component, the project, or nowhere. */
