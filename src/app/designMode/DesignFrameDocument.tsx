@@ -3,7 +3,7 @@
 // A same-origin iframe with scripts off, in this renderer's own process: eight frames are eight documents, not eight
 // processes. A new snapshot loads beside the shown one, hidden, and takes its place once loaded, so a frame never
 // flashes white while it is edited. The frame is as tall as its page.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DESIGN_FRAME_WINDOW_NAME } from '../../../shared/ipc/designSnapshot';
 
 /** The tallest a frame is drawn: past this a page is cut off on the canvas. */
@@ -28,12 +28,15 @@ export function DesignFrameDocument({
   title,
   widthPx,
   heightPx,
+  floorPx,
   onMeasure,
 }: {
   readonly html: string;
   readonly title: string;
   readonly widthPx: number;
   readonly heightPx: number;
+  /** The shortest a frame is drawn: one screen of its page. */
+  readonly floorPx: number;
   readonly onMeasure: (measure: FrameMeasure) => void;
 }) {
   // The shown document, and the one loading over it when the snapshot changed.
@@ -55,15 +58,33 @@ export function DesignFrameDocument({
     if (document === undefined || !frame.isConnected || document.body === null) {
       return;
     }
-    const measured = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    // A document is never read shorter than its own frame, so it is read in a frame one screen tall, and a page
+    // that got shorter (made wider, or something removed) makes a shorter frame. Nothing is painted between.
+    const drawn = frame.style.height;
+    frame.style.setProperty('height', `${String(floorPx)}px`);
+    const measured = Math.max(floorPx, document.documentElement.scrollHeight, document.body.scrollHeight);
+    frame.style.setProperty('height', drawn);
     revision.current += 1;
     onMeasure({ document, heightPx: Math.min(FRAME_HEIGHT_PX_MAX, Math.max(1, measured)), revision: revision.current });
   };
+  // A new width reflows the shown document at once, and its height is read again before it is painted.
+  const shownFrame = useRef<HTMLIFrameElement | undefined>(undefined);
+  const latestMeasure = useRef(measure);
+  latestMeasure.current = measure;
+  const measuredWidth = useRef(widthPx);
+  useLayoutEffect(() => {
+    if (measuredWidth.current !== widthPx && shownFrame.current !== undefined) {
+      measuredWidth.current = widthPx;
+      latestMeasure.current(shownFrame.current);
+    }
+  }, [widthPx]);
   const loaded = (layer: Layer, frame: HTMLIFrameElement): void => {
     setLayers((current) => (current.next?.key === layer.key ? { shown: current.next, next: undefined } : current));
     timers.current.forEach((timer) => window.clearTimeout(timer));
+    shownFrame.current = frame;
+    measuredWidth.current = widthPx;
     measure(frame);
-    timers.current = MEASURE_AGAIN_MS.map((delay) => window.setTimeout(() => measure(frame), delay));
+    timers.current = MEASURE_AGAIN_MS.map((delay) => window.setTimeout(() => latestMeasure.current(frame), delay));
   };
   return (
     <>

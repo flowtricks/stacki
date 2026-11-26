@@ -15,6 +15,7 @@ export const designModeKo: DesignCatalog = {
   'frame.delete': '삭제',
   'frame.changes': '변경된 파일 {count}개',
   'frame.renameLabel': '프레임 이름',
+  'frame.width': '프레임 너비(픽셀)',
   'board.title': '프레임',
   'frame.loading': '이 프레임을 그리는 중',
   'menu.duplicate': '복제',

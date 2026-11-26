@@ -15,6 +15,7 @@ export const designModeDe: DesignCatalog = {
   'frame.delete': 'Löschen',
   'frame.changes': 'Geänderte Dateien: {count}',
   'frame.renameLabel': 'Frame-Name',
+  'frame.width': 'Frame-Breite in Pixeln',
   'board.title': 'Frames',
   'frame.loading': 'Frame wird gezeichnet',
   'menu.duplicate': 'Duplizieren',

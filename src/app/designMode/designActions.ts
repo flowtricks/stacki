@@ -20,7 +20,7 @@ import { pictureFrame } from './designCapture';
 import { flushCaptures } from './designCaptureQueue';
 import { framesSettled } from './designFrameOps';
 import { livePagePath, requestSnapshot } from './designLiveCanvas';
-import { currentReturn, noteReturn } from './designReturn';
+import { currentReturn, noteReturn, type DesignReturn } from './designReturn';
 import { handoffText } from './designHandoff';
 import { clearDesignRole } from './designRole';
 import { designView, framePicture, updateDesignView } from './designStore';
@@ -182,13 +182,22 @@ export async function exitDesignMode(app: DesignHostSource, words: DesignWords, 
     }
     noteForReload(send === 'send' ? 'sent' : 'left');
     // Back to the page open now, which may not be the one the mode began on.
-    noteReturn(currentReturn(app));
+    noteReturn(placeAfter(currentReturn(app), held));
     clearDesignRole();
     await app.leaveProject(reply.realRoot);
   } catch (error: unknown) {
     app.showToast(words('toast.failed', { detail: cleanError(error) }), 'error');
     updateDesignView((view) => ({ ...view, phase: 'working' }));
   }
+}
+
+/**
+ * The place to come back to in the project. A custom canvas width that a frame's resize asked for is not the
+ * person's choice, and a reload keeps no width: they come back on Desktop.
+ */
+function placeAfter(place: DesignReturn | undefined, session: Extract<DesignSessionState, { kind: 'on' }>): DesignReturn | undefined {
+  const resized = session.frames.some((frame) => frame.widthPx !== undefined);
+  return place !== undefined && resized && place.device === 'custom' ? { ...place, device: 'desktop' } : place;
 }
 
 /** The chosen frame, shown with a picture of the open page, then pictured whole. */

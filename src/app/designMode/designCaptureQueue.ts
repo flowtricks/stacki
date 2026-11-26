@@ -20,10 +20,13 @@ const BUSY_GAP_MS = 1_000;
 const KEEP_QUIET_MS = 500;
 const FLUSH_POLLS_MAX = 100;
 const FLUSH_POLL_MS = 20;
+/** Pictures of the wrong width taken again in a row, while the canvas is still taking the shown frame's width. */
+const WIDTH_RETRIES_MAX = 10;
 
 let timer: number | undefined;
 let running: Promise<void> | undefined;
 let wanted = false;
+let widthRetries = 0;
 let runLength = 0;
 let lastCaptureMs = 0;
 let lastChangeMs = 0;
@@ -50,6 +53,7 @@ export function holdCaptures(next: 'held' | 'free'): void {
 
 /** The live canvas may show something new. */
 export function noteCanvasChange(): void {
+  widthRetries = 0;
   lastChangeMs = performance.now();
   wanted = true;
   arm();
@@ -120,6 +124,16 @@ function store(frame: DesignFrameId, snapshot: DesignSnapshot): void {
   if (shownPath !== undefined && takenPath !== undefined && !samePage(shownPath, takenPath)) {
     return;
   }
+  // A frame given a width keeps its picture until the canvas draws that width: this one is of the width before.
+  const widthPx = session.frames.find((entry) => entry.id === frame)?.widthPx;
+  if (widthPx !== undefined && Math.abs(snapshot.viewportWidthPx - widthPx) > 1) {
+    if (widthRetries < WIDTH_RETRIES_MAX) {
+      widthRetries += 1;
+      wanted = true;
+    }
+    return;
+  }
+  widthRetries = 0;
   const held = view.snapshots.get(frame);
   if (held !== undefined && held.html === snapshot.html && held.viewportWidthPx === snapshot.viewportWidthPx) {
     return;

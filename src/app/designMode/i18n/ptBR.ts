@@ -15,6 +15,7 @@ export const designModePtBR: DesignCatalog = {
   'frame.delete': 'Excluir',
   'frame.changes': 'Arquivos alterados: {count}',
   'frame.renameLabel': 'Nome do frame',
+  'frame.width': 'Largura do frame em pixels',
   'board.title': 'Frames',
   'frame.loading': 'Desenhando este quadro',
   'menu.duplicate': 'Duplicar',

@@ -15,6 +15,7 @@ export const designModeEs: DesignCatalog = {
   'frame.delete': 'Eliminar',
   'frame.changes': 'Archivos modificados: {count}',
   'frame.renameLabel': 'Nombre del marco',
+  'frame.width': 'Ancho del marco en píxeles',
   'board.title': 'Marcos',
   'frame.loading': 'Dibujando este marco',
   'menu.duplicate': 'Duplicar',

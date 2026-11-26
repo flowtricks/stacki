@@ -16,6 +16,7 @@ import {
   DESIGN_SESSION_LIMITS,
   defaultFramePlace,
   parseDesignFrameId,
+  parseDesignFrameWidth,
   parseDesignPlace,
   type DesignFrameId,
   type DesignPlace,
@@ -32,6 +33,7 @@ export interface DraftFrame {
   readonly id: DesignFrameId;
   readonly name: string;
   readonly at: DesignPlace;
+  readonly widthPx?: number;
   readonly files: FrameFiles;
 }
 
@@ -62,6 +64,7 @@ export function saveDraft(input: { readonly appDataRoot: string; readonly realRo
     id: frame.id,
     name: frame.name,
     at: frame.at,
+    widthPx: frame.widthPx,
     files: [...frame.files]
       .filter(([rel]) => !isSecretFile(rel))
       .map(([rel, change]) => ({
@@ -142,7 +145,8 @@ function parseDraft(input: unknown, where: { readonly realRoot: string; readonly
     const name = stringOf(frame['name'], 'Design draft frame name').slice(0, DESIGN_SESSION_LIMITS.frameNameCharsMax);
     // A draft kept before frames had places is laid out in a row.
     const at = frame['at'] === undefined ? defaultFramePlace(index) : parseDesignPlace(frame['at']);
-    return { id: parseDesignFrameId(frame['id']), name, at, files: changes };
+    const width = frame['widthPx'] === undefined ? {} : { widthPx: parseDesignFrameWidth(frame['widthPx']) };
+    return { id: parseDesignFrameId(frame['id']), name, at, ...width, files: changes };
   });
   const active = parseDesignFrameId(value['active']);
   if (!parsed.some((frame) => frame.id === active)) {

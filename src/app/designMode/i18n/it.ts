@@ -15,6 +15,7 @@ export const designModeIt: DesignCatalog = {
   'frame.delete': 'Elimina',
   'frame.changes': 'File modificati: {count}',
   'frame.renameLabel': 'Nome del frame',
+  'frame.width': 'Larghezza del frame in pixel',
   'board.title': 'Frame',
   'frame.loading': 'Disegno di questo frame in corso',
   'menu.duplicate': 'Duplica',

@@ -30,6 +30,7 @@ import {
   moveFrame,
   pageSourceOf,
   renameFrame,
+  resizeFrames,
   snapshotsOf,
   startOver,
   stateOf,
@@ -192,6 +193,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
       case 'frame-rename':
       case 'frame-delete':
       case 'frame-move':
+      case 'frame-resize':
       case 'frame-snapshot':
       case 'frame-snapshots':
       case 'start-over': {
@@ -209,7 +211,14 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
   return { answer, end, endAtQuit, observe, current: (): Session | undefined => session };
 }
 
-const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set(['state', 'frame-move', 'frame-snapshot', 'frame-snapshots', 'frame-rename']);
+const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set([
+  'state',
+  'frame-move',
+  'frame-resize',
+  'frame-snapshot',
+  'frame-snapshots',
+  'frame-rename',
+]);
 
 type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' | 'preview' }>;
 
@@ -250,6 +259,8 @@ async function operate(
       return saved(renameFrame(session, request.frame, request.name));
     case 'frame-move':
       return saved(moveFrame(session, request.frame, request.at));
+    case 'frame-resize':
+      return saved(resizeFrames(session, request.frames));
     case 'start-over': {
       const next = await startOver(appDataRoot, session, request.frameName);
       return shown(appDataRoot, next, request.page);

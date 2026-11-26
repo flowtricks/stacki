@@ -7,7 +7,6 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { clearSelection, duplicateFrame, placeBeside, removeFrame, selectFrame, type DesignOpsContext } from './designFrameOps';
 import { designView, updateDesignView } from './designStore';
 import { zoomAt } from './designCamera';
-import { EMPTY_FRAME } from './DesignFrameTile';
 
 const ZOOM_STEP = 1.25;
 
@@ -98,9 +97,8 @@ export function useDesignKeys(context: DesignOpsContext, plane: RefObject<HTMLDi
         }
       } else if (command && event.code === 'KeyD') {
         take(event);
-        const width = view.snapshots.get(selection.frame)?.viewportWidthPx ?? EMPTY_FRAME.widthPx;
         if (!event.repeat) {
-          duplicateFrame(context, selection.frame, placeBeside(view.session, selection.frame, width));
+          duplicateFrame(context, selection.frame, placeBeside(view.session, selection.frame));
         }
       }
     };

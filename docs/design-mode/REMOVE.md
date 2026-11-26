@@ -60,6 +60,14 @@ project.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
   its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
   inline style through the editor's own write (so ⌘Z takes them back), in rem.
+- **Frame widths** (`designFrameWidth.ts`): a drag of either side of a frame, as of an artboard (the other side stays;
+  Escape puts it back), or the number beside the picked frame's name, sets that frame's width, 280 to 7680 px (the
+  editor's canvas limits). During a drag only the frame's own document is resized, so its media queries answer with
+  no new picture. On release the editor's canvas under Design mode takes the width (`useFrameWidthSync.ts`), so the
+  frame is pictured again there and the style panel's breakpoint follows. A width the canvas gets from anything else
+  (a breakpoint or Base picked in the style panel) becomes the shown frame's. The first resize gives every frame a
+  width; widths are kept in the session and the draft beside each frame's place. Like a frame's place, a width is not
+  in undo history. Start over forgets them, and leaving comes back to the project on Desktop.
 - **Unlinking a component** (right-click an instance in the shown frame, or its Navigator row: "Unlink component")
   replaces the instance, in the copy's page only, with the plain elements it renders (`designUnlink.ts`). It reads
   the page as the dev server renders it, markers and all (`stacki:design-page-html`, answered by the canvas frame's

@@ -15,6 +15,7 @@ export const designModeHi: DesignCatalog = {
   'frame.delete': 'हटाएँ',
   'frame.changes': '{count} बदली गई फ़ाइलें',
   'frame.renameLabel': 'फ़्रेम का नाम',
+  'frame.width': 'पिक्सेल में फ़्रेम की चौड़ाई',
   'board.title': 'फ़्रेम',
   'frame.loading': 'यह फ़्रेम बनाया जा रहा है',
   'menu.duplicate': 'डुप्लिकेट करें',

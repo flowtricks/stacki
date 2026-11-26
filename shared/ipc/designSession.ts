@@ -38,6 +38,9 @@ export const DESIGN_SESSION_LIMITS = {
   projectNameCharsMax: 400,
   /** One frame's picture for the AI, a PNG data URL. */
   imageCharsMax: 4_000_000,
+  /** The widths a frame may be given: the editor's own canvas width limits (previewViewport.ts). */
+  frameWidthPxMin: 280,
+  frameWidthPxMax: 7_680,
   /** How far from the canvas's origin a frame may be placed, in canvas pixels. */
   placePxMax: 1_000_000,
   /** Where new sessions and old drafts lay frames out: a desktop frame and the gap after it. */
@@ -58,10 +61,18 @@ export interface DesignPlace {
   readonly y: number;
 }
 
+export interface DesignFrameSize {
+  readonly frame: DesignFrameId;
+  readonly widthPx: number;
+  readonly at: DesignPlace;
+}
+
 export interface DesignFrameView {
   readonly id: DesignFrameId;
   readonly name: string;
   readonly at: DesignPlace;
+  /** The width given to the frame. Without one it is as wide as the canvas it was pictured on. */
+  readonly widthPx?: number;
   /** Files this frame changes against the project as it was copied. */
   readonly changedFiles: number;
 }
@@ -119,6 +130,8 @@ export type DesignSessionRequest =
   | { readonly op: 'frame-rename'; readonly frame: DesignFrameId; readonly name: string }
   | { readonly op: 'frame-delete'; readonly frame: DesignFrameId; readonly page: string | undefined }
   | { readonly op: 'frame-move'; readonly frame: DesignFrameId; readonly at: DesignPlace }
+  /** Frames' widths, and where each then is: dragging a left edge moves a frame as it widens it. */
+  | { readonly op: 'frame-resize'; readonly frames: readonly DesignFrameSize[] }
   | { readonly op: 'frame-snapshot'; readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }
   | { readonly op: 'frame-snapshots' }
   | { readonly op: 'start-over'; readonly frameName: string; readonly page: string | undefined };
@@ -181,6 +194,24 @@ function coordinate(input: unknown): number {
 export function parseDesignPlace(input: unknown): DesignPlace {
   const value = record(input);
   return { x: coordinate(value['x']), y: coordinate(value['y']) };
+}
+
+export function parseDesignFrameWidth(input: unknown): number {
+  if (typeof input !== 'number' || !Number.isSafeInteger(input)) {
+    throw new Error('Design frame width: expected a whole number');
+  }
+  if (input < DESIGN_SESSION_LIMITS.frameWidthPxMin) {
+    throw new Error('Design frame width: too narrow');
+  }
+  if (input > DESIGN_SESSION_LIMITS.frameWidthPxMax) {
+    throw new Error('Design frame width: too wide');
+  }
+  return input;
+}
+
+function frameSize(input: unknown): DesignFrameSize {
+  const value = record(input);
+  return { frame: parseDesignFrameId(value['frame']), widthPx: parseDesignFrameWidth(value['widthPx']), at: parseDesignPlace(value['at']) };
 }
 
 function bounded(input: unknown, charsMax: number, what: string): string {
@@ -266,6 +297,13 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
       return { op, frame: parseDesignFrameId(value['frame']), name: frameName(value['name']) };
     case 'frame-move':
       return { op, frame: parseDesignFrameId(value['frame']), at: parseDesignPlace(value['at']) };
+    case 'frame-resize': {
+      const frames = boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design frame sizes').map(frameSize);
+      if (frames.length === 0) {
+        throw new Error('Design frame sizes: at least one');
+      }
+      return { op, frames };
+    }
     case 'frame-snapshot':
       return { op, frame: parseDesignFrameId(value['frame']), snapshot: parseDesignSnapshot(value['snapshot']) };
     case 'start-over':
@@ -278,7 +316,8 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
 function frameView(input: unknown): DesignFrameView {
   const value = record(input);
   const changedFiles = count(value['changedFiles']);
-  return { id: parseDesignFrameId(value['id']), name: frameName(value['name']), at: parseDesignPlace(value['at']), changedFiles };
+  const width = value['widthPx'] === undefined ? {} : { widthPx: parseDesignFrameWidth(value['widthPx']) };
+  return { id: parseDesignFrameId(value['id']), name: frameName(value['name']), at: parseDesignPlace(value['at']), ...width, changedFiles };
 }
 
 function parseState(input: unknown): DesignSessionState {

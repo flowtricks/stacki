@@ -320,6 +320,86 @@ body:has(.dm-bar) .toast-stack {
   right: 0; /* physical: its other end */
   height: var(--dm-line);
 }
+/* A frame's two sides, which set its width: a strip a few screen pixels wide just outside the page, so a press on
+   the page's own edge still reaches the page. */
+.dm-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--dm-line) * 8);
+  cursor: ew-resize;
+}
+.dm-edge.is-w {
+  right: 100%; /* physical: just left of the page */
+}
+.dm-edge.is-e {
+  left: 100%; /* physical: just right of the page */
+}
+.dm-edge::before,
+.dm-edge-grip {
+  position: absolute;
+  content: '';
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.dm-edge::before {
+  top: 0;
+  bottom: 0;
+  width: calc(var(--dm-line) * 1.5);
+}
+.dm-edge.is-w::before {
+  right: 0; /* physical: along the page's left edge */
+}
+.dm-edge.is-e::before {
+  left: 0; /* physical: along the page's right edge */
+}
+.dm-edge:hover::before {
+  opacity: 1;
+}
+.dm-edge-grip {
+  width: calc(var(--dm-line) * 3);
+  height: calc(var(--dm-line) * 24);
+  border-radius: var(--dm-line);
+  transform: translate(0, -50%);
+}
+.dm-edge.is-w .dm-edge-grip {
+  right: var(--dm-line); /* physical: beside the left edge */
+}
+.dm-edge.is-e .dm-edge-grip {
+  left: var(--dm-line); /* physical: beside the right edge */
+}
+.dm-tile.is-selected .dm-edge-grip,
+.dm-tile:hover .dm-edge-grip {
+  opacity: 1;
+}
+.dm-plane[data-dm-resizing],
+.dm-plane[data-dm-resizing] * {
+  cursor: ew-resize;
+}
+.dm-size.dm-width {
+  inset-inline-start: auto;
+  left: 50%; /* physical: over the middle of the page's top */
+  transform: translateX(-50%);
+}
+.dm-title-width {
+  flex: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dm-title-width:hover,
+.dm-title-width:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.dm-width-input {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
 .dm-menu-anchor {
   position: fixed;
   width: 1px;
@@ -331,7 +411,8 @@ body:has(.dm-bar) .toast-stack {
 .dm-capturing .toast-stack,
 .dm-canvas.is-photo .dm-title,
 .dm-canvas.is-photo .dm-outline,
-.dm-canvas.is-photo .dm-guide {
+.dm-canvas.is-photo .dm-guide,
+.dm-canvas.is-photo .dm-edge {
   visibility: hidden;
 }
 .dm-canvas.is-photo .dm-tile .dm-body {

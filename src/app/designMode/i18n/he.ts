@@ -15,6 +15,7 @@ export const designModeHe: DesignCatalog = {
   'frame.delete': 'מחיקה',
   'frame.changes': '{count} קבצים שהשתנו',
   'frame.renameLabel': 'שם הפריים',
+  'frame.width': 'רוחב הפריים בפיקסלים',
   'board.title': 'פריימים',
   'frame.loading': 'המסגרת בציור',
   'menu.duplicate': 'שכפול',

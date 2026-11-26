@@ -10,6 +10,7 @@ import {
   DESIGN_SESSION_LIMITS,
   nextDesignFrameId,
   type DesignFrameId,
+  type DesignFrameSize,
   type DesignFrameView,
   type DesignPlace,
   type DesignSessionReply,
@@ -22,7 +23,8 @@ import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import type { StyleChange } from './designElementDrag';
 import { designSession } from './designBridge';
 import { dropCapture, flushCaptures, noteCanvasChange } from './designCaptureQueue';
-import { designView, updateDesignView, type DesignSelection } from './designStore';
+import { clampFrameWidth, frameWidthPx, type ResizedFrame } from './designFrameWidth';
+import { designView, framePicture, updateDesignView, type DesignSelection } from './designStore';
 import type { DesignWords } from './i18n/designWords';
 
 export interface DesignOpsContext {
@@ -231,11 +233,11 @@ export function nextFrameId(session: OnSession): DesignFrameId {
   return nextDesignFrameId(session.frames);
 }
 
-/** The place right of the rightmost frame. */
-export function placeBeside(session: OnSession, source: DesignFrameId, widthPx: number): DesignPlace {
+/** The place right of every frame, level with `source`. */
+export function placeBeside(session: OnSession, source: DesignFrameId): DesignPlace {
   const at = session.frames.find((frame) => frame.id === source)?.at ?? { x: 0, y: 0 };
-  const right = session.frames.reduce((max, frame) => Math.max(max, frame.at.x), at.x);
-  return { x: Math.round(right + widthPx + DESIGN_FRAME_GAP_PX), y: at.y };
+  const right = session.frames.reduce((max, frame) => Math.max(max, frame.at.x + drawnWidth(session, frame)), at.x);
+  return clampPlace({ x: right + DESIGN_FRAME_GAP_PX, y: at.y });
 }
 
 export const DESIGN_FRAME_GAP_PX = 80;
@@ -274,7 +276,8 @@ export function duplicateFrame(context: DesignOpsContext, source: DesignFrameId,
     snapshots: picture === undefined ? view.snapshots : new Map(view.snapshots).set(id, picture),
     selection: { kind: 'frame', frame: id },
   }));
-  editFrames((frames) => [...frames, { id, name, at: place, changedFiles: original.changedFiles }]);
+  const width = original.widthPx === undefined ? {} : { widthPx: original.widthPx };
+  editFrames((frames) => [...frames, { id, name, at: place, ...width, changedFiles: original.changedFiles }]);
   context.app().setSelectedId(undefined);
   void enqueue(context, async () => {
     // The source's last edit goes into the copy.
@@ -335,6 +338,57 @@ export function moveFrame(context: DesignOpsContext, frame: DesignFrameId, at: D
   send(context, { op: 'frame-move', frame, at: place });
 }
 
+/** The width every frame is drawn at now. */
+function drawnWidth(session: OnSession, frame: DesignFrameView): number {
+  return frameWidthPx(frame, framePicture(designView(), session.frames, frame));
+}
+
+/**
+ * Gives `frame` a width, and the place it then has. From the first resize every frame has a width of its own (the
+ * others keep the one they are drawn at), so showing one never gives it the canvas width of another. A frame not
+ * shown is selected, which shows it; in the shown one, what is selected stays.
+ */
+export function resizeFrame(context: DesignOpsContext, frame: DesignFrameId, size: ResizedFrame): void {
+  const session = onSession();
+  const target = session?.frames.find((entry) => entry.id === frame);
+  if (session === undefined || target === undefined) {
+    return;
+  }
+  const widthPx = clampFrameWidth(size.widthPx);
+  if (widthPx === drawnWidth(session, target)) {
+    return;
+  }
+  const sizes: readonly DesignFrameSize[] = session.frames
+    .filter((entry) => entry.id === frame || entry.widthPx === undefined)
+    .map((entry) =>
+      entry.id === frame
+        ? { frame, widthPx, at: clampPlace(size.at) }
+        : { frame: entry.id, widthPx: clampFrameWidth(drawnWidth(session, entry)), at: entry.at },
+    );
+  sendSizes(context, sizes);
+  if (session.active !== frame) {
+    selectFrame(context, frame);
+  }
+}
+
+/** The shown frame takes the width the editor's canvas was given. */
+export function adoptFrameWidth(context: DesignOpsContext, frame: DesignFrameId, widthPx: number): void {
+  const held = onSession()?.frames.find((entry) => entry.id === frame);
+  if (held !== undefined) {
+    sendSizes(context, [{ frame, widthPx, at: held.at }]);
+  }
+}
+
+function sendSizes(context: DesignOpsContext, sizes: readonly DesignFrameSize[]): void {
+  editFrames((frames) =>
+    frames.map((entry) => {
+      const size = sizes.find((candidate) => candidate.frame === entry.id);
+      return size === undefined ? entry : { ...entry, widthPx: size.widthPx, at: size.at };
+    }),
+  );
+  send(context, { op: 'frame-resize', frames: sizes });
+}
+
 export function renameFrame(context: DesignOpsContext, frame: DesignFrameId, name: string): void {
   editFrames((frames) => frames.map((entry) => (entry.id === frame ? { ...entry, name } : entry)));
   send(context, { op: 'frame-rename', frame, name });
@@ -345,6 +399,7 @@ export function startOver(context: DesignOpsContext): void {
   void enqueue(context, async () => {
     await context.app().flushSave();
     await flushCaptures(SETTLE_MS);
+    const resized = onSession()?.frames.some((entry) => entry.widthPx !== undefined) === true;
     updateDesignView((view) => ({ ...view, switching: 'f1' }));
     const reply = await designSession({ op: 'start-over', frameName: context.words()('frame.original'), page: openPagePath(context) });
     if (reply.kind !== 'shown') {
@@ -353,6 +408,10 @@ export function startOver(context: DesignOpsContext): void {
     installState(reply);
     await pageRead(context, reply.pageSource);
     updateDesignView((view) => ({ ...view, switching: undefined, snapshots: new Map(), camera: undefined }));
+    // The one frame left has no width of its own, so the canvas gives up the one a resize gave it.
+    if (resized) {
+      context.app().showDesktopCanvas();
+    }
     noteCanvasChange();
   });
 }

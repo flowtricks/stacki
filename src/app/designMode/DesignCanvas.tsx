@@ -8,7 +8,9 @@ import Menu from '../../ui/Menu';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import type { DesignFrameId } from '../../../shared/ipc/designSession';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
-import { DesignFrameTile, EMPTY_FRAME, type DesignTileProps } from './DesignFrameTile';
+import { DesignFrameTile, type DesignTileProps } from './DesignFrameTile';
+import { frameWidthPx } from './designFrameWidth';
+import { useFrameWidthSync } from './useFrameWidthSync';
 import { fitCamera, zoomAt } from './designCamera';
 import { noteCanvasChange, reportCaptureRefusals } from './designCaptureQueue';
 import { exitDesignMode } from './designActions';
@@ -20,6 +22,7 @@ import {
   placeBeside,
   removeFrame,
   renameFrame,
+  resizeFrame,
   selectElement,
   selectFrame,
   type DesignOpsContext,
@@ -60,13 +63,14 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
     }
     const boxes = current.session.frames.map((frame) => ({
       at: frame.at,
-      widthPx: current.snapshots.get(frame.id)?.viewportWidthPx ?? EMPTY_FRAME.widthPx,
+      widthPx: frameWidthPx(frame, current.snapshots.get(frame.id)),
     }));
     updateDesignView((next) => ({ ...next, camera: fitCamera(boxes, element.clientWidth, element.clientHeight) }));
   }, []);
   const space = useDesignKeys(context, plane, fit);
   const gestures = useDesignGestures(context, plane, space);
   useLiveCanvas(context);
+  useFrameWidthSync(context);
   // A picture taken while the preview itself was shown was taken without walking the page: it is taken again.
   useEffect(() => {
     if (area.visible) {
@@ -128,6 +132,10 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
               {...tile}
               zoom={camera.zoom}
               renaming={renaming === tile.frame.id}
+              onWidth={(widthPx) => {
+                resizeFrame(context, tile.frame.id, { widthPx, at: tile.frame.at });
+                plane.current?.focus({ preventScroll: true });
+              }}
               onRename={() => setRenaming(tile.frame.id)}
               onRenamed={(name) => {
                 setRenaming(undefined);
@@ -157,7 +165,7 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
   );
 }
 
-type TileData = Omit<DesignTileProps, 'zoom' | 'renaming' | 'onRename' | 'onRenamed'>;
+type TileData = Omit<DesignTileProps, 'zoom' | 'renaming' | 'onRename' | 'onRenamed' | 'onWidth'>;
 
 /** Each frame as it is drawn, and the copy being dragged out of one, under the id it will keep. */
 function tilesOf(
@@ -171,7 +179,8 @@ function tilesOf(
   const selected = view.selection.kind === 'frame' ? view.selection.frame : undefined;
   const tiles: TileData[] = session.frames.map((frame) => ({
     frame,
-    at: drag?.kind === 'move' && drag.frame === frame.id ? drag.at : frame.at,
+    at: (drag?.kind === 'move' || drag?.kind === 'width') && drag.frame === frame.id ? drag.at : frame.at,
+    resizing: drag?.kind === 'width' && drag.frame === frame.id ? drag.widthPx : undefined,
     snapshot: framePicture(view, session.frames, frame),
     mark: selected === frame.id ? 'selected' : (view.switching ?? session.active) === frame.id ? 'active' : 'none',
     hover: hover?.frame === frame.id ? hover.node : undefined,
@@ -306,7 +315,6 @@ function FrameMenu({
 }) {
   const words = useDesignWords();
   const [anchor, setAnchor] = useState<HTMLElement | undefined>(undefined);
-  const widthPx = designView().snapshots.get(target.frame)?.viewportWidthPx ?? EMPTY_FRAME.widthPx;
   return (
     <>
       <span ref={(element) => setAnchor(element ?? undefined)} className="dm-menu-anchor" style={{ left: target.x, top: target.y }} />
@@ -325,7 +333,7 @@ function FrameMenu({
             shortcut: shortcutLabel('D', 'primary', currentDesktopPlatform()),
             onSelect: () => {
               if (mayDuplicate(context)) {
-                duplicateFrame(context, target.frame, placeBeside(session, target.frame, widthPx));
+                duplicateFrame(context, target.frame, placeBeside(session, target.frame));
               }
             },
           },

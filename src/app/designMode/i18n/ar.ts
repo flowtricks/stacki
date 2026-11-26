@@ -15,6 +15,7 @@ export const designModeAr: DesignCatalog = {
   'frame.delete': 'حذف',
   'frame.changes': 'الملفات المعدّلة: {count}',
   'frame.renameLabel': 'اسم الإطار',
+  'frame.width': 'عرض الإطار بالبكسل',
   'board.title': 'الإطارات',
   'frame.loading': 'جارٍ رسم هذا الإطار',
   'menu.duplicate': 'تكرار',

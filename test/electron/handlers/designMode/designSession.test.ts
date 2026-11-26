@@ -385,6 +385,72 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   observeDesignFence(undefined);
 });
 
+test('a frame width is kept with its place: in the session, in a duplicate, and in the draft that comes back', async () => {
+  const { project, appData } = scratch();
+  const before = digest(project);
+  const sessions = createDesignSessions({ openProject: () => project, send: () => undefined }, { appDataRoot: appData, platform: process.platform });
+  observeDesignFence(sessions.observe);
+  const ask = async (request: unknown) => parseDesignSessionReply(await sessions.answer(parseDesignSessionRequest(request)));
+  const entering = { op: 'enter', projectPath: project, refusal: REFUSAL, frameName: 'Original' };
+  await ask(entering);
+  const framesNow = async () => {
+    const reply = await ask({ op: 'state' });
+    assert.ok(reply.kind === 'state' && reply.state.kind === 'on');
+    return reply.state.frames.map((frame) => [frame.id, frame.widthPx, frame.at.x]);
+  };
+  assert.deepEqual(await framesNow(), [['f1', undefined, 0]], 'a new frame has no width of its own');
+  await ask({ op: 'frame-resize', frames: [{ frame: 'f1', widthPx: 390, at: { x: 1050, y: 0 } }] });
+  await ask({ op: 'frame-duplicate', source: 'f1', name: 'Narrow', at: { x: 1520, y: 0 } });
+  const both = [
+    ['f1', 390, 1050],
+    ['f2', 390, 1520],
+  ];
+  assert.deepEqual(await framesNow(), both, 'a copy is as wide as its source');
+  await assert.rejects(
+    ask({
+      op: 'frame-resize',
+      frames: [
+        { frame: 'f2', widthPx: 800, at: { x: 0, y: 0 } },
+        { frame: 'f9', widthPx: 800, at: { x: 0, y: 0 } },
+      ],
+    }),
+    /there is no frame f9/,
+  );
+  assert.deepEqual(await framesNow(), both, 'a refused resize changes no frame');
+  checkDesignFence('project:close', project);
+  await sessions.end();
+  const preview = await ask({ op: 'preview', projectPath: project });
+  assert.ok(preview.kind === 'preview');
+  assert.deepEqual(
+    preview.frames.map((frame) => frame.widthPx),
+    [390, 390],
+  );
+  await ask(entering);
+  assert.deepEqual(await framesNow(), both, 'widths come back with the draft');
+  const over = await ask({ op: 'start-over', frameName: 'Original' });
+  assert.ok(over.kind === 'shown' && over.state.kind === 'on' && over.state.frames[0]?.widthPx === undefined);
+  await sessions.end();
+  assert.equal(digest(project), before);
+  observeDesignFence(undefined);
+});
+
+test('a frame width is whole pixels within its limits, for one to eight frames', () => {
+  const resize = (widthPx: unknown) => () => parseDesignSessionRequest({ op: 'frame-resize', frames: [{ frame: 'f1', widthPx, at: { x: 0, y: 0 } }] });
+  assert.doesNotThrow(resize(280));
+  assert.doesNotThrow(resize(7680));
+  assert.throws(resize(279), /too narrow/);
+  assert.throws(resize(7681), /too wide/);
+  assert.throws(resize(390.5), /whole number/);
+  assert.throws(resize('390'), /whole number/);
+  assert.throws(resize(undefined), /whole number/);
+  assert.throws(() => parseDesignSessionRequest({ op: 'frame-resize', frames: [] }), /at least one/);
+  const nine = Array.from({ length: 9 }, () => ({ frame: 'f1', widthPx: 390, at: { x: 0, y: 0 } }));
+  assert.throws(() => parseDesignSessionRequest({ op: 'frame-resize', frames: nine }), /too many/);
+  const frame = { id: 'f1', name: 'One', at: { x: 0, y: 0 }, widthPx: 20, changedFiles: 0 };
+  const state = { kind: 'on', projectName: 'site', liveRoot: '/tmp/live', frames: [frame], active: 'f1', stale: false };
+  assert.throws(() => parseDesignSessionReply({ kind: 'state', state }), /too narrow/);
+});
+
 test('requests and replies are parsed: unknown ops, bad frame ids, oversized names and foreign images are refused', () => {
   assert.throws(() => parseDesignSessionRequest({ op: 'format-disk' }), /unknown op/);
   assert.throws(() => parseDesignSessionRequest({ op: 'frame-switch', frame: 'f0' }), /frame id/);

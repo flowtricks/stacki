@@ -15,6 +15,7 @@ export const designModeFr: DesignCatalog = {
   'frame.delete': 'Supprimer',
   'frame.changes': 'Fichiers modifiés : {count}',
   'frame.renameLabel': 'Nom du cadre',
+  'frame.width': 'Largeur du cadre en pixels',
   'board.title': 'Cadres',
   'frame.loading': 'Dessin de ce cadre',
   'menu.duplicate': 'Dupliquer',
