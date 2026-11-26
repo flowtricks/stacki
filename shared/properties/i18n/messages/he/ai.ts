@@ -514,7 +514,6 @@ export const messages = {
   'ai.pins.progress.working': 'בעבודה',
   'ai.pins.progress.workingTip': 'הסוכן עובד על הנעץ הזה.',
   'ai.pins.recapture': 'צילום מחדש של האזור שננעץ',
-  'ai.pins.removedToast': 'נעץ {number} הוסר',
   'ai.pins.reopen': 'פתיחה מחדש',
   'ai.pins.reply': 'תשובה',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

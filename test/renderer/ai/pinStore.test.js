@@ -203,7 +203,7 @@ test('include and delete do only what they say', async () => {
   const second = pinned('Second', 'src/pages/about.astro');
   pins.setPinIncluded(second, 'exclude');
   assert.equal(pins.pinState().board.pins.find((pin) => pin.id === second).included, false);
-  pins.deletePin(first);
+  pins.deletePin(first, translate);
   assert.deepEqual(
     pins.pinState().board.pins.map((pin) => pin.id),
     [second],
@@ -251,7 +251,7 @@ test('Claude: each pin is deleted as its own subagent finishes well; the others 
   push([agentEvent(turn, 'a3', 3, 'completed'), { kind: 'turn-end', turn, stop: 'end_turn', message: undefined, at: 9 }]);
   assert.equal(pinOf(three), undefined);
   assert.deepEqual(pins.progressOf(pinOf(one)), { kind: 'unfinished', reason: 'failed' }, 'a failed pin stays with its status');
-  pins.deletePin(one);
+  pins.deletePin(one, translate);
   assert.equal(pins.pinState().listOpen, false, 'the list closes once no pin is left');
   stop();
 });
@@ -410,17 +410,25 @@ test('Send all to Codex: one message per pin, the next after a turn that ended w
   stop();
 });
 
-test('the close button drops a pin never saved, with Undo; on a saved pin it drops only the changes', async () => {
+test('the close button drops a pin never saved, with no toast, and Undo of the app brings it back; on a saved pin it drops only the changes', async () => {
   await start();
   const { toasts, unsubscribe } = collectToasts();
+  const steps = [];
+  pins.setPinHistory((step) => steps.push(step));
   const fresh = drop();
   pins.setPinComment(fresh, 'Typed, never saved');
   pins.closePinBox('discard', translate);
   assert.equal(pinOf(fresh), undefined, 'a pin never saved goes');
-  const undo = toasts.at(-1)?.recovery?.[0];
-  assert.ok(undo !== undefined, 'an Undo is offered for the words that went');
-  await errorNotices.runToastRecovery(undo);
+  assert.equal(toasts.length, 0, 'and no toast says so');
+  assert.equal(steps.length, 1, 'it is one step of the app history');
+  await steps[0].undo();
   assert.equal(pinOf(fresh)?.edit?.comment, 'Typed, never saved', 'Undo brings the pin and its words back');
+  await steps[0].redo();
+  assert.equal(pinOf(fresh), undefined, 'Redo takes it again');
+  const blank = drop('src/pages/index.astro', '0.9');
+  pins.closePinBox('discard', translate);
+  assert.equal(pinOf(blank), undefined);
+  assert.equal(steps.length, 1, 'an empty pin is not a step');
   const saved = pinned('Saved words', 'src/pages/about.astro', '0.2');
   pins.openPin(saved, translate);
   pins.setPinComment(saved, 'Changed, not saved');
@@ -540,4 +548,36 @@ test('a pin that asks does not hold the pins behind it, and its question keeps i
   assert.equal(fake.named('aiPrompt').length, 2, 'the next pin went');
   assert.equal(pins.progressOf(pinOf(one)).kind, 'attention');
   stop();
+});
+
+test('a pin deleted from the list comes back by Undo with its words, images, model and number', async () => {
+  const fake = await start({ agent: 'claude', options: [] });
+  const steps = [];
+  pins.setPinHistory((step) => steps.push(step));
+  const id = drop();
+  pins.setPinComment(id, 'With a picture');
+  pins.addImagesToPin(id, [{ kind: 'added', name: 'ref.png', mimeType: 'image/png', data: 'aGVsbG8=' }], translate);
+  pins.savePinBox();
+  pins.setPinModel(id, { agent: 'claude', value: 'haiku', name: 'Haiku' });
+  const before = pinOf(id);
+  await pins.flushPinSave();
+  pins.deletePin(id, translate);
+  await pins.flushPinSave(); // The save drops the image's bytes.
+  assert.equal(pins.pinState().images.size, 0);
+  await steps[0].undo();
+  assert.deepEqual(pinOf(id), before);
+  assert.equal(pins.pinState().images.get(before.images[0].id), 'aGVsbG8=');
+  await pins.flushPinSave();
+  assert.equal(fake.named('aiPinsWrite').at(-1).payload.images.length, 1, 'the image is written again');
+  // A change made after the Undo survives the next Redo and Undo.
+  pins.setPinIncluded(id, 'exclude');
+  await steps[0].redo();
+  assert.equal(pinOf(id), undefined);
+  await steps[0].undo();
+  assert.equal(pinOf(id).included, false);
+  assert.equal(steps.length, 1, 'undoing and redoing record nothing new');
+  // Another project open: the step touches nothing.
+  await pins.loadPins('/other');
+  await steps[0].redo();
+  assert.equal(pins.pinState().board.pins.length, 0);
 });

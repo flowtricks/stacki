@@ -473,7 +473,6 @@ export const messages = {
   'ai.pins.progress.working': '作業中',
   'ai.pins.progress.workingTip': 'エージェントがこのピンの作業をしています。',
   'ai.pins.recapture': 'ピン留めした領域を再キャプチャ',
-  'ai.pins.removedToast': 'ピン {number} を削除しました',
   'ai.pins.reopen': '再開',
   'ai.pins.reply': '返信',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

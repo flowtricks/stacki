@@ -494,7 +494,6 @@ export const messages = {
   'ai.pins.progress.working': 'Çalışıyor',
   'ai.pins.progress.workingTip': 'Ajan bu iğne üzerinde çalışıyor.',
   'ai.pins.recapture': 'İğnelenen alanı yeniden yakala',
-  'ai.pins.removedToast': '{number} numaralı iğne kaldırıldı',
   'ai.pins.reopen': 'Yeniden aç',
   'ai.pins.reply': 'Yanıtla',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

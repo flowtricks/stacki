@@ -494,7 +494,6 @@ export const messages = {
   'ai.pins.progress.working': 'काम जारी है',
   'ai.pins.progress.workingTip': 'एजेंट इस पिन पर काम कर रहा है।',
   'ai.pins.recapture': 'पिन किया गया हिस्सा दोबारा कैप्चर करें',
-  'ai.pins.removedToast': 'पिन {number} हटाया गया',
   'ai.pins.reopen': 'फिर से खोलें',
   'ai.pins.reply': 'जवाब दें',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

@@ -539,7 +539,6 @@ export const messages = {
   'ai.pins.progress.working': 'Pracuje',
   'ai.pins.progress.workingTip': 'Agent pracuje nad tą pinezką.',
   'ai.pins.recapture': 'Przechwyć przypięty obszar ponownie',
-  'ai.pins.removedToast': 'Usunięto pinezkę {number}',
   'ai.pins.reopen': 'Otwórz ponownie',
   'ai.pins.reply': 'Odpowiedz',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

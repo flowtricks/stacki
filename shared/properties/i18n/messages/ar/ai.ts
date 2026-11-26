@@ -581,7 +581,6 @@ export const messages = {
   'ai.pins.progress.working': 'قيد العمل',
   'ai.pins.progress.workingTip': 'الوكيل يعمل على هذا الدبوس.',
   'ai.pins.recapture': 'إعادة التقاط المنطقة المثبّت عليها الدبوس',
-  'ai.pins.removedToast': 'تمت إزالة الدبوس {number}',
   'ai.pins.reopen': 'إعادة الفتح',
   'ai.pins.reply': 'رد',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

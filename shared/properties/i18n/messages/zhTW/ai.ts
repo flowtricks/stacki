@@ -470,7 +470,6 @@ export const messages = {
   'ai.pins.progress.working': '處理中',
   'ai.pins.progress.workingTip': '代理程式正在處理此圖釘。',
   'ai.pins.recapture': '重新擷取標記區域',
-  'ai.pins.removedToast': '已移除圖釘 {number}',
   'ai.pins.reopen': '重新開啟',
   'ai.pins.reply': '回覆',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

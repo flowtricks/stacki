@@ -472,7 +472,6 @@ export const messages = {
   'ai.pins.progress.working': '작업 중',
   'ai.pins.progress.workingTip': '에이전트가 이 핀을 작업하고 있습니다.',
   'ai.pins.recapture': '고정한 영역 다시 캡처',
-  'ai.pins.removedToast': '핀 {number}을(를) 삭제했습니다',
   'ai.pins.reopen': '다시 열기',
   'ai.pins.reply': '답장',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

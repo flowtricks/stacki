@@ -473,7 +473,6 @@ export const messages = {
   'ai.pins.progress.working': 'Mengerjakan',
   'ai.pins.progress.workingTip': 'Agen sedang mengerjakan pin ini.',
   'ai.pins.recapture': 'Tangkap ulang area yang dipin',
-  'ai.pins.removedToast': 'Pin {number} dihapus',
   'ai.pins.reopen': 'Buka kembali',
   'ai.pins.reply': 'Balas',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

@@ -38,6 +38,7 @@ import {
   pinState,
   progressOf,
   setDetachedPins,
+  setPinHistory,
   setPinMover,
   setPinNavigator,
   startMovingPin,
@@ -83,9 +84,12 @@ export function PinsHost({ app }: { readonly app: ShellView }) {
   useEffect(() => {
     setPinNavigator({ reveal: (pin) => revealPin(appRef.current, pin) });
     setPinMover((id, point, translate) => moveDraggedPin(appRef.current, id, point, translate));
+    // Removing a pin is a step of the app's one history, so Undo and Redo keep their order with page edits.
+    setPinHistory((step) => appRef.current.pushCommand(step));
     return () => {
       setPinNavigator(undefined);
       setPinMover(undefined);
+      setPinHistory(undefined);
     };
   }, []);
   // Leaving the panel's role, or the project, ends the mode.

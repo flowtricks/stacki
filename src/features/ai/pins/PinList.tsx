@@ -100,7 +100,7 @@ function PinRow({
         return;
       }
     }
-    deletePin(pin.id);
+    deletePin(pin.id, translate);
     // The row that takes this one's place (or the one before, for the last) keeps the keyboard in the list: after the
     // confirm dialog's exit, which hands focus back to the button that is gone.
     window.setTimeout(() => {

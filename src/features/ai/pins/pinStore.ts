@@ -47,6 +47,7 @@ import {
   closeOutcome,
   commentLine,
   discardPinEdit,
+  hasContentToLose,
   hasPersonContent,
   hasUnsavedChanges,
   movePinAnchor,
@@ -270,7 +271,8 @@ export function openPin(id: PinId, translate?: Translator): void {
 
 /**
  * Closes the open box. `discard` (its close button, Escape): a pin never saved goes, a saved pin loses only its
- * unsaved changes, and when words or images the person made go with it an Undo toast brings them back. `keep`
+ * unsaved changes. When words or images the person made go with it, they come back: a removed pin by the app's Undo
+ * (⌘Z), a saved pin's unsaved changes by the toast's Undo. `keep`
  * (a press elsewhere, another pin, leaving the mode or the page): content is saved, an empty box is let go.
  */
 export function closePinBox(how: 'keep' | 'discard', translate?: Translator): void {
@@ -285,6 +287,7 @@ export function closePinBox(how: 'keep' | 'discard', translate?: Translator): vo
   const outcome = closeOutcome(pin, how);
   const lost = (outcome === 'remove' || outcome === 'discard') && pin.edit !== undefined && hasPersonContent(pin.edit) && hasUnsavedChanges(pin);
   const at = Date.now();
+  const removal = lost && outcome === 'remove' && translate !== undefined ? pinSnapshot(pin) : undefined;
   update((current) => {
     switch (outcome) {
       case 'unchanged':
@@ -301,8 +304,10 @@ export function closePinBox(how: 'keep' | 'discard', translate?: Translator): vo
       }
     }
   });
-  if (lost && translate !== undefined) {
-    offerUndo(pin, translate(outcome === 'remove' ? 'ai.pins.removedToast' : 'ai.pins.discardedToast', { number: pin.number }), translate);
+  if (removal !== undefined && translate !== undefined) {
+    recordRemoval(removal, translate);
+  } else if (lost && translate !== undefined) {
+    offerUndo(pin, translate('ai.pins.discardedToast', { number: pin.number }), translate);
   }
 }
 
@@ -317,37 +322,101 @@ export function savePinBox(): void {
   update((current) => ({ ...current, open: undefined, board: changePin(current.board, pin.id, at, (old) => savePinEdit(old, at)) }));
 }
 
-// A toast that puts a pin back as it was before it was closed, moved or removed, with the bytes of its images.
-function offerUndo(before: CommentPin, message: string, translate: Translator): void {
-  const held = new Map<PinImageId, string>();
-  for (const image of [...before.images, ...(before.edit?.images ?? [])]) {
-    const data = state.images.get(image.id);
-    if (data !== undefined) {
-      held.set(image.id, data);
-    }
-  }
-  reportActionToast(message, 'info', [{ label: translate('ai.pins.undo'), run: () => restorePin(before, held, translate) }]);
+/** A pin as it was, with the bytes of its images: what an Undo needs to put it back. */
+interface PinSnapshot {
+  readonly pin: CommentPin;
+  readonly images: ReadonlyMap<PinImageId, string>;
 }
 
-function restorePin(before: CommentPin, held: ReadonlyMap<PinImageId, string>, translate: Translator): void {
+function pinSnapshot(pin: CommentPin): PinSnapshot {
+  const images = new Map<PinImageId, string>();
+  for (const image of [...pin.images, ...(pin.edit?.images ?? [])]) {
+    const data = state.images.get(image.id);
+    if (data !== undefined) {
+      images.set(image.id, data);
+    }
+  }
+  return { pin, images };
+}
+
+// A toast that puts a pin back as it was before it was moved, or before its unsaved changes were discarded.
+function offerUndo(before: CommentPin, message: string, translate: Translator): void {
+  const snapshot = pinSnapshot(before);
+  reportActionToast(message, 'info', [
+    {
+      label: translate('ai.pins.undo'),
+      run: () => {
+        if (restorePin(snapshot) === 'full') {
+          reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
+        }
+      },
+    },
+  ]);
+}
+
+/** A removed pin as a step of the app's Undo and Redo, so ⌘Z takes it back in order with every other step. */
+export interface PinHistoryStep {
+  readonly undo: () => Promise<void>;
+  readonly redo: () => Promise<void>;
+}
+
+/** What the shell installs to record a step on the app's history (DesktopPins.tsx), which bounds how many it keeps. */
+export type PinHistory = (step: PinHistoryStep) => void;
+
+let history: PinHistory | undefined;
+
+export function setPinHistory(next: PinHistory | undefined): void {
+  history = next;
+}
+
+// A removal the person made. A removal Stacki makes (a pin whose work finished) is not theirs to undo and is not recorded.
+function recordRemoval(removed: PinSnapshot, translate: Translator): void {
+  const projectPath = state.projectPath;
+  let snapshot = removed;
+  history?.({
+    // A step left over from another project changes nothing here: its board is not the one open.
+    undo: async () => {
+      if (state.projectPath === projectPath && restorePin(snapshot) === 'full') {
+        throw new Error(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
+      }
+    },
+    redo: async () => {
+      const present = state.projectPath === projectPath ? state.board.pins.find((pin) => pin.id === snapshot.pin.id) : undefined;
+      if (present !== undefined) {
+        snapshot = pinSnapshot(present); // As it is now, so the next Undo brings back what this Redo takes.
+        takePin(present.id);
+      }
+    },
+  });
+}
+
+// Puts a pin back as the snapshot has it: in place of what is on the board under its id, or added again.
+function restorePin(snapshot: PinSnapshot): 'restored' | 'full' {
+  const before = snapshot.pin;
   const present = state.board.pins.some((pin) => pin.id === before.id);
   const others = state.board.pins.filter((pin) => pin.id !== before.id);
   if (!present && others.length >= PIN_LIMITS.pinsMax) {
-    reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
-    return;
+    return 'full';
   }
   // Its number again, unless a newer pin took it meanwhile.
   const number = others.some((pin) => pin.number === before.number) ? nextPinNumber({ version: 1, pins: others }) : before.number;
   update((current) => {
     const images = new Map(current.images);
-    for (const [id, data] of held) {
+    for (const [id, data] of snapshot.images) {
       images.set(id, data);
       stored.delete(id); // The save that dropped it may have removed its file: it is written again.
     }
-    const restored = { ...before, number };
+    const restored = { ...stillWaiting(before, current.run), number };
     const pins = present ? current.board.pins.map((pin) => (pin.id === before.id ? restored : pin)) : [...current.board.pins, restored];
     return { ...current, images, board: { ...current.board, pins } };
   });
+  return 'restored';
+}
+
+// A pin removed while it waited for its turn in a one-per-message run that has since ended is a draft again.
+function stillWaiting(pin: CommentPin, run: SequentialRun | undefined): CommentPin {
+  const waiting = pin.delivery.kind === 'sent' && pin.delivery.turn === undefined;
+  return waiting && run?.pins.includes(pin.id) !== true ? { ...pin, delivery: { kind: 'draft' } } : pin;
 }
 
 export function setPinListOpen(open: 'open' | 'closed'): void {
@@ -434,8 +503,20 @@ export function setPinIncluded(id: PinId, choice: 'include' | 'exclude'): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, included: choice === 'include' })) }));
 }
 
-/** Deletes pin `id`. The list stays open while a saved pin remains, and closes with the last. */
-export function deletePin(id: PinId): void {
+/** Deletes pin `id`, as a step the app's Undo takes back. The list stays open while a saved pin remains, and closes with the last. */
+export function deletePin(id: PinId, translate: Translator): void {
+  const pin = state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined) {
+    return;
+  }
+  const removal = pinSnapshot(pin);
+  takePin(id);
+  if (pin.savedAt !== undefined || hasContentToLose(pin)) {
+    recordRemoval(removal, translate);
+  }
+}
+
+function takePin(id: PinId): void {
   update((current) => {
     const board = removePin(current.board, id);
     return {

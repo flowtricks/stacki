@@ -496,7 +496,6 @@ export const messages = {
   'ai.pins.progress.working': 'En cours',
   'ai.pins.progress.workingTip': 'L’agent travaille sur cette épingle.',
   'ai.pins.recapture': 'Capturer de nouveau la zone épinglée',
-  'ai.pins.removedToast': 'Épingle {number} supprimée',
   'ai.pins.reopen': 'Rouvrir',
   'ai.pins.reply': 'Répondre',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

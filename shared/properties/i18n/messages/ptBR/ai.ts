@@ -495,7 +495,6 @@ export const messages = {
   'ai.pins.progress.working': 'Trabalhando',
   'ai.pins.progress.workingTip': 'O agente está trabalhando neste pin.',
   'ai.pins.recapture': 'Capturar a área marcada de novo',
-  'ai.pins.removedToast': 'Pin {number} removido',
   'ai.pins.reopen': 'Reabrir',
   'ai.pins.reply': 'Responder',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same

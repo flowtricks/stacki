@@ -539,7 +539,6 @@ export const messages = {
   'ai.pins.progress.working': 'Работает',
   'ai.pins.progress.workingTip': 'Агент работает над этой меткой.',
   'ai.pins.recapture': 'Заново сделать снимок отмеченной области',
-  'ai.pins.removedToast': 'Метка {number} удалена',
   'ai.pins.reopen': 'Открыть заново',
   'ai.pins.reply': 'Ответить',
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
