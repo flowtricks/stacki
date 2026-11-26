@@ -852,16 +852,20 @@ export function cropRect(input: {
   }
   const across = inside(wide, clip.x, clip.width);
   const down = inside(tall, clip.y, clip.height);
-  const x = Math.max(clip.x, Math.floor(across.start));
-  const y = Math.max(clip.y, Math.floor(down.start));
-  const right = Math.min(clip.x + clip.width, Math.ceil(across.start + across.size));
-  const bottom = Math.min(clip.y + clip.height, Math.ceil(down.start + down.size));
+  // The screenshot takes whole pixels, and the canvas's box often is not on them (a fixed width centred in the pane
+  // starts on half a pixel). So the crop is cut to the whole pixels inside the canvas: cut to the box itself, it kept
+  // the fraction, the request was refused, and the pin silently had no picture.
+  const x = Math.max(Math.ceil(clip.x), Math.floor(across.start));
+  const y = Math.max(Math.ceil(clip.y), Math.floor(down.start));
+  const right = Math.min(Math.floor(clip.x + clip.width), Math.ceil(across.start + across.size));
+  const bottom = Math.min(Math.floor(clip.y + clip.height), Math.ceil(down.start + down.size));
   if (right - x < 1) {
     return undefined;
   }
   if (bottom - y < 1) {
     return undefined;
   }
+  assert([x, y, right, bottom].every(Number.isSafeInteger), 'cropRect: a crop is whole pixels');
   return { x, y, width: right - x, height: bottom - y };
 }
 
