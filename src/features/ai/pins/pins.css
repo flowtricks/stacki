@@ -150,7 +150,10 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   gap: 2px;
   height: 36px;
   box-sizing: border-box;
-  padding: 4px;
+  /* A faded edge keeps the pill apart from a dark page behind it: the owner's one exception to fills-not-borders, for
+     this pill only. The edge and the padding add up to 4px, so the pill and everything in it keep their places. */
+  border: 1px solid var(--border-strong);
+  padding: 3px;
   border-radius: 10px;
   background: var(--bg-panel);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
