@@ -1,6 +1,9 @@
 # Design mode as a Figma-style canvas: proposal and handover
 
-Status: proposal, not built. Branch `design-sandbox` (worktree `.claude/worktrees/agent-a4d565c2646a82b9b`), on top of
+Status: approved. Phase 1 (the canvas, frame gestures, selection driving the real panels) is built, with one change
+from the text below: the real panels edit the shown frame's own files in the one sandbox copy, so no per-frame panel
+adapter or override stylesheet is needed (phase 3 is covered by this; `docs/design-mode/REMOVE.md` describes it).
+The text below is the proposal as approved. Branch `design-sandbox` (worktree `.claude/worktrees/agent-a4d565c2646a82b9b`), on top of
 integration `ac15d16d`. Read `docs/design-mode/REMOVE.md` first: it describes what exists today.
 
 ## What the owner asked for
