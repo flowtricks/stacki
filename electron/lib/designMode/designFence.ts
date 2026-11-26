@@ -105,7 +105,21 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   ...['native:copy', 'native:paste', 'native:redo', 'native:undo', 'selection:copy', 'settings:get', 'locale:set'],
   ...['update:read', 'roles:identity', 'studio:status', 'microphone:status', 'dictation:status', 'dictation:cancel'],
   'shell:openExternal',
+  // What the shell polls as it opens a project, read only: answered from the copy, so no refusal reaches the
+  // person as a toast for something they never asked for. Their panels are out of reach (designRole.ts).
+  ...['apps:list', 'apps:folders', 'apps:checkUpdates', 'apps:storageWatch', 'publish:state', 'publish:availability', 'secrets:list'],
 ]);
+
+/**
+ * What the fence answers itself, for a channel the shell asks as it opens a project and whose real answer would
+ * reach past the copy. git's: the copy is not a repository (git would otherwise look for one in the folders above
+ * it), so the branch chip shows none instead of a refusal.
+ */
+const DESIGN_ANSWERS: ReadonlyMap<string, unknown> = new Map([['git:info', { isRepo: false }]]);
+
+export type DesignFenceVerdict = { readonly kind: 'run' } | { readonly kind: 'answer'; readonly value: unknown };
+
+const RUN: DesignFenceVerdict = { kind: 'run' };
 
 /** Keys whose values are files picked outside the project to copy in: reading them is not a write. */
 const SOURCE_KEYS: ReadonlyMap<string, string> = new Map([
@@ -163,12 +177,16 @@ export function lowerDesignFence(): void {
 
 /**
  * Throws (the request is refused, and the renderer's caller shows the message) unless `channel` may run with
- * `payload` while the fence is up. Does nothing while it is down.
+ * `payload` while the fence is up; for a channel the fence answers itself, says so. Lets everything run while it is down.
  */
-export function checkDesignFence(channel: string, payload: unknown): void {
+export function checkDesignFence(channel: string, payload: unknown): DesignFenceVerdict {
   const current = state;
   if (current.kind === 'off') {
-    return;
+    return RUN;
+  }
+  const answer = DESIGN_ANSWERS.get(channel);
+  if (answer !== undefined) {
+    return { kind: 'answer', value: answer };
   }
   if (!DESIGN_CHANNELS.has(channel)) {
     throw refusalError(current.refusal);
@@ -176,14 +194,14 @@ export function checkDesignFence(channel: string, payload: unknown): void {
   if (channel === 'project:close') {
     // Only names the folder the window opens next, and reloads; the next open is checked like any other.
     observer?.(channel, payload);
-    return;
+    return RUN;
   }
   if (channel === 'shell:openExternal') {
     // A web page opened in the browser; a file URL or path could name the project, so only the web is let through.
     if (typeof payload !== 'string' || !/^https?:\/\//i.test(payload)) {
       throw refusalError(current.refusal);
     }
-    return;
+    return RUN;
   }
   if (channel === 'watch:start' && typeof payload === 'string') {
     // The folder the window opens: while the fence is up, only the copy.
@@ -194,6 +212,7 @@ export function checkDesignFence(channel: string, payload: unknown): void {
     visitPayload(current, payload, SOURCE_KEYS.get(channel));
   }
   observer?.(channel, payload);
+  return RUN;
 }
 
 function visitPayload(current: Exclude<DesignFenceState, { kind: 'off' }>, payload: unknown, sourceKey: string | undefined): void {

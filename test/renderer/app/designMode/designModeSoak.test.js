@@ -20,7 +20,12 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const WAIT_MS_MAX = 120_000;
+/** A step's wait for the state it expects: short, so a failure shows within a couple of minutes. */
+const WAIT_MS_MAX = 30_000;
+/** Opening a copy also starts its dev server, which takes longer than any other step. */
+const OPEN_WAIT_MS_MAX = 90_000;
+/** How long a person takes between selecting and typing: the panel settles its target meanwhile. */
+const THINK_MS = 1_500;
 const POLL_MS = 100;
 /** One press's wait to be the selection, before it is pressed again. */
 const SELECT_WAIT_MS_MAX = 10_000;
@@ -124,14 +129,16 @@ async function runInElectron({ window, project, options }) {
     }
   };
   const shot = (name) => driver.screenshot(path.join(options.outDirectory, `${name}.png`));
-  const until = (what, expression, test = Boolean) =>
+  const until = (what, expression, test = Boolean, waitMsMax = WAIT_MS_MAX) =>
     waitFor({
       what,
       read: () => driver.evaluate(expression).catch(() => undefined),
       until: test,
       pollIntervalMs: POLL_MS,
-      pollCountMax: WAIT_MS_MAX / POLL_MS,
+      pollCountMax: waitMsMax / POLL_MS,
     });
+  /** A wait across a reload into another project, which starts its dev server. */
+  const untilOpen = (what, expression) => until(what, expression, Boolean, OPEN_WAIT_MS_MAX);
   const untilCanvas = (what, expression, test = Boolean) =>
     waitFor({
       what,
@@ -143,6 +150,7 @@ async function runInElectron({ window, project, options }) {
   const run = async (what, act) => {
     try {
       await act();
+      await collectToasts();
     } catch (error) {
       report.failures.push(`${what}: ${String(error && error.message ? error.message : error)}`);
       await shot('failed-' + what.replace(/\W+/g, '-')).catch(() => undefined);
@@ -204,11 +212,33 @@ async function runInElectron({ window, project, options }) {
     await driver.key('Enter');
     await untilCanvas(`the canvas at ${value}`, PLAIN_INDENT, (size) => size === value);
   };
-  /** The window reloaded (a project switch): wait for the app again, and put back the recorder the reload dropped. */
+  // Every toast's text, kept in main as the page shows it: the window reloads, the record must not.
+  const toasts = [];
+  const watchToasts = () =>
+    driver.evaluate(`(() => {
+      window.__dmToasts = [];
+      new MutationObserver(() => {
+        for (const toast of document.querySelectorAll('.toast-stack [role="status"], .toast-stack [role="alert"], .toast-list > *')) {
+          const text = (toast.textContent || '').trim();
+          if (text && !window.__dmToasts.includes(text)) window.__dmToasts.push(text);
+        }
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+      return 0;
+    })()`);
+  const collectToasts = async () => {
+    const seen = (await driver.evaluate(`window.__dmToasts || []`).catch(() => [])) ?? [];
+    for (const text of seen) {
+      if (!toasts.includes(text)) {
+        toasts.push(text);
+      }
+    }
+  };
+  /** The window reloaded (a project switch): wait for the app again, and put back what the reload dropped. */
   const reopened = async () => {
     await driver.waitForApp();
     await driver.setPageFocus('focused');
     await installRecorder(driver.contents);
+    await watchToasts();
     await driver.settle();
   };
   const sandboxes = path.join(app.getPath('userData'), 'design-sandboxes');
@@ -217,6 +247,7 @@ async function runInElectron({ window, project, options }) {
   await driver.waitForApp();
   await driver.setPageFocus('focused');
   await installRecorder(driver.contents);
+  await watchToasts();
   await driver.settle();
   const before = treeDigest(project);
   const realProject = fs.realpathSync(project);
@@ -224,7 +255,8 @@ async function runInElectron({ window, project, options }) {
 
   await run('enter from the Modes menu: the window reopens on a private copy', async () => {
     await pickMode(/design mode/i);
-    await until('the Design mode bar', `!!document.querySelector('.dm-bar')`);
+    await collectToasts();
+    await untilOpen('the Design mode bar', `!!document.querySelector('.dm-bar')`);
     await reopened();
     const fence = designFenceState();
     check('the fence is up', fence.kind === 'on');
@@ -248,11 +280,18 @@ async function runInElectron({ window, project, options }) {
     await selectOnCanvas('#soak-plain');
     await until('the Inline styles chip picked', `!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`);
     check('a new selection starts on Inline styles', true);
+    // A person looks before typing; the panel finishes picking its target meanwhile, and it must stay inline.
+    await driver.sleep(THINK_MS);
+    check(
+      'Inline styles is still the target a moment later',
+      await driver.evaluate(`!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`),
+    );
     await setIndent('40px');
     const fence = designFenceState();
     const live = fence.kind === 'on' ? path.join(fence.sandboxRoot, 'site', path.basename(project)) : '';
     // The canvas shows an edit before the save lands (instant edits); the file is read until it holds it.
-    const inline = /id="soak-plain"[^>]*style="[^"]*text-indent: ?40px|style="[^"]*text-indent: ?40px[^"]*"[^>]*id="soak-plain"/;
+    // Written in rem where the project writes lengths in rem (40px is 2.5rem).
+    const inline = /id="soak-plain"[^>]*style="[^"]*text-indent: ?(40px|2\.5rem)/;
     const saved = await waitFor({
       what: 'the inline style saved in the copy',
       read: () => fs.readFileSync(path.join(live, 'src/pages/index.astro'), 'utf8'),
@@ -267,23 +306,7 @@ async function runInElectron({ window, project, options }) {
       .readFileSync(path.join(live, 'src/pages/index.astro'), 'utf8')
       .split('\n')
       .find((text) => text.includes('soak-plain'));
-    const { captureChanges } = require('#dist/electron/handlers/designMode/designFrames.js');
-    const changed =
-      fence.kind === 'on'
-        ? [...captureChanges(path.join(fence.sandboxRoot, 'base'), live, 0)].map(
-            ([rel, change]) =>
-              `${rel}: ${
-                change.kind === 'write'
-                  ? change.bytes
-                      .toString('utf8')
-                      .split('\n')
-                      .filter((text) => /text-indent|soak-plain/.test(text))
-                      .join(' | ')
-                  : 'deleted'
-              }`,
-          )
-        : [];
-    check('the edit is an inline style in the copy', saved, `${line} — changed: ${changed.join(' ;; ')}`);
+    check('the edit is an inline style in the copy', saved, line);
     check('the project page is unchanged', fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8') === plainBefore);
     await shot('02-inline-style');
   });
@@ -346,7 +369,8 @@ async function runInElectron({ window, project, options }) {
 
   await run('Send to AI reopens the project with the frames waiting in the AI panel', async () => {
     await driver.evaluate(`document.querySelector('.dm-bar .dm-button.is-primary').click()`);
-    await until('the project open again', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
+    await collectToasts();
+    await untilOpen('the project open again', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
     await reopened();
     await until('the frames in the AI panel draft', `(document.querySelector('.ai-composer')?.textContent || '').includes('Design mode')`);
     check('the draft carries the request', true);
@@ -358,13 +382,15 @@ async function runInElectron({ window, project, options }) {
 
   await run('coming back restores the frames; Exit leaves again', async () => {
     await pickMode(/design mode/i);
-    await until('the Design mode bar again', `!!document.querySelector('.dm-bar') && ${TABS}.length === 2`);
+    await collectToasts();
+    await untilOpen('the Design mode bar again', `!!document.querySelector('.dm-bar') && ${TABS}.length === 2`);
     await reopened();
     check('both frames came back from the draft', true);
     await untilCanvas('the shown frame’s style restored', PLAIN_INDENT, (size) => size === '40px');
     await shot('07-restored');
     await driver.evaluate(`[...document.querySelectorAll('.dm-bar .dm-button')].find((b) => /^exit$/i.test((b.textContent || '').trim())).click()`);
-    await until('out of Design mode', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
+    await collectToasts();
+    await untilOpen('out of Design mode', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
     await reopened();
     check('the fence is down after Exit', designFenceState().kind === 'off');
     check('the copy is deleted after Exit', leftInSandboxes().length === 0);
@@ -380,6 +406,10 @@ async function runInElectron({ window, project, options }) {
     await shot('08-exited');
   });
 
+  await collectToasts();
+  const refusals = toasts.filter((text) => /not available in design mode/i.test(text));
+  check('no refused request reached the person as a toast', refusals.length === 0, refusals.join(' | '));
+  report.toasts = toasts;
   const after = treeDigest(project);
   check('the project folder is byte-identical after everything', after === before, `${before} → ${after}`);
   fs.writeFileSync(path.join(options.outDirectory, 'report.json'), JSON.stringify(report, null, 2));

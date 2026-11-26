@@ -322,8 +322,11 @@ export function useInlineCard(
     };
     return { ...withChip, ...writes, sourceNote: undefined, inlineCode: { kind: 'branches', view: plain } };
   }
+  if (style.kind === 'none') {
+    // No attribute yet: active only while inline is the default (startsInline), and the first write creates it.
+    return { ...withChip, ...writes, sourceNote: undefined };
+  }
   if (style.kind !== 'branched') {
-    // No attribute: never active (inlineTargetOf), so there is nothing to edit.
     return withChip;
   }
   const view: InlineBranchView = {

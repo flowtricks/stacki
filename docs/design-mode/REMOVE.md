@@ -20,7 +20,9 @@ and main refuses to begin a session.
 - **Requests are fenced.** Every invoke channel passes the IPC registrar, which calls `checkDesignFence`
   (`electron/lib/designMode/designFence.ts`). While the mode is on only the channels in `DESIGN_CHANNELS` run;
   everything else (git, publishing, the terminal, the AI agent, Stacki apps, secrets, MCP writes, remote content
-  writes, app settings, recents, and any channel added later) is refused. A request that runs must name the copy
+  writes, app settings, recents, and any channel added later) is refused. git's branch question is answered
+  "no repository", so the shell's polling never shows a refusal; the shell's read-only polls of apps, publishing
+  state and secret names are answered from the copy for the same reason. A request that runs must name the copy
   as its project, may not name a path in the project, and may not climb out with `..`.
 - **Writes are fenced.** `electron/lib/designMode/designWriteGuard.ts` wraps every Node file system call that
   creates, changes or removes a file. While the mode is on, a write outside the copy, Stacki's data folder and the
@@ -54,14 +56,15 @@ byte-identical afterwards.
    - `electron/main.ts`: the two imports (`registerDesignModeHandlers`, `designFenceState`), the
      `registerDesignModeHandlers(…)` line, and in `relaunchApp` the two `fence` lines, back to
      `fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');`.
-   - `electron/lib/ipcRegistrar.ts`: the `checkDesignFence` import and its call.
+   - `electron/lib/ipcRegistrar.ts`: the `checkDesignFence` import, the `const fenced = …` line and the
+     `if (fenced.kind === 'answer') { … }` block after it.
    - `electron/preload/preloadBridge.ts`: `designSession: invoke('design:session'),`.
    - `shared/ipc/ipcPayloads.ts`: the `DESIGN_SESSION_PAYLOADS` import and its spread.
    - `shared/ipc/ipcResults.ts`: the `DesignSessionResults` import, the comment line above `IpcResults`, and
      `, DesignSessionResults` in its `extends` list.
    - `shared/ipc/preloadApi.ts`: `readonly designSession: 'design:session';`.
    - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
-     `inlineTargetOf`, the `startsInline` function, the `useInlineByDefault(…)` call in `useInlineCard`, and the
+     `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
      `useInlineByDefault` function at the end of the file.
    - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts` and
      `src/features/style/model/inlineDefault.ts` entries.

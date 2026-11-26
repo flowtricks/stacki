@@ -24,7 +24,7 @@ const FILES_MAX = 20_000;
 const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'src/app/shell/AppShell.tsx': 2,
   'electron/main.ts': 5,
-  'electron/lib/ipcRegistrar.ts': 2,
+  'electron/lib/ipcRegistrar.ts': 3,
   'electron/preload/preloadBridge.ts': 1,
   'shared/ipc/ipcPayloads.ts': 2,
   'shared/ipc/ipcResults.ts': 3,
@@ -81,10 +81,10 @@ test('only the listed integration points reach Design mode from outside its fold
 const NEVER = [
   /^git:/,
   /^github:/,
-  /^publish:/,
+  /^publish:(?!state$|availability$)/,
   /^terminal:/,
-  /^apps:/,
-  /^secrets:/,
+  /^apps:(?!list$|folders$|checkUpdates$|storageWatch$)/,
+  /^secrets:(?!list$)/,
   /^preview:(atCommit|stop)$/,
   /^studio:(?!status$)/,
   /^emdash:install/,

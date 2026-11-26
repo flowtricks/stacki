@@ -177,7 +177,8 @@ test('the fence refuses unlisted channels, the project and climbing paths, and l
     assert.throws(() => checkDesignFence('style:writeFile', { projectPath: live, rel: '../../site/src/x.css' }), { message: REFUSAL });
     assert.throws(() => checkDesignFence('watch:start', project), { message: REFUSAL });
     assert.throws(() => checkDesignFence('shell:openExternal', `file://${project}`), { message: REFUSAL });
-    checkDesignFence('page:edit', { projectPath: live, edits: [{ text: '/about' }] });
+    assert.deepEqual(checkDesignFence('git:info', live), { kind: 'answer', value: { isRepo: false } }, 'the copy is no repository');
+    assert.deepEqual(checkDesignFence('page:edit', { projectPath: live, edits: [{ text: '/about' }] }), { kind: 'run' });
     checkDesignFence('watch:start', live);
     checkDesignFence('assets:upload', { projectPath: live, destRel: 'public', filePaths: [path.join(project, 'photo.png')] });
     checkDesignFence('shell:openExternal', 'https://astro.build');

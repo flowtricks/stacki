@@ -13,7 +13,10 @@ export function createIpcRegistrar(ipcMain: Pick<Electron.IpcMain, 'handle'>) {
   ): void {
     ipcMain.handle(channel, (event, input: unknown) => {
       const payload = parseIpcPayload(channel, input);
-      checkDesignFence(channel, payload); // Design mode (experimental): docs/design-mode/REMOVE.md
+      const fenced = checkDesignFence(channel, payload); // Design mode (experimental): docs/design-mode/REMOVE.md
+      if (fenced.kind === 'answer') {
+        return fenced.value; // Design mode (experimental): docs/design-mode/REMOVE.md
+      }
       return listener(event, payload);
     });
   };
