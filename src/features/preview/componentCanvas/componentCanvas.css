@@ -92,6 +92,11 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+/* The Layout choices' arrows, at the size the Style panel's direction bar draws them. */
+.component-canvas-arrangement .u-segmented-button svg {
+  width: 16px;
+  height: 16px;
+}
 .component-canvas-length,
 .component-canvas-color {
   display: flex;

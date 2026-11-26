@@ -19,6 +19,7 @@ import {
   type FrameLength,
   type FrameSetting,
 } from '../../../../shared/properties/componentCanvas';
+import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../../ui/DirectionIcons';
 import InfoHint from '../../../ui/InfoHint';
 import SegmentedControl from '../../../ui/SegmentedControl';
 import { ResetLabel } from '../../../ui/ResetLabel';
@@ -85,13 +86,20 @@ function LayoutSection({ canvas, state }: { readonly canvas: ComponentCanvasCont
   const translate = useTranslate();
   const title = translate('componentCanvas.panel.layout');
   const value = arrangementOf(state.settings.components[state.component.file]);
-  const options: readonly { readonly value: CanvasArrangement; readonly label: string }[] = [
-    { value: 'row', label: translate('componentCanvas.panel.layout.row') },
-    { value: 'column', label: translate('componentCanvas.panel.layout.column') },
-    { value: 'wrap', label: translate('componentCanvas.panel.layout.wrap') },
+  // Drawn with the Style panel's direction icons; each choice's words are its tooltip and accessible name.
+  const option = (arrangement: CanvasArrangement, icon: ReactNode, name: string) => ({
+    value: arrangement,
+    label: icon,
+    ariaLabel: name,
+    tooltip: name,
+  });
+  const options = [
+    option('row', <ArrowRightIcon />, translate('componentCanvas.panel.layout.row')),
+    option('column', <ArrowDownIcon />, translate('componentCanvas.panel.layout.column')),
+    option('wrap', <RowWrapIcon />, translate('componentCanvas.panel.layout.wrap')),
   ];
   assert(
-    options.some((option) => option.value === value),
+    options.some((candidate) => candidate.value === value),
     'The canvas’s arrangement is one it offers',
   );
   return (
@@ -100,7 +108,8 @@ function LayoutSection({ canvas, state }: { readonly canvas: ComponentCanvasCont
         <span className="component-canvas-heading-title">{title}</span>
       </div>
       <div className="props-field">
-        <SegmentedControl
+        <SegmentedControl<CanvasArrangement>
+          className="component-canvas-arrangement"
           ariaLabel={title}
           value={value}
           options={options}

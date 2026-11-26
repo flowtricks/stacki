@@ -1,11 +1,7 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import {
-  arrowDown as centralArrowDown,
-  arrowLeft as centralArrowLeft,
-  arrowRight as centralArrowRight,
-  arrowUp as centralArrowUp,
-} from '../../ui/central/centralGeometry';
+import { arrowLeft as centralArrowLeft, arrowUp as centralArrowUp } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
+import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../ui/DirectionIcons';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -28,21 +24,8 @@ import '../../ui/segmentedControl.css';
 
 // ─────────────────────────── Icons (from Webflow) ───────────────────────────
 
-const ArrowRightIcon = centralIcon(centralArrowRight);
-const ArrowDownIcon = centralIcon(centralArrowDown);
 const ArrowLeftIcon = centralIcon(centralArrowLeft);
 const ArrowUpIcon = centralIcon(centralArrowUp);
-const ROW_WRAP_ICON_FIRST_PATH =
-  'M14.207 11.5L10.8535 14.8535L10.1465 14.1465L12.293 12H3V11H12.293L10.1465 8.85352' + 'L10.8535 8.14648L14.207 11.5ZM11 4H3V3H11V4Z';
-
-function RowWrapIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={ROW_WRAP_ICON_FIRST_PATH} fill="currentColor" />
-      <path opacity="0.4" d="M11 4.20703L4.20703 11H3V10.793L9.79297 4H11V4.20703Z" fill="currentColor" />
-    </svg>
-  );
-}
 const ROW_WRAP_REVERSE_ICON_FIRST_PATH =
   'M14.207 4.5L10.8535 1.14648L10.1465 1.85352L12.293 4L3 4L3 5L12.293 5L10.1465 7.14648' + 'L10.8535 7.85351L14.207 4.5ZM11 12L3 12L3 13L11 13L11 12Z';
 
