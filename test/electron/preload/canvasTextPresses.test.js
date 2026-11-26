@@ -103,6 +103,22 @@ test('in a line of words, presses inside are the browser’s and presses outside
   });
 });
 
+test('the block editor outlives the page moving under it', () => {
+  // Enter near the bottom scrolls to the new line: the edit goes on, long after the open has settled.
+  onPage('line', ({ frame, session, window, paragraph }) => {
+    const later = window.performance.now() + 60_000;
+    const now = performance.now;
+    performance.now = () => later;
+    try {
+      session.dismissOnMovement();
+    } finally {
+      performance.now = now;
+    }
+    assert.equal(paragraph.getAttribute('contenteditable'), 'true');
+    assert.equal(frame.isCanvasTextEditing(paragraph), true);
+  });
+});
+
 test('a click that ends a press begun inside is the editor’s, wherever it lands', () => {
   onPage('line', ({ session, window, paragraph, outside, native }) => {
     // A drag out of the block clicks whatever holds both ends, with or without words left selected.

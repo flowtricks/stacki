@@ -29,6 +29,7 @@ import {
 } from '../../../shared/properties/canvasTextOverlay';
 import { canvasRichPlus, canvasTextSelection, clearCanvasTextSelection, type CanvasFormatAction, type CanvasFormatState } from './canvasTextSelection';
 import { canvasTextDraft, clearCanvasTextDraft, canvasTypedText, type CanvasTextDraft } from '../../ui/canvasTextDraft';
+import { clearLiveContent, setLiveContent } from '../../ui/liveContent';
 
 export interface CanvasTextDocument {
   readonly projectPath: string;
@@ -64,6 +65,8 @@ export interface CanvasTextFormatter {
    * paragraph split at each one. False: the content cannot be laid out so, and nothing was written.
    */
   readonly breaks?: (textId: string, breaks: CanvasTextBreaks, value: string) => boolean;
+  /** The node whose children a canvas edit of this text writes (what `richText` writes over). */
+  readonly contentOwner?: (textId: string, breaks: CanvasTextBreaks | undefined) => string | undefined;
   /** Rich text the canvas left in the instance that holds this text, written as its content. False: refused, nothing written. */
   readonly richText?: (textId: string, html: string, breaks: CanvasTextBreaks | undefined) => boolean;
 }
@@ -145,6 +148,8 @@ function startCanvasText(current: RefObject<Options>) {
     overlay.close();
     clearCanvasTextDraft(session);
     clearCanvasTextSelection(session);
+    // An editor that outlives this catalog says its content again under the next one.
+    clearLiveContent(session);
     // The `+` is not cleared here: the frame's rich text editor outlives a rebuilt catalog, and says when it closes.
     unsubscribeContent();
     unsubscribeRefresh();
@@ -184,6 +189,9 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       if (!busy) {
         clearCanvasTextDraft(options.session);
       }
+      if (message.type === 'avb:text-inactive') {
+        clearLiveContent(options.session);
+      }
       if (message.type === 'avb:text-inactive' && !takeover.linking) {
         takeover.key = undefined;
         clearCanvasTextSelection(options.session);
@@ -209,6 +217,10 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
       return;
     }
+    if (message.type === 'avb:rich-draft') {
+      publishLiveContent(plan, message, { ...options, nodes });
+      return;
+    }
     if (message.type === 'avb:rich-save') {
       saveRichText(plan, message.html, { ...options, nodes });
       return;
@@ -227,6 +239,20 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
         }
       });
   };
+}
+
+// The block editor's content as it is typed, for whoever shows the node it will be written to (ui/liveContent.ts).
+// Nothing is written to the file until the editor saves.
+function publishLiveContent(
+  plan: CanvasTextEdit,
+  message: { readonly html: string; readonly caret: readonly number[] },
+  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
+) {
+  const node = options.nodes.get(plan.target.path);
+  const nodeID = node?.kind === 'text' && node.id !== undefined ? options.initial.format?.contentOwner?.(node.id, plan.target.breaks) : undefined;
+  if (nodeID !== undefined) {
+    setLiveContent({ owner: options.session, nodeID, html: message.html, caret: message.caret });
+  }
 }
 
 // Rich text typed in a component instance on the canvas: written as the instance's content, the way the rich text

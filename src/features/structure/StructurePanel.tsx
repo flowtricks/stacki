@@ -40,7 +40,10 @@ import { dropPlacement, type DropPlacement } from './dropPlacement';
 import { documentOfPath, type PlacementEnvironment, type PlacementInsertable } from '../../editor/placementCheck';
 import { getDrag } from '../../editor/dragState';
 import type { PlacementMessage } from '../../../shared/page/placement';
-import { type LiveValue } from '../../ui/liveValue';
+import { useLiveValue, type LiveValue } from '../../ui/liveValue';
+import { liveContent } from '../../ui/liveContent';
+import { canvasTextDraft } from '../../ui/canvasTextDraft';
+import { isLiveRowId, navigatorLiveTree } from './navigatorLive';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
@@ -183,7 +186,8 @@ type EditableProps = StructurePanelProps & {
   readonly pageState: Extract<StructurePageState, { readonly editable: true }>;
 };
 
-function EditableStructurePanel(props: EditableProps) {
+function EditableStructurePanel(given: EditableProps) {
+  const props = useTypedTree(given);
   const state = useTreeState(props);
   // A drag on the canvas is drawn here too, from the same decision, in the same commit (canvasDragSession.ts).
   const canvasDrag = useSyncExternalStore(subscribeCanvasDrag, navigatorDragView);
@@ -201,6 +205,24 @@ function EditableStructurePanel(props: EditableProps) {
       )}
     </div>
   );
+}
+
+// The page as it is being typed (navigatorLive.ts): while an editor holds content the file does not have yet, the
+// rows are the editor's blocks and words, and the highlighted row is the caret's block. Only the tree drawn here
+// changes; the selection the rest of the app works on stays where it was.
+function useTypedTree(given: EditableProps): EditableProps {
+  const content = useLiveValue(liveContent);
+  const draft = useLiveValue(canvasTextDraft);
+  const model = given.pageState.model;
+  const tree = useMemo(() => navigatorLiveTree(model.nodes, { content, draft }, document), [model.nodes, content, draft]);
+  if (tree.nodes === model.nodes && tree.caretId === undefined) {
+    return given;
+  }
+  return {
+    ...given,
+    pageState: { ...given.pageState, model: { ...model, nodes: tree.nodes } },
+    ...(tree.caretId === undefined ? {} : { selectedId: tree.caretId, selectedPseudo: undefined }),
+  };
 }
 
 /** What the Navigator says about the drop in flight (the placement rule): why a place refuses, where it lands instead, or a caution. */
@@ -480,7 +502,7 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
     noteDrop: (placement) => state.setDropNote((previous) => noteOf(placement, previous)),
     nodeById: (id) => findNavigatorNode(props.pageState.model.nodes, id) ?? undefined,
     onSelect: (id) => {
-      if (canEditNode(props, id)) {
+      if (!isLiveRowId(id) && canEditNode(props, id)) {
         props.onSelect(id);
         endSearch(props, state, id);
       }
@@ -493,7 +515,7 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
       state.setToggled((previous) => new Map(previous).set(node.id, !collapsedState(node, previous)));
     },
     openContextMenu: (left, top, nodeId) => {
-      if (!canEditNode(props, nodeId)) {
+      if (isLiveRowId(nodeId) || !canEditNode(props, nodeId)) {
         return;
       }
       props.onSelect(nodeId);
