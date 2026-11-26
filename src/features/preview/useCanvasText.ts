@@ -3,7 +3,7 @@ import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import type { CanvasTextBreaks, CanvasTextRefusal } from '../../../shared/properties/canvasText';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { cmsTransport } from '../../ipc/editorEnvironment';
-import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
+import { noteCanvasRichHistory, noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import type { BoundTextBlockReason } from '../../editor/boundText';
 import { useEffect, useRef, type RefObject } from 'react';
@@ -200,6 +200,11 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
     }
     if (message.type === 'avb:text-active' || message.type === 'avb:text-inactive') {
       noteCanvasTextEditing(message.type === 'avb:text-active' ? 'active' : 'inactive');
+      noteCanvasRichHistory(
+        message.type === 'avb:text-active' && message.blocks === true
+          ? (step) => options.current.current?.post({ type: 'avb:rich-history', session: options.session, step })
+          : undefined,
+      );
       options.overlay.receive(message);
       showSourceCue(message, options);
       if (!busy) {
