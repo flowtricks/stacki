@@ -92,6 +92,7 @@ export function createRichHistory(host: HTMLElement): RichHistory {
       if (done.length > RICH_DOM_LIMITS.historyMax) {
         done.shift();
       }
+      assert(done.length <= RICH_DOM_LIMITS.historyMax, 'The history of placed blocks is bounded');
     },
     undo: () => {
       const entry = done.at(-1);
@@ -233,6 +234,7 @@ export function insertRichBlocks(host: HTMLElement, range: Range, blocks: readon
 // The host's child a position is in, with its index; or, for a position between children (or in the whitespace between
 // blocks), the index it is at.
 function topPosition(host: HTMLElement, container: Node, offset: number): { readonly top: Element | undefined; readonly index: number } {
+  assert(offset >= 0, 'A position has no negative offset');
   const children = Array.from(host.childNodes);
   if (container === host) {
     return { top: undefined, index: Math.min(offset, children.length) };
@@ -273,6 +275,7 @@ function halfOf(document: Document, start: readonly [Node, number], end: readonl
 }
 
 function placeCaretAfter(host: HTMLElement, block: Element, options: { readonly newLine: boolean }): void {
+  assert(block.parentNode === host, "The placed block is one of the editor's blocks");
   const document = host.ownerDocument;
   const items = block.querySelectorAll('li');
   const own = MEDIA_TAGS.has(block.tagName) ? undefined : (items[items.length - 1] ?? block);
@@ -344,5 +347,6 @@ function unnest(wrapper: Element): void {
     }
   }
   close();
+  assert(wrapper.parentNode !== null, 'A block being unnested is still in the content');
   wrapper.replaceWith(...parts);
 }
