@@ -24,7 +24,7 @@ const crypto = require('node:crypto');
 const WAIT_MS_MAX = 30_000;
 /** Opening a copy also starts its dev server, which takes longer than any other step. */
 const OPEN_WAIT_MS_MAX = 90_000;
-/** How long a person takes between selecting and typing: the panel settles its target meanwhile. */
+/** How long the target must hold after a selection, as long as a person takes to start typing. */
 const THINK_MS = 1_500;
 const POLL_MS = 100;
 /** One press's wait to be the selection, before it is pressed again. */
@@ -118,7 +118,7 @@ async function runInElectron({ window, project, options }) {
   const { app } = require('electron');
   const { createDriver } = require('../../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../../helpers/e2e/panelRecorder.js');
-  const { waitFor } = require('../../../helpers/waitFor.js');
+  const { waitFor, waitForSteady } = require('../../../helpers/waitFor.js');
   const { designFenceState, checkDesignFence } = require('#dist/electron/lib/designMode/designFence.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [] };
@@ -280,12 +280,17 @@ async function runInElectron({ window, project, options }) {
     await selectOnCanvas('#soak-plain');
     await until('the Inline styles chip picked', `!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`);
     check('a new selection starts on Inline styles', true);
-    // A person looks before typing; the panel finishes picking its target meanwhile, and it must stay inline.
-    await driver.sleep(THINK_MS);
-    check(
-      'Inline styles is still the target a moment later',
-      await driver.evaluate(`!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`),
-    );
+    // A person looks before typing; the panel finishes picking its target meanwhile, and it must stay inline for
+    // as long as a person takes to start typing (THINK_MS of polls in a row), not just at the first glance.
+    await waitForSteady({
+      what: 'Inline styles still the target',
+      read: () => driver.evaluate(`!!document.querySelector('.embed-editor_selector-chip.is-inline.is-active')`).catch(() => false),
+      until: Boolean,
+      steadyPollCount: THINK_MS / POLL_MS,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: WAIT_MS_MAX / POLL_MS,
+    });
+    check('Inline styles is still the target a moment later', true);
     await setIndent('40px');
     const fence = designFenceState();
     const live = fence.kind === 'on' ? path.join(fence.sandboxRoot, 'site', path.basename(project)) : '';

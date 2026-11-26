@@ -81,10 +81,10 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
 /** On every project open: is this window on a Design mode copy? Then the mode's look; else, a handoff to take. */
 function useSessionOnOpen(projectPath: string, latest: { readonly current: { readonly app: DesignHostSource; readonly words: DesignWords } }): void {
   useEffect(() => {
-    const lifetime: { value: 'active' | 'disposed' } = { value: 'active' };
+    const lifetime: { state: 'active' | 'disposed' } = { state: 'active' };
     void (async () => {
       const reply = await designSession({ op: 'state' });
-      if (lifetime.value === 'disposed' || reply.kind !== 'state') {
+      if (lifetime.state === 'disposed' || reply.kind !== 'state') {
         return;
       }
       const { app, words } = latest.current;
@@ -101,7 +101,7 @@ function useSessionOnOpen(projectPath: string, latest: { readonly current: { rea
       await announceLeft(app, words, notice);
     })().catch(() => undefined);
     return () => {
-      lifetime.value = 'disposed';
+      lifetime.state = 'disposed';
       setInlineDefault('selector');
       clearDesignRole();
     };
