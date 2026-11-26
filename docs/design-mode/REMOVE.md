@@ -108,7 +108,7 @@ byte-identical afterwards.
    - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts`, `shared/ipc/designSnapshot.ts` and
      `src/features/style/model/inlineDefault.ts` entries.
    - `test/shared/ipc/ipcPayloads.test.ts`: the `'design:session'` sample.
-   - `test/electron/app/mainBoundaries.test.ts`: the Design mode comment line, and the channel count back to 341.
+   - `test/electron/app/mainBoundaries.test.ts`: the Design mode comment line, and the channel count one lower (it counts `design:session`).
    - `test/electron/documents/singleWriter.test.ts`: the comment and the four `electron/handlers/designMode/` entries.
 3. Optionally delete `design-drafts/` (and `design-sandboxes/`, which is empty unless the app crashed during a
    session) from Stacki's user data folder: once the feature is gone nothing reads or sweeps them.
