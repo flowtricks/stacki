@@ -116,10 +116,11 @@ test('an Escape leaves without saving and puts the words back', () => {
   });
 });
 
-test('a lone break at the end is not saved; two show an empty line and are', () => {
+test('no break at the end is saved; breaks between words, a blank line included, are', () => {
   const { withoutTrailingCaretBreak } = loadRenderer('electron/preload/frameRichText.ts');
   assert.equal(withoutTrailingCaretBreak('Hello<br>'), 'Hello');
-  assert.equal(withoutTrailingCaretBreak('Hello<br><br>'), 'Hello<br><br>');
+  assert.equal(withoutTrailingCaretBreak('Hello<br><br>'), 'Hello');
+  assert.equal(withoutTrailingCaretBreak('Hello<br><br>World'), 'Hello<br><br>World');
   assert.equal(withoutTrailingCaretBreak('Hello<br>World'), 'Hello<br>World');
   assert.equal(withoutTrailingCaretBreak(''), '');
 });

@@ -229,12 +229,11 @@ function cleanElement(element: Element): Element {
       }
     }
   }
-  // A lone break at the end of a block shows nothing (the browser leaves it after the last line's words go), so it
-  // is not written; two at the end show an empty line and stay.
+  // A break at the end of a block shows nothing after it (the browser leaves one after the last line's words go), so
+  // none is written; breaks between words, a blank line in the middle included, stay.
   for (const node of all) {
-    const last = node.lastChild;
-    if (last instanceof Element && last.tagName === 'BR' && !(last.previousSibling instanceof Element && last.previousSibling.tagName === 'BR')) {
-      last.remove();
+    for (let end = node.lastChild; end instanceof Element && end.tagName === 'BR'; end = node.lastChild) {
+      end.remove();
     }
   }
   const walker = document.createTreeWalker(copy, NodeFilter.SHOW_COMMENT);
@@ -261,12 +260,11 @@ function readWholeHTML(container: Element): string {
 }
 
 /**
- * Without a lone `<br>` at the very end: a block shows nothing for it (the browser leaves one behind when the last
- * line's words are deleted), so it is not written. Two or more at the end are kept: they show an empty last line, in
- * the editor and on the page alike.
+ * Without the `<br>`s at the very end: a break with nothing after it shows nothing on the page (the browser leaves
+ * one behind when the last line's words are deleted), so none is written; the next words typed bring it back.
  */
 export function withoutTrailingCaretBreak(html: string): string {
-  return /<br>$/.test(html) && !/<br><br>$/.test(html) ? html.slice(0, -'<br>'.length) : html;
+  return html.replace(/(?:<br>\s*)+$/, '');
 }
 
 function escapeText(text: string): string {
