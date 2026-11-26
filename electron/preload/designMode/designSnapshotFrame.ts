@@ -10,6 +10,7 @@
 // Nothing here changes the live document: the copy is made from a clone.
 import {
   DESIGN_FRAME_WINDOW_NAME,
+  DESIGN_ID_ATTRIBUTE,
   DESIGN_NODE_ATTRIBUTE,
   DESIGN_SNAPSHOT_LIMITS,
   parseDesignSnapshotRequest,
@@ -19,6 +20,8 @@ import {
 } from '../../../shared/ipc/designSnapshot';
 import { PATH_ATTR, inScope, pathsOf, regions, runsOf } from '../frameRegions';
 import { isElement } from '../frameBasics';
+import { AssetBudget, inlinePictures, inlineStylePictures } from './designSnapshotAssets';
+import { liveId, mirrorPreview } from './designLiveMirror';
 import { FontInliner, freezeViewportUnits, rebaseCssURLs } from './designSnapshotCss';
 
 /** Whether this document is one of the canvas's frames, where the preload installs nothing. */
@@ -40,6 +43,10 @@ export function listenForDesignSnapshots(): void {
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
+    }
+    const data: unknown = event.data;
+    if (typeof data === 'object' && data && 'type' in data && typeof data.type === 'string') {
+      mirrorPreview(data.type, post);
     }
     const request = parseDesignSnapshotRequest(event.data);
     if (request === undefined) {
@@ -131,7 +138,8 @@ const LEFT_OUT = [
   'link[rel="modulepreload"]',
   'link[rel~="preload"]',
   'link[rel~="prefetch"]',
-  'style[id^="avb-"]',
+  // The live variable overrides stay: a picture taken while one is shown must show it.
+  'style[id^="avb-"]:not(#avb-live-variables)',
   'link[id^="avb-"]',
   '[data-avb-text-marks]',
   '[data-avb-text-editor]',
@@ -152,7 +160,11 @@ async function snapshotHTML(root: HTMLElement): Promise<string> {
   if (!(clone instanceof HTMLElement)) {
     throw new Error('Assertion failed: a cloned root is an element');
   }
+  markIds(root, clone);
   markNodes(root, clone);
+  const assets = new AssetBudget();
+  // Read while the copy still lists the page's elements one for one.
+  await inlinePictures(root, clone, assets);
   copyFormState(root, clone);
   inlineStylesheets(root, clone);
   for (const piece of Array.from(clone.querySelectorAll(LEFT_OUT))) {
@@ -165,12 +177,15 @@ async function snapshotHTML(root: HTMLElement): Promise<string> {
   for (const element of Array.from(clone.querySelectorAll('[style*="vh"]'))) {
     element.setAttribute('style', freezeViewportUnits(element.getAttribute('style') ?? ''));
   }
+  for (const element of Array.from(clone.querySelectorAll('[style*="url("]'))) {
+    element.setAttribute('style', await inlineStylePictures(rebaseCssURLs(element.getAttribute('style') ?? '', location.href), assets));
+  }
   const fonts = new FontInliner(DESIGN_SNAPSHOT_LIMITS.fontsCharsMax, DESIGN_SNAPSHOT_LIMITS.fontsMax, fetchFontDataURL);
   for (const style of Array.from(clone.querySelectorAll('style')).slice(0, SHEETS_MAX)) {
     const base = style.getAttribute('data-design-base') ?? location.href;
     style.removeAttribute('data-design-base');
     const text = freezeViewportUnits(rebaseCssURLs(style.textContent ?? '', base));
-    style.textContent = await fonts.inline(text);
+    style.textContent = await inlineStylePictures(await fonts.inline(text), assets);
   }
   const head = clone.querySelector('head') ?? clone.insertBefore(document.createElement('head'), clone.firstChild);
   const base = document.createElement('base');
@@ -180,6 +195,16 @@ async function snapshotHTML(root: HTMLElement): Promise<string> {
   still.textContent = STILL_CSS;
   head.appendChild(still);
   return '<!DOCTYPE html>\n' + clone.outerHTML;
+}
+
+/** Writes on each element of the copy the id a live preview's report names its original by. */
+function markIds(source: HTMLElement, target: HTMLElement): void {
+  const sources = [source, ...Array.from(source.getElementsByTagName('*'))];
+  const targets = [target, ...Array.from(target.getElementsByTagName('*'))];
+  if (sources.length !== targets.length) {
+    throw new Error('Assertion failed: markIds: a clone lists the same elements');
+  }
+  sources.forEach((element, index) => targets[index]?.setAttribute(DESIGN_ID_ATTRIBUTE, String(liveId(element))));
 }
 
 /** Writes on each element of the copy the nodes of the open file it stands for. */
@@ -304,6 +329,10 @@ function inlineStylesheets(source: HTMLElement, target: HTMLElement): void {
       return; // Another origin: the link stays, now absolute.
     }
     const style = document.createElement('style');
+    const id = copy.getAttribute(DESIGN_ID_ATTRIBUTE);
+    if (id !== null) {
+      style.setAttribute(DESIGN_ID_ATTRIBUTE, id);
+    }
     const media = link.getAttribute('media');
     if (media !== null) {
       style.setAttribute('media', media);

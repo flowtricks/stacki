@@ -130,6 +130,8 @@ async function activate(context: DesignOpsContext, frame: DesignFrameId): Promis
   installState(reply);
   await pageRead(context, reply.pageSource);
   updateDesignView((view) => ({ ...view, switching: undefined }));
+  // Frames that draw this page alike say nothing new; the shown one still needs a picture of this page.
+  window.setTimeout(noteCanvasChange, SETTLE_MS);
 }
 
 /** Gives the real panels the element picked on the canvas, if it is still the pick and its frame is shown. */

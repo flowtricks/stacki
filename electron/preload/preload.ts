@@ -52,9 +52,9 @@ if (location.protocol === 'stacki-app:') {
   rememberScrollAcrossRecovery();
   reportErrorOverlay(post);
   listenForDesign();
+  listenForDesignSnapshots(); // Design mode (experimental)
   listenForQueries();
   startWhenReady();
-  listenForDesignSnapshots(); // Design mode (experimental)
   // The canvas draws the page's scrollbar beside the frame from these reports (frameScrollbar.ts). Last, so the
   // canvas's own listeners are in place whatever happens here.
   installPageScrollReport(post);

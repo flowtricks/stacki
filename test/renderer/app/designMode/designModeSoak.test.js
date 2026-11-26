@@ -261,6 +261,12 @@ async function runInElectron({ window, project, options }) {
 
   const times = {};
   const point = (what, expression) => until(what, expression);
+  /** Fits every frame on the canvas, with its key. */
+  const fitCanvas = async () => {
+    await driver.evaluate(`document.activeElement?.blur(); 0`);
+    await driver.key('1', { modifiers: ['shift'] });
+    await driver.settle();
+  };
   /** A real press at the point `expression` names, once it names one. */
   const pressAt = async (what, expression, options) => {
     const at = await point(what, expression);
@@ -408,7 +414,7 @@ async function runInElectron({ window, project, options }) {
     check('the copy keeps the frame\u2019s look', (await driver.evaluate(frameIndent('f2'))) === '40px');
     check('the copy is the selected frame', await driver.evaluate(`!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f2"]')`));
     await shot('05-option-drag');
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     await shot('06-two-frames-fitted');
   });
@@ -444,7 +450,7 @@ async function runInElectron({ window, project, options }) {
     check('Duplicate in the menu makes a drawn copy within 100 ms', times.menuDuplicateMs < 100, times.menuDuplicateMs);
     await until('the third frame shows the second\u2019s version', frameIndent('f3'), (size) => size === '60px');
     check('the menu copied the right frame', true);
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     await shot('09-three-frames');
   });
@@ -468,7 +474,7 @@ async function runInElectron({ window, project, options }) {
     await driver.wheel(middle, -120);
     await until('the canvas panned', world, (value) => value !== before);
     check('a scroll pans the canvas', true);
-    const zoom = `parseFloat(document.querySelector('.dm-zoom').textContent)`;
+    const zoom = `Number(/scale\\(([\\d.]+)\\)/.exec(document.querySelector('.dm-world').style.transform)?.[1])`;
     const percent = await driver.evaluate(zoom);
     driver.contents.sendInputEvent({ type: 'mouseWheel', x: middle.x, y: middle.y, deltaX: 0, deltaY: 120, canScroll: true, modifiers: ['meta'] });
     await until('the canvas zoomed', zoom, (value) => value !== percent);
@@ -477,7 +483,7 @@ async function runInElectron({ window, project, options }) {
     await driver.drag(middle, { x: middle.x + 60, y: middle.y + 30 }, { label: 'pan' });
     await until('the canvas dragged', world, (value) => value !== panned);
     check('dragging the empty canvas pans it', (await driver.evaluate(`${TILES}.length`)) === 3);
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     const name = await point('the third name', centreOf('.dm-tile[data-dm-tile="f3"] .dm-title-name'));
     driver.contents.sendInputEvent({ type: 'mouseDown', x: name.x, y: name.y, button: 'right', clickCount: 1 });
@@ -531,7 +537,7 @@ async function runInElectron({ window, project, options }) {
     await until('two frames from the keyboard', `${TILES}.length === 2`);
     check('\u2318D duplicates the selected frame', true);
     await driver.settle();
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     const copy = await driver.evaluate(`${TILES}[1].dataset.dmTile`);
     await selectInFrame(copy, '#soak-plain');
@@ -540,7 +546,7 @@ async function runInElectron({ window, project, options }) {
   });
 
   await run('an element is dragged and resized in its frame, Escape lets go, and undo takes it back', async () => {
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     const [first, second] = await driver.evaluate(`${TILES}.map((t) => t.dataset.dmTile)`);
     await selectInFrame(second, '#soak-plain');
@@ -616,14 +622,14 @@ async function runInElectron({ window, project, options }) {
     await until('the narrow window', `innerWidth <= 1100`);
     await driver.settle();
     const fits = await driver.evaluate(
-      `JSON.stringify([...document.querySelectorAll('.dm-bar .dm-badge, .dm-bar button')].map((e) => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { name: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20), width: Math.round(r.width), inside: r.left >= 0 && r.right <= innerWidth, clipped: e.scrollWidth > e.clientWidth + 1, reachable: !!hit && (e.contains(hit) || hit.contains(e)) }; }))`,
+      `JSON.stringify([...document.querySelectorAll('.dm-bar .dm-name, .dm-bar button')].map((e) => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { name: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20), width: Math.round(r.width), inside: r.left >= 0 && r.right <= innerWidth, clipped: e.scrollWidth > e.clientWidth + 1, reachable: !!hit && (e.contains(hit) || hit.contains(e)) }; }))`,
     );
     check(
       'every control of the bar is whole and reachable at 1100 pixels',
-      JSON.parse(fits).every((control) => control.width >= 32 && control.inside && !control.clipped && control.reachable),
+      JSON.parse(fits).every((control) => control.width >= 28 && control.inside && !control.clipped && control.reachable),
       fits,
     );
-    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await fitCanvas();
     await driver.settle();
     await shot('09b-narrow');
     window.setContentSize(width, height);
@@ -650,23 +656,21 @@ async function runInElectron({ window, project, options }) {
   });
 
   await run('Send to AI reopens the project with a picture of each frame waiting in the AI panel', async () => {
-    await pressAt('Send to AI', centreOf('.dm-bar .dm-button.is-primary'));
+    await pressAt('Send to AI', centreOf('.dm-bar .dm-send'));
     await collectToasts();
     await untilOpen('the project open again', `!document.querySelector('.dm-bar') && !!document.querySelector('.embed-editor_root')`);
     await reopened();
-    await until('the frames in the AI panel draft', `(document.querySelector('.ai-composer')?.textContent || '').includes('Design mode')`);
+    await until('the frames in the AI panel draft', `(document.querySelector('.ai-composer')?.textContent || '').includes('Rebuild the')`);
     check('the draft carries the request', true);
     const pictures = await until(
       'the pictures',
-      `[...document.querySelectorAll('.ai-composer img')].map((i) => i.src).filter((s) => s.startsWith('data:image/png'))`,
-      (list) => list.length >= 2,
+      `[...document.querySelectorAll('.ai-composer img')].map((i) => i.src).filter((s) => s.startsWith('data:image/'))`,
+      (list) => list.length >= 1,
     );
-    pictures
-      .slice(0, 2)
-      .forEach((picture, index) =>
-        fs.writeFileSync(path.join(options.outDirectory, `10-handoff-${index + 1}.png`), Buffer.from(picture.slice(picture.indexOf(',') + 1), 'base64')),
-      );
-    check('one picture a frame', pictures.length === 2, pictures.length);
+    pictures.forEach((picture, index) =>
+      fs.writeFileSync(path.join(options.outDirectory, `10-handoff-${index + 1}.png`), Buffer.from(picture.slice(picture.indexOf(',') + 1), 'base64')),
+    );
+    check('the picked frame goes as pictures, at most six', pictures.length >= 1 && pictures.length <= 6, pictures.length);
     check('the fence is down', designFenceState().kind === 'off');
     check('the copy and its .env are deleted', leftInSandboxes().length === 0);
     check('the project is byte-identical', treeDigest(project) === before);

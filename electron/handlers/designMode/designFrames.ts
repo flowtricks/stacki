@@ -19,9 +19,6 @@ export const DESIGN_FRAME_LIMITS = {
   walkDepthMax: 64,
   /** Files read or written at once. */
   filesInFlightMax: 16,
-  /** One file's described change, in characters, and how many lines of it are shown. */
-  fileChangeCharsMax: 6_000,
-  hunkLinesMax: 80,
 } as const satisfies Record<string, number>;
 
 export type FileChange = { readonly kind: 'write'; readonly bytes: Buffer } | { readonly kind: 'delete' };
@@ -181,68 +178,4 @@ async function writeIfDifferent(target: string, bytes: Buffer): Promise<void> {
 function isInside(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-/** One frame's changes as text for the AI: each file, and the lines that differ from the project. */
-export function describeChanges(base: string, files: FrameFiles, charsMax: number): string {
-  const parts: string[] = [];
-  let length = 0;
-  for (const [rel, change] of [...files].sort(([left], [right]) => left.localeCompare(right, 'en'))) {
-    const part = describeFile(rel, readText(path.join(base, rel)), change.kind === 'write' ? textOf(change.bytes) : undefined);
-    if (length + part.length > charsMax) {
-      parts.push(`… ${files.size - parts.length} more changed files`); // i18n-ignore: text for the AI, not the interface.
-      break;
-    }
-    parts.push(part);
-    length += part.length + 1;
-  }
-  return parts.join('\n');
-}
-
-function readText(file: string): string | undefined {
-  return fs.existsSync(file) ? textOf(fs.readFileSync(file)) : undefined;
-}
-
-// Binary content (an image swapped in) is named, not shown.
-function textOf(bytes: Buffer): string | undefined {
-  return bytes.includes(0) ? undefined : bytes.toString('utf8');
-}
-
-/** A file's change as one hunk: the lines between the longest common start and end, removed then added. */
-export function describeFile(rel: string, before: string | undefined, after: string | undefined): string {
-  if (before === undefined && after === undefined) {
-    return `${rel}: removed or binary`; // i18n-ignore: text for the AI, not the interface.
-  }
-  if (before === undefined) {
-    return clip(`${rel} (new file)\n${prefixLines(after ?? '', '+')}`); // i18n-ignore: text for the AI.
-  }
-  if (after === undefined) {
-    return `${rel} (removed)`; // i18n-ignore: text for the AI, not the interface.
-  }
-  const beforeLines = before.split('\n');
-  const afterLines = after.split('\n');
-  let start = 0;
-  while (start < beforeLines.length && start < afterLines.length && beforeLines[start] === afterLines[start]) {
-    start += 1;
-  }
-  let end = 0;
-  while (end < beforeLines.length - start && end < afterLines.length - start && beforeLines.at(-1 - end) === afterLines.at(-1 - end)) {
-    end += 1;
-  }
-  const removed = beforeLines.slice(start, beforeLines.length - end);
-  const added = afterLines.slice(start, afterLines.length - end);
-  return clip(`${rel} @@ line ${start + 1}\n${prefixLines(removed.join('\n'), '-')}\n${prefixLines(added.join('\n'), '+')}`);
-}
-
-function prefixLines(text: string, mark: '+' | '-'): string {
-  const lines = text.length === 0 ? [] : text.split('\n');
-  const shown = lines.slice(0, DESIGN_FRAME_LIMITS.hunkLinesMax).map((line) => `${mark} ${line}`);
-  if (lines.length > shown.length) {
-    shown.push(`${mark} … ${lines.length - shown.length} more lines`); // i18n-ignore: text for the AI.
-  }
-  return shown.join('\n');
-}
-
-function clip(text: string): string {
-  return text.length <= DESIGN_FRAME_LIMITS.fileChangeCharsMax ? text : `${text.slice(0, DESIGN_FRAME_LIMITS.fileChangeCharsMax)}…`;
 }

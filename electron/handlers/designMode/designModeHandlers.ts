@@ -20,7 +20,6 @@ import {
   announceShown,
   beginSession,
   capture,
-  changesOf,
   deleteFrame,
   duplicateFrame,
   filesBetween,
@@ -186,7 +185,6 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
       case 'frame-move':
       case 'frame-snapshot':
       case 'frame-snapshots':
-      case 'changes':
       case 'start-over': {
         const run = queue.then(() => onSession(request));
         queue = run.catch(() => undefined);
@@ -255,8 +253,6 @@ async function operate(
       return { next: session, reply: { kind: 'kept' } };
     case 'frame-snapshots':
       return { next: session, reply: { kind: 'snapshots', snapshots: await snapshotsOf(appDataRoot, session) } };
-    case 'changes':
-      return { next: session, reply: { kind: 'changes', frames: changesOf(session) } };
     default: {
       const exhaustive: never = request;
       throw new Error(`Assertion failed: operate: ${JSON.stringify(exhaustive)}`);

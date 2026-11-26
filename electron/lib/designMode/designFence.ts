@@ -48,10 +48,8 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   'project:injectedRoutes',
   'project:inspectFolder',
   'project:metadata',
-  'project:writeMetadata',
   'project:resolveImport',
   'project:checkAstroCopy',
-  'project:createDefaultsCanvas',
   'project:removeDefaultsCanvas',
   'recents:list',
   // The canvas and its dev server, which runs on the copy.

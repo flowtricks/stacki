@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react';
 import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignFrameView, type DesignSessionState } from '../../../shared/ipc/designSession';
 import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
+import { pathOfAddress, samePage } from './designLiveCanvas';
 
 export type DesignPhase = 'idle' | 'entering' | 'working' | 'leaving';
 
@@ -35,6 +36,12 @@ export interface DesignView {
   readonly selection: DesignSelection;
   /** The frame the site's copy is being rewritten to; until it is read, the panels have nothing selected. */
   readonly switching: DesignFrameId | undefined;
+  /** The path, in the preview, of the page the canvas shows: a frame's picture of another page is not drawn. */
+  readonly pagePath: string | undefined;
+  /** 'returning' while the page the person was on is being opened after a reload. */
+  readonly returning: 'returning' | 'there';
+  /** Counts live previews applied to the shown frame, so what is drawn over it is drawn again. */
+  readonly liveRevision: number;
   /** Undefined until the canvas first fits its frames. */
   readonly camera: DesignCamera | undefined;
   /** The one frame shown while it is photographed for the AI. */
@@ -49,6 +56,9 @@ let view: DesignView = {
   phase: 'idle',
   opening: undefined,
   snapshots: new Map(),
+  pagePath: undefined,
+  returning: 'there',
+  liveRevision: 0,
   selection: { kind: 'none' },
   switching: undefined,
   camera: undefined,
@@ -87,6 +97,31 @@ export function subscribeDesignView(listener: () => void): () => void {
 /** Whether the header button shows Design mode as on: on, or on its way. */
 export function isDesignModeActive(): boolean {
   return view.session.kind === 'on' || view.phase === 'entering';
+}
+
+/**
+ * The picture a frame draws: its own when it is of the page the canvas shows. A frame that changes nothing looks like
+ * any other such frame, so it borrows one's picture of this page. Otherwise it has none yet.
+ */
+export function framePicture(view: DesignView, frames: readonly DesignFrameView[], frame: DesignFrameView): DesignSnapshot | undefined {
+  const ofThisPage = (snapshot: DesignSnapshot | undefined): DesignSnapshot | undefined => {
+    if (snapshot === undefined || view.pagePath === undefined) {
+      return snapshot;
+    }
+    const path = pathOfAddress(snapshot.url);
+    return path === undefined || samePage(path, view.pagePath) ? snapshot : undefined;
+  };
+  const own = ofThisPage(view.snapshots.get(frame.id));
+  if (own !== undefined || frame.changedFiles !== 0) {
+    return own;
+  }
+  for (const other of frames) {
+    const borrowed = other.changedFiles === 0 ? ofThisPage(view.snapshots.get(other.id)) : undefined;
+    if (borrowed !== undefined) {
+      return borrowed;
+    }
+  }
+  return undefined;
 }
 
 export function useDesignView(): DesignView {

@@ -23,8 +23,22 @@ project.
 - **Showing a frame again** writes bytes the editor may have saved before, which the project watcher takes for the
   editor's own save, so main announces the rewritten files itself, and the canvas does not go on until the editor
   has read the frame's page.
-- **Send to AI** pictures the top of each frame (as wide as the canvas, as tall as the window shows) and describes
-  each frame's source changes as diffs.
+- **Send to AI** sends one frame (the picked one, else the shown one): pictures of its whole page, top to bottom in
+  at most six slices, and one sentence naming the page. Nothing else of the design goes (no source changes, styles or
+  positions). It lands in the AI panel's message box and is never sent by itself.
+- **The person's page** is noted before each reload and reopened once the editor has opened its own first page
+  (`designReturn.ts`), then left alone. A component opened from a page enters on that page; a route a dependency adds,
+  and a component opened on its own, are refused. A frame's picture of another page is never drawn.
+- **Pictures in frames:** Astro's dev server refuses another origin's no-cors requests (its Sec-Fetch check), which is
+  what a frame on the app's origin sends, so a snapshot carries its same-origin pictures, posters and fonts in
+  itself (`designSnapshotAssets.ts`), within a budget; past it a picture shows broken in the frame only.
+- **Live previews** (hovering a value, scrubbing) restyle the preview without saving; the preview reports what they
+  change and the shown frame is restyled in place (`designLiveMirror.ts`, `designLiveApply.ts`).
+- **Put away while the mode is on:** the top toolbar's size, guide and breakpoint controls (the pointer button stays
+  and shows the shown frame live), their digit keys, and "Set component defaults"; main refuses project settings
+  writes.
+- **After a crash** the copy, its `.env` and its dev server stay until Stacki next starts, which stops the server and
+  deletes the copy (`test/renderer/app/designMode/designModeCrashSoak.test.js`).
 - **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
   together.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
@@ -84,6 +98,7 @@ byte-identical afterwards.
    - `electron/preload/designMode/`
    - `src/features/style/model/inlineDefault.ts`
    - `src/features/ai/aiHold.ts`
+   - `src/features/structure/defaultsMenu.ts`
    - `test/renderer/app/designMode/`
    - `test/electron/handlers/designMode/`
 2. Revert these lines, each marked `Design mode (experimental)`:
@@ -103,6 +118,9 @@ byte-identical afterwards.
    - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
      `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
      `useInlineByDefault` function at the end of the file.
+   - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
+     `&& defaultsMenu === 'offered'` on the "Set component defaults" rows.
+   - `src/features/preview/PreviewToolbar.tsx`: the `is-interaction` class on the pointer button's group.
    - `src/features/ai/AiPanel.tsx`: the `useAiHold` import, the `const hold = useAiHold();` line, and `hold` in
      `blocked`, the prewarm's `eligible`, the setup detection effect and the trust card's condition.
    - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts`, `shared/ipc/designSnapshot.ts` and

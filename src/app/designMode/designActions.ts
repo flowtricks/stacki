@@ -5,25 +5,36 @@
 // same way. Both reloads clear undo history, which the person is told in a toast after each one. Everything
 // between works on the copy: what the canvas does is in designFrameOps.ts.
 import type { ShellView } from '../App';
-import { defaultFramePlace, type DesignEnterRefusal, type DesignFrameView, type DesignSessionState } from '../../../shared/ipc/designSession';
+import {
+  DESIGN_SESSION_LIMITS,
+  defaultFramePlace,
+  type DesignEnterRefusal,
+  type DesignFrameId,
+  type DesignFrameView,
+  type DesignSessionState,
+} from '../../../shared/ipc/designSession';
 import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import { cleanError } from '../../lib/cleanError';
 import { holdWindow } from '../../ui/busyLock';
 import { designSession } from './designBridge';
-import { pictureFrames } from './designCapture';
+import { pictureFrame } from './designCapture';
 import { flushCaptures } from './designCaptureQueue';
 import { framesSettled } from './designFrameOps';
-import { requestSnapshot } from './designLiveCanvas';
+import { livePagePath, requestSnapshot } from './designLiveCanvas';
+import { currentReturn, noteReturn } from './designReturn';
 import { handoffText } from './designHandoff';
 import { clearDesignRole } from './designRole';
-import { designView, updateDesignView } from './designStore';
+import { designView, framePicture, updateDesignView } from './designStore';
 import type { DesignWordKey } from './i18n/en';
 import type { DesignWords } from './i18n/designWords';
 
 /** How long after a change the canvas may still be drawing it when the mode is left. */
 const LEAVE_SETTLE_MS = 400;
 
-export type DesignHostSource = Pick<ShellView, 'project' | 'currentPage' | 'scan' | 'selectPage' | 'leaveProject' | 'flushSave' | 'showToast' | 'setLeftTab'>;
+export type DesignHostSource = Pick<
+  ShellView,
+  'project' | 'currentPage' | 'editStack' | 'pageUrlPath' | 'device' | 'scan' | 'selectPage' | 'leaveProject' | 'flushSave' | 'showToast' | 'setLeftTab'
+>;
 
 /** What the window says after its next reload; kept in the window's session storage, which a reload keeps. */
 export const DESIGN_NOTICE_KEY = 'stacki-design-mode-notice';
@@ -53,9 +64,10 @@ function cancelAsked(): boolean {
   return opening.cancel === 'asked';
 }
 
-export async function enterDesignMode(app: DesignHostSource, words: DesignWords): Promise<void> {
-  const page = app.currentPage;
-  if (page === undefined || page.kind !== 'page' || page.path.includes('/.stacki/')) {
+export async function enterDesignMode(app: DesignHostSource, words: DesignWords, latestApp: () => DesignHostSource): Promise<void> {
+  // A component opened from a page enters on that page.
+  const place = currentReturn(app);
+  if (place === undefined) {
     app.showToast(words('toast.notOpen'), 'warning');
     return;
   }
@@ -80,7 +92,7 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
     const reply = await designSession({
       op: 'enter',
       projectPath: app.project.path,
-      page: page.name,
+      page: place.file,
       refusal: words('fence.refusal'),
       frameName: words('frame.original'),
       snapshot,
@@ -98,6 +110,7 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
       throw new Error('Design mode: main did not begin a session');
     }
     noteForReload('entered');
+    noteReturn(currentReturn(latestApp()) ?? place);
     release();
     await app.leaveProject(reply.liveRoot);
   } catch (error: unknown) {
@@ -109,7 +122,8 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
 }
 
 function showOpening(frames: readonly DesignFrameView[]): void {
-  updateDesignView((view) => ({ ...view, phase: 'entering', opening: { frames }, snapshots: new Map(), camera: undefined }));
+  const pagePath = livePagePath();
+  updateDesignView((view) => ({ ...view, phase: 'entering', opening: { frames }, snapshots: new Map(), pagePath, camera: undefined }));
 }
 
 function closeOpening(): void {
@@ -140,8 +154,11 @@ export async function cancelDesignMode(): Promise<void> {
   }
 }
 
-/** Leaves the copy for the project. With `send`, every frame's picture and changes go to the AI panel first. */
-export async function exitDesignMode(app: DesignHostSource, words: DesignWords, send: 'send' | 'keep'): Promise<void> {
+/**
+ * Leaves the copy for the project. With `send`, one frame's picture goes to the AI panel's message box first: the
+ * frame `asked`, else the one picked on the canvas. A frame with no picture of the open page yet is shown first.
+ */
+export async function exitDesignMode(app: DesignHostSource, words: DesignWords, send: 'send' | 'keep', asked?: DesignFrameId): Promise<void> {
   const session = designView().session;
   if (session.kind !== 'on' || designView().phase === 'leaving') {
     return;
@@ -151,13 +168,21 @@ export async function exitDesignMode(app: DesignHostSource, words: DesignWords, 
     await framesSettled();
     await app.flushSave();
     await flushCaptures(LEAVE_SETTLE_MS);
+    const current = designView().session;
+    const held = current.kind === 'on' ? current : session;
+    const chosen = send === 'send' ? chosenFrame(held, asked) : undefined;
+    if (chosen !== undefined && framePicture(designView(), held.frames, chosen) === undefined) {
+      throw new Error(words('toast.noPicture'));
+    }
     updateDesignView((view) => ({ ...view, phase: 'leaving' }));
-    const handoff = send === 'send' ? await composeHandoff(app, session, words) : undefined;
+    const handoff = chosen === undefined ? undefined : await composeHandoff(app, chosen, words);
     const reply = await designSession({ op: 'exit', handoff });
     if (reply.kind !== 'left') {
       throw new Error('Design mode: main did not end the session');
     }
     noteForReload(send === 'send' ? 'sent' : 'left');
+    // Back to the page open now, which may not be the one the mode began on.
+    noteReturn(currentReturn(app));
     clearDesignRole();
     await app.leaveProject(reply.realRoot);
   } catch (error: unknown) {
@@ -166,16 +191,28 @@ export async function exitDesignMode(app: DesignHostSource, words: DesignWords, 
   }
 }
 
-async function composeHandoff(app: DesignHostSource, session: Extract<DesignSessionState, { kind: 'on' }>, words: DesignWords) {
-  const pictures = await pictureFrames(app.project.path, session);
-  const changes = await designSession({ op: 'changes' });
-  if (changes.kind !== 'changes') {
-    throw new Error('Design mode: main did not describe the frames');
+/** The chosen frame, shown with a picture of the open page, then pictured whole. */
+async function composeHandoff(app: DesignHostSource, chosen: DesignFrameView, words: DesignWords) {
+  const pictures = await pictureFrame(app.project.path, chosen);
+  if (pictures === undefined) {
+    throw new Error(words('toast.noPicture'));
   }
-  const active = session.frames.find((frame) => frame.id === session.active)?.name ?? '';
   return {
-    text: handoffText(changes.frames, active, words),
-    images: pictures.map((picture) => picture.image),
-    names: pictures.map((picture) => picture.name),
+    text: handoffText(app.pageUrlPath ?? '/', pictures.length, words),
+    images: [...pictures],
+    names: pictures.map((_, index) =>
+      pictures.length === 1 ? chosen.name : `${chosen.name} ${String(index + 1)}`.slice(0, DESIGN_SESSION_LIMITS.frameNameCharsMax),
+    ),
   };
+}
+
+/** The frame Send to AI sends: the one asked for, else the one picked on the canvas, else the one shown. */
+function chosenFrame(session: Extract<DesignSessionState, { kind: 'on' }>, asked: DesignFrameId | undefined): DesignFrameView {
+  const selection = designView().selection;
+  const wanted = asked ?? (selection.kind === 'none' ? session.active : selection.frame);
+  const frame = session.frames.find((entry) => entry.id === wanted) ?? session.frames.find((entry) => entry.id === session.active);
+  if (frame === undefined) {
+    throw new Error('Assertion failed: chosenFrame: the shown frame is one of the frames');
+  }
+  return frame;
 }

@@ -11,9 +11,15 @@ export const DESIGN_SNAPSHOT_LIMITS = {
   /** Elements one frame holds. A page past this is refused: eight of them would not fit the memory budget. */
   elementsMax: 20_000,
   /** One frame's document, in characters, fonts included. */
-  htmlCharsMax: 6_000_000,
+  htmlCharsMax: 10_000_000,
+  /** A page's own pictures copied into one snapshot, together and each, in characters. */
+  assetsCharsMax: 5_000_000,
+  assetCharsMax: 900_000,
+  /** What one report of a live preview names. */
+  liveSheetsMax: 400,
+  liveElementsMax: 400,
   /** Every frame's document together, as the canvas holds them. */
-  totalCharsMax: 32_000_000,
+  totalCharsMax: 48_000_000,
   /** Web fonts inlined into one snapshot, and their characters together and each. */
   fontsMax: 24,
   fontsCharsMax: 3_000_000,
@@ -24,6 +30,20 @@ export const DESIGN_SNAPSHOT_LIMITS = {
   detailCharsMax: 400,
   pixelsMax: 20_000,
 } as const satisfies Record<string, number>;
+
+/** On each element and stylesheet of a snapshot: the id a live preview's report names it by. */
+export const DESIGN_ID_ATTRIBUTE = 'data-dm-id';
+
+export interface DesignLiveSheet {
+  readonly id: number;
+  readonly css: string;
+}
+
+export interface DesignLiveElement {
+  readonly id: number;
+  readonly style: string | undefined;
+  readonly className: string | undefined;
+}
 
 /** `window.name` of a canvas frame's iframe, which the preload reads to install nothing in it. */
 export const DESIGN_FRAME_WINDOW_NAME = 'stacki-design-frame';
@@ -87,6 +107,13 @@ export type DesignCanvasMessage =
       readonly failure: DesignSnapshotFailure;
       readonly detail: string;
     }
+  /** What a live preview changed on the page: rules and variable overrides, and elements' own styles and classes. */
+  | {
+      readonly type: 'stacki:design-live';
+      readonly sheets: readonly DesignLiveSheet[];
+      readonly elements: readonly DesignLiveElement[];
+      readonly variables: string;
+    }
   /** The page's styles changed under the watch (a stylesheet replaced by the dev server, a live rule). */
   | { readonly type: 'stacki:design-changed' };
 
@@ -139,6 +166,30 @@ export function parseDesignSnapshotRequest(input: unknown): DesignSnapshotReques
   return { type: input.type, nonce };
 }
 
+function parseDesignLive(value: Readonly<Record<string, unknown>>): DesignCanvasMessage {
+  const listed = (input: unknown, itemsMax: number, what: string): readonly Readonly<Record<string, unknown>>[] => {
+    if (!Array.isArray(input) || input.length > itemsMax) {
+      throw new Error(`${what}: expected a bounded list`);
+    }
+    return input.map((entry: unknown) => record(entry));
+  };
+  const optionalText = (input: unknown, what: string): string | undefined =>
+    input === undefined ? undefined : bounded(input, DESIGN_SNAPSHOT_LIMITS.assetCharsMax, what);
+  return {
+    type: 'stacki:design-live',
+    sheets: listed(value['sheets'], DESIGN_SNAPSHOT_LIMITS.liveSheetsMax, 'Design live sheets').map((sheet) => ({
+      id: count(sheet['id']),
+      css: bounded(sheet['css'], DESIGN_SNAPSHOT_LIMITS.htmlCharsMax, 'Design live sheet'),
+    })),
+    elements: listed(value['elements'], DESIGN_SNAPSHOT_LIMITS.liveElementsMax, 'Design live elements').map((element) => ({
+      id: count(element['id']),
+      style: optionalText(element['style'], 'Design live style'),
+      className: optionalText(element['className'], 'Design live class'),
+    })),
+    variables: bounded(value['variables'], DESIGN_SNAPSHOT_LIMITS.assetCharsMax, 'Design live variables'),
+  };
+}
+
 /** A message from the canvas frame, parsed; undefined for the editor's other messages and for a malformed one. */
 export function parseDesignCanvasMessage(input: unknown): DesignCanvasMessage | undefined {
   if (typeof input !== 'object' || !input || !('type' in input)) {
@@ -146,6 +197,13 @@ export function parseDesignCanvasMessage(input: unknown): DesignCanvasMessage | 
   }
   if (input.type === 'stacki:design-changed') {
     return { type: input.type };
+  }
+  if (input.type === 'stacki:design-live') {
+    try {
+      return parseDesignLive(record(input));
+    } catch {
+      return undefined;
+    }
   }
   if (input.type !== 'stacki:design-snapshot-reply') {
     return undefined;
