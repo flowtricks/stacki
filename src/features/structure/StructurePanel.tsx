@@ -477,7 +477,14 @@ function revealRow(bodyElement: HTMLDivElement | undefined, selectedId: string, 
 function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: NavigatorDragView | undefined, translate: Translator): StructureTreeContext {
   // A canvas drag opens the rows its mark sits in for as long as it lasts, without touching what the person
   // opened or closed: when the drag ends the set is empty and every row is as it was.
-  const isCollapsed = (node: NavigatorNode): boolean => (canvasDrag?.expand.has(node.id) === true ? false : collapsedState(node, state.toggled));
+  // A list of named rows (rowLabels) is open until the person closes a row: its rows are regenerated with new ids, and
+  // a default that closed them would fold the list up each time.
+  const isCollapsed = (node: NavigatorNode): boolean =>
+    canvasDrag?.expand.has(node.id) === true
+      ? false
+      : props.rowLabels === undefined
+        ? collapsedState(node, state.toggled)
+        : (state.toggled.get(node.id) ?? false);
   return {
     clientMode: props.clientMode === true,
     selectedId: props.selectedId,
@@ -512,7 +519,9 @@ function treeContextOf(props: EditableProps, state: TreeState, canvasDrag: Navig
     ...(props.onOpenComponent === undefined ? {} : { onOpenComponent: props.onOpenComponent }),
     ...(props.onOpenCode === undefined ? {} : { onOpenCode: props.onOpenCode }),
     toggleCollapse: (node) => {
-      state.setToggled((previous) => new Map(previous).set(node.id, !collapsedState(node, previous)));
+      state.setToggled((previous) =>
+        new Map(previous).set(node.id, !(props.rowLabels === undefined ? collapsedState(node, previous) : (previous.get(node.id) ?? false))),
+      );
     },
     openContextMenu: (left, top, nodeId) => {
       if (isLiveRowId(nodeId) || !canEditNode(props, nodeId)) {

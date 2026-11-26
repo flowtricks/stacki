@@ -31,7 +31,10 @@ export const messages = {
   'componentCanvas.panel.height': 'גובה',
   'componentCanvas.panel.hug': 'התאמה לתוכן',
   'componentCanvas.panel.pixels': '{side} בפיקסלים',
+  'componentCanvas.panel.root.about': 'הקנבס שמאחורי כל המסגרות: רכיב ה-html של הדף. המחלקות שלו נמצאות בלוח ההגדרות.',
+  'componentCanvas.panel.root.title': 'קנבס',
   'componentCanvas.panel.scope.all': 'כל המסגרות',
+  'componentCanvas.panel.scope.component': 'הרכיב הזה',
   'componentCanvas.panel.scope.frame': 'המסגרת הזו',
   'componentCanvas.panel.scope.hint':
     'היכן חלים הגודל, הרקע וערכי ה־props שמגדירים: במסגרת הזו, בכל המסגרות של ערך אחד, או בכל המסגרות. הגדרה של מסגרת עצמה גוברת על הגדרה רחבה יותר.',

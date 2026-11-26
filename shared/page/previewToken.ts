@@ -31,6 +31,13 @@ import { err, ok, type Result } from '../core/result';
 export const PREVIEW_STAMP_PREFIX = 'avb-d:';
 export const PREVIEW_STAMP_ATTRIBUTE = 'data-avb-d';
 
+/**
+ * An element Stacki writes as chrome around the person's markup (the component canvas's frames, its page's <body>):
+ * the dev preview gives it neither markers nor a path, so the editor never names it. A click, a hover or a deep click
+ * on it is its nearest marked ancestor's; its children are marked as ever.
+ */
+export const PREVIEW_UNMARKED_ATTRIBUTE = 'data-stacki-unmarked';
+
 export interface PreviewStamp {
   /** Project-relative, `/`-separated: `src/components/Card.astro`. */
   readonly file: string;

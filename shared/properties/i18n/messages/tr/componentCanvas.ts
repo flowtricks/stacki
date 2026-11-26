@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Yükseklik',
   'componentCanvas.panel.hug': 'İçeriğe göre',
   'componentCanvas.panel.pixels': 'Piksel cinsinden {side}',
+  'componentCanvas.panel.root.about': 'Tüm çerçevelerin arkasındaki tuval: sayfanın html öğesi. Sınıfları Ayarlar panelindedir.',
+  'componentCanvas.panel.root.title': 'Tuval',
   'componentCanvas.panel.scope.all': 'Tüm çerçeveler',
+  'componentCanvas.panel.scope.component': 'Bu bileşen',
   'componentCanvas.panel.scope.frame': 'Bu çerçeve',
   'componentCanvas.panel.scope.hint':
     'Ayarladığınız boyut, arka plan ve prop değerlerinin uygulanacağı yer: bu çerçeve, tek bir değerin tüm çerçeveleri veya tüm çerçeveler. Çerçevenin kendi ayarı, daha geniş kapsamlı ayara üstün gelir.',

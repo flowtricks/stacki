@@ -10,7 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule');
-const { parsePage } = require('#dist/electron/parse/astroParser.js');
+const { parsePage, serializePageMarked } = require('#dist/electron/parse/astroParser.js');
 const model = loadRenderer('src/features/preview/componentCanvas/canvasModel.ts');
 const page = loadRenderer('src/features/preview/componentCanvas/canvasPage.ts');
 const chrome = loadRenderer('src/features/preview/componentCanvas/canvasChrome.ts');
@@ -103,10 +103,11 @@ test('the canvas page parses, imports the component once, and writes each frame'
   const source = pageOf(layout);
   const importLine = 'import Button from "../../' + BUTTON + '";';
   assert.equal(source.split(importLine).length - 1, 1, 'the component is imported once');
-  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"}>'));
+  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
   assert.match(
     source,
-    /data-fixed-width data-fixed-height style="width: 320px; height: 200px; contain-intrinsic-size: 320px 200px; background: var\(--swatch-light\)"/,
+    /data-fixed-width data-fixed-height style="grid-row: 2; grid-column: 2; width: 320px; height: 200px; contain-intrinsic-size: 320px 200px; background: var\(--swatch-light\)"/,
+    'the frame sits in its row and column, at its size and background',
   );
   assert.match(source, /label="Back &quot;&lt;there&gt;&quot;"/, 'prop text is escaped');
   assert.match(source, /<Button variant="main"[^>]*>Button Text<\/Button>/, 'without a project recipe, the starter defaults fill the slot');
@@ -115,9 +116,22 @@ test('the canvas page parses, imports the component once, and writes each frame'
   assert.doesNotMatch(source, /variant="main" direction=/, 'main is never given a direction');
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
-  const root = JSON.stringify(parsed.model.nodes).includes('"name":"stacki-canvas"');
-  assert.ok(root, 'the frames sit in one stacki-canvas element the editor can focus');
-  assert.doesNotMatch(source, /<stacki-frame-body[^>]*data-transparent/, 'every frame has the all-frames background');
+  const tags = new Set();
+  const pending = [...parsed.model.nodes];
+  for (let visited = 0; visited < 10_000 && pending.length > 0; visited++) {
+    const node = pending.shift();
+    if (node.kind === 'element') {
+      tags.add(node.name);
+    }
+    pending.push(...(node.children ?? []));
+  }
+  assert.equal(pending.length, 0, 'the page is walked whole');
+  assert.deepEqual(
+    [...tags].filter((name) => name.startsWith('stacki-')),
+    ['stacki-frame'],
+    'the frames are the only element of the canvas: no world, rows or labels to point at',
+  );
+  assert.doesNotMatch(source, /<stacki-frame[^>]*data-transparent/, 'every frame has the all-frames background');
 });
 
 test('insertion defaults come first and the frame wins; an unset prop is not passed at all', () => {
@@ -210,16 +224,20 @@ test('every frame renders the component defaults: props, text and nested childre
 
 test('the project background is the canvas surface, frames without their own are transparent over it, and a gone variable falls back', () => {
   const grey = chrome.chromeStyles('dark');
-  assert.match(grey, /stacki-canvas \{[^}]*background: #1e1e1e;/);
-  assert.match(grey, /stacki-frame-body\[data-transparent\] \{ background: #fff; \}/, 'the page background is painted over this by the script');
+  assert.match(grey, /html\[data-stacki-ready\] \{ background: #1e1e1e !important; \}/);
+  assert.match(grey, /stacki-frame\[data-transparent\] \{ background: #fff; \}/, 'the page background is painted over this by the script');
   assert.doesNotMatch(chrome.chromeScript(ID), /setProperty\('--/, 'the chrome sets no custom property a variable picker would list');
   const layout = model.buildCanvasLayout(button, undefined);
-  assert.match(pageOf(layout, { surface: 'var(--background)' }), /<stacki-canvas data-surface>/, 'a project background marks the canvas');
-  assert.match(pageOf(layout), /<stacki-canvas>/);
+  assert.match(
+    pageOf(layout, { surface: 'var(--background)' }),
+    /'stacki-designer'\]\.filter\(Boolean\)\.join\(' '\)\} data-stacki-surface>/,
+    'a project background marks the root',
+  );
+  assert.doesNotMatch(pageOf(layout), /\} data-stacki-surface>/);
   const themed = chrome.chromeStyles('dark', 'var(--background)');
-  assert.match(themed, /stacki-canvas \{[^}]*background: var\(--background, #1e1e1e\);/, 'a variable the project drops draws the grey');
-  assert.match(themed, /stacki-frame-body\[data-transparent\] \{ background: transparent; \}/);
-  assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff;/);
+  assert.match(themed, /html\[data-stacki-ready\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
+  assert.match(themed, /stacki-frame\[data-transparent\] \{ background: transparent; \}/);
+  assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
@@ -245,19 +263,21 @@ test('each frame instance is found by its path; a click in a frame names its ins
     assert.equal(node?.name, 'Button', 'named as the component is, not a generated binding');
   }
   const [first, second] = instances;
-  const frameOf = (path) => path.split('.').slice(0, -2).join('.');
+  const frameOf = (path) => path.split('.').slice(0, -1).join('.');
   session.noteComponentCanvas({ kind: 'idle' });
   assert.equal(session.canvasInstanceAt(first.path), undefined, 'no canvas open: nothing is a frame');
   assert.equal(session.isComponentCanvasPage(`/site/.stacki/canvas/${ID}.astro`), false);
-  session.noteComponentCanvas({ kind: 'open', id: ID, instances });
+  session.noteComponentCanvas({ kind: 'open', id: ID, instances, root: '1' });
+  assert.equal(session.isCanvasRoot('1'), true, 'the root is the canvas itself');
+  assert.equal(session.isCanvasRoot(first.path), false);
+  assert.equal(session.canvasRootPath(), '1');
   assert.equal(session.isComponentCanvasPage(`/site/.stacki/canvas/${ID}.astro`), true);
   assert.equal(session.isComponentCanvasPage('/site/.stacki/canvas/0f8fad5b-d9cb-469f-a165-70867728950f.astro'), false, 'another canvas page is not this one');
   assert.equal(session.isComponentCanvasPage('/site/src/pages/index.astro'), false);
   assert.equal(session.canvasInstanceAt(first.path)?.key, first.key, 'the instance itself');
   assert.equal(session.canvasInstanceAt(first.path + '.0')?.key, first.key, 'inside the instance');
-  assert.equal(session.canvasInstanceAt(frameOf(second.path) + '.0')?.key, second.key, 'the frame label');
-  assert.equal(session.canvasInstanceAt(frameOf(second.path))?.key, second.key, 'the frame itself');
-  assert.equal(session.canvasInstanceAt(frameOf(frameOf(first.path))), undefined, 'the row between frames is no frame');
+  assert.equal(session.canvasInstanceAt(frameOf(second.path))?.key, second.key, 'the frame itself (its caption, the space around its instance)');
+  assert.equal(session.canvasInstanceAt(frameOf(frameOf(first.path))), undefined, 'the world between frames is no frame');
   assert.equal(session.canvasInstanceOf(first.path + '.0'), undefined, 'only the instance itself is the instance');
   assert.throws(() => page.canvasInstancesOf([{ kind: 'element', name: 'stacki-frame', props: {}, children: [] }]), /names its frame/);
   session.noteComponentCanvas({ kind: 'idle' });
@@ -273,4 +293,35 @@ test('a prop value from the Settings panel is a preview value only when the canv
   assert.equal(model.previewValue({ type: 'expr', value: 'page.title' }), undefined, 'data is code');
   assert.equal(model.previewValue({ type: 'expr', value: '() => go()' }), undefined);
   assert.equal(model.previewValue({ type: 'spread', value: 'rest' }), undefined);
+});
+
+test('the canvas root is the page’s <html>: its path is found, and its classes follow the layout’s', () => {
+  const layout = model.buildCanvasLayout(button, undefined);
+  const source = pageOf(layout, { rootClasses: ['theme-dark', 'u-wide'] });
+  assert.match(source, /class=\{\[htmlAttributes\.class, "theme-dark", "u-wide", 'stacki-designer'\]/, 'after the layout’s own, before the canvas’s');
+  assert.match(pageOf(layout), /class=\{\[htmlAttributes\.class, 'stacki-designer'\]/, 'none set, the layout’s alone');
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true);
+  const tree = page.canvasTreeOf(parsed.model.nodes);
+  assert.equal(parsed.model.nodes[Number(tree.root)].name, 'html');
+  assert.ok(
+    tree.instances.every((instance) => instance.path.startsWith(tree.root + '.')),
+    'every frame is inside the root',
+  );
+  assert.throws(() => pageOf(layout, { rootClasses: ['a"b'] }), /plain class name/);
+  // The preview marks every node with a path the editor names it by; the canvas's chrome and <body> get none, so a
+  // click or hover between frames is the root's, and one in a frame its instance's. The instance is marked as ever.
+  const marked = serializePageMarked(parsed.model, '', undefined, source);
+  for (const tag of ['body']) {
+    assert.doesNotMatch(marked, new RegExp(`<${tag}[^>]*data-avb-p`), `${tag} carries no path`);
+  }
+  const instancePath = tree.instances[0].path;
+  assert.ok(marked.includes(`data-avb-p="${instancePath}"`) || marked.includes(`"${instancePath}"`), 'the instance keeps its path');
+  assert.ok(marked.includes(`<!--avb-s:${instancePath}-->`), 'the instance keeps its markers');
+  const bodyPath = `${tree.root}.1`;
+  assert.ok(
+    tree.instances.every((instance) => instance.path.split('.').length === 4),
+    'html > body > frame > instance, nothing in between',
+  );
+  assert.ok(!marked.includes(`<!--avb-s:${bodyPath}-->`), 'the body has no marker pair');
 });

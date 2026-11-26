@@ -29,7 +29,10 @@ export const messages = {
   'componentCanvas.panel.height': '높이',
   'componentCanvas.panel.hug': '콘텐츠에 맞춤',
   'componentCanvas.panel.pixels': '{side}(픽셀)',
+  'componentCanvas.panel.root.about': '모든 프레임 뒤에 있는 캔버스로, 페이지의 html 요소입니다. 캔버스의 클래스는 설정 패널에 있습니다.',
+  'componentCanvas.panel.root.title': '캔버스',
   'componentCanvas.panel.scope.all': '모든 프레임',
+  'componentCanvas.panel.scope.component': '이 컴포넌트',
   'componentCanvas.panel.scope.frame': '이 프레임',
   'componentCanvas.panel.scope.hint':
     '설정한 크기, 배경, 속성 값이 적용되는 범위입니다. 이 프레임, 한 값의 모든 프레임, 또는 모든 프레임 중에서 선택합니다. 프레임 자체의 설정이 더 넓은 범위의 설정보다 우선합니다.',

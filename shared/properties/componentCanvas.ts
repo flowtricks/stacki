@@ -33,6 +33,9 @@ export const CANVAS_LIMITS = {
   propNameCharsMax: 100,
   keyCharsMax: 1_024,
   backgroundCharsMax: 256,
+  /** Classes the canvas root (its page's <html>) carries: a theme class or two, never a stylesheet's worth. */
+  rootClassesMax: 32,
+  classNameCharsMax: 128,
   sizePxMin: 1,
   sizePxMax: 10_000,
   /** Frames drawn at once. Every frame is one more render of the component on the one canvas page. */
@@ -58,10 +61,24 @@ export interface FrameEntry {
   readonly background?: string;
 }
 
+/**
+ * The canvas root: the page's <html>, which every frame is drawn inside. Its classes re-theme every frame (a site's
+ * `theme-dark` on <html>), its background is the surface the frames sit on. The project's is the default; a
+ * component's own replaces it, setting by setting (classes as a whole list, not merged).
+ */
+export interface CanvasRoot {
+  /** A CSS colour, `transparent`, or `var(--name)`; absent: what the project sets, else the app's own grey. */
+  readonly background?: string;
+  /** Class names, in order, after the classes the site's layout puts on <html>. */
+  readonly classes?: readonly string[];
+}
+
 export interface ComponentCanvas {
   /** The props that get their own frames, in layout order; absent: the canvas chooses (defaultSplit). */
   readonly split?: readonly string[];
   readonly frames?: Readonly<Record<string, FrameEntry>>;
+  /** This component's canvas root, over the project's. */
+  readonly root?: CanvasRoot;
 }
 
 export interface ComponentCanvasFile {
@@ -72,6 +89,8 @@ export interface ComponentCanvasFile {
    * variable. Absent: the app's own canvas grey. Versions before this key ignore it, and drop it on their next save.
    */
   readonly background?: string;
+  /** The project's canvas root classes (CanvasRoot.classes); versions before this key ignore it. */
+  readonly classes?: readonly string[];
   readonly components: Readonly<Record<string, ComponentCanvas>>;
 }
 
@@ -82,7 +101,10 @@ export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: 
 const PROP_NAME = /^[A-Za-z_$][\w$-]*$/;
 const COMPONENT_FILE = /^(?:src\/|node_modules\/)[^\0]*\.astro$/;
 const ENTRY_FIELDS = new Set(['props', 'unset', 'width', 'height', 'background']);
-const COMPONENT_FIELDS = new Set(['split', 'frames']);
+const COMPONENT_FIELDS = new Set(['split', 'frames', 'root']);
+const ROOT_FIELDS = new Set(['background', 'classes']);
+// A class name as a selector can name it without escapes; `stacki-` is the canvas's own (`stacki-designer`).
+const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
 
 export function parseComponentCanvasSource(source: string): Result<ComponentCanvasFile> {
   if (source.length > CANVAS_LIMITS.sourceCharsMax) {
@@ -112,7 +134,53 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
   assert(Object.keys(components).length === entries.length, 'Component canvas: every component is kept');
   const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
   assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
-  return { version: 1, ...(background === undefined ? {} : { background }), components };
+  const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
+  return canvasFileOf({ background, classes }, components);
+}
+
+// The file with its project-level settings, each written only when it is set.
+function canvasFileOf(
+  project: { readonly background: string | undefined; readonly classes: readonly string[] | undefined },
+  components: Readonly<Record<string, ComponentCanvas>>,
+): ComponentCanvasFile {
+  return {
+    version: 1,
+    ...(project.background === undefined ? {} : { background: project.background }),
+    ...(project.classes === undefined ? {} : { classes: project.classes }),
+    components,
+  };
+}
+
+/** Classes for the canvas root: a bounded list of distinct names a selector can name, none of them the canvas's own. */
+export function canvasRootClasses(input: unknown): readonly string[] {
+  if (!Array.isArray(input) || input.length > CANVAS_LIMITS.rootClassesMax) {
+    throw new Error(`Component canvas: the root's classes are a list of at most ${CANVAS_LIMITS.rootClassesMax} names`);
+  }
+  const names = input.map((name: unknown): string => {
+    if (typeof name !== 'string' || name.length > CANVAS_LIMITS.classNameCharsMax || !CLASS_NAME.test(name)) {
+      throw new Error(`Component canvas: ${String(name)} is not a class name of at most ${CANVAS_LIMITS.classNameCharsMax} characters`);
+    }
+    if (name.startsWith('stacki-')) {
+      throw new Error(`Component canvas: ${name} is a class the canvas keeps for itself`);
+    }
+    return name;
+  });
+  if (new Set(names).size !== names.length) {
+    throw new Error('Component canvas: the root names a class twice');
+  }
+  return names;
+}
+
+function parseCanvasRoot(input: unknown, file: string): CanvasRoot {
+  const value = record(input);
+  for (const key of Object.keys(value)) {
+    if (!ROOT_FIELDS.has(key)) {
+      throw new Error(`Component canvas: ${file}'s root has an unknown key ${key}`);
+    }
+  }
+  const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
+  const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
+  return { ...(background === undefined ? {} : { background }), ...(classes === undefined ? {} : { classes }) };
 }
 
 /** A project-relative component path, as `.stacki/components.json` keys them. */
@@ -143,7 +211,8 @@ function parseComponentSettings(input: unknown, file: string): ComponentCanvas {
   for (const [key, entry] of frameEntries) {
     frames[parseFrameKey(key)] = parseFrameEntry(entry, file);
   }
-  return { ...(split === undefined ? {} : { split }), ...(framesInput === undefined ? {} : { frames }) };
+  const root = value['root'] === undefined ? undefined : parseCanvasRoot(value['root'], file);
+  return { ...(split === undefined ? {} : { split }), ...(framesInput === undefined ? {} : { frames }), ...(root === undefined ? {} : { root }) };
 }
 
 function parseSplit(input: unknown, file: string): readonly string[] {
@@ -292,7 +361,7 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
       .sort()
       .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
   );
-  const text = JSON.stringify({ version: 1, ...(file.background === undefined ? {} : { background: file.background }), components }, undefined, 2) + '\n';
+  const text = JSON.stringify(canvasFileOf({ background: file.background, classes: file.classes }, components), undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
@@ -310,6 +379,8 @@ function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
               .map((key) => [key, sortedEntry(frames[key] ?? {})]),
           ),
         }),
+    // Classes keep their order: a later class wins a tie in the cascade, as on <html> itself.
+    ...(settings.root === undefined ? {} : { root: settings.root }),
   };
 }
 
@@ -680,17 +751,23 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
   return withComponentSettings(file, component, {
     ...(split === undefined ? {} : { split }),
     ...(settings.frames === undefined ? {} : { frames: settings.frames }),
+    ...(settings.root === undefined ? {} : { root: settings.root }),
   });
 }
 
 function withComponentSettings(file: ComponentCanvasFile, component: string, settings: ComponentCanvas): ComponentCanvasFile {
   const components: Record<string, ComponentCanvas> = { ...file.components };
   const frames = settings.frames !== undefined && Object.keys(settings.frames).length > 0 ? settings.frames : undefined;
-  if (settings.split === undefined && frames === undefined) {
+  const root = settings.root !== undefined && (settings.root.background !== undefined || settings.root.classes !== undefined) ? settings.root : undefined;
+  if (settings.split === undefined && frames === undefined && root === undefined) {
     // Nothing chosen and nothing set: the component leaves the file rather than sitting in it empty.
     delete components[component];
   } else {
-    components[component] = { ...(settings.split === undefined ? {} : { split: settings.split }), ...(frames === undefined ? {} : { frames }) };
+    components[component] = {
+      ...(settings.split === undefined ? {} : { split: settings.split }),
+      ...(frames === undefined ? {} : { frames }),
+      ...(root === undefined ? {} : { root }),
+    };
   }
   if (Object.keys(components).length > CANVAS_LIMITS.componentsMax) {
     throw new Error(`The canvas keeps settings for at most ${CANVAS_LIMITS.componentsMax} components`);
@@ -700,24 +777,84 @@ function withComponentSettings(file: ComponentCanvasFile, component: string, set
 
 /** The file with the project's canvas background set, or cleared with `undefined` (the app's own grey again). */
 export function withProjectBackground(file: ComponentCanvasFile, background: string | undefined): ComponentCanvasFile {
-  const value = background === undefined ? undefined : canvasBackground(background);
-  const next: ComponentCanvasFile = { version: 1, ...(value === undefined ? {} : { background: value }), components: file.components };
-  assert(next.background === value, 'The project background is what was set');
-  return next;
+  return withRootEdit(file, PROJECT_ROOT, { kind: 'background', value: background });
+}
+
+/** Where a canvas root setting is written: the project's default, or one component's own. */
+export const PROJECT_ROOT = { kind: 'project' } as const;
+export type RootTarget = typeof PROJECT_ROOT | { readonly kind: 'component'; readonly file: string };
+
+export type RootEdit =
+  { readonly kind: 'background'; readonly value: string | undefined } | { readonly kind: 'classes'; readonly value: readonly string[] | undefined };
+
+/** The file with one canvas root setting set at `target`, or cleared with `undefined` (the wider one shows again). */
+export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit: RootEdit): ComponentCanvasFile {
+  const background = edit.kind === 'background' && edit.value !== undefined ? canvasBackground(edit.value) : undefined;
+  const classes = edit.kind === 'classes' && edit.value !== undefined ? canvasRootClasses(edit.value) : undefined;
+  const edited = (root: CanvasRoot): CanvasRoot => {
+    const next = edit.kind === 'background' ? { ...root, background } : { ...root, classes };
+    return {
+      ...(next.background === undefined ? {} : { background: next.background }),
+      ...(next.classes === undefined ? {} : { classes: next.classes }),
+    };
+  };
+  if (target.kind === 'project') {
+    const root = edited({
+      ...(file.background === undefined ? {} : { background: file.background }),
+      ...(file.classes === undefined ? {} : { classes: file.classes }),
+    });
+    const next = canvasFileOf({ background: root.background, classes: root.classes }, file.components);
+    assert(edit.kind !== 'background' || next.background === background, 'The project background is what was set');
+    return next;
+  }
+  canvasComponentFile(target.file);
+  const settings = file.components[target.file] ?? {};
+  return withComponentSettings(file, target.file, { ...settings, root: edited(settings.root ?? {}) });
+}
+
+/** Where a canvas root setting comes from: the component, the project, or nowhere. */
+export type RootSource = 'component' | 'project' | 'none';
+
+/** The canvas root a component's canvas draws with: each setting from the component, else the project. */
+export function canvasRoot(
+  file: ComponentCanvasFile,
+  component: string,
+): {
+  readonly background: string | undefined;
+  readonly backgroundSource: RootSource;
+  readonly classes: readonly string[];
+  readonly classesSource: RootSource;
+} {
+  const own = file.components[component]?.root;
+  const background = own?.background ?? file.background;
+  const classes = own?.classes ?? file.classes ?? [];
+  assert(classes.length <= CANVAS_LIMITS.rootClassesMax, 'The canvas root carries a bounded number of classes');
+  return {
+    background,
+    backgroundSource: own?.background !== undefined ? 'component' : file.background !== undefined ? 'project' : 'none',
+    classes,
+    classesSource: own?.classes !== undefined ? 'component' : file.classes !== undefined ? 'project' : 'none',
+  };
 }
 
 /** Where a frame's background comes from: a frame or scope entry (its key), the project, or nowhere (the app's grey). */
-export type BackgroundSource = { readonly kind: 'entry'; readonly key: string } | { readonly kind: 'project' } | { readonly kind: 'none' };
+export type BackgroundSource =
+  { readonly kind: 'entry'; readonly key: string } | { readonly kind: 'root' } | { readonly kind: 'project' } | { readonly kind: 'none' };
 
 /** The background a frame shows and where it comes from: the frame, then its scopes and component, then the project. */
-export function frameBackground(file: ComponentCanvasFile, resolved: ResolvedFrame): { readonly value: string | undefined; readonly source: BackgroundSource } {
+export function frameBackground(
+  file: ComponentCanvasFile,
+  resolved: ResolvedFrame,
+  component: string,
+): { readonly value: string | undefined; readonly source: BackgroundSource } {
   const key = resolved.origins.get('background');
   assert(resolved.background === undefined || key !== undefined, 'A frame’s own background says which entry set it');
   if (resolved.background !== undefined && key !== undefined) {
     return { value: resolved.background, source: { kind: 'entry', key } };
   }
-  if (file.background !== undefined) {
-    return { value: file.background, source: { kind: 'project' } };
+  const root = canvasRoot(file, component);
+  if (root.background !== undefined) {
+    return { value: root.background, source: { kind: root.backgroundSource === 'component' ? 'root' : 'project' } };
   }
   return { value: undefined, source: { kind: 'none' } };
 }
@@ -736,23 +873,24 @@ export function renameCanvasVariables(file: ComponentCanvasFile, rename: (name: 
   const components = Object.fromEntries(
     Object.entries(file.components).map(([component, settings]): [string, ComponentCanvas] => {
       const frames = settings.frames;
-      if (frames === undefined) {
-        return [component, settings];
-      }
-      const renamed = Object.fromEntries(
-        Object.entries(frames).map(([key, entry]): [string, FrameEntry] => [
-          key,
-          entry.background === undefined ? entry : { ...entry, background: next(entry.background) },
-        ]),
-      );
-      return [component, { ...settings, frames: renamed }];
+      const root = settings.root?.background === undefined ? settings.root : { ...settings.root, background: next(settings.root.background) };
+      const renamed =
+        frames === undefined
+          ? undefined
+          : Object.fromEntries(
+              Object.entries(frames).map(([key, entry]): [string, FrameEntry] => [
+                key,
+                entry.background === undefined ? entry : { ...entry, background: next(entry.background) },
+              ]),
+            );
+      return [component, { ...settings, ...(renamed === undefined ? {} : { frames: renamed }), ...(root === undefined ? {} : { root }) }];
     }),
   );
   const background = file.background === undefined ? undefined : next(file.background);
   if (!changed) {
     return file;
   }
-  const result: ComponentCanvasFile = { version: 1, ...(background === undefined ? {} : { background: canvasBackground(background) }), components };
+  const result = canvasFileOf({ background: background === undefined ? undefined : canvasBackground(background), classes: file.classes }, components);
   assert(Object.keys(result.components).length === Object.keys(file.components).length, 'A rename keeps every component');
   assert((result.background === undefined) === (file.background === undefined), 'A rename neither adds nor drops the project background');
   return result;

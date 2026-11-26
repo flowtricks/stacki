@@ -32,7 +32,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Wysokość',
   'componentCanvas.panel.hug': 'Do treści',
   'componentCanvas.panel.pixels': '{side} w pikselach',
+  'componentCanvas.panel.root.about': 'Kanwa za wszystkimi ramkami: element html strony. Jej klasy znajdziesz w panelu Ustawienia.',
+  'componentCanvas.panel.root.title': 'Kanwa',
   'componentCanvas.panel.scope.all': 'Wszystkie ramki',
+  'componentCanvas.panel.scope.component': 'Ten komponent',
   'componentCanvas.panel.scope.frame': 'Ta ramka',
   'componentCanvas.panel.scope.hint':
     'Zakres ustawianego rozmiaru, tła i wartości właściwości: ta ramka, wszystkie ramki jednej wartości lub wszystkie ramki. Własne ustawienie ramki ma pierwszeństwo przed szerszym.',

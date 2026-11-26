@@ -2,7 +2,7 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
-import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { isCanvasRoot, isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { requestCanvasReports } from '../../editor/canvasQuery';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -215,6 +215,10 @@ export function useCrumbLabels(
 
   // Breadcrumb trail for the canvas toolbar: page → ancestors → selection.
   const crumbLabel = (node: EditorNode): string => {
+    // The component canvas's root is its page's own <html>, not a layout.
+    if (node.kind === 'element' && node.name === 'html' && isComponentCanvasPage(currentPage?.path)) {
+      return 'html'; // i18n-ignore: the element's own tag name, as elements are named everywhere.
+    }
     if (node.id === 'layout') {
       return currentLayoutName || node.name || 'layout';
     }
@@ -313,8 +317,10 @@ export function useCanvasMarks(
     crumbs.push({ id: 'frontmatter', label: 'Frontmatter' }); // i18n-ignore: the file format's own word, shown as written.
   } else if (model && selectedId) {
     // On the component canvas's page the frames' wrappers are its own chrome, not the person's markup: the trail names
-    // the frame's instance alone, as the Navigator lists it.
-    const chain = isComponentCanvasPage(currentPage?.path) ? selectedAncestors.filter((node) => node.kind === 'component') : selectedAncestors;
+    // the canvas root (<html>) and the frame's instance, as the Navigator lists them.
+    const chain = isComponentCanvasPage(currentPage?.path)
+      ? selectedAncestors.filter((node) => node.kind === 'component' || (node.kind === 'element' && node.name === 'html'))
+      : selectedAncestors;
     // A then has no row in the navigator, so the trail doesn't name it either —
     // "if command › then › hero-command" said "then" to no one (see
     // branches.js).
@@ -429,7 +435,9 @@ export function useOverlayInfo(
     if (!node) {
       return undefined;
     }
-    const label = node.id === 'layout' ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
+    // The component canvas's root is its page's own <html>, not a layout.
+    const canvasRoot = isCanvasRoot(path);
+    const label = node.id === 'layout' && !canvasRoot ? currentLayoutName || node.name || 'layout' : crumbLabel(node);
     // Fragments group inline content rather than referring to another component.
     // Their outlines use ordinary element styling, as dynamic tags already do.
     const kind = isFragmentNode(node)
@@ -449,7 +457,7 @@ export function useOverlayInfo(
       dynamicTag: !!node.dynamicTag,
       nodeKind: node.kind,
       childCount: 'children' in node && Array.isArray(node.children) ? node.children.length : 0,
-      isLayout: node.id === 'layout',
+      isLayout: node.id === 'layout' && !canvasRoot,
       bound: kind === 'element' && isDataBound(node),
       hostContent: node.kind === 'element' && node.name === 'slot',
     };

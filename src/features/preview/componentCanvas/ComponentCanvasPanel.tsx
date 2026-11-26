@@ -4,7 +4,7 @@
 // their own frames and the frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode } from 'react';
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, frameBackground, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, canvasRoot, frameBackground, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
 import Dropdown from '../../../ui/Dropdown';
 import InfoHint from '../../../ui/InfoHint';
 import SegmentedControl from '../../../ui/SegmentedControl';
@@ -15,7 +15,7 @@ import ColorSwatch from '../../style/components/ColorSwatch';
 import VariableConnect from '../../style/VariableConnect';
 import type { ModelFrame } from './canvasModel';
 import { frameLabel, partLabel, prettyComponentName } from './frameLabel';
-import { PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
+import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 
 // The width a frame takes when it stops hugging and nothing wider sets one.
@@ -34,7 +34,11 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
         <span className="component-canvas-panel-name">{prettyComponentName(state.component.name)}</span>
         <span className="badge">{translate('componentCanvas.panel.frames', { count: state.layout.frames.length })}</span>
       </div>
-      <FrameSection canvas={canvas} state={state} frame={frame} entry={entry} />
+      {state.subject === 'root' ? (
+        <RootSection canvas={canvas} state={state} frame={frame} />
+      ) : (
+        <FrameSection canvas={canvas} state={state} frame={frame} entry={entry} />
+      )}
     </div>
   );
 }
@@ -64,7 +68,6 @@ function FrameSection({
     { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
     ...frame.parts.map((part) => ({ value: frameKey([part]), label: translate('componentCanvas.panel.scope.part', { part: partLabel(part, translate) }) })),
     { value: '', label: translate('componentCanvas.panel.scope.all') },
-    { value: PROJECT_SCOPE, label: translate('componentCanvas.panel.scope.project') },
   ].filter((option, index, all) => all.findIndex((other) => other.value === option.value) === index);
   return (
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.frame.title')}>
@@ -87,13 +90,32 @@ function FrameSection({
         </label>
         <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
       </div>
-      {state.scope !== PROJECT_SCOPE && (
-        <>
-          <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
-          <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
-        </>
-      )}
+      <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
+      <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
       <BackgroundField canvas={canvas} state={state} frame={frame} entry={entry} />
+    </section>
+  );
+}
+
+// The canvas itself, while its root (the page's <html>) is selected: where its settings apply, and its background, the
+// surface every frame sits on. Its classes are the Settings panel's class field (canvasFrameSettings.tsx).
+function RootSection({ canvas, state, frame }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen; readonly frame: ModelFrame }) {
+  const translate = useTranslate();
+  const scopes = [
+    { value: COMPONENT_SCOPE, label: translate('componentCanvas.panel.scope.component') },
+    { value: PROJECT_SCOPE, label: translate('componentCanvas.panel.scope.project') },
+  ];
+  return (
+    <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.root.title')}>
+      <Heading title={translate('componentCanvas.panel.root.title')} hint={translate('componentCanvas.panel.root.about')} />
+      <div className="props-field">
+        <label>
+          {translate('componentCanvas.panel.scope.label')}
+          <InfoHint text={translate('componentCanvas.panel.scope.hint')} />
+        </label>
+        <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
+      </div>
+      <BackgroundField canvas={canvas} state={state} frame={frame} entry={undefined} />
     </section>
   );
 }
@@ -163,9 +185,14 @@ function BackgroundField({
   readonly entry: FrameEntry | undefined;
 }) {
   const translate = useTranslate();
-  const project = state.scope === PROJECT_SCOPE;
-  const shown = project ? { value: state.settings.background, source: { kind: 'project' as const } } : frameBackground(state.settings, frame.resolved);
-  const own = project ? state.settings.background !== undefined : entry?.background !== undefined;
+  // At a root scope the field is the canvas surface: the component's own, else the project's (inherited at the component).
+  const rootScope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE;
+  const root = canvasRoot(state.settings, state.component.file);
+  const rootOwn = state.scope === PROJECT_SCOPE ? state.settings.background : state.settings.components[state.component.file]?.root?.background;
+  const shown = rootScope
+    ? { value: rootOwn ?? (state.scope === COMPONENT_SCOPE ? root.background : undefined) }
+    : frameBackground(state.settings, frame.resolved, state.component.file);
+  const own = rootScope ? rootOwn !== undefined : entry?.background !== undefined;
   const inherited = !own && shown.value !== undefined;
   const value = shown.value;
   const label = translate('componentCanvas.panel.background');

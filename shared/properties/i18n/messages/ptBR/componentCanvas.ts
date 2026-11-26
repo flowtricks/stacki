@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Altura',
   'componentCanvas.panel.hug': 'Ao conteúdo',
   'componentCanvas.panel.pixels': '{side} em pixels',
+  'componentCanvas.panel.root.about': 'O canvas atrás de todos os quadros: o elemento html da página. As classes dele ficam no painel de configurações.',
+  'componentCanvas.panel.root.title': 'Canvas', // same
   'componentCanvas.panel.scope.all': 'Todos os quadros',
+  'componentCanvas.panel.scope.component': 'Este componente',
   'componentCanvas.panel.scope.frame': 'Este quadro',
   'componentCanvas.panel.scope.hint':
     'Onde se aplicam o tamanho, o plano de fundo e os valores de props que você definir: neste quadro, em todos os quadros de um valor ou em todos os quadros. A configuração do próprio quadro prevalece sobre uma mais ampla.',

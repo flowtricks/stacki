@@ -31,7 +31,10 @@ export const messages = {
   'componentCanvas.panel.height': '高さ',
   'componentCanvas.panel.hug': 'コンテンツに合わせる',
   'componentCanvas.panel.pixels': '{side}（ピクセル）',
+  'componentCanvas.panel.root.about': 'すべてのフレームの背後にあるキャンバスで、ページの html 要素です。そのクラスは設定パネルにあります。',
+  'componentCanvas.panel.root.title': 'キャンバス',
   'componentCanvas.panel.scope.all': 'すべてのフレーム',
+  'componentCanvas.panel.scope.component': 'このコンポーネント',
   'componentCanvas.panel.scope.frame': 'このフレーム',
   'componentCanvas.panel.scope.hint':
     '設定するサイズ、背景、プロパティ値の適用先です。このフレーム、ある値のすべてのフレーム、またはすべてのフレームから選びます。フレーム自体の設定は、より広い範囲の設定より優先されます。',

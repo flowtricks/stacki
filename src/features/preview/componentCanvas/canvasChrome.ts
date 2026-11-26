@@ -32,22 +32,27 @@ export function chromeStyles(theme: 'light' | 'dark', surface?: string): string 
   // A variable the project no longer defines falls back to the grey rather than to nothing.
   const canvas = surface === undefined ? grey : withFallback(surface, grey);
   const label = theme === 'dark' ? '#a3a3a3' : '#6b6b6b';
+  // The page is the canvas: its <html> (the canvas root, which the person selects and gives classes) is the surface, its
+  // <body> the pannable, zoomable world, and each frame one element holding its instance, its label a caption drawn by
+  // the frame itself (::before), so nothing but the root and the instances is an element anyone can point at. The
+  // surface and the frames' page background apply once the script has read the site's own (data-stacki-ready).
   const css = `
-html, body { margin: 0 !important; padding: 0 !important; height: 100% !important; overflow: hidden !important; }
-stacki-canvas { position: fixed; inset: 0; display: block; overflow: clip; background: ${canvas}; touch-action: none; }
-stacki-canvas.is-panning, stacki-canvas.is-panning * { cursor: grabbing !important; }
-stacki-canvas-world { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 96px; padding: 64px; transform-origin: 0 0; width: max-content; }
-stacki-canvas-row { display: flex; align-items: flex-start; gap: 64px; }
-stacki-frame { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-stacki-frame-label { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; letter-spacing: 0; text-transform: none; color: ${label}; user-select: none; cursor: default; }
-stacki-frame[data-selected] > stacki-frame-label { color: #2f80ff !important; }
-stacki-frame-body { display: block; position: relative; transform: translate(0); box-sizing: border-box; width: max-content; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px; min-width: 24px; min-height: 24px; }
-stacki-frame-body[data-transparent] { background: ${surface === undefined ? '#fff' : 'transparent'}; }
-stacki-frame-body[data-fixed-width] { max-width: none; overflow-x: clip; }
-stacki-frame-body[data-fixed-height] { overflow-y: clip; }
-stacki-frame-body[data-fixed-width][data-fixed-height] { content-visibility: auto; }
-stacki-frame-body[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px; }
-stacki-frame-body[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px; }
+html { height: 100% !important; overflow: hidden !important; touch-action: none; }
+html[data-stacki-ready] { background: ${canvas} !important; }
+html[data-stacki-ready] body { background: transparent !important; }
+body { position: absolute !important; left: 0; top: 0; margin: 0 !important; padding: 64px !important; box-sizing: content-box; display: grid !important; grid-auto-flow: row; gap: 96px 64px; align-items: start; justify-items: start; transform-origin: 0 0; width: max-content; min-height: 0 !important; }
+html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
+stacki-frame { display: block; position: relative; transform: translate(0); box-sizing: border-box; width: max-content; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px; min-width: 24px; min-height: 24px; }
+stacki-frame::before { content: attr(data-label); position: absolute; left: 0; bottom: 100%; margin-bottom: 8px; max-width: max(100%, 320px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; letter-spacing: 0; text-transform: none; color: ${label}; user-select: none; cursor: default; }
+html[data-stacki-light] stacki-frame::before { color: #5c5c5c; }
+html[data-stacki-dark] stacki-frame::before { color: #a3a3a3; }
+stacki-frame[data-selected]::before { color: #2f80ff !important; }
+stacki-frame[data-transparent] { background: ${surface === undefined ? '#fff' : 'transparent'}; }
+stacki-frame[data-fixed-width] { max-width: none; overflow-x: clip; }
+stacki-frame[data-fixed-height] { overflow-y: clip; }
+stacki-frame[data-fixed-width][data-fixed-height] { content-visibility: auto; }
+stacki-frame[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px; }
+stacki-frame[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px; }
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
@@ -66,9 +71,9 @@ export function chromeScript(id: string): string {
   var ID = ${JSON.stringify(id)};
   var TYPE = ${JSON.stringify(CANVAS_MESSAGE)};
   var ZOOM_MIN = ${String(CHROME_LIMITS.zoomMin)}, ZOOM_MAX = ${String(CHROME_LIMITS.zoomMax)};
-  var canvas = document.querySelector('stacki-canvas');
-  var world = document.querySelector('stacki-canvas-world');
-  if (!canvas || !world) return;
+  var root = document.documentElement;
+  var world = document.body;
+  if (!world) return;
   var KEY = 'stacki-canvas-view:' + ID;
   var view = null;
   var restoredMoved = false;
@@ -81,6 +86,7 @@ export function chromeScript(id: string): string {
   try { var stored = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (stored && isFinite(stored.x) && isFinite(stored.y) && stored.scale > 0) { view = { x: stored.x, y: stored.y, scale: stored.scale }; restoredMoved = stored.moved === true; } } catch (e) {}
   function post(message) { message.type = TYPE; message.canvas = ID; try { window.parent.postMessage(message, '*'); } catch (e) {} }
   function clamp(value, low, high) { return Math.min(Math.max(value, low), high); }
+  function flag(element, name, on) { if (on !== element.hasAttribute(name)) { if (on) element.setAttribute(name, ''); else element.removeAttribute(name); } }
   function apply() {
     if (!view) return;
     var transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.scale + ')';
@@ -90,11 +96,11 @@ export function chromeScript(id: string): string {
   function set(next) { view = next; apply(); remember(); }
   function fit() {
     var width = world.offsetWidth, height = world.offsetHeight;
-    var box = canvas.getBoundingClientRect();
-    var room = Math.max(box.width - insetRight, box.width / 3);
-    if (!width || !height || !room || !box.height) return;
-    var scale = clamp(Math.min(room / width, box.height / height), ZOOM_MIN, 1);
-    set({ scale: scale, x: Math.max((room - width * scale) / 2, 0), y: Math.max((box.height - height * scale) / 2, 0) });
+    var boxWidth = window.innerWidth, boxHeight = window.innerHeight;
+    var room = Math.max(boxWidth - insetRight, boxWidth / 3);
+    if (!width || !height || !room || !boxHeight) return;
+    var scale = clamp(Math.min(room / width, boxHeight / height), ZOOM_MIN, 1);
+    set({ scale: scale, x: Math.max((room - width * scale) / 2, 0), y: Math.max((boxHeight - height * scale) / 2, 0) });
   }
   function zoomAt(scale, x, y) {
     moved = true;
@@ -102,59 +108,64 @@ export function chromeScript(id: string): string {
     set({ scale: next, x: x - (x - view.x) * ratio, y: y - (y - view.y) * ratio });
   }
   function frameOf(node) { return node && node.closest ? node.closest('stacki-frame') : null; }
+  function frames() { return document.querySelectorAll('stacki-frame'); }
   function mark() {
-    var frames = document.querySelectorAll('stacki-frame');
-    for (var i = 0; i < frames.length; i++) {
-      var frame = frames[i];
-      var on = frame.getAttribute('data-frame') === selected;
-      if (on !== frame.hasAttribute('data-selected')) { if (on) frame.setAttribute('data-selected', ''); else frame.removeAttribute('data-selected'); }
-    }
+    var all = frames();
+    for (var i = 0; i < all.length; i++) flag(all[i], 'data-selected', all[i].getAttribute('data-frame') === selected);
   }
   // A hugging frame whose component draws only out-of-flow boxes (a fixed modal, an absolute popover) has no size of
   // its own, so it takes a window-like size for them to fill; every other frame keeps hugging.
   function fallbacks() {
-    var bodies = document.querySelectorAll('stacki-frame-body');
-    for (var i = 0; i < bodies.length; i++) {
-      var body = bodies[i], kids = body.children, outside = kids.length > 0;
+    var all = frames();
+    for (var i = 0; i < all.length; i++) {
+      var frame = all[i], kids = frame.children, outside = kids.length > 0;
       for (var k = 0; k < kids.length && outside; k++) {
         var position = getComputedStyle(kids[k]).position;
         outside = position === 'fixed' || position === 'absolute';
       }
-      if (outside !== body.hasAttribute('data-fallback')) { if (outside) body.setAttribute('data-fallback', ''); else body.removeAttribute('data-fallback'); }
+      flag(frame, 'data-fallback', outside);
     }
   }
-  // Colours are written on the elements themselves, never as custom properties: a property set here would be listed
-  // among the site's own variables wherever the editor offers them (the variable picker of an element in a frame).
-  function paint(elements, property, value) {
-    for (var i = 0; i < elements.length; i++) { if (elements[i].style.getPropertyValue(property) !== value) elements[i].style.setProperty(property, value); }
+  var clear = function (color) { return !color || color === 'transparent' || /rgba\\(.*,\\s*0\\)$/.test(color); };
+  // The site's own page background, read with the canvas's surface lifted for the moment it takes (the site's styles
+  // arrive after this script, and a theme class on the root changes it): without a project canvas background, a frame
+  // without a background of its own shows it, as the component sits on in the site (its text colours are chosen for
+  // it). Written on the frames themselves, never as a custom property the editor's variable picker would list.
+  function sitePage() {
+    root.removeAttribute('data-stacki-ready');
+    var body = getComputedStyle(world).backgroundColor, html = getComputedStyle(root).backgroundColor;
+    root.setAttribute('data-stacki-ready', '');
+    return !clear(body) ? body : !clear(html) ? html : '#fff';
   }
-  // Without a project canvas background, a frame without a background of its own shows the page's, as the component
-  // sits on in the site: the site's text colours are chosen for it, and over the canvas's grey a dark link vanished.
+  root.setAttribute('data-stacki-ready', '');
   function pageBackground() {
-    if (canvas.hasAttribute('data-surface')) return;
-    var clear = function (color) { return !color || color === 'transparent' || /rgba\(.*,\s*0\)$/.test(color); };
-    var body = getComputedStyle(document.body).backgroundColor, root = getComputedStyle(document.documentElement).backgroundColor;
-    paint(document.querySelectorAll('stacki-frame-body[data-transparent]'), 'background', !clear(body) ? body : !clear(root) ? root : '#fff');
+    if (root.hasAttribute('data-stacki-surface')) return;
+    var page = sitePage();
+    var all = document.querySelectorAll('stacki-frame[data-transparent]');
+    for (var i = 0; i < all.length; i++) { if (all[i].style.getPropertyValue('background') !== page) all[i].style.setProperty('background', page); }
   }
-  // Labels stay legible on any canvas colour: dark on a light canvas, light on a dark one.
+  // Captions stay legible on any canvas colour: dark on a light canvas, light on a dark one.
   function labelColor() {
-    var match = /rgba?\(([^)]+)\)/.exec(getComputedStyle(canvas).backgroundColor || '');
+    var match = /rgba?\\(([^)]+)\\)/.exec(getComputedStyle(root).backgroundColor || '');
     var parts = match ? match[1].split(',').map(parseFloat) : [30, 30, 30, 1];
     var alpha = parts.length > 3 ? parts[3] : 1;
     var light = alpha > 0.5 && (0.299 * parts[0] + 0.587 * parts[1] + 0.114 * parts[2]) > 150;
-    paint(document.querySelectorAll('stacki-frame-label'), 'color', light ? '#5c5c5c' : '#a3a3a3');
+    flag(root, 'data-stacki-light', light);
+    flag(root, 'data-stacki-dark', !light);
   }
   var queued = false;
   function settle() { queued = false; apply(); mark(); fallbacks(); pageBackground(); labelColor(); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
-  new MutationObserver(queue).observe(canvas, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
-  canvas.addEventListener('wheel', function (event) {
+  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
+  // The site's styles arrive in <head> after this script runs (the dev server injects them): settle again as they do.
+  if (document.head) new MutationObserver(queue).observe(document.head, { childList: true });
+  window.addEventListener('load', queue);
+  window.addEventListener('wheel', function (event) {
     event.preventDefault();
     if (!view) return;
-    var box = canvas.getBoundingClientRect();
     if (event.ctrlKey || event.metaKey) {
-      zoomAt(view.scale * Math.exp(-clamp(event.deltaY, -40, 40) * 0.01), event.clientX - box.left, event.clientY - box.top);
+      zoomAt(view.scale * Math.exp(-clamp(event.deltaY, -40, 40) * 0.01), event.clientX, event.clientY);
     } else {
       moved = true;
       set({ scale: view.scale, x: view.x - event.deltaX, y: view.y - event.deltaY });
@@ -162,22 +173,20 @@ export function chromeScript(id: string): string {
   }, { passive: false });
   window.addEventListener('keydown', function (event) { if (event.code === 'Space' && !event.repeat && !(event.target && event.target.isContentEditable)) space = true; }, true);
   window.addEventListener('keyup', function (event) { if (event.code === 'Space') space = false; }, true);
-  // Clicks belong to the editor (it selects the frame's instance); a press tells it whether it was on the frame's own
-  // chrome (its label, the space around the instance), which also opens the frame's settings.
-  canvas.addEventListener('pointerdown', function (event) {
+  // Clicks belong to the editor (it selects the frame's instance, or the root between frames); a press tells it
+  // whether it was on the frame itself (its caption, the space around its instance), which opens the frame's settings.
+  window.addEventListener('pointerdown', function (event) {
     var frame = frameOf(event.target);
     var background = !frame;
     if (frame && event.button === 0 && !space) {
-      var body = frame.querySelector('stacki-frame-body');
-      var chrome = !body || event.target === body || !body.contains(event.target);
-      post({ event: 'select', frame: frame.getAttribute('data-frame'), chrome: chrome });
+      post({ event: 'select', frame: frame.getAttribute('data-frame'), chrome: event.target === frame });
     }
     if (!view || !(event.button === 1 || (event.button === 0 && (space || background)))) return;
     event.preventDefault();
     var startX = event.clientX, startY = event.clientY, from = view;
-    canvas.classList.add('is-panning');
+    root.setAttribute('data-stacki-panning', '');
     var move = function (next) { moved = true; set({ scale: from.scale, x: from.x + next.clientX - startX, y: from.y + next.clientY - startY }); };
-    var end = function () { canvas.classList.remove('is-panning'); window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerup', end, true); window.removeEventListener('pointercancel', end, true); };
+    var end = function () { root.removeAttribute('data-stacki-panning'); window.removeEventListener('pointermove', move, true); window.removeEventListener('pointerup', end, true); window.removeEventListener('pointercancel', end, true); };
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', end, true);
     window.addEventListener('pointercancel', end, true);
@@ -191,15 +200,14 @@ export function chromeScript(id: string): string {
     }
     if (data.command === 'select') { selected = typeof data.frame === 'string' ? data.frame : null; mark(); }
     if (data.command === 'zoom' && view) {
-      var box = canvas.getBoundingClientRect();
       if (data.action === 'fit') { moved = false; fit(); }
-      else zoomAt(data.action === 'reset' ? (isFinite(data.unit) && data.unit > 0 ? data.unit : 1) : data.action === 'in' ? view.scale * 1.25 : view.scale / 1.25, box.width / 2, box.height / 2);
+      else zoomAt(data.action === 'reset' ? (isFinite(data.unit) && data.unit > 0 ? data.unit : 1) : data.action === 'in' ? view.scale * 1.25 : view.scale / 1.25, window.innerWidth / 2, window.innerHeight / 2);
     }
   });
   if (typeof ResizeObserver === 'function') {
     var refit = new ResizeObserver(function () { if (!moved) fit(); });
     refit.observe(world);
-    refit.observe(canvas);
+    refit.observe(root);
   }
   fallbacks();
   pageBackground();

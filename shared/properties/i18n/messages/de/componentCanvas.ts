@@ -31,7 +31,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Höhe',
   'componentCanvas.panel.hug': 'An Inhalt',
   'componentCanvas.panel.pixels': '{side} in Pixeln',
+  'componentCanvas.panel.root.about': 'Die Canvas hinter allen Frames: das html-Element der Seite. Ihre Klassen findest du im Einstellungen-Panel.',
+  'componentCanvas.panel.root.title': 'Canvas', // same
   'componentCanvas.panel.scope.all': 'Alle Frames',
+  'componentCanvas.panel.scope.component': 'Diese Komponente',
   'componentCanvas.panel.scope.frame': 'Dieser Frame',
   'componentCanvas.panel.scope.hint':
     'Wo die von dir festgelegte Größe, der Hintergrund und die Prop-Werte gelten: für diesen Frame, für jeden Frame eines Werts oder für alle Frames. Die eigene Einstellung eines Frames hat Vorrang vor einer weiter gefassten.',

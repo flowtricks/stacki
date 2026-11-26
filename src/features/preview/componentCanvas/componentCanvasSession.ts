@@ -27,6 +27,10 @@ export interface CanvasOpen {
   readonly defaults: Readonly<Record<string, DefaultValue>>;
   /** Each frame's instance on the canvas page, by its path in the page's tree: what the navigator lists and a click selects. */
   readonly instances: readonly CanvasInstance[];
+  /** The canvas page's root (its <html>) by path: the canvas itself, selected by a click between frames. */
+  readonly root: string;
+  /** What Frame settings and the Settings panel speak of: a frame (`frame`), or the canvas root. */
+  readonly subject: 'frame' | 'root';
 }
 
 /** One frame's instance of the component on the canvas page. */
@@ -44,6 +48,9 @@ export type CanvasState = { readonly kind: 'idle' } | { readonly kind: 'opening'
  * Never a frame key, which is sorted `name=value` pairs or empty.
  */
 export const PROJECT_SCOPE = '*project';
+
+/** The "Apply to" scope of this component's canvas root (componentCanvas.ts ComponentCanvas.root). Never a frame key. */
+export const COMPONENT_SCOPE = '*component';
 
 export type CanvasZoom = 'in' | 'out' | 'reset' | 'fit';
 
@@ -67,6 +74,8 @@ export interface ComponentCanvasControl {
    * chosen; the project level holds no props, so there it is this frame). Never to the component or its instances.
    */
   readonly editProp: (edit: Extract<FrameEdit, { readonly kind: 'prop' | 'unset' | 'inherit' }>) => void;
+  /** The canvas root's classes at the root's "Apply to" scope (this component or the project); undefined clears them there. */
+  readonly editRootClasses: (classes: readonly string[] | undefined) => void;
   /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */
   readonly coverRight: (pixels: number) => void;
 }
@@ -128,14 +137,24 @@ export function canvasInstanceAt(path: string | undefined): CanvasInstance | und
   });
 }
 
+/** Whether `path` is the canvas page's root (its <html>): the canvas itself. */
+export function isCanvasRoot(path: string | undefined): boolean {
+  return noted.kind === 'open' && path !== undefined && path === noted.root;
+}
+
+/** The canvas root's path in the open canvas page, if a canvas is open. */
+export function canvasRootPath(): string | undefined {
+  return noted.kind === 'open' ? noted.root : undefined;
+}
+
 /** The instance at exactly `path` in the canvas page, if one is. */
 export function canvasInstanceOf(path: string | undefined): CanvasInstance | undefined {
   return noted.kind === 'open' && path !== undefined ? noted.instances.find((instance) => instance.path === path) : undefined;
 }
 
-// An instance sits in its frame's body, which sits in the frame (canvasPage.ts frameMarkup).
+// An instance sits directly in its frame (canvasPage.ts frameMarkup).
 function framePathOf(instancePath: string): string {
   const parts = instancePath.split('.');
-  assert(parts.length > 2, 'A canvas instance is inside a frame body inside a frame');
-  return parts.slice(0, -2).join('.');
+  assert(parts.length > 1, 'A canvas instance is inside a frame');
+  return parts.slice(0, -1).join('.');
 }

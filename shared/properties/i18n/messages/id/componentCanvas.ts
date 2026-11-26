@@ -29,7 +29,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Tinggi',
   'componentCanvas.panel.hug': 'Ikuti isi',
   'componentCanvas.panel.pixels': '{side} dalam piksel',
+  'componentCanvas.panel.root.about': 'Kanvas di belakang semua frame: elemen html halaman. Kelasnya ada di panel Pengaturan.',
+  'componentCanvas.panel.root.title': 'Kanvas',
   'componentCanvas.panel.scope.all': 'Semua frame',
+  'componentCanvas.panel.scope.component': 'Komponen ini',
   'componentCanvas.panel.scope.frame': 'Frame ini',
   'componentCanvas.panel.scope.hint':
     'Tempat berlakunya ukuran, latar belakang, dan nilai prop yang Anda atur: frame ini, setiap frame dengan satu nilai, atau semua frame. Pengaturan milik frame mengalahkan pengaturan yang lebih luas.',
