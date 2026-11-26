@@ -698,6 +698,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Quando la pagina mostra un codice, copialo e incollalo qui sotto.',
   'ai.signIn.waiting.text': 'Quando la pagina dice che hai effettuato l’accesso, torna qui. Termina da solo dopo cinque minuti.',
   'ai.signIn.waiting.title': 'Completa l’accesso nel browser',
+  'ai.signInCheck.chip': 'Accesso non verificato',
+  'ai.signInCheck.hint':
+    'Stacki non è riuscito a verificare se {agent} ha effettuato l’accesso. Puoi continuare a scrivere e inviare. Premi per ripetere la verifica.',
+  'ai.signInSource.apiKey': 'Chiave API',
+  'ai.signInSource.apiKey.hint': '{agent} usa una chiave API, non l’accesso con un account. L’utilizzo potrebbe essere addebitato a quella chiave.',
+  'ai.signInSource.cloud': 'Accesso cloud',
+  'ai.signInSource.cloud.hint': '{agent} ha effettuato l’accesso tramite un provider cloud. Quel provider potrebbe addebitare l’utilizzo.',
+  'ai.signInSource.token': 'Token di accesso',
+  'ai.signInSource.token.hint': '{agent} ha effettuato l’accesso con un token di accesso.',
   'ai.status.counted.command': {
     one: 'Esecuzione di {count} comando',
     other: 'Esecuzione di {count} comandi',

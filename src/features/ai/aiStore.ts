@@ -1034,7 +1034,8 @@ function listen(): void {
     // A "ready" push while the agent's sign-in has expired is runSetup's to apply, together with the fresh availability
     // (one update, no flash of the expired card between the two).
     const expired = state.agents.some((entry) => entry.agent === next.agent && entry.state === 'sign-in');
-    if (next.step === 'ready' && expired) {
+    // "Unchecked" after a sign-in that worked is read the same way: main may no longer hold the agent as signed out.
+    if ((next.step === 'ready' || next.step === 'unchecked') && expired) {
       // The sign-in finished on its own, long after the `signIn` request returned: nobody else will apply it.
       // Leaving this push to runSetup left the card waiting forever (the agent's saved sign-in had expired,
       // which is exactly when a person signs in again).

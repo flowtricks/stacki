@@ -698,6 +698,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Sayfa bir kod gösterdiğinde kopyalayıp aşağıya yapıştırın.',
   'ai.signIn.waiting.text': 'Sayfa oturum açtığınızı söylediğinde buraya dönün. Beş dakika sonra kendiliğinden sona erer.',
   'ai.signIn.waiting.title': 'Oturum açmayı tarayıcınızda tamamlayın',
+  'ai.signInCheck.chip': 'Oturum denetlenmedi',
+  'ai.signInCheck.hint':
+    'Stacki, {agent} oturumunun açık olup olmadığını denetleyemedi. Yazmaya ve göndermeye devam edebilirsiniz. Yeniden denetlemek için basın.',
+  'ai.signInSource.apiKey': 'API anahtarı',
+  'ai.signInSource.apiKey.hint': '{agent}, hesap oturumu yerine bir API anahtarı kullanıyor. Kullanım bu anahtara faturalandırılabilir.',
+  'ai.signInSource.cloud': 'Bulut oturumu',
+  'ai.signInSource.cloud.hint': '{agent} oturumu bir bulut sağlayıcısı üzerinden açık. Kullanımı bu sağlayıcı faturalandırabilir.',
+  'ai.signInSource.token': 'Erişim belirteci',
+  'ai.signInSource.token.hint': '{agent} oturumu bir erişim belirteciyle açık.',
   'ai.status.counted.command': {
     one: '{count} komut çalıştırılıyor',
     other: '{count} komut çalıştırılıyor',

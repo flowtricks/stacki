@@ -702,6 +702,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Wenn die Seite einen Code zeigt, kopiere ihn und füge ihn unten ein.',
   'ai.signIn.waiting.text': 'Wenn die Seite meldet, dass du angemeldet bist, komm hierher zurück. Nach fünf Minuten endet der Vorgang von selbst.',
   'ai.signIn.waiting.title': 'Schließe die Anmeldung in deinem Browser ab',
+  'ai.signInCheck.chip': 'Anmeldung nicht geprüft',
+  'ai.signInCheck.hint': 'Stacki konnte nicht prüfen, ob du bei {agent} angemeldet bist. Du kannst weiter schreiben und senden. Zum erneuten Prüfen klicken.',
+  'ai.signInSource.apiKey': 'API-Schlüssel',
+  'ai.signInSource.apiKey.hint':
+    '{agent} nutzt einen API-Schlüssel statt einer Kontoanmeldung. Die Nutzung wird möglicherweise über diesen Schlüssel abgerechnet.',
+  'ai.signInSource.cloud': 'Cloud-Anmeldung',
+  'ai.signInSource.cloud.hint': '{agent} ist über einen Cloud-Anbieter angemeldet. Dieser Anbieter rechnet die Nutzung möglicherweise ab.',
+  'ai.signInSource.token': 'Zugriffstoken',
+  'ai.signInSource.token.hint': '{agent} ist mit einem Zugriffstoken angemeldet.',
   'ai.status.counted.command': {
     one: 'Führt {count} Befehl aus',
     other: 'Führt {count} Befehle aus',

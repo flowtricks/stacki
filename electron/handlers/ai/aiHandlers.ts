@@ -14,6 +14,7 @@ import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { isProjectRelativePath } from '../../../shared/properties/ai/mentions';
 import { createProjectText, writeProjectText } from '../../documents/documentWrites';
 import { sameFilesystemPath } from '../../lib/platform';
+import { LoginShellSettings } from '../../lib/loginShellSettings';
 import { buildShellEnv } from '../../lib/shellEnvironment';
 import type { MainHost } from '../mainHost';
 import { AgentHost, NEW_CHAT_TITLE, type AgentHostDeps } from './agentHost';
@@ -80,6 +81,10 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     store ??= new ChatStore(path.join(options.userData(), 'ai'));
     return store;
   };
+  // The sign-in settings set only in the person's shell startup files, for the agents alone. Nothing is read
+  // until an agent is first checked or started, so opening the app never waits for a shell.
+  const loginShell = new LoginShellSettings({ environment: buildShellEnv });
+  const agentEnvironment = loginShell.environmentFor.bind(loginShell);
   let pinStore: PinBoardStore | undefined;
   // Beside the project's chats, so a project's private AI state stays in one folder.
   const pins = (): PinBoardStore => {
@@ -94,6 +99,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       files: projectFiles(host),
       snapshots: GIT_SNAPSHOTS,
       environment: buildShellEnv,
+      agentEnvironment,
       now: Date.now,
       version: options.version(),
       askBeforeTrust: options.askBeforeTrust,
@@ -126,6 +132,8 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   const agentSetup = (): AgentSetup => {
     setup ??= new AgentSetup({
       environment: buildShellEnv,
+      agentEnvironment,
+      signInCompleted: (agent) => agentHost().noteSignedIn(agent),
       openExternal: (url) => void host.shell.openExternal(url),
       publish: (state) => {
         host.send('ai:setupState', state);

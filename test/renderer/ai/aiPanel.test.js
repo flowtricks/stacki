@@ -163,7 +163,7 @@ function fakeMain(over = {}) {
       if (payload.action.kind === 'signIn' && over.signIn !== undefined) {
         if (over.signIn === 'ready') {
           expired = false;
-          return { agent: payload.agent, step: 'ready', account: { name: undefined, plan: undefined, email: undefined } };
+          return { agent: payload.agent, step: 'ready', account: { name: undefined, plan: undefined, email: undefined, source: 'account' } };
         }
         return over.signIn === 'failed'
           ? { agent: payload.agent, step: 'failed', during: 'sign-in', message: 'Signing in took too long. Try again.', details: 'codex login: timed out' }
@@ -174,7 +174,7 @@ function fakeMain(over = {}) {
       }
       const step = payload.action.kind === 'install' ? 'installing' : (over.setup?.[payload.agent] ?? 'ready');
       return step === 'ready'
-        ? { agent: payload.agent, step, account: { name: 'Timothy Ricks', plan: 'Max', email: 'designer@example.com' } }
+        ? { agent: payload.agent, step, account: over.account ?? { name: 'Timothy Ricks', plan: 'Max', email: 'designer@example.com', source: 'account' } }
         : { agent: payload.agent, step };
     }),
     onAiSetup: () => () => undefined,
@@ -627,9 +627,15 @@ test('a draft hand-off (Build an app) waits unsent in the composer: ready or not
 });
 
 test('the account line shows a name and plan, falls back to the plan, and keeps the email inside ⋯', async (context) => {
-  assert.equal(ai.accountLabel('claude', { name: 'Timothy Ricks', plan: 'Max', email: 'a@b.c' }, ai.ENGLISH_TRANSLATE), 'Timothy Ricks · Max');
-  assert.equal(ai.accountLabel('claude', { name: undefined, plan: 'Max', email: 'a@b.c' }, ai.ENGLISH_TRANSLATE), 'Claude Max');
-  assert.equal(ai.accountLabel('codex', { name: undefined, plan: undefined, email: undefined }, ai.ENGLISH_TRANSLATE), 'Signed in to ChatGPT');
+  assert.equal(
+    ai.accountLabel('claude', { name: 'Timothy Ricks', plan: 'Max', email: 'a@b.c', source: 'account' }, ai.ENGLISH_TRANSLATE),
+    'Timothy Ricks · Max',
+  );
+  assert.equal(ai.accountLabel('claude', { name: undefined, plan: 'Max', email: 'a@b.c', source: 'account' }, ai.ENGLISH_TRANSLATE), 'Claude Max');
+  assert.equal(
+    ai.accountLabel('codex', { name: undefined, plan: undefined, email: undefined, source: 'account' }, ai.ENGLISH_TRANSLATE),
+    'Signed in to ChatGPT',
+  );
   ai.resetAiStore();
   window.localStorage.setItem('stacki.ai.agent', 'codex');
   fakeMain({ trusted: true });
@@ -1096,4 +1102,45 @@ test('whole panel: narrow, the panel shows the chat alone with the way back to t
   assert.equal(container.querySelector('.ai-sidebar') ?? undefined, undefined, 'no sidebar');
   assert.ok(container.querySelector('button[aria-label="All chats"]'), 'the way back to the list');
   assert.equal(container.querySelector('.ai-list-row') ?? undefined, undefined, 'the list is one step back');
+});
+
+test('a sign-in that could not be checked blocks nothing: no card, a quiet note that checks again, also when the window is focused', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  const { calls, listeners } = fakeMain({ trusted: true, setup: { codex: 'unchecked' } });
+  const { container, root } = await mount();
+  context.after(() => act(() => root.unmount()));
+  assert.equal(container.querySelector('.ai-signin') ?? undefined, undefined, 'no sign-in card');
+  assert.equal(container.querySelector('.ai-gate') ?? undefined, undefined, 'no setup card');
+  assert.equal(container.querySelector('.ai-composer.is-blocked') ?? undefined, undefined, 'typing and sending are open');
+  await act(async () => ai.setDraft(CHAT, () => ai.draftFromText('hello')));
+  assert.equal(container.querySelector('.ai-send').disabled, false);
+  const note = container.querySelector('button.ai-sign-in-note');
+  assert.equal(note.textContent, 'Sign-in not checked');
+  assert.match(note.getAttribute('title'), /You can keep typing and sending/);
+  const checks = () => calls.filter((call) => call.name === 'aiSetup' && call.payload.action.kind === 'detect').length;
+  const first = checks();
+  await click(note);
+  assert.equal(checks(), first + 1, 'pressing the note checks again');
+  await act(async () => window.dispatchEvent(new window.Event('focus')));
+  await settle();
+  assert.equal(checks(), first + 2, 'coming back to the window checks again');
+  // A real refusal when sending still shows the one sign-in card.
+  await act(async () => listeners.status({ projectPath: PROJECT, availability: { agent: 'codex', state: 'sign-in' } }));
+  await settle();
+  assert.equal(container.querySelectorAll('.ai-signin').length, 1);
+  assert.match(container.textContent, /Your session expired/);
+});
+
+test('a key, token or cloud sign-in is named quietly, without a value; an account sign-in says nothing', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  fakeMain({ trusted: true, account: { name: undefined, plan: undefined, email: undefined, source: 'api-key' } });
+  const { container, root } = await mount();
+  context.after(() => act(() => root.unmount()));
+  const note = container.querySelector('.ai-sign-in-note');
+  assert.equal(note.textContent, 'API key');
+  assert.equal(note.tagName, 'SPAN', 'it only tells');
+  assert.match(note.getAttribute('title'), /Codex is using an API key, not an account sign-in\. Usage may be billed to that key\./);
+  assert.equal(ai.accountLabel('claude', { name: undefined, plan: undefined, email: undefined, source: 'cloud' }, ai.ENGLISH_TRANSLATE), 'Cloud sign-in');
 });

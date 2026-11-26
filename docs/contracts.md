@@ -2319,7 +2319,10 @@ roles with `panel:ai` and `code:edit`.
 **Main process** (`electron/handlers/ai/`, in the `handlers` area so it may use `lib`, `documents` and
 `git`). `agentRegistry.ts` pins each adapter (`@agentclientprotocol/claude-agent-acp`,
 `@agentclientprotocol/codex-acp`; docs/dependencies.md) and finds the person's CLI on the shell PATH
-(`lib/shellEnvironment.ts`, shared with the terminal). `agentInstaller.ts` installs on request into
+(`lib/shellEnvironment.ts`, the app's environment with the common tool folders added, which the
+terminal's login shell also starts from). The agents alone also get the sign-in settings set only in
+shell startup files (`lib/loginShellSettings.ts`, "Sign-in settings from the shell" below).
+`agentInstaller.ts` installs on request into
 `userData/agents/<agent>-<version>/`: staged, `npm ci --omit=optional --ignore-scripts` against the
 shipped lockfile (its SHA-256 pinned), the entry's SHA-256 checked, then renamed into place; the
 digest is checked again at every start. `agentHost.ts` runs one adapter per agent per project as
@@ -2572,6 +2575,26 @@ sign-in ends ready, failed (with the CLI's output), cancelled or timed out. Sign
 logout`, `codex logout`. The CLI stores the credentials; Stacki reads only what the status command
 prints, shows the account's name and plan, and the email only inside the account menu (held in
 memory, never stored or logged). Setup is detected again each time a chat opens and after each step.
+
+A status check answers `ready`, `signed-out` (the CLI said so) or `unchecked` (it timed out after
+`statusMsMax`, crashed, or printed something unreadable). Claude's answer is read from normal output
+only; Codex answers on the error stream, so both are read. `unchecked` blocks nothing: a quiet note
+under the composer checks again when pressed, as does focusing the window or opening the chat, and main
+retries on its own after each of `STATUS_RETRY_DELAYS_MS` and then stops. An agent that refuses a
+prompt still shows the sign-in card. A `ready` account carries `source` (`account`, `api-key`, `token`
+or `cloud`), the kind only; anything but `account` is named under the composer, because it may be
+billed differently.
+
+**Sign-in settings from the shell** (`lib/loginShellSettings.ts`; macOS and Linux). An app opened from
+the Dock never runs shell startup files, so the person's shell is run once per app run, as a login and
+interactive shell (`-ilc`, as the terminal behaves), the first time an agent is checked or started:
+never at boot, asynchronously, within `LOGIN_SHELL_LIMITS`, and its `env -0` is read between two
+random marks. Only the names in `SIGN_IN_SETTINGS` are kept, each agent gets only its own, a cloud
+provider's credentials only while its switch is on, and the app's own environment wins. They reach
+the agent's status, sign-in and sign-out commands and its adapter, never installers, the dev server,
+git or the window; values are never logged or stored. A read that fails leaves the app's environment.
+Windows reads nothing: user and system variables already reach the app, and variables set only in a
+PowerShell profile are not read. A custom Codex provider's own `env_key` variable cannot be listed.
 
 **Trust and opening.** Opening the panel in a project allows agents there and is remembered, unless
 Settings → AI "Ask before allowing agents in a new project" is on (then the trust card asks first).

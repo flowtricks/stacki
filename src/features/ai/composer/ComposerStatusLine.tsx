@@ -19,6 +19,7 @@ import { ContextRing } from './ContextRing';
 import { optionById, type ComposerSettings } from './composerSettings';
 import { ModeMenu } from './ModeMenu';
 import { ModelMenu } from './ModelMenu';
+import { SignInNote } from './SignInNote';
 
 export function ComposerStatusLine({
   state,
@@ -66,6 +67,7 @@ export function ComposerStatusLine({
       <ModelMenu settings={settings} />
       {modeKnown && <ModeMenu settings={settings} />}
       <span className="ai-status-spacer" />
+      <SignInNote agent={agent} setup={state.setups.get(agent)} />
       <ContextRing chat={chatId} agent={agent} usage={usage} running={running} compacting={view.compaction?.status === 'in_progress'} />
       <AccountMenu agent={agent} chat={chatId} started={started} badges={agentBadges} />
     </div>

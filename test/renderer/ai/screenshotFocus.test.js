@@ -105,7 +105,7 @@ function fakeMain() {
     aiChatRead: async () => ({ ok: true, value: { summary, events: [], full: false } }),
     aiChatUpdate: async () => ({ ok: true, value: summary }),
     aiRemember: async () => ({ ok: true, value: { claude: [], codex: [] } }),
-    aiSetup: async (payload) => ({ agent: payload.agent, step: 'ready', account: { name: undefined, plan: undefined, email: undefined } }),
+    aiSetup: async (payload) => ({ agent: payload.agent, step: 'ready', account: { name: undefined, plan: undefined, email: undefined, source: 'account' } }),
     aiAutoCompactGet: async () => ({ percent: undefined }),
     onAiSetup: () => () => undefined,
     aiAck: () => undefined,

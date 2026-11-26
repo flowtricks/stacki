@@ -30,6 +30,9 @@ export function agentBadge(state: Pick<AiState, 'agents' | 'setups'>, agent: Age
         return 'sign-in';
       case 'ready':
         return 'ready';
+      case 'unchecked':
+        // Nothing was learned, so no "Ready": only what is known otherwise (a connector to install, an expired sign-in).
+        return availability?.state === 'ready' ? undefined : availabilityBadge(availability);
       case 'failed':
         break;
       default: {
@@ -38,6 +41,10 @@ export function agentBadge(state: Pick<AiState, 'agents' | 'setups'>, agent: Age
       }
     }
   }
+  return availabilityBadge(availability);
+}
+
+function availabilityBadge(availability: AgentAvailability | undefined): AgentBadge | undefined {
   if (availability === undefined) {
     return undefined;
   }

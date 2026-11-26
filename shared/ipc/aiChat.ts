@@ -905,6 +905,8 @@ export type SetupState =
   | { readonly agent: AgentId; readonly step: 'missing' }
   | { readonly agent: AgentId; readonly step: 'installing' }
   | { readonly agent: AgentId; readonly step: 'signed-out' }
+  /** The sign-in could not be checked (the CLI timed out, stopped or printed something unreadable). Nothing is blocked. */
+  | { readonly agent: AgentId; readonly step: 'unchecked' }
   /**
    * `url`: the page the CLI asked for, opened in the browser; `needsCode`: the CLI waits for a pasted code;
    * `output`: what the CLI has printed so far, with links and tokens left out, for the card's Details.
@@ -935,11 +937,16 @@ export interface SetupAccount {
   readonly name: string | undefined;
   readonly plan: string | undefined;
   readonly email: string | undefined;
+  /** Which kind of sign-in the agent uses. Only the kind crosses to the renderer: never a key, a token or a value. */
+  readonly source: SignInSource;
 }
+
+export const SIGN_IN_SOURCES = ['account', 'api-key', 'token', 'cloud'] as const;
+export type SignInSource = (typeof SIGN_IN_SOURCES)[number];
 
 export const SETUP_DETAILS_CHARS_MAX = 16_000;
 
-const SETUP_STEPS = ['missing', 'installing', 'signed-out', 'signing-in', 'ready', 'failed'] as const;
+const SETUP_STEPS = ['missing', 'installing', 'signed-out', 'unchecked', 'signing-in', 'ready', 'failed'] as const;
 
 export function parseSetupState(input: unknown): SetupState {
   const value = record(input);
@@ -949,6 +956,7 @@ export function parseSetupState(input: unknown): SetupState {
     case 'missing':
     case 'installing':
     case 'signed-out':
+    case 'unchecked':
       return { agent, step };
     case 'signing-in':
       return {
@@ -965,7 +973,11 @@ export function parseSetupState(input: unknown): SetupState {
       if (name !== undefined && name.includes('@')) {
         throw new Error('account.name: a display name, never an email');
       }
-      return { agent, step, account: { name, plan: field(account['plan']), email: field(account['email']) } };
+      const source = SIGN_IN_SOURCES.find((candidate) => candidate === account['source']);
+      if (source === undefined) {
+        throw new Error('account.source: unknown kind of sign-in');
+      }
+      return { agent, step, account: { name, plan: field(account['plan']), email: field(account['email']), source } };
     }
     case 'failed': {
       const during = value['during'] === 'install' || value['during'] === 'sign-in' || value['during'] === 'sign-out' ? value['during'] : undefined;

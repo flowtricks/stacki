@@ -342,6 +342,11 @@
   flex: none;
   color: var(--text-faint);
 }
+/* A note that only tells (which kind of sign-in is in use) has no hover fill: pressing it does nothing. */
+.ai-chip.is-static:hover {
+  background: transparent;
+  color: var(--text-faint);
+}
 .ai-ring {
   width: 24px;
   height: 24px;

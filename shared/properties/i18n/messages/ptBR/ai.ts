@@ -699,6 +699,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Quando a página mostrar um código, copie e cole abaixo.',
   'ai.signIn.waiting.text': 'Quando a página disser que você entrou, volte aqui. Termina sozinho após cinco minutos.',
   'ai.signIn.waiting.title': 'Conclua o login no seu navegador',
+  'ai.signInCheck.chip': 'Login não verificado',
+  'ai.signInCheck.hint':
+    'O Stacki não conseguiu verificar se o {agent} está conectado. Você pode continuar digitando e enviando. Pressione para verificar de novo.',
+  'ai.signInSource.apiKey': 'Chave de API',
+  'ai.signInSource.apiKey.hint': 'O {agent} está usando uma chave de API, não o login de uma conta. O uso pode ser cobrado nessa chave.',
+  'ai.signInSource.cloud': 'Login na nuvem',
+  'ai.signInSource.cloud.hint': 'O {agent} está conectado por um provedor de nuvem. Esse provedor pode cobrar pelo uso.',
+  'ai.signInSource.token': 'Token de acesso',
+  'ai.signInSource.token.hint': 'O {agent} está conectado com um token de acesso.',
   'ai.status.counted.command': {
     one: 'Executando {count} comando',
     other: 'Executando {count} comandos',

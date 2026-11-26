@@ -699,6 +699,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Cuando la página muestre un código, cópialo y pégalo abajo.',
   'ai.signIn.waiting.text': 'Cuando la página diga que has iniciado sesión, vuelve aquí. Termina sola a los cinco minutos.',
   'ai.signIn.waiting.title': 'Termina de iniciar sesión en tu navegador',
+  'ai.signInCheck.chip': 'Sesión sin comprobar',
+  'ai.signInCheck.hint':
+    'Stacki no pudo comprobar si la sesión de {agent} está iniciada. Puedes seguir escribiendo y enviando. Pulsa para comprobarlo de nuevo.',
+  'ai.signInSource.apiKey': 'Clave de API',
+  'ai.signInSource.apiKey.hint': '{agent} usa una clave de API, no el inicio de sesión de una cuenta. El uso podría cobrarse a esa clave.',
+  'ai.signInSource.cloud': 'Sesión en la nube',
+  'ai.signInSource.cloud.hint': '{agent} ha iniciado sesión a través de un proveedor en la nube. Ese proveedor podría cobrar el uso.',
+  'ai.signInSource.token': 'Token de acceso',
+  'ai.signInSource.token.hint': '{agent} ha iniciado sesión con un token de acceso.',
   'ai.status.counted.command': {
     one: 'Ejecutando {count} comando',
     other: 'Ejecutando {count} comandos',

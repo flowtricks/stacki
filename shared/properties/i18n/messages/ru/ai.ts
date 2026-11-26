@@ -760,6 +760,15 @@ export const messages = {
   'ai.signIn.waiting.code': 'Когда на странице появится код, скопируйте его и вставьте ниже.',
   'ai.signIn.waiting.text': 'Когда на странице появится сообщение о входе, вернитесь сюда. Ожидание завершится само через пять минут.',
   'ai.signIn.waiting.title': 'Завершите вход в браузере',
+  'ai.signInCheck.chip': 'Вход не проверен',
+  'ai.signInCheck.hint':
+    'Stacki не удалось проверить, выполнен ли вход в {agent}. Можно и дальше печатать и отправлять сообщения. Нажмите, чтобы проверить снова.',
+  'ai.signInSource.apiKey': 'Ключ API',
+  'ai.signInSource.apiKey.hint': '{agent} использует ключ API, а не вход в аккаунт. Плата за использование может списываться по этому ключу.',
+  'ai.signInSource.cloud': 'Вход через облако',
+  'ai.signInSource.cloud.hint': 'Вход в {agent} выполнен через облачного провайдера. Этот провайдер может взимать плату за использование.',
+  'ai.signInSource.token': 'Токен доступа',
+  'ai.signInSource.token.hint': 'Вход в {agent} выполнен с помощью токена доступа.',
   'ai.status.counted.command': {
     one: 'Выполняется {count} команда',
     few: 'Выполняются {count} команды',

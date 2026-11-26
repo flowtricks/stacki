@@ -254,6 +254,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
       void runSetup(agent, { kind: 'detect' });
     }
   }, [agent, chatId, hold]);
+  useRecheckOnFocus(agent, hold === undefined && setup?.step === 'unchecked' ? 'while-unchecked' : 'never');
   return (
     <>
       <AgentChoiceNotices onChoose={() => setChoosingAgents(true)} />
@@ -300,6 +301,18 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   );
 }
 
+/** While the sign-in could not be checked, coming back to the window checks it again. */
+function useRecheckOnFocus(agent: AgentId, recheck: 'while-unchecked' | 'never'): void {
+  useEffect(() => {
+    if (recheck === 'never') {
+      return undefined;
+    }
+    const detect = (): void => void runSetup(agent, { kind: 'detect' });
+    window.addEventListener('focus', detect);
+    return () => window.removeEventListener('focus', detect);
+  }, [agent, recheck]);
+}
+
 /** Why the composer cannot send, in words that say what to do; undefined when it can. */
 function composerBlock({
   agent,
@@ -343,7 +356,8 @@ function AgentGate(
     return <SignInCard agent={agent} stage={stage} details={props.details} onOpenExternal={props.onOpenExternal} onOpenTerminal={props.onOpenTerminal} />;
   }
   // The person's own CLI first (install), by buttons; then Stacki's connector.
-  if (setup !== undefined && setup.step !== 'ready' && setup.step !== 'signed-out' && setup.step !== 'signing-in') {
+  // A sign-in that could not be checked is no gate: the note under the composer says so, and the person can send.
+  if (setup !== undefined && setup.step !== 'ready' && setup.step !== 'signed-out' && setup.step !== 'unchecked' && setup.step !== 'signing-in') {
     return <SetupCard setup={setup} />;
   }
   if (availability === undefined || availability.state === 'ready') {

@@ -205,7 +205,7 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { c
     aiSetup: record('aiSetup', (payload) => ({
       agent: payload.agent,
       step: 'ready',
-      account: { name: undefined, plan: undefined, email: undefined },
+      account: { name: undefined, plan: undefined, email: undefined, source: 'account' },
     })),
     onAiSetup: () => () => undefined,
     aiAck: () => undefined,

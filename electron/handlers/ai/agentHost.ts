@@ -160,6 +160,11 @@ export interface AgentHostDeps {
   readonly snapshots: TreeSnapshots;
   /** The person's shell environment (lib/shellEnvironment.ts), read at each start. */
   readonly environment: () => Readonly<Record<string, string | undefined>>;
+  /**
+   * The environment one agent's adapter (and so its CLI) starts in: `environment` plus the sign-in settings the
+   * person's login shell sets (lib/loginShellSettings.ts). Nothing else gets these. Absent: `environment`.
+   */
+  readonly agentEnvironment?: (agent: AgentId) => Promise<Readonly<Record<string, string | undefined>>>;
   readonly now: () => number;
   /** The person's home folder, where user skills live (`~/.claude/skills`); the operating system's by default. */
   readonly home?: () => string;
@@ -448,6 +453,8 @@ export class AgentHost {
   private readonly crashes = new Map<string, Crashes>();
   private readonly installing = new Set<AgentId>();
   private readonly signIn = new Set<AgentId>();
+  /** How many times everything was stopped: a start that was waiting across one is given up. */
+  private stops = 0;
   private readonly installFailures = new Map<AgentId, string>();
   private readonly permissions = new PermissionBroker();
   private readonly pump: EventPump;
@@ -867,6 +874,7 @@ export class AgentHost {
 
   /** Stops every agent: the project closed, or the app is quitting. */
   stopAll(): void {
+    this.stops += 1;
     this.permissions.cancel(undefined);
     this.pump.flush();
     this.releaseWarm();
@@ -949,6 +957,13 @@ export class AgentHost {
   }
 
   private async ensureProcess(agent: AgentId, root: string): Promise<Result<AgentProcess, AiFailure>> {
+    // Waited for first, so everything from "is one running?" to registering the new one stays in one step.
+    const stops = this.stops;
+    const agentEnvironment = this.deps.agentEnvironment === undefined ? this.deps.environment() : await this.deps.agentEnvironment(agent);
+    if (this.stops !== stops) {
+      // The project closed or the app is quitting while the first read of the shell's settings was under way.
+      return err({ code: 'agent-failed', ...described('ai.error.stopped', { agent: AGENTS[agent].label, detail: '.' }) });
+    }
     const key = processKey(agent, root);
     const running = this.processes.get(key);
     if (running !== undefined) {
@@ -973,7 +988,7 @@ export class AgentHost {
     if (this.processes.size >= AI_LIMITS.processesMax) {
       this.stopIdlest();
     }
-    const process = this.spawnProcess(agent, root, entry, cli);
+    const process = this.spawnProcess({ agent, root, entry, cli, agentEnvironment });
     this.processes.set(key, process);
     assert(this.processes.size <= AI_LIMITS.processesMax, 'ensureProcess: adapter processes are bounded');
     this.crowdIdleTimers();
@@ -985,10 +1000,22 @@ export class AgentHost {
     return ok(process);
   }
 
-  private spawnProcess(agent: AgentId, root: string, entry: string, cli: string): AgentProcess {
+  private spawnProcess({
+    agent,
+    root,
+    entry,
+    cli,
+    agentEnvironment,
+  }: {
+    readonly agent: AgentId;
+    readonly root: string;
+    readonly entry: string;
+    readonly cli: string;
+    readonly agentEnvironment: Readonly<Record<string, string | undefined>>;
+  }): AgentProcess {
     const runnable = runnableAdapterCli(cli, this.deps.environment());
     const environment = {
-      ...adapterEnvironment(this.deps.environment(), ADAPTERS[agent].cliVariable, runnable),
+      ...adapterEnvironment(agentEnvironment, ADAPTERS[agent].cliVariable, runnable),
       ...autoCompactEnvironment(agent, this.deps.autoCompactPercent?.()),
     };
     const spawnedAt = this.deps.now();

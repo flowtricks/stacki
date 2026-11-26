@@ -130,7 +130,7 @@ test('not installed → installing → signed out, by the official installer', a
   assert.deepEqual(await cli.setup.act('claude', { kind: 'detect' }), {
     agent: 'claude',
     step: 'ready',
-    account: { name: 'Acme Studio', plan: 'Max', email: 'designer@example.com' },
+    account: { name: 'Acme Studio', plan: 'Max', email: 'designer@example.com', source: 'account' },
   });
 });
 
@@ -175,7 +175,7 @@ test('sign-in opens the provider’s page, takes a pasted code, and ends ready',
   signedIn = true;
   login?.exit(0);
   await until('ready', () => cli.states.at(-1)?.step === 'ready');
-  assert.deepEqual(cli.states.at(-1), { agent: 'codex', step: 'ready', account: { name: undefined, plan: undefined, email: undefined } });
+  assert.deepEqual(cli.states.at(-1), { agent: 'codex', step: 'ready', account: { name: undefined, plan: undefined, email: undefined, source: 'account' } });
 });
 
 test('cancel stops the sign-in; a sign-in that ends signed out is a failure with details; sign-out runs logout', async () => {
@@ -221,21 +221,21 @@ test('the readers: sign-in addresses, code prompts, terminal codes and each CLI�
   assert.ok(asksForCode('Enter the authorization code:'));
   assert.ok(!asksForCode('Signing in… waiting for the browser'));
   assert.equal(stripTerminalCodes('\x1b[2K\x1b[1mBold\x1b[0m\x1b]0;title\x07'), 'Bold');
-  const none = { name: undefined, plan: undefined, email: undefined };
+  const none = { name: undefined, plan: undefined, email: undefined, source: 'account' };
+  const claude = (stdout: string, exitCode: number) => readClaudeStatus({ stdout, stderr: '', exitCode }, {});
   // A personal account's organisation is named after its email: that is no display name.
-  assert.deepEqual(readClaudeStatus('{"loggedIn":true,"email":"a@b.c","orgName":"a@b.c\'s Organization","subscriptionType":"team_plus"}', 0), {
-    signedIn: true,
-    account: { name: undefined, plan: 'Team Plus', email: 'a@b.c' },
+  assert.deepEqual(claude('{"loggedIn":true,"email":"a@b.c","orgName":"a@b.c\'s Organization","subscriptionType":"team_plus"}', 0), {
+    kind: 'signed-in',
+    account: { name: undefined, plan: 'Team Plus', email: 'a@b.c', source: 'account' },
   });
-  assert.deepEqual(readClaudeStatus('{"loggedIn":true,"orgName":"Timothy Ricks","subscriptionType":"max"}', 0).account, {
-    name: 'Timothy Ricks',
-    plan: 'Max',
-    email: undefined,
+  assert.deepEqual(claude('{"loggedIn":true,"orgName":"Timothy Ricks","subscriptionType":"max"}', 0), {
+    kind: 'signed-in',
+    account: { name: 'Timothy Ricks', plan: 'Max', email: undefined, source: 'account' },
   });
-  assert.deepEqual(readClaudeStatus('{"loggedIn":false}', 1), { signedIn: false, account: none });
-  assert.deepEqual(readClaudeStatus('not json', 0), { signedIn: false, account: none });
-  assert.deepEqual(readCodexStatus('Logged in using ChatGPT', 0), { signedIn: true, account: none });
-  assert.deepEqual(readCodexStatus('Not logged in', 1), { signedIn: false, account: none });
+  assert.deepEqual(claude('{"loggedIn":false}', 1), { kind: 'signed-out' });
+  assert.deepEqual(claude('not json', 0), { kind: 'unreadable' });
+  assert.deepEqual(readCodexStatus({ stdout: '', stderr: 'Logged in using ChatGPT\n', exitCode: 0 }), { kind: 'signed-in', account: none });
+  assert.deepEqual(readCodexStatus({ stdout: '', stderr: 'Not logged in\n', exitCode: 1 }), { kind: 'signed-out' });
 });
 
 function claudeCli(onLogin: (process: FakeProcess) => void, status: () => { readonly signedIn: boolean; readonly exit: number }) {
