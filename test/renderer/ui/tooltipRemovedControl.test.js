@@ -3,12 +3,11 @@
 // sent) stayed on screen for good. Both shared hooks (delayedTooltip.ts) are held to it: the tip closes when its control
 // leaves the document, a tip still waiting never opens, and a tip whose control stays is left alone.
 // Method: bundle the real hooks, mount a component that keeps the tip's state while its button comes and goes in jsdom,
-// and drive hover, focus and removal. The wait is the hooks' own timer, so the test waits it out once per case.
+// and drive hover, focus and removal. The wait is the hooks' own timer on a mocked clock the test moves past it.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { setTimeout: sleep } = require('node:timers/promises');
 const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { repoPath } = require('../../helpers/sources.js');
@@ -46,7 +45,8 @@ const HOOKS = {
   },
 };
 
-async function mount(useTip) {
+async function mount(context, useTip) {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost' });
   global.window = dom.window;
   global.document = dom.window.document;
@@ -78,7 +78,7 @@ async function mount(useTip) {
     tip: () => container.querySelector('[role="tooltip"]')?.textContent,
     hover: () => React.act(async () => Simulate.mouseEnter(container.querySelector('button'))),
     focus: () => React.act(async () => Simulate.focus(container.querySelector('button'))),
-    rest: () => React.act(async () => sleep(hooks.TOOLTIP_DELAY_MS + 100)),
+    rest: () => React.act(async () => context.mock.timers.tick(hooks.TOOLTIP_DELAY_MS)),
     async unmount() {
       await React.act(async () => root.unmount());
       dom.window.close();
@@ -87,8 +87,8 @@ async function mount(useTip) {
 }
 
 for (const [name, useTip] of Object.entries(HOOKS)) {
-  test(`${name}: an open tip closes when its control is removed, and does not come back with a new one`, async () => {
-    const view = await mount(useTip);
+  test(`${name}: an open tip closes when its control is removed, and does not come back with a new one`, async (context) => {
+    const view = await mount(context, useTip);
     try {
       await view.hover();
       await view.rest();
@@ -105,8 +105,8 @@ for (const [name, useTip] of Object.entries(HOOKS)) {
     }
   });
 
-  test(`${name}: a tip still waiting never opens once its control is removed`, async () => {
-    const view = await mount(useTip);
+  test(`${name}: a tip still waiting never opens once its control is removed`, async (context) => {
+    const view = await mount(context, useTip);
     try {
       await view.hover();
       await view.render({ button: false, neighbour: false });
@@ -118,8 +118,8 @@ for (const [name, useTip] of Object.entries(HOOKS)) {
   });
 }
 
-test('useDelayedPlacement: a tip opened at once by keyboard focus closes with its control too', async () => {
-  const view = await mount(HOOKS.useDelayedPlacement);
+test('useDelayedPlacement: a tip opened at once by keyboard focus closes with its control too', async (context) => {
+  const view = await mount(context, HOOKS.useDelayedPlacement);
   try {
     await view.focus();
     assert.notEqual(view.tip(), undefined, 'focus shows it at once');

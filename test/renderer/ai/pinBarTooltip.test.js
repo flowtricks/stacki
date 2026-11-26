@@ -82,8 +82,17 @@ dom.window.avb = {
 const translate = (key) => key;
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 const tipText = () => [...document.querySelectorAll('[role="tooltip"]')].map((tip) => tip.textContent).join(' | ');
-// Longer than the tip's wait (TOOLTIP_DELAY_MS), inside act so the tip it opens is drawn.
-const rest = () => act(async () => new Promise((resolve) => setTimeout(resolve, 700)));
+// The tip opens after its own wait: each poll lets React draw in an act of its own, until the tip is there.
+const untilTip = async () => {
+  await waitFor({
+    what: 'a tooltip',
+    read: async () => {
+      await act(async () => undefined);
+      return tipText();
+    },
+    until: (text) => text !== '',
+  });
+};
 const send = () => document.querySelector('.ai-pin-send, .ai-pin-send-waiting');
 
 async function mount() {
@@ -128,7 +137,7 @@ test('sending takes Send and its tip with it, and nothing says there is nothing 
     await pinOne();
     await waitFor({ what: 'the Send button', read: () => (send() ?? undefined) !== undefined, until: Boolean });
     await act(async () => Simulate.mouseEnter(send()));
-    await rest();
+    await untilTip();
     assert.match(tipText(), /one message|same time|subagent/i, 'the useful tip says how they are sent');
     await act(async () => Simulate.click(send()));
     for (let round = 0; round < 8; round += 1) {
@@ -147,7 +156,7 @@ test('the mode tip goes when the mode is left under the pointer, and does not re
   const root = await mount();
   try {
     await act(async () => Simulate.mouseEnter(document.querySelector('.ai-pin-bar-mode')));
-    await rest();
+    await untilTip();
     await act(async () => ui.pins.setCommentMode('off'));
     await settle();
     await act(async () => ui.pins.setCommentMode('on'));
