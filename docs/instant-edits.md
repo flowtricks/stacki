@@ -18,7 +18,9 @@ frame's DOM and is never written to disk by itself.
 3. **Same task as the patch.** The morph client takes every shown change back just before it patches
    and puts it back right after when the rendering is of the old source (`avb:before-morph`,
    `avb:after-patch`; judged by the source stamps), so nothing flashes or jumps and nothing is
-   shown twice.
+   shown twice. No change to the page's DOM skips this. The patch writes only what two renderings
+   disagree about, so a guess left on the page is never corrected by it: a class taken off an
+   instance, which its component also writes itself, stayed off until a refresh.
 4. **Refusal reverts.** `onRefusedGesture` (`src/app/state/appLifecycle.ts`) sends `avb:move-revert`
    and `avb:insert-revert` (which also takes back deletes and edits); a rendering that never comes
    takes the change away after a bound (20 s; 5 s for a delete).
@@ -43,6 +45,7 @@ reads the operation union, checks every named module exists and that nothing is 
 | Reorder | Real nodes moved, paths renumbered | `canvasMove.ts`, `frameMove.ts` |
 | Attribute, class, prop on a plain element, rename attribute | Set or removed | `shared/page/canvasEdit.ts`, `framePendingEdit.ts` |
 | Words of an element, rename tag | Words set, element replaced with children moved | same |
+| A class added to or taken off an element or instance (`avb:class-patch`) | Only the names that really changed, taken back like every other shown edit | same |
 | Component props, expressions, component rename | Old DOM, `updating` cue after 80 ms | same |
 | Undo, redo | The step's result applied from the model diff the moment it is installed (including the one node an undo added or removed) | `src/editor/canvasEditShow.ts` |
 
