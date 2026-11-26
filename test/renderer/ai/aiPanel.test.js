@@ -297,8 +297,11 @@ test('with "ask before allowing" on, a new project asks first', async (context) 
   const { calls } = fakeMain({ trusted: false });
   const { container, root } = await mount();
   context.after(() => act(() => root.unmount()));
-  assert.match(container.textContent, /Let agents work in this project\?/);
-  await click(button(container, 'Allow in this project'));
+  assert.match(container.textContent, /Allow agents in this project\?/);
+  for (const fact of ['read, change and run anything in this project', 'apply to your files right away', 'keep or undo each changed file']) {
+    assert.ok(container.textContent.includes(fact), `the permission still says: ${fact}`);
+  }
+  await click(button(container, 'Allow agents'));
   assert.ok(calls.some((call) => call.name === 'aiTrust'));
 });
 
@@ -803,7 +806,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   assert.match(strip.querySelector('.ai-agents-head').textContent, /1 agent working/);
   const row = strip.querySelector('.ai-agent');
   assert.equal(row.querySelector('.ai-agent-name').textContent, 'Tidy Hero.astro');
-  assert.equal(row.querySelector('.ai-agent-model').textContent, 'Session model', 'no model asked for and none reported: the session’s');
+  assert.equal(row.querySelector('.ai-agent-model').textContent, '', 'no model asked for and none reported: no name to show');
   assert.match(row.getAttribute('title'), /general-purpose/, 'its role is in the row’s tooltip');
   assert.equal(row.querySelector('.ai-agent-dot').getAttribute('aria-label'), 'Running');
   assert.match(row.querySelector('.ai-agent-time').textContent, /^\d[\d.]*s$/, 'its elapsed time');
@@ -816,7 +819,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   assert.match(unit.querySelector('.ai-subagent-title').textContent, /Tidy Hero\.astro/);
   assert.match(
     unit.querySelector('.ai-subagent-progress').textContent,
-    /Editing Hero\.astro · Edited 1 file, read 1 file/,
+    /Editing Hero\.astro · Read 1 file, edited 1 file/,
     'what it does now and what it has done',
   );
   assert.equal(unit.querySelector('.ai-subagent-head').getAttribute('aria-expanded'), 'false', 'closed by default');
@@ -826,7 +829,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   assert.equal(unit.querySelector('.ai-subagent-head').getAttribute('aria-expanded'), 'true', 'a strip row opens its unit');
   assert.deepEqual(
     [...unit.querySelectorAll('.ai-subagent-body .ai-step-label')].map((label) => label.textContent),
-    ['Read Hero.astro', 'Edited Hero.astro'],
+    ['Read Hero component', 'Edited Hero component'],
     'with its own calls inside, as steps in words',
   );
   assert.equal(unit.querySelector('.ai-subagent-body .ai-tool') ?? undefined, undefined, 'no raw call cards in the unit');
@@ -834,7 +837,7 @@ test('whole panel: subagents show in a strip and as units holding their own call
   const chip = container.querySelector('.ai-running-chip');
   assert.equal(chip.textContent, '1 agent working');
 
-  await click(button(container, 'Open transcript'));
+  await click(button(container, 'See all steps'));
   assert.equal(container.querySelector('.ai-agents') ?? undefined, undefined, 'the strip gives way to the subagent’s transcript');
   const head = container.querySelector('.ai-agent-pane-head');
   assert.match(head.textContent, /Tidy Hero\.astro/);

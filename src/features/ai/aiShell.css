@@ -156,6 +156,56 @@
   color: var(--text-dim);
 }
 
+/* The trust question (TrustCard.tsx): the panel's card fill, a title, three short points each led by its icon, and
+   the one blue button. Logical properties only, so it mirrors for right-to-left. */
+.ai-trust {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--bg-input);
+}
+.ai-trust-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.ai-trust-points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 17px;
+}
+.ai-trust-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ai-trust-icon {
+  flex: none;
+  display: inline-flex;
+  margin-block-start: 0.5px;
+  color: var(--text-faint);
+}
+.ai-trust-allow {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+.ai-trust-allow[aria-busy='true'] {
+  cursor: progress;
+}
+
 /* Guided setup (SetupCard.tsx). */
 .ai-setup-head {
   display: flex;

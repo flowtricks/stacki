@@ -42,7 +42,7 @@ const TARGETS = [
   ['Settings > Breakpoints Add', 'breakpoints-add-actions', addButtonClasses()],
   ['a plain primary button', 'probe', 'primary'],
   ['the Apps panel Open', 'apps-row', 'apps-open primary'],
-  ['the AI trust button', 'ai-gate', 'ai-primary'],
+  ['the AI trust button', 'ai-trust', 'primary ai-trust-allow'],
   ['the AI keep-all button', 'ai-changes-bulk', 'ai-changes-keep'],
   ['the AI permission allow', 'ai-ask-actions', 'ai-allow'],
   ['the Audits run button', 'probe', 'audits-card-button'],

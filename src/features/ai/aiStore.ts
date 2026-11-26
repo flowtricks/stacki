@@ -356,13 +356,21 @@ export function setPanelVisibility(visibility: PanelVisibility): void {
   }
 }
 
+/**
+ * Allows agents in the open project. A refusal is shown as the panel's error toast; so is a yes that did not hold (the
+ * project read again still not allowed), so pressing Allow never ends in nothing.
+ */
 export async function trustProject(): Promise<void> {
   const projectPath = requireProject();
   const reply = await aiTrust(projectPath);
   update((current) => ({ ...current, trusted: reply.ok ? true : current.trusted, ...failureFields(reply.ok ? undefined : reply.error) }));
-  if (reply.ok) {
-    // Trusted now: main may ask the agents for their real models and efforts.
-    await loadAiProject(projectPath);
+  if (!reply.ok) {
+    return;
+  }
+  // Trusted now: main may ask the agents for their real models and efforts.
+  await loadAiProject(projectPath);
+  if (!state.trusted && state.projectPath === projectPath) {
+    fail({ code: 'invalid', ...described('ai.trust.notSaved') });
   }
 }
 
