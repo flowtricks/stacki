@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeZhTW: DesignCatalog = {
   'mode.name': '設計模式',
+  'mode.button': '設計模式（實驗性）',
   'bar.label': '設計模式',
   'bar.tip': '你正在編輯網站副本。在這裡所做的任何變更都不會儲存到專案。',
   'bar.send': '傳送給 AI',

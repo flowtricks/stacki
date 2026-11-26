@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeHi: DesignCatalog = {
   'mode.name': 'डिज़ाइन मोड',
+  'mode.button': 'डिज़ाइन मोड (प्रायोगिक)',
   'bar.label': 'डिज़ाइन मोड',
   'bar.tip': 'आप अपनी साइट की एक कॉपी संपादित कर रहे हैं। यहाँ किया गया कोई भी बदलाव आपके प्रोजेक्ट में सहेजा नहीं जाता।',
   'bar.send': 'AI को भेजें',

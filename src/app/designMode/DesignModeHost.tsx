@@ -12,11 +12,12 @@ import type { ShellView } from '../App';
 import { registerPanelMode } from '../../features/ai/panelModes';
 import { setInlineDefault } from '../../features/style/model/inlineDefault';
 import { useCurrentRole } from '../../lib/useCurrentRole';
+import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { useLocale } from '../../lib/i18n/useTranslate';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { brush } from '../../ui/central/centralGeometry';
 import PanelBoundary from '../../ui/PanelBoundary';
-import { DESIGN_MODE_ENABLED, type DesignSessionState } from '../../../shared/ipc/designSession';
+import { designModeAvailable, type DesignSessionState } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
 import { DESIGN_NOTICE_KEY, cancelDesignMode, enterDesignMode, exitDesignMode, type DesignHostSource, type DesignNotice } from './designActions';
 import { installState, type DesignOpsContext } from './designFrameOps';
@@ -40,7 +41,7 @@ const MODE_BUTTON_ORDER = 20;
 
 export function DesignModeHost({ app }: { readonly app: ShellView }) {
   const words = useDesignWords();
-  if (!DESIGN_MODE_ENABLED) {
+  if (!designModeAvailable(currentDesktopPlatform())) {
     return undefined;
   }
   return (
@@ -63,7 +64,7 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
       registerPanelMode({
         id: 'design',
         order: MODE_BUTTON_ORDER,
-        label: () => designWord(locale, 'mode.name'),
+        label: () => designWord(locale, 'mode.button'),
         icon: () => <DesignModeIcon size={16} />,
         isActive: isDesignModeActive,
         setActive: (active) => {

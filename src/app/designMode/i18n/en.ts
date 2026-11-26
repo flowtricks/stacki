@@ -3,6 +3,7 @@
 // Placeholders are `{name}`; every catalog has exactly these keys and placeholders (designModeWords.test.js).
 export const designModeEnglish = {
   'mode.name': 'Design mode',
+  'mode.button': 'Design mode (experimental)',
   'bar.label': 'Design mode',
   'bar.tip': 'You are editing a copy of your site. Nothing you change here is saved to your project.',
   'bar.send': 'Send to AI',

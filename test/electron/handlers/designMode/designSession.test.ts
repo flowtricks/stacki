@@ -6,7 +6,9 @@
 //
 // Method: real folders under the temporary directory. A small fixture project (pages, a style file, a `.env`,
 // a node_modules with an `astro` package) stands in for a site; nothing runs Astro. The session is driven through
-// `createDesignSessions` with a stand-in host, the same function the IPC handler calls.
+// `createDesignSessions` with a stand-in host, the same function the IPC handler calls. Design mode is offered on
+// macOS only: the tests that make real copies and raise the fence run there, while the platform rule and main's
+// refusal take the platform as an argument and run on every platform, as do the parsers and the startup sweep.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,7 +27,7 @@ import {
   raiseDesignFence,
 } from '#dist/electron/lib/designMode/designFence.js';
 import { guardDesignWrites } from '#dist/electron/lib/designMode/designWriteGuard.js';
-import { parseDesignSessionReply, parseDesignSessionRequest } from '#dist/shared/ipc/designSession.js';
+import { designModeAvailable, parseDesignSessionReply, parseDesignSessionRequest } from '#dist/shared/ipc/designSession.js';
 import {
   DESIGN_SNAPSHOT_LIMITS,
   deepestDesignNode,
@@ -35,6 +37,8 @@ import {
 } from '#dist/shared/ipc/designSnapshot.js';
 
 const REFUSAL = 'Not while you design';
+
+const ON_MACOS = process.platform === 'darwin' ? {} : { skip: 'Design mode is offered on macOS only' };
 
 function scratch(): { readonly project: string; readonly appData: string; readonly root: string } {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-design-')));
@@ -84,7 +88,7 @@ function digest(directory: string): string {
   return parts.sort().join('\n');
 }
 
-test('the sandbox is one private copy outside the project; the project is its original; output is skipped at any depth', async () => {
+test('the sandbox is one private copy outside the project; the project is its original; output is skipped at any depth', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const before = digest(project);
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
@@ -104,7 +108,7 @@ test('the sandbox is one private copy outside the project; the project is its or
   assert.equal(digest(project), before, 'copying reads the project and writes nothing in it');
 });
 
-test('a project that links outside itself, or keeps its packages above it, is refused and nothing is left', async () => {
+test('a project that links outside itself, or keeps its packages above it, is refused and nothing is left', ON_MACOS, async () => {
   const linked = scratch();
   fs.symlinkSync(os.tmpdir(), path.join(linked.project, 'src/outside'));
   const refused = await createSandbox({ appDataRoot: linked.appData, realRoot: linked.project });
@@ -135,7 +139,7 @@ test('a sandbox a crash left behind is swept, with its .env; private folders are
   assertPrivate(folder);
 });
 
-test('frames: what live differs by is captured and applied both ways', async () => {
+test('frames: what live differs by is captured and applied both ways', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
@@ -155,7 +159,7 @@ test('frames: what live differs by is captured and applied both ways', async () 
   await assert.rejects(applyFrame({ base, live, from: new Map(), to: new Map([['../escape.txt', { kind: 'delete' }]]) }), /inside the copy/);
 });
 
-test('drafts keep no secrets, notice a changed project, and refuse a kept path that climbs', async () => {
+test('drafts keep no secrets, notice a changed project, and refuse a kept path that climbs', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
@@ -190,7 +194,7 @@ test('drafts keep no secrets, notice a changed project, and refuse a kept path t
   assert.ok(!isSecretFile('src/env.ts'));
 });
 
-test('the fence refuses unlisted channels, the project and climbing paths, and lets the copy be edited', async () => {
+test('the fence refuses unlisted channels, the project and climbing paths, and lets the copy be edited', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
@@ -219,7 +223,7 @@ test('the fence refuses unlisted channels, the project and climbing paths, and l
   }
 });
 
-test('while the fence is up, every file system write into the project fails before it runs', async () => {
+test('while the fence is up, every file system write into the project fails before it runs', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
@@ -255,12 +259,12 @@ test('while the fence is up, every file system write into the project fails befo
   fs.writeFileSync(path.join(project, 'after.txt'), 'the fence is down');
 });
 
-test('a session: enter, edit, duplicate, switch, leave; the copy and its .env are gone, the project is untouched', async () => {
+test('a session: enter, edit, duplicate, switch, leave; the copy and its .env are gone, the project is untouched', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const before = digest(project);
   const sent: { readonly channel: string; readonly payload: unknown }[] = [];
   const send = (channel: string, payload: unknown) => void sent.push({ channel, payload });
-  const sessions = createDesignSessions({ openProject: () => project, send }, { appDataRoot: appData });
+  const sessions = createDesignSessions({ openProject: () => project, send }, { appDataRoot: appData, platform: 'darwin' });
   observeDesignFence(sessions.observe);
   const ask = async (request: unknown) => parseDesignSessionReply(await sessions.answer(parseDesignSessionRequest(request)));
   assert.deepEqual(await ask({ op: 'enter', projectPath: path.join(project, 'elsewhere'), refusal: REFUSAL, frameName: 'Original' }), {
@@ -387,7 +391,7 @@ test('requests and replies are parsed: unknown ops, bad frame ids, oversized nam
   assert.deepEqual(parseDesignSessionRequest({ op: 'frame-rename', frame: 'f2', name: ' Bold ' }), { op: 'frame-rename', frame: 'f2', name: 'Bold' });
 });
 
-test('the preflight refuses a project past its bounds, naming the largest folder, and leaves nothing', async () => {
+test('the preflight refuses a project past its bounds, naming the largest folder, and leaves nothing', ON_MACOS, async () => {
   const { project, appData } = scratch();
   for (let index = 0; index < 20_050; index += 1) {
     const folder = path.join(project, 'src/content/many', String(Math.floor(index / 500)));
@@ -399,7 +403,7 @@ test('the preflight refuses a project past its bounds, naming the largest folder
   assert.ok(!fs.existsSync(sandboxesRoot(appData)) || fs.readdirSync(sandboxesRoot(appData)).length === 0, 'nothing was made');
 });
 
-test('a copy the person cancels stops and leaves nothing', async () => {
+test('a copy the person cancels stops and leaves nothing', ON_MACOS, async () => {
   const { project, appData } = scratch();
   const cancelled = await createSandbox({ appDataRoot: appData, realRoot: project, cancel: { cancelled: () => true } });
   assert.deepEqual(cancelled, { ok: false, reason: 'cancelled' });
@@ -418,4 +422,26 @@ test("a canvas frame's messages and node marks are parsed: forged and malformed 
   assert.ok(!spaced.includes(' '), 'a space in a file name cannot split a mark');
   assert.deepEqual(deepestDesignNode(spaced), { path: 'src/components/Hero Card.astro|0.1', copy: 1 });
   assert.equal(deepestDesignNode('0.1 0.2:-1 :3 %E0%A4%A:1'), undefined);
+});
+
+test('Design mode is offered on macOS only', () => {
+  assert.equal(designModeAvailable('darwin'), true);
+  for (const platform of ['win32', 'linux', 'freebsd']) {
+    assert.equal(designModeAvailable(platform), false, platform);
+  }
+  assert.throws(() => designModeAvailable(''), /a platform is named/);
+});
+
+test('off macOS, main refuses every design:session request and makes no copy', async () => {
+  const { project, appData } = scratch();
+  for (const platform of ['win32', 'linux'] as const) {
+    // What the design:session handler calls with every request (registerDesignModeHandlers).
+    const sessions = createDesignSessions({ openProject: () => project, send: () => undefined }, { appDataRoot: appData, platform });
+    for (const request of [{ op: 'enter', projectPath: project, refusal: REFUSAL, frameName: 'Original' }, { op: 'state' }, { op: 'cancel' }]) {
+      await assert.rejects(sessions.answer(parseDesignSessionRequest(request)), /not available on this computer/, `${platform} ${request.op}`);
+    }
+    assert.equal(sessions.current(), undefined);
+  }
+  assert.ok(!fs.existsSync(sandboxesRoot(appData)), 'no copy, and so no copy of .env');
+  assert.equal(designFenceState().kind, 'off');
 });

@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModePl: DesignCatalog = {
   'mode.name': 'Tryb projektowania',
+  'mode.button': 'Tryb projektowania (eksperymentalny)',
   'bar.label': 'Tryb projektowania',
   'bar.tip': 'Edytujesz kopię swojej strony. Nic, co tu zmienisz, nie zapisuje się w Twoim projekcie.',
   'bar.send': 'Wyślij do AI',

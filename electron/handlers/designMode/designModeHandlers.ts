@@ -10,7 +10,7 @@
 // when the app quits, and a sandbox a crash left behind is deleted the next time the app starts. Earlier undo
 // history does not survive: the window reloads on the way in and on the way out, as it does for any project switch.
 import path from 'node:path';
-import { DESIGN_MODE_ENABLED, type DesignHandoff, type DesignSessionReply, type DesignSessionRequest } from '../../../shared/ipc/designSession';
+import { designModeAvailable, type DesignHandoff, type DesignSessionReply, type DesignSessionRequest } from '../../../shared/ipc/designSession';
 import { lowerDesignFence, observeDesignFence, raiseDesignFence } from '../../lib/designMode/designFence';
 import { guardDesignWrites } from '../../lib/designMode/designWriteGuard';
 import { isPathWithin } from '../../lib/platform';
@@ -41,23 +41,28 @@ export interface DesignModeOptions {
   readonly appDataRoot: string;
   /** Runs `listener` once as the app quits. */
   readonly onQuit: (listener: () => void) => void;
+  /** The computer's platform: Design mode is offered on macOS only (designModeAvailable). */
+  readonly platform: NodeJS.Platform;
 }
 
 export function registerDesignModeHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject' | 'send'>, options: DesignModeOptions): void {
   // A sandbox still here at startup was left by a crash or a forced quit: its dev server is stopped and its copy of
   // `.env` deleted first, in the background, so the app starts at once.
+  // Swept on every platform: a copy found here is deleted whether or not this computer may make another.
   void sweepSandboxes(options.appDataRoot).catch(() => undefined);
-  guardDesignWrites();
   const sessions = createDesignSessions(host, options);
-  observeDesignFence(sessions.observe);
-  options.onQuit(sessions.endAtQuit);
+  if (designModeAvailable(options.platform)) {
+    guardDesignWrites();
+    observeDesignFence(sessions.observe);
+    options.onQuit(sessions.endAtQuit);
+  }
   host.ipcMain.handle('design:session', (_event, request) => sessions.answer(request));
 }
 
 type EnterRequest = Extract<DesignSessionRequest, { op: 'enter' }>;
 
 /** The one session, and every request on it; apart from registration so a test can drive it without Electron. */
-export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'>, options: Pick<DesignModeOptions, 'appDataRoot'>) {
+export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'>, options: Pick<DesignModeOptions, 'appDataRoot' | 'platform'>) {
   const appDataRoot = options.appDataRoot;
   let session: Session | undefined = undefined;
   let entering: { readonly cancelled: () => boolean; readonly cancel: () => void } | undefined = undefined;
@@ -110,7 +115,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
 
   const enter = async (request: EnterRequest): Promise<DesignSessionReply> => {
     const open = host.openProject();
-    if (!DESIGN_MODE_ENABLED || open === undefined || path.resolve(open) !== path.resolve(request.projectPath)) {
+    if (open === undefined || path.resolve(open) !== path.resolve(request.projectPath)) {
       return { kind: 'refused', reason: 'not-open', folder: undefined };
     }
     if (session !== undefined || entering !== undefined) {
@@ -159,6 +164,10 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
   };
 
   const answer = async (request: DesignSessionRequest): Promise<DesignSessionReply> => {
+    // The window draws no button where Design mode is not offered, so any request there is refused outright.
+    if (!designModeAvailable(options.platform)) {
+      throw new Error('Design mode is not available on this computer');
+    }
     switch (request.op) {
       case 'enter':
         return enter(request);

@@ -8,11 +8,22 @@
 //
 // Every value crosses the IPC boundary, so both ends parse it here: main parses requests before it acts, and the
 // renderer parses replies before it trusts them.
+import { assert } from '../core/assert';
 import { boolean, count, pathText, record, text } from '../core/boundary';
 import { parseDesignSnapshot, type DesignSnapshot } from './designSnapshot';
 
 /** The single switch. False: no header button, and main answers every request as if nothing were open. */
 export const DESIGN_MODE_ENABLED = true;
+
+/**
+ * Whether this computer offers Design mode (experimental): macOS only. Why: on Windows and Linux, stopping a dev server
+ * a crash left running from a copy is unverified, and a server still holding the copy could keep it, and the `.env` in
+ * it, from being deleted. Both ends ask: the window draws no button, and main refuses every request.
+ */
+export function designModeAvailable(platform: string): boolean {
+  assert(platform.length > 0, 'designModeAvailable: a platform is named');
+  return DESIGN_MODE_ENABLED && platform === 'darwin';
+}
 
 export const DESIGN_SESSION_LIMITS = {
   /** Frames at once. Why: each is a version of the whole site, and the board stays readable. */

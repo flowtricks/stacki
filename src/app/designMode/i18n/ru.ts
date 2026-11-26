@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeRu: DesignCatalog = {
   'mode.name': 'Режим дизайна',
+  'mode.button': 'Режим дизайна (экспериментальный)',
   'bar.label': 'Режим дизайна',
   'bar.tip': 'Вы редактируете копию своего сайта. Ничего из изменённого здесь не сохраняется в проект.',
   'bar.send': 'Отправить в ИИ',

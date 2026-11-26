@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeNl: DesignCatalog = {
   'mode.name': 'Ontwerpmodus',
+  'mode.button': 'Ontwerpmodus (experimenteel)',
   'bar.label': 'Ontwerpmodus',
   'bar.tip': 'Je bewerkt een kopie van je site. Niets wat je hier wijzigt, wordt in je project opgeslagen.',
   'bar.send': 'Naar AI sturen',

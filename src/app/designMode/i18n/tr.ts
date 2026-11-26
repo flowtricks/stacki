@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeTr: DesignCatalog = {
   'mode.name': 'Tasarım modu',
+  'mode.button': 'Tasarım modu (deneysel)',
   'bar.label': 'Tasarım modu',
   'bar.tip': 'Sitenizin bir kopyasını düzenliyorsunuz. Burada değiştirdiğiniz hiçbir şey projenize kaydedilmez.',
   'bar.send': 'AI’a gönder',

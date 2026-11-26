@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeHe: DesignCatalog = {
   'mode.name': 'מצב עיצוב',
+  'mode.button': 'מצב עיצוב (ניסיוני)',
   'bar.label': 'מצב עיצוב',
   'bar.tip': 'העריכה מתבצעת בעותק של האתר. שום שינוי כאן לא נשמר בפרויקט.',
   'bar.send': 'שליחה ל-AI',

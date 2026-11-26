@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeZhCN: DesignCatalog = {
   'mode.name': '设计模式',
+  'mode.button': '设计模式（实验性）',
   'bar.label': '设计模式',
   'bar.tip': '你正在编辑网站副本。这里所做的任何更改都不会保存到项目中。',
   'bar.send': '发送给 AI',

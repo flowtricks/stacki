@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeKo: DesignCatalog = {
   'mode.name': '디자인 모드',
+  'mode.button': '디자인 모드(실험 기능)',
   'bar.label': '디자인 모드',
   'bar.tip': '사이트 사본을 편집하고 있습니다. 여기서 변경한 내용은 프로젝트에 저장되지 않습니다.',
   'bar.send': 'AI에 보내기',

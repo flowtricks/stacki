@@ -1432,7 +1432,7 @@ registerGitHandlers(host);
 registerGitRepositoryHandlers(host);
 registerImageConversionHandler(host);
 registerPageHandlers(host, { current: () => devServers.current(), restart: (projectPath) => devServers.restartForNewIntegration(projectPath) });
-registerDesignModeHandlers(host, { appDataRoot: app.getPath('userData'), onQuit: (listener) => app.on('will-quit', listener) }); // Design mode (experimental): docs/design-mode/REMOVE.md
+registerDesignModeHandlers(host, { appDataRoot: app.getPath('userData'), onQuit: (listener) => app.on('will-quit', listener), platform: process.platform }); // Design mode (experimental): docs/design-mode/REMOVE.md
 registerPageTemplateHandlers(
   host,
   {

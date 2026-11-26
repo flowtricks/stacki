@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModePtBR: DesignCatalog = {
   'mode.name': 'Modo de design',
+  'mode.button': 'Modo de design (experimental)',
   'bar.label': 'Modo de design',
   'bar.tip': 'Você está editando uma cópia do seu site. Nada do que mudar aqui é salvo no seu projeto.',
   'bar.send': 'Enviar para a IA',

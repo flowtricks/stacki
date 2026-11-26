@@ -58,7 +58,7 @@ function treeDigest(root) {
 async function orchestrate() {
   const { cloneModules, copySite, removeWithRetries, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
   const { RUN_DIRECTORY_PREFIX, stopRun, writeRegistry } = require('../../../helpers/e2e/soakProcesses.js');
-  const unavailable = process.platform === 'win32' ? 'no process table by path on Windows' : soakUnavailableReason();
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'Design mode is offered on macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModeCrashSoak: ${unavailable}`);
     return;

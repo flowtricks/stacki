@@ -3,6 +3,7 @@ import type { DesignCatalog } from './catalogs';
 
 export const designModeAr: DesignCatalog = {
   'mode.name': 'وضع التصميم',
+  'mode.button': 'وضع التصميم (تجريبي)',
   'bar.label': 'وضع التصميم',
   'bar.tip': 'أنت تعدّل نسخة من موقعك. لا يُحفظ في مشروعك أي شيء تغيّره هنا.',
   'bar.send': 'إرسال إلى الذكاء الاصطناعي',

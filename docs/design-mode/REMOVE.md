@@ -47,6 +47,15 @@ project.
 - **Not yet:** unlinking a component and editing text inside a frame; opening a component from a frame; undo for a
   removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
 
+## Where it is offered
+
+macOS only, labelled experimental on its header button. `designModeAvailable` in `shared/ipc/designSession.ts` is the one
+rule: off macOS the window draws no button and registers nothing, and main refuses every `design:session` request,
+makes no copy and installs no write guard. The startup sweep still runs everywhere. Why: on Windows and Linux, stopping
+a dev server a crash left running from a copy is unverified, so a copy, with the project's `.env`, could be left behind.
+Studio and the demo never mount Design mode. To offer it on another platform, verify that cleanup there first, change
+the rule, and let the suites in `test/electron/handlers/designMode/` and `test/renderer/app/designMode/` run there.
+
 ## Switching it off without removing it
 
 Set `DESIGN_MODE_ENABLED` to `false` in `shared/ipc/designSession.ts`. The header then has no Design mode button (comment pins keep theirs),

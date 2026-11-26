@@ -21,7 +21,8 @@ const CHECKS_MIN = 20;
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
-  const unavailable = soakUnavailableReason();
+  // Design mode is offered on macOS only, and the run drives the real pointer.
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'Design mode is offered on macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModeControlsSoak: ${unavailable}`);
     return;
