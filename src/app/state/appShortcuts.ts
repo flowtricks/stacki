@@ -285,6 +285,11 @@ export function useKeyboard(
   ]);
 }
 
+// A field whose undo is the app's (data-app-undo).
+function appUndoField(target: unknown): boolean {
+  return target instanceof Element && target.closest('[data-app-undo]') !== null;
+}
+
 // Application-menu shortcuts.
 export function useMenuShortcuts(
   lifecycle: ReturnType<typeof useLifecycle>,
@@ -317,6 +322,19 @@ export function useMenuShortcuts(
       pasteNode,
       reportFailure,
     };
+    // The Content field writes the page at every keystroke, so its undo is the page's: the browser's own history of
+    // the box loses every step whenever the page's content is put back into it, and never held a typed line break.
+    // The key, where it reaches the page, is taken here; where the menu takes it first, below.
+    const onFieldUndo = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod || event.altKey || event.key.toLowerCase() !== 'z' || !appUndoField(event.target) || windowHeld()) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      void (event.shiftKey ? redo() : undo());
+    };
+    document.addEventListener('keydown', onFieldUndo, true);
     const offs = [
       // ⌘Z is a menu accelerator, so the key never reaches the page: whatever
       // this decides is the only undo there is.
@@ -342,6 +360,10 @@ export function useMenuShortcuts(
         if (windowHeld()) {
           return;
         }
+        if (appUndoField(document.activeElement ?? undefined)) {
+          void undo();
+          return;
+        }
         const route = appShortcutRoute('Mod+Z', document.activeElement ?? undefined);
         if (route === 'app') {
           return;
@@ -360,6 +382,10 @@ export function useMenuShortcuts(
       }),
       window.avb.onMenu('redo', () => {
         if (windowHeld()) {
+          return;
+        }
+        if (appUndoField(document.activeElement ?? undefined)) {
+          void redo();
           return;
         }
         const route = appShortcutRoute('Mod+Shift+Z', document.activeElement ?? undefined);
@@ -398,7 +424,10 @@ export function useMenuShortcuts(
         }
       }),
     ];
-    return () => offs.forEach((off) => off());
+    return () => {
+      document.removeEventListener('keydown', onFieldUndo, true);
+      offs.forEach((off) => off());
+    };
   }, [
     translate,
     setRefreshKey,
