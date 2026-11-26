@@ -347,6 +347,11 @@ async function runInElectron({ window, project, options }) {
       `document.querySelectorAll('.dm-board-frame').length === 2 && document.querySelectorAll('.dm-board-picture').length === 2`,
     );
     check('both frames have a picture', true);
+    const cover = await driver.evaluate(
+      `(() => { const board = document.querySelector('.dm-board'); const r = board.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 3); return JSON.stringify({ width: Math.round(r.width), height: Math.round(r.height), onTop: !!hit && board.contains(hit), hit: hit ? String(hit.className || hit.tagName) : '' }); })()`,
+    );
+    check('the board covers the canvas column', JSON.parse(cover).onTop === true, cover);
+    await driver.settle();
     await shot('05-compare');
     await driver.evaluate(`document.querySelectorAll('.dm-board-frame')[0].click()`);
     await until('the board closed', `!document.querySelector('.dm-board')`);

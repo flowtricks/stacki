@@ -217,3 +217,8 @@
     0 0 0 6px var(--bg-active),
     0 8px 32px rgb(0 0 0 / 0.3);
 }
+
+/* Hidden while the canvas is pictured for the board and the AI (designCapture.ts). */
+.dm-capturing .dm-bar {
+  visibility: hidden;
+}

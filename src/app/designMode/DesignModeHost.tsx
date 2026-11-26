@@ -66,6 +66,14 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
     [locale],
   );
   useSessionOnOpen(app.project.path, latest);
+  // The preview's name follows the language: the catalog may load after the mode's look is applied.
+  const roleName = words('mode.name');
+  const on = view.session.kind === 'on';
+  useEffect(() => {
+    if (on) {
+      applyDesignRole(roleName);
+    }
+  }, [on, roleName]);
   useReopenedPage(app, view.session);
   if (view.session.kind !== 'on') {
     return undefined;

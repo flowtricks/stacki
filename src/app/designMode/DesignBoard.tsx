@@ -14,6 +14,10 @@ type OnSession = Extract<DesignSessionState, { kind: 'on' }>;
 
 const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 2;
+/** A frame's width and the gap between frames on the board, as designMode.css draws them. */
+const FRAME_WIDTH_PX = 1_200;
+const FRAME_GAP_PX = 64;
+const BOARD_MARGIN_PX = 32;
 /** Room below the board's content for the bar. */
 const BAR_ROOM_PX = 72;
 
@@ -28,7 +32,14 @@ export function DesignBoard({
 }) {
   const words = useDesignWords();
   const column = useCanvasColumn();
-  const [view, setView] = useState({ x: 32, y: 32, zoom: 0.5 });
+  // Opens with every frame in view: as wide as the column allows, never larger than life.
+  const [view, setView] = useState(() => {
+    const count = Math.max(1, session.frames.length);
+    const contentPx = count * FRAME_WIDTH_PX + (count - 1) * FRAME_GAP_PX;
+    const widthPx = typeof column.width === 'number' ? column.width : 0;
+    const zoom = Math.min(1, Math.max(ZOOM_MIN, (widthPx - 2 * BOARD_MARGIN_PX) / contentPx));
+    return { x: BOARD_MARGIN_PX, y: BOARD_MARGIN_PX, zoom };
+  });
   const drag = useRef<{ readonly x: number; readonly y: number; readonly startX: number; readonly startY: number } | undefined>(undefined);
   const onWheel = (event: WheelEvent<HTMLDivElement>): void => {
     if (event.ctrlKey || event.metaKey) {

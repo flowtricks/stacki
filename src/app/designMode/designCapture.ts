@@ -36,12 +36,27 @@ export async function captureCanvas(projectPath: string): Promise<string | undef
     width: Math.floor(Math.min(box.width, window.innerWidth - Math.max(0, box.left))),
     height: Math.floor(Math.min(box.height, window.innerHeight - Math.max(0, box.top))),
   };
-  const shot = await aiScreenshot({ projectPath, rect: visible });
+  // The bar sits over the canvas: it is hidden for the picture, so a frame shows the page alone.
+  document.documentElement.classList.add('dm-capturing');
+  let shot: Awaited<ReturnType<typeof aiScreenshot>>;
+  try {
+    await nextPaint();
+    shot = await aiScreenshot({ projectPath, rect: visible });
+  } finally {
+    document.documentElement.classList.remove('dm-capturing');
+  }
   if (!shot.ok) {
     return undefined;
   }
   const scaled = await scaledPng(`data:${shot.value.mimeType};base64,${shot.value.data}`);
   return scaled !== undefined && scaled.length <= DESIGN_SESSION_LIMITS.imageCharsMax ? scaled : undefined;
+}
+
+/** Resolves after the next two frames, so a style change is on screen. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 async function scaledPng(source: string): Promise<string | undefined> {
