@@ -84,6 +84,8 @@ export const messages = {
   'error.pages.devServerStatus': '开发服务器返回了 {status}',
   'error.project.chooseInside': '请选择项目内的内容，而不是项目本身。',
   'error.project.gone': '它已不存在。',
+  'error.project.managerMissing': '未安装 {manager}。请安装它或选择 npm。',
+  'error.project.npmMissing': '找不到 npm。请安装 Node.js（包含 npm）后重试。',
   'error.project.outside': '它位于项目之外。',
   'error.projectSettings.changed': '项目设置已更改，请在保存前重新加载。',
   'error.projectSettings.changedDuringSave': '保存期间项目设置发生了变化，请重新加载以查看。',

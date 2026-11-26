@@ -120,6 +120,7 @@ export const messages = {
   'workspace.files.undo.rename': 'שינוי השם של {name}',
   'workspace.notifications.copied': 'הועתק',
   'workspace.notifications.copy': 'העתקה',
+  'workspace.notifications.copyFailed': 'ההעתקה נכשלה',
   'workspace.notifications.dismiss': 'סגירת ההתראה',
   'workspace.notifications.label': 'התראות',
   'workspace.notifications.loadMore': 'טעינת עוד ({count})',

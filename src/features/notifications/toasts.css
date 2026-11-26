@@ -192,6 +192,15 @@
   text-decoration: none;
   cursor: pointer;
 }
+.toast-copy {
+  display: inline-grid;
+}
+.toast-copy > span {
+  grid-area: 1 / 1;
+}
+.toast-copy > span[data-shown='false'] {
+  visibility: hidden;
+}
 .toast-message {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

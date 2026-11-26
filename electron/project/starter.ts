@@ -1,12 +1,11 @@
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 
 import { toRecord } from '../../shared/core/record';
 import { commandNeedsShell } from '../lib/platform';
 import { stopProcessTree } from '../lib/nodeTools';
-import { packageManagerProgram, type PackageManager } from '../../shared/properties/packageManager';
+import { scaffolderManager, type PackageManager } from '../../shared/properties/packageManager';
 
 // Starting a site from a starter.
 //
@@ -38,8 +37,9 @@ const STARTERS: Record<string, Starter> = {
 };
 
 // A folder name has to be a folder name; the site can be renamed later, but not
-// out of a directory that already exists.
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+// out of a directory that already exists. It goes on a command line, so a leading
+// dash, which a scaffolder would read as one of its options, is refused.
+const NAME_RE = /^(?!-)[A-Za-z0-9._-]+$/;
 
 type OnLog = (text: string) => void;
 
@@ -53,40 +53,6 @@ export const RUN_CANCELLED = 'The command was cancelled.';
 interface RunOptions {
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
-  /** Extra variables for this child only, laid over the app's own. */
-  readonly environment?: Readonly<Record<string, string>>;
-}
-
-// The Lumos scaffolder (create-lumos 0.3.9) links its skill folders with symlinks and, where Windows refuses them
-// (no Developer Mode, no admin), falls back to `copyFile` on the folder, which always fails with EPERM. This preload
-// makes that one fallback copy the folder instead. It touches nothing else: files go to the original `copyFile`.
-const COPY_DIRECTORIES_SHIM = `const fsp = require('node:fs/promises');
-const { statSync } = require('node:fs');
-const original = fsp.copyFile;
-fsp.copyFile = async function copyFile(source, target, mode) {
-  let directory = false;
-  try {
-    directory = statSync(source).isDirectory();
-  } catch {
-    directory = false;
-  }
-  if (directory) {
-    return fsp.cp(source, target, { recursive: true });
-  }
-  return original.call(this, source, target, mode);
-};
-require('node:module').syncBuiltinESMExports();
-`;
-
-// NODE_OPTIONS for a scaffolder run: the shim written to the temp folder, joined to whatever the person already set.
-function scaffolderEnvironment(): Readonly<Record<string, string>> {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-scaffold-'));
-  const file = path.join(folder, 'copyDirectories.cjs');
-  fs.writeFileSync(file, COPY_DIRECTORIES_SHIM, 'utf8');
-  // Forward slashes: a backslash escapes inside the quotes NODE_OPTIONS reads.
-  const preload = `--require "${file.replace(/\\/g, '/')}"`;
-  const existing = process.env['NODE_OPTIONS'];
-  return { NODE_OPTIONS: existing === undefined || existing.length === 0 ? preload : `${existing} ${preload}` };
 }
 
 const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, options: RunOptions = {}): Promise<string> =>
@@ -95,7 +61,7 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, o
     try {
       proc = spawn(cmd, [...args], {
         cwd,
-        // On Windows npm is a .cmd shim, which needs a shell to be found.
+        // On Windows a package manager needs a shell to be found (commandNeedsShell).
         shell: commandNeedsShell(cmd),
         // Its own process group, so a stalled run is stopped with what it started.
         detached: !isWin,
@@ -105,7 +71,6 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, o
           FORCE_COLOR: '0',
           NO_COLOR: '1',
           CI: '1', // npm asks before downloading a scaffolder; nobody is here to answer
-          ...options.environment,
         },
       });
     } catch (error: unknown) {
@@ -169,24 +134,22 @@ interface CreateStarterOptions {
   readonly starter?: string;
   readonly parentPath?: string;
   readonly name?: string;
-  /** The npm command to run, so a test can hand it one that needs no network. */
-  readonly npm?: string;
-  /** The manager the person chose. Bun runs the scaffolder itself (`bun create`); the others run it through npm, which every Node install has. */
+  /** The manager the person chose; it decides what runs the scaffolder (scaffolderManager). */
   readonly manager?: PackageManager;
+  /** Run instead of the scaffolding manager, so a test needs no network. */
+  readonly program?: string;
   readonly onLog?: OnLog;
 }
 
-// Bun has its own `create`, which downloads and runs the scaffolder. It takes no `--yes` and no `--` separator:
-// what follows the folder name goes to the scaffolder as it is.
-function scaffolderCommand(
-  manager: PackageManager | undefined,
-  create: string,
-  folder: string,
-): { readonly label: string; readonly program: string; readonly args: readonly string[] } {
+// `--no-install`: the app installs afterwards, where a failure is an error the wizard can show rather than a line in
+// a log that scrolled past. npm needs `--yes` (nobody can answer its download question) and `--` before the
+// scaffolder's own flags. `bun create <name>` is `bunx create-<name>`, which passes everything after the template on
+// as it is, so either of those would reach the scaffolder as an argument.
+function scaffolderArguments(manager: 'npm' | 'bun', template: string, folder: string): readonly string[] {
   if (manager === 'bun') {
-    return { label: 'bun', program: packageManagerProgram('bun', { windows: isWin }), args: ['create', create, folder, '--no-install'] };
+    return ['create', template, folder, '--no-install'];
   }
-  return { label: 'npm', program: packageManagerProgram('npm', { windows: isWin }), args: ['create', create, folder, '--yes', '--', '--no-install'] };
+  return ['create', template, folder, '--yes', '--', '--no-install'];
 }
 
 /**
@@ -195,7 +158,7 @@ function scaffolderCommand(
  * caller's — this is the part that has to be right before anything is
  * installed into it.
  */
-async function createStarter({ starter = 'lumos', parentPath, name, npm, manager, onLog }: CreateStarterOptions = {}): Promise<{
+async function createStarter({ starter = 'lumos', parentPath, name, manager = 'npm', program, onLog }: CreateStarterOptions = {}): Promise<{
   ok: boolean;
   projectPath: string;
 }> {
@@ -206,11 +169,9 @@ async function createStarter({ starter = 'lumos', parentPath, name, npm, manager
   const directory = newSiteDirectory(parentPath, name);
   const folder = path.basename(directory);
 
-  // `--no-install`: the app installs afterwards, where a failure is an error
-  // the wizard can show rather than a line in a log that scrolled past.
-  const command = scaffolderCommand(manager, template.create, folder);
-  onLog?.(`> ${command.label} create ${template.create} ${folder}\n\n`);
-  await run(npm || command.program, command.args, path.dirname(directory), onLog, { environment: scaffolderEnvironment() });
+  const scaffolder = scaffolderManager(manager);
+  onLog?.(`> ${scaffolder} create ${template.create} ${folder}\n\n`);
+  await run(program ?? scaffolder, scaffolderArguments(scaffolder, template.create, folder), path.dirname(directory), onLog);
 
   if (!fs.existsSync(path.join(directory, 'package.json'))) {
     throw new Error('The starter finished but there is no package.json in it.');
@@ -277,7 +238,7 @@ function newSiteDirectory(parentPath: string | undefined, name: string | undefin
     throw new Error('Give the site a name.');
   }
   if (!NAME_RE.test(folder)) {
-    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name.');
+    throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name, not starting with a dash.');
   }
   const directory = path.join(parentPath, folder);
   if (fs.existsSync(directory)) {
@@ -286,4 +247,4 @@ function newSiteDirectory(parentPath: string | undefined, name: string | undefin
   return directory;
 }
 
-export { createStarter, newSiteDirectory, run as runCreateCommand, scaffolderEnvironment, startSiteHistory, STARTERS };
+export { createStarter, newSiteDirectory, run as runCreateCommand, startSiteHistory, STARTERS };

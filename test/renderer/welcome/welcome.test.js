@@ -315,7 +315,11 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
     check('the package manager is npm by default', trigger?.textContent === 'npm', trigger?.outerHTML);
     await act(async () => trigger.click());
     const managers = [...dom.window.document.querySelectorAll('.dd-option')];
-    check('and offers npm and pnpm', managers.map((option) => option.textContent).join() === 'npm,pnpm', managers.map((option) => option.textContent).join());
+    check(
+      'and offers npm, pnpm and Bun',
+      managers.map((option) => option.textContent).join() === 'npm,pnpm,Bun',
+      managers.map((option) => option.textContent).join(),
+    );
     await act(async () => managers[1].click());
     check('picking pnpm shows it', trigger?.textContent === 'pnpm', trigger?.textContent);
     await act(async () => {

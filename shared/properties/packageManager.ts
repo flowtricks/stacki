@@ -14,17 +14,15 @@ const FIELD_CHARS_MAX = 256;
 export function parseCreatePackageManager(input: unknown): CreatePackageManager {
   const manager = CREATE_PACKAGE_MANAGERS.find((candidate) => candidate === input);
   if (manager === undefined) {
-    throw new Error(
-      `Package manager: expected ${CREATE_PACKAGE_MANAGERS.slice(0, -1).join(', ')} or ${CREATE_PACKAGE_MANAGERS[CREATE_PACKAGE_MANAGERS.length - 1]}`,
-    );
+    throw new Error(`Package manager: expected one of ${CREATE_PACKAGE_MANAGERS.join(', ')}`);
   }
   return manager;
 }
 
-// The program to start for a manager. npm, pnpm and Yarn are Node shims, `.cmd` files on Windows; Bun is a
-// native binary there (`bun.exe`), so a `bun.cmd` would never be found.
-export function packageManagerProgram(manager: PackageManager, options: { readonly windows: boolean }): string {
-  return options.windows && manager !== 'bun' ? `${manager}.cmd` : manager;
+// Which manager runs a starter's scaffolder. Bun runs it with its own `create`; every other choice goes through npm,
+// which comes with Node. The wizard shows the same command main runs.
+export function scaffolderManager(manager: PackageManager): 'npm' | 'bun' {
+  return manager === 'bun' ? 'bun' : 'npm';
 }
 
 // The name people know each manager by, for messages.

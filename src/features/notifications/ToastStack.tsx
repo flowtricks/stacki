@@ -3,11 +3,13 @@ import { checkCircle as centralCheckCircle, close as centralClose, info as centr
 import { createPortal } from 'react-dom';
 import { useToastHost } from './useToastHost';
 import { runToastRecovery } from '../../ui/errorNotices';
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useToastInteraction } from './useToastInteraction';
 import { TOAST_LIMIT, type ToastNotice } from './useToastStack';
 import { useToastLayout } from './useToastLayout';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useCopy, type CopyState } from '../../ui/copyText';
 import './toasts.css';
 
 const CloseIcon = centralIcon(centralClose);
@@ -134,32 +136,25 @@ function ToastCard({
   );
 }
 
-// Copies the message so an error can be pasted into a search, an issue or a chat. The toast stays up, and the
-// button says "Copied" for a moment so the click is seen to have worked.
-const COPIED_LABEL_MS = 2000;
+const COPY_LABELS = [
+  { state: 'idle', key: 'workspace.notifications.copy' },
+  { state: 'copied', key: 'workspace.notifications.copied' },
+  { state: 'failed', key: 'workspace.notifications.copyFailed' },
+] as const satisfies readonly { readonly state: CopyState; readonly key: MessageKey }[];
 
+// Copies the message as shown, so an error can be pasted into a search, an issue or a chat; the toast stays up. All
+// three labels share one grid cell, so the button keeps the widest one's size in every language and nothing moves
+// when it changes. The hidden ones are `visibility: hidden`, which also leaves them out of the button's name.
 function ToastCopy({ message }: { readonly message: string }) {
   const translate = useTranslate();
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setCopied(false), COPIED_LABEL_MS);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const { state, copy } = useCopy();
   return (
-    <button
-      type="button"
-      className="toast-copy"
-      onClick={() => {
-        navigator.clipboard.writeText(message).then(
-          () => setCopied(true),
-          () => setCopied(false),
-        );
-      }}
-    >
-      {translate(copied ? 'workspace.notifications.copied' : 'workspace.notifications.copy')}
+    <button type="button" className="toast-copy" onClick={() => copy(message)}>
+      {COPY_LABELS.map((label) => (
+        <span key={label.state} data-shown={label.state === state}>
+          {translate(label.key)}
+        </span>
+      ))}
     </button>
   );
 }

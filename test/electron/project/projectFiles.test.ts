@@ -57,9 +57,9 @@ test('installed packages are found in the package or in any parent workspace roo
   assert.equal(has('none'), false);
 });
 
-// Goal: a Bun install on Windows is found. Method: lay out .bin the way each manager does and ask for the command.
-// Bun writes astro.exe and no astro.cmd; looking only for the .cmd made Stacki say astro was not installed.
-test('the astro command is the .cmd npm leaves or the .exe Bun leaves on Windows', { skip: process.platform !== 'win32' }, (context) => {
+// Goal: a Bun install on Windows is found. Method: lay out .bin the way each manager does and ask for the command
+// as each platform would. Bun writes astro.exe and no astro.cmd; looking only for the .cmd reported astro missing.
+test('the astro command is the .cmd npm leaves or the .exe Bun leaves on Windows', (context) => {
   const built = buildProject({
     'bun/node_modules/.bin/astro.exe': 'MZ',
     'npm/node_modules/.bin/astro.cmd': '@echo off',
@@ -68,12 +68,12 @@ test('the astro command is the .cmd npm leaves or the .exe Bun leaves on Windows
     'empty/package.json': '{}',
   });
   context.after(() => removeProject(built.root));
-  const bin = (folder: string) => path.basename(localAstroBin(path.join(built.root, folder)));
-  assert.equal(bin('bun'), 'astro.exe');
-  assert.equal(bin('npm'), 'astro.cmd');
-  assert.equal(bin('both'), 'astro.cmd');
-  assert.equal(bin('empty'), 'astro.cmd');
-  assert.equal(hasDependencies(path.join(built.root, 'bun')), true);
+  const bin = (folder: string, platform: NodeJS.Platform) => path.basename(localAstroBin(path.join(built.root, folder), platform));
+  assert.equal(bin('bun', 'win32'), 'astro.exe');
+  assert.equal(bin('npm', 'win32'), 'astro.cmd');
+  assert.equal(bin('both', 'win32'), 'astro.cmd');
+  assert.equal(bin('empty', 'win32'), 'astro.cmd');
+  assert.equal(bin('bun', 'darwin'), 'astro');
 });
 
 test('the package manager comes from the nearest field or lockfile, looking through parents', (context) => {
@@ -93,6 +93,8 @@ test('the package manager comes from the nearest field or lockfile, looking thro
     'broken/package.json': '{ nope',
     'broken/yarn.lock': '',
     'none/package.json': '{}',
+    // Detection looks through every parent: this one keeps a stray lockfile above the temp folder out of the answers.
+    'package-lock.json': '{}',
   });
   context.after(() => removeProject(built.root));
   const manager = (folder: string) => detectPackageManager(path.join(built.root, folder));

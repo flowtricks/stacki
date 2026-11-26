@@ -85,6 +85,8 @@ export const messages = {
   'error.pages.devServerStatus': 'Geliştirme sunucusu {status} döndürdü',
   'error.project.chooseInside': 'Projenin kendisini değil, proje içindeki bir şeyi seçin.',
   'error.project.gone': 'Bu artık yok.',
+  'error.project.managerMissing': '{manager} yüklü değil. Yükleyin veya npm’i seçin.',
+  'error.project.npmMissing': 'npm bulunamadı. Node.js’i (npm dahildir) yükleyip yeniden deneyin.',
   'error.project.outside': 'Bu, projenin dışında.',
   'error.projectSettings.changed': 'Proje ayarları değişti. Kaydetmeden önce yeniden yükleyin.',
   'error.projectSettings.changedDuringSave': 'Proje ayarları kaydedilirken değişti. İncelemek için yeniden yükleyin.',

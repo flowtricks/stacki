@@ -84,6 +84,8 @@ export const messages = {
   'error.pages.devServerStatus': '개발 서버가 {status}을(를) 반환했습니다',
   'error.project.chooseInside': '프로젝트 자체가 아니라 프로젝트 안의 항목을 선택하세요.',
   'error.project.gone': '더 이상 존재하지 않습니다.',
+  'error.project.managerMissing': '{manager}이(가) 설치되어 있지 않습니다. 설치하거나 npm을 선택하세요.',
+  'error.project.npmMissing': 'npm을 찾을 수 없습니다. npm이 포함된 Node.js를 설치한 후 다시 시도하세요.',
   'error.project.outside': '프로젝트 밖에 있습니다.',
   'error.projectSettings.changed': '프로젝트 설정이 변경되었습니다. 저장하기 전에 다시 불러오세요.',
   'error.projectSettings.changedDuringSave': '저장하는 동안 프로젝트 설정이 변경되었습니다. 다시 불러와서 확인하세요.',

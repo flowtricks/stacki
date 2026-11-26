@@ -93,6 +93,8 @@ export const messages = {
   'error.pages.devServerStatus': 'Serwer deweloperski zwrócił {status}',
   'error.project.chooseInside': 'Wybierz coś wewnątrz projektu, a nie sam projekt.',
   'error.project.gone': 'Tego już tu nie ma.',
+  'error.project.managerMissing': '{manager} nie jest zainstalowany. Zainstaluj go lub wybierz npm.',
+  'error.project.npmMissing': 'Nie znaleziono npm. Zainstaluj Node.js (zawiera npm) i spróbuj ponownie.',
   'error.project.outside': 'To jest poza projektem.',
   'error.projectSettings.changed': 'Ustawienia projektu zmieniły się. Wczytaj ponownie przed zapisaniem.',
   'error.projectSettings.changedDuringSave': 'Ustawienia projektu zmieniły się podczas zapisywania. Wczytaj ponownie, aby je sprawdzić.',

@@ -42,7 +42,7 @@ import type { ChatView } from '../chatReducer';
 import { chatShortcut } from '../chatShortcuts';
 import { requestChatFind } from '../transcript/chatFind';
 import { hasExportableMessages, transcriptMarkdown } from '../transcript/chatExport';
-import { COPY_LIMITS, copyText } from '../transcript/copyText';
+import { COPY_LIMITS, copyText } from '../../../ui/copyText';
 import { builtinCommandNamed, builtinCommandOfDraft, builtinCommands, withBuiltinCommands, type BuiltinCommandName } from './builtinCommands';
 import { reportErrorToast } from '../../../ui/errorNotices';
 import { ComposerInput, type ComposerHandle, type SendKey } from './ComposerInput';

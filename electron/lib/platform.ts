@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { PACKAGE_MANAGERS } from '../../shared/properties/packageManager';
 
 type Platform = NodeJS.Platform;
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -60,8 +61,18 @@ export function mergeToolPaths(current: string, candidates: readonly string[], p
   return parts.join(delimiter);
 }
 
+// On Windows, a .cmd or .bat file only runs through cmd.exe. So does a package manager started by its bare name:
+// which file that is depends on how it was installed (`npm.cmd`, `bun.exe` from Bun's installer, `bun.cmd` from
+// `npm install -g bun`, `pnpm.exe` from pnpm's installer), and only cmd.exe tries each (PATHEXT). Node does not
+// quote arguments for a shell, so a caller passes only fixed or validated ones.
 export function commandNeedsShell(command: string, platform: Platform = process.platform): boolean {
-  return platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
+  if (platform !== 'win32') {
+    return false;
+  }
+  if (PACKAGE_MANAGERS.some((manager) => manager === command)) {
+    return true;
+  }
+  return /\.(?:cmd|bat)$/i.test(command);
 }
 
 export function staticToolPathGuesses(home: string, environment: Environment, platform: Platform = process.platform): readonly string[] {

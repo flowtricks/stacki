@@ -85,6 +85,8 @@ export const messages = {
   'error.pages.devServerStatus': 'Dev server returned {status}',
   'error.project.chooseInside': 'Choose something inside the project, not the project itself.',
   'error.project.gone': 'That is no longer there.',
+  'error.project.managerMissing': '{manager} is not installed. Install it or choose npm.',
+  'error.project.npmMissing': 'npm could not be found. Install Node.js (which includes npm) and try again.',
   'error.project.outside': 'That is outside the project.',
   'error.projectSettings.changed': 'Project settings changed. Reload before saving.',
   'error.projectSettings.changedDuringSave': 'Project settings changed during save. Reload to inspect them.',

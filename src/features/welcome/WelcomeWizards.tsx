@@ -3,14 +3,14 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
 import { createAstroProject, createStarterProject, subscribeCreateLog, type ProjectTemplate } from './welcomeBridge';
-import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, type CreatePackageManager } from '../../../shared/properties/packageManager';
+import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, scaffolderManager, type CreatePackageManager } from '../../../shared/properties/packageManager';
 import Dropdown from '../../ui/Dropdown';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
 const SITE_NAME_DEFAULT = 'my-site';
-const SITE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const SITE_NAME_PATTERN = /^(?!-)[A-Za-z0-9._-]+$/;
 const TEMPLATES = [
   { value: 'basics', labelKey: 'welcome.template.basics.label', hintKey: 'welcome.template.basics.hint' },
   { value: 'blog', labelKey: 'welcome.template.blog.label', hintKey: 'welcome.template.blog.hint' },
@@ -70,8 +70,8 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
       <SiteNameField parentPath={parentPath} name={name} running={running} change={setName} submit={() => void run()} />
       <PackageManagerField value={manager} disabled={running} change={setManager} />
       <div className="starter-note">
-        {translateRich(manager === 'npm' ? 'welcome.starter.note' : 'welcome.starter.noteWithManager', {
-          command: <CodeInline language="shell" text="npm create lumos@latest" />,
+        {translateRich(manager === scaffolderManager(manager) ? 'welcome.starter.note' : 'welcome.starter.noteWithManager', {
+          command: <CodeInline language="shell" text={`${scaffolderManager(manager)} create lumos@latest`} />,
           manager: <CodeInline language="shell" text={manager} />,
         })}
       </div>
