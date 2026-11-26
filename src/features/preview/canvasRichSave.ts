@@ -95,7 +95,7 @@ export function createCanvasRichSaver(): {
       if (bases.has(edit.edit)) {
         return;
       }
-      const owner = document === undefined ? undefined : ownerOf(edit, document);
+      const owner = document === undefined ? undefined : richOwnerOf(edit, document);
       const content = owner === undefined ? undefined : document?.format?.content?.(owner);
       if (content !== undefined) {
         bases.set(edit.edit, content);
@@ -116,7 +116,7 @@ function writeRichText(save: CanvasRichSave, document: CanvasRichDocument | unde
   if (document.file !== save.file || document.format?.richText === undefined) {
     return 'refused';
   }
-  const owner = ownerOf(save, document);
+  const owner = richOwnerOf(save, document);
   if (owner === undefined) {
     return 'busy';
   }
@@ -124,7 +124,7 @@ function writeRichText(save: CanvasRichSave, document: CanvasRichDocument | unde
 }
 
 // The node whose content the edit writes, by its place on the page: handles change when a page is read again.
-function ownerOf(edit: CanvasRichEdit, document: CanvasRichDocument): string | undefined {
+export function richOwnerOf(edit: CanvasRichEdit, document: CanvasRichDocument): string | undefined {
   const pending: CanvasSourceNode[] = [...document.nodes];
   for (let visited = 0; visited < pending.length && visited < LIMITS.treeNodesMax; visited++) {
     const node = pending[visited];

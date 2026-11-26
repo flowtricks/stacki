@@ -123,6 +123,11 @@ export interface CanvasTextCatalog {
   readonly file: string;
   readonly checksum: string;
   readonly targets: readonly CanvasTextTarget[];
+  /**
+   * The rich text instances whose blocks may be typed in, by page path: one with no words (only an image, an empty
+   * paragraph) has no target to find it by.
+   */
+  readonly boxes?: readonly string[];
   /** Data-bound texts a double click cannot edit in place (computed, joined, a call): the frame names them instead of staying silent. */
   readonly blocked?: readonly CanvasTextBlocked[];
 }
@@ -254,8 +259,17 @@ export function parseCanvasTextCatalog(input: unknown): CanvasTextCatalog {
     file: pathText(data['file']),
     checksum: digest(data['checksum']),
     targets,
+    ...(data['boxes'] === undefined ? {} : { boxes: parseBoxes(data['boxes']) }),
     ...(data['blocked'] === undefined ? {} : { blocked: parseBlocked(data['blocked']) }),
   };
+}
+
+function parseBoxes(input: unknown): readonly string[] {
+  const boxes = list(pathText)(input);
+  if (boxes.length > CANVAS_BLOCKED_LIMIT) {
+    throw new Error('Too many canvas rich text boxes');
+  }
+  return boxes;
 }
 
 function parseBlocked(input: unknown): readonly CanvasTextBlocked[] {

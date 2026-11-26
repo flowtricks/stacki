@@ -187,3 +187,12 @@ test('Backspace and Delete beside an image take it, or the empty line; never lea
     '<p>a</p><hr>',
   );
 });
+
+test('words typed with the caret between blocks, whitespace and all, get a paragraph of their own', () => {
+  editor('\n  <img src="/a.png">\n  ', ({ host, caret, rich }) => {
+    caret(host, host.childNodes.length);
+    rich.keepTypingInBlocks(host, rich.createRichHistory(host));
+    assert.equal(window.getSelection().focusNode.tagName, 'P');
+    assert.equal(host.lastChild.tagName, 'P');
+  });
+});

@@ -18,7 +18,7 @@ import {
 import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import { onCanvasTextRefresh } from './canvasTextRefresh';
-import { createCanvasRichSaver, type CanvasRichSave, type CanvasRichSaveHost, type RichWritten } from './canvasRichSave';
+import { createCanvasRichSaver, richOwnerOf, type CanvasRichEdit, type CanvasRichSave, type CanvasRichSaveHost, type RichWritten } from './canvasRichSave';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { canvasSourceCue, clearCanvasSourceCue } from '../../ui/canvasTextSourceCue';
 import {
@@ -55,6 +55,8 @@ export interface CanvasTextDocument {
   readonly format?: CanvasTextFormatter | undefined;
   /** What Enter types in the text at a page path, from its component's editing settings. Absent: Enter finishes, as before. */
   readonly breaks?: ((textPath: string) => { readonly breaks: CanvasTextBreaks; readonly richRoot?: string } | undefined) | undefined;
+  /** The page paths of the instances whose blocks are edited as rich text, with words or without. */
+  readonly richBoxes?: (() => readonly string[]) | undefined;
   /** What `breaks` is read from (the editing settings); a new value rebuilds the catalog, as `components` does. */
   readonly settings?: unknown;
 }
@@ -223,17 +225,18 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       receiveCanvasSelection(message, { ...options, nodes, takeover });
       return;
     }
+    if (message.type === 'avb:rich-draft') {
+      // By the edit's own name, so rich text opened with no words to name it is followed too.
+      options.richSaver.opened(richEditOf(message.edit), options.current.current?.document);
+      publishLiveContent(richEditOf(message.edit), message, options);
+      return;
+    }
     const plan = options.plans().find((entry) => entry.target.key === message.key);
     if (!plan) {
       return;
     }
     if (message.type === 'avb:text-draft') {
       publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
-      return;
-    }
-    if (message.type === 'avb:rich-draft') {
-      options.richSaver.opened(richEditOf(message.edit), options.current.current?.document);
-      publishLiveContent(plan, message, { ...options, nodes });
       return;
     }
     if (savedWithBreaks(plan, message, { ...options, nodes })) {
@@ -254,19 +257,14 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
 
 // The block editor's content as it is typed, for whoever shows the node it will be written to (ui/liveContent.ts).
 // Nothing is written to the file until the editor saves.
-function publishLiveContent(
-  plan: CanvasTextEdit,
-  message: { readonly html: string; readonly caret: readonly number[] },
-  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
-) {
-  const node = options.nodes.get(plan.target.path);
-  const nodeID = node?.kind === 'text' && node.id !== undefined ? options.initial.format?.contentOwner?.(node.id, plan.target.breaks) : undefined;
+function publishLiveContent(edit: CanvasRichEdit, message: { readonly html: string; readonly caret: readonly number[] }, options: CanvasTextReceiverOptions) {
+  const document = options.current.current?.document;
+  const nodeID = document === undefined ? undefined : richOwnerOf(edit, document);
   if (nodeID !== undefined) {
     setLiveContent({ owner: options.session, nodeID, html: message.html, caret: message.caret });
   }
 }
 
-// The words of rich text, a block to a line.
 function wordsOf(html: string): string {
   const template = document.createElement('template');
   template.innerHTML = html;
@@ -461,12 +459,14 @@ async function publishCanvasTextSession(
       },
     })),
   ];
+  const boxes = document.richBoxes?.().slice(0, CANVAS_BLOCKED_LIMIT) ?? [];
   const catalog: CanvasTextCatalog = {
     type: 'avb:text-catalog',
     session,
     file: document.file,
     checksum,
     targets: plans.map((plan) => plan.target).slice(0, 2_000),
+    ...(boxes.length === 0 ? {} : { boxes }),
   };
   publish({ plans, catalog });
   const content = await document.loadContent(document);

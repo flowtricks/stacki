@@ -1,6 +1,6 @@
 import type { CanvasTextTarget, CanvasTextCatalog } from '../../shared/properties/canvasText';
 import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
-import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
+import { pathsOf, canvasTextSourceMatches, runsOf, elementsWithPath } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect, elementsAt } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
@@ -70,7 +70,7 @@ export function installCanvasText(
     }
     // A double click inside rich text but on no words (between its paragraphs, in its padding) is still typing in it:
     // the caret goes to the nearest line. The component opens by its name tag, the Navigator or the context menu.
-    const hit = findTextHit(catalog, event) ?? findRichBoxHit(catalog, event);
+    const hit = findTextHit(catalog, event) ?? findRichBoxHit(catalog, event) ?? findWordlessHit(catalog, event) ?? findBesideHit(catalog, event);
     if (!hit) {
       refuseBlockedText(catalog, event, post);
       return;
@@ -262,6 +262,110 @@ export function findRichBoxHit(catalog: CanvasTextCatalog, event: Pick<MouseEven
     }
     if (nearest) {
       return nearest.hit;
+    }
+  }
+  return undefined;
+}
+
+// Rich text with no words to find it by (only an image, an empty paragraph): its box, found by the blocks the catalog
+// says are an instance's. The edit is named by the instance. Exported for the regression suite.
+export function findWordlessHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 'target'>): TextHit | undefined {
+  let box: Element | undefined = event.target instanceof Element ? event.target : undefined;
+  for (let depth = 0; box && depth < 32; depth++, box = box.parentElement ?? undefined) {
+    for (const root of catalog.boxes ?? []) {
+      const block = ownBlockOf(box, root);
+      if (block !== undefined) {
+        return wordlessHit(root, block);
+      }
+    }
+  }
+  return undefined;
+}
+
+function wordlessHit(root: string, block: Element): TextHit {
+  const target: CanvasTextTarget = {
+    kind: 'component',
+    key: `box:${root}`,
+    path: root,
+    parent: root,
+    value: '',
+    label: '',
+    nested: false,
+    tag: '',
+    siblings: [],
+    breaks: 'rich',
+    richRoot: root,
+  };
+  return { target, match: { nodes: [], element: block } };
+}
+
+// A double click in the empty space beside typed text that is narrower than its row (a maximum width): on an element
+// around the text, level with it, left or right of its box. As in any text editor, that is typing in the nearest words.
+// Space above or below stays the element's, and opens the component as before. Exported for the regression suite.
+export function findBesideHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 'target' | 'clientX' | 'clientY'>): TextHit | undefined {
+  const around = event.target;
+  if (!(around instanceof Element)) {
+    return undefined;
+  }
+  let nearest: { readonly hit: TextHit; readonly distance: number } | undefined;
+  for (const target of catalog.targets) {
+    if (target.breaks === undefined || (target.scope !== undefined && !isEditableThroughProps(textReach({ loaded: true, covering: target })))) {
+      continue;
+    }
+    for (const parent of elementsWithPath(target.parent)) {
+      // The box that is typed in: the element holding an instance's blocks, or the line of words itself.
+      const box = target.breaks === 'rich' ? editableBox(parent, target.richRoot ?? '') : parent;
+      if (box === undefined || box === around || !around.contains(box)) {
+        continue;
+      }
+      const bounds = box.getBoundingClientRect();
+      const level = event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+      if (!level || (event.clientX >= bounds.left && event.clientX <= bounds.right)) {
+        continue;
+      }
+      const match = matchCanvasText(target, parent);
+      for (const line of match ? textLineBoxes(match) : []) {
+        const distance = distanceToBox(line, event.clientX, event.clientY);
+        if (match && (nearest === undefined || distance < nearest.distance)) {
+          nearest = { hit: { target, match }, distance };
+        }
+      }
+    }
+  }
+  return nearest?.hit ?? besideWordlessBox(catalog, around, event);
+}
+
+// The same beside rich text with no words, whose box may be next to nothing wide.
+function besideWordlessBox(catalog: CanvasTextCatalog, around: Element, event: Pick<MouseEvent, 'clientX' | 'clientY'>): TextHit | undefined {
+  for (const root of catalog.boxes ?? []) {
+    // The first block still marked is enough to find the box; a few places are looked at.
+    const block = Array.from({ length: BOX_BLOCKS_LOOKED }, (_, index) => elementsWithPath(`${root}.${index}`)[0]).find((found) => found !== undefined);
+    const box = block?.parentElement ?? undefined;
+    if (block === undefined || box === undefined || box === around || !around.contains(box)) {
+      continue;
+    }
+    const bounds = box.getBoundingClientRect();
+    if (event.clientY >= bounds.top && event.clientY <= bounds.bottom) {
+      return wordlessHit(root, block);
+    }
+  }
+  return undefined;
+}
+
+const BOX_BLOCKS_LOOKED = 8;
+
+// The child of `box` that is a block of the instance at `root`, when it has one.
+function ownBlockOf(box: Element, root: string): Element | undefined {
+  return Array.from(box.children)
+    .slice(0, 500)
+    .find((element) => pathsOf(element).some((path) => path.startsWith(`${root}.`) && /^\d+$/.test(path.slice(root.length + 1))));
+}
+
+function editableBox(element: Element, root: string): Element | undefined {
+  let current: Element | undefined = element.parentElement ?? undefined;
+  for (let depth = 0; current && depth < 32; depth++, current = current.parentElement ?? undefined) {
+    if (ownBlockOf(current, root) !== undefined) {
+      return current;
     }
   }
   return undefined;

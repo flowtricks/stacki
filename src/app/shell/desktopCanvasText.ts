@@ -6,7 +6,7 @@ import { readPage, readText, resolvePath, writeText } from '../../ipc/bridge';
 import { boundPropReader, canvasBoundEdits, type BoundTextHost, type BoundTextWords } from '../model/canvasBoundText';
 import type { ShellView } from '../App';
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
-import { canvasTextBreaksOf, canvasTextFormatter, type CanvasTextBreaking } from '../model/canvasTextFormat';
+import { canvasRichRootsOf, canvasTextBreaksOf, canvasTextFormatter, type CanvasTextBreaking } from '../model/canvasTextFormat';
 import { componentReference } from '../model/componentReference';
 import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
 import { projectRelativePath } from '../../lib/projectPath';
@@ -61,7 +61,7 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
     report: app.showToast,
     // The canvas bar's presses, saved as the Content field saves them.
     format: canvasTextFormatter(shown, app.setNodeInline),
-    breaks: desktopTextBreaks(app, state.model, shown),
+    ...desktopTextBreaks(app, state.model, shown),
     settings: app.componentEditing,
     focus: canvasFocus(app.selectedId, app.pathFor),
     components: app.insertables,
@@ -73,18 +73,18 @@ function desktopTextBreaks(
   app: ShellView,
   model: NonNullable<ShellView['model']>,
   shown: NonNullable<ShellView['model']>['nodes'],
-): (path: string) => CanvasTextBreaking | undefined {
+): { readonly breaks: (path: string) => CanvasTextBreaking | undefined; readonly richBoxes: () => readonly string[] } {
   const imports = 'imports' in model ? model.imports : [];
   // Read when a catalog is published, not on every render of the shell.
   let breaks: ReadonlyMap<string, CanvasTextBreaking> | undefined;
-  return (path) => {
-    breaks ??= canvasTextBreaksOf(shown, app.pathFor, (node) =>
-      app.componentEditing(
-        componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
-        DEFAULT_SLOT_FIELD,
-      ),
+  const settingsOf = (node: (typeof shown)[number]) =>
+    app.componentEditing(
+      componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
+      DEFAULT_SLOT_FIELD,
     );
-    return breaks.get(path);
+  return {
+    breaks: (path) => (breaks ??= canvasTextBreaksOf(shown, app.pathFor, settingsOf)).get(path),
+    richBoxes: () => canvasRichRootsOf(shown, app.pathFor, settingsOf),
   };
 }
 

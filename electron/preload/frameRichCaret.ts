@@ -110,9 +110,16 @@ export function openingCaret(container: Element, owned: Owned, at: Pick<MouseEve
     return;
   }
   const point = nearestCaret(container, owned, at.clientX, at.clientY);
-  if (point !== undefined) {
-    select(point, undefined);
+  if (point === undefined) {
+    // No line to go to (only an image): after the content, where the next words get a paragraph of their own.
+    select({ node: container, offset: container.childNodes.length }, undefined);
+    return;
   }
+  // An empty block has no line to type on until it holds a break: the browser would put the words outside it.
+  if (point.node instanceof Element && point.node !== container && point.node.childNodes.length === 0) {
+    point.node.append(document.createElement('br'));
+  }
+  select(point, undefined);
 }
 
 /** Presses on the box where there are no words, while it is edited; removed with `signal`. */

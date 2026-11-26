@@ -227,9 +227,6 @@ export function keepTypingInBlocks(host: HTMLElement, history: RichHistory): voi
     return;
   }
   const index = media === undefined ? range.startOffset : range.startOffset + 1;
-  if (media === undefined && !isMediaChild(host, host.childNodes[index]) && !isMediaChild(host, host.childNodes[index - 1])) {
-    return;
-  }
   const paragraph = host.ownerDocument.createElement('p');
   paragraph.setAttribute(SPARE_LINE, '');
   paragraph.append(host.ownerDocument.createElement('br'));
