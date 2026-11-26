@@ -1,6 +1,7 @@
-/* Design mode (experimental; docs/design-mode/REMOVE.md). Fills, never outlines; the app's tokens throughout, so
-   both themes follow. The bar and the board sit in a fixed layer over the canvas column, placed by the column's
-   measured box (useCanvasColumn.ts), so their physical left and top are screen positions in every language. */
+/* Design mode (experimental; docs/design-mode/REMOVE.md). Fills, never outlines, on the mode's own chrome; the app's
+   tokens throughout, so both themes follow. The canvas and the bar sit in a fixed layer over the canvas column,
+   placed by measured boxes (useCanvasColumn.ts), so their physical left and top are screen positions in every
+   language. */
 
 .dm-bar {
   position: fixed;
@@ -14,9 +15,17 @@
   box-sizing: border-box;
   pointer-events: none;
 }
-.dm-bar > *,
-.dm-bar .dm-frames {
+.dm-bar > * {
   pointer-events: auto;
+}
+/* The title bar's "View as" chip would end the mode's own preview, bringing publishing and pulling back over a copy
+   that can do neither; the bar below already names the mode, and Exit ends it. */
+body:has(.dm-bar) .view-as-chip {
+  display: none;
+}
+/* Toasts sit at the window's bottom centre, over the bar: while it is up they start above it, so Exit is never covered. */
+body:has(.dm-bar) .toast-stack {
+  bottom: 72px;
 }
 .dm-badge {
   display: inline-flex;
@@ -29,80 +38,6 @@
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-}
-.dm-frames {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  max-width: 50%;
-  height: 32px;
-  padding: 0 3px;
-  border-radius: 8px;
-  background: var(--bg-panel);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
-  overflow-x: auto;
-  scrollbar-gutter: stable;
-  scrollbar-width: none;
-}
-.dm-tab {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  height: 26px;
-  border-radius: 6px;
-  color: var(--text-dim);
-}
-.dm-tab:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.dm-tab.is-active {
-  background: var(--bg-active);
-  color: var(--text);
-}
-.dm-tab-name {
-  height: 26px;
-  padding: 0 10px;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: default;
-}
-.dm-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-inline-end: 3px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--text-faint);
-  opacity: 0;
-}
-.dm-tab:hover .dm-tab-close,
-.dm-tab-close:focus-visible {
-  opacity: 1;
-}
-.dm-tab-close:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.dm-tab-input {
-  width: 140px;
-  height: 26px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
 }
 .dm-icon,
 .dm-button {
@@ -126,6 +61,10 @@
 .dm-button {
   padding: 0 12px;
 }
+.dm-zoom {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
 .dm-icon:hover:not(:disabled),
 .dm-button:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -137,6 +76,11 @@
   background: var(--accent);
   color: #fff;
 }
+.dm-status,
+.dm-status:hover {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+}
 .dm-button.is-confirming {
   background: var(--bg-active);
 }
@@ -145,81 +89,159 @@
   opacity: 0.5;
 }
 
-.dm-board {
+.dm-canvas {
   position: fixed;
-  z-index: 225;
+  /* Over the editor's preview and its overlays, under panels, popups and menus. */
+  z-index: 60;
   box-sizing: border-box;
   background: var(--bg);
 }
-.dm-board-plane {
+.dm-plane {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  cursor: grab;
+  outline: none;
   touch-action: none;
+  user-select: none;
 }
-.dm-board-plane:active {
-  cursor: grabbing;
+.dm-plane.is-panning,
+.dm-plane.is-panning * {
+  cursor: grab;
 }
-.dm-board-world {
+.dm-plane.is-copying .dm-tile {
+  cursor: copy;
+}
+.dm-world {
   position: absolute;
-  left: 0; /* physical: the board is a plane panned by transform from its top-left corner in every language */
+  left: 0; /* physical: a plane panned by transform from its top-left corner in every language */
   top: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 64px;
   transform-origin: 0 0;
 }
-.dm-board-frame {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+.dm-tile {
+  position: absolute;
 }
-.dm-board-name {
+.dm-title {
+  position: absolute;
+  bottom: 100%;
+  left: 0; /* physical: a frame's name starts at its left edge, as the frame is placed */
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 24px;
-  font-weight: 600;
-}
-.dm-board-count {
-  font-size: 18px;
-  font-weight: 400;
+  align-items: center;
+  overflow: hidden;
   color: var(--text-dim);
+  white-space: nowrap;
+  cursor: default;
 }
-.dm-board-picture,
-.dm-board-skeleton {
-  display: block;
-  width: 1200px;
-  border-radius: 6px;
+.dm-title-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.dm-title-note {
+  color: var(--text-faint);
+}
+.dm-title-input {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: inherit;
+}
+.dm-tile.is-active .dm-title {
+  color: var(--text);
+}
+.dm-tile.is-selected .dm-title {
+  color: var(--accent);
+}
+.dm-body {
+  position: relative;
+  overflow: hidden;
   background: #fff;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
 }
-.dm-board-skeleton.ui-skeleton {
-  height: 800px;
+.dm-tile.is-selected .dm-body {
+  outline: calc(var(--dm-line) * 1.5) solid var(--accent);
+}
+.dm-tile.is-ghost {
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 1;
+}
+.dm-document {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  /* The canvas hears every pointer; the document is only read. */
+  pointer-events: none;
+}
+.dm-skeleton {
+  position: absolute;
+  inset: 0;
+}
+.dm-skeleton.ui-skeleton {
+  border-radius: 0;
   background: var(--bg-active);
 }
-.dm-board-frame.is-active .dm-board-picture,
-.dm-board-frame.is-active .dm-board-skeleton {
-  box-shadow:
-    0 0 0 6px var(--accent),
-    0 8px 32px rgb(0 0 0 / 0.3);
+.dm-outline {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  outline: var(--dm-line) solid var(--accent);
 }
-.dm-board-frame:hover .dm-board-picture {
-  box-shadow:
-    0 0 0 6px var(--bg-active),
-    0 8px 32px rgb(0 0 0 / 0.3);
+.dm-outline.is-hover {
+  opacity: 0.55;
+}
+.dm-handle {
+  position: absolute;
+  width: calc(var(--dm-line) * 5);
+  height: calc(var(--dm-line) * 5);
+  border-radius: calc(var(--dm-line));
+  background: var(--accent);
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+.dm-handle.is-e {
+  left: 100%; /* physical: a handle on the element's right edge, as the page is drawn */
+  top: 50%;
+  cursor: ew-resize;
+}
+.dm-handle.is-s {
+  left: 50%; /* physical: the middle of the bottom edge */
+  top: 100%;
+  cursor: ns-resize;
+}
+.dm-handle.is-se {
+  left: 100%; /* physical: the bottom right corner */
+  top: 100%;
+  cursor: nwse-resize;
+}
+.dm-guide {
+  position: absolute;
+  background: var(--accent);
+  pointer-events: none;
+}
+.dm-guide.is-x {
+  top: 0;
+  bottom: 0;
+  width: var(--dm-line);
+}
+.dm-guide.is-y {
+  left: 0; /* physical: a snap line across the whole page */
+  right: 0;
+  height: var(--dm-line);
+}
+.dm-menu-anchor {
+  position: fixed;
+  width: 1px;
+  height: 1px;
 }
 
-/* Hidden while the canvas is pictured for the board and the AI (designCapture.ts). */
-.dm-capturing .dm-bar {
+/* While a frame is photographed for the AI: the frame alone, with nothing of Design mode over it. */
+.dm-capturing .dm-bar,
+.dm-canvas.is-photo .dm-title,
+.dm-canvas.is-photo .dm-outline,
+.dm-canvas.is-photo .dm-guide {
   visibility: hidden;
+}
+.dm-canvas.is-photo .dm-tile .dm-body {
+  outline: none;
 }

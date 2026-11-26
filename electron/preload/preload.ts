@@ -20,11 +20,14 @@ import { listenForQueries, startWhenReady } from './frameQueries';
 import { rememberScrollAcrossRecovery } from './frameScrollMemory';
 import { reportErrorOverlay } from './frameErrorOverlay';
 import { installPageScrollReport } from './frameScrollbar';
+import { isDesignFrameDocument, listenForDesignSnapshots } from './designMode/designSnapshotFrame'; // Design mode (experimental)
 
 // A Stacki app's frame (stacki-app:) is the app's own sandboxed document: it
 // gets neither half. It talks to Stacki only through postMessage and the RPC.
 if (location.protocol === 'stacki-app:') {
   // Nothing to install.
+} else if (!process.isMainFrame && isDesignFrameDocument()) {
+  // Design mode (experimental): a frame on its canvas is a still copy of a page, so it gets neither half.
 } else if (!process.isMainFrame) {
   const post = (message: unknown) => window.parent.postMessage(message, '*');
   // Registered first, so a double click on an image is heard before text editing (which takes the nearest words of a
@@ -51,6 +54,7 @@ if (location.protocol === 'stacki-app:') {
   listenForDesign();
   listenForQueries();
   startWhenReady();
+  listenForDesignSnapshots(); // Design mode (experimental)
   // The canvas draws the page's scrollbar beside the frame from these reports (frameScrollbar.ts). Last, so the
   // canvas's own listeners are in place whatever happens here.
   installPageScrollReport(post);

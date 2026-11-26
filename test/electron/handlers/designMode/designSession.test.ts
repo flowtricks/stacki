@@ -26,6 +26,13 @@ import {
 } from '#dist/electron/lib/designMode/designFence.js';
 import { guardDesignWrites } from '#dist/electron/lib/designMode/designWriteGuard.js';
 import { parseDesignSessionReply, parseDesignSessionRequest } from '#dist/shared/ipc/designSession.js';
+import {
+  DESIGN_SNAPSHOT_LIMITS,
+  deepestDesignNode,
+  designNodeMark,
+  parseDesignCanvasMessage,
+  parseDesignSnapshotRequest,
+} from '#dist/shared/ipc/designSnapshot.js';
 
 const REFUSAL = 'Not while you design';
 
@@ -151,7 +158,12 @@ test('drafts keep no secrets, notice a changed project, and refuse a kept path t
     ['src/styles/global.css', { kind: 'write' as const, bytes: Buffer.from('.title{}') }],
     ['.env', { kind: 'write' as const, bytes: Buffer.from('SECRET=2') }],
   ]);
-  saveDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base, draft: { frames: [{ id: 'f1', name: 'One', files }], active: 'f1' } });
+  saveDraft({
+    appDataRoot: appData,
+    realRoot: project,
+    base: created.sandbox.base,
+    draft: { frames: [{ id: 'f1', name: 'One', at: { x: 0, y: 0 }, files }], active: 'f1' },
+  });
   const text = fs.readFileSync(path.join(draftFolder(appData, project), 'draft.json'), 'utf8');
   assert.ok(!text.includes(Buffer.from('SECRET=2').toString('base64')));
   assert.equal(fs.statSync(draftFolder(appData, project)).mode & 0o777, 0o700);
@@ -163,6 +175,11 @@ test('drafts keep no secrets, notice a changed project, and refuse a kept path t
   assert.ok(stale.kind === 'draft' && stale.stale);
   fs.writeFileSync(path.join(draftFolder(appData, project), 'draft.json'), text.replace('src/styles/global.css', '../../escape.css'));
   assert.deepEqual(readDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base }), { kind: 'none' });
+  // A draft kept before frames had places is laid out in a row.
+  fs.writeFileSync(path.join(draftFolder(appData, project), 'draft.json'), text.replace('"at":{"x":0,"y":0},', ''));
+  const unplaced = readDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base });
+  assert.ok(unplaced.kind === 'draft');
+  assert.deepEqual(unplaced.draft.frames[0]?.at, { x: 0, y: 0 });
   assert.ok(isSecretFile('.env.production'));
   assert.ok(isSecretFile('certs/site.pem'));
   assert.ok(!isSecretFile('src/env.ts'));
@@ -236,7 +253,9 @@ test('while the fence is up, every file system write into the project fails befo
 test('a session: enter, edit, duplicate, switch, leave; the copy and its .env are gone, the project is untouched', async () => {
   const { project, appData } = scratch();
   const before = digest(project);
-  const sessions = createDesignSessions({ openProject: () => project }, { appDataRoot: appData });
+  const sent: { readonly channel: string; readonly payload: unknown }[] = [];
+  const send = (channel: string, payload: unknown) => void sent.push({ channel, payload });
+  const sessions = createDesignSessions({ openProject: () => project, send }, { appDataRoot: appData });
   observeDesignFence(sessions.observe);
   const ask = async (request: unknown) => parseDesignSessionReply(await sessions.answer(parseDesignSessionRequest(request)));
   assert.deepEqual(await ask({ op: 'enter', projectPath: path.join(project, 'elsewhere'), refusal: REFUSAL, frameName: 'Original' }), {
@@ -244,17 +263,49 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
     reason: 'not-open',
     folder: undefined,
   });
-  const entered = await ask({ op: 'enter', projectPath: project, page: 'src/pages/index.astro', refusal: REFUSAL, frameName: 'Original' });
+  const snapshot = { html: '<html><body>seed</body></html>', url: 'http://localhost:1/', title: 'Seed', viewportWidthPx: 1200, viewportHeightPx: 800 };
+  const entering = { op: 'enter', projectPath: project, page: 'src/pages/index.astro', refusal: REFUSAL, frameName: 'Original', snapshot };
+  const entered = await ask(entering);
   assert.equal(entered.kind, 'entered');
   assert.equal(designFenceState().kind, 'on');
   const live = entered.kind === 'entered' ? entered.liveRoot : '';
   checkDesignFence('project:close', live); // The window opening the copy does not end the session.
   assert.ok(sessions.current() !== undefined);
   fs.writeFileSync(path.join(live, 'src/styles/global.css'), '.title { color: green; }\n');
-  const duplicated = await ask({ op: 'frame-duplicate', name: 'Green' });
-  assert.ok(duplicated.kind === 'state' && duplicated.state.kind === 'on' && duplicated.state.frames.length === 2 && duplicated.state.active === 'f2');
+  const duplicated = await ask({ op: 'frame-duplicate', source: 'f1', name: 'Green', at: { x: 1520, y: 40 } });
+  assert.ok(duplicated.kind === 'state' && duplicated.state.kind === 'on' && duplicated.state.frames.length === 2);
+  assert.equal(duplicated.state.active, 'f1', 'duplicating leaves the copy showing the same frame');
+  assert.deepEqual(duplicated.state.frames[1]?.at, { x: 1520, y: 40 });
+  const pictured = await ask({ op: 'frame-snapshots' });
+  assert.deepEqual(pictured, {
+    kind: 'snapshots',
+    snapshots: [
+      { frame: 'f1', snapshot },
+      { frame: 'f2', snapshot },
+    ],
+  });
+  // Switching hands back the asked page as the shown frame holds it; a page outside the copy is never read.
+  const page = path.join(live, 'src/styles/global.css');
+  const switched = await ask({ op: 'frame-switch', frame: 'f2', page });
+  assert.ok(switched.kind === 'shown' && switched.pageSource === '.title { color: green; }\n');
+  const outside = await ask({ op: 'frame-switch', frame: 'f2', page: path.join(project, 'src/styles/global.css') });
+  assert.ok(outside.kind === 'shown' && outside.pageSource === undefined);
   fs.writeFileSync(path.join(live, 'src/styles/global.css'), '.title { color: purple; }\n');
+  await ask({ op: 'frame-move', frame: 'f2', at: { x: -300, y: 12 } });
+  const drawn = { ...snapshot, html: '<html><body>purple</body></html>' };
+  assert.deepEqual(await ask({ op: 'frame-snapshot', frame: 'f2', snapshot: drawn }), { kind: 'kept' });
+  assert.deepEqual(await ask({ op: 'frame-snapshot', frame: 'f7', snapshot: drawn }), { kind: 'kept' }, 'a frame that is gone is not made');
+  // Showing a frame announces what it rewrote: the watcher would take bytes the editor saved before for its own.
+  sent.length = 0;
   await ask({ op: 'frame-switch', frame: 'f1' });
+  assert.deepEqual(sent, [
+    { channel: 'fs:changed', payload: { files: [path.join(live, 'src/styles/global.css')] } },
+    { channel: 'css:changed', payload: {} },
+  ]);
+  sent.length = 0;
+  await ask({ op: 'frame-switch', frame: 'f1' });
+  await ask({ op: 'frame-rename', frame: 'f2', name: 'Purple' });
+  assert.deepEqual([...sent], [], 'nothing rewritten, nothing announced');
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: green; }\n');
   await ask({ op: 'frame-switch', frame: 'f2' });
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: purple; }\n');
@@ -271,14 +322,39 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: undefined }, 'handed over once');
   assert.equal(digest(project), before);
 
+  // Before coming back, the kept frames can be drawn at once; another project's, or none, are never read.
+  const preview = await ask({ op: 'preview', projectPath: project });
+  assert.ok(preview.kind === 'preview' && preview.frames.length === 2 && preview.snapshots.length === 2);
+  assert.deepEqual(await ask({ op: 'preview', projectPath: path.join(project, 'elsewhere') }), { kind: 'preview', frames: [], snapshots: [] });
+
   // Coming back: the frames return from the draft, the shown one laid over the new copy.
   const again = await ask({ op: 'enter', projectPath: project, refusal: REFUSAL, frameName: 'Original' });
   const state = await ask({ op: 'state' });
   assert.ok(state.kind === 'state' && state.state.kind === 'on' && state.state.frames.length === 2 && state.state.active === 'f2');
   const againLive = again.kind === 'entered' ? again.liveRoot : '';
   assert.equal(fs.readFileSync(path.join(againLive, 'src/styles/global.css'), 'utf8'), '.title { color: purple; }\n');
+  const back = await ask({ op: 'frame-snapshots' });
+  assert.deepEqual(
+    back,
+    {
+      kind: 'snapshots',
+      snapshots: [
+        { frame: 'f1', snapshot },
+        { frame: 'f2', snapshot: drawn },
+      ],
+    },
+    'frames come back drawn',
+  );
+  assert.ok(state.state.kind === 'on' && state.state.frames[1]?.at.x === -300);
+  const removed = await ask({ op: 'frame-delete', frame: 'f2' });
+  assert.ok(removed.kind === 'shown' && removed.state.kind === 'on' && removed.state.active === 'f1' && removed.state.frames.length === 1);
+  assert.equal(fs.readFileSync(path.join(againLive, 'src/styles/global.css'), 'utf8'), '.title { color: green; }\n');
+  assert.ok(!fs.existsSync(path.join(draftFolder(appData, project), 'f2.snapshot.json')), "a removed frame's document goes with it");
+  await assert.rejects(ask({ op: 'frame-delete', frame: 'f1' }), /the last frame stays/);
+  sent.length = 0;
   const over = await ask({ op: 'start-over', frameName: 'Original' });
-  assert.ok(over.kind === 'state' && over.state.kind === 'on' && over.state.frames.length === 1 && over.state.frames[0]?.changedFiles === 0);
+  assert.equal(sent.at(0)?.channel, 'fs:changed');
+  assert.ok(over.kind === 'shown' && over.state.kind === 'on' && over.state.frames.length === 1 && over.state.frames[0]?.changedFiles === 0);
   await sessions.end(); // As the window leaves the copy.
   assert.equal(designFenceState().kind, 'off');
   assert.deepEqual(fs.readdirSync(sandboxesRoot(appData)), []);
@@ -290,9 +366,18 @@ test('requests and replies are parsed: unknown ops, bad frame ids, oversized nam
   assert.throws(() => parseDesignSessionRequest({ op: 'format-disk' }), /unknown op/);
   assert.throws(() => parseDesignSessionRequest({ op: 'frame-switch', frame: 'f0' }), /frame id/);
   assert.throws(() => parseDesignSessionRequest({ op: 'frame-switch', frame: '../f1' }), /frame id/);
-  assert.throws(() => parseDesignSessionRequest({ op: 'frame-duplicate', name: '  ' }), /expected text/);
-  assert.throws(() => parseDesignSessionRequest({ op: 'frame-duplicate', name: 'x'.repeat(61) }), /exceeds/);
-  assert.throws(() => parseDesignSessionRequest({ op: 'frame-image', frame: 'f1', image: 'data:text/html,<script>' }), /PNG/);
+  const duplicate = { op: 'frame-duplicate', source: 'f1', at: { x: 0, y: 0 } };
+  assert.throws(() => parseDesignSessionRequest({ ...duplicate, name: '  ' }), /expected text/);
+  assert.throws(() => parseDesignSessionRequest({ ...duplicate, name: 'x'.repeat(61) }), /exceeds/);
+  assert.throws(() => parseDesignSessionRequest({ op: 'frame-move', frame: 'f1', at: { x: 0.5, y: 0 } }), /whole numbers/);
+  assert.throws(() => parseDesignSessionRequest({ op: 'frame-move', frame: 'f1', at: { x: 2_000_000, y: 0 } }), /too far/);
+  const handoff = { text: 'x', images: ['data:text/html,<script>'], names: ['One'] };
+  assert.throws(() => parseDesignSessionRequest({ op: 'exit', handoff }), /PNG/);
+  const snapshot = { html: '<html></html>', url: '', title: '', viewportWidthPx: 10, viewportHeightPx: 10 };
+  const keep = (change: object) => () => parseDesignSessionRequest({ op: 'frame-snapshot', frame: 'f1', snapshot: { ...snapshot, ...change } });
+  assert.throws(keep({ html: '' }), /expected a document/);
+  assert.throws(keep({ html: 'x'.repeat(DESIGN_SNAPSHOT_LIMITS.htmlCharsMax + 1) }), /exceeds/);
+  assert.throws(keep({ viewportWidthPx: 1_000_000 }), /too large/);
   assert.throws(() => parseDesignSessionReply({ kind: 'state', state: { kind: 'on', frames: [], active: 'f1' } }), /at least one/);
   assert.throws(() => parseDesignSessionReply({ kind: 'refused', reason: 'because' }), /unknown refusal/);
   assert.deepEqual(parseDesignSessionRequest({ op: 'frame-rename', frame: 'f2', name: ' Bold ' }), { op: 'frame-rename', frame: 'f2', name: 'Bold' });
@@ -315,4 +400,18 @@ test('a copy the person cancels stops and leaves nothing', async () => {
   const cancelled = await createSandbox({ appDataRoot: appData, realRoot: project, cancel: { cancelled: () => true } });
   assert.deepEqual(cancelled, { ok: false, reason: 'cancelled' });
   assert.ok(!fs.existsSync(sandboxesRoot(appData)) || fs.readdirSync(sandboxesRoot(appData)).length === 0);
+});
+
+test("a canvas frame's messages and node marks are parsed: forged and malformed ones are ignored", () => {
+  assert.deepEqual(parseDesignSnapshotRequest({ type: 'stacki:design-snapshot', nonce: 'a' }), { type: 'stacki:design-snapshot', nonce: 'a' });
+  assert.equal(parseDesignSnapshotRequest({ type: 'stacki:design-snapshot', nonce: 'a'.repeat(65) }), undefined);
+  assert.equal(parseDesignSnapshotRequest({ type: 'avb:render' }), undefined);
+  assert.equal(parseDesignCanvasMessage({ type: 'stacki:design-snapshot-reply', nonce: 'a', ok: true, snapshot: {} }), undefined);
+  assert.equal(parseDesignCanvasMessage('stacki:design-changed'), undefined);
+  const marks = [designNodeMark('0.1', 0), designNodeMark('0.1.2', 3)].join(' ');
+  assert.deepEqual(deepestDesignNode(marks), { path: '0.1.2', copy: 3 });
+  const spaced = designNodeMark('src/components/Hero Card.astro|0.1', 1);
+  assert.ok(!spaced.includes(' '), 'a space in a file name cannot split a mark');
+  assert.deepEqual(deepestDesignNode(spaced), { path: 'src/components/Hero Card.astro|0.1', copy: 1 });
+  assert.equal(deepestDesignNode('0.1 0.2:-1 :3 %E0%A4%A:1'), undefined);
 });

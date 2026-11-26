@@ -1,6 +1,7 @@
 // Design mode (experimental, removable: docs/design-mode/REMOVE.md): drafts, the frames kept between sessions.
 //
-// When the mode ends, each frame's changed files (and its last picture) are kept in Stacki's own data folder,
+// When the mode ends, each frame's changed files and its place on the canvas (its snapshot beside them,
+// designSnapshots.ts) are kept in Stacki's own data folder,
 // `design-drafts/<project hash>/`, readable by the person only, and come back the next time the mode begins on
 // the same project. Never in the project. Secrets are never kept: a frame's change to `.env` or a key file is
 // dropped from its draft (the sandbox that held it is deleted with the session).
@@ -11,20 +12,26 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DESIGN_SESSION_LIMITS, parseDesignFrameId, type DesignFrameId } from '../../../shared/ipc/designSession';
+import {
+  DESIGN_SESSION_LIMITS,
+  defaultFramePlace,
+  parseDesignFrameId,
+  parseDesignPlace,
+  type DesignFrameId,
+  type DesignPlace,
+} from '../../../shared/ipc/designSession';
 import { ensurePrivateDirectory } from './designSandbox';
 import { DESIGN_FRAME_LIMITS, type FileChange, type FrameFiles } from './designFrames';
 
 export const DESIGN_DRAFT_LIMITS = {
   /** One project's draft file. */
   draftBytesMax: 96 * 1024 * 1024,
-  /** Draft folders read when one is looked for; the hash names exactly one. */
-  imageBytesMax: 16 * 1024 * 1024,
 } as const satisfies Record<string, number>;
 
 export interface DraftFrame {
   readonly id: DesignFrameId;
   readonly name: string;
+  readonly at: DesignPlace;
   readonly files: FrameFiles;
 }
 
@@ -63,6 +70,7 @@ export function saveDraft(input: { readonly appDataRoot: string; readonly realRo
   const frames = input.draft.frames.map((frame) => ({
     id: frame.id,
     name: frame.name,
+    at: frame.at,
     files: [...frame.files]
       .filter(([rel]) => !isSecretFile(rel))
       .map(([rel, change]) => ({
@@ -128,7 +136,7 @@ function parseDraft(input: unknown, where: { readonly realRoot: string; readonly
     throw new Error('Design draft frames: expected one to the most a session holds');
   }
   let stale = false;
-  const parsed = frames.map((entry: unknown): DraftFrame => {
+  const parsed = frames.map((entry: unknown, index): DraftFrame => {
     const frame = recordOf(entry, 'Design draft frame');
     const files = frame['files'];
     if (!Array.isArray(files) || files.length > DESIGN_FRAME_LIMITS.changedFilesMax) {
@@ -141,7 +149,9 @@ function parseDraft(input: unknown, where: { readonly realRoot: string; readonly
       changes.set(parsedFile.rel, parsedFile.change);
     }
     const name = stringOf(frame['name'], 'Design draft frame name').slice(0, DESIGN_SESSION_LIMITS.frameNameCharsMax);
-    return { id: parseDesignFrameId(frame['id']), name, files: changes };
+    // A draft kept before frames had places is laid out in a row.
+    const at = frame['at'] === undefined ? defaultFramePlace(index) : parseDesignPlace(frame['at']);
+    return { id: parseDesignFrameId(frame['id']), name, at, files: changes };
   });
   const active = parseDesignFrameId(value['active']);
   if (!parsed.some((frame) => frame.id === active)) {
@@ -165,37 +175,6 @@ function parseDraftFile(input: unknown): { readonly rel: string; readonly change
     throw new Error('Design draft file: unknown kind');
   }
   return { rel, change: { kind: 'write', bytes: Buffer.from(stringOf(value['base64'], 'Design draft content'), 'base64') }, baseDigest };
-}
-
-/** Keeps a frame's picture beside its draft. */
-export function saveDraftImage(input: {
-  readonly appDataRoot: string;
-  readonly realRoot: string;
-  readonly frame: DesignFrameId;
-  readonly image: string;
-}): void {
-  const folder = draftFolder(input.appDataRoot, input.realRoot);
-  ensurePrivateDirectory(path.dirname(folder));
-  ensurePrivateDirectory(folder);
-  const bytes = Buffer.from(input.image.slice(input.image.indexOf(',') + 1), 'base64');
-  if (bytes.length > DESIGN_DRAFT_LIMITS.imageBytesMax) {
-    throw new Error('Design draft picture: larger than a picture is kept');
-  }
-  fs.writeFileSync(path.join(folder, `${input.frame}.png`), bytes, { mode: 0o600 });
-}
-
-/** A frame's kept picture, as a PNG data URL, when there is one. */
-export function readDraftImage(input: { readonly appDataRoot: string; readonly realRoot: string; readonly frame: DesignFrameId }): string | undefined {
-  const file = path.join(draftFolder(input.appDataRoot, input.realRoot), `${input.frame}.png`);
-  if (!fs.existsSync(file) || fs.statSync(file).size > DESIGN_DRAFT_LIMITS.imageBytesMax) {
-    return undefined;
-  }
-  return `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
-}
-
-/** Forgets a deleted frame's picture. */
-export function removeDraftImage(input: { readonly appDataRoot: string; readonly realRoot: string; readonly frame: DesignFrameId }): void {
-  fs.rmSync(path.join(draftFolder(input.appDataRoot, input.realRoot), `${input.frame}.png`), { force: true });
 }
 
 /** Forgets the project's drafts: Start over. */

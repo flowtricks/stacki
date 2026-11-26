@@ -301,6 +301,7 @@
     "shared/ipc/codeIntel.ts",
     "shared/ipc/commitAvatars.ts",
     "shared/ipc/designSession.ts",
+    "shared/ipc/designSnapshot.ts",
     "shared/ipc/devNetwork.ts",
     "shared/ipc/fileExplorer.ts",
     "shared/ipc/folderOpen.ts",

@@ -2,9 +2,36 @@
 
 Design mode is the normal editor working on a sandbox: a private copy of the project in Stacki's own data folder.
 Turning it on (the AI panel header's Design mode button) copies the project and opens the copy through the app's own project
-switch, so the Navigator, the Style and Settings panels, Add elements, Components, Assets and the canvas all work
-on it for real. Frames are versions of that copy: duplicate one, change it, switch between them, compare them side
-by side, and send them to the AI. Nothing is saved to the project.
+switch, so the Navigator, the Style and Settings panels, Add elements, Components, Assets and the preview all work
+on it for real. Over the preview sits Design mode's canvas of frames, which can be panned, zoomed, duplicated
+(Option-drag, right-click or ⌘D), moved, renamed, removed (Delete) and sent to the AI. Nothing is saved to the
+project.
+
+## Frames
+
+- **One site copy, one dev server, one live preview.** A frame is the set of files it changes in the copy. The
+  editor's preview, hidden under the canvas, renders the shown frame; picking something in another frame rewrites
+  the files the two differ in, and the real panels get the selection once the editor has read that frame's page
+  (`src/app/designMode/designFrameOps.ts`).
+- **What a frame draws** is a snapshot of that preview's document (`electron/preload/designMode/`): scripts out,
+  stylesheets and fonts inlined, nested documents and media switched off, each element marked with the page node
+  it stands for, so a click in a frame selects the same node a click on the preview would
+  (`shared/ipc/designSnapshot.ts`). It is shown in a same-origin iframe with scripts off, in the app window's own
+  process. The shown frame is snapshotted again after each change; the others keep theirs.
+- **Entering** shows the canvas on the click itself, with the kept frames (or the page as the editor shows it),
+  while the copy is made; the window then reloads into the copy, as for any project switch.
+- **Showing a frame again** writes bytes the editor may have saved before, which the project watcher takes for the
+  editor's own save, so main announces the rewritten files itself, and the canvas does not go on until the editor
+  has read the frame's page.
+- **Send to AI** pictures the top of each frame (as wide as the canvas, as tall as the window shows) and describes
+  each frame's source changes as diffs.
+- **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
+  together.
+- **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
+  its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
+  inline style through the editor's own write (so ⌘Z takes them back), in rem.
+- **Not yet:** unlinking a component and editing text inside a frame; opening a component from a frame; undo for a
+  removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
 
 ## Switching it off without removing it
 
@@ -38,8 +65,9 @@ and main refuses to begin a session.
   quits, and, for a copy a crash left behind, the next time the app starts.
 - **Undo history from before is cleared**, on the way in and on the way out: the window reloads, as it does for any
   project switch. A toast says so each time.
-- **Drafts** (each frame's changed files and its picture) are kept in `<user data>/design-drafts/<hash>/`, mode
-  0700, never in the project. Secrets (`.env*`, key files) are never kept in a draft.
+- **Drafts** (each frame's changed files, its place and its snapshot, which is the page as rendered) are kept in
+  `<user data>/design-drafts/<hash>/`, mode 0700, never in the project. Secret files (`.env*`, key files) are never
+  kept in a draft.
 
 `test/electron/handlers/designMode/designSession.test.ts` holds each of these properties with real folders;
 `test/renderer/app/designMode/designModeSoak.test.js` runs them in the real app and checks the project folder is
@@ -52,6 +80,8 @@ byte-identical afterwards.
    - `electron/handlers/designMode/`
    - `electron/lib/designMode/`
    - `shared/ipc/designSession.ts`
+   - `shared/ipc/designSnapshot.ts`
+   - `electron/preload/designMode/`
    - `src/features/style/model/inlineDefault.ts`
    - `src/features/ai/aiHold.ts`
    - `test/renderer/app/designMode/`
@@ -63,6 +93,8 @@ byte-identical afterwards.
      `fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');`.
    - `electron/lib/ipcRegistrar.ts`: the `checkDesignFence` import, the `const fenced = …` line and the
      `if (fenced.kind === 'answer') { … }` block after it.
+   - `electron/preload/preload.ts`: the `designSnapshotFrame` import, the `else if (… isDesignFrameDocument())` branch
+     with its comment, and `listenForDesignSnapshots();`.
    - `electron/preload/preloadBridge.ts`: `designSession: invoke('design:session'),`.
    - `shared/ipc/ipcPayloads.ts`: the `DESIGN_SESSION_PAYLOADS` import and its spread.
    - `shared/ipc/ipcResults.ts`: the `DesignSessionResults` import, the comment line above `IpcResults`, and
@@ -73,11 +105,11 @@ byte-identical afterwards.
      `useInlineByDefault` function at the end of the file.
    - `src/features/ai/AiPanel.tsx`: the `useAiHold` import, the `const hold = useAiHold();` line, and `hold` in
      `blocked`, the prewarm's `eligible`, the setup detection effect and the trust card's condition.
-   - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts` and
+   - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts`, `shared/ipc/designSnapshot.ts` and
      `src/features/style/model/inlineDefault.ts` entries.
    - `test/shared/ipc/ipcPayloads.test.ts`: the `'design:session'` sample.
    - `test/electron/app/mainBoundaries.test.ts`: the Design mode comment line, and the channel count back to 341.
-   - `test/electron/documents/singleWriter.test.ts`: the comment and the three `electron/handlers/designMode/` entries.
+   - `test/electron/documents/singleWriter.test.ts`: the comment and the four `electron/handlers/designMode/` entries.
 3. Optionally delete `design-drafts/` (and `design-sandboxes/`, which is empty unless the app crashed during a
    session) from Stacki's user data folder: once the feature is gone nothing reads or sweeps them.
 

@@ -9,6 +9,7 @@
 // Every value crosses the IPC boundary, so both ends parse it here: main parses requests before it acts, and the
 // renderer parses replies before it trusts them.
 import { boolean, count, pathText, record, text } from '../core/boundary';
+import { parseDesignSnapshot, type DesignSnapshot } from './designSnapshot';
 
 /** The single switch. False: no header button, and main answers every request as if nothing were open. */
 export const DESIGN_MODE_ENABLED = true;
@@ -26,10 +27,14 @@ export const DESIGN_SESSION_LIMITS = {
   changedFilesMax: 400,
   /** The described change of one frame, as text. */
   changesCharsMax: 60_000,
-  /** One frame's picture, a PNG data URL. */
+  /** One frame's picture for the AI, a PNG data URL. */
   imageCharsMax: 4_000_000,
-  /** Every frame picture kept in memory together: the oldest goes first past this. */
-  imagesCharsMax: 24_000_000,
+  /** How far from the canvas's origin a frame may be placed, in canvas pixels. */
+  placePxMax: 1_000_000,
+  /** Where new sessions and old drafts lay frames out: a desktop frame and the gap after it. */
+  placeStepPx: 1_520,
+  /** A page's text, compared to tell when the window has read a frame's version. */
+  pageSourceCharsMax: 2_000_000,
   /** What Send to AI carries across the window's reload. */
   handoffTextCharsMax: 200_000,
   handoffImagesMax: 9,
@@ -38,9 +43,16 @@ export const DESIGN_SESSION_LIMITS = {
 /** A frame's id: `f1`, `f2`, … */
 export type DesignFrameId = `f${number}`;
 
+/** A frame's top-left corner on the canvas, in canvas pixels (the page's own pixels at full size). */
+export interface DesignPlace {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface DesignFrameView {
   readonly id: DesignFrameId;
   readonly name: string;
+  readonly at: DesignPlace;
   /** Files this frame changes against the project as it was copied. */
   readonly changedFiles: number;
 }
@@ -91,19 +103,25 @@ export type DesignSessionRequest =
       readonly refusal: string;
       /** The first frame's name, in the person's language. */
       readonly frameName: string;
+      /** The canvas as it is shown now, so the first frame is drawn before the copy's dev server is up. */
+      readonly snapshot: DesignSnapshot | undefined;
     }
   | { readonly op: 'exit'; readonly handoff: DesignHandoff | undefined }
   /** Stops a copy under way: the enter answers `cancelled` and leaves nothing behind. */
   | { readonly op: 'cancel' }
   | { readonly op: 'take-handoff' }
-  | { readonly op: 'frame-duplicate'; readonly name: string }
-  | { readonly op: 'frame-switch'; readonly frame: DesignFrameId }
+  /** Before a session: the frames kept for the open project, so the canvas shows them while the copy is made. */
+  | { readonly op: 'preview'; readonly projectPath: string }
+  | { readonly op: 'frame-duplicate'; readonly source: DesignFrameId; readonly name: string; readonly at: DesignPlace }
+  /** `page`: the open page in the copy, whose text in the shown frame comes back. */
+  | { readonly op: 'frame-switch'; readonly frame: DesignFrameId; readonly page: string | undefined }
   | { readonly op: 'frame-rename'; readonly frame: DesignFrameId; readonly name: string }
-  | { readonly op: 'frame-delete'; readonly frame: DesignFrameId }
-  | { readonly op: 'frame-image'; readonly frame: DesignFrameId; readonly image: string }
-  | { readonly op: 'frame-images' }
+  | { readonly op: 'frame-delete'; readonly frame: DesignFrameId; readonly page: string | undefined }
+  | { readonly op: 'frame-move'; readonly frame: DesignFrameId; readonly at: DesignPlace }
+  | { readonly op: 'frame-snapshot'; readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }
+  | { readonly op: 'frame-snapshots' }
   | { readonly op: 'changes' }
-  | { readonly op: 'start-over'; readonly frameName: string };
+  | { readonly op: 'start-over'; readonly frameName: string; readonly page: string | undefined };
 
 export type DesignSessionReply =
   | { readonly kind: 'state'; readonly state: DesignSessionState }
@@ -112,7 +130,16 @@ export type DesignSessionReply =
   | { readonly kind: 'refused'; readonly reason: DesignEnterRefusal; readonly folder: string | undefined }
   | { readonly kind: 'left'; readonly realRoot: string }
   | { readonly kind: 'handoff'; readonly handoff: DesignHandoff | undefined }
-  | { readonly kind: 'images'; readonly images: readonly { readonly frame: DesignFrameId; readonly image: string }[] }
+  /** After a switch or a delete: the session, and the asked page's text as the copy now holds it. */
+  | { readonly kind: 'shown'; readonly state: DesignSessionState; readonly pageSource: string | undefined }
+  | { readonly kind: 'kept' }
+  /** No kept frames: both lists are empty. */
+  | {
+      readonly kind: 'preview';
+      readonly frames: readonly DesignFrameView[];
+      readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[];
+    }
+  | { readonly kind: 'snapshots'; readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] }
   | { readonly kind: 'changes'; readonly frames: readonly DesignFrameChanges[] };
 
 const FRAME_ID = /^f[1-9]\d{0,5}$/;
@@ -135,6 +162,26 @@ export function nextDesignFrameId(frames: readonly { readonly id: DesignFrameId 
     throw new Error('Assertion failed: nextDesignFrameId: a new id is unused');
   }
   return next;
+}
+
+/** The place of the frame at `index` in a row. */
+export function defaultFramePlace(index: number): DesignPlace {
+  return { x: index * DESIGN_SESSION_LIMITS.placeStepPx, y: 0 };
+}
+
+function coordinate(input: unknown): number {
+  if (typeof input !== 'number' || !Number.isSafeInteger(input)) {
+    throw new Error('Design place: expected whole numbers');
+  }
+  if (Math.abs(input) > DESIGN_SESSION_LIMITS.placePxMax) {
+    throw new Error('Design place: too far from the canvas');
+  }
+  return input;
+}
+
+export function parseDesignPlace(input: unknown): DesignPlace {
+  const value = record(input);
+  return { x: coordinate(value['x']), y: coordinate(value['y']) };
 }
 
 function bounded(input: unknown, charsMax: number, what: string): string {
@@ -195,10 +242,12 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
   switch (op) {
     case 'state':
     case 'take-handoff':
-    case 'frame-images':
+    case 'frame-snapshots':
     case 'changes':
     case 'cancel':
       return { op };
+    case 'preview':
+      return { op, projectPath: pathText(value['projectPath']) };
     case 'enter':
       return {
         op,
@@ -206,20 +255,23 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
         page: optionalPage(value['page']),
         refusal: bounded(value['refusal'], DESIGN_SESSION_LIMITS.refusalCharsMax, 'Design refusal'),
         frameName: frameName(value['frameName']),
+        snapshot: value['snapshot'] === undefined ? undefined : parseDesignSnapshot(value['snapshot']),
       };
     case 'exit':
       return { op, handoff: value['handoff'] === undefined ? undefined : handoff(value['handoff']) };
     case 'frame-duplicate':
-      return { op, name: frameName(value['name']) };
+      return { op, source: parseDesignFrameId(value['source']), name: frameName(value['name']), at: parseDesignPlace(value['at']) };
     case 'frame-switch':
     case 'frame-delete':
-      return { op, frame: parseDesignFrameId(value['frame']) };
+      return { op, frame: parseDesignFrameId(value['frame']), page: optionalPage(value['page']) };
     case 'frame-rename':
       return { op, frame: parseDesignFrameId(value['frame']), name: frameName(value['name']) };
-    case 'frame-image':
-      return { op, frame: parseDesignFrameId(value['frame']), image: image(value['image']) };
+    case 'frame-move':
+      return { op, frame: parseDesignFrameId(value['frame']), at: parseDesignPlace(value['at']) };
+    case 'frame-snapshot':
+      return { op, frame: parseDesignFrameId(value['frame']), snapshot: parseDesignSnapshot(value['snapshot']) };
     case 'start-over':
-      return { op, frameName: frameName(value['frameName']) };
+      return { op, frameName: frameName(value['frameName']), page: optionalPage(value['page']) };
     default:
       throw new Error(`Design session: unknown op ${JSON.stringify(op)}`);
   }
@@ -227,7 +279,8 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
 
 function frameView(input: unknown): DesignFrameView {
   const value = record(input);
-  return { id: parseDesignFrameId(value['id']), name: frameName(value['name']), changedFiles: count(value['changedFiles']) };
+  const changedFiles = count(value['changedFiles']);
+  return { id: parseDesignFrameId(value['id']), name: frameName(value['name']), at: parseDesignPlace(value['at']), changedFiles };
 }
 
 function parseState(input: unknown): DesignSessionState {
@@ -284,6 +337,13 @@ function boundedList(input: unknown, itemsMax: number, what: string): readonly u
   return input;
 }
 
+function frameSnapshots(input: unknown): readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] {
+  return boundedList(input, DESIGN_SESSION_LIMITS.framesMax, 'Design snapshots').map((entry) => {
+    const item = record(entry);
+    return { frame: parseDesignFrameId(item['frame']), snapshot: parseDesignSnapshot(item['snapshot']) };
+  });
+}
+
 /** A `design:session` reply, parsed in the renderer before it is trusted. */
 export function parseDesignSessionReply(input: unknown): DesignSessionReply {
   const value = record(input);
@@ -305,14 +365,19 @@ export function parseDesignSessionReply(input: unknown): DesignSessionReply {
       return { kind, realRoot: pathText(value['realRoot']) };
     case 'handoff':
       return { kind, handoff: value['handoff'] === undefined ? undefined : handoff(value['handoff']) };
-    case 'images':
-      return {
-        kind,
-        images: boundedList(value['images'], DESIGN_SESSION_LIMITS.framesMax, 'Design frame images').map((entry) => {
-          const item = record(entry);
-          return { frame: parseDesignFrameId(item['frame']), image: image(item['image']) };
-        }),
-      };
+    case 'shown': {
+      const source = value['pageSource'];
+      const pageSource = source === undefined ? undefined : bounded(source, DESIGN_SESSION_LIMITS.pageSourceCharsMax, 'Design page text');
+      return { kind, state: parseState(value['state']), pageSource };
+    }
+    case 'kept':
+      return { kind };
+    case 'snapshots':
+      return { kind, snapshots: frameSnapshots(value['snapshots']) };
+    case 'preview': {
+      const frames = boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design preview').map(frameView);
+      return { kind, frames, snapshots: frameSnapshots(value['snapshots']) };
+    }
     case 'changes':
       return { kind, frames: boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design changes').map(frameChanges) };
     default:
