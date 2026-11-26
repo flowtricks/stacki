@@ -89,6 +89,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki לא הצליח לקרוא את המפתח של החיבור הזה. יש לחבר את Sanity מחדש.',
   'error.pages.devServerStatus': 'שרת הפיתוח החזיר {status}',
   'error.project.chooseInside': 'יש לבחור משהו בתוך הפרויקט, לא את הפרויקט עצמו.',
+  'error.project.creationBusy': 'אתר כבר נמצא בתהליך יצירה. יש להמתין לסיום.',
   'error.project.gone': 'זה כבר לא קיים.',
   'error.project.outside': 'זה נמצא מחוץ לפרויקט.',
   'error.projectSettings.changed': 'הגדרות הפרויקט השתנו. יש לטעון מחדש לפני השמירה.',

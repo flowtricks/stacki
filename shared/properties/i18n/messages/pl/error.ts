@@ -92,6 +92,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki nie mógł odczytać klucza tego połączenia. Połącz Sanity ponownie.',
   'error.pages.devServerStatus': 'Serwer deweloperski zwrócił {status}',
   'error.project.chooseInside': 'Wybierz coś wewnątrz projektu, a nie sam projekt.',
+  'error.project.creationBusy': 'Trwa już tworzenie witryny. Poczekaj na zakończenie.',
   'error.project.gone': 'Tego już tu nie ma.',
   'error.project.outside': 'To jest poza projektem.',
   'error.projectSettings.changed': 'Ustawienia projektu zmieniły się. Wczytaj ponownie przed zapisaniem.',

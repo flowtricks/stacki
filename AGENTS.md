@@ -77,17 +77,12 @@ the same checks run for people and for every coding agent (Claude Code, Codex,
 Pi). `docs/enforcement.md` maps each rule to the check that holds it and lists
 the rules that remain for review.
 
-- Agent hooks format and check each file you edit, and check every changed
-  file before you finish. Fix what they report; do not work around them.
-- `npm run check:changed` runs the finish check by hand. Run it before you
-  say you are done.
-- `npm run check:local` runs fast repository-wide checks before `npm run dev`.
-  All Desktop compiler targets and test source paths also run at agent finish,
-  because config changes and deleted files can break unchanged callers.
-- Git hooks check staged files, commit messages, and pushes. Never skip them
-  (`--no-verify`); the agent hooks refuse it, and CI runs the same checks.
-- Pushes run the full clean-build and regression gate locally so passing
-  TypeScript alone cannot send a known test failure to GitHub.
+- GitHub Actions runs required checks for pull requests and pushes to
+  `main`. Wait for the checks on the current commit and fix failures before
+  merging. This keeps builds and tests off the contributor's machine and
+  checks every supported operating system.
+- Run local checks only when the user asks. Commits, pushes, development
+  launches, and agent sessions can proceed without starting the test suite.
 - The files that define the gates (this file, lint and compiler configs,
   `scripts/{eslintPlugin,policy,agent}/`, hook configs, `shared/core/limits.ts`)
   change only with a human's approval.
@@ -538,7 +533,7 @@ installs; their cost is amplified through everything built on them.
 `docs/contracts.md` before changing page trees, scans, preload methods, IPC
 channels, or renderer bridge modules. Values from IPC, disk, browser messages,
 drag data, and `JSON.parse` stay `unknown` until the matching shared or feature
-boundary parser accepts them. Generated or edited code must pass
+boundary parser accepts them. GitHub Actions runs the equivalent of
 `env -u ELECTRON_RUN_AS_NODE npm test`, which includes strict TypeScript,
 ESLint, production builds, contract tests, and the complete regression suite.
 
@@ -554,10 +549,9 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - Where a state machine exists, property-based tests (e.g. fast-check) hunt the
   transitions you didn't think of. A fuzzer proves the presence of bugs, never
   their absence — the mental model and its assertions come first.
-- When a GitHub release or publishing workflow fails, reproduce the cause locally and add or
-  improve a regression test whenever possible before pushing again. This prevents the same
-  failure from recurring only in GitHub. Follow [publishing failure handling](docs/releases.md).
-  If local reproduction is impractical, document why and the verification that remains remote.
+- When a GitHub release or publishing workflow fails, use the GitHub logs to
+  identify the cause and add or improve a regression test where possible.
+  Verify the fix on GitHub. Follow [publishing failure handling](docs/releases.md).
 
 ## Definition of done (checklist)
 
@@ -579,7 +573,7 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - [ ] Comments are sentences that say why; test files open with goal and
       methodology
 - [ ] New dependencies carry a written justification
-- [ ] `npm run check:changed` passes (`tsc`, ESLint, Prettier, policy scan)
+- [ ] GitHub Actions passes for the current pull request commit
 
 ## Code display
 

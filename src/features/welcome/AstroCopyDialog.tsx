@@ -88,9 +88,12 @@ export default function AstroCopyDialog({ source, onClose, onDone }: AstroCopyDi
     if (!checked) {
       return; // The check of these very values is still on its way; Enter again once it is back.
     }
+    if (!log.begin()) {
+      return;
+    }
     setRunning(true);
-    log.clear();
     const result = await createAstroCopy({ sourcePath: source.sourcePath, parentPath, name });
+    log.end();
     if (!result.ok) {
       reportErrorToast(result.error);
     } else if (!result.value.ok) {

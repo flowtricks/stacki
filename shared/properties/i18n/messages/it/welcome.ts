@@ -50,6 +50,7 @@ export const messages = {
   'welcome.hero.openFolder': 'Apri da cartella',
   'welcome.hero.openGitHub': 'Apri da GitHub',
   'welcome.hero.startAstro': 'Inizia da Astro',
+  'welcome.hero.startHeroUI': 'Inizia con HeroUI',
   'welcome.hero.startLumos': 'Inizia da Lumos',
   'welcome.hero.startShadcn': 'Inizia con shadcn',
   'welcome.notWebsite': 'Quella cartella non è un sito web: non ha un progetto Astro né pagine HTML.',
@@ -66,9 +67,6 @@ export const messages = {
   'welcome.recent.remove': 'Rimuovi dai progetti recenti',
   'welcome.shadcn.base': 'Base', // same: cognate.
   'welcome.shadcn.icons': 'Libreria di icone',
-  'welcome.shadcn.nameEmpty': 'Inserisci un nome per il sito.',
-  'welcome.shadcn.nameInvalid': 'Usa lettere, numeri, punti, trattini o trattini bassi.',
-  'welcome.shadcn.path': 'Percorso del progetto',
   'welcome.shadcn.pointer': 'Puntatore a mano sui pulsanti',
   'welcome.shadcn.preset': 'Codice preset (facoltativo)',
   'welcome.shadcn.presetChecking': 'Verifica del preset…',
@@ -77,10 +75,13 @@ export const messages = {
   'welcome.shadcn.rtl': 'Attiva il supporto per il layout da destra a sinistra',
   'welcome.siteCreated': 'Sito creato',
   'welcome.siteName': 'Nome del sito',
+  'welcome.starter.nameEmpty': 'Inserisci un nome per il sito.',
+  'welcome.starter.nameInvalid': 'Usa lettere, numeri, punti, trattini o trattini bassi.',
   'welcome.starter.note':
     'Esegue {command}, poi avvia una cronologia git propria: così pubblicarlo in seguito pubblica il tuo sito, non un fork dello starter.',
   'welcome.starter.noteWithManager':
     'Esegue {command}, lo installa con {manager}, poi avvia una cronologia git propria: così pubblicarlo in seguito pubblica il tuo sito, non un fork dello starter.',
+  'welcome.starter.path': 'Percorso del progetto',
   'welcome.starter.submit': 'Crea sito',
   'welcome.starter.title': 'Inizia da Lumos',
   'welcome.starter.unfinished': 'Lo starter non è stato completato.',

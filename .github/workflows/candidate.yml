@@ -172,6 +172,11 @@ jobs:
       - run: npm ci
       - run: npm --prefix studio ci
       - run: npm run build
+      - name: Run Linux release preflight
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          xvfb-run --auto-servernum npm run check:linux
       - run: npx electron-builder --linux --publish never
       - name: Install and test Debian package
         # Refresh the package index first: the runner image's index named archive files that

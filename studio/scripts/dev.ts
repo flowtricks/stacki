@@ -4,7 +4,7 @@ import { mkdir, realpath, readFile, writeFile, symlink } from 'node:fs/promises'
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { writeStudioConfig, exists } from './workspace';
+import { draftDependencyRoot, exists, writeStudioConfig } from './workspace';
 import { copyProject } from './copyProject';
 import { prepareStudioLocal } from '../vendor/stacki/electron/previewServer/studioLocalMove';
 import { withStudioTelemetryDisabled } from '../vendor/stacki/shared/properties/studioTelemetry';
@@ -47,7 +47,7 @@ export async function startDraft(packageRoot: string, source: string, port: numb
   }
   await restoreCmsDeletions(workspace);
   await restoreAssetState(workspace);
-  await writeStudioConfig(workspace, packageRoot, port);
+  await writeStudioConfig(workspace, packageRoot, port, await draftDependencyRoot(workspace, source));
   console.log(`Draft workspace: ${workspace}\nStudio: http://localhost:${port}/studio`);
   await run(
     process.execPath,

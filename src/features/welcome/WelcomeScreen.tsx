@@ -4,13 +4,14 @@ import CloneRepositoryModal from './CloneRepositoryModal';
 import WelcomeSplitButton from './WelcomeSplitButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { chooseSiteFolder, chooseStarterParent, listRecentProjects, refreshRecentThumbnail, removeRecentProject, type RecentProject } from './welcomeBridge';
-import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
+import { AstroIcon, CloseIcon, ComponentIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
 import WelcomeShaderBackground from './WelcomeShaderBackground';
 import { railScrollbarFor, watchRailEdges } from './recentRail';
 import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
 import ShadcnStarterWizard from './ShadcnStarterWizard';
+import HeroUIStarterWizard from './HeroUIStarterWizard';
 import { ShadcnStarterLogo } from '../../ui/ShadcnStarterLogo';
 import AstroCopyDialog, { announceAstroCopy, type AstroCopySource } from './AstroCopyDialog';
 import { FolderDropHost, useFolderChoiceRoute } from './FolderDropHost';
@@ -20,7 +21,7 @@ interface WelcomeScreenProps {
   readonly showToast: (message: string, kind: 'success' | 'error' | 'info') => void;
 }
 
-const PROJECT_WIZARDS = { astro: NewProjectWizard, lumos: StarterWizard, shadcn: ShadcnStarterWizard };
+const PROJECT_WIZARDS = { astro: NewProjectWizard, lumos: StarterWizard, shadcn: ShadcnStarterWizard, heroui: HeroUIStarterWizard };
 type ProjectWizardKind = keyof typeof PROJECT_WIZARDS;
 interface ProjectCreation {
   readonly kind: ProjectWizardKind;
@@ -242,6 +243,7 @@ function WelcomeHero({
             items={[
               { label: translate('welcome.hero.startAstro'), icon: <AstroIcon size={15} />, onSelect: () => startProject('astro') },
               { label: translate('welcome.hero.startShadcn'), icon: <ShadcnStarterLogo brand="shadcn" size={15} />, onSelect: () => startProject('shadcn') },
+              { label: translate('welcome.hero.startHeroUI'), icon: <ComponentIcon size={15} />, onSelect: () => startProject('heroui') },
             ]}
             menuTitle={translate('welcome.hero.moreStart')}
             onClick={() => startProject('lumos')}

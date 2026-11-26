@@ -12,31 +12,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "^(apply_patch|Edit|Write)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-cdup)scripts/agent/codex.mts\" post-tool",
-            "statusMessage": "Formatting and checking the edited files",
-            "timeout": 120
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$(git rev-parse --show-cdup)scripts/agent/codex.mts\" stop",
-            "statusMessage": "Checking every changed file",
-            "timeout": 300
-          }
-        ]
-      }
     ]
   }
 }

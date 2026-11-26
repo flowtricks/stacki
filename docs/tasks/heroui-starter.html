@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stacki HeroUI starter tasks</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.6;
+      }
+      body {
+        max-width: 82ch;
+        margin: 3rem auto;
+        padding: 0 1.25rem 3rem;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+      }
+      section {
+        border-top: 1px solid GrayText;
+        margin-top: 2rem;
+      }
+      article {
+        margin-top: 2rem;
+      }
+      a,
+      code {
+        overflow-wrap: anywhere;
+      }
+      li + li {
+        margin-top: 0.4rem;
+      }
+      @media (max-width: 40rem) {
+        body {
+          margin-top: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Stacki HeroUI starter tasks</h1>
+        <p>
+          Add <strong>Start from HeroUI</strong> beside <strong>Start from shadcn</strong> in the Stacki fork. Desktop creates and opens an Astro site. In
+          Desktop and Studio, users can insert the full public HeroUI React v3 catalog, edit component props and content, and change the light and dark theme in
+          Variables. The generated site includes a style guide and an interactive component gallery.
+        </p>
+        <p>
+          The <code>heroui_starter</code> branch starts at local <code>main</code>, commit <code>5d4cd354</code>. This plan records the source audit,
+          implementation tasks, and verification results.
+        </p>
+      </header>
+
+      <nav aria-label="Plan contents">
+        <ul>
+          <li><a href="#scope">What ships</a></li>
+          <li><a href="#audit">What the audit found</a></li>
+          <li><a href="#tasks">Implementation tasks</a></li>
+          <li><a href="#checks">Release checks</a></li>
+          <li><a href="#pilot-results">Pilot results</a></li>
+          <li><a href="#starter-results">Generated starter results</a></li>
+          <li><a href="#inventory">Audited catalog baseline</a></li>
+        </ul>
+      </nav>
+
+      <section aria-labelledby="scope">
+        <h2 id="scope">What ships</h2>
+        <ul>
+          <li>
+            <strong>Desktop wizard.</strong> Pick a parent folder, enter a site name, see the read-only project path update, and choose npm or pnpm in Stacki's
+            dropdown. npm is the initial choice. Show creation progress and open the site when setup finishes. A failed creation preserves the wizard inputs for
+            retry.
+          </li>
+          <li>
+            <strong>Components.</strong> Provide one useful insertion per documented component shipped in the pinned public React package. Expose meaningful
+            variants, defaults, and compound content through typed Astro props or slots. Include helpers such as Label and FieldError with the context they need
+            to work. The catalog covers the free package. HeroUI Pro requires a separate licensing decision.
+            <a href="https://heroui.com/en/docs/react/components">React component catalog</a> ·
+            <a href="https://heroui.pro/docs/react/getting-started/licensing">Pro licensing</a>
+          </li>
+          <li>
+            <strong>Variables.</strong> Expose the public theme settings for both modes in project CSS. Include shared settings once where they apply to both
+            modes. Keep derived values linked to their inputs. Inventory documented component-level overrides as well and record which belong in the theme and
+            which are per-component styles.
+          </li>
+          <li>
+            <strong>Generated pages.</strong> Open on Style Guide at <code>/</code> with a link to Example Components at <code>/example-components</code>. Both
+            pages use the same project CSS. A Light / Dark control on the generated site changes the theme of the page and its overlays.
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="audit">
+        <h2 id="audit">What the audit found</h2>
+        <ul>
+          <li>
+            Stacki already has a folder picker, wizard handoff, request parser, creation logs, and staged generator for shadcn. The wizard opens the returned
+            path through the normal project flow. Creation handlers share a log channel, so concurrent attempts can interfere unless the channel has one owner.
+            <a href="../../src/features/welcome/WelcomeScreen.tsx">Welcome screen</a> ·
+            <a href="../../electron/handlers/projectHandlers.ts">Project handlers</a> ·
+            <a href="../../electron/project/shadcnStarter.ts">Staged generator</a>
+          </li>
+          <li>
+            Desktop and Studio discover Astro files and resolve the same insertion recipes. The shadcn gallery exposes editable props and slots on Astro
+            wrappers and renders interactive controls in React islands. A palette tile has its own preview route, so verify it separately from the interactive
+            page.
+            <a href="../../electron/project/projectFiles.ts">Desktop discovery</a> ·
+            <a href="../../studio/src/features/project/projectServer.ts">Studio discovery</a> ·
+            <a href="../../electron/project/shadcnEditableGallery.ts">Editable gallery pattern</a> ·
+            <a href="../../electron/previewServer/componentPreviewRecipe.ts">Tile preview</a>
+          </li>
+          <li>
+            Both editors read authored CSS custom properties. Declarations supplied only by dependencies or declared directly in Tailwind's
+            <code>@theme</code> are outside the current variable scan. Project-owned declarations in ordinary CSS rules give the editor a source location it can
+            write back to. <a href="../../electron/project/cssVarRead.ts">CSS variable reader</a> ·
+            <a href="../../studio/src/features/variables/variableServer.ts">Studio variable reader</a> ·
+            <a href="../../studio/src/features/variables/variableOperations.ts">Studio variable edits</a>
+          </li>
+          <li>
+            The registry publishes matching <code>@heroui/react@3.2.8</code> and <code>@heroui/styles@3.2.8</code>. The React tarball contains 73 component
+            documentation pages. HeroUI requires React 19 and Tailwind 4. Those dependencies belong in the generated site. The pinned package docs and exports
+            give the implementation a versioned baseline. <a href="https://heroui.com/en/docs/react/releases/v3-2-8">Release notes</a> ·
+            <a href="https://registry.npmjs.org/@heroui/react/3.2.8">React manifest</a> ·
+            <a href="https://registry.npmjs.org/@heroui/styles/3.2.8">Styles manifest</a> ·
+            <a href="https://registry.npmjs.org/@heroui/react/-/react-3.2.8.tgz">React tarball</a>
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="tasks">
+        <h2 id="tasks">Implementation tasks</h2>
+        <ol>
+          <li><a href="#versions">Pin and build a disposable Astro site</a></li>
+          <li><a href="#pilot">Prove the editing workflow on four components</a></li>
+          <li><a href="#theme">Expose and verify the full theme</a></li>
+          <li><a href="#catalog">Ship the full component catalog</a></li>
+          <li><a href="#pages">Build the generated style guide and gallery</a></li>
+          <li><a href="#contract">Add the shared starter request</a></li>
+          <li><a href="#generator">Generate and publish the site safely</a></li>
+          <li><a href="#wizard">Connect the Desktop wizard</a></li>
+          <li><a href="#checks">Verify the shipped workflow</a></li>
+        </ol>
+
+        <article aria-labelledby="versions">
+          <h3 id="versions">1. Pin and build a disposable Astro site</h3>
+          <p>
+            Start with the Astro version supported by the checkout's Studio package. Pin compatible versions of Astro, <code>@astrojs/react</code>, React and
+            React DOM 19, Tailwind 4 and its Vite plugin, and both HeroUI packages at <code>3.2.8</code>. Record the registry integrity values and check the
+            resolved React Aria and date peers. Wire the full documented CSS imports through one shared Astro layout. Put the initial theme on
+            <code>document.documentElement</code> so portalled overlays inherit it.
+          </p>
+          <p>
+            <strong>Pass when</strong> npm and pnpm each install and resolve the same intentional dependency set, the site builds and serves production output,
+            and a hydrated Button renders with the expected styles without console or hydration errors. Record the actual installed versions and explain any
+            additional dependency. <a href="https://heroui.com/en/docs/react/getting-started/quick-start">HeroUI quick start</a> ·
+            <a href="https://docs.astro.build/en/guides/integrations-guide/react/">Astro React integration</a> ·
+            <a href="https://docs.astro.build/en/guides/styling/#tailwind">Astro Tailwind integration</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="pilot">
+          <h3 id="pilot">2. Prove the editing workflow on four components</h3>
+          <p>
+            Add Button, Card, Text Field, and Modal wrappers to the site. Use them to prove literal props and variants, named slots, a saved field default, and
+            a portalled control. Add insertion recipes keyed by project-relative Astro paths in <code>.stacki/components.json</code>. Keep compound parts,
+            controlled state, and callbacks in one React island. Pass serializable values through Astro. Hydrate the controls that need interaction.
+          </p>
+          <p>
+            <strong>Pass when</strong> both editors discover and insert all four, and the resulting Astro source contains the expected imports, props, and slot
+            content. Edit a label, slot, and default, then reload and confirm each saved edit. Typing in a live field leaves the source intact. Open the Modal
+            by keyboard, verify focus containment and themed overlay styles, close it with Escape, and verify focus returns to the trigger. Check the palette
+            tile separately. Fix any blocker here before expanding the catalog. <a href="../contracts.md#shared-project-editor-metadata">Recipe contract</a> ·
+            <a href="https://docs.astro.build/en/reference/directives-reference/#client-directives">Astro client directives</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="theme">
+          <h3 id="theme">3. Expose and verify the full theme</h3>
+          <p>
+            Compare the official theming reference with <code>dist/themes/default/variables.css</code> and <code>dist/themes/shared/theme.css</code> in the
+            pinned styles tarball. Keep a versioned inventory of shared, light, and dark settings. Cover semantic colors, surfaces, overlays, field and focus
+            styles, spacing, radii, typography, shadows, and other documented public settings. For each entry, record its selector, expected value or
+            expression, and where users edit it.
+          </p>
+          <p>
+            Write the public source settings into ordinary project CSS rules. Verify the cascade after the library import and keep Tailwind mappings and
+            calculated values connected to their inputs. Provide a document-level light/dark control. Preserve an explicit choice across navigation and reload.
+            Check the actual theme selectors against both editors and against portalled content.
+          </p>
+          <p>
+            <strong>Pass when</strong> every inventory entry has a disposition and each public theme setting can be changed in the intended mode. Test an accent
+            color, an overlay color, a radius, a font setting, and a derived hover color. In each editor, compare the CSS before and after a save, then reload
+            and verify the computed value in the matching mode. Changing a dark declaration leaves the light declaration intact. An alias keeps resolving after
+            its source value changes. <a href="https://heroui.com/en/docs/react/getting-started/theming">HeroUI theming</a> ·
+            <a href="https://heroui.com/en/docs/react/getting-started/dark-mode">Dark mode</a> ·
+            <a href="https://registry.npmjs.org/@heroui/styles/-/styles-3.2.8.tgz">Styles tarball</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="catalog">
+          <h3 id="catalog">4. Ship the full component catalog</h3>
+          <p>
+            Build a checked-in manifest from the pinned tarball's component documentation slugs. Compare it with the pinned React exports and the official Free
+            catalog. Record discrepancies with their source and rationale. Map every component to an Astro wrapper, insertion recipe, gallery demo, and test
+            case. Check for duplicate names, missing files, invalid slots, cyclic references, and recipe limits.
+          </p>
+          <p>
+            Develop and verify by component family. Give overlays, selections, date controls, and forms early coverage. In particular, test Select inside a
+            Modal, two independent instances of a controlled collection, a date range encoded as serializable inputs, and validation with the correct accessible
+            label and error. Use context-aware demos for components that depend on a form, group, or trigger.
+          </p>
+          <p>
+            <strong>Pass when</strong> the manifest, Components panel, and gallery agree with the pinned public inventory. Every recipe parses, inserts, builds,
+            and renders. Representative interactions per family work in production output. Changing a saved default takes effect on reload, and preview
+            interactions leave that default intact. A coverage test reports missing or unexpected entries when the package pin changes.
+            <a href="../../electron/project/shadcnStarterCatalog.ts">shadcn inventory pattern</a> ·
+            <a href="../../shared/properties/componentDefaults.ts">Recipe parsing and limits</a> ·
+            <a href="https://heroui.com/en/docs/react/getting-started/composition">HeroUI composition</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="pages">
+          <h3 id="pages">5. Build the generated style guide and gallery</h3>
+          <p>
+            Create the shared layout and both Astro routes. Show theme colors, typography, spacing, radii, and representative states on Style Guide. Generate
+            Example Components from the same manifest as the insertion recipes. Use the editable wrappers in the examples so changes in the inspector affect the
+            same components users insert on their own pages. Use an accessible theme control and readable category navigation.
+          </p>
+          <p>
+            <strong>Pass when</strong> both pages appear in the Stacki page tree, navigation and theme switching work in the built site, and representative
+            cards remain usable on a narrow viewport and with the keyboard. Both pages render after a fresh install. The gallery links and examples cover every
+            manifest entry. <a href="../../electron/project/shadcnStarterContent.ts">shadcn generated layout and routes</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="contract">
+          <h3 id="contract">6. Add the shared starter request</h3>
+          <p>
+            Read the shared contract before editing IPC. Extend <code>project:createStarter</code> with a HeroUI discriminator and shared location fields. Reuse
+            the site-name, absolute parent-path, and package-manager parsers. Preserve the existing success reply and the legacy omitted-discriminator Lumos
+            behavior. Keep starter-specific options on their own variants. Update the welcome bridge and handler through the existing request path.
+          </p>
+          <p>
+            <strong>Pass when</strong> contract tests accept valid HeroUI input for both managers and retain the Lumos and shadcn cases. Reject unknown
+            starters, unsafe names, missing or relative parent paths, unsupported package managers, over-limit values, and shadcn options on a HeroUI request.
+            <a href="../contracts.md">Shared contracts</a> · <a href="../../shared/ipc/shadcnStarter.ts">Starter request parser</a> ·
+            <a href="../../test/shared/ipc/shadcnStarterContract.test.ts">Existing contract tests</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="generator">
+          <h3 id="generator">7. Generate and publish the site safely</h3>
+          <p>
+            Write the versioned template into a staging directory under the canonical parent. Reuse existing bounded command and package-manager handling where
+            the behavior matches. Isolate installation from any parent workspace. Write the app files and tracked <code>.stacki</code> metadata, verify the
+            selected lockfile and manifest, and create and verify the initial Git commit before publishing. Ignore only generated
+            <code>.stacki/preview/</code> within the metadata directory.
+          </p>
+          <p>
+            Claim the destination without overwriting files. Define what happens if publication fails partway through, including how a failed rollback preserves
+            the files needed for recovery. Stop the subprocess before cleanup. Give creation attempts one owner for the shared log and progress stream and
+            release that ownership on success and failure.
+          </p>
+          <p>
+            <strong>Pass when</strong> generator tests cover missing tools, install or Git failure, timeouts, symlink parents and destinations, destination
+            races, a partial move, failed rollback, retry, and concurrent requests. Test successful creation with both managers under an existing workspace.
+            Confirm the published directory still installs and builds after relocation and Desktop detects the selected package manager.
+            <a href="../../electron/project/shadcnStarter.ts">Staged creation and publication</a> ·
+            <a href="../../electron/project/starter.ts">Command runner</a> ·
+            <a href="../../test/electron/project/shadcnStarter.test.ts">Generator test patterns</a>
+          </p>
+        </article>
+
+        <article aria-labelledby="wizard">
+          <h3 id="wizard">8. Connect the Desktop wizard</h3>
+          <p>
+            Add <strong>Start from HeroUI</strong> to the Welcome menu and connect it to the folder picker. Reuse the existing site name, path preview,
+            package-manager Dropdown, and progress patterns. Add translated UI strings. Pass the successful project path to the existing open action. Report the
+            failed creation step in the wizard with the option to retry.
+          </p>
+          <p>
+            <strong>Pass when</strong> keyboard users can pick HeroUI, choose a package manager, and create a site. Cancelling the picker leaves the welcome
+            screen ready for another choice. An invalid name stays editable. An install failure retains the entered name and selected manager. Success opens
+            Style Guide, and Desktop can reopen the published path through Open from folder. Check the existing Lumos, Astro, and shadcn choices.
+            <a href="../../src/features/welcome/WelcomeScreen.tsx">Welcome starter actions</a> ·
+            <a href="../../src/features/welcome/ShadcnStarterWizard.tsx">Wizard pattern</a> · <a href="../i18n-playbook.md">Translation guidance</a>
+          </p>
+        </article>
+      </section>
+
+      <section aria-labelledby="checks">
+        <h2 id="checks">9. Verify the shipped workflow</h2>
+        <ul>
+          <li>
+            Create sites through Desktop with npm and pnpm in clean directories. Include a parent path with spaces. Confirm each project opens, both routes
+            build, Git captures the generated source, and a failed install can be retried without inheriting a partial site.
+          </li>
+          <li>
+            Run <code>astro-studio check-project &lt;project-directory&gt;</code> using the installed Studio CLI against each generated project. Fix missing
+            component paths, invalid slots, and cycles together. Open the Desktop-hosted Studio and a standalone Studio draft and verify that each saves to the
+            expected workspace. <a href="../../studio/README.md">Studio modes and project check</a>
+          </li>
+          <li>
+            In Desktop and Studio, exercise palette discovery, insertion, inspector edits, named slots, undo and redo, a saved default after reload, and two
+            independent interactive instances. Reopen the saved project and compare the authored Astro and CSS with what the preview shows.
+          </li>
+          <li>
+            Compare light and dark in the built site and in interactive preview. Verify focus, Escape, and computed overlay styles on a portalled control.
+            Confirm a Variables edit targets the matching declaration and leaves unrelated source intact. Check the palette tile for the intended theme.
+          </li>
+          <li>
+            Run <code>npm run check:changed</code> and <code>env -u ELECTRON_RUN_AS_NODE npm test</code> for the implementation. Record results for supported
+            macOS, Windows, and Linux jobs, the package managers exercised, the catalog coverage result, and any checks that still need a run. Use the normal
+            repository hooks. <a href="../../AGENTS.md">Repository checks</a> · <a href="../enforcement.md">Enforcement</a>
+          </li>
+        </ul>
+        <p>
+          The starter is ready when a user can create and reopen a HeroUI site, insert every catalog entry, use its interactions in preview, and save theme
+          changes in both editors. The four-component fixture is the first evidence for that workflow.
+        </p>
+      </section>
+
+      <section aria-labelledby="pilot-results">
+        <h2 id="pilot-results">Pilot results</h2>
+        <ul>
+          <li>
+            On macOS with Node 22.23.5, a disposable Astro 7.3.8 project with HeroUI 3.2.8 built with both npm and pnpm. The production page rendered Button,
+            Card, Text Field, and Modal. Reloading restored the authored field default. Modal used the active theme, held focus while open, and returned focus
+            to its trigger after Escape.
+          </li>
+          <li>
+            Desktop and standalone Studio discovered the pilot's Astro wrapper and inserted its configured props and slot text. Desktop saved a dark variable to
+            the project. Standalone Studio saved the same kind of edit to its draft and preserved the source project.
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="starter-results">
+        <h2 id="starter-results">Generated starter results on macOS</h2>
+        <ul>
+          <li>
+            The built Desktop app created npm and pnpm sites through Start from HeroUI and opened Style Guide in the canvas. Desktop discovered all 73 wrappers
+            in each site and saved a dark overlay variable without changing the light declaration.
+          </li>
+          <li>
+            npm and pnpm sites built after publication and a locked reinstall. Each kept its selected lockfile, recorded matching direct dependency versions,
+            and contained one initial Git commit. Both passed <code>astro-studio check-project</code>.
+          </li>
+          <li>
+            Both production galleries contained all 73 audited examples and their projects had 73 insertion recipes. In Chromium, the gallery hydrated 56
+            islands. Tabs changed selection, dark mode persisted after a reload, Select worked inside Modal, and Escape restored focus to the trigger. The
+            gallery fit a 390-pixel viewport.
+          </li>
+          <li>
+            The generated site's Astro React integration requires Node.js 22.23.4 or later. The project manifest and generated README record that minimum.
+          </li>
+          <li>
+            Standalone Studio opened a generated project's interactive preview and changed the HeroUI Pin item toggle from unpressed to pressed. Vite served the
+            linked React and HeroUI modules while refusing requests for the original project's manifest. The starter prebundles React DOM's client entry so
+            Astro can import its named exports in development.
+          </li>
+          <li>
+            Studio's source-editing mode discovered all 73 wrappers, inserted a HeroUI Button from the palette, and saved a dark overlay variable to the
+            original site. The generated gallery also responded to a click on its hydrated Pin item toggle.
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="inventory">
+        <h2 id="inventory">Audited catalog baseline</h2>
+        <p>
+          These 73 slugs come from <code>package/docs/components/</code> in the <code>@heroui/react@3.2.8</code> tarball. Task 4 reconciles them with the
+          exports and proves an insertion for each component. <a href="https://registry.npmjs.org/@heroui/react/-/react-3.2.8.tgz">Pinned React tarball</a>
+        </p>
+        <div id="catalog-slugs">
+          <p>
+            <code>accordion</code>, <code>alert</code>, <code>alert-dialog</code>, <code>autocomplete</code>, <code>avatar</code>, <code>avatar-group</code>,
+            <code>badge</code>, <code>breadcrumbs</code>, <code>button</code>, <code>button-group</code>, <code>calendar</code>, <code>card</code>,
+            <code>checkbox</code>, <code>checkbox-group</code>, <code>chip</code>, <code>close-button</code>, <code>color-area</code>, <code>color-field</code>,
+            <code>color-picker</code>, <code>color-slider</code>, <code>color-swatch</code>, <code>color-swatch-picker</code>, <code>combo-box</code>,
+            <code>date-field</code>, <code>date-picker</code>, <code>date-range-picker</code>, <code>description</code>, <code>disclosure</code>,
+            <code>disclosure-group</code>, <code>drawer</code>, <code>dropdown</code>, <code>error-message</code>, <code>field-error</code>,
+            <code>fieldset</code>, <code>form</code>, <code>input</code>, <code>input-group</code>, <code>input-otp</code>, <code>kbd</code>,
+            <code>label</code>, <code>link</code>, <code>list-box</code>, <code>meter</code>, <code>modal</code>, <code>number-field</code>,
+            <code>pagination</code>, <code>popover</code>, <code>progress-bar</code>, <code>progress-circle</code>, <code>radio-group</code>,
+            <code>range-calendar</code>, <code>scroll-shadow</code>, <code>search-field</code>, <code>select</code>, <code>separator</code>, <code>sheet</code>,
+            <code>skeleton</code>, <code>slider</code>, <code>spinner</code>, <code>surface</code>, <code>switch</code>, <code>table</code>, <code>tabs</code>,
+            <code>tag-group</code>, <code>text-area</code>, <code>text-field</code>, <code>time-field</code>, <code>toast</code>, <code>toggle-button</code>,
+            <code>toggle-button-group</code>, <code>toolbar</code>, <code>tooltip</code>, <code>typography</code>.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

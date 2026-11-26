@@ -1,0 +1,32 @@
+.starter-wizard-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+}
+
+.starter-wizard-modal .modal-body {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.starter-wizard-modal .modal-body > *,
+.starter-wizard-modal :is(.modal-header, .modal-footer) {
+  flex-shrink: 0;
+}
+
+.starter-wizard-modal .starter-project-path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+}
+
+.starter-wizard-modal .starter-field > [data-invalid='true'],
+.starter-creation-error {
+  color: var(--red);
+}
+
+.starter-creation-error {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

@@ -84,6 +84,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki could not read this connection’s key. Connect Sanity again.',
   'error.pages.devServerStatus': 'Dev server returned {status}',
   'error.project.chooseInside': 'Choose something inside the project, not the project itself.',
+  'error.project.creationBusy': 'A site is already being created. Wait for it to finish.',
   'error.project.gone': 'That is no longer there.',
   'error.project.outside': 'That is outside the project.',
   'error.projectSettings.changed': 'Project settings changed. Reload before saving.',

@@ -83,6 +83,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki가 이 연결의 키를 읽지 못했습니다. Sanity를 다시 연결하세요.',
   'error.pages.devServerStatus': '개발 서버가 {status}을(를) 반환했습니다',
   'error.project.chooseInside': '프로젝트 자체가 아니라 프로젝트 안의 항목을 선택하세요.',
+  'error.project.creationBusy': '이미 사이트를 만들고 있습니다. 완료될 때까지 기다리세요.',
   'error.project.gone': '더 이상 존재하지 않습니다.',
   'error.project.outside': '프로젝트 밖에 있습니다.',
   'error.projectSettings.changed': '프로젝트 설정이 변경되었습니다. 저장하기 전에 다시 불러오세요.',

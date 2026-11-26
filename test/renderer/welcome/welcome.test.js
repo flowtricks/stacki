@@ -11,6 +11,8 @@
 // leaving it running against a project the user has just opened.
 // Split actions verify folder selection, menu focus and dismissal. The shadcn
 // flow holds IPC replies to exercise overlapping preset checks and creation retries.
+// The HeroUI flow drives keyboard controls, verifies a failed install keeps form
+// values and confirms the returned directory is opened and can be reopened.
 
 const fs = require('fs');
 const path = require('path');
@@ -383,10 +385,10 @@ export { subscribeErrorToasts } from './src/ui/errorNotices';`,
     const openShadcn = async () => {
       await act(async () => arrows[1].click());
       check(
-        'the starter menu lists Astro and shadcn in order',
+        'the starter menu lists Astro, shadcn and HeroUI in order',
         all('[role=menuitem]')
           .map((item) => item.textContent)
-          .join('|') === 'Start from Astro|Start from shadcn',
+          .join('|') === 'Start from Astro|Start from shadcn|Start from HeroUI',
       );
       check('the shadcn action uses its own mark', all('[role=menuitem]')[1].querySelector('svg[aria-hidden="true"][viewBox="0 0 256 256"]') !== null);
       await act(async () => {
@@ -571,6 +573,104 @@ export { subscribeErrorToasts } from './src/ui/errorNotices';`,
     await act(async () => finishCreate({ ok: true, projectPath: '/tmp/sites/shadcn-site' }));
     check('success closes the wizard and opens the site', !document.querySelector('.shadcn-starter-modal') && opened.at(-1) === '/tmp/sites/shadcn-site');
     stopErrorNotices();
+  }
+
+  {
+    const parentPath = '/tmp/sites';
+    const projectPath = parentPath + '/heroui-site';
+    let parentRequests = 0;
+    let receiveLog;
+    let finishCreate;
+    let failCreate;
+    const attempts = [];
+    dom.window.avb.parentDialog = async () => {
+      parentRequests++;
+      return parentRequests === 1 ? { canceled: true } : { canceled: false, parentPath };
+    };
+    dom.window.avb.onCreateLog = (receive) => {
+      receiveLog = receive;
+      return () => {};
+    };
+    dom.window.avb.createStarter = (payload) => {
+      attempts.push(payload);
+      return new Promise((resolve, reject) => {
+        finishCreate = resolve;
+        failCreate = reject;
+      });
+    };
+    const key = (element, value) => element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }));
+    const openHeroUI = async () => {
+      await act(async () => key(arrows[1], 'ArrowDown'));
+      await act(async () => key(document.activeElement, 'End'));
+      check('the starter menu can focus HeroUI through the keyboard', document.activeElement.textContent === 'Start from HeroUI');
+      await act(async () => document.activeElement.click());
+    };
+    const findDialog = () => document.querySelector('dialog[aria-label="Start from HeroUI"]');
+    await openHeroUI();
+    check('canceling the HeroUI parent picker leaves the screen ready for another action', parentRequests === 1 && !findDialog());
+    await openHeroUI();
+    const dialog = findDialog();
+    const siteName = dialog.querySelector('label.starter-field-label').control;
+    const pathField = dialog.querySelector('input[readonly]');
+    const manager = dialog.querySelector('.dd-trigger');
+    const submit = dialog.querySelector('.modal-footer .primary');
+    const setName = (value) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(siteName, value);
+        siteName.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      });
+    check('HeroUI starts with npm and a read-only project path', manager.textContent === 'npm' && pathField.value === '/tmp/sites/my-site');
+    await setName('..');
+    await act(async () => key(siteName, 'Enter'));
+    check(
+      'an unsafe HeroUI name is editable and never reaches IPC',
+      !siteName.disabled && siteName.ariaInvalid === 'true' && submit.disabled && !attempts.length,
+    );
+    await setName('heroui-site');
+    check('the HeroUI path follows the corrected site name', pathField.value === projectPath && !submit.disabled);
+    await act(async () => key(manager, 'Enter'));
+    await act(async () => key(manager, 'ArrowDown'));
+    await act(async () => key(manager, 'Enter'));
+    check('HeroUI lets the keyboard choose pnpm in the shared dropdown', manager.textContent === 'pnpm' && manager.ariaExpanded === 'false');
+    await act(async () => receiveLog('Output from another creation'));
+    check('an idle HeroUI wizard does not show another attempt’s log', !dialog.querySelector('.create-log'));
+    await act(async () => {
+      key(siteName, 'Enter');
+      key(siteName, 'Enter');
+      receiveLog('Installing HeroUI dependencies');
+    });
+    const expected = { parentPath, name: 'heroui-site', packageManager: 'pnpm', starter: 'heroui' };
+    check(
+      'HeroUI submits one discriminator and the selected location and manager',
+      attempts.length === 1 && JSON.stringify(attempts[0]) === JSON.stringify(expected),
+    );
+    check(
+      'HeroUI shows streamed progress and locks the form during creation',
+      dialog.querySelector('.create-log')?.textContent.includes('Installing HeroUI dependencies') && siteName.disabled && manager.disabled && submit.disabled,
+    );
+    await act(async () => failCreate(new Error('pnpm install failed')));
+    check(
+      'the failed step is shown in the HeroUI wizard and inputs are kept for retry',
+      dialog.querySelector('[role=alert]')?.textContent === 'pnpm install failed' &&
+        submit.textContent === 'Try again' &&
+        !submit.disabled &&
+        siteName.value === 'heroui-site' &&
+        manager.textContent === 'pnpm' &&
+        !opened.includes(projectPath),
+    );
+    await act(async () => submit.click());
+    check(
+      'HeroUI retry sends the same request and clears the old output',
+      JSON.stringify(attempts[1]) === JSON.stringify(expected) &&
+        !dialog.querySelector('[role=alert]') &&
+        !dialog.querySelector('.create-log')?.textContent.includes('Installing HeroUI dependencies'),
+    );
+    await act(async () => finishCreate({ ok: true, projectPath }));
+    check('HeroUI success closes the wizard and opens the returned path', !findDialog() && opened.at(-1) === projectPath);
+    dom.window.avb.openSiteDialog = async () => ({ kind: 'astro', projectPath });
+    const openCount = opened.length;
+    await act(async () => all('.actions button')[0].click());
+    check('Open from folder also opens the HeroUI project', opened.length === openCount + 1 && opened.at(-1) === projectPath);
   }
 
   // A first run has nothing to return to, so starting a site is the answer

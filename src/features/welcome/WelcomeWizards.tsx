@@ -4,9 +4,11 @@ import Popup from '../../ui/Popup';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createAstroProject, createStarterProject, subscribeCreateLog, type ProjectTemplate } from './welcomeBridge';
 import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, type CreatePackageManager } from '../../../shared/properties/packageManager';
+import { parseStarterName } from '../../../shared/ipc/shadcnStarter';
 import Dropdown from '../../ui/Dropdown';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import './welcomeWizards.css';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
 export const SITE_NAME_DEFAULT = 'my-site';
@@ -40,9 +42,12 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
   const invalid = !siteNameValid(name);
   const running = state.kind === 'running';
   const run = async (): Promise<void> => {
+    if (invalid || !log.begin()) {
+      return;
+    }
     setState({ kind: 'running' });
-    log.clear();
-    const result = await createStarterProject(parentPath, cleanName, manager);
+    const result = await createStarterProject({ starter: 'lumos', parentPath, name: cleanName, packageManager: manager });
+    log.end();
     if (!result.ok) {
       setState({ kind: 'error', message: result.error });
     } else if (!result.value.ok) {
@@ -94,10 +99,13 @@ export function NewProjectWizard({ parentPath, onClose, onDone }: WizardProps & 
   const running = state.kind === 'running';
   const invalid = !siteNameValid(name);
   const run = async (): Promise<void> => {
+    if (invalid || !log.begin()) {
+      return;
+    }
     setState({ kind: 'running' });
-    log.clear();
     const options = { parentPath, name: name.trim(), template, install, git, ai, packageManager };
     const result = await createAstroProject(options);
+    log.end();
     if (result.ok) {
       onDone(result.value.projectPath);
     } else {
@@ -150,7 +158,19 @@ function siteNameValid(name: string): boolean {
   return SITE_NAME_PATTERN.test(cleanName);
 }
 
-// The site's name and the folder it becomes, shared by both wizards so they name sites alike.
+export function starterNameProblem(name: string): 'welcome.starter.nameEmpty' | 'welcome.starter.nameInvalid' | undefined {
+  if (name.trim() === '') {
+    return 'welcome.starter.nameEmpty';
+  }
+  try {
+    parseStarterName(name);
+    return undefined;
+  } catch {
+    return 'welcome.starter.nameInvalid';
+  }
+}
+
+// Each wizard uses the same name field and path preview.
 // Enter submits only a valid name and only while nothing is running.
 export function SiteNameField(props: {
   readonly parentPath: string;
@@ -185,7 +205,7 @@ export function SiteNameField(props: {
             if (event.key !== 'Enter') {
               return;
             }
-            if (siteNameValid(props.name)) {
+            if (props.problem === undefined && siteNameValid(props.name)) {
               props.submit();
             }
           }}
@@ -201,7 +221,7 @@ export function SiteNameField(props: {
           <span id={problemId} aria-live="polite" data-invalid={props.problem !== undefined}>
             {props.problem ?? props.pathLabel}
           </span>
-          <input className="shadcn-project-path" aria-label={props.pathLabel} dir="ltr" readOnly value={folder} title={folder} />
+          <input className="starter-project-path" aria-label={props.pathLabel} dir="ltr" readOnly value={folder} title={folder} />
         </label>
       )}
     </>
@@ -243,14 +263,38 @@ export function PackageManagerField(props: {
 /** The scaffolder's and installer's output as it streams on `create:log`, bounded and kept scrolled to the end. */
 export function useCreateLog() {
   const [text, setText] = useState('');
+  const active = useRef(false);
   const elementRef = useRef<HTMLPreElement>(null);
-  useEffect(() => subscribeCreateLog((chunk) => setText((previous) => (previous + chunk).slice(-CREATE_LOG_CHARS_MAX))), []);
+  useEffect(
+    () =>
+      subscribeCreateLog((chunk) => {
+        if (active.current) {
+          setText((previous) => (previous + chunk).slice(-CREATE_LOG_CHARS_MAX));
+        }
+      }),
+    [],
+  );
   useEffect(() => {
     if (elementRef.current) {
       elementRef.current.scrollTop = elementRef.current.scrollHeight;
     }
   }, [text]);
-  return { text, elementRef, clear: () => setText('') };
+  return {
+    text,
+    elementRef,
+    begin: () => {
+      // Input events can arrive before React has disabled the controls.
+      if (active.current) {
+        return false;
+      }
+      active.current = true;
+      setText('');
+      return true;
+    },
+    end: () => {
+      active.current = false;
+    },
+  };
 }
 
 export function WizardFrame({

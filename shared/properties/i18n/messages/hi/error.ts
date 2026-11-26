@@ -85,6 +85,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki इस कनेक्शन की कुंजी पढ़ नहीं सका। Sanity फिर से कनेक्ट करें।',
   'error.pages.devServerStatus': 'डेव सर्वर ने {status} लौटाया',
   'error.project.chooseInside': 'प्रोजेक्ट के भीतर कुछ चुनें, प्रोजेक्ट को नहीं।',
+  'error.project.creationBusy': 'एक साइट पहले से बनाई जा रही है। उसके पूरा होने तक इंतज़ार करें।',
   'error.project.gone': 'वह अब मौजूद नहीं है।',
   'error.project.outside': 'वह प्रोजेक्ट के बाहर है।',
   'error.projectSettings.changed': 'प्रोजेक्ट सेटिंग बदल गई हैं। सहेजने से पहले रीलोड करें।',

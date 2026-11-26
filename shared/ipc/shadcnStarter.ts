@@ -34,7 +34,11 @@ interface StarterLocation {
 }
 
 export type StarterRequest = StarterLocation &
-  ({ readonly starter?: 'lumos'; readonly shadcn?: never } | { readonly starter: 'shadcn'; readonly shadcn: ShadcnStarterOptions });
+  (
+    | { readonly starter?: 'lumos'; readonly shadcn?: never }
+    | { readonly starter: 'heroui'; readonly shadcn?: never }
+    | { readonly starter: 'shadcn'; readonly shadcn: ShadcnStarterOptions }
+  );
 export type ShadcnPresetReply = Result<{ readonly iconLibrary: ShadcnIconLibrary; readonly style: ShadcnStyle }, { readonly message: string }>;
 
 export const SHADCN_PRESET_CODE_LENGTH_MAX = 32;
@@ -46,6 +50,11 @@ export function parseStarterRequest(input: unknown): StarterRequest {
   switch (starter) {
     case 'shadcn':
       return { ...parseStarterLocation(fields), starter, shadcn: parseShadcnOptions(fields['shadcn']) };
+    case 'heroui':
+      if ('shadcn' in fields) {
+        throw new Error('shadcn options require the shadcn starter.');
+      }
+      return { ...parseStarterLocation(fields), starter };
     case 'lumos':
     case undefined: {
       if (fields['shadcn'] !== undefined) {

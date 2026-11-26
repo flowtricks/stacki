@@ -83,6 +83,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki 無法讀取此連結的金鑰。請重新連結 Sanity。',
   'error.pages.devServerStatus': '開發伺服器傳回 {status}',
   'error.project.chooseInside': '請選擇專案內的項目，而非專案本身。',
+  'error.project.creationBusy': '已有網站正在建立，請等候完成。',
   'error.project.gone': '該項目已不存在。',
   'error.project.outside': '該項目位於專案外部。',
   'error.projectSettings.changed': '專案設定已變更。請重新載入後再儲存。',

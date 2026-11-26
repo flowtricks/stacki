@@ -14,16 +14,9 @@ These are separate publication paths. A successful `Check` run publishes nothing
   `.github/workflows/release-post.yml` once the desktop release is public.
   See [create-stacki publication](./create-stacki.md) for authentication and registry verification.
 
-Run the fast checks and complete regression suite locally before pushing. Also run Studio's
-`npm run verify` and `npm run test:browser` against a disposable fixture workspace before tagging:
-the Desktop regression gate does not run that separate Studio browser scenario.
-
-Pushing a version tag runs the Linux preflight automatically: the `pre-push` hook runs it after the
-full gate has rebuilt `dist/`, and a failure stops the tag reaching GitHub, so no release build
-starts. The release scripts push the bump commit and the tag in one atomic push, so after a failure
-neither reached GitHub and the tag exists only locally: fix the finding, delete the local tag, and
-run again; never move a pushed tag. Run `npm run check:linux` by hand (about 30 seconds) to find problems before
-tagging. It checks, on a Mac, the ways the Linux release job has failed:
+Wait for Check and Candidate on GitHub before tagging. Candidate runs the separate Studio browser
+scenario and the Linux release preflight. A failure blocks publication of that commit. The preflight
+covers common Linux release failures:
 
 - relative imports and package or workflow paths match their files' case exactly (macOS ignores
   case, Linux does not), and no two tracked paths differ only in case;

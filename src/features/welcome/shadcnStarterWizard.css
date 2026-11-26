@@ -1,29 +1,3 @@
-.shadcn-starter-modal {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(100dvh - 48px);
-}
-
-.shadcn-starter-modal .modal-body {
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
-.shadcn-starter-modal .modal-body > * {
-  flex-shrink: 0;
-}
-
-.shadcn-starter-modal :is(.modal-header, .modal-footer) {
-  flex-shrink: 0;
-}
-
-.shadcn-starter-modal .shadcn-project-path {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  text-overflow: ellipsis;
-}
-
 .shadcn-starter-choices {
   min-inline-size: 0;
   margin: 0;
@@ -162,6 +136,6 @@
   font: inherit;
 }
 
-.shadcn-starter-modal :is(.starter-field, .shadcn-preset-action) > [data-invalid='true'] {
+.shadcn-starter-modal .shadcn-preset-action > [data-invalid='true'] {
   color: var(--red);
 }

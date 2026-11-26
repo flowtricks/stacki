@@ -83,6 +83,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki 无法读取此连接的密钥，请重新连接 Sanity。',
   'error.pages.devServerStatus': '开发服务器返回了 {status}',
   'error.project.chooseInside': '请选择项目内的内容，而不是项目本身。',
+  'error.project.creationBusy': '已在创建站点，请等待创建完成。',
   'error.project.gone': '它已不存在。',
   'error.project.outside': '它位于项目之外。',
   'error.projectSettings.changed': '项目设置已更改，请在保存前重新加载。',

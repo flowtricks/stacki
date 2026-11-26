@@ -12,29 +12,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/agent/claude.mts\" post-tool",
-            "timeout": 120
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/agent/claude.mts\" stop",
-            "timeout": 300
-          }
-        ]
-      }
     ]
   }
 }

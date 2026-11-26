@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   parseShadcnPresetCode,
-  parseStarterName,
   SHADCN_BASES,
   SHADCN_ICON_LIBRARIES,
   SHADCN_PRESET_CODE_LENGTH_MAX,
@@ -17,8 +16,18 @@ import { CheckIcon } from '../../ui/Icons';
 import { SwitchRow } from '../../ui/Switch';
 import TipAnchor from '../../ui/TipAnchor';
 import { ShadcnStarterLogo, type ShadcnStarterChoice } from '../../ui/ShadcnStarterLogo';
-import { CreateLog, PackageManagerField, SITE_NAME_DEFAULT, SiteNameField, useCreateLog, WizardFrame, type RunState, type WizardProps } from './WelcomeWizards';
-import { createShadcnStarterProject, inspectShadcnPreset } from './welcomeBridge';
+import {
+  CreateLog,
+  PackageManagerField,
+  SITE_NAME_DEFAULT,
+  SiteNameField,
+  starterNameProblem,
+  useCreateLog,
+  WizardFrame,
+  type RunState,
+  type WizardProps,
+} from './WelcomeWizards';
+import { createStarterProject, inspectShadcnPreset } from './welcomeBridge';
 import './shadcnStarterWizard.css';
 
 const PRESET_CHECK_DELAY_MS = 250;
@@ -44,37 +53,34 @@ export default function ShadcnStarterWizard({ parentPath, onClose, onDone }: Wiz
   const [pointer, setPointer] = useState<boolean>(SHADCN_STARTER_DEFAULTS.pointer);
   const [rtl, setRTL] = useState<boolean>(SHADCN_STARTER_DEFAULTS.rtl);
   const [state, setState] = useState<RunState>({ kind: 'idle' });
-  const submitted = useRef(false);
   const log = useCreateLog();
   const preset = usePreset();
   const style = preset.selection.kind === 'valid' ? preset.selection.style : chosenStyle;
   const cleanName = name.trim();
-  const nameProblem = shadcnNameProblem(cleanName);
+  const nameProblem = starterNameProblem(cleanName);
   const running = state.kind === 'running';
   const presetReady = preset.selection.kind === 'empty' || preset.selection.kind === 'valid';
   const ready = !running && nameProblem === undefined && presetReady;
 
   const run = async (): Promise<void> => {
-    if (!ready || submitted.current) {
+    if (!ready || !log.begin()) {
       return;
     }
-    submitted.current = true;
     setState({ kind: 'running' });
-    log.clear();
     const shadcn = { base, style, iconLibrary: preset.iconLibrary, pointer, rtl, ...(preset.code === undefined ? {} : { preset: preset.code }) };
-    const result = await createShadcnStarterProject({ parentPath, name: cleanName, packageManager: manager, shadcn });
+    const result = await createStarterProject({ starter: 'shadcn', parentPath, name: cleanName, packageManager: manager, shadcn });
+    log.end();
     if (result.ok && result.value.ok) {
       onDone(result.value.projectPath);
       return;
     }
-    submitted.current = false;
     setState({ kind: 'error', message: result.ok ? translate('welcome.starter.unfinished') : result.error });
   };
 
   return (
     <WizardFrame
       title={translate('welcome.hero.startShadcn')}
-      className="shadcn-starter-modal"
+      className="starter-wizard-modal shadcn-starter-modal"
       running={running}
       onClose={onClose}
       footer={(close) => (
@@ -94,7 +100,7 @@ export default function ShadcnStarterWizard({ parentPath, onClose, onDone }: Wiz
         running={running}
         change={setName}
         submit={() => void run()}
-        pathLabel={translate('welcome.shadcn.path')}
+        pathLabel={translate('welcome.starter.path')}
         problem={nameProblem === undefined ? undefined : translate(nameProblem)}
       />
       <PackageManagerField value={manager} disabled={running} change={setManager} />
@@ -126,18 +132,6 @@ export default function ShadcnStarterWizard({ parentPath, onClose, onDone }: Wiz
       <ErrorToast message={preset.selection.kind === 'error' ? preset.selection.message : undefined} />
     </WizardFrame>
   );
-}
-
-function shadcnNameProblem(name: string): 'welcome.shadcn.nameEmpty' | 'welcome.shadcn.nameInvalid' | undefined {
-  if (name === '') {
-    return 'welcome.shadcn.nameEmpty';
-  }
-  try {
-    parseStarterName(name);
-    return undefined;
-  } catch {
-    return 'welcome.shadcn.nameInvalid';
-  }
 }
 
 function usePreset() {

@@ -84,6 +84,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki bu bağlantının anahtarını okuyamadı. Sanity’yi yeniden bağlayın.',
   'error.pages.devServerStatus': 'Geliştirme sunucusu {status} döndürdü',
   'error.project.chooseInside': 'Projenin kendisini değil, proje içindeki bir şeyi seçin.',
+  'error.project.creationBusy': 'Zaten bir site oluşturuluyor. Tamamlanmasını bekleyin.',
   'error.project.gone': 'Bu artık yok.',
   'error.project.outside': 'Bu, projenin dışında.',
   'error.projectSettings.changed': 'Proje ayarları değişti. Kaydetmeden önce yeniden yükleyin.',

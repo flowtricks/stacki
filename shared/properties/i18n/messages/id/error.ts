@@ -84,6 +84,7 @@ export const messages = {
   'error.pageTemplate.keyUnreadable': 'Stacki tidak dapat membaca kunci koneksi ini. Hubungkan Sanity lagi.',
   'error.pages.devServerStatus': 'Server dev mengembalikan {status}',
   'error.project.chooseInside': 'Pilih sesuatu di dalam proyek, bukan proyek itu sendiri.',
+  'error.project.creationBusy': 'Situs lain sedang dibuat. Tunggu hingga selesai.',
   'error.project.gone': 'Itu sudah tidak ada.',
   'error.project.outside': 'Itu berada di luar proyek.',
   'error.projectSettings.changed': 'Pengaturan proyek berubah. Muat ulang sebelum menyimpan.',
