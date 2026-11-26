@@ -315,11 +315,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           postToCanvas(current.id, { command: 'targets', frames: frames ?? [] });
         }
       },
-      editRootClasses: (classes) =>
-        update((current) => {
-          const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: current.component.file };
-          return (file) => withShownRootEdit(file, target, current.component.file, { kind: 'classes', value: classes });
-        }),
+      editRootClasses: (classes) => update((current) => rootClassesChange(current, classes)),
       setSplit: (split) =>
         update((current) => {
           const component = current.component.file;
@@ -391,6 +387,13 @@ export function frameSettingChange(current: CanvasOpen, edit: FrameEdit): Canvas
   return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
 }
 
+/** What the canvas root's class field writes, at the root scope chosen. Exported for its regression test. */
+export function rootClassesChange(current: CanvasOpen, classes: readonly string[] | undefined): CanvasChange {
+  const component = current.component.file;
+  const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: component };
+  return (file) => withShownRootEdit(file, target, component, { kind: 'classes', value: classes });
+}
+
 /** Preview values from the Settings panel, written at `scope` only: narrower values survive, as for sizes. Exported for its test. */
 export function valuesChange(current: CanvasOpen, scope: string, edits: readonly FrameEdit[]): CanvasChange {
   assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
@@ -398,11 +401,21 @@ export function valuesChange(current: CanvasOpen, scope: string, edits: readonly
   return (file) => edits.reduce((next, edit) => withFrameEdit(next, component, scope, edit), file);
 }
 
-// The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit.
-function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
+/** The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit. Exported for its test. */
+export function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
   const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
   const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-  return { ...current, settings, layout, frame, scopes: keptScopes(current, frame, layout) };
+  const scopes = keptScopes(current, frame, layout);
+  return { ...current, settings, layout, frame, scopes: { ...scopes, background: rootScopeOver(current, settings, scopes.background) } };
+}
+
+// The canvas root's settings started at This component for a value of its own (shownRootScope). Once the last of them is
+// removed, what shows is every component's again, so the choice goes back there too: left at This component, that value
+// would show as borrowed, and the next removal would only set this component apart from the others.
+function rootScopeOver(current: CanvasOpen, settings: ComponentCanvasFile, scope: string): string {
+  const file = current.component.file;
+  const dropped = hasOwnCanvasRoot(current.settings, file) && !hasOwnCanvasRoot(settings, file);
+  return dropped && current.subject === 'root' && scope === COMPONENT_SCOPE ? PROJECT_SCOPE : scope;
 }
 
 // The scopes kept over a new layout or frame: each that still reaches the frame, else its section's default.

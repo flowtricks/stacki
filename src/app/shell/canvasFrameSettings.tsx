@@ -128,8 +128,11 @@ export type CanvasInstanceSettings =
     }
   | {
       readonly kind: 'root';
-      /** The classes the root draws with at its "Apply to" choice: that choice's own, or every component's under it. */
-      readonly classes: readonly string[];
+      /**
+       * The class field's value at its "Apply to" choice: that choice's own classes, or every component's under it.
+       * `` is this component set to no classes over every component's; undefined, no class set or shown.
+       */
+      readonly value: string | undefined;
       /** Where they come from: the choice itself (a blue label), every component's (orange), or nowhere (none shown). */
       readonly extras: PropFieldExtras;
       readonly onSetProp: (name: string, value: Attr | undefined) => void;
@@ -480,17 +483,21 @@ function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
 }
 
 // The canvas root's class field: the classes the root draws with, written to the root's "Apply to" scope (Frame
-// settings). Cleared, the scope's own list goes and a wider one shows; names a class cannot have are refused there.
-function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, translate: Translator): CanvasInstanceSettings {
+// settings); names a class cannot have are refused there. At This component with no list of its own, every component's
+// show as borrowed (orange). Removing the last of those sets this component to no classes: there is nothing of its own
+// to clear, and clearing would leave the borrowed class where it was. Removing the last of a list of its own, or its
+// Reset, clears the list, and a wider one shows. Exported for its regression test.
+export function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, translate: Translator): CanvasInstanceSettings {
   const project = state.settings.classes ?? [];
-  const own = state.scopes.background === PROJECT_SCOPE ? project : (state.settings.components[state.component.file]?.root?.classes ?? []);
-  // At this component's choice with none of its own, every component's classes show, inherited.
-  const inherited = own.length === 0 && state.scopes.background === COMPONENT_SCOPE && project.length > 0;
-  const classes = inherited ? project : own;
+  const atComponent = state.scopes.background === COMPONENT_SCOPE;
+  const own = atComponent ? state.settings.components[state.component.file]?.root?.classes : state.settings.classes;
+  const inherited = atComponent && own === undefined && project.length > 0;
+  const classes = inherited ? project : (own ?? []);
   assert(classes.length <= CANVAS_LIMITS.rootClassesMax, 'The canvas root carries a bounded number of classes');
+  const none = atComponent && own?.length === 0;
   return {
     kind: 'root',
-    classes,
+    value: classes.length > 0 ? classes.join(' ') : none ? '' : undefined,
     extras: (name) =>
       name === 'class' && inherited ? { provenance: { tone: 'inherited', tip: translate('componentCanvas.panel.scope.project') } } : undefined,
     onSetProp: (name, value) => {
@@ -498,7 +505,11 @@ function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, transla
         return; // The root's only field: anything else is the generated page's and is never written.
       }
       const text = value?.type === 'string' ? value.value.trim() : '';
-      canvas.editRootClasses(text === '' ? undefined : [...new Set(text.split(/\s+/))]);
+      if (text !== '') {
+        canvas.editRootClasses([...new Set(text.split(/\s+/))]);
+      } else {
+        canvas.editRootClasses(inherited ? [] : undefined);
+      }
     },
   };
 }

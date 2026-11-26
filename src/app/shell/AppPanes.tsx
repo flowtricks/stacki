@@ -800,8 +800,8 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
       // No class attribute where no class is set: an empty one would mark the label set (blue) with nothing in it.
       node: {
         ...node,
-        props: canvasInstance.classes.length === 0 ? {} : { class: { type: 'string' as const, value: canvasInstance.classes.join(' ') } },
-        attrOrder: canvasInstance.classes.length === 0 ? [] : ['class'],
+        props: canvasInstance.value === undefined ? {} : { class: { type: 'string' as const, value: canvasInstance.value } },
+        attrOrder: canvasInstance.value === undefined ? [] : ['class'],
         children: [],
       },
       // The page's own <html>, never a layout: no layout picker, no tag.

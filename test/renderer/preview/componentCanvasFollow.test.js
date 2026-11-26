@@ -28,13 +28,15 @@ const output = path.join(directory, 'component-canvas-follow.cjs');
 buildSync({
   stdin: {
     contents: [
-      "export { useFrameFollowsEditor, frameSettingChange, valuesChange } from './src/app/state/useDesktopComponentCanvas';",
+      "export { useFrameFollowsEditor, frameSettingChange, valuesChange, rootClassesChange, withSettings } from './src/app/state/useDesktopComponentCanvas';",
+      "export { rootSettings } from './src/app/shell/canvasFrameSettings';",
       "export { ComponentCanvasPanel } from './src/features/preview/componentCanvas/ComponentCanvasPanel';",
       "export { noteComponentCanvas } from './src/features/preview/componentCanvas/componentCanvasSession';",
       "export { buildCanvasLayout } from './src/features/preview/componentCanvas/canvasModel';",
       "export { groupFrames } from './src/features/preview/componentCanvas/canvasGroups';",
       "export { canvasPageSource, canvasTreeOf } from './src/features/preview/componentCanvas/canvasPage';",
       "export { nodeAtPath } from './src/editor/editorTree';",
+      "export { parseComponentCanvasSource, serializeComponentCanvas } from './shared/properties/componentCanvas';",
       "export { toEditorPageState } from './src/editor/pageState';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -352,4 +354,55 @@ test('the canvas root’s settings start at the level whose values the canvas dr
   const other = { ...project, components: { 'src/components/Card.astro': { root: { classes: ['theme-brand'] } } } };
   assert.equal(await scopeWith(other), '*project', 'another component’s own classes change nothing here');
   canvas.noteComponentCanvas({ kind: 'idle' });
+});
+
+// The owner's second report: after removing the component's own theme-invert, the field stayed at This component and
+// showed the project's theme-dark as borrowed (orange), and removing it did nothing. Each removal here goes the way the
+// app's does: the class field's writer, the change it makes, and the open canvas over the new settings.
+function rootField(opened) {
+  let state = opened;
+  const field = () => {
+    const control = {
+      editRootClasses: (classes) => {
+        state = canvas.withSettings(state, canvas.rootClassesChange(state, classes)(state.settings));
+      },
+    };
+    return canvas.rootSettings(control, state, (key) => key);
+  };
+  return {
+    shown: () => ({ value: field().value, tone: field().extras('class')?.provenance?.tone, scope: state.scopes.background }),
+    remove: () => field().onSetProp('class', undefined),
+    settings: () => state.settings,
+  };
+}
+
+const atRoot = (settings, scope) => {
+  const { state } = openCanvas();
+  return { ...state, settings, subject: 'root', scopes: { ...state.scopes, background: scope } };
+};
+
+test('removing the canvas root’s own class leaves a project class that is set, not borrowed, and can be removed', () => {
+  const settings = { version: 1, classes: ['theme-dark'], components: { [BUTTON]: { root: { classes: ['theme-invert'] } } } };
+  const field = rootField(atRoot(settings, '*component'));
+  assert.deepEqual(field.shown(), { value: 'theme-invert', tone: undefined, scope: '*component' });
+  field.remove();
+  assert.deepEqual(field.shown(), { value: 'theme-dark', tone: undefined, scope: '*project' }, 'back at every component: not orange');
+  field.remove();
+  assert.deepEqual(field.shown(), { value: undefined, tone: undefined, scope: '*project' }, 'and removed');
+  assert.equal(field.settings().classes, undefined);
+});
+
+test('removing a borrowed class at This component takes it off this component only, and Reset brings it back', () => {
+  const field = rootField(atRoot({ version: 1, classes: ['theme-dark'], components: {} }, '*component'));
+  assert.deepEqual(field.shown(), { value: 'theme-dark', tone: 'inherited', scope: '*component' }, 'chosen here, borrowed: orange is true');
+  field.remove();
+  assert.deepEqual(field.shown(), { value: '', tone: undefined, scope: '*component' }, 'none here, set here');
+  assert.deepEqual(field.settings().classes, ['theme-dark'], 'other components keep theirs');
+  assert.deepEqual(field.settings().components[BUTTON].root.classes, []);
+  const saved = canvas.parseComponentCanvasSource(canvas.serializeComponentCanvas(field.settings()));
+  assert.deepEqual(saved.value.components[BUTTON].root.classes, [], 'and it stays removed in the saved file');
+  // Reset clears the field's value, which here removes the component's setting.
+  field.remove();
+  assert.deepEqual(field.shown(), { value: 'theme-dark', tone: undefined, scope: '*project' });
+  assert.equal(field.settings().components[BUTTON], undefined);
 });
