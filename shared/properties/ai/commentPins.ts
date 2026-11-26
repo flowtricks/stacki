@@ -13,7 +13,7 @@ import type { Brand } from '../../core/brand';
 import { toArray, toRecord } from '../../core/record';
 import { AGENT_IDS, type AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
-import { PIN_LIMITS, PIN_SEND_MODES, type PinSendMode } from './commentPinBrief';
+import { PIN_LIMITS, PIN_SEND_MODES, pinSegmentsField, type PinSendMode, type PinWords } from './commentPinBrief';
 import { toChatId, toTurnId, type ChatId, type TurnId } from './chatModel';
 import { isProjectRelativePath } from './mentions';
 
@@ -105,8 +105,7 @@ export type PinDelivery =
  * What is being typed in a pin's box and not saved yet: its words and images as they stand. It is kept on the
  * board, so an unsaved comment survives a restart; "Send all" never reads it.
  */
-export interface PinEdit {
-  readonly comment: string;
+export interface PinEdit extends PinWords {
   readonly images: readonly PinImageRef[];
 }
 
@@ -117,14 +116,13 @@ export interface PinModel {
   readonly name: string;
 }
 
-export interface CommentPin {
+export interface CommentPin extends PinWords {
   readonly id: PinId;
   /** The number on the pin and in the message: unique on the board. */
   readonly number: number;
   readonly createdAt: number;
   readonly updatedAt: number;
-  /** The saved words and images: what the pin says and "Send all" sends. Empty on a pin never saved. */
-  readonly comment: string;
+  /** The saved words (`comment`, `segments`) and images: what the pin says and "Send all" sends. Empty on a pin never saved. */
   readonly images: readonly PinImageRef[];
   /** When the pin was last saved; undefined for a pin never saved, which "Send all" leaves out. */
   readonly savedAt: number | undefined;
@@ -243,12 +241,14 @@ export function parsePin(input: unknown): CommentPin {
   }
   const images = pinImages(value['images'], 'pin.images');
   const savedAt = value['savedAt'] === undefined ? undefined : count(value['savedAt'], 'pin.savedAt');
+  const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'pin.comment');
   const pin: CommentPin = {
     id: toPinId(text(value['id'], 17, 'pin.id')),
     number: pinNumber(value['number']),
     createdAt,
     updatedAt,
-    comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'pin.comment'),
+    comment,
+    ...pinSegmentsField(value['segments'], comment),
     images,
     savedAt,
     edit: value['edit'] === undefined ? undefined : parsePinEdit(value['edit']),
@@ -275,7 +275,8 @@ export function parsePinModel(input: unknown): PinModel {
 /** Unsaved changes: words and images bounded as a pin's own are. */
 export function parsePinEdit(input: unknown): PinEdit {
   const value = object(input, 'edit');
-  return { comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'edit.comment'), images: pinImages(value['images'], 'edit.images') };
+  const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'edit.comment');
+  return { comment, ...pinSegmentsField(value['segments'], comment), images: pinImages(value['images'], 'edit.images') };
 }
 
 function pinImages(input: unknown, name: string): readonly PinImageRef[] {

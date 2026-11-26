@@ -14,7 +14,8 @@ import { useState } from 'react';
 import { isSubagentModel, type PinQuestion } from '../../../../shared/properties/ai/commentPinBrief';
 import { chosenModelName, deriveSubagentWork } from '../subagents';
 import { answerPinQuestion, goToPinAnswer } from './pinAnswer';
-import { pinProgress, pinSubagentCall } from './pinModel';
+import { ChipWords } from '../mentions/ChipWords';
+import { pinProgress, pinSubagentCall, segmentsOfWords } from './pinModel';
 import { PinProgressPill } from './PinProgressPill';
 import { jumpToPin, sentPinOf, usePinState } from './pinStore';
 import './pins.css';
@@ -103,7 +104,7 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
             const words = (
               <>
                 <span className={pin.comment.trim() === '' ? 'ai-pins-message-comment is-empty' : 'ai-pins-message-comment'}>
-                  {pin.comment.trim() === '' ? translate('ai.pins.noComment') : pin.comment}
+                  {pin.comment.trim() === '' ? translate('ai.pins.noComment') : <ChipWords segments={segmentsOfWords(pin)} />}
                 </span>
                 <span className="ai-pins-message-place">{translate('ai.pins.messagePlace', { page: pin.pageLabel, element: pin.elementLabel })}</span>
               </>

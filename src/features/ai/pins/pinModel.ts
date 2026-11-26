@@ -15,8 +15,10 @@ import {
   type PinBriefEntry,
   type PinQuestion,
   type PinSendMode,
+  type PinWords,
   type SentPin,
 } from '../../../../shared/properties/ai/commentPinBrief';
+import { isReferenceChip, plainTextOf, type ComposerSegments } from '../../../../shared/properties/ai/mentions';
 import { pinSendMode } from '../../../../shared/properties/ai/agentPresentation';
 import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import {
@@ -100,8 +102,37 @@ export function removePin(board: PinBoard, id: PinId): PinBoard {
 }
 
 /** What the pin's box shows: its unsaved changes when it has some, else what was saved. */
-export function workingCopy(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): PinEdit {
-  return pin.edit ?? { comment: pin.comment, images: pin.images };
+export function workingCopy(pin: Pick<CommentPin, 'comment' | 'segments' | 'images' | 'edit'>): PinEdit {
+  return pin.edit ?? { ...wordsOf(pin), images: pin.images };
+}
+
+/** The words and chips of a pin or its box, and nothing else of it. */
+export function wordsOf({ comment, segments }: PinWords): PinWords {
+  return segments === undefined ? { comment } : { comment, segments };
+}
+
+/** A box's words as the chat's composer holds them: its chips, or the text alone. */
+export function segmentsOfWords({ comment, segments }: PinWords): ComposerSegments {
+  return segments ?? (comment === '' ? [] : [{ kind: 'text', text: comment }]);
+}
+
+/**
+ * What the box's editor holds as a pin keeps it, within `commentCharsMax` characters of plain text: past the bound
+ * the end is dropped (text is cut; a chip goes whole, as half a reference would name something else).
+ */
+export function pinWordsOf(segments: ComposerSegments): PinWords {
+  let kept = segments;
+  // Each round shortens the last segment or drops it, so there are at most two rounds a segment.
+  for (let round = 0; round <= segments.length * 2 && plainTextOf(kept).length > PIN_LIMITS.commentCharsMax; round += 1) {
+    const last = kept[kept.length - 1];
+    assert(last !== undefined, 'pinWordsOf: words over the bound have a segment');
+    const over = plainTextOf(kept).length - PIN_LIMITS.commentCharsMax;
+    const cut = last.kind === 'text' && last.text.length > over ? [{ kind: 'text' as const, text: last.text.slice(0, last.text.length - over) }] : [];
+    kept = [...kept.slice(0, -1), ...cut];
+  }
+  const comment = plainTextOf(kept);
+  assert(comment.length <= PIN_LIMITS.commentCharsMax, 'pinWordsOf: within the bound');
+  return kept.some((segment) => segment.kind === 'chip') ? { comment, segments: kept } : { comment };
 }
 
 /**
@@ -130,7 +161,9 @@ export function hasUnsavedChanges(pin: Pick<CommentPin, 'comment' | 'images' | '
 export function savePinEdit(pin: CommentPin, at: number): CommentPin {
   const edit = workingCopy(pin);
   assert(hasPersonContent(edit), 'savePinEdit: a pin is saved with words or an added image');
-  const saved = { ...pin, comment: edit.comment, images: edit.images, savedAt: Math.max(at, pin.createdAt), edit: undefined };
+  const before = { ...pin };
+  delete before.segments; // The box's words replace the saved ones whole: chips it no longer has go with them.
+  const saved = { ...before, ...wordsOf(edit), images: edit.images, savedAt: Math.max(at, pin.createdAt), edit: undefined };
   assert(saved.edit === undefined, 'savePinEdit: nothing is left unsaved');
   return saved;
 }
@@ -190,7 +223,7 @@ export function addPinImages(
 ): ImageOutcome {
   assert(boardChars >= 0, 'addPinImages: the board holds a nonnegative weight');
   const working = workingCopy(pin);
-  const withImages = (images: readonly PinImageRef[]): CommentPin => ({ ...pin, edit: { comment: working.comment, images } });
+  const withImages = (images: readonly PinImageRef[]): CommentPin => ({ ...pin, edit: { ...wordsOf(working), images } });
   let kept = [...working.images];
   let chars = boardChars;
   const added: PinImageRef[] = [];
@@ -612,6 +645,10 @@ export interface PinMessage {
   readonly text: string;
   readonly attachments: readonly PromptAttachment[];
   readonly brief: PinBrief;
+  /** Each pin's chips and words, for the check a send runs on mentions. */
+  readonly drafts: readonly ComposerSegments[];
+  /** The files, skills and instructions the pins mention, each after a line naming its pin; empty when there are none. */
+  readonly mentions: ComposerSegments;
 }
 
 /**
@@ -652,13 +689,26 @@ export function pinMessage(
     entries.push({ ...briefEntry(pin, indexes), ...(model === undefined ? {} : { model: model.value, modelName: model.name }) });
   }
   assert(entries.length === pins.length, 'pinMessage: one entry per pin');
-  return { text: summary(pins), attachments, brief: { mode, pins: entries } };
+  const mentions = pinExpandedMentions(pins, AI_LIMITS.mentionsMax);
+  return {
+    text: summary(pins),
+    attachments,
+    brief: { mode, pins: entries },
+    // What the chat checks against the project before any of it is sent.
+    drafts: pins.flatMap((pin) => (pin.segments === undefined ? [] : [pin.segments])),
+    mentions: mentions.flatMap((mention, at) => {
+      const number = pins[mention.pinIndex]?.number;
+      assert(number !== undefined, 'pinMessage: a mention belongs to a pin');
+      const lead = mentions[at - 1]?.pinIndex === mention.pinIndex ? ' ' : `${at === 0 ? '' : '\n'}Pin ${number} mentions: `;
+      return [{ kind: 'text' as const, text: lead }, mention.segment];
+    }),
+  };
 }
 
 function briefEntry(pin: CommentPin, images: readonly number[]): PinBriefEntry {
   return {
     number: pin.number,
-    comment: pin.comment,
+    ...wordsOf(pin),
     pageLabel: pin.place.pageLabel,
     page: pin.place.page,
     elementLabel: pin.place.elementLabel,
@@ -670,6 +720,34 @@ function briefEntry(pin: CommentPin, images: readonly number[]): PinBriefEntry {
     breakpointPx: pin.place.breakpointPx,
     images,
   };
+}
+
+/**
+ * The chips of `pins` that the host expands into context of its own (a file, a skill, built-in instructions), each
+ * once, at most `max` (a message's bound on mentions). Every other chip is already in its pin's plain text as the
+ * reference the chat's composer sends; so is one past the bound, whose path or name the agent can still follow.
+ */
+export function pinExpandedMentions(
+  pins: readonly PinWords[],
+  max: number,
+): readonly { readonly pinIndex: number; readonly segment: ComposerSegments[number] }[] {
+  const seen = new Set<string>();
+  const found: { readonly pinIndex: number; readonly segment: ComposerSegments[number] }[] = [];
+  pins.forEach((pin, pinIndex) => {
+    for (const segment of pin.segments ?? []) {
+      if (segment.kind !== 'chip' || isReferenceChip(segment.chip)) {
+        continue;
+      }
+      const chip = segment.chip;
+      const key = chip.kind === 'builtin' ? `builtin:${chip.id}` : `${chip.kind}:${'path' in chip ? chip.path : ''}`;
+      if (!seen.has(key) && found.length < max) {
+        seen.add(key);
+        found.push({ pinIndex, segment });
+      }
+    }
+  });
+  assert(found.length <= max, 'pinExpandedMentions: bounded');
+  return found;
 }
 
 /** The first line of a comment, cut for a list row or a message's plain text. */

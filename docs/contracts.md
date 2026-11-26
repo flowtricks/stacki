@@ -2795,19 +2795,30 @@ on; clicking it again turns the mode off. A mode that is not registered has no b
 (`pins/commentMode.tsx`); another mode registers from its own file and removing that file removes only its button.
 
 **Contract** (`shared/properties/ai/commentPinBrief.ts` under the chat model, `commentPins.ts` above it). A pin is
-`{ id, number, createdAt, updatedAt, comment, images, anchor, place, included, delivery }`: `anchor` is the canvas
+`{ id, number, createdAt, updatedAt, comment, segments?, images, anchor, place, included, delivery }`: `anchor` is the canvas
 path clicked (`<file>|` scoped inside an open component), the copy, the point in the box (0 to 1) and the element's
 tag and words; `place` is the page, its display name, the open component, the element's file, locator and name, an
 instance's component file and the canvas width. `delivery` is `draft` or `sent` (chat, turn, mode `subagents` or
 `single`). `comment` and `images` are what was saved (`savedAt`, absent on a pin never saved); `edit` is what its box
 holds unsaved, kept on the board so a crash loses nothing and never sent. Save (or Enter) needs words or an added image
 (a crop alone is not a comment); the close button and Escape drop a pin never saved and only the unsaved changes of a
-saved one (Undo in a toast); a press elsewhere, another pin, leaving the mode or the page save a box with content and
+saved one (the latter has an Undo toast). Removing a pin (that way, or Delete in the list) shows no toast: it is a
+command on the app's undo history (`pushCommand`, installed by the shell as `setPinHistory`), so Undo and Redo take it
+in order with every other change, restoring its words, chips, images, model and number; a pin Stacki deletes because
+its work finished is not recorded; a press elsewhere, another pin, leaving the mode or the page save a box with content and
 let an empty one go. A draft's marker drags onto another element (anchor, place and crop renewed; words, changes and
 number kept; Undo in a toast); a sent pin does not move. While comment mode takes the canvas, the frame's forwarded edit
 keys (`avb:shortcut`, except Escape and ⌥P) are dropped (`canvasClicksIntercepted`). Bounds `PIN_LIMITS`: 40 pins, 4,000 characters a comment, 4 images a pin, the board's images within
 `attachmentsImageCharsMax`, 16 pins a send, 4 subagents at once. `parsePinBoard` is total (a damaged pin is left out
 alone); `parsePinBoardStrict` (what a writer sends) refuses the whole board.
+
+**Mentions.** The box takes `@` as the chat does. `comment` is always the words' plain text, each chip as the reference
+the chat's composer sends; `segments` (the chat draft's own shape and bounds, `parseDraftSegments`) is kept only while
+there is a chip, on the pin, its `edit`, its brief entry and its sent pin, so older pins read unchanged. Chips that do
+not parse, or whose plain text is not `comment`, are dropped and the words stay (`pinSegmentsField`). On send, the
+files, skills and built-in instructions the pins mention travel as `parts`, each once, at most `mentionsMax`, after a
+line "Pin <n> mentions:"; every other chip is already in the comment. A component mention that no longer matches the
+project refuses the send, as in the chat.
 
 **Storage** (`electron/handlers/ai/pinBoardStore.ts`): `userData/ai/projects/<sha256(realpath)>/pins/board.json`
 (replaced whole after a 400 ms pause in typing) and `pins/images/<id>.bin` (each written once, removed by the save

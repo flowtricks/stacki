@@ -13,6 +13,7 @@
 // In both, a pin that cannot be done without the person's answer asks in the written form `pinQuestionsOf` reads.
 // Pure: the host passes the brief, and a test reads the text.
 import { assert } from '../../../shared/core/assert';
+import { isReferenceChip } from '../../../shared/properties/ai/mentions';
 import { PIN_LIMITS, PIN_QUESTION_LEAD, pinWaves, type PinBrief, type PinBriefEntry } from '../../../shared/properties/ai/commentPinBrief';
 
 /** The text block for a brief, wrapped in a tag so the agent reads it as one set of instructions. */
@@ -52,6 +53,7 @@ function subagentsText(pins: readonly PinBriefEntry[]): string {
         ]
       : []),
     '- Give each subagent its pin below, word for word, and tell it which images are its own.',
+    ...mentionRules(pins, "Give a pin's subagent the paths of the files its pin mentions, and the text of any skill or instructions it mentions."),
     `- Tell every subagent these edit rules: ${EDIT_RULES.join('; ')}; change only what its pin asks for.`,
     '- Tell every subagent to end its report with one or two plain sentences a designer reads: what changed on the page, in words, without code, file paths or tags. The person sees that report.',
     '- Set run_in_background to false on every Agent call, so each pin shows as finished only when its work is done.',
@@ -73,12 +75,22 @@ function singleText(pins: readonly PinBriefEntry[]): string {
     'The person pinned a comment to an element of their Astro site in Stacki, a visual editor. Make the change it asks for.',
     '- Make small, targeted edits and never rewrite a whole file; read a file again right before changing it.',
     '- Change only what this pin asks for.',
+    ...mentionRules(pins, 'Use them for this pin.'),
     '- When you are done, answer in one or two plain sentences a designer reads: what changed, or why it could not be done.',
     ...questionRules('If you cannot make the change without an answer from the person, do not guess: end your answer with the question in the form below.'),
     '',
     ...pinLines(pin),
   ];
   return lines.join('\n').trimEnd();
+}
+
+// The files, skills and instructions a pin mentions travel as the message's own parts, as the chat's mentions do.
+// Said only when there are some: every other mention is already in the pin's comment.
+function mentionRules(pins: readonly PinBriefEntry[], use: string): readonly string[] {
+  const expanded = pins.some((pin) => pin.segments?.some((segment) => segment.kind === 'chip' && !isReferenceChip(segment.chip)) === true);
+  return expanded
+    ? [`- Some pins mention files, skills or instructions. What they bring is attached to this message, after a line "Pin <number> mentions:". ${use}`]
+    : [];
 }
 
 // How a question reaches the person: Stacki reads this exact form and shows the choices as buttons beside the pin.

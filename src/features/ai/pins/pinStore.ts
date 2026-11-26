@@ -39,6 +39,7 @@ import { usableSettings } from '../../../../shared/properties/ai/rememberedSetti
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { aiPinsRead, aiPinsWrite, aiScreenshot } from '../aiBridge';
+import type { ComposerSegments } from '../../../../shared/properties/ai/mentions';
 import { aiState, loadChatView, newChat, openChat, preferredAgent, sendPinMessage, setChatOption, subscribeAiState } from '../aiStore';
 import {
   addPin,
@@ -56,6 +57,9 @@ import {
   workingCopy,
   pinFinished,
   pinMessage,
+  pinWordsOf,
+  wordsOf,
+  type PinMessage,
   pinProgress,
   pinsToSend,
   resolvePinModel,
@@ -490,12 +494,17 @@ export function followPinElement(id: PinId, path: string): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (old) => ({ ...old, anchor: { ...old.anchor, path } })) }));
 }
 
-/** The box's words as typed or dictated: unsaved until Save. */
+/** The box's words as plain text: unsaved until Save. */
 export function setPinComment(id: PinId, comment: string): void {
-  const bounded = comment.slice(0, PIN_LIMITS.commentCharsMax);
+  setPinSegments(id, comment === '' ? [] : [{ kind: 'text', text: comment }]);
+}
+
+/** The box's words and chips as typed or dictated: unsaved until Save. */
+export function setPinSegments(id: PinId, segments: ComposerSegments): void {
+  const words = pinWordsOf(segments);
   update((current) => ({
     ...current,
-    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, edit: { comment: bounded, images: workingCopy(pin).images } })),
+    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, edit: { ...words, images: workingCopy(pin).images } })),
   }));
 }
 
@@ -652,7 +661,7 @@ export function removePinImage(id: PinId, image: PinImageId): void {
     ...current,
     board: changePin(current.board, id, Date.now(), (pin) => {
       const working = workingCopy(pin);
-      return { ...pin, edit: { comment: working.comment, images: working.images.filter((entry) => entry.id !== image) } };
+      return { ...pin, edit: { ...wordsOf(working), images: working.images.filter((entry) => entry.id !== image) } };
     }),
   }));
 }
@@ -792,7 +801,7 @@ export async function sendAllPins(translate: Translator): Promise<boolean> {
   if (readiness.mode === 'subagents') {
     const modelOf = modelsFor(pins, agent, chat, translate);
     const message = pinMessage(pins, 'subagents', (id) => state.images.get(id), summary, modelOf);
-    const turn = await sendPinMessage(chat, { text: message.text, attachments: message.attachments, pins: message.brief });
+    const turn = await sendPinMessage(chat, pinPrompt(message));
     if (turn === undefined) {
       return false;
     }
@@ -835,6 +844,10 @@ export function cancelRun(): void {
       ),
     },
   }));
+}
+
+function pinPrompt({ brief, ...message }: PinMessage): Parameters<typeof sendPinMessage>[1] {
+  return { ...message, pins: brief };
 }
 
 // The plain text of a message of pins: what Copy, an export and the chat's title read. Each pin's own words, numbered.
@@ -905,7 +918,7 @@ async function sendNextInRunNow(translate: Translator): Promise<boolean> {
     (sent) => pinSummaryText(sent, translate),
     () => model,
   );
-  const turn = await sendPinMessage(run.chat, { text: message.text, attachments: message.attachments, pins: message.brief });
+  const turn = await sendPinMessage(run.chat, pinPrompt(message));
   if (turn === undefined) {
     holdRun();
     return false;

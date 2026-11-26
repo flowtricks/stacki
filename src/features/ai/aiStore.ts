@@ -656,15 +656,36 @@ function reportSendFailure(error: AiFailure): void {
 
 /**
  * Sends a message of comment pins (pins/pinStore.ts): their instructions travel as `pins`, their images as the
- * attachments, and `text` is the plain words the transcript keeps. The turn it started, or undefined when it was
- * refused (the failure is shown as any send's is).
+ * attachments, and `text` is the plain words the transcript keeps. A pin's `@` chips reach the agent as the chat's
+ * would: a reference is in the pin's words, and the files, skills and instructions it mentions (`mentions`) travel as
+ * parts; a component mention that no longer matches the project refuses the send, as it refuses the chat's. The turn
+ * it started, or undefined when it was refused (the failure is shown as any send's is).
  */
 export async function sendPinMessage(
   chat: ChatId,
-  message: { readonly text: string; readonly attachments: readonly PromptAttachment[]; readonly pins: PinBrief },
+  message: {
+    readonly text: string;
+    readonly attachments: readonly PromptAttachment[];
+    readonly pins: PinBrief;
+    readonly drafts: readonly ComposerSegments[];
+    readonly mentions: ComposerSegments;
+  },
 ): Promise<TurnId | undefined> {
   assert(message.pins.pins.length >= 1, 'sendPinMessage: a message of pins has a pin');
-  const reply = await aiPrompt({ projectPath: requireProject(), chat, text: message.text, attachments: message.attachments, pins: message.pins });
+  const invalid = mentionCheck === undefined ? [] : message.drafts.flatMap((draft) => mentionCheck?.(draft) ?? []);
+  if (invalid.length > 0) {
+    fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: [...new Set(invalid)].join(', ') }) });
+    return undefined;
+  }
+  const parts = message.mentions.length === 0 ? undefined : promptPartsOf([{ kind: 'text', text: `${message.text}\n\n` }, ...message.mentions], builtinTextOf);
+  const reply = await aiPrompt({
+    projectPath: requireProject(),
+    chat,
+    text: message.text,
+    attachments: message.attachments,
+    pins: message.pins,
+    ...(parts === undefined ? {} : { parts }),
+  });
   if (!reply.ok) {
     reportSendFailure(reply.error);
     return undefined;

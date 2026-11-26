@@ -5,7 +5,7 @@
 import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 import { AI_LIMITS } from './aiLimits';
-import { isProjectRelativePath } from './mentions';
+import { isProjectRelativePath, parseDraftSegments, plainTextOf, type ComposerSegments } from './mentions';
 
 export const PIN_LIMITS = {
   /** Pins on one project's board, sent or not. Why: a page review rarely needs more, and the list stays a glance. */
@@ -66,10 +66,34 @@ export type PinSendMode = (typeof PIN_SEND_MODES)[number];
 // The brief a send carries (`ai:prompt` part `pins`) and what the transcript keeps
 // ---------------------------------------------------------------------------
 
-/** One pin as the agent is told about it. `images` are the indexes of its images among the message's attachments. */
-export interface PinBriefEntry {
-  readonly number: number;
+/**
+ * A pin's words with their `@` chips: `comment` is always their plain text (each chip as the reference the chat's
+ * composer sends), and `segments` is kept only while there is a chip to draw. Older pins hold the text alone.
+ */
+export interface PinWords {
   readonly comment: string;
+  readonly segments?: ComposerSegments;
+}
+
+/**
+ * The chips of `comment` as stored or received, spread into what holds the words. Bounded as the chat's drafts are
+ * (parseDraftSegments). Chips that do not parse, or whose plain text is not the comment, are left out and the words
+ * stay as text: a pin is never lost, and the chips never say something the comment does not.
+ */
+export function pinSegmentsField(input: unknown, comment: string): { readonly segments?: ComposerSegments } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseDraftSegments(input);
+  if (!parsed.ok || !parsed.value.some((segment) => segment.kind === 'chip')) {
+    return {};
+  }
+  return plainTextOf(parsed.value) === comment ? { segments: parsed.value } : {};
+}
+
+/** One pin as the agent is told about it. `images` are the indexes of its images among the message's attachments. */
+export interface PinBriefEntry extends PinWords {
+  readonly number: number;
   readonly pageLabel: string;
   readonly page: string;
   readonly elementLabel: string;
@@ -92,9 +116,8 @@ export interface PinBrief {
 }
 
 /** One pin as its sent message keeps it: enough to draw it, never the paths or the agent's instructions. */
-export interface SentPin {
+export interface SentPin extends PinWords {
   readonly number: number;
-  readonly comment: string;
   readonly pageLabel: string;
   readonly elementLabel: string;
   /** The index of its first image among the message's attachments, for the thumbnail. */
@@ -136,9 +159,11 @@ export function parsePinBrief(input: unknown): PinBrief {
 function parseBriefEntry(input: unknown): PinBriefEntry {
   const value = object(input, 'brief.pin');
   const breakpoint = value['breakpointPx'];
+  const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'brief.pin.comment');
   return {
     number: pinNumber(value['number']),
-    comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'brief.pin.comment'),
+    comment,
+    ...pinSegmentsField(value['segments'], comment),
     pageLabel: nonEmpty(value['pageLabel'], PIN_LIMITS.labelCharsMax, 'brief.pin.pageLabel'),
     page: projectFile(value['page'], 'brief.pin.page'),
     elementLabel: nonEmpty(value['elementLabel'], PIN_LIMITS.labelCharsMax, 'brief.pin.elementLabel'),
@@ -175,6 +200,7 @@ export function sentPinsOf(brief: PinBrief): readonly SentPin[] {
   const sent = brief.pins.map((pin) => ({
     number: pin.number,
     comment: pin.comment,
+    ...(pin.segments === undefined ? {} : { segments: pin.segments }),
     pageLabel: pin.pageLabel,
     elementLabel: pin.elementLabel,
     image: pin.images[0],
@@ -188,9 +214,11 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
   const pins = list(input, PIN_LIMITS.pinsPerSendMax, 'sentPins').map((entry) => {
     const value = object(entry, 'sentPin');
     const image = value['image'];
+    const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'sentPin.comment');
     return {
       number: pinNumber(value['number']),
-      comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'sentPin.comment'),
+      comment,
+      ...pinSegmentsField(value['segments'], comment),
       pageLabel: nonEmpty(value['pageLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.pageLabel'),
       elementLabel: nonEmpty(value['elementLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.elementLabel'),
       image: image === undefined ? undefined : bounded(count(image, 'sentPin.image'), AI_LIMITS.attachmentsMax - 1, 'sentPin.image'),
