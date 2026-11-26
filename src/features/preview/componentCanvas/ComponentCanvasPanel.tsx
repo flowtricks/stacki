@@ -114,8 +114,10 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
   const label = translate(side === 'width' ? 'componentCanvas.panel.width' : 'componentCanvas.panel.height');
   const scope = state.scopes.size;
   const settings = state.settings.components[state.component.file];
-  // What the scope itself gives: its own value, else a wider one's, else hug.
-  const value = resolveFrame(settings, scope)[side];
+  // What the scope itself gives: its own value, else a wider one's, else hug; while the selected frame is being resized
+  // on the canvas, the size the pointer gives it.
+  const dragged = state.resizing?.frame === state.frame ? state.resizing[side] : undefined;
+  const value = dragged ?? resolveFrame(settings, scope)[side];
   const own = settings?.frames?.[scope]?.[side] !== undefined;
   const tip = overridden(state, 'size', side, translate);
   // Hug over all frames is what no setting says, so it is written as no setting rather than as "hug".

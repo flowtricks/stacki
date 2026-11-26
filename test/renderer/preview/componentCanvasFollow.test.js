@@ -127,6 +127,7 @@ function openCanvas() {
     root: tree.root,
     subject: 'frame',
     picked: { kind: 'component' },
+    resizing: undefined,
   };
   return { model, tree, state };
 }

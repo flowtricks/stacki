@@ -4,7 +4,7 @@
 import { createContext, useContext } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
-import type { ComponentCanvasFile, FrameEdit, FrameSetting } from '../../../../shared/properties/componentCanvas';
+import type { ComponentCanvasFile, FrameEdit, FrameLength, FrameSetting } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
 import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
@@ -42,6 +42,14 @@ export interface CanvasOpen {
    * group box around it (then the scope is that group's). The panels show the frame in every case.
    */
   readonly picked: CanvasPick;
+  /** A frame being resized on the canvas: its sides as the pointer has them, shown in Frame settings until let go. */
+  readonly resizing: CanvasResizing | undefined;
+}
+
+export interface CanvasResizing {
+  readonly frame: string;
+  readonly width: FrameLength | undefined;
+  readonly height: FrameLength | undefined;
 }
 
 /** The scope of each section of edits (CanvasOpen.scopes). */

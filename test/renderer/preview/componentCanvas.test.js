@@ -160,6 +160,13 @@ test('only well-formed messages from this canvas are heard', () => {
   const sizes = chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: { a: [120, 40], b: [1.5, 2], c: [-1, 3], d: 'x', e: [9e9, 1] } }, ID).sizes;
   assert.deepEqual([...sizes], [['a', { width: 120, height: 40 }]]);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: 'none' }, ID).sizes.size, 0);
+  // A resize on the canvas: its frame, its phase, and whole bounded sizes or hug per side; anything else is not heard.
+  const resize = (extra) => chrome.canvasMessage({ type, canvas: ID, event: 'resize', frame: 'variant=main', phase: 'end', ...extra }, ID)?.resize;
+  assert.deepEqual(resize({ width: 320, height: 'hug' }), { frame: 'variant=main', phase: 'end', width: 320, height: 'hug' });
+  assert.deepEqual(resize({ width: 0.5 }), { frame: 'variant=main', phase: 'end', width: undefined, height: undefined }, 'not a whole size');
+  assert.equal(resize({ width: 99999 })?.width, undefined, 'past the bound');
+  assert.equal(resize({ phase: 'drag' }), undefined, 'an unknown phase');
+  assert.match(chrome.chromeScript(ID), /data\.command === 'cancelResize'/, 'the editor can cancel a resize (Escape)');
   // The selection is the editor's: the page no longer names a pressed frame, and such a message is not heard.
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: 0.5 }, ID).scale, 0.5);
