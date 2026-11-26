@@ -7,6 +7,7 @@ import { assert } from '../../../shared/core/assert';
 import { selectFromPanel, type PanelSelectionTarget } from './panelSelection';
 
 export interface RevealTarget extends PanelSelectionTarget {
+  readonly setRevealedId: (id: string | undefined) => void;
   readonly setHoverNodeId: (id: string | undefined) => void;
 }
 
@@ -21,6 +22,7 @@ export function revealNode(target: RevealTarget, id: string, schedule: Schedule 
   assert(id.length > 0, 'revealNode: an element has an id');
   selectFromPanel(target, id);
   target.setHoverNodeId(id);
+  target.setRevealedId(id);
   schedule(() => target.setNavigatorSelectionTick((tick) => tick + 1), REVEAL_SETTLE_MS);
   schedule(() => target.setHoverNodeId(undefined), REVEAL_FLASH_MS);
 }

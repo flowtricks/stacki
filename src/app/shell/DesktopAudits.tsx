@@ -20,6 +20,7 @@ import { absolutePath, type FixDeps } from '../../features/audits/auditFixes';
 import { terminalAgentHandler } from '../../features/terminal/terminalAgent';
 import { AuditsPanel } from '../appPanels';
 import { relativeTo } from '../../features/audits/auditScope';
+import { hostRoute } from '../../features/audits/auditPlaces';
 import { openAppSettings } from '../settings/LazySettings';
 import { nextReveal, revealNode, type PendingReveal, type StyleBlockCode } from './auditReveal';
 import { lineAtOffset, type AuditCodeTarget } from '../../features/audits/tokenActions';
@@ -33,6 +34,9 @@ const TERMINAL_HANDLER_PRIORITY = 10;
 
 /** An element a finding named in a file that was not open: selected once that file opens. */
 let pendingReveal: PendingReveal | undefined;
+
+/** A component waiting for the page it is to be opened on: opened once that page shows. */
+let pendingOpen: { readonly hostPath: string; readonly file: string } | undefined;
 
 export function AuditsHost({ app }: { readonly app: ShellView }) {
   const open =
@@ -56,6 +60,13 @@ export function AuditsHost({ app }: { readonly app: ShellView }) {
   const appRef = useRef(app);
   appRef.current = app;
   const rendered = app.renderedPaths !== undefined;
+  useEffect(() => {
+    const waiting = pendingOpen;
+    if (waiting !== undefined && shownPath === waiting.hostPath && state !== undefined) {
+      pendingOpen = undefined;
+      openFinding(appRef.current, waiting.file);
+    }
+  }, [shownPath, state]);
   useEffect(() => {
     const wanted = pendingReveal;
     if (wanted === undefined) {
@@ -81,7 +92,9 @@ export function AuditsTab({ app }: { readonly app: ShellView }) {
     <AuditsPanel
       project={app.project}
       fixDeps={() => fixDeps(app)}
-      onReveal={(file: string, trail: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget) => reveal(app, file, trail, prop, code)}
+      onReveal={(file: string, trail: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget, routes?: readonly string[]) =>
+        reveal(app, { file, trail, prop, code, routes })
+      }
       onHover={(file: string, trail: readonly number[] | undefined) => hover(app, file, trail)}
       onCreatePage={(route: string) => app.onCreatePage(route.replace(/^\/+|\/+$/g, '') || 'index', undefined)}
       routes={app.scan.pages.map((page) => page.route).filter((route) => !route.includes('['))}
@@ -162,8 +175,19 @@ function fixDeps(app: ShellView): FixDeps {
 // panel and the canvas open it, and its element is selected when it has loaded. A
 // declaration also opens the code window at its line: a `<style>` block's own window
 // (selected and re-targeted, never a second window), or a stylesheet's file.
-function reveal(app: ShellView, file: string, trail: readonly number[] | undefined, prop: string | undefined, code: AuditCodeTarget | undefined): void {
+function reveal(
+  app: ShellView,
+  wanted: {
+    readonly file: string;
+    readonly trail: readonly number[] | undefined;
+    readonly prop: string | undefined;
+    readonly code: AuditCodeTarget | undefined;
+    readonly routes: readonly string[] | undefined;
+  },
+): void {
+  const { file, trail, prop, code, routes } = wanted;
   const path = absolutePath(app.project.path, file);
+  pendingOpen = undefined;
   if (prop !== undefined) {
     // The value is a prop on this instance: its field is in Settings.
     app.setRightTab('settings');
@@ -175,7 +199,9 @@ function reveal(app: ShellView, file: string, trail: readonly number[] | undefin
   }
   const styleCode: StyleBlockCode | undefined = code?.tag === 'style-block' ? { path: code.path, offset: code.offset } : undefined;
   const state = app.pageStateRef.current.pageState;
-  if (app.currentPage?.path === path) {
+  const page = app.scan.pages.find((candidate) => candidate.path === path);
+  const host = page === undefined ? neededHost(app, routes ?? []) : undefined;
+  if (app.currentPage?.path === path && host === undefined) {
     const node = state?.editable === true && trail !== undefined ? nodeAtPath<EditorNode>(state.model.nodes, trail) : undefined;
     if (node !== undefined) {
       revealNode(app, node.id);
@@ -190,11 +216,30 @@ function reveal(app: ShellView, file: string, trail: readonly number[] | undefin
   }
   // A page-level finding (no element) only opens its file.
   pendingReveal = trail === undefined ? undefined : { path, trail, phase: 'opening', ...(styleCode === undefined ? {} : { code: styleCode }) };
-  const page = app.scan.pages.find((candidate) => candidate.path === path);
   if (page !== undefined) {
     app.onSelectPage(page);
     return;
   }
+  if (host !== undefined) {
+    // The canvas shows a page behind an open component, and only one that uses it has the element to outline.
+    pendingOpen = { hostPath: host.path, file };
+    app.onSelectPage(host);
+    return;
+  }
+  openFinding(app, file);
+}
+
+// The page to show before opening a component on it: undefined when the page behind the editor already uses it.
+function neededHost(app: ShellView, routes: readonly string[]): ShellView['scan']['pages'][number] | undefined {
+  const behind = app.editStack[0]?.path ?? app.currentPage?.path;
+  const shown = app.scan.pages.find((candidate) => candidate.path === behind)?.route;
+  const route = hostRoute(routes, shown);
+  return route === undefined ? undefined : app.scan.pages.find((candidate) => candidate.route === route);
+}
+
+// Opens a component or layout a finding is in, in place of any open above the page.
+function openFinding(app: ShellView, file: string): void {
+  const path = absolutePath(app.project.path, file);
   const name = file
     .split('/')
     .pop()

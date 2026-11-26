@@ -141,6 +141,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         pathScope={app.editedRel ? `${app.editedRel}|` : ''}
         selPath={app.pathFor(app.selectedId)}
         navigatorSelectionTick={app.navigatorSelectionTick}
+        unhidePath={app.revealedId !== undefined && app.revealedId === app.selectedId ? app.pathFor(app.selectedId) : undefined}
         navHoverPath={app.pathFor(hoverNodeId)}
         navHoverPseudo={hoverPseudo}
         selPseudo={selectedPseudo(app.selectedId, app.pseudoPick)}

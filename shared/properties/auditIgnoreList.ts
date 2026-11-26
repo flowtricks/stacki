@@ -13,6 +13,8 @@ export interface IgnorableFinding {
   readonly detail: string;
   /** Set on a repeat of an identical match (shared/page/auditFindings.ts numberedRepeats). */
   readonly repeatOf?: string;
+  /** Ids it was listed under before it moved (shared/page/auditFindings.ts AuditFinding.formerIds). */
+  readonly formerIds?: readonly string[];
 }
 
 /** A finding the project ignores, and the note someone left, when they left one. */
@@ -27,8 +29,11 @@ export function ignoreReasons(findings: readonly IgnorableFinding[], file: Pick<
   const reasons = new Map<string, IgnoredFinding>();
   for (const finding of findings) {
     // An ignore of the first of identical matches covers them all, as it did while they shared one id.
-    const entry = own.get(finding.id) ?? (finding.repeatOf === undefined ? undefined : own.get(finding.repeatOf));
-    const page = pages.get(finding.file);
+    // So does an ignore saved while the finding was listed somewhere else (formerIds), whole files included.
+    const former = finding.formerIds ?? [];
+    const ids = [finding.id, ...(finding.repeatOf === undefined ? [] : [finding.repeatOf]), ...former];
+    const entry = ids.map((id) => own.get(id)).find((found) => found !== undefined);
+    const page = [finding.file, ...former.map(fileOfIgnoreId)].map((name) => pages.get(name)).find((found) => found !== undefined);
     if (entry !== undefined || page !== undefined) {
       reasons.set(finding.id, { reason: entry?.reason ?? page?.reason });
     }
@@ -60,7 +65,7 @@ export function fileOfIgnoreId(id: string): string {
 
 /** Every ignore entry grouped by file, files in name order. */
 export function ignoredGroups(findings: readonly IgnorableFinding[], file: Pick<AuditFile, 'ignored' | 'ignoredPages'>): readonly IgnoredGroup[] {
-  const live = new Map(findings.map((finding) => [finding.id, finding]));
+  const live = new Map(findings.flatMap((finding) => [...(finding.formerIds ?? []), finding.id].map((id) => [id, finding] as const)));
   const groups = new Map<string, { page: IgnoredGroup['page']; findings: IgnoredFindingRow[] }>();
   const group = (name: string): { page: IgnoredGroup['page']; findings: IgnoredFindingRow[] } => {
     const held = groups.get(name) ?? { page: undefined, findings: [] };
@@ -73,7 +78,13 @@ export function ignoredGroups(findings: readonly IgnorableFinding[], file: Pick<
   for (const entry of file.ignored) {
     const finding = live.get(entry.id);
     const label = finding === undefined ? entry.id.split('|').slice(3).join('|') || entry.id : finding.detail;
-    group(finding?.file ?? fileOfIgnoreId(entry.id)).findings.push({ id: entry.id, reason: entry.reason, label, live: finding !== undefined });
+    // An entry stays under the file its id names, where the person ignored it.
+    group(finding?.id === entry.id ? finding.file : fileOfIgnoreId(entry.id)).findings.push({
+      id: entry.id,
+      reason: entry.reason,
+      label,
+      live: finding !== undefined,
+    });
   }
   const sorted = [...groups]
     .sort((left, right) => left[0].localeCompare(right[0]))

@@ -2878,6 +2878,8 @@ version 2; settings at their defaults are left out of the file.
 It travels as the `audits` metadata kind through `project:metadata` / `project:writeMetadata`
 (writes need `panel:audits` or `settings:audits`). An id is `findingId`
 (`shared/page/auditFindings.ts`): check (`custom:<id>` for a custom audit), file, structural path and detail.
+A broken link listed at the usage that passes its value keeps the id it would have had on the component that
+draws it in `formerIds`, so an entry saved under that id still hides it.
 
 `audit:measure` loads one route of the loopback dev server in a hidden, sandboxed window with its
 own session and answers `{ ok: true, measurement }` or `{ ok: false, message }`. The measurement is

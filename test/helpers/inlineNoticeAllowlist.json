@@ -252,7 +252,7 @@
     },
     {
       "file": "src/features/audits/AuditsPanel.tsx",
-      "pattern": "<span className=\"audits-note-line\" title={note}>",
+      "pattern": "<span className=\"audits-note-line\" title={noteTitle}>",
       "reason": "Empty or clean state of the audits list, or a finding secondary line that also carries a title tooltip."
     },
     {

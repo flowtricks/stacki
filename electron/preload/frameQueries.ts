@@ -1,4 +1,5 @@
 import { receiveLiveVariables } from './frameLiveVariables';
+import { restoreUntracked, showTarget } from './frameUnhide';
 import { receiveLiveRules } from './frameLiveRules';
 import { receiveAppCursor } from './frameAppCursor';
 import { receivePointQuery } from './framePointQuery';
@@ -241,8 +242,11 @@ export function listenForQueries(): void {
     guideFrame?.receive(data);
     if (data['type'] === 'avb:track' && Array.isArray(data['paths'])) {
       track(data, data['paths']);
+      restoreUntracked(data['paths'].filter((path): path is string => typeof path === 'string'));
     }
     if (data['type'] === 'avb:scroll-to' && typeof data['path'] === 'string') {
+      // A go-to also shows what hides its element (frameUnhide.ts), before it is scrolled to.
+      showTarget(data['path'], typeof data['occ'] === 'number' ? data['occ'] : 0, { unhide: data['unhide'] === true });
       scrollPathIntoView(data['path'], typeof data['occ'] === 'number' ? data['occ'] : 0);
     }
     if (data['type'] === 'avb:set-vh' && typeof data['px'] === 'number') {

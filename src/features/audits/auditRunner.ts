@@ -25,7 +25,7 @@ import {
   type SitePage,
 } from '../../../shared/page/auditSite';
 import { lintCss, tokenGroup, variablesFor } from '../../../shared/page/auditTokens';
-import { lineOf, lineStarts } from '../../../shared/page/auditMarkup';
+import { lineOf, lineStarts, nodeChildren } from '../../../shared/page/auditMarkup';
 import { swapped } from '../../../shared/page/auditStatic';
 import type { AuditFile } from '../../../shared/properties/auditIgnores';
 import type { RenderedElement as RenderedNodeElement } from '../../../shared/page/auditRendered';
@@ -137,6 +137,8 @@ export interface AuditReport {
   readonly checkedAt: number;
   /** Each read file's tree, so an occurrence row names its element as the Navigator does. */
   readonly trees: ReadonlyMap<string, readonly PageNode[]>;
+  /** For each page, its route; for each component and layout, the routes of the pages that render it. Absent from older reports. */
+  readonly usage?: ReadonlyMap<string, readonly string[]>;
   /** The custom audits that did not run (a pattern the guard refused) or stopped early at a cap; absent from older reports. */
   readonly custom?: Pick<CustomAuditOutcome, 'problems' | 'stopped'>;
 }
@@ -229,8 +231,60 @@ export async function runAudit(input: AuditRunInput, io: AuditIO): Promise<Audit
     rendered: rendered.status,
     checkedAt: Date.now(),
     trees,
+    usage: componentUsage(inputs, known, resolve),
     custom: { problems: custom.problems, stopped: custom.stopped },
   };
+}
+
+// Which pages render each component, through however many components between: a walk of the
+// component tags from each page. Static, so it holds with no dev server running.
+function componentUsage(
+  pages: ReadonlyMap<string, AuditFileInput>,
+  known: ReadonlyMap<string, AuditFileInput>,
+  resolve: (from: AuditFileInput, tag: string) => string | undefined,
+): ReadonlyMap<string, readonly string[]> {
+  const usage = new Map<string, Set<string>>();
+  const children = new Map<string, readonly string[]>();
+  for (const page of pages.values()) {
+    if (page.kind !== 'page' || page.route === undefined) {
+      continue;
+    }
+    usage.set(page.file, new Set([page.route]));
+    const pending = [page];
+    const seen = new Set<string>();
+    for (let visited = 0; pending.length > 0; visited++) {
+      assert(visited <= AUDIT_LIMITS.filesMax, 'componentUsage: each file is walked once per page');
+      const file = pending.pop();
+      assert(file !== undefined, 'componentUsage: the stack holds a file');
+      const rendered = children.get(file.file) ?? renderedComponents(file, resolve);
+      children.set(file.file, rendered);
+      for (const name of rendered) {
+        const callee = known.get(name);
+        if (callee !== undefined && !seen.has(name)) {
+          seen.add(name);
+          usage.set(name, (usage.get(name) ?? new Set()).add(page.route));
+          pending.push(callee);
+        }
+      }
+    }
+  }
+  return new Map([...usage].map(([file, routes]) => [file, [...routes].sort()] as const));
+}
+
+// The component files a file's own markup renders: its component tags, resolved through its imports.
+function renderedComponents(file: AuditFileInput, resolve: (from: AuditFileInput, tag: string) => string | undefined): readonly string[] {
+  const found = new Set<string>();
+  const pending: PageNode[] = [...file.nodes];
+  for (let visited = 0; pending.length > 0 && visited < AUDIT_LIMITS.elementsPerFileMax; visited++) {
+    const node = pending.pop();
+    assert(node !== undefined, 'renderedComponents: the stack holds a node');
+    const target = node.kind === 'component' ? resolve(file, node.name) : undefined;
+    if (target !== undefined) {
+      found.add(target);
+    }
+    pending.push(...nodeChildren(node));
+  }
+  return [...found];
 }
 
 /** The frontmatter's code: the text between the opening and closing `---` fences. */
@@ -428,7 +482,8 @@ async function renderedPass(
   let failure: string | undefined;
   for (const { route, file } of routes) {
     const html = await render(route).catch((error: unknown): RenderedHtml => ({ ok: false, message: String(error) }));
-    if (!html.ok || html.status >= 400) {
+    // The 404 page answers 404 by design: it is a page like any other, and its links are checked.
+    if (!html.ok || (html.status >= 400 && !(route === '/404' && html.status === 404))) {
       failure = html.ok ? `${route} answered ${html.status}` : html.message;
       continue;
     }
@@ -798,13 +853,20 @@ async function renderedLinkFindings(
             files: context.files,
             resolve: context.resolve,
             within: link.within,
-            leaf: { file: link.finding.file, path: element.path, attr: 'href' },
+            leaf: { file: link.finding.file, path: element.path, attr: 'href', ...renderedHref(link.finding.detail) },
           });
-    const finding = await movedTo(link.finding, authored, { pageFile: link.pageFile, io: context.io });
+    const moved = await movedTo(link.finding, authored, { pageFile: link.pageFile, io: context.io });
+    const finding = moved.id === link.finding.id ? moved : { ...moved, formerIds: [link.finding.id] };
     traced.push({ finding, url: target.tag === 'missing' ? target.url : undefined });
   }
   assert(traced.length <= links.length, 'renderedLinkFindings: at most one finding per link');
   return traced;
+}
+
+// The href the rendered element holds, as its finding's detail quotes it.
+function renderedHref(detail: string): { readonly value?: string } {
+  const value = /^href="([^"]*)"/.exec(detail)?.[1];
+  return value === undefined ? {} : { value };
 }
 
 function fragmentMissing(target: { readonly route: string; readonly id: string }, ids: ReadonlyMap<string, ReadonlySet<string>>): boolean {

@@ -14,6 +14,7 @@ export const messages = {
   'auditsUi.breakdown.unit': { one: '{count} eenheid', other: '{count} eenheden' },
   'auditsUi.category': 'Categorie',
   'auditsUi.changeLink': 'Link wijzigen…',
+  'auditsUi.copyOf': '{index} van {total}',
   'auditsUi.createPage': '{route} maken',
   'auditsUi.empty.auditing': 'Auditen…',
   'auditsUi.empty.clean': 'Geen problemen · gecontroleerd {time}.',
@@ -77,6 +78,10 @@ export const messages = {
   'auditsUi.ignoredManyToast': 'Bevindingen genegeerd',
   'auditsUi.ignoredNote': 'Genegeerd: {reason}',
   'auditsUi.ignoredToast': 'Bevinding genegeerd',
+  'auditsUi.link.noPage': 'Linkt naar {url} · pagina bestaat niet',
+  'auditsUi.link.noPageTitle': 'Geen pagina, bestand of omleiding in dit project beantwoordt {url}.',
+  'auditsUi.link.noSection': 'Linkt naar {url} · sectie bestaat niet',
+  'auditsUi.link.noSectionTitle': 'De pagina heeft geen doel voor {url}.',
   'auditsUi.linkTo': 'Linken naar',
   'auditsUi.linkToLabel': 'Linken naar {route}',
   'auditsUi.menu.closeFind': 'Zoeken en vervangen sluiten',
@@ -160,4 +165,11 @@ export const messages = {
   'auditsUi.stopIgnoring': 'Niet meer negeren',
   'auditsUi.title': 'Audits', // same
   'auditsUi.variableToUse': 'Te gebruiken variabele',
+  'auditsUi.where.component': 'Component', // same
+  'auditsUi.where.layout': 'Lay-out',
+  'auditsUi.where.more': '{pages} +{count}', // same
+  'auditsUi.where.page': 'Pagina',
+  'auditsUi.where.pageAt': 'Pagina · {route}',
+  'auditsUi.where.title': 'Gebruikt op {pages}. Een oplossing hier wijzigt ze allemaal.',
+  'auditsUi.where.usedOn': '{place} · op {pages}',
 } as const satisfies CatalogOf<MessageKey>;

@@ -11,7 +11,14 @@ import { assert } from '../../../shared/core/assert';
 import { AUDIT_LIMITS } from '../../../shared/page/auditFindings';
 import { LIMITS } from '../../../shared/core/limits';
 import { blend, parseCssColor, type Rgba } from '../../../shared/page/auditContrast';
-import { parseMarker, type RenderedElement, type RenderedNode, type RenderedSource, type RenderedStyle } from '../../../shared/page/auditRendered';
+import {
+  parseMarker,
+  type RenderedElement,
+  type RenderedNode,
+  type RenderedPlace,
+  type RenderedSource,
+  type RenderedStyle,
+} from '../../../shared/page/auditRendered';
 
 const FRAME_LOAD_MS_MAX = 6_000;
 const STYLED_ELEMENTS_MAX = 6_000;
@@ -55,7 +62,7 @@ export function renderedTree(document: Document, pageFile: string, styleOf?: (el
         }
       } else if (child.nodeType === 1 && child instanceof Element) {
         const location = elementPlace(child, marker, pageFile);
-        children.push(convert(child, location === undefined ? inherited(source) : placed(location, open), depth + 1));
+        children.push(convert(child, location === undefined ? inherited(source) : ownPlace(child, location, { open, pageFile }), depth + 1));
         marker = undefined;
       }
     }
@@ -99,6 +106,24 @@ function closeMarker(open: { readonly id: string; readonly place: RenderedSource
   assert(open.length <= MARKERS_OPEN_MAX, 'closeMarker: the open markers are bounded');
 }
 
+/** Instances one element's path attribute names above itself, at most: components nest a few deep. */
+const CALLERS_MAX = 12;
+
+// The paths after the element's own in `data-avb-p`: the instances it was handed down through,
+// written immediate caller first; returned outermost first, as `within` lists places.
+function callerPlaces(element: Element, pageFile: string): readonly RenderedPlace[] {
+  const written = (element.getAttribute('data-avb-p') ?? '')
+    .trim()
+    .split(/\s+/)
+    .slice(1, CALLERS_MAX + 1);
+  const places = written.flatMap((id) => {
+    const place = parseMarker(`avb-s:${id}`, pageFile);
+    return place === undefined ? [] : [{ file: place.file, path: place.path }];
+  });
+  assert(places.length <= CALLERS_MAX, 'callerPlaces: the callers are bounded');
+  return places.reverse();
+}
+
 /** A marked element's location with the marked nodes around it, its own marker left out. */
 function placed(marker: RenderedSource, open: readonly { readonly place: RenderedSource }[]): RenderedSource {
   const within = open.filter((entry) => entry.place !== marker).map((entry) => ({ file: entry.place.file, path: entry.place.path }));
@@ -119,6 +144,17 @@ function elementPlace(element: Element, marker: RenderedSource | undefined, page
   }
   // The element's own comment marker names the same node: keep that object, so `placed` leaves it out of `within`.
   return marker !== undefined && marker.file === own.file && marker.path.join('.') === own.path.join('.') ? marker : own;
+}
+
+// A located element's source: its marker, what is open around it, and the instances its path attribute names.
+function ownPlace(
+  element: Element,
+  location: RenderedSource,
+  context: { readonly open: readonly { readonly place: RenderedSource }[]; readonly pageFile: string },
+): RenderedSource {
+  const callers = callerPlaces(element, context.pageFile);
+  const source = placed(location, context.open);
+  return callers.length === 0 ? source : { ...source, callers };
 }
 
 /** The location an unmarked element takes from its parent: the parent's own, marked as an ancestor's. */

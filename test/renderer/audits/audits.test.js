@@ -627,6 +627,7 @@ function recorder() {
     setPseudoPick: (pick) => calls.push(['pseudo', pick]),
     setSelectedId: (id) => calls.push(['select', id]),
     setHoverNodeId: (id) => calls.push(['hover', id]),
+    setRevealedId: (id) => calls.push(['revealed', id]),
   };
 }
 
@@ -637,7 +638,14 @@ test('go-to selects exactly as a Navigator click does, then scrolls again once t
   const scheduled = [];
   audits.revealNode(goTo, 'n7', (run, delayMs) => scheduled.push({ run, delayMs }));
   assert.deepEqual(goTo.calls.slice(0, navigator.calls.length), navigator.calls, 'the same selection calls, in the same order');
-  assert.deepEqual(goTo.calls.slice(navigator.calls.length), [['hover', 'n7']], 'then outlined');
+  assert.deepEqual(
+    goTo.calls.slice(navigator.calls.length),
+    [
+      ['hover', 'n7'],
+      ['revealed', 'n7'],
+    ],
+    'then outlined, and marked so the canvas shows whatever hides it',
+  );
   assert.deepEqual(
     scheduled.map((entry) => entry.delayMs),
     [audits.REVEAL_SETTLE_MS, audits.REVEAL_FLASH_MS],

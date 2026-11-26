@@ -111,6 +111,8 @@ export function useCanvasReportState() {
   // Navigator selection is an action even when the row is already selected:
   // it resets a canvas-picked loop occurrence to the first rendered copy.
   const [navigatorSelectionTick, setNavigatorSelectionTick] = useState(0);
+  // The element an audit last went to; while it is the selection, the canvas shows whatever hides it.
+  const [revealedId, setRevealedId] = useState<string | undefined>(undefined);
   // Which selection the classes above describe, and a counter that lets the
   // effect below re-check the moment a report lands rather than on a timer.
   const classesForRef = useRef<string | undefined>(undefined);
@@ -149,6 +151,8 @@ export function useCanvasReportState() {
     hoverNode,
     hoverPseudo,
     navigatorSelectionTick,
+    revealedId,
+    setRevealedId,
     nodeClasses,
     nodeStates,
     pseudoPick,
