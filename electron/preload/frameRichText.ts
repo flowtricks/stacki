@@ -75,14 +75,26 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     // break or a paragraph shows at once. Bounded, as the canvas's other shown edits are.
     const putBack = () => container.replaceChildren(...snapshot);
     if (saved) {
-      const timer = setTimeout(putBack, SHOWN_SAVE_MS_MAX);
-      document.addEventListener(
-        'avb:before-morph',
-        () => {
-          clearTimeout(timer);
-          putBack();
+      // Put back at the rendering, or at once when the host refuses the save (its take-back messages, as for the
+      // canvas's other shown edits), so the page never keeps showing an edit the file did not get.
+      const shown = new AbortController();
+      const settle = () => {
+        clearTimeout(timer);
+        shown.abort();
+        putBack();
+      };
+      const timer = setTimeout(settle, SHOWN_SAVE_MS_MAX);
+      document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
+      window.addEventListener(
+        'message',
+        (event) => {
+          const data: unknown = event.data;
+          const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
+          if (type === 'avb:insert-revert' || type === 'avb:move-revert') {
+            settle();
+          }
         },
-        { once: true },
+        { signal: shown.signal },
       );
     } else {
       putBack();
