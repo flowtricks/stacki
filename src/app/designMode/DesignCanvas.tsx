@@ -67,6 +67,12 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
   const space = useDesignKeys(context, plane, fit);
   const gestures = useDesignGestures(context, plane, space);
   useLiveCanvas(context);
+  // A picture taken while the preview itself was shown was taken without walking the page: it is taken again.
+  useEffect(() => {
+    if (area.visible) {
+      noteCanvasChange();
+    }
+  }, [area.visible]);
   useEffect(() => {
     if (view.camera === undefined) {
       fit();

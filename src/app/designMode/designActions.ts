@@ -13,7 +13,6 @@ import {
   type DesignFrameView,
   type DesignSessionState,
 } from '../../../shared/ipc/designSession';
-import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import { cleanError } from '../../lib/cleanError';
 import { holdWindow } from '../../ui/busyLock';
 import { designSession } from './designBridge';
@@ -82,7 +81,7 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords,
     // What the editor still holds is saved first, so the copy is the project as the person sees it.
     await app.flushSave();
     // The frames kept from last time, or else the page as the editor shows it now.
-    const snapshot = await drawOpening(app.project.path);
+    await drawOpening(app.project.path);
     // Cancelled before main had a copy to stop.
     if (cancelAsked()) {
       app.showToast(words('toast.cancelled'), 'info');
@@ -95,7 +94,9 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords,
       page: place.file,
       refusal: words('fence.refusal'),
       frameName: words('frame.original'),
-      snapshot,
+      // The opening picture is of the preview as it stood, its entrances perhaps unplayed: a new first frame waits
+      // for the copy's own, taken once its page has been walked.
+      snapshot: undefined,
     });
     if (reply.kind === 'refused') {
       const named = reply.reason === 'too-large' && reply.folder !== undefined;
@@ -131,11 +132,11 @@ function closeOpening(): void {
 }
 
 /**
- * Draws the opening canvas: the kept frames when there are some, else the first frame from the live canvas. Returns
- * the live canvas's picture, which a new session keeps as its first frame's.
+ * Draws the opening canvas: the kept frames when there are some, else the first frame from the live canvas, which
+ * is the person's own preview and so is not walked.
  */
-async function drawOpening(projectPath: string): Promise<DesignSnapshot | undefined> {
-  const [kept, live] = await Promise.all([designSession({ op: 'preview', projectPath }), requestSnapshot()]);
+async function drawOpening(projectPath: string): Promise<void> {
+  const [kept, live] = await Promise.all([designSession({ op: 'preview', projectPath }), requestSnapshot('held')]);
   const snapshot = live.ok ? live.snapshot : undefined;
   if (kept.kind === 'preview' && kept.frames.length > 0) {
     const snapshots = new Map(kept.snapshots.map((entry) => [entry.frame, entry.snapshot] as const));
@@ -143,7 +144,6 @@ async function drawOpening(projectPath: string): Promise<DesignSnapshot | undefi
   } else if (snapshot !== undefined) {
     updateDesignView((view) => ({ ...view, snapshots: new Map([['f1', snapshot]]), camera: undefined }));
   }
-  return snapshot;
 }
 
 /** Stops a copy under way (the Modes menu row chosen again while it runs). */

@@ -91,8 +91,14 @@ export function deepestDesignNode(attribute: string): DesignNodeAt | undefined {
   return best;
 }
 
+/**
+ * Whether the canvas may walk the page (scroll it top to bottom so its entrances play) before copying it. 'held'
+ * while the person sees the page itself, which is never scrolled under them.
+ */
+export type DesignWalking = 'allowed' | 'held';
+
 export type DesignSnapshotRequest =
-  | { readonly type: 'stacki:design-snapshot'; readonly nonce: string }
+  | { readonly type: 'stacki:design-snapshot'; readonly nonce: string; readonly walking: DesignWalking }
   | { readonly type: 'stacki:design-page-html'; readonly nonce: string }
   | { readonly type: 'stacki:design-watch' };
 
@@ -122,6 +128,8 @@ export type DesignCanvasMessage =
       readonly failure: DesignSnapshotFailure;
       readonly detail: string;
     }
+  /** The canvas heard a snapshot request: its answer may take as long as walking the page does. */
+  | { readonly type: 'stacki:design-snapshot-started'; readonly nonce: string }
   /** What a live preview changed on the page: rules and variable overrides, and elements' own styles and classes. */
   | {
       readonly type: 'stacki:design-live';
@@ -181,7 +189,11 @@ export function parseDesignSnapshotRequest(input: unknown): DesignSnapshotReques
   if (typeof nonce !== 'string' || nonce.length > DESIGN_SNAPSHOT_LIMITS.nonceCharsMax) {
     return undefined;
   }
-  return { type: input.type, nonce };
+  if (input.type === 'stacki:design-page-html') {
+    return { type: input.type, nonce };
+  }
+  const walking = 'walking' in input ? input.walking : undefined;
+  return { type: input.type, nonce, walking: walking === 'allowed' ? walking : 'held' };
 }
 
 function parseDesignLive(value: Readonly<Record<string, unknown>>): DesignCanvasMessage {
@@ -215,6 +227,10 @@ export function parseDesignCanvasMessage(input: unknown): DesignCanvasMessage | 
   }
   if (input.type === 'stacki:design-changed') {
     return { type: input.type };
+  }
+  if (input.type === 'stacki:design-snapshot-started') {
+    const nonce = 'nonce' in input ? input.nonce : undefined;
+    return typeof nonce === 'string' && nonce.length <= DESIGN_SNAPSHOT_LIMITS.nonceCharsMax ? { type: input.type, nonce } : undefined;
   }
   if (input.type === 'stacki:design-live') {
     try {

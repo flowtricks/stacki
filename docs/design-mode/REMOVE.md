@@ -29,6 +29,22 @@ project.
 - **The person's page** is noted before each reload and reopened once the editor has opened its own first page
   (`designReturn.ts`), then left alone. A component opened from a page enters on that page; a route a dependency adds,
   and a component opened on its own, are refused. A frame's picture of another page is never drawn.
+- **A frame is the page as scrolled through** (`designSettle.ts`). The covered live canvas has never been
+  scrolled, so before it is copied it is walked top to bottom: once when it is a new document, is drawn at another
+  size, or holds elements the last walk never saw. Finite CSS and Web animations are finished at once; script
+  animations are waited for until the page stops writing (400 ms quiet, 1.4 s while something the script hid is
+  still hidden; an element written for 3 s without a pause is a loop). A walk takes at most 12 s. A second walk
+  reads what only holds on screen (a scrubbed value, a reversing reveal, a view timeline, a canvas or video's
+  picture) while each element is nearest the middle, and writes it on the copy only, never over a value changed
+  since. Every copy is taken with the page at its top, and the canvas is put back where it was scrolled. The
+  canvas is never walked while the pointer button shows it, nor is the person's own preview before the copy opens
+  (a new session's first frame is a skeleton until the copy's own picture arrives).
+  What a still frame shows instead of motion: a pinned sequence (`.pin-spacer`) appears once, as it starts,
+  without its scroll room; an endless animation or marquee at a still point; a canvas or video as one picture
+  (an `<img>` stands for a canvas, which Chromium collapses where scripts are off, so a rule that names the
+  `canvas` tag does not reach it). A canvas that reads blank leaves what lies under it showing. Not reached:
+  closed shadow roots, other origins' frames and pixels, content inside the page's own scrolling boxes, and an
+  entrance that starts more than 1.4 s after the page has otherwise stopped.
 - **Pictures in frames:** Astro's dev server refuses another origin's no-cors requests (its Sec-Fetch check), which is
   what a frame on the app's origin sends, so a snapshot carries its same-origin pictures, posters and fonts in
   itself (`designSnapshotAssets.ts`), within a budget; past it a picture shows broken in the frame only.
@@ -59,7 +75,7 @@ project.
   writes a `<style>` or a framework island into the page, shows a picture at an address only the dev server answers
   (`/_image`, `/@fs/`, `/src/`), draws slot content twice, renders nothing, or is repeated by a page loop.
 - **Not yet:** editing text inside a frame; opening a component from a frame; undo for a
-  removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
+  removed frame. Frames run no script, so a frame is one still state of the page (below).
 
 ## Where it is offered
 
@@ -144,6 +160,7 @@ byte-identical afterwards.
    - `electron/lib/designMode/`
    - `shared/ipc/designSession.ts`
    - `shared/ipc/designSnapshot.ts`
+   - `test/electron/preload/designSnapshotChromium.test.js` and `test/fixtures/design-snapshot/`
    - `electron/preload/designMode/`
    - `src/features/style/model/inlineDefault.ts`
    - `src/features/ai/aiHold.ts`

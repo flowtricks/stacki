@@ -7,7 +7,7 @@
 import { DESIGN_SNAPSHOT_LIMITS, type DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import type { DesignFrameId } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
-import { livePagePath, pathOfAddress, requestSnapshot, samePage, type SnapshotResult } from './designLiveCanvas';
+import { livePagePath, pathOfAddress, requestSnapshot, samePage, walkingNow, type SnapshotResult } from './designLiveCanvas';
 import { designView, updateDesignView } from './designStore';
 
 /** Changes closer together than this are one change. */
@@ -81,7 +81,7 @@ function capture(): Promise<void> {
   const frame = view.session.active;
   wanted = false;
   running = (async () => {
-    const result = await requestSnapshot();
+    const result = await requestSnapshot(walkingNow());
     lastCaptureMs = performance.now();
     runLength += 1;
     if (result.ok) {

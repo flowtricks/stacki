@@ -426,7 +426,15 @@ test('a copy the person cancels stops and leaves nothing', async () => {
 });
 
 test("a canvas frame's messages and node marks are parsed: forged and malformed ones are ignored", () => {
-  assert.deepEqual(parseDesignSnapshotRequest({ type: 'stacki:design-snapshot', nonce: 'a' }), { type: 'stacki:design-snapshot', nonce: 'a' });
+  // A request that does not say the page may be walked leaves it where it is.
+  const asked = { type: 'stacki:design-snapshot', nonce: 'a' } as const;
+  assert.deepEqual(parseDesignSnapshotRequest(asked), { ...asked, walking: 'held' });
+  assert.deepEqual(parseDesignSnapshotRequest({ ...asked, walking: 'allowed' }), { ...asked, walking: 'allowed' });
+  assert.deepEqual(parseDesignSnapshotRequest({ ...asked, walking: 'yes' }), { ...asked, walking: 'held' });
+  const heard = { type: 'stacki:design-snapshot-started', nonce: 'a' } as const;
+  assert.deepEqual(parseDesignCanvasMessage(heard), heard);
+  assert.equal(parseDesignCanvasMessage({ ...heard, nonce: 'a'.repeat(65) }), undefined);
+  assert.equal(parseDesignCanvasMessage({ type: heard.type }), undefined);
   assert.equal(parseDesignSnapshotRequest({ type: 'stacki:design-snapshot', nonce: 'a'.repeat(65) }), undefined);
   assert.equal(parseDesignSnapshotRequest({ type: 'avb:render' }), undefined);
   assert.equal(parseDesignCanvasMessage({ type: 'stacki:design-snapshot-reply', nonce: 'a', ok: true, snapshot: {} }), undefined);

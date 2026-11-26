@@ -9,10 +9,13 @@ import {
   type DesignPageHtmlFailure,
   type DesignSnapshot,
   type DesignSnapshotFailure,
+  type DesignWalking,
 } from '../../../shared/ipc/designSnapshot';
 
-/** How long a snapshot may take before the request is given up. */
-const SNAPSHOT_WAIT_MS_MAX = 6_000;
+/** How long the canvas may take to say it heard a request: one still loading hears nothing and never answers. */
+const SNAPSHOT_HEARD_MS_MAX = 3_000;
+/** How long a snapshot may take once heard: past the canvas's longest walk of a page. */
+const SNAPSHOT_WAIT_MS_MAX = 25_000;
 
 export type SnapshotResult =
   { readonly ok: true; readonly snapshot: DesignSnapshot } | { readonly ok: false; readonly failure: DesignSnapshotFailure | 'no-canvas' | 'timed-out' };
@@ -22,6 +25,11 @@ const SHOWN_PREVIEW = '.preview-frame-wrap iframe[aria-hidden="false"]';
 
 function shownPreview(): HTMLIFrameElement | undefined {
   return document.querySelector<HTMLIFrameElement>(SHOWN_PREVIEW) ?? undefined;
+}
+
+/** Whether the canvas may walk the page: not while the pointer button shows the preview itself to the person. */
+export function walkingNow(): DesignWalking {
+  return document.querySelector('.preview-frame-wrap[data-canvas-interactive="true"]') === null ? 'allowed' : 'held';
 }
 
 /** The editor's current preview frame; its previous page, still shown while a new one loads, is hidden from readers. */
@@ -59,7 +67,11 @@ export function samePage(left: string, right: string): boolean {
 
 let nonce = 0;
 
-export function requestSnapshot(): Promise<SnapshotResult> {
+function isCanvasReady(data: unknown): boolean {
+  return typeof data === 'object' && data !== null && 'type' in data && data.type === 'avb:canvas-ready';
+}
+
+export function requestSnapshot(walking: DesignWalking): Promise<SnapshotResult> {
   const target = liveCanvasWindow();
   if (target === undefined) {
     return Promise.resolve({ ok: false, failure: 'no-canvas' });
@@ -76,16 +88,26 @@ export function requestSnapshot(): Promise<SnapshotResult> {
       if (event.source !== target) {
         return;
       }
+      // A new document in the preview will never answer what the one before it was asked.
+      if (isCanvasReady(event.data)) {
+        finish({ ok: false, failure: 'timed-out' });
+        return;
+      }
       const message = parseDesignCanvasMessage(event.data);
+      if (message?.type === 'stacki:design-snapshot-started' && message.nonce === asked) {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => finish({ ok: false, failure: 'timed-out' }), SNAPSHOT_WAIT_MS_MAX);
+        return;
+      }
       if (message?.type !== 'stacki:design-snapshot-reply' || message.nonce !== asked) {
         return;
       }
       finish(message.ok ? { ok: true, snapshot: message.snapshot } : { ok: false, failure: message.failure });
     };
-    const timer = window.setTimeout(() => finish({ ok: false, failure: 'timed-out' }), SNAPSHOT_WAIT_MS_MAX);
+    let timer = window.setTimeout(() => finish({ ok: false, failure: 'timed-out' }), SNAPSHOT_HEARD_MS_MAX);
     window.addEventListener('message', receive);
     target.postMessage({ type: 'stacki:design-watch' }, '*');
-    target.postMessage({ type: 'stacki:design-snapshot', nonce: asked }, '*');
+    target.postMessage({ type: 'stacki:design-snapshot', nonce: asked, walking }, '*');
   });
 }
 
