@@ -218,10 +218,12 @@ async function mount(context) {
     waitFor({
       what,
       read: async () => {
-        await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
+        // One turn of the event loop inside act renders what has arrived; the poll's interval is the wait.
+        await act(async () => new Promise((resolve) => setImmediate(resolve)));
         return Boolean(condition());
       },
       until: (value) => value,
+      pollIntervalMs: 20,
       pollCountMax: 400,
     });
   const press = async (options = {}, target = window) => {

@@ -13,7 +13,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { repoPath } = require('../helpers/sources.js');
-const { waitFor } = require('../helpers/waitFor.js');
+const { waitFor, waitForSteady } = require('../helpers/waitFor.js');
 // Playwright is Studio's dev dependency (its browser tests); Desktop reuses it here rather than adding its own copy.
 const { _electron: electron } = require(
   fs.existsSync(repoPath('studio/node_modules/playwright'))
@@ -27,6 +27,7 @@ const SITE = fs.existsSync(repoPath('studio/test/fixtures/site/node_modules'))
   ? repoPath('studio/test/fixtures/site')
   : '/Users/timothyricks/Documents/Projects/stacki/studio/test/fixtures/site';
 const WAIT_MS = 60_000;
+const STEADY_POLL_MS = 100;
 
 function writeFixture(project) {
   fs.mkdirSync(project, { recursive: true });
@@ -374,7 +375,15 @@ async function caretPass(window, canvas, page, results, pauseMs) {
     const before = await read();
     await (key === 'Enter' ? window.keyboard.press('Enter') : window.keyboard.type(key));
     if (pauseMs > 0) {
-      await window.waitForTimeout(pauseMs);
+      // The file holds still for the whole pause: the key's save has landed before the next key.
+      await waitForSteady({
+        what: 'the save of the key typed',
+        read: source,
+        until: () => true,
+        pollIntervalMs: STEADY_POLL_MS,
+        steadyPollCount: Math.max(2, Math.ceil(pauseMs / STEADY_POLL_MS)),
+        pollCountMax: WAIT_MS / STEADY_POLL_MS,
+      });
     }
     const after = await read();
     // The caret moves on by what was typed, the words before it stay in place.
@@ -401,7 +410,15 @@ async function caretPass(window, canvas, page, results, pauseMs) {
   });
   await type('middle of line one', 'Z');
   await type('a space in the middle', ' ');
-  await window.waitForTimeout(1500);
+  // The last two keys are saved, and nothing more is on its way.
+  await waitForSteady({
+    what: 'the last keys are saved',
+    read: source,
+    until: (text) => text.includes('LoremZ'),
+    pollIntervalMs: STEADY_POLL_MS,
+    steadyPollCount: 15,
+    pollCountMax: WAIT_MS / STEADY_POLL_MS,
+  });
   results.caretSteps = steps;
   results.caretAllOk = steps.every((entry) => entry.ok);
   results.caretSource = source();
