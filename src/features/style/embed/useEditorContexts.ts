@@ -3,7 +3,7 @@
 // selector chips and changing context (EmbedEditor.tsx).
 
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
+import { chipStyleOf, inlineActiveOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   contextKeyOf,
@@ -126,6 +126,8 @@ export function useStyleContexts(
   contextKeys: ReturnType<typeof useContextKeys>,
   embedContexts: ReturnType<typeof useEmbedContexts>,
   wrapperReachHook: ReturnType<typeof useWrapperReach>,
+  inlineState: InlineState,
+  elementTokens: ReturnType<typeof useElementTokens>,
 ) {
   const translate = useTranslate();
   const { context, setContext } = selectionState;
@@ -149,14 +151,25 @@ export function useStyleContexts(
     // (useContextChange, model/activeQuery.ts).
     return list;
   }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, reachOf, translate]);
+  // The "Inline styles" target and a query never go together: a style attribute applies at every width, so a
+  // value set there while a query showed would look like that query's and apply everywhere. Whatever put a query
+  // here (following the canvas, a new selection's own query, the attribute becoming the target again on
+  // reselection or by default in Design mode), the target is Base. Corrected while rendering, so React renders
+  // again before an effect or a frame sees both. A person asking for a query leaves the attribute first
+  // (useContextChange onContextChange, useInlineCard onAddQuery), so their pick is not undone here.
+  const inlineActive = inlineActiveOf(inlineState, elementTokens.snapshot);
+  const targetKey = inlineActive ? '' : context;
+  if (targetKey !== context) {
+    setContext(targetKey);
+  }
   const currentContext = useMemo<StyleContext>(
     () =>
-      styleContexts.find((entry) => entry.key === context) ??
+      styleContexts.find((entry) => entry.key === targetKey) ??
       // A typed query, once written, is listed under its stylesheet: the typed key
       // names no stylesheet, so it is the written row's place that matches.
-      styleContexts.find((entry) => splitSourcedKey(context).source === undefined && entry.key !== '' && splitSourcedKey(entry.key).placed === context) ??
+      styleContexts.find((entry) => splitSourcedKey(targetKey).source === undefined && entry.key !== '' && splitSourcedKey(entry.key).placed === targetKey) ??
       styleContexts[0] ?? { key: '', label: translate('styleModel.breakpoint.main'), breakpoint: 'main', embedAtContext: '' },
-    [styleContexts, context, translate],
+    [styleContexts, targetKey, translate],
   );
   useEffect(() => {
     if (currentContext.key !== context && currentContext.key !== '' && splitSourcedKey(currentContext.key).placed === context) {
@@ -179,7 +192,7 @@ export function useStyleContexts(
       setContext('');
     }
   }, [contextReach, setContext]);
-  return { currentContext, styleContexts, reachPending };
+  return { currentContext, inlineActive, styleContexts, reachPending };
 }
 
 /**
@@ -807,13 +820,15 @@ export function useContextChange(
   activeSelectorHook: ReturnType<typeof useActiveSelector>,
   selectorPick: ReturnType<typeof useSelectorPick>,
   styleContextsHook: ReturnType<typeof useStyleContexts>,
+  inlineState: InlineState,
 ) {
   const { context, contextStale, pendingDefaultRef, setContext, setContextStale } = selectionState;
   const { nativeModel } = nativeState;
   const { model, scan } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector, setTypedContexts } = selectorPick;
-  const { styleContexts, reachPending } = styleContextsHook;
+  const { inlineActive, styleContexts, reachPending } = styleContextsHook;
+  const { setPickedFor } = inlineState;
   const [followMode, setFollowMode] = useFollowMode(getHost().projectPath);
   const canvasWidthPx = useCanvasWidthPx();
   // In a desktop-first component the breakpoint that holds at the canvas width is the target even before
@@ -901,10 +916,12 @@ export function useContextChange(
   // The dropdown's pick and the follow toggle (the link on the trigger and the "0" key) are one
   // table, embed/followTransition.ts; this applies its answer. Where no canvas width is known there
   // is nothing to follow, and a pick is the style target alone, moving the canvas as it always did.
-  const onContextChange = useCallback(
-    (next: ContextKey) => {
+  const pickContext = useCallback(
+    // `target` is what the pick is for: a rule, or the style attribute, which has Base only and picks no selector.
+    (next: ContextKey, target: 'rule' | 'attribute') => {
+      assert(target === 'rule' || next === '', 'pickContext: the style attribute has Base only');
       if (canvasWidthPx === undefined) {
-        changeContext(next, { canvas: 'move', selector: 'repick' });
+        changeContext(next, { canvas: 'move', selector: target === 'rule' ? 'repick' : 'keep' });
         return;
       }
       const row = styleContexts.find((entry) => entry.key === next) ?? { key: next, embedAtContext: next };
@@ -917,13 +934,37 @@ export function useContextChange(
       assert(outcome.canvas === 'keep' || placement.kind !== 'none', 'onContextChange: the canvas moves only to a placement');
       pickPendingRef.current = outcome.canvas === 'move' ? { fromWidthPx: canvasWidthPx } : undefined;
       setFollowMode(outcome.following ? 'follow' : 'pinned');
-      changeContext(next, { canvas: 'keep', selector: next === context ? 'keep' : 'repick' });
+      changeContext(next, { canvas: 'keep', selector: next === context || target === 'attribute' ? 'keep' : 'repick' });
       if (outcome.canvas === 'move') {
         showRowOnCanvas(placement);
       }
     },
     [followMode, context, matchedKey, canvasWidthPx, styleContexts, projectBreakpoints, followKeyAt, changeContext, setFollowMode],
   );
+
+  // The dropdown's pick. A query picked while the style attribute is the target leaves the attribute, in the
+  // same update, so what is typed next goes into a rule in that query and never into the attribute. Base keeps it.
+  const onContextChange = useCallback(
+    (next: ContextKey) => {
+      if (inlineActive && next !== '') {
+        setPickedFor(undefined);
+        pickContext(next, 'rule');
+        return;
+      }
+      pickContext(next, inlineActive ? 'attribute' : 'rule');
+    },
+    [inlineActive, setPickedFor, pickContext],
+  );
+
+  // The person picking the "Inline styles" chip: the dropdown goes to Base exactly as if Base were picked in it,
+  // following and canvas width included. With the target and the canvas already on Base there is nothing to pick.
+  const showBaseForAttribute = useCallback(() => {
+    const canvasOnBase = matchedKey === undefined || matchedKey === '';
+    if (context === '' && canvasOnBase) {
+      return;
+    }
+    pickContext('', 'attribute');
+  }, [context, matchedKey, pickContext]);
 
   // The element's rules and the reach of its nested queries have both been answered.
   const settled = (scan === undefined || scan.settled) && !reachPending;
@@ -942,7 +983,8 @@ export function useContextChange(
       followedKey: followMode === 'follow' ? matchedKey : undefined,
     });
     setContextStale(false);
-    if (resolved !== context) {
+    // The style attribute holds the target on Base (useStyleContexts).
+    if (!inlineActive && resolved !== context) {
       setContext(resolved);
     }
   }
@@ -976,7 +1018,8 @@ export function useContextChange(
           return;
         case 'matched':
           // Until the element's rules are read the follow effect below retargets once they are (followRetargetKey).
-          if (settled && matchedKey !== undefined && matchedKey !== context) {
+          // The style attribute stays on Base; following takes the canvas's row once a rule is picked.
+          if (!inlineActive && settled && matchedKey !== undefined && matchedKey !== context) {
             retargetTo(matchedKey);
           }
           return;
@@ -988,13 +1031,14 @@ export function useContextChange(
         }
       }
     },
-    [context, settled, matchedKey, changeContext, retargetTo, setFollowMode],
+    [context, settled, inlineActive, matchedKey, changeContext, retargetTo, setFollowMode],
   );
   useFollowToggleHandler(toggleFollow);
 
   // While following, the target is the row that holds at the canvas's width. It moves the
   // target only: no write, no canvas move, and the active selector stays where it is. The
-  // dropdown, if open, just checks the new row in place.
+  // dropdown, if open, just checks the new row in place. It waits while the style attribute
+  // is the target, which has Base only; the mode itself is left as the person set it.
   const following = followMode === 'follow' && matchedKey !== undefined;
   useEffect(() => {
     const pending = pickPendingRef.current;
@@ -1003,11 +1047,11 @@ export function useContextChange(
       pickPendingRef.current = undefined;
     }
     const pickPending = pickPendingRef.current !== undefined;
-    const target = followRetargetKey({ following, settled, matchedKey, context, pickPending });
+    const target = followRetargetKey({ following: following && !inlineActive, settled, matchedKey, context, pickPending });
     if (target !== undefined) {
       retargetTo(target);
     }
-  }, [following, settled, matchedKey, context, canvasWidthPx, retargetTo]);
+  }, [following, inlineActive, settled, matchedKey, context, canvasWidthPx, retargetTo]);
 
   // The follow control exists only where there is a canvas width to follow. Checking the
   // matching row or the link on the trigger lets go of a hold; resizing the canvas never does.
@@ -1026,5 +1070,5 @@ export function useContextChange(
           onFollow: () => toggleFollow('pinned'),
           onHold: () => toggleFollow('follow'),
         };
-  return { onContextChange, contextFollow, contextsSettled: settled };
+  return { onContextChange, showBaseForAttribute, contextFollow, contextsSettled: settled };
 }
