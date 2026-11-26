@@ -155,7 +155,11 @@ test('the chrome refuses what could break out of its elements, and the page name
 
 test('only well-formed messages from this canvas are heard', () => {
   const type = chrome.CANVAS_MESSAGE;
-  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined });
+  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined, sizes: new Map() });
+  // The frames' drawn sizes: whole, bounded lengths by key; anything else is left out.
+  const sizes = chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: { a: [120, 40], b: [1.5, 2], c: [-1, 3], d: 'x', e: [9e9, 1] } }, ID).sizes;
+  assert.deepEqual([...sizes], [['a', { width: 120, height: 40 }]]);
+  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: null }, ID).sizes.size, 0);
   // The selection is the editor's: the page no longer names a pressed frame, and such a message is not heard.
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: 0.5 }, ID).scale, 0.5);
