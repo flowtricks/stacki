@@ -69,6 +69,13 @@
   align-items: center;
   color: var(--text-dim);
 }
+.files-icon-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
 
 /* The Navigator's collapse slot: 18px wide and as tall as the row, so the chevron is easy to hit (TreeDragHandle). */
 .files-chevron {
