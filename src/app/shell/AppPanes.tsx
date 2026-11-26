@@ -81,6 +81,7 @@ import {
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
+import { desktopGuideSubject } from '../../features/preview/guideSubject';
 import { CanvasSectionHeading } from '../../features/preview/componentCanvas/CanvasScopeControl';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
@@ -108,9 +109,11 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const pinPaths = pins.trackPaths;
   const trackPaths = useMemo(() => [...appOverlayPaths, ...pinPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, pinPaths, dropKey]);
   const appOverlays = appOverlayLayer(app);
+  const guideSubject = useGuideSubject(app);
   return (
     <>
       <PreviewPane
+        guideSubject={guideSubject}
         extraTrackPaths={trackPaths}
         overlayLayer={(frame) => (
           <>
@@ -175,6 +178,15 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
       {pins.bar}
     </>
   );
+}
+
+function useGuideSubject(app: ShellView) {
+  const componentCanvas = useComponentCanvas();
+  return desktopGuideSubject({
+    openFile: app.currentPage,
+    componentCanvas: componentCanvas?.state.kind,
+    defaultsCanvas: app.defaultsCanvas.state.kind === 'idle' ? 'idle' : 'shown',
+  });
 }
 
 // The image popup's fields: the Properties panel's own editors for the selected node, only the ones named.

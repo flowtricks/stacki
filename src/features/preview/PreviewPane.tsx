@@ -25,6 +25,7 @@ import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
 import { GuideOverlay } from './GuideOverlay';
 import { useColumnGuide, type ShownGuide } from './guideSettings';
+import type { GuideSubject } from './guideSubject';
 
 export { deviceForWidth } from './PreviewToolbar';
 
@@ -97,6 +98,8 @@ interface PreviewPaneProps {
   readonly onViewportWidth?: ((widthPx: number | undefined) => void) | undefined;
   /** The open project: the column guide's settings are kept per project. */
   readonly projectPath?: string | undefined;
+  /** What the canvas is editing: a component has no column guide (guideSubject.ts). */
+  readonly guideSubject: GuideSubject;
   /** More paths for the canvas to measure (the elements app overlays anchor to). */
   readonly extraTrackPaths?: readonly string[] | undefined;
   /** A drag on the canvas, or one crossing into it (src/app/state/appCanvasDrag.ts decides the drop). */
@@ -135,6 +138,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
     metrics: runtime.guide,
     available: props.device !== 'canvas',
     frame: runtime,
+    subject: props.guideSubject,
   });
   return (
     <>
