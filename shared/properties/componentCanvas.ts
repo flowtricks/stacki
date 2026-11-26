@@ -954,6 +954,7 @@ export function withoutOverrides(file: ComponentCanvasFile, component: string, s
     (key) => key !== scope && scopeHolds(scope, key) && resolveFrame(settings, key).origins.get(setting) === key,
   );
   assert(entries.length <= CANVAS_LIMITS.entriesMax, 'A component keeps a bounded number of entries');
+  assert(!entries.includes(scope), "The scope's own entry is never cleared");
   const edit = clearingEdit(setting);
   return entries.reduce((next, key) => withFrameEdit(next, component, key, edit), file);
 }

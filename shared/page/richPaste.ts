@@ -30,6 +30,7 @@ export function pasteRichText(target: RichPasteTarget, paste: RichPaste): void {
   const text = paste.text.slice(0, BOUNDARY_LIMITS.textLengthMax);
   const address = text.trim();
   const range = richCaret(target.host);
+  assert(target.host.contains(range.commonAncestorContainer), 'The paste goes into the editor');
   if (!paste.plain && !range.collapsed && /^(?:https?:\/\/|mailto:|tel:)\S+$/i.test(address)) {
     document.execCommand('createLink', false, address);
     return;
@@ -80,6 +81,7 @@ function asBlocks(document: Document, nodes: readonly ChildNode[]): readonly Ele
     }
   }
   close();
+  assert(blocks.every(isBlockElement), 'Everything placed beside a block is a block');
   return blocks;
 }
 
@@ -92,6 +94,7 @@ function wrapped(document: Document, nodes: readonly ChildNode[], tag = 'div'): 
 // Plain text: one line is words; several are a paragraph each, blank lines only dividing them.
 function plainHTML(text: string): string {
   const escaped = text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  assert(!escaped.includes('<'), 'Pasted words hold no markup');
   const lines = escaped.split(/\r?\n/);
   if (lines.length === 1) {
     return escaped;

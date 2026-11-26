@@ -43,13 +43,18 @@ async function orchestrate() {
     return;
   }
   const { repoPath } = require('../../../helpers/sources.js');
+  const { measureSpeedFactor } = require('../../../helpers/rendererModule')('test/helpers/scaleFixtures.ts');
   const outDirectory = process.env.STACKI_SCREENSHOT_DIR ?? repoPath('node_modules/.stacki-test/design-mode');
   fs.mkdirSync(outDirectory, { recursive: true });
   fs.rmSync(path.join(outDirectory, 'report.json'), { force: true });
   // While Design mode is on, the app may write only to its copy, its own data and the temporary folder: the run
   // writes its pictures and report to the temporary folder, and they are moved to `outDirectory` afterwards.
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-design-soak-'));
-  const { code, directory, leftovers } = await runSoak({ scenarioModule: __filename, options: { outDirectory: staging }, keepDirectory: false });
+  const { code, directory, leftovers } = await runSoak({
+    scenarioModule: __filename,
+    options: { outDirectory: staging, speedFactor: measureSpeedFactor() },
+    keepDirectory: false,
+  });
   for (const name of fs.readdirSync(staging)) {
     fs.copyFileSync(path.join(staging, name), path.join(outDirectory, name));
   }
@@ -256,7 +261,7 @@ async function runInElectron({ window, project, options }) {
   await watchToasts();
   await driver.settle();
   const before = treeDigest(project);
-  const realProject = fs.realpathSync(project);
+  const realProject = fs.realpathSync.native(project);
   const plainBefore = fs.readFileSync(path.join(project, 'src/pages/index.astro'), 'utf8');
 
   const times = {};
@@ -297,10 +302,14 @@ async function runInElectron({ window, project, options }) {
     return { canvasMs: Math.round(canvasMs), drawnMs: Math.round(drawnMs) };
   };
 
+  // What a person feels as instant, and as half a second, stretched by how slow this machine is (scaleFixtures.ts).
+  const instantMsMax = 100 * options.speedFactor;
+  const drawnMsMax = 500 * options.speedFactor;
+
   await run('entering shows the canvas with the page as its first frame', async () => {
     times.enter = await enterAndTime();
-    check('the canvas is up within 100 ms of the click', times.enter.canvasMs < 100, times.enter.canvasMs);
-    check('a drawn frame within half a second of the click', times.enter.drawnMs < 500, times.enter.drawnMs);
+    check('the canvas is up within 100 ms of the click', times.enter.canvasMs < instantMsMax, times.enter.canvasMs);
+    check('a drawn frame within half a second of the click', times.enter.drawnMs < drawnMsMax, times.enter.drawnMs);
     await shot('00-opening');
     await collectToasts();
     await untilOpen(
@@ -310,8 +319,8 @@ async function runInElectron({ window, project, options }) {
     await reopened();
     const fence = designFenceState();
     check('the fence is up', fence.kind === 'on');
-    check('the copy is in the app data folder', fence.kind === 'on' && fence.sandboxRoot.startsWith(fs.realpathSync(app.getPath('userData'))));
-    check('the copy is private to the person', (fs.statSync(sandboxes).mode & 0o777) === 0o700);
+    check('the copy is in the app data folder', fence.kind === 'on' && fence.sandboxRoot.startsWith(fs.realpathSync.native(app.getPath('userData'))));
+    check('the copy is private to the person', process.platform === 'win32' || (fs.statSync(sandboxes).mode & 0o777) === 0o700);
     await untilOpen('the first frame drawn', `${DRAWN} === 'f1'`);
     await untilOpen('the live canvas up', `!!document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]')`);
     await untilCanvas('the live page', PLAIN_INDENT);
@@ -404,7 +413,7 @@ async function runInElectron({ window, project, options }) {
     await driver.evaluate(armTimer(`${DRAWN} === 'f1,f2' && !document.querySelector('[data-dm-ghost]')`));
     await driver.drag(from, { x: Math.round(from.x + box.width + 24), y: from.y }, { modifiers: ['alt'], steps: 10, label: 'option drag' });
     times.optionDragMs = await until('the copy drawn', `window.__dmTime`, (value) => value !== undefined);
-    check('Option-drag makes a drawn copy within 100 ms of release', times.optionDragMs < 100, times.optionDragMs);
+    check('Option-drag makes a drawn copy within 100 ms of release', times.optionDragMs < instantMsMax, times.optionDragMs);
     check('the copy keeps the frame\u2019s look', (await driver.evaluate(frameIndent('f2'))) === '40px');
     check('the copy is the selected frame', await driver.evaluate(`!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f2"]')`));
     await shot('05-option-drag');
@@ -441,7 +450,7 @@ async function runInElectron({ window, project, options }) {
     await driver.evaluate(armTimer(`${DRAWN} === 'f1,f2,f3'`));
     await pressAt('Duplicate', item);
     times.menuDuplicateMs = await until('the third frame drawn', `window.__dmTime`, (value) => value !== undefined);
-    check('Duplicate in the menu makes a drawn copy within 100 ms', times.menuDuplicateMs < 100, times.menuDuplicateMs);
+    check('Duplicate in the menu makes a drawn copy within 100 ms', times.menuDuplicateMs < instantMsMax, times.menuDuplicateMs);
     await until('the third frame shows the second\u2019s version', frameIndent('f3'), (size) => size === '60px');
     check('the menu copied the right frame', true);
     await pressAt('the zoom button', centreOf('.dm-zoom'));
@@ -676,7 +685,7 @@ async function runInElectron({ window, project, options }) {
   await run('coming back shows every frame from its kept document; Exit leaves again', async () => {
     const asked = Date.now();
     times.reenter = await enterAndTime();
-    check('kept frames are drawn within half a second of the click', times.reenter.drawnMs < 500, times.reenter.drawnMs);
+    check('kept frames are drawn within half a second of the click', times.reenter.drawnMs < drawnMsMax, times.reenter.drawnMs);
     await collectToasts();
     await untilOpen(
       'the canvas again with both frames drawn',

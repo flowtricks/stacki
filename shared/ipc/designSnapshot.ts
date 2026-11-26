@@ -5,6 +5,7 @@
 // `stacki:design-snapshot` answers with a copy of the document as drawn now, each element that stands for a node
 // of the open file marked with that node's path; `stacki:design-watch` makes the frame say when its styles change.
 // Both ends parse what they receive: the page on the canvas is the person's own site, and may post anything.
+import { assert } from '../core/assert';
 import { count, record, text } from '../core/boundary';
 
 export const DESIGN_SNAPSHOT_LIMITS = {
@@ -33,6 +34,8 @@ export const DESIGN_NODE_ATTRIBUTE = 'data-dm-node';
 
 /** One mark: the node's path, encoded because a component's file name may hold spaces, then the copy. */
 export function designNodeMark(path: string, copy: number): string {
+  assert(Number.isSafeInteger(copy), 'A node copy is counted in whole numbers');
+  assert(copy >= 0, 'A node copy is counted from zero');
   return `${encodeURIComponent(path)}:${String(copy)}`;
 }
 

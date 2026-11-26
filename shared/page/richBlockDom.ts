@@ -127,6 +127,7 @@ function isMediaChild(host: HTMLElement, node: Node | undefined): node is Elemen
 
 // The one image, video or rule the selection holds, and nothing else.
 function selectedMedia(host: HTMLElement, range: Range): Element | undefined {
+  assert(host.contains(range.commonAncestorContainer), 'The selection read is in the editor');
   if (range.startContainer !== host || range.endContainer !== host || range.endOffset !== range.startOffset + 1) {
     return undefined;
   }
@@ -149,6 +150,7 @@ export function deleteBesideRichMedia(host: HTMLElement, history: RichHistory, k
   const selected = selectedMedia(host, range);
   if (selected !== undefined) {
     history.record(() => {
+      assert(selected.parentNode === host, "A selected block is one of the editor's blocks");
       const next = selected.nextElementSibling ?? undefined;
       const previous = selected.previousElementSibling ?? undefined;
       selected.remove();
@@ -177,6 +179,7 @@ export function deleteBesideRichMedia(host: HTMLElement, history: RichHistory, k
     return false;
   }
   history.record(() => {
+    assert(block.parentNode === host, "The caret's block is one of the editor's blocks");
     if (isBlank(block)) {
       const beyond = (back ? neighbour.previousElementSibling : neighbour.nextElementSibling) ?? undefined;
       block.remove();
@@ -193,6 +196,8 @@ export function deleteBesideRichMedia(host: HTMLElement, history: RichHistory, k
 
 // After a block went: the end of the block before, else the start of the one after.
 function caretBeside(host: HTMLElement, previous: Element | undefined, next: Element | undefined): void {
+  assert(previous === undefined || previous.parentNode === host, 'The block before stays in the editor');
+  assert(next === undefined || next.parentNode === host, 'The block after stays in the editor');
   if (previous !== undefined && TYPING_BLOCKS.has(previous.tagName)) {
     const items = previous.querySelectorAll('li');
     const end = items[items.length - 1] ?? previous;
@@ -206,6 +211,7 @@ function caretBeside(host: HTMLElement, previous: Element | undefined, next: Ele
 
 /** Selects an image, a video or a rule whole, as a press on it does. */
 export function selectRichMedia(media: Element): void {
+  assert(media.parentNode !== null, 'A selected block is in the content');
   const document = media.ownerDocument;
   const range = document.createRange();
   range.selectNode(media);
@@ -228,6 +234,7 @@ export function keepTypingInBlocks(host: HTMLElement, history: RichHistory): voi
     return;
   }
   const index = media === undefined ? range.startOffset : range.startOffset + 1;
+  assert(index <= host.childNodes.length, 'The new paragraph has a place among the blocks');
   const paragraph = host.ownerDocument.createElement('p');
   paragraph.setAttribute(SPARE_LINE, '');
   paragraph.append(host.ownerDocument.createElement('br'));
@@ -454,6 +461,7 @@ export function leaveQuoteOnEnter(host: HTMLElement, history: RichHistory): bool
   paragraph.append(host.ownerDocument.createElement('br'));
   history.record(() => {
     quote.after(paragraph);
+    assert(paragraph.parentNode === host, 'The paragraph follows the quote among the blocks');
     collapseAt(paragraph, 0);
   });
   return true;
@@ -489,6 +497,7 @@ export function withoutTypingResidue(root: Element, opened: string): void {
         renamed.append(...Array.from(element.childNodes));
         element.replaceWith(renamed);
       }
+      assert(root.querySelector(from) === null, 'No element of the renamed kind is left');
     }
   }
   if (!NON_BREAKING.test(opened)) {
@@ -540,6 +549,7 @@ function plainSpaces(block: Element): void {
       node.data = next;
     }
   }
+  assert(at === whole.length, "Every one of the block's words was read");
 }
 
 /**
