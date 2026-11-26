@@ -327,6 +327,7 @@ export function useInlineCard(
     return { ...withChip, ...writes, sourceNote: undefined };
   }
   if (style.kind !== 'branched') {
+    // No attribute: never active (inlineTargetOf), so there is nothing to edit.
     return withChip;
   }
   const view: InlineBranchView = {
