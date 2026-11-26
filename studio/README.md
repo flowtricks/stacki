@@ -92,12 +92,12 @@ Hosted Studio signs people in with GitHub, and that stays the default. An instan
 ## Privacy
 
 Studio sends no usage tracking. It has no analytics, no usage counter and no background
-update service, and it turns off the usage reporting of the tools it starts: Astro, Wrangler
-and Vercel's CLI. `scripts/noTracking.ts` checks this in the tests and before each release.
+update service, and it turns off the usage reporting of the tools it starts: Astro, Wrangler,
+and the Vercel and Netlify CLIs. `scripts/noTracking.ts` checks this in the tests and before each release.
 
 Studio still contacts third parties to do what you ask of it:
 
-- GitHub, Sanity, Cloudflare, Vercel and your AI provider, when you connect them.
+- GitHub, Sanity, Cloudflare, Vercel, Netlify and your AI provider, when you connect them.
 - GitHub profile pictures, for people signed in to a hosted Studio.
 - YouTube, Vimeo, Loom, Wistia or Dailymotion, when you link one of their videos in a CMS
   field and Studio fetches its preview.
