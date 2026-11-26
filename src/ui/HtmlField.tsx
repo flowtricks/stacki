@@ -12,6 +12,7 @@ import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
 import { HtmlToolbar, MOD } from './HtmlToolbar';
 import { containsHTML, editableHTML } from './htmlFieldModel';
+import { RICH_HISTORY_EVENT } from '../editor/canvasTextFocus';
 import { pasteRichText } from '../../shared/page/richPaste';
 import {
   deleteBesideRichMedia,
@@ -146,8 +147,13 @@ function useHtmlEditor(options: {
       setCounts(textCounts(host.current.innerText ?? host.current.textContent ?? ''));
     }
   };
+  // The value the field was last drawn from. Only a value that changed can be news from outside: a render in between
+  // an edit and the parent taking it still holds the one before, and must not put the old content back.
+  const seen = useRef<string>();
   useEffect(() => {
-    if (host.current && value !== emitted.current) {
+    const changed = value !== seen.current;
+    seen.current = value;
+    if (host.current && changed && value !== emitted.current) {
       host.current.innerHTML = projection.html;
       emitted.current = value;
       opened.current = value;
@@ -169,6 +175,24 @@ function useHtmlEditor(options: {
     },
     restore: () => restoreSelection(host.current, saved.current),
   };
+  // The menu's ⌘Z and ⇧⌘Z for a block placed whole; a step not taken here is the browser's.
+  const emitRef = useRef(editor.emit);
+  emitRef.current = editor.emit;
+  useEffect(() => {
+    const element = host.current;
+    if (element === undefined) {
+      return undefined;
+    }
+    const onStep = (event: Event) => {
+      const step: unknown = event instanceof CustomEvent ? event.detail : undefined;
+      if ((step === 'undo' || step === 'redo') && richHistoryOf(element)[step]()) {
+        event.preventDefault();
+        emitRef.current();
+      }
+    };
+    element.addEventListener(RICH_HISTORY_EVENT, onStep);
+    return () => element.removeEventListener(RICH_HISTORY_EVENT, onStep);
+  });
   useSelectionTracking(editor, (next) => {
     setFormat(next);
     setBubble((open) => bubbleFor(host.current, next, open));
@@ -193,6 +217,7 @@ function useHtmlEditor(options: {
   };
   const forget = (): void => {
     emitted.current = undefined;
+    seen.current = undefined;
   };
   return { editor, format, bubble, setBubble, counts, run, closeBubble, forget, plus };
 }
@@ -429,6 +454,9 @@ function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlac
     if (element !== undefined) {
       insertBlock(element, richElement(element.ownerDocument, kind === 'image' ? 'img' : 'video', address));
       editor.emit();
+      // The asset picker takes focus with it as it closes: the field gets it back once it has gone, so typing goes on
+      // and ⌘Z is the field's.
+      setTimeout(() => editor.restore(), 0);
     }
   };
   const choose = (choice: BlockInsertChoice) => {

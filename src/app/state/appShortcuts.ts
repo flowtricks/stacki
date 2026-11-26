@@ -2,6 +2,7 @@
 // escape keys, routes, collections and their sample entries, cleaning up
 // queries, and composing the node edits (App.tsx).
 
+import { stepRichHistory } from '../../editor/canvasTextFocus';
 import { PREVIEW_SHORTCUT } from '../railShortcuts';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef } from 'react';
@@ -364,6 +365,9 @@ export function useMenuShortcuts(
           void undo();
           return;
         }
+        if (stepRichHistory('undo')) {
+          return;
+        }
         const route = appShortcutRoute('Mod+Z', document.activeElement ?? undefined);
         if (route === 'app') {
           return;
@@ -386,6 +390,9 @@ export function useMenuShortcuts(
         }
         if (appUndoField(document.activeElement ?? undefined)) {
           void redo();
+          return;
+        }
+        if (stepRichHistory('redo')) {
           return;
         }
         const route = appShortcutRoute('Mod+Shift+Z', document.activeElement ?? undefined);

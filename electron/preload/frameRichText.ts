@@ -394,6 +394,15 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     hold: () => {
       held = true;
     },
+    /** The menu's undo or redo: a placed block is the editor's to take back; everything typed is the browser's. */
+    step: (step: 'undo' | 'redo') => {
+      if (!closed) {
+        if (!history[step]()) {
+          document.execCommand(step);
+        }
+        report();
+      }
+    },
     /** The `+`'s menu or address field closed with nothing chosen: typing goes on where the caret was. */
     resume: () => {
       held = false;

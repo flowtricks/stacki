@@ -67,6 +67,11 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         rich?.hold();
         return;
       }
+      const step = richHistoryStep(input);
+      if (step !== undefined) {
+        rich?.step(step);
+        return;
+      }
       if (isRichMessage(input, 'avb:rich-resume')) {
         rich?.resume();
         return;
@@ -240,6 +245,14 @@ function openCanvasRich(context: CanvasRichContext, post: (message: unknown) => 
 // nothing chosen.
 function isRichMessage(input: unknown, type: 'avb:rich-hold' | 'avb:rich-resume'): boolean {
   return typeof input === 'object' && input !== null && 'type' in input && input.type === type;
+}
+
+// The menu's undo or redo, for the rich text being typed.
+function richHistoryStep(input: unknown): 'undo' | 'redo' | undefined {
+  if (typeof input !== 'object' || input === null || !('type' in input) || input.type !== 'avb:rich-history' || !('step' in input)) {
+    return undefined;
+  }
+  return input.step === 'undo' || input.step === 'redo' ? input.step : undefined;
 }
 
 function readRichBlockRequest(input: unknown) {
