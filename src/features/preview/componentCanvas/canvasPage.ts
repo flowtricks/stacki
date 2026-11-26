@@ -76,7 +76,7 @@ import 'virtual:stacki-component-preview-styles';
 import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';
 ${imports.declarations().join('\n')}
 const chrome = ${JSON.stringify(chromeStyles(input.theme, input.surface))};
-const script = ${JSON.stringify(chromeScript(input.id))};
+const script = ${JSON.stringify(chromeScript(input.id, input.theme))};
 ---
 <html {...htmlAttributes} class={[htmlAttributes.class, ${rootClassList(input.rootClasses ?? [])}'stacki-designer'].filter(Boolean).join(' ')}${input.surface === undefined ? '' : ' data-stacki-surface'}>
 <head>
@@ -258,7 +258,8 @@ function frameMarkup(frame: CanvasPageFrame, cell: { readonly row: number; reado
   // compares this with the key it is sent. A key is URI-encoded pairs, so it holds no quote, brace or angle bracket.
   assert(!/["{}<>\\]/.test(frame.key), 'A frame key is URI-encoded');
   const key = JSON.stringify(frame.key);
-  const styleAttribute = ` style="${style.join('; ')}"`;
+  // !important, inline: the frame's own size, place and background beat any rule of the project's (canvasChrome.ts).
+  const styleAttribute = ` style="${style.map((declaration) => `${declaration} !important`).join('; ')}"`;
   const flagAttributes = flags.map((flag) => ' ' + flag).join('');
   // The caption is the frame's own (`data-label`, drawn by its ::before), not an element anyone can point at. The frame
   // itself is marked: a press on its caption or around its instance names it, which the editor reads as the instance
