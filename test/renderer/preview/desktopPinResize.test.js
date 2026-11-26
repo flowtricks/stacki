@@ -1,9 +1,10 @@
 // Goal: shrinking the window never shrinks the website. The ordinary canvas (a project opened, a page switched, a
 // canvas reloaded, Desktop shown without anyone choosing it) is the pane's own width at 100% and reflows as the pane
-// moves. Only choosing Desktop in a pane too narrow for the desktop layout draws the Desktop width, scaled, and that
-// view holds while the pane stays too narrow; once the pane has the desktop range the choice is over for good.
+// moves. Only choosing Desktop in a pane too narrow for the desktop layout draws the Desktop width, scaled, and that is
+// one look: the next resize of the pane, either way, wider or still too narrow, goes back to the pane's own width and
+// the choice is over. Rounding jitter and the layout the pick itself causes are not resizes.
 // Method: the real sizing hook (usePreviewSizing) in jsdom, over a pane whose width the test sets and announces
-// through the ResizeObserver, as a window or panel resize does. Each step reads the frame's own width (undefined:
+// through the ResizeObserver, as a window or panel resize does. A pick settles on the real clock. Each step reads the frame's own width (undefined:
 // filling), the width and scale it draws at, and the device the toolbar presses.
 
 const assert = require('node:assert/strict');
@@ -20,7 +21,7 @@ const output = path.join(directory, 'pin.cjs');
 buildSync({
   stdin: {
     contents: [
-      "export { usePreviewSizing, usePreviewDimensions } from './src/features/preview/usePreviewSizing';",
+      "export { usePreviewSizing, usePreviewDimensions, DESKTOP_PICK_SETTLE_MS } from './src/features/preview/usePreviewSizing';",
       "export { BREAKPOINT_DEFAULTS, resolveBreakpoints } from './shared/properties/projectBreakpoints';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -49,6 +50,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(global, name, { value, configurable: true, writable: true });
 }
 let paneWidthPx = 1600;
+let paneHeightPx = 700;
 const observers = new Set();
 global.ResizeObserver = class {
   constructor(callback) {
@@ -62,7 +64,7 @@ global.ResizeObserver = class {
   }
 };
 Object.defineProperty(dom.window.HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => paneWidthPx });
-Object.defineProperty(dom.window.HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 700 });
+Object.defineProperty(dom.window.HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => paneHeightPx });
 
 const React = require('react');
 const { act } = React;
@@ -71,6 +73,7 @@ const pin = require(output);
 
 async function mount({ widthPx, breakpoints = pin.BREAKPOINT_DEFAULTS, preview = false }) {
   paneWidthPx = widthPx;
+  paneHeightPx = 700;
   const handle = {};
   function Window({ viewKey }) {
     const [device, setDevice] = React.useState('desktop');
@@ -101,8 +104,11 @@ async function mount({ widthPx, breakpoints = pin.BREAKPOINT_DEFAULTS, preview =
     handle,
     read,
     render,
-    resize: (next) =>
+    // Past the pick's settle window, on the real clock.
+    settle: () => act(async () => new Promise((resolve) => setTimeout(resolve, pin.DESKTOP_PICK_SETTLE_MS + 50))),
+    resize: (next, height = paneHeightPx) =>
       act(async () => {
+        paneHeightPx = height;
         paneWidthPx = next;
         for (const observer of observers) {
           observer.callback([]);
@@ -148,18 +154,46 @@ test('choosing Desktop where it fits leaves nothing behind: shrinking afterwards
   await canvas.unmount();
 });
 
-test('choosing Desktop in a narrow pane scales the Desktop width, holds while narrow, and is over once the pane has room', async () => {
+test('choosing Desktop in a narrow pane is one look: the next resize goes back to the pane’s own width', async () => {
   const canvas = await mount({ widthPx: 900 });
-  await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
-  assert.deepEqual(canvas.read(), framed(900), 'as typing 1440 would');
-  await canvas.resize(700);
-  assert.deepEqual(canvas.read(), framed(700), 'held across a resize while still too narrow');
-  await canvas.resize(1023);
-  assert.deepEqual(canvas.read(), framed(1023), 'the last pixel under the range');
-  await canvas.resize(1024);
-  assert.deepEqual(canvas.read(), filling(1024, 'desktop'));
+  for (const [panePx, page, active, what] of [
+    [860, 842, 'laptop', 'narrower'],
+    [940, 922, 'laptop', 'wider, still too narrow'],
+    [1100, 1082, 'desktop', 'wide enough'],
+    [700, 682, 'tablet', 'much narrower'],
+  ]) {
+    await canvas.resize(900);
+    await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
+    await canvas.settle();
+    assert.deepEqual(canvas.read(), framed(900), 'as typing 1440 would, every time it is chosen');
+    await canvas.resize(panePx);
+    assert.deepEqual(canvas.read(), filling(page, active), what);
+    assert.equal(canvas.handle.dimensions.desktopPick, 'none', what);
+  }
   await canvas.resize(900);
   assert.deepEqual(canvas.read(), filling(882, 'laptop'), 'the pick does not come back');
+  await canvas.unmount();
+});
+
+test('a change of height alone is a resize too', async () => {
+  const canvas = await mount({ widthPx: 900 });
+  await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
+  await canvas.settle();
+  await canvas.resize(900, 640);
+  assert.deepEqual(canvas.read(), filling(882, 'laptop'));
+  await canvas.unmount();
+});
+
+test('jitter, and the layout the pick itself causes, keep the look', async () => {
+  const canvas = await mount({ widthPx: 900 });
+  await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
+  await canvas.resize(884);
+  assert.deepEqual(canvas.read(), framed(884), 'the pane moving right after the click is the click’s own layout');
+  await canvas.settle();
+  await canvas.resize(887, 697);
+  assert.deepEqual(canvas.read(), framed(887), 'a few pixels either way');
+  await canvas.resize(889);
+  assert.deepEqual(canvas.read(), filling(871, 'laptop'), 'small steps add up from the size held');
   await canvas.unmount();
 });
 
@@ -187,18 +221,15 @@ test('a page switch or a reload opens on the ordinary canvas; a resize alone is 
   await canvas.unmount();
 });
 
-test('past a wider breakpoint: the ordinary canvas shows it, a pick of Desktop stops short until the pane comes back', async () => {
+test('past a wider breakpoint: the ordinary canvas shows it, a pick of Desktop stops short until the next resize', async () => {
   const wide = { id: 'bp-1', name: 'Wide', direction: 'up', setting: { value: 100, unit: 'rem' } };
   const canvas = await mount({ widthPx: 1800, breakpoints: pin.resolveBreakpoints([wide, ...pin.BREAKPOINT_DEFAULTS]) });
   assert.deepEqual(canvas.read(), filling(1782, 'bp-1'), 'the real width');
   await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
   assert.deepEqual(canvas.read(), filling(1599, 'desktop'));
+  await canvas.settle();
   await canvas.resize(2000);
-  assert.deepEqual(canvas.read(), filling(1599, 'desktop'));
-  await canvas.resize(1400);
-  assert.deepEqual(canvas.read(), filling(1382, 'desktop'));
-  await canvas.resize(1800);
-  assert.deepEqual(canvas.read(), filling(1782, 'bp-1'), 'back in the range once, the pick is over');
+  assert.deepEqual(canvas.read(), filling(1982, 'bp-1'), 'the real width again');
   await canvas.unmount();
 });
 
