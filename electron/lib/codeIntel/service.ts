@@ -24,12 +24,14 @@ import { blockLanguage, createStyleIndex, fileStyles, STYLESHEET_EXTENSIONS, typ
 import { markupClassSuggestions, stylesheetCompletions, variableSuggestions, type StyleSources } from './styleSuggest';
 import { completions, noCompletions, suggestion } from './suggestion';
 import { entryMemory, sameTarget, typeDetail, typeDiagnostics, typeHover, typeSignature, typeSuggestions, type Target } from './typeAnswers';
-import { typeConfig } from './typeConfig';
+import { typeConfig, type TypeConfig } from './typeConfig';
 import { libraryFiles, type LibraryFiles } from './typeFiles';
 import { createTypeProject, type TypeProject } from './typeProject';
 
 const SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const DEPENDENCIES_CHECKED_MAX = 30;
+/** Files whose tsconfig is remembered. */
+const CONFIGS_KEPT_MAX = 50;
 /** Folders walked up looking for installed dependencies. */
 const ANCESTORS_MAX = 40;
 const ASTRO_DIRECTIVES: readonly string[] = [
@@ -78,6 +80,8 @@ interface Workspace {
   /** The type checker's project for a file, made on first need. */
   readonly types: (file: string) => TypeProject;
   readonly packageFolder: (file: string) => string;
+  /** The tsconfig a file belongs to, read once between changes: finding it among references lists the project. */
+  readonly config: (file: string) => TypeConfig;
   readonly astroPackage: (folder: string) => string | undefined;
   /** False when the file's package lists dependencies and none are installed. */
   readonly installed: (file: string) => boolean;
@@ -92,6 +96,22 @@ function createWorkspace(root: string, libraries: LibraryFiles): Workspace {
   const versions = new Map<string, string>();
   const projects = new Map<string, TypeProject>();
   const astroFolders = new Map<string, string>();
+  const configs = new Map<string, { readonly generation: number; readonly config: TypeConfig }>();
+  const configFor = (file: string): TypeConfig => {
+    const generation = index.generation();
+    const kept = configs.get(file);
+    if (kept?.generation === generation) {
+      return kept.config;
+    }
+    const config = typeConfig(file, root);
+    configs.delete(file);
+    configs.set(file, { generation, config });
+    const oldest = configs.keys().next();
+    if (configs.size > CONFIGS_KEPT_MAX && oldest.done !== true) {
+      configs.delete(oldest.value);
+    }
+    return config;
+  };
   const installedFolders = new Set<string>();
   /** Packages last seen without their dependencies, and one of the names they lacked. */
   const awaited = new Map<string, readonly string[]>();
@@ -100,6 +120,7 @@ function createWorkspace(root: string, libraries: LibraryFiles): Workspace {
       project.dispose();
     }
     projects.clear();
+    configs.clear();
     versions.clear();
     astroFolders.clear();
     installedFolders.clear();
@@ -162,6 +183,7 @@ function createWorkspace(root: string, libraries: LibraryFiles): Workspace {
     memory: entryMemory(),
     libraries,
     packageFolder,
+    config: configFor,
     astroPackage,
     installed: (file) => {
       const folder = packageFolder(file);
@@ -178,7 +200,7 @@ function createWorkspace(root: string, libraries: LibraryFiles): Workspace {
       return found;
     },
     types: (file) => {
-      const config = typeConfig(file, root);
+      const config = configFor(file);
       const key = config.file ?? root;
       let project = projects.get(key);
       if (project === undefined) {
@@ -371,7 +393,7 @@ function pathPlace(question: Question): PathPlace {
   return {
     file: question.file,
     packageFolder,
-    aliases: typeConfig(question.file, question.workspace.root).aliases,
+    aliases: question.workspace.config(question.file).aliases,
     dependencies: dependencyNames(packageFolder),
   };
 }
@@ -453,7 +475,7 @@ function tagCompletions(question: Question, position: number, from: number): Cod
   const { workspace, file } = question;
   const mdx = question.extension === '.mdx';
   const resolver = mdx ? undefined : openProject(question);
-  const config = typeConfig(file, workspace.root);
+  const config = workspace.config(file);
   const fence = frontmatterRange(question.text);
   const code = mdx ? (question.text.match(/^import\s[^\n]*$/gm) ?? []).join('\n') : fence === undefined ? '' : question.text.slice(fence.from, fence.to);
   const items = componentSuggestions(

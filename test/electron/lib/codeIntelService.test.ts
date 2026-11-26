@@ -253,6 +253,14 @@ test('classes and variables follow what would apply', (context) => {
   assert.deepEqual(project.labels('src/styles/other.css', '@import "./‸";'), ['card.module.css', 'global.css']);
 });
 
+test('MDX: components with their import among the document, and import paths', (context) => {
+  const project = site(context, { 'src/components/Card.astro': CARD });
+  const [card] = project.items('src/content/post.mdx', '---\ntitle: A\n---\n\n# Hello\n\n<Car‸\n');
+  assert.equal(card?.edits[0]?.insert, "\nimport Card from '../components/Card.astro';\n\n");
+  assert.deepEqual(project.labels('src/content/post.mdx', 'import Card from "../components/‸"\n'), ['Card.astro']);
+  assert.deepEqual(project.errors('src/content/post.mdx', '# <Nope />\n'), []);
+});
+
 test('served and imported paths', (context) => {
   const project = site(context, { 'public/images/logo.svg': '', 'public/favicon.ico': '', 'src/assets/hero.png': '', [PAGE]: '' });
   assert.deepEqual(project.labels(PAGE, '<img src="/‸" />'), ['images/', 'favicon.ico']);
