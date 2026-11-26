@@ -21,6 +21,10 @@ export type Hosting =
       readonly provider: 'vercel';
       readonly organizationId: string;
       readonly projectId: string;
+    }
+  | {
+      readonly provider: 'netlify';
+      readonly siteId: string;
     };
 export interface PublishConfig {
   readonly publishedSite?: PublishedSite;
@@ -152,8 +156,10 @@ function parseHosting(input: unknown): Hosting {
         organizationId: identifier(value['organizationId']),
         projectId: identifier(value['projectId']),
       };
+    case 'netlify':
+      return { provider: 'netlify', siteId: identifier(value['siteId']) };
     default:
-      throw new Error('Choose Cloudflare Pages, Cloudflare Workers, Vercel, or no hosting.');
+      throw new Error('Choose Cloudflare Pages, Cloudflare Workers, Vercel, Netlify, or no hosting.');
   }
 }
 

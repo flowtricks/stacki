@@ -10,6 +10,7 @@ export interface Environment extends AuthConfig {
   readonly GITHUB_DEPLOY_ACCOUNT?: string;
   readonly PUBLISH_CLOUDFLARE_API_TOKEN?: string;
   readonly PUBLISH_VERCEL_TOKEN?: string;
+  readonly PUBLISH_NETLIFY_TOKEN?: string;
   readonly AI_BASE_URL?: string;
   readonly AI_MODEL?: string;
   readonly AI_MODELS?: string;

@@ -73,7 +73,7 @@ export function AddPublishAccount(props: Props) {
 }
 
 // i18n-ignore: product names are never translated.
-const PROVIDER_LABELS: Readonly<Record<AccountProvider, string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel' };
+const PROVIDER_LABELS: Readonly<Record<AccountProvider, string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel', netlify: 'Netlify' };
 
 function AccountDeviceCode({ code }: { readonly code: string }) {
   const translate = useTranslate();
@@ -165,7 +165,7 @@ const BROWSER_STEP_LABELS = {
 // One screen for the whole browser sign-in: one line, a (?) tip for switching logins, and one primary button that
 // carries the progress (spinner and step label) from setup to sign-in. The browser opens by itself once the sign-in
 // page is ready; problems are toasts, each with its own retry, never lines added to the dialog.
-function BrowserSignIn(props: { readonly provider: 'cloudflare' | 'vercel'; readonly state: AccountState; readonly retry: () => void }) {
+function BrowserSignIn(props: { readonly provider: Exclude<AccountProvider, 'github'>; readonly state: AccountState; readonly retry: () => void }) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const [openError, setOpenError] = useState('');

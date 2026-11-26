@@ -35,6 +35,11 @@ export function findMissingPublishField(config: Pick<PublishConfig, 'hosting' | 
         return err({ field: 'vercelOrganization' });
       }
       break;
+    case 'netlify':
+      if (hosting.siteId.trim() === '') {
+        return err({ field: 'hostingProject' });
+      }
+      break;
     default: {
       const exhaustive: never = hosting;
       return exhaustive;

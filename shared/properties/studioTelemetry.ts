@@ -1,6 +1,6 @@
 // Third-party command-line tools report usage on their own unless told not to:
-// Astro on every `astro dev` and `astro build`, Wrangler and Vercel on every
-// deploy. Studio promises no usage tracking, so every process that hosts Studio
+// Astro on every `astro dev` and `astro build`, Wrangler, Vercel and Netlify
+// on every deploy. Studio promises no usage tracking, so every process that hosts Studio
 // starts with these values and the tools it runs inherit them, publishing
 // included, because `publishEnvironment()` copies the host's environment.
 //
@@ -10,6 +10,7 @@
 export const STUDIO_TELEMETRY_DISABLED = {
   ASTRO_TELEMETRY_DISABLED: '1',
   VERCEL_TELEMETRY_DISABLED: '1',
+  NETLIFY_TELEMETRY_DISABLED: '1',
   WRANGLER_SEND_METRICS: 'false',
 } as const satisfies Readonly<Record<string, string>>;
 

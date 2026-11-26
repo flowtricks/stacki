@@ -65,6 +65,7 @@ import { parseAstroCopyRequest } from './astroCopy';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parseWorkerSetupRequest } from '../properties/publishWorkerSetup';
+import { parseNetlifySiteRequest } from '../properties/publishNetlify';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
@@ -505,6 +506,7 @@ export const IPC_PAYLOADS = {
   'publish:discover': object({ ...project, request: parseDiscoveryRequest }),
   'publish:account': object({ ...project, request: parseAccountRequest }),
   'publish:workerSetup': object({ ...project, worker: parseWorkerSetupRequest }),
+  'publish:netlifySite': object({ ...project, site: parseNetlifySiteRequest }),
   'cmsConnections:list': object({ ...project }),
   'cmsConnections:save': object({ ...project, draft: parseCmsConnectionDraft }),
   'cmsConnections:remove': object({ ...project, id: parseConnectionId }),

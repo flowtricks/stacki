@@ -19,7 +19,7 @@ type Props = { readonly projectPath: string } & (
       readonly change: (account: string) => void;
     }
   | {
-      readonly provider: 'cloudflare' | 'vercel';
+      readonly provider: 'cloudflare' | 'vercel' | 'netlify';
       readonly value: Hosting;
       readonly change: (hosting: Hosting) => void;
     }
@@ -83,7 +83,7 @@ export function PublishConnections(props: Props) {
 }
 
 // i18n-ignore: product names are never translated.
-const PROVIDER_LABELS: Readonly<Record<Props['provider'], string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel' };
+const PROVIDER_LABELS: Readonly<Record<Props['provider'], string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel', netlify: 'Netlify' };
 
 // The label is English text plus its reference, so the screen translates it and tests and logs keep the English.
 type Recovery = ({ readonly kind: 'sign-in' } | { readonly kind: 'refresh' }) & Described & { readonly label: string };
@@ -107,7 +107,7 @@ export function connectionRecovery(provider: Props['provider'], problem: Pick<Co
   const label = PROVIDER_LABELS[provider];
   switch (problem.reason) {
     case 'missing-cli':
-      // Cloudflare and Vercel sign-in install their CLI first; Stacki never installs gh.
+      // Cloudflare, Vercel and Netlify sign-in install their CLI first; Stacki never installs gh.
       if (provider === 'github') {
         return recoveryOf('refresh', 'publish.connection.recovery.refresh');
       }
@@ -129,7 +129,7 @@ export function connectionRecovery(provider: Props['provider'], problem: Pick<Co
 }
 
 /**
- * Whether the recovery button fixes the problem by itself: a missing Cloudflare or Vercel tool is installed by the
+ * Whether the recovery button fixes the problem by itself: a missing Cloudflare, Vercel or Netlify tool is installed by the
  * sign-in that button starts, so the missing tool is not news to report, only a step the button takes.
  */
 export function installsOnConnect(provider: Props['provider'], problem: Pick<ConnectionProblem, 'reason'>): boolean {
@@ -280,7 +280,7 @@ function GitHubAvatar({ login }: { readonly login: string }) {
 export function ConnectionHelp({ provider }: { readonly provider: Props['provider'] }) {
   const translate = useTranslate();
   const translateRich = useTranslateRich();
-  const command = { github: 'gh auth login', cloudflare: 'wrangler login', vercel: 'vercel login' };
+  const command = { github: 'gh auth login', cloudflare: 'wrangler login', vercel: 'vercel login', netlify: 'netlify login' };
   return (
     <details className="publish-connection-help">
       <summary>{translate('publish.connection.help.title')}</summary>

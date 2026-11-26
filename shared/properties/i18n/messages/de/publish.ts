@@ -19,6 +19,7 @@ export const messages = {
   'publish.account.error.signInOutputLarge': 'Die Anmeldung bei {provider} hat zu viel Ausgabe erzeugt.',
   'publish.account.error.startCloudflare': 'Die Cloudflare-Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.',
   'publish.account.error.startGitHub': 'Die GitHub-Anmeldung konnte nicht gestartet werden. Installiere gh und versuche es erneut.',
+  'publish.account.error.startNetlify': 'Die Netlify-Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.',
   'publish.account.error.startVercel': 'Die Vercel-Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.',
   'publish.account.expired': 'Die Kontoanmeldung ist abgelaufen. Versuche es erneut.',
   'publish.account.openBrowser': 'Browser öffnen',
@@ -105,6 +106,7 @@ export const messages = {
   'publish.hosting.accountNameLoading': 'Kontoname wird geladen …',
   'publish.hosting.accountNameUnavailable': 'Kontoname nicht verfügbar',
   'publish.hosting.accountUnverified': 'Konto nicht verifiziert',
+  'publish.hosting.addSite': 'Website hinzufügen',
   'publish.hosting.addWorker': 'Worker hinzufügen',
   'publish.hosting.chooseAccount': 'Konto auswählen …',
   'publish.hosting.chooseCloudflareFirst': 'Wähle zuerst ein Cloudflare-Konto',
@@ -117,6 +119,7 @@ export const messages = {
   'publish.hosting.refreshCloudflareAccount': 'Cloudflare-Konto aktualisieren',
   'publish.hosting.refreshProject': 'Hosting-Projekt aktualisieren',
   'publish.hosting.saved': 'Gespeichert',
+  'publish.hosting.savedNetlifySite': 'Gespeicherte Netlify-Website',
   'publish.hosting.savedVercelProject': 'Gespeichertes Vercel-Projekt',
   'publish.hosting.worker': 'Worker', // same
   'publish.label': 'Veröffentlichen', // review
@@ -135,6 +138,26 @@ export const messages = {
   'publish.menu.pushToGitHub': 'Zu GitHub pushen',
   'publish.menu.settings': 'Veröffentlichungseinstellungen …',
   'publish.moreOptions': 'Weitere Veröffentlichungsoptionen',
+  'publish.netlify.error.adapterNeeded':
+    'Diese Website wird bei Bedarf gerendert. Füge den Adapter @astrojs/netlify hinzu, um sie auf Netlify bereitzustellen.',
+  'publish.netlify.error.config': 'Stacki konnte netlify.toml nicht lesen. Korrigiere die Datei und veröffentliche erneut.',
+  'publish.netlify.error.createFailed': 'Netlify konnte die Website nicht erstellen. Versuche es erneut.',
+  'publish.netlify.error.createUnconfirmed': 'Netlify hat die neue Website nicht bestätigt. Aktualisiere die Projektliste, bevor du es erneut versuchst.',
+  'publish.netlify.error.nameRefused': 'Netlify hat diesen Namen nicht akzeptiert. Vielleicht ist er schon vergeben. Versuche einen anderen.',
+  'publish.netlify.error.otherAdapter':
+    'Diese Website verwendet den Astro-Adapter eines anderen Hosters. Wechsle zu @astrojs/netlify, um auf Netlify bereitzustellen.',
+  'publish.netlify.error.otherSite': 'Netlify hat auf einer anderen als der ausgewählten Website bereitgestellt. Prüfe dein Netlify-Dashboard.',
+  'publish.netlify.error.outputFolder':
+    'Stacki hat den Build-Ordner der Website nicht gefunden. Prüfe das Build-Skript oder lege publish in netlify.toml fest.',
+  'publish.netlify.error.siteNotFound':
+    'Netlify findet diese Website mit dem angemeldeten Konto nicht. Wähle sie in den Veröffentlichungseinstellungen erneut aus.',
+  'publish.netlify.error.unconfirmed': 'Netlify hat die Bereitstellung nicht bestätigt. Prüfe die Website in deinem Netlify-Dashboard.',
+  'publish.netlify.newSite.create': 'Website erstellen',
+  'publish.netlify.newSite.creating': 'Website wird erstellt…',
+  'publish.netlify.newSite.name': 'Name der Website',
+  'publish.netlify.newSite.nameRule': 'Kleinbuchstaben, Zahlen und Bindestriche. Daraus wird die netlify.app-Adresse der Website.',
+  'publish.netlify.newSite.team': 'Team', // same
+  'publish.netlify.newSite.title': 'Neue Netlify-Website',
   'publish.repositories.add': 'Repo hinzufügen',
   'publish.repositories.choose': 'Repository auswählen …',
   'publish.repositories.chooseAccountFirst': 'Wähle zuerst ein GitHub-Konto',
@@ -188,6 +211,7 @@ export const messages = {
   'publish.settings.advanced.afterPublish': 'Nach dem Veröffentlichen',
   'publish.settings.advanced.beforePublish': 'Vor dem Veröffentlichen',
   'publish.settings.advanced.buildScript': 'Build-Skript',
+  'publish.settings.advanced.netlifySite': 'Netlify-Website-ID',
   'publish.settings.advanced.outputDirectory': 'Build-Ausgabeordner',
   'publish.settings.advanced.pagesProject': 'Name des Pages-Projekts',
   'publish.settings.advanced.productionBranch': 'Produktions-Branch',

@@ -8,11 +8,12 @@ import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import { AddPublishAccount } from './PublishAccount';
 import { AddWorker } from './PublishWorker';
+import { AddNetlifySite } from './PublishNetlifySite';
 import { invalidatePublishingAccounts } from './publishDiscoveryCache';
 
 interface Props {
   readonly projectPath: string;
-  readonly provider: 'cloudflare' | 'vercel';
+  readonly provider: 'cloudflare' | 'vercel' | 'netlify';
   readonly value: Hosting;
   readonly change: (hosting: Hosting) => void;
   readonly accounts: readonly PublishAccount[];
@@ -22,7 +23,7 @@ interface Props {
 }
 
 export function HostingChoice(props: Props) {
-  const [dialog, setDialog] = useState<'closed' | 'account' | 'worker'>('closed');
+  const [dialog, setDialog] = useState<'closed' | 'account' | 'worker' | 'site'>('closed');
   useResolvedAccount(props);
   const account = hostingAccount(props.value);
   const projects =
@@ -30,7 +31,20 @@ export function HostingChoice(props: Props) {
   return (
     <>
       {props.provider === 'cloudflare' && <CloudflareAccount {...props} add={() => setDialog('account')} />}
-      <HostingProject {...props} projects={projects} add={() => setDialog('worker')} />
+      <HostingProject {...props} projects={projects} add={() => setDialog(props.provider === 'netlify' ? 'site' : 'worker')} />
+      {dialog === 'site' && (
+        <AddNetlifySite
+          projectPath={props.projectPath}
+          teams={props.accounts}
+          close={() => setDialog('closed')}
+          created={(hosting) => {
+            props.change(hosting);
+            setDialog('closed');
+            invalidatePublishingAccounts(props.projectPath, 'netlify');
+            props.refresh();
+          }}
+        />
+      )}
       {dialog === 'account' && (
         <AddPublishAccount
           projectPath={props.projectPath}
@@ -134,7 +148,7 @@ function HostingProject(props: Props & { readonly add: () => void }) {
     .map((project) => ({
       value: hostingKey(project.hosting),
       label: project.name,
-      group: props.accounts.find((entry) => entry.id === hostingAccount(project.hosting))?.name ?? '',
+      group: props.accounts.find((entry) => entry.id === (project.account ?? hostingAccount(project.hosting)))?.name ?? '',
       description:
         project.hosting.provider === 'cloudflare'
           ? translate('publish.hosting.pages')
@@ -148,7 +162,8 @@ function HostingProject(props: Props & { readonly add: () => void }) {
       value: selected,
       label: hostingLabel(props.value, translate),
       group: '',
-      description: account ? translate('publish.hosting.saved') : translate('publish.hosting.accountUnverified'),
+      // A Netlify destination names no account, so an unlisted one is simply the saved choice.
+      description: account || props.provider === 'netlify' ? translate('publish.hosting.saved') : translate('publish.hosting.accountUnverified'),
     });
   }
   return (
@@ -163,6 +178,11 @@ function HostingProject(props: Props & { readonly add: () => void }) {
         {props.provider === 'cloudflare' && (
           <button type="button" className="publish-refresh" disabled={!account || props.busy} onClick={props.add}>
             {translate('publish.hosting.addWorker')}
+          </button>
+        )}
+        {props.provider === 'netlify' && (
+          <button type="button" className="publish-refresh" disabled={props.accounts.length === 0 || props.busy} onClick={props.add}>
+            {translate('publish.hosting.addSite')}
           </button>
         )}
       </div>
@@ -230,6 +250,7 @@ function HostingLabel(props: { readonly label: string; readonly refreshLabel: st
 function hostingAccount(hosting: Hosting): string {
   switch (hosting.provider) {
     case 'none':
+    case 'netlify':
       return '';
     case 'cloudflare':
     case 'cloudflare-workers':
@@ -247,13 +268,25 @@ export function hostingKey(hosting: Hosting): string {
       return hosting.project ? `${hosting.provider}/${hosting.accountId}/${hosting.project}` : ''; // i18n-ignore: an option id, not text.
     case 'vercel':
       return hosting.projectId ? `vercel/${hosting.organizationId}/${hosting.projectId}` : ''; // i18n-ignore: an option id, not text.
+    case 'netlify':
+      return hosting.siteId ? `netlify/${hosting.siteId}` : ''; // i18n-ignore: an option id, not text.
   }
 }
-// What the saved destination is called in the project list; a Vercel project has no name until discovery finds it.
+// What the saved destination is called in the project list; a Vercel project or Netlify site has no name until
+// discovery finds it.
 function hostingLabel(hosting: Hosting, translate: Translator): string {
-  return hosting.provider === 'vercel' ? translate('publish.hosting.savedVercelProject') : hostingName(hosting);
+  switch (hosting.provider) {
+    case 'vercel':
+      return translate('publish.hosting.savedVercelProject');
+    case 'netlify':
+      return translate('publish.hosting.savedNetlifySite');
+    case 'none':
+    case 'cloudflare':
+    case 'cloudflare-workers':
+      return hostingName(hosting);
+  }
 }
-// Only compared and tested for emptiness: the display name for Vercel comes from `hostingLabel`.
+// Only compared and tested for emptiness: the display name for Vercel and Netlify comes from `hostingLabel`.
 function hostingName(hosting: Hosting): string {
   switch (hosting.provider) {
     case 'none':
@@ -263,5 +296,7 @@ function hostingName(hosting: Hosting): string {
       return hosting.project;
     case 'vercel':
       return 'vercel'; // i18n-ignore: a non-empty marker for comparisons; the label people read is hostingLabel.
+    case 'netlify':
+      return 'netlify'; // i18n-ignore: the same kind of marker.
   }
 }

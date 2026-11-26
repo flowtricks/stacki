@@ -60,6 +60,7 @@ const CLIENT_HOSTS_ALLOWED: Readonly<Record<string, string>> = {
   'aka.ms': "Links in the TypeScript compiler's diagnostic text.",
   'api.hubapi.com': "HubSpot's API, called through Stacki's HubSpot connection only for an app the person connected to HubSpot.",
   'app.hubspot.com': "HubSpot's sign-in page for the HubSpot connection apps use, opened only when someone connects HubSpot.",
+  'app.netlify.com': "Validates the Netlify CLI's sign-in link before it is opened in the browser (publishAccount.ts); Studio never fetches it.",
   'avatars.githubusercontent.com': "Signed-in collaborators' GitHub profile pictures.",
   'claude.com': "Claude Code's install page, opened in the browser from the AI panel's setup step; Studio never fetches it.",
   'cms.example.com': 'Placeholder text in the CMS connection form.',
@@ -101,6 +102,7 @@ const LITERAL_HOST = /\b(?:https?|wss?):\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi;
 const TELEMETRY_SETTINGS = [
   { name: 'ASTRO_TELEMETRY_DISABLED', value: '1' },
   { name: 'VERCEL_TELEMETRY_DISABLED', value: '1' },
+  { name: 'NETLIFY_TELEMETRY_DISABLED', value: '1' },
   { name: 'WRANGLER_SEND_METRICS', value: 'false' },
 ] as const;
 const LAUNCH_ENVIRONMENT = 'env: withStudioTelemetryDisabled(process.env)';

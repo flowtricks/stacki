@@ -2,7 +2,7 @@ import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
-export const ACCOUNT_PROVIDERS = ['github', 'cloudflare', 'vercel'] as const;
+export const ACCOUNT_PROVIDERS = ['github', 'cloudflare', 'vercel', 'netlify'] as const;
 export type AccountProvider = (typeof ACCOUNT_PROVIDERS)[number];
 export interface AccountRequest {
   readonly provider?: AccountProvider;
@@ -86,8 +86,10 @@ export function accountSignInPending(state: AccountState): boolean {
 }
 
 /**
- * A sign-in page a provider CLI printed: Cloudflare's OAuth authorization page, or Vercel's
- * device-authorization page (`vercel login` prints `https://vercel.com/oauth/device?user_code=…`).
+ * A sign-in page a provider CLI printed: Cloudflare's OAuth authorization page, Vercel's
+ * device-authorization page (`vercel login` prints `https://vercel.com/oauth/device?user_code=…`),
+ * or Netlify's ticket authorization page (`netlify login --request` prints
+ * `https://app.netlify.com/authorize?response_type=ticket&ticket=…`).
  * Any other address is refused, so a CLI's output can never open an arbitrary page.
  */
 export function parseSignInURL(input: unknown): string {
@@ -99,6 +101,12 @@ export function parseSignInURL(input: unknown): string {
   assert(url.hash === '', 'A sign-in URL has no fragment');
   if (url.origin === 'https://vercel.com') {
     assert(url.pathname === '/oauth/device', 'Vercel sign-in uses the device authorization page');
+    return value;
+  }
+  if (url.origin === 'https://app.netlify.com') {
+    assert(url.pathname === '/authorize', 'Netlify sign-in uses the authorization page');
+    assert(url.searchParams.get('response_type') === 'ticket', 'Netlify sign-in authorizes a ticket');
+    assert((url.searchParams.get('ticket') ?? '') !== '', 'Netlify sign-in names its ticket');
     return value;
   }
   assert(url.origin === 'https://dash.cloudflare.com', 'Cloudflare sign-in uses its dashboard');

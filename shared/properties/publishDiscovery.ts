@@ -3,7 +3,7 @@ import { record, text, list } from '../core/boundary';
 import { englishText, messageRef, type MessageKey } from './i18n/messageRef';
 import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, type Hosting } from './publishConfig';
 
-export type DiscoveryProvider = 'cloudflare' | 'cloudflare-workers' | 'vercel' | 'github' | 'linked';
+export type DiscoveryProvider = 'cloudflare' | 'cloudflare-workers' | 'vercel' | 'netlify' | 'github' | 'linked';
 export interface DiscoveryRequest {
   readonly provider: DiscoveryProvider;
   readonly account: string;
@@ -15,6 +15,8 @@ export interface PublishAccount {
 export interface PublishProject {
   readonly name: string;
   readonly hosting: Hosting;
+  // The account that lists the project, for hosts whose saved destination does not name one (Netlify keeps a site id only).
+  readonly account?: string;
 }
 // Why a provider connection could not be read. The reason, never the CLI's output, crosses the
 // boundary: it picks the recovery the settings offer (install, sign in, sign in again, refresh).
@@ -38,7 +40,7 @@ export const DISCOVERY_LIMITS = { itemsMax: 500, pagesMax: 5, timeoutMs: 30_000 
 export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
   const value = record(input);
   const provider = value['provider'];
-  if (provider !== 'cloudflare' && provider !== 'cloudflare-workers' && provider !== 'vercel' && provider !== 'github' && provider !== 'linked') {
+  if (!isDiscoveryProvider(provider)) {
     throw new Error('Unknown publishing provider.');
   }
   const account = text(value['account']);
@@ -46,6 +48,19 @@ export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
     discoveryIdentifier(account);
   }
   return { provider, account };
+}
+
+const DISCOVERY_PROVIDERS = {
+  cloudflare: true,
+  'cloudflare-workers': true,
+  vercel: true,
+  netlify: true,
+  github: true,
+  linked: true,
+} as const satisfies Record<DiscoveryProvider, true>;
+
+function isDiscoveryProvider(input: unknown): input is DiscoveryProvider {
+  return typeof input === 'string' && Object.hasOwn(DISCOVERY_PROVIDERS, input);
 }
 
 export function parsePublishDiscovery(input: unknown): PublishDiscovery {
@@ -68,6 +83,7 @@ export function parsePublishDiscovery(input: unknown): PublishDiscovery {
       return {
         name: discoveryLabel(project['name']),
         hosting: parseDiscoveredHosting(project['hosting']),
+        ...(project['account'] === undefined ? {} : { account: discoveryIdentifier(project['account']) }),
       };
     }),
   };

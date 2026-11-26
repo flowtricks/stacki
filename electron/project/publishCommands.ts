@@ -6,7 +6,11 @@ import { resolvePublishExecutable, type ExecutableCommand } from './publishExecu
 import { checkWorkerReady, withWorkerAccount } from './publishWorkerConfig';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { ok, type Result } from '../../shared/core/result';
+import { netlifyEnvironment, publishEnvironment } from './publishEnvironment';
+import { deployNetlify, netlifyBuildPlan } from './publishNetlifyDeploy';
 import { DescribedError } from '../../shared/properties/describedError';
+
+export { publishEnvironment };
 
 export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
   if (scripts.length > PUBLISH_LIMITS.hooksMax) {
@@ -26,12 +30,21 @@ export async function checkHostingReady(root: string, config: PublishConfig): Pr
     const ready = await checkWorkerReady(root);
     return ready.ok ? ok(undefined) : ready;
   }
+  if (config.hosting.provider === 'netlify') {
+    const plan = await netlifyBuildPlan(root);
+    return plan.ok ? ok(undefined) : plan;
+  }
   return ok(undefined);
 }
 
 export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
   if (config.hosting.provider === 'none') {
     throw new DescribedError(described('error.publish.chooseHosting'));
+  }
+  if (config.hosting.provider === 'netlify') {
+    // Netlify checks the site, picks how to build, and reads back which site it deployed (publishNetlifyDeploy.ts).
+    await deployNetlify(root, config.hosting, (command) => runPublishCommandOutput(root, command));
+    return;
   }
   const command = hostingCommand(config.hosting);
   if (config.hosting.provider === 'cloudflare-workers') {
@@ -51,9 +64,18 @@ export async function deployHosting(root: string, config: PublishConfig): Promis
  * here too, when Worker setup adds the deploy tool to the site as a development dependency.
  */
 export async function runPublishCommand(root: string, command: ExecutableCommand): Promise<void> {
+  await runPublishProcess(root, command, 'discard');
+}
+
+/** The same run, returning standard output for a command that reports its result there. It stays in this process. */
+export async function runPublishCommandOutput(root: string, command: ExecutableCommand): Promise<string> {
+  return runPublishProcess(root, command, 'keep');
+}
+
+async function runPublishProcess(root: string, command: ExecutableCommand, output: 'keep' | 'discard'): Promise<string> {
   const resolved = resolvePublishExecutable(root, command);
   const environment = {
-    ...publishEnvironment(),
+    ...(command.executable === 'netlify' ? netlifyEnvironment() : publishEnvironment()),
     ...command.environment,
     CI: 'true',
     NO_COLOR: '1',
@@ -74,6 +96,7 @@ export async function runPublishCommand(root: string, command: ExecutableCommand
     });
     // Logs may contain credentials from third-party hooks. Keep them out of IPC and UI errors.
     let outputBytes = 0;
+    const printed: Buffer[] = [];
     let failure: Described | undefined;
     const stop = (problem: Described) => {
       failure = problem;
@@ -86,7 +109,13 @@ export async function runPublishCommand(root: string, command: ExecutableCommand
         stop(described('publish.command.outputLimit'));
       }
     };
-    child.stdout.on('data', collect);
+    child.stdout.on('data', (chunk: Buffer) => {
+      collect(chunk);
+      // Bounded by the same output limit, which stops the command before more is kept.
+      if (output === 'keep' && failure === undefined) {
+        printed.push(chunk);
+      }
+    });
     child.stderr.on('data', collect);
     const timer = setTimeout(() => stop(described('publish.command.timeLimit')), PUBLISH_LIMITS.commandTimeoutMs);
     child.once('error', () => {
@@ -96,30 +125,12 @@ export async function runPublishCommand(root: string, command: ExecutableCommand
     child.once('close', (code) => {
       clearTimeout(timer);
       if (code === 0 && failure === undefined) {
-        resolve();
+        resolve(Buffer.concat(printed).toString('utf8'));
       } else {
         reject(new DescribedError(failure ?? described('publish.command.exitFailed', { executable: command.executable, code: String(code) })));
       }
     });
   });
-}
-
-export function publishEnvironment(): NodeJS.ProcessEnv {
-  const environment = { ...process.env };
-  // Site automation may use deployment credentials, but never Studio's private control channel.
-  for (const name of [
-    'STUDIO_CONTAINER_TOKEN',
-    'STUDIO_BACKEND_URL',
-    'GITHUB_PRIVATE_KEY',
-    'GITHUB_APP_ID',
-    'GITHUB_INSTALLATION_ID',
-    'GH_TOKEN',
-    'GITHUB_TOKEN',
-    'AI_API_KEY',
-  ]) {
-    delete environment[name];
-  }
-  return environment;
 }
 
 export function stopPublishProcess(pid: number | undefined): void {

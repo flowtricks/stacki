@@ -37,6 +37,10 @@ const vercel = {
   projectId: field(identifier, 'The Vercel project id.', { required: true }),
 };
 
+const netlify = {
+  siteId: field(identifier, 'The Netlify site (project) id.', { required: true }),
+};
+
 export const PUBLISH_FILE: FileSchema = {
   id: 'publish',
   file: '.stacki/publish.json',
@@ -56,7 +60,7 @@ export const PUBLISH_FILE: FileSchema = {
       },
     ),
     hosting: field(
-      variantOf('provider', { none: {}, cloudflare: cloudflarePages, 'cloudflare-workers': cloudflareWorkers, vercel }),
+      variantOf('provider', { none: {}, cloudflare: cloudflarePages, 'cloudflare-workers': cloudflareWorkers, vercel, netlify }),
       'The hosting destination, by provider.',
       { required: true, default: 'none' },
     ),
@@ -77,7 +81,7 @@ export const PUBLISH_FILE: FileSchema = {
     publishedSite: field(
       objectOf({
         hosting: field(
-          variantOf('provider', { cloudflare: cloudflarePages, 'cloudflare-workers': cloudflareWorkers, vercel }),
+          variantOf('provider', { cloudflare: cloudflarePages, 'cloudflare-workers': cloudflareWorkers, vercel, netlify }),
           'The hosting destination the address belongs to; it is ignored when it no longer equals the file hosting.',
           { required: true },
         ),

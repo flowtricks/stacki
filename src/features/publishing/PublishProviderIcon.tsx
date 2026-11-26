@@ -1,7 +1,16 @@
 import { githubIconPath } from '../../ui/iconPaths';
+import { UploadCloudIcon } from '../../ui/Icons';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
 export function PublishProviderIcon({ provider }: { readonly provider: Hosting['provider'] | 'github' }) {
+  if (provider === 'netlify') {
+    // Netlify's mark is not among the bundled paths or the app's icon set, so it takes the app's hosting icon.
+    return (
+      <span className="publish-provider-icon" data-provider={provider} aria-hidden="true">
+        <UploadCloudIcon size={20} />
+      </span>
+    );
+  }
   return (
     <svg
       className="publish-provider-icon"

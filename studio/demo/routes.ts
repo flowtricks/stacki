@@ -7,7 +7,7 @@ import { managedAsset } from '../src/features/assets/assetStateTypes';
 import { record, sourcePath, string } from '../src/shared/validation';
 import { UPLOAD_LIMITS, type DemoFiles } from './projectFiles';
 import { DEMO_PUBLISH_SOURCE, type DemoPublish } from './publish';
-import { publishAccount, publishDiscovery, publishRepositories } from './publishConnections';
+import { publishAccount, publishDiscovery, publishNetlifySite, publishRepositories } from './publishConnections';
 import type { DemoRooms } from './room';
 import { componentUsage } from './componentUsage';
 import { pageAddress } from './pageAddress';
@@ -233,6 +233,8 @@ async function writeRoute(context: RouteContext, url: URL, init: RequestInit | u
       return json(200, publishDiscovery(JSON.parse(bodyText(init))));
     case '/studio/api/publish/repository':
       return json(200, publishRepositories(JSON.parse(bodyText(init))));
+    case '/studio/api/publish/netlify-site':
+      return json(200, publishNetlifySite(JSON.parse(bodyText(init))));
     case '/studio/api/publish/account':
       return json(200, publishAccount(JSON.parse(bodyText(init))));
     case '/studio/api/assets':

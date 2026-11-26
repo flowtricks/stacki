@@ -12,6 +12,8 @@ export function hostingSiteKey(hosting: Hosting): string {
       return JSON.stringify([hosting.provider, hosting.accountId, hosting.project]);
     case 'vercel':
       return JSON.stringify([hosting.provider, hosting.organizationId, hosting.projectId]);
+    case 'netlify':
+      return JSON.stringify([hosting.provider, hosting.siteId]);
   }
 }
 

@@ -522,3 +522,61 @@ test('Save with no Cloudflare account names the account first', async (context) 
   assert.equal(document.querySelector('[aria-label="Cloudflare account"]').getAttribute('aria-invalid'), 'true');
   assert.equal(document.querySelector('[aria-label="Hosting project"]').hasAttribute('aria-invalid'), false);
 });
+
+test('Netlify: a saved site, Add site with a toast for a taken name, then the created site is saved', async (context) => {
+  const saved = JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, githubAccount: 'owner', hosting: { provider: 'netlify', siteId: 'site-1' } });
+  const { discovery, writes, show, toasts } = fixture(context, saved);
+  const requests = [];
+  window.avb.createNetlifySite = async ({ projectPath, site }) => {
+    requests.push({ projectPath, site });
+    return site.name === 'taken'
+      ? {
+          kind: 'failed',
+          message: 'Netlify did not accept that name. It may already be taken. Try another one.',
+          messageRef: { key: 'publish.netlify.error.nameRefused' },
+        }
+      : { kind: 'ready', name: site.name, hosting: { provider: 'netlify', siteId: 'site-2' } };
+  };
+  await show();
+  const project = () => document.querySelector('[aria-label="Hosting project"]');
+  assert.match(project().textContent, /Saved Netlify site/);
+  const add = () => [...document.querySelectorAll('button')].find((entry) => entry.textContent === 'Add site');
+  assert.equal(add().disabled, true, 'no team is known yet');
+  const netlify = discovery.find((call) => call.request.provider === 'netlify');
+  assert.ok(netlify);
+  await act(async () =>
+    netlify.resolve({
+      kind: 'ready',
+      accounts: [{ id: 'acme', name: 'Acme team' }],
+      projects: [{ name: 'first-site', account: 'acme', hosting: { provider: 'netlify', siteId: 'site-1' } }],
+    }),
+  );
+  assert.match(project().textContent, /first-site/);
+  await act(async () => add().click());
+  const input = document.querySelector('.publish-new-worker input');
+  const submit = () => document.querySelector('.publish-new-worker .primary');
+  const { Simulate } = require('react-dom/test-utils');
+  const type = (name) =>
+    act(async () => {
+      Simulate.change(input, { target: { value: name } });
+    });
+  for (const [name, disabled] of [
+    ['', true],
+    ['Bad Name', true],
+    ['-bad', true],
+    ['taken', false],
+  ]) {
+    await type(name);
+    assert.equal(submit().disabled, disabled, name);
+  }
+  await act(async () => submit().click());
+  assert.deepEqual(toasts, ['Netlify did not accept that name. It may already be taken. Try another one.']);
+  assert.ok(document.querySelector('.publish-new-worker'), 'the dialog stays open to try another name');
+  await type('second-site');
+  await act(async () => submit().click());
+  assert.deepEqual(requests.at(-1), { projectPath: '/project', site: { team: 'acme', name: 'second-site' } });
+  assert.equal(document.querySelector('.publish-new-worker') ?? undefined, undefined);
+  assert.equal(writes.length, 0, 'the choice is saved with Save, like any other hosting choice');
+  await act(async () => document.querySelector('.modal-footer .primary').click());
+  assert.deepEqual(writes[0].hosting, { provider: 'netlify', siteId: 'site-2' });
+});
