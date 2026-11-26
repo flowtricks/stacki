@@ -8,21 +8,22 @@ export const messages = {
   'componentCanvas.error.notReturned': 'Tidak dapat kembali ke file sebelumnya. Buka file itu dari panel Halaman.',
   'componentCanvas.error.open': 'Kanvas tidak dapat dibuka: {message}',
   'componentCanvas.error.pageReadOnly': 'Kanvas ini hanya menampilkan komponen. Klik dua kali sebuah frame untuk mengedit komponen di dalamnya.',
-  'componentCanvas.error.previewValue': 'Frame dapat mempratinjau teks, angka, atau aktif dan nonaktif untuk {name}, bukan kode.',
+  'componentCanvas.error.previewValue': 'Frame dapat mempratinjau nilai untuk {name}, bukan kode.',
   'componentCanvas.error.save': 'Pengaturan kanvas tidak dapat disimpan: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'belum diatur',
-  'componentCanvas.framePanel.hide': 'Sembunyikan pengaturan frame',
-  'componentCanvas.framePanel.show': 'Tampilkan pengaturan frame',
+  'componentCanvas.level.all': 'Diatur untuk semua frame',
+  'componentCanvas.level.frame': 'Frame ini punya nilainya sendiri',
+  'componentCanvas.level.overrides': {
+    other: '{count} frame di sini tetap memakai nilainya sendiri. Reset untuk memberinya nilai ini.',
+  },
+  'componentCanvas.level.part': 'Diatur untuk setiap frame {part}',
   'componentCanvas.menu.open': 'Buka di kanvas',
   'componentCanvas.notice.truncated': 'Menampilkan {shown} frame pertama dari {total}. Berikan frame sendiri ke lebih sedikit prop untuk melihat sisanya.',
   'componentCanvas.pageName': 'Kanvas {name}',
   'componentCanvas.panel.background': 'Latar belakang',
   'componentCanvas.panel.backgroundVariable': 'Hubungkan ke variabel',
   'componentCanvas.panel.fixed': 'Tetap',
-  'componentCanvas.panel.frame.about': 'Klik sebuah frame untuk memilih komponennya, dan klik dua kali untuk mengedit komponen di dalamnya.',
-  'componentCanvas.panel.frame.pick': 'Frame', // same
-  'componentCanvas.panel.frame.title': 'Frame', // same
   'componentCanvas.panel.frames': {
     other: '{count} frame',
   },
@@ -39,10 +40,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': 'Terapkan ke',
   'componentCanvas.panel.scope.part': 'Setiap frame {part}',
   'componentCanvas.panel.scope.project': 'Semua komponen',
+  'componentCanvas.panel.size': 'Ukuran',
   'componentCanvas.panel.transparent': 'Transparan',
   'componentCanvas.panel.width': 'Lebar',
-  'componentCanvas.popup.close': 'Tutup pengaturan frame',
+  'componentCanvas.popup.expand': 'Perluas pengaturan frame',
+  'componentCanvas.popup.minimize': 'Ciutkan pengaturan frame',
   'componentCanvas.popup.title': 'Pengaturan frame',
+  'componentCanvas.scope.valueFrames': 'Semua frame {value}',
   'componentCanvas.split.full': 'Maksimal {max} prop dapat memiliki frame sendiri. Nonaktifkan salah satunya terlebih dahulu.',
   'componentCanvas.split.locked': 'Setiap nilai {name} memiliki frame sendiri.',
   'componentCanvas.split.off': {

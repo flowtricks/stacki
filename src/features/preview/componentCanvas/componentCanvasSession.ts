@@ -4,9 +4,9 @@
 import { createContext, useContext } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
-import type { ComponentCanvasFile, FrameEdit } from '../../../../shared/properties/componentCanvas';
+import type { ComponentCanvasFile, FrameEdit, FrameSetting } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
-import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
+import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
 
 export interface CanvasOpen {
@@ -18,19 +18,52 @@ export interface CanvasOpen {
   readonly layout: CanvasLayout;
   /** The selected frame's key; always one of the layout's frames. */
   readonly frame: string;
-  /** Where the panel's edits go: `` all frames, a split value's key, the selected frame's own key, or PROJECT_SCOPE. */
-  readonly scope: string;
+  /**
+   * Where each kind of edit goes, each chosen on its own: a frame key (`` for all frames, a split value's, a group's, or
+   * the selected frame's own), or for the canvas root's background and classes PROJECT_SCOPE or COMPONENT_SCOPE.
+   * Props start at the frame, sizes at all frames, the background at the frame (all components for the root).
+   */
+  readonly scopes: CanvasScopes;
   readonly scale: number;
   /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
   readonly framePanel: 'shown' | 'hidden';
-  /** The props the component defaults give an inserted instance: what a frame shows where it sets nothing. */
-  readonly defaults: Readonly<Record<string, DefaultValue>>;
+  /** What the component defaults give an inserted instance: what a frame shows where it sets nothing. */
+  readonly defaults: ComponentRecipe;
   /** Each frame's instance on the canvas page, by its path in the page's tree: what the navigator lists and a click selects. */
   readonly instances: readonly CanvasInstance[];
+  /** The frames' boxes and the groups around them, by path: real elements of the page, selected and listed as divs. */
+  readonly boxes: readonly CanvasBox[];
   /** The canvas page's root (its <html>) by path: the canvas itself, selected by a click between frames. */
   readonly root: string;
   /** What Frame settings and the Settings panel speak of: a frame (`frame`), or the canvas root. */
   readonly subject: 'frame' | 'root';
+  /**
+   * What is selected on the canvas: the selected frame's component, its box (a press on its padding or caption), or a
+   * group box around it (then the scope is that group's). The panels show the frame in every case.
+   */
+  readonly picked: CanvasPick;
+}
+
+/** The scope of each section of edits (CanvasOpen.scopes). */
+export interface CanvasScopes {
+  readonly props: string;
+  readonly size: string;
+  readonly background: string;
+}
+
+export type CanvasSection = keyof CanvasScopes;
+
+/** What is selected on the canvas page while a frame is the subject (CanvasOpen.picked). */
+export type CanvasPick = { readonly kind: 'component' } | { readonly kind: 'box' } | { readonly kind: 'group'; readonly key: string };
+
+/** A box on the canvas page: a frame's (around its instance) or a group's (around the frames that share its values). */
+export interface CanvasBox {
+  readonly kind: 'frame' | 'group';
+  /** A frame's key, or the pairs every frame in the group shares (a frame key too). */
+  readonly key: string;
+  readonly path: string;
+  /** Its caption or header, as the canvas draws it: the name its Navigator row and its tag show. */
+  readonly label: string;
 }
 
 /** One frame's instance of the component on the canvas page. */
@@ -60,9 +93,13 @@ export interface ComponentCanvasControl {
   readonly canOpen: (component: ScanComponent) => boolean;
   readonly open: (component: ScanComponent) => void;
   readonly exit: () => void;
-  readonly selectFrame: (key: string) => void;
-  readonly setScope: (scope: string) => void;
+  readonly setScope: (section: CanvasSection, scope: string) => void;
+  /** A size or background edit, to its section's scope (a background at a root scope goes to the canvas root). */
   readonly edit: (edit: FrameEdit) => void;
+  /** Drops what scopes narrower than the section's own say about `setting`, so every frame it reaches shows its value. */
+  readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
+  /** The frames a scope choice would change, outlined on the canvas while it is pointed at; undefined clears them. */
+  readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;
@@ -70,10 +107,11 @@ export interface ComponentCanvasControl {
   /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */
   readonly showFramePanel: () => void;
   /**
-   * A preview prop value from the Settings panel: written to the Apply to scope (this frame unless a wider one is
-   * chosen; the project level holds no props, so there it is this frame). Never to the component or its instances.
+   * Preview values from the Settings panel, written together to the frame scope `scope` (a frame, a split value or
+   * `` for every frame): the scope the field showed, even when a pick answers after the selection moved. Never to the
+   * component or its instances.
    */
-  readonly editProp: (edit: Extract<FrameEdit, { readonly kind: 'prop' | 'unset' | 'inherit' }>) => void;
+  readonly editValues: (scope: string, edits: readonly FrameEdit[]) => void;
   /** The canvas root's classes at the root's "Apply to" scope (this component or the project); undefined clears them there. */
   readonly editRootClasses: (classes: readonly string[] | undefined) => void;
   /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */
@@ -150,6 +188,11 @@ export function canvasRootPath(): string | undefined {
 /** The instance at exactly `path` in the canvas page, if one is. */
 export function canvasInstanceOf(path: string | undefined): CanvasInstance | undefined {
   return noted.kind === 'open' && path !== undefined ? noted.instances.find((instance) => instance.path === path) : undefined;
+}
+
+/** The box (a frame's or a group's) at exactly `path` in the open canvas page, if one is. */
+export function canvasBoxOf(path: string | undefined): CanvasBox | undefined {
+  return noted.kind === 'open' && path !== undefined ? noted.boxes.find((box) => box.path === path) : undefined;
 }
 
 // An instance sits directly in its frame (canvasPage.ts frameMarkup).

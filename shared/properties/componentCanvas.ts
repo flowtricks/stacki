@@ -12,9 +12,28 @@
 // kept, never deleted silently: they come back when the split or the variants that made them return.
 //
 // Preview values are only what the canvas renders with. Nothing here is written to the component or to its instances.
+//
+// A prop's preview value is held in one of three places, as `.stacki/components.json` holds its defaults
+// (componentDefaultValues.ts): `props` (text, numbers, on and off), `assets` (an imported file under src/) or
+// `literals` (a list or object of plain data, read token by token, never run). `content` is the default slot's markup.
+// Released Stacki versions have no component canvas and ignore this file. A development build from before `assets`,
+// `literals` and `content` refuses a file that holds them, naming the key, rather than dropping them.
 import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
 import { record } from '../core/boundary';
+import {
+  defaultAssetUses,
+  heldDefaults,
+  isAssetDefaultFile,
+  parseHeldDefaults,
+  relinkDefaultAssets,
+  type AssetDefaultUse,
+  type HeldDefaults,
+  type AssetDefault,
+  type AssetDefaults,
+  type LiteralDefault,
+  type LiteralDefaults,
+} from './componentDefaultValues';
 import type { PropField, PropUnion } from './propSchema';
 
 export const COMPONENT_CANVAS_FILE = '.stacki/component-canvas.json';
@@ -29,7 +48,8 @@ export const CANVAS_LIMITS = {
   entriesMax: 256,
   /** Preview values one entry holds. */
   valuesMax: 64,
-  valueCharsMax: 2_000,
+  valueCharsMax: 16_384,
+  contentCharsMax: 16_384,
   propNameCharsMax: 100,
   keyCharsMax: 1_024,
   backgroundCharsMax: 256,
@@ -55,6 +75,10 @@ export interface FrameEntry {
   readonly props?: Readonly<Record<string, CanvasValue>>;
   /** Props this scope shows as not set, over a value a wider scope gives. */
   readonly unset?: readonly string[];
+  readonly assets?: AssetDefaults;
+  readonly literals?: LiteralDefaults;
+  /** The default slot's markup here: HTML with no script or event handler; `` is an empty slot. */
+  readonly content?: string;
   readonly width?: FrameLength;
   readonly height?: FrameLength;
   /** A CSS colour or `var(--…)`; absent: transparent, or what a wider scope sets. */
@@ -92,7 +116,11 @@ export interface ComponentCanvasFile {
   /** The project's canvas root classes (CanvasRoot.classes); versions before this key ignore it. */
   readonly classes?: readonly string[];
   readonly components: Readonly<Record<string, ComponentCanvas>>;
+  /** Top-level keys a later version wrote: kept as read, so saving from this one never drops them. */
+  readonly later?: Readonly<Record<string, unknown>>;
 }
+
+const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components']);
 
 export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: {} };
 
@@ -100,7 +128,7 @@ export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: 
 
 const PROP_NAME = /^[A-Za-z_$][\w$-]*$/;
 const COMPONENT_FILE = /^(?:src\/|node_modules\/)[^\0]*\.astro$/;
-const ENTRY_FIELDS = new Set(['props', 'unset', 'width', 'height', 'background']);
+const ENTRY_FIELDS = new Set(['props', 'unset', 'assets', 'literals', 'content', 'width', 'height', 'background']);
 const COMPONENT_FIELDS = new Set(['split', 'frames', 'root']);
 const ROOT_FIELDS = new Set(['background', 'classes']);
 // A class name as a selector can name it without escapes; `stacki-` is the canvas's own (`stacki-designer`).
@@ -135,12 +163,17 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
   const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
   assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
   const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
-  return canvasFileOf({ background, classes }, components);
+  const later = Object.entries(value).filter(([key]) => !FILE_FIELDS.has(key));
+  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, components);
 }
 
 // The file with its project-level settings, each written only when it is set.
 function canvasFileOf(
-  project: { readonly background: string | undefined; readonly classes: readonly string[] | undefined },
+  project: {
+    readonly background: string | undefined;
+    readonly classes: readonly string[] | undefined;
+    readonly later?: Readonly<Record<string, unknown>> | undefined;
+  },
   components: Readonly<Record<string, ComponentCanvas>>,
 ): ComponentCanvasFile {
   assert(Object.keys(components).length <= CANVAS_LIMITS.componentsMax, 'The canvas file keeps settings for a bounded number of components');
@@ -149,6 +182,7 @@ function canvasFileOf(
     ...(project.background === undefined ? {} : { background: project.background }),
     ...(project.classes === undefined ? {} : { classes: project.classes }),
     components,
+    ...(project.later === undefined ? {} : { later: project.later }),
   };
 }
 
@@ -259,6 +293,24 @@ function parseFrameEntry(input: unknown, file: string): FrameEntry {
       throw new Error('Component canvas: a prop is either given a value or unset, not both');
     }
   }
+  const held = parseHeldDefaults(value, entry.props ?? {});
+  const heldNames = [...Object.keys(held.assets ?? {}), ...Object.keys(held.literals ?? {})];
+  heldNames.forEach((name) => propName(name));
+  if (heldNames.some((name) => entry.unset?.includes(name) === true)) {
+    throw new Error('Component canvas: a prop is either given a value or unset, not both');
+  }
+  if (heldNames.length + Object.keys(entry.props ?? {}).length > CANVAS_LIMITS.valuesMax) {
+    throw new Error(`Component canvas: a frame holds at most ${CANVAS_LIMITS.valuesMax} values`);
+  }
+  if (held.assets !== undefined) {
+    entry.assets = held.assets;
+  }
+  if (held.literals !== undefined) {
+    entry.literals = held.literals;
+  }
+  if (value['content'] !== undefined) {
+    entry.content = canvasContent(value['content']);
+  }
   if (value['width'] !== undefined) {
     entry.width = frameLength(value['width']);
   }
@@ -288,6 +340,21 @@ export function canvasValue(input: unknown): CanvasValue {
     return input;
   }
   throw new Error('Component canvas: a value is text, a number or true or false');
+}
+
+// Markup that runs code. The canvas writes content as HTML text (never as Astro source, so braces are only words),
+// and this keeps a hand-edited file from putting a script in the preview.
+const CONTENT_REFUSED = /<\s*\/?\s*(?:script|style|iframe|object|embed|slot|template|link|meta|base)\b|<[^>]*[\s/"']on[a-z]+\s*=|javascript:/i;
+
+/** A frame's default-slot markup: bounded HTML with nothing that runs. */
+export function canvasContent(input: unknown): string {
+  if (typeof input !== 'string' || input.length > CANVAS_LIMITS.contentCharsMax) {
+    throw new Error(`Component canvas: content is text of at most ${CANVAS_LIMITS.contentCharsMax} characters`);
+  }
+  if (CONTENT_REFUSED.test(input)) {
+    throw new Error('Component canvas: content is words and plain markup, with no script, style or event handler');
+  }
+  return input;
 }
 
 export function frameLength(input: unknown): FrameLength {
@@ -362,7 +429,8 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
       .sort()
       .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
   );
-  const text = JSON.stringify(canvasFileOf({ background: file.background, classes: file.classes }, components), undefined, 2) + '\n';
+  const { later, ...known } = canvasFileOf({ background: file.background, classes: file.classes, later: file.later }, components);
+  const text = JSON.stringify({ ...known, ...later }, undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
@@ -398,10 +466,17 @@ function sortedEntry(entry: FrameEntry): FrameEntry {
           ),
         }),
     ...(entry.unset === undefined ? {} : { unset: [...entry.unset].sort() }),
+    ...(entry.assets === undefined ? {} : { assets: byName(entry.assets) }),
+    ...(entry.literals === undefined ? {} : { literals: byName(entry.literals) }),
+    ...(entry.content === undefined ? {} : { content: entry.content }),
     ...(entry.width === undefined ? {} : { width: entry.width }),
     ...(entry.height === undefined ? {} : { height: entry.height }),
     ...(entry.background === undefined ? {} : { background: entry.background }),
   };
+}
+
+function byName<T>(held: Readonly<Record<string, T>>): Readonly<Record<string, T>> {
+  return Object.fromEntries(Object.entries(held).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)));
 }
 
 // ----- Split props and frames -----
@@ -609,10 +684,14 @@ export type FrameField = 'width' | 'height' | 'background';
 export interface ResolvedFrame {
   readonly props: Readonly<Record<string, CanvasValue>>;
   readonly unset: ReadonlySet<string>;
+  readonly assets: AssetDefaults;
+  readonly literals: LiteralDefaults;
+  /** The default slot's markup; undefined: the component defaults' content. */
+  readonly content: string | undefined;
   readonly width: FrameLength;
   readonly height: FrameLength;
   readonly background: string | undefined;
-  /** The key of the entry each value, unset prop or frame field comes from. */
+  /** The key of the entry each value, unset prop, `content` or frame field comes from. */
   readonly origins: ReadonlyMap<string, string>;
 }
 
@@ -626,22 +705,19 @@ export function matchingEntries(settings: ComponentCanvas | undefined, key: stri
 }
 
 export function resolveFrame(settings: ComponentCanvas | undefined, key: string): ResolvedFrame {
-  const props: Record<string, CanvasValue> = {};
-  const unset = new Set<string>();
+  const values: HeldMaps = { props: new Map(), assets: new Map(), literals: new Map(), unset: new Set() };
   const origins = new Map<string, string>();
   let width: FrameLength = 'hug';
   let height: FrameLength = 'hug';
   let background: string | undefined;
+  let content: string | undefined;
   for (const [stored, entry] of matchingEntries(settings, key)) {
-    for (const [name, value] of Object.entries(entry.props ?? {})) {
-      props[name] = value;
-      unset.delete(name);
+    for (const name of layEntry(values, entry)) {
       origins.set('prop:' + name, stored);
     }
-    for (const name of entry.unset ?? []) {
-      delete props[name];
-      unset.add(name);
-      origins.set('prop:' + name, stored);
+    if (entry.content !== undefined) {
+      content = entry.content;
+      origins.set('content', stored);
     }
     if (entry.width !== undefined) {
       width = entry.width;
@@ -656,13 +732,92 @@ export function resolveFrame(settings: ComponentCanvas | undefined, key: string)
       origins.set('background', stored);
     }
   }
-  return { props, unset, width, height, background, origins };
+  return {
+    props: Object.fromEntries(values.props),
+    assets: Object.fromEntries(values.assets),
+    literals: Object.fromEntries(values.literals),
+    unset: values.unset,
+    content,
+    width,
+    height,
+    background,
+    origins,
+  };
+}
+
+interface HeldMaps {
+  readonly props: Map<string, CanvasValue>;
+  readonly assets: Map<string, AssetDefault>;
+  readonly literals: Map<string, LiteralDefault>;
+  readonly unset: Set<string>;
+}
+
+// One entry's prop values over what wider entries gave: a name it sets leaves whichever place held it before. Returns
+// the names the entry speaks for.
+function layEntry(values: HeldMaps, entry: FrameEntry): readonly string[] {
+  const drop = (name: string): void => {
+    values.props.delete(name);
+    values.assets.delete(name);
+    values.literals.delete(name);
+    values.unset.delete(name);
+  };
+  const lay = <T>(held: Readonly<Record<string, T>> | undefined, into: Map<string, T>): readonly string[] =>
+    Object.entries(held ?? {}).map(([name, value]) => {
+      drop(name);
+      into.set(name, value);
+      return name;
+    });
+  const names = [...lay(entry.props, values.props), ...lay(entry.assets, values.assets), ...lay(entry.literals, values.literals)];
+  for (const name of entry.unset ?? []) {
+    drop(name);
+    values.unset.add(name);
+  }
+  return [...names, ...(entry.unset ?? [])];
+}
+
+/** Whether the entry itself says anything about the prop. */
+export function entryHolds(entry: FrameEntry | undefined, name: string): boolean {
+  if (entry === undefined) {
+    return false;
+  }
+  const valued = Object.hasOwn(entry.props ?? {}, name) || Object.hasOwn(entry.assets ?? {}, name) || Object.hasOwn(entry.literals ?? {}, name);
+  return valued || entry.unset?.includes(name) === true;
+}
+
+/** One setting of a frame: a prop's preview value (`prop:name`), the slot content or a frame field. */
+export type FrameSetting = `prop:${string}` | 'content' | 'width' | 'height' | 'background';
+
+/**
+ * Where a setting stands for a frame while edits go to `scope`: set at the scope itself (`own`); not set there, and
+ * given by a wider entry (`inherited`, from that entry's key); set by a narrower or sibling entry the frame also has,
+ * which wins on this frame whatever the scope says (`overridden`); or set nowhere (`none`).
+ */
+export type SettingLevel =
+  | { readonly kind: 'own' }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'inherited'; readonly from: string }
+  | { readonly kind: 'overridden'; readonly by: string };
+
+export function settingLevel(settings: ComponentCanvas | undefined, frame: string, scope: string, setting: FrameSetting): SettingLevel {
+  const winner = resolveFrame(settings, frame).origins.get(setting);
+  const atScope = resolveFrame(settings, scope).origins.get(setting);
+  if (winner !== undefined && winner !== atScope) {
+    return { kind: 'overridden', by: winner };
+  }
+  if (atScope === undefined) {
+    return { kind: 'none' };
+  }
+  return atScope === scope ? { kind: 'own' } : { kind: 'inherited', from: atScope };
 }
 
 // ----- Edits -----
 
 export type FrameEdit =
   | { readonly kind: 'prop'; readonly name: string; readonly value: CanvasValue }
+  | { readonly kind: 'asset'; readonly name: string; readonly asset: AssetDefault }
+  | { readonly kind: 'literal'; readonly name: string; readonly literal: LiteralDefault }
+  /** The default slot's markup at this scope; undefined: what a wider scope or the component defaults give. */
+  | { readonly kind: 'content'; readonly value: string | undefined }
   | { readonly kind: 'unset'; readonly name: string }
   /** Drops what this scope says about the prop, so a wider scope's value shows. */
   | { readonly kind: 'inherit'; readonly name: string }
@@ -685,61 +840,138 @@ export function withFrameEdit(file: ComponentCanvasFile, component: string, scop
   if (Object.keys(frames).length > CANVAS_LIMITS.entriesMax) {
     throw new Error(`A component keeps at most ${CANVAS_LIMITS.entriesMax} frame settings`);
   }
-  const result = withComponentSettings(file, component, { ...(settings.split === undefined ? {} : { split: settings.split }), frames });
+  const result = withComponentSettings(file, component, { ...settings, frames });
   assert(parseComponentCanvasSource(serializeComponentCanvas(result)).ok, 'An edited canvas file parses');
   return result;
 }
 
 function editedEntry(entry: FrameEntry, edit: FrameEdit): FrameEntry {
-  const props: Record<string, CanvasValue> = { ...entry.props };
-  let unset = [...(entry.unset ?? [])];
-  let width = entry.width;
-  let height = entry.height;
-  let background = entry.background;
   switch (edit.kind) {
     case 'prop':
-      propName(edit.name);
-      props[edit.name] = canvasValue(edit.value);
-      unset = unset.filter((name) => name !== edit.name);
-      break;
+    case 'asset':
+    case 'literal':
     case 'unset':
-      propName(edit.name);
-      delete props[edit.name];
-      unset = [...unset.filter((name) => name !== edit.name), edit.name];
-      break;
     case 'inherit':
-      delete props[edit.name];
-      unset = unset.filter((name) => name !== edit.name);
-      break;
+      return editedValues(entry, edit);
+    case 'content':
+      return withoutAbsent({ ...entry, content: edit.value === undefined ? undefined : canvasContent(edit.value) });
     case 'field':
-      if (edit.field === 'width') {
-        width = edit.value === undefined ? undefined : frameLength(edit.value);
-      } else {
-        height = edit.value === undefined ? undefined : frameLength(edit.value);
-      }
-      break;
+      return withoutAbsent({ ...entry, [edit.field]: edit.value === undefined ? undefined : frameLength(edit.value) });
     case 'background':
-      background = edit.value === undefined ? undefined : canvasBackground(edit.value);
-      break;
+      return withoutAbsent({ ...entry, background: edit.value === undefined ? undefined : canvasBackground(edit.value) });
     default: {
       const exhaustive: never = edit;
       return exhaustive;
     }
   }
-  if (Object.keys(props).length > CANVAS_LIMITS.valuesMax || unset.length > CANVAS_LIMITS.valuesMax) {
+}
+
+// The entry with one prop's value set, unset or dropped: whatever held the prop before no longer does.
+function editedValues(entry: FrameEntry, edit: Extract<FrameEdit, { readonly kind: 'prop' | 'asset' | 'literal' | 'unset' | 'inherit' }>): FrameEntry {
+  propName(edit.name);
+  const without = <T>(held: Readonly<Record<string, T>> | undefined): Record<string, T> =>
+    Object.fromEntries(Object.entries(held ?? {}).filter(([name]) => name !== edit.name));
+  const props = without(entry.props);
+  const assets = without(entry.assets);
+  const literals = without(entry.literals);
+  const unset = (entry.unset ?? []).filter((name) => name !== edit.name);
+  if (edit.kind === 'prop') {
+    props[edit.name] = canvasValue(edit.value);
+  } else if (edit.kind === 'asset') {
+    assert(isAssetDefaultFile(edit.asset.file), 'An asset value is a media file under src/');
+    assets[edit.name] = edit.asset;
+  } else if (edit.kind === 'literal') {
+    literals[edit.name] = edit.literal;
+  } else if (edit.kind === 'unset') {
+    unset.push(edit.name);
+  }
+  const valued = Object.keys(props).length + Object.keys(assets).length + Object.keys(literals).length;
+  if (valued > CANVAS_LIMITS.valuesMax || unset.length > CANVAS_LIMITS.valuesMax) {
     throw new Error(`A frame holds at most ${CANVAS_LIMITS.valuesMax} values`);
   }
-  return {
-    ...(Object.keys(props).length === 0 ? {} : { props }),
-    ...(unset.length === 0 ? {} : { unset }),
-    ...(width === undefined ? {} : { width }),
-    ...(height === undefined ? {} : { height }),
-    ...(background === undefined ? {} : { background }),
-  };
+  const some = <T>(held: Record<string, T>): Record<string, T> | undefined => (Object.keys(held).length === 0 ? undefined : held);
+  return withoutAbsent({ ...entry, props: some(props), assets: some(assets), literals: some(literals), unset: unset.length === 0 ? undefined : unset });
+}
+
+type EntryDraft = { [K in keyof FrameEntry]?: FrameEntry[K] | undefined };
+
+// An entry holds only the keys it sets.
+function withoutAbsent(draft: EntryDraft): FrameEntry {
+  const entry: FrameEntry = Object.fromEntries(Object.entries(draft).filter(([, value]) => value !== undefined));
+  assert(
+    Object.keys(entry).every((key) => ENTRY_FIELDS.has(key)),
+    'An edited entry keeps known keys',
+  );
+  return entry;
 }
 
 function isEmptyEntry(entry: FrameEntry): boolean {
-  return entry.props === undefined && entry.unset === undefined && entry.width === undefined && entry.height === undefined && entry.background === undefined;
+  return Object.keys(entry).length === 0;
+}
+
+/** Whether every pair of `scope` is one of `key`'s: the scope's edits reach the frame or narrower scope `key`. */
+export function scopeHolds(scope: string, key: string): boolean {
+  const pairs = new Set(keyPairs(key));
+  return keyPairs(scope).every((pair) => pairs.has(pair));
+}
+
+/**
+ * The frames among `frames` that `scope` reaches but that show a value of their own for `setting`: one an entry
+ * narrower than the scope sets (a frame's own size, a variant's), which wins over what the scope says. Each with the
+ * entry its value comes from.
+ */
+export function overridesIn(
+  settings: ComponentCanvas | undefined,
+  frames: readonly string[],
+  scope: string,
+  setting: FrameSetting,
+): readonly { readonly frame: string; readonly from: string }[] {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A canvas has a bounded number of frames');
+  const found = frames.flatMap((frame) => {
+    if (!scopeHolds(scope, frame)) {
+      return [];
+    }
+    const from = resolveFrame(settings, frame).origins.get(setting);
+    // Narrower than the scope: it holds every pair of the scope and more.
+    return from !== undefined && from !== scope && scopeHolds(scope, from) ? [{ frame, from }] : [];
+  });
+  assert(
+    found.every((entry) => entry.from !== scope),
+    'An override is never the scope itself',
+  );
+  return found;
+}
+
+/**
+ * The file without what entries narrower than `scope` say about `setting`, so every frame the scope reaches shows the
+ * scope's value: the reset of overrides. Entries left empty are removed; the scope's own entry and wider ones stay.
+ */
+export function withoutOverrides(file: ComponentCanvasFile, component: string, scope: string, setting: FrameSetting): ComponentCanvasFile {
+  parseFrameKey(scope);
+  const settings = file.components[component];
+  // Only the entries that say something about the setting: the others are left exactly as they are.
+  const entries = Object.keys(settings?.frames ?? {}).filter(
+    (key) => key !== scope && scopeHolds(scope, key) && resolveFrame(settings, key).origins.get(setting) === key,
+  );
+  assert(entries.length <= CANVAS_LIMITS.entriesMax, 'A component keeps a bounded number of entries');
+  const edit = clearingEdit(setting);
+  return entries.reduce((next, key) => withFrameEdit(next, component, key, edit), file);
+}
+
+// The edit that drops one setting from an entry.
+function clearingEdit(setting: FrameSetting): FrameEdit {
+  if (setting === 'width' || setting === 'height') {
+    return { kind: 'field', field: setting, value: undefined };
+  }
+  if (setting === 'background') {
+    return { kind: 'background', value: undefined };
+  }
+  if (setting === 'content') {
+    return { kind: 'content', value: undefined };
+  }
+  const name = setting.slice('prop:'.length);
+  assert(name.length > 0, 'A prop setting names its prop');
+  return { kind: 'inherit', name };
 }
 
 /** The file with the props a component splits by set; `undefined` goes back to the default choice. */
@@ -748,32 +980,36 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
   if (split !== undefined) {
     parseSplit(split, component);
   }
-  const settings = file.components[component] ?? {};
-  return withComponentSettings(file, component, {
-    ...(split === undefined ? {} : { split }),
-    ...(settings.frames === undefined ? {} : { frames: settings.frames }),
-    ...(settings.root === undefined ? {} : { root: settings.root }),
-  });
+  return withComponentSettings(file, component, { ...file.components[component], split });
 }
 
-function withComponentSettings(file: ComponentCanvasFile, component: string, settings: ComponentCanvas): ComponentCanvasFile {
+// The file with one component's settings replaced. `settings` is everything the component keeps: a writer starts from
+// what is stored and changes only its own key. Only an empty `frames` or `root` is left out.
+function withComponentSettings(
+  file: ComponentCanvasFile,
+  component: string,
+  settings: { readonly [K in keyof ComponentCanvas]: ComponentCanvas[K] | undefined },
+): ComponentCanvasFile {
   const components: Record<string, ComponentCanvas> = { ...file.components };
-  const frames = settings.frames !== undefined && Object.keys(settings.frames).length > 0 ? settings.frames : undefined;
-  const root = settings.root !== undefined && (settings.root.background !== undefined || settings.root.classes !== undefined) ? settings.root : undefined;
-  if (settings.split === undefined && frames === undefined && root === undefined) {
+  const kept: ComponentCanvas = Object.fromEntries(Object.entries(settings).filter(([key, value]) => keepsSetting(key, value)));
+  if (Object.keys(kept).length === 0) {
     // Nothing chosen and nothing set: the component leaves the file rather than sitting in it empty.
     delete components[component];
   } else {
-    components[component] = {
-      ...(settings.split === undefined ? {} : { split: settings.split }),
-      ...(frames === undefined ? {} : { frames }),
-      ...(root === undefined ? {} : { root }),
-    };
+    components[component] = kept;
   }
   if (Object.keys(components).length > CANVAS_LIMITS.componentsMax) {
     throw new Error(`The canvas keeps settings for at most ${CANVAS_LIMITS.componentsMax} components`);
   }
   return { ...file, components };
+}
+
+function keepsSetting(key: string, value: unknown): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  // A chosen split of no props is a choice (one frame); empty frames or an empty root say nothing.
+  return key === 'split' || Object.values(value as object).some((held) => held !== undefined);
 }
 
 /** The file with the project's canvas background set, or cleared with `undefined` (the app's own grey again). */
@@ -804,7 +1040,7 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
       ...(file.background === undefined ? {} : { background: file.background }),
       ...(file.classes === undefined ? {} : { classes: file.classes }),
     });
-    const next = canvasFileOf({ background: root.background, classes: root.classes }, file.components);
+    const next = canvasFileOf({ background: root.background, classes: root.classes, later: file.later }, file.components);
     assert(edit.kind !== 'background' || next.background === background, 'The project background is what was set');
     return next;
   }
@@ -893,13 +1129,60 @@ export function renameCanvasVariables(file: ComponentCanvasFile, rename: (name: 
   if (!changed) {
     return file;
   }
-  const result = canvasFileOf({ background: background === undefined ? undefined : canvasBackground(background), classes: file.classes }, components);
+  const project = { background: background === undefined ? undefined : canvasBackground(background), classes: file.classes, later: file.later };
+  const result = canvasFileOf(project, components);
   assert(Object.keys(result.components).length === Object.keys(file.components).length, 'A rename keeps every component');
   assert((result.background === undefined) === (file.background === undefined), 'A rename neither adds nor drops the project background');
   return result;
 }
 
 // ----- Project upkeep -----
+
+/** Every project file a frame's preview values name, with the component and prop that name it. */
+export function canvasAssetUses(file: ComponentCanvasFile): readonly AssetDefaultUse[] {
+  const uses = defaultAssetUses({ version: 1, components: canvasRecipes(file) });
+  assert(uses.length <= CANVAS_LIMITS.componentsMax * CANVAS_LIMITS.entriesMax * CANVAS_LIMITS.valuesMax * 32, 'Asset uses are bounded');
+  return uses.map((use) => ({ ...use, owner: use.owner.slice(use.owner.indexOf('\u0000') + 1) }));
+}
+
+// Each frame entry as a default recipe, so the one walk over assets and literal imports serves both files.
+function canvasRecipes(file: ComponentCanvasFile): Record<string, HeldDefaults> {
+  const recipes: Record<string, HeldDefaults> = {};
+  for (const [component, settings] of Object.entries(file.components)) {
+    for (const [key, entry] of Object.entries(settings.frames ?? {})) {
+      recipes[`${key}\u0000${component}`] = heldDefaults({
+        ...(entry.assets === undefined ? {} : { assets: entry.assets }),
+        ...(entry.literals === undefined ? {} : { literals: entry.literals }),
+      });
+    }
+  }
+  return recipes;
+}
+
+/** The settings after a file or folder moved from `from` to `to`; the same file when no preview value named it. */
+export function relinkCanvasAssets(file: ComponentCanvasFile, from: string, to: string): ComponentCanvasFile {
+  const before = { version: 1 as const, components: canvasRecipes(file) };
+  const moved = relinkDefaultAssets(before, from, to);
+  if (moved === before) {
+    return file;
+  }
+  const components = Object.fromEntries(
+    Object.entries(file.components).map(([component, settings]): [string, ComponentCanvas] => {
+      if (settings.frames === undefined) {
+        return [component, settings];
+      }
+      const frames = Object.fromEntries(
+        Object.entries(settings.frames).map(([key, entry]): [string, FrameEntry] => {
+          const held = moved.components[`${key}\u0000${component}`];
+          return [key, withoutAbsent({ ...entry, assets: held?.assets, literals: held?.literals })];
+        }),
+      );
+      return [component, { ...settings, frames }];
+    }),
+  );
+  assert(Object.keys(components).length === Object.keys(file.components).length, 'A relink keeps every component');
+  return { ...file, components };
+}
 
 /** The settings after a component file was renamed or moved: its key follows the file. A target that already has settings keeps them. */
 export function relinkComponentCanvas(file: ComponentCanvasFile, from: string, to: string): ComponentCanvasFile {

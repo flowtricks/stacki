@@ -27,16 +27,23 @@ import type { FieldFocus } from './fieldFocus';
 import { RichTextContentField } from './ComponentEditingFields';
 import { plainChildrenHTML } from './richTextContent';
 import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
+import type { PropFieldProvenance } from './propFieldExtras';
+import './propFieldExtras.css';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
-  const contentSet = (node.children?.length ?? 0) > 0;
+  const held = state.contentValue;
+  const contentSet = held === undefined ? (node.children?.length ?? 0) > 0 : held.own;
   if (state.richTextContent === true && node.kind === 'component') {
     return (
       <RichTextContentField
         label={translate('props.element.content')}
+        key={node.id}
+        provenance={held?.provenance}
+        own={held?.own}
+        onReset={held?.onReset}
         source={state.contentSource ?? plainChildrenHTML(node.children)}
         shown={state.contentShown}
         onSetNodes={onSetInline}
@@ -52,7 +59,8 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             <ContentLabel
               active={contentSet}
               name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}
-              onReset={() => onSetInline([])}
+              onReset={held === undefined ? () => onSetInline([]) : held.onReset}
+              provenance={held?.provenance}
             />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
@@ -62,7 +70,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
           </label>
           <RichContent
             key={node.id}
-            nodes={canvasDraftInline(isInlineOnly(node.children) ? node.children : [], draft)}
+            nodes={held === undefined ? canvasDraftInline(isInlineOnly(node.children) ? node.children : [], draft) : isInlineOnly(held.nodes) ? held.nodes : []}
             {...richContextProp(bindContext || loopContext)}
             insertRef={contentInsertRef}
             onChange={onSetInline}
@@ -103,14 +111,19 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   );
 }
 
-function ContentLabel(props: { readonly active: boolean; readonly name: string; readonly onReset: () => void }) {
+function ContentLabel(props: {
+  readonly active: boolean;
+  readonly name: string;
+  readonly onReset: () => void;
+  readonly provenance?: PropFieldProvenance | undefined;
+}) {
   const translate = useTranslate();
   const [position, setPosition] = useState<FieldPosition>();
   return (
     <>
       <span
-        className={`prop-label${props.active ? ' set' : ''}`}
-        title={props.active ? translate('props.element.resetHint') : undefined}
+        className={`prop-label${props.provenance?.tone === 'inherited' ? ' inherited' : props.active ? ' set' : ''}`}
+        title={props.provenance?.tip ?? (props.active ? translate('props.element.resetHint') : undefined)}
         onClick={(event) => {
           event.preventDefault();
           if (!props.active) {

@@ -13,12 +13,20 @@ import type { Rename, SetText, TagOption, TagFieldProps } from './propNodeEditor
 import type { VariableRename } from '../../../shared/engine/variableRename';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
+import type { InlineCandidate } from './richContentModel';
+import type { PropFieldProvenance } from './propFieldExtras';
 import type { TextPiece } from './textConnect';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import React from 'react';
 import LinkField from './LinkField';
 
+export interface ContentValue {
+  readonly nodes: readonly InlineCandidate[];
+  readonly own: boolean;
+  readonly provenance?: PropFieldProvenance | undefined;
+  readonly onReset: () => void;
+}
 export type SelectedNode = PageNode | { readonly kind: 'frontmatter'; readonly id: string };
 export type ElementNode = (PairedNode | ChunkGroupNode) & { readonly props?: PropValues };
 export interface PropsPanelProps {
@@ -35,6 +43,13 @@ export interface PropsPanelProps {
   readonly listProps?: ReadonlyMap<string, ListProp> | undefined;
   readonly slotOptions?: readonly string[] | undefined;
   readonly takesSlotText?: boolean;
+  /**
+   * The default slot's content where the host stores it itself (a component canvas frame): what the Content field
+   * shows, whether it is set here, and how it is cleared back to what shows without it.
+   */
+  readonly contentValue?: ContentValue | undefined;
+  /** Whether the instance takes a style attribute though it declares none (a component canvas frame of a `...rest` one). */
+  readonly offersStyle?: boolean | undefined;
   readonly tagOptions?: readonly TagOption[];
   readonly projectClasses?: readonly string[];
   readonly allowAttrs?: boolean;

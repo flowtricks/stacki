@@ -44,8 +44,15 @@
   font-weight: 600;
   color: var(--text);
 }
-.component-canvas-popup-close {
+.component-canvas-popup-toggle {
   cursor: pointer;
+}
+/* Expanded, the chevron points up: pressing it folds the popover to its header. */
+.component-canvas-popup:not(.is-minimized) .component-canvas-popup-toggle svg {
+  transform: rotate(180deg);
+}
+.component-canvas-popup.is-minimized .component-canvas-popup-head {
+  padding-block-end: 8px;
 }
 .component-canvas-popup .props-title {
   padding-top: 4px;
@@ -62,17 +69,6 @@
 }
 .component-canvas-section {
   padding-top: 4px;
-}
-.component-canvas-heading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 8px 12px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--text-dim);
 }
 .component-canvas-switch-row {
   display: flex;
@@ -138,22 +134,56 @@
 .component-canvas-zoom {
   z-index: 6;
 }
-/* Frame settings' toggle in the zoom bar: the bar's own button, filled while the popover is open. */
-.component-canvas-panel-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.component-canvas-panel-toggle.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
 /* An inherited background's label: the Style panel's orange, in the popover's own label type and pill, so every field
    title in Frame settings is one size and sits the same distance above its control. */
-.prop-label.component-canvas-inherited {
+.prop-label.component-canvas-inherited,
+.component-canvas-panel .prop-label.embed-editor_prop-orange {
   padding: 1px 5px;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
   cursor: default;
+}
+/* A section's heading row: its title, and at the row's end the compact dropdown choosing where its edits go. The
+   dropdown hugs its words and gives way first on a narrow panel, its words cut short (the menu names them whole). */
+.component-canvas-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 12px 6px;
+}
+.component-canvas-heading-title {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.dd-trigger.component-canvas-scope {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 60%;
+  height: 24px;
+  padding-inline: 8px 6px;
+  font-size: 12px;
+}
+.dd-trigger.component-canvas-scope .dd-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* At the top of the Settings panel: the same row, over the frame's preview values. */
+.component-canvas-props-scope .component-canvas-heading-row {
+  margin-block: 10px 2px;
+}
+/* An overridden label resets the frames that keep their own value: a press on it opens Reset. */
+.component-canvas-panel .prop-label.embed-editor_prop-orange[role='button'] {
+  cursor: pointer;
 }

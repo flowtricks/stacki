@@ -8,22 +8,23 @@ export const messages = {
   'componentCanvas.error.notReturned': 'Die Rückkehr zur vorherigen Datei ist fehlgeschlagen. Öffne sie im Bereich „Seiten“.',
   'componentCanvas.error.open': 'Die Canvas konnte nicht geöffnet werden: {message}',
   'componentCanvas.error.pageReadOnly': 'Diese Canvas zeigt nur die Komponente an. Doppelklicke auf einen Frame, um die Komponente darin zu bearbeiten.',
-  'componentCanvas.error.previewValue': 'Ein Frame kann für {name} Text, eine Zahl oder Ein/Aus als Vorschau zeigen, aber keinen Code.',
+  'componentCanvas.error.previewValue': 'Ein Frame kann für {name} einen Wert als Vorschau zeigen, aber keinen Code.',
   'componentCanvas.error.save': 'Die Canvas-Einstellungen konnten nicht gespeichert werden: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'nicht gesetzt',
-  'componentCanvas.framePanel.hide': 'Frame-Einstellungen ausblenden',
-  'componentCanvas.framePanel.show': 'Frame-Einstellungen einblenden',
+  'componentCanvas.level.all': 'Für alle Frames festgelegt',
+  'componentCanvas.level.frame': 'Dieser Frame hat einen eigenen Wert',
+  'componentCanvas.level.overrides': {
+    one: '{count} Frame hier behält seinen eigenen Wert. Setze zurück, um ihm diesen zu geben.',
+    other: '{count} Frames hier behalten ihren eigenen Wert. Setze zurück, um ihnen diesen zu geben.',
+  },
+  'componentCanvas.level.part': 'Für jeden Frame mit {part} festgelegt',
   'componentCanvas.menu.open': 'In der Canvas öffnen',
   'componentCanvas.notice.truncated': 'Die ersten {shown} von {total} Frames werden angezeigt. Gib weniger Props eigene Frames, um den Rest zu sehen.',
   'componentCanvas.pageName': '{name}-Canvas',
   'componentCanvas.panel.background': 'Hintergrund',
   'componentCanvas.panel.backgroundVariable': 'Mit Variable verbinden',
   'componentCanvas.panel.fixed': 'Fest',
-  'componentCanvas.panel.frame.about':
-    'Klicke auf einen Frame, um seine Komponente auszuwählen, und doppelklicke darauf, um die Komponente darin zu bearbeiten.',
-  'componentCanvas.panel.frame.pick': 'Frame', // same
-  'componentCanvas.panel.frame.title': 'Frame', // same
   'componentCanvas.panel.frames': {
     one: '{count} Frame',
     other: '{count} Frames',
@@ -41,10 +42,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': 'Anwenden auf',
   'componentCanvas.panel.scope.part': 'Jeder Frame mit {part}',
   'componentCanvas.panel.scope.project': 'Alle Komponenten',
+  'componentCanvas.panel.size': 'Größe',
   'componentCanvas.panel.transparent': 'Transparent', // same
   'componentCanvas.panel.width': 'Breite',
-  'componentCanvas.popup.close': 'Frame-Einstellungen schließen',
+  'componentCanvas.popup.expand': 'Frame-Einstellungen ausklappen',
+  'componentCanvas.popup.minimize': 'Frame-Einstellungen minimieren',
   'componentCanvas.popup.title': 'Frame-Einstellungen',
+  'componentCanvas.scope.valueFrames': 'Alle Frames mit {value}',
   'componentCanvas.split.full': 'Bis zu {max} Props können eigene Frames haben. Schalte zuerst eine davon aus.',
   'componentCanvas.split.locked': 'Jeder Wert von {name} hat einen eigenen Frame.',
   'componentCanvas.split.off': {

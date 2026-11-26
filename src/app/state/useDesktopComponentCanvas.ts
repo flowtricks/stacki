@@ -13,7 +13,7 @@ import { defaultsCanvasRoute } from '../../../shared/properties/defaultsCanvas';
 import {
   EMPTY_CANVAS_FILE,
   parseComponentCanvasSource,
-  serializeComponentCanvas,
+  canvasAssetUses,
   withFrameEdit,
   canvasRoot,
   PROJECT_ROOT,
@@ -21,21 +21,28 @@ import {
   type RootTarget,
   withSplit,
   CANVAS_LIMITS,
+  keyPairs,
+  scopeHolds,
+  withoutOverrides,
   type ComponentCanvasFile,
   type FrameEdit,
 } from '../../../shared/properties/componentCanvas';
 import type { DefaultComponent, DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 import { parsePageSource, readPage, writeText } from '../../ipc/bridge';
 import { carriedParse, toEditorPageState } from '../../editor/pageState';
 import { createDefaultsCanvas, onMetadataWrite, readMetadata, removeDefaultsCanvas, writeMetadata } from '../../ipc/projectMetadataBridge';
-import { defaultsSnapshot, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
+import { assetFileExists, defaultsSnapshot, missingAssetFiles, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
+import { onAssetEntriesChanged } from '../../ipc/assetBridge';
 import { buildCanvasLayout, type CanvasComponent } from '../../features/preview/componentCanvas/canvasModel';
-import { canvasPageSource, canvasTreeOf, defaultProps, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
+import { groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
+import { canvasPageSource, canvasTreeOf, frameDefaults, type CanvasPageItem, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
 import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentCanvas/canvasChrome';
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
+  canvasBoxOf,
   canvasInstanceAt,
   canvasInstanceOf,
   canvasRootPath,
@@ -45,13 +52,16 @@ import {
   noteComponentCanvas,
   PROJECT_SCOPE,
   registerCanvasInstanceOpener,
+  type CanvasBox,
   type CanvasInstance,
   type CanvasOpen,
+  type CanvasSection,
   type CanvasState,
   type CanvasZoom,
   type ComponentCanvasControl,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { cleanError } from '../../lib/cleanError';
+import { canvasSettingsStore, type CanvasChange, type CanvasSettingsIo, type CanvasSettingsStore } from '../model/canvasSettingsStore';
 import { nodeAtPath } from '../../editor/editorTree';
 import { trailOf } from '../model/pageGestures';
 import { resolveProjectImport } from '../../ipc/appBridge';
@@ -76,8 +86,10 @@ interface Origin {
 }
 
 interface Writes {
-  /** The settings file as last read or written: the base the next write is checked against. */
-  base: string | undefined;
+  /** The open canvas's settings and their one writer (canvasSettingsStore.ts). */
+  store: CanvasSettingsStore | undefined;
+  /** The canvas page's writes, one at a time, so an older page never lands over a newer one. */
+  pageQueue: Promise<void>;
   /** The page text last written, so an unchanged page is never rewritten. */
   page: string;
   /** The canvas whose page may be written: cleared as it closes, so a write already under way never revives a retired page. */
@@ -92,39 +104,34 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   const stateRef = useRef(state);
   stateRef.current = state;
   const origin = useRef<Origin>({ stack: [], selectionPath: undefined, device: 'desktop', customWidth: undefined });
-  const writes = useRef<Writes>({ base: undefined, page: '', active: undefined, settingsTimer: undefined, pageTimer: undefined });
+  const writes = useRef<Writes>({
+    store: undefined,
+    pageQueue: Promise.resolve(),
+    page: '',
+    active: undefined,
+    settingsTimer: undefined,
+    pageTimer: undefined,
+  });
   const project = app.project.path;
   // The shell's latest view, for the control's actions: the control itself stays the same object between renders.
   const shell = useRef(app);
   shell.current = app;
   noteComponentCanvas(state);
 
-  const saveSettings = useCallback(
-    async (closing?: CanvasOpen): Promise<void> => {
-      const current = closing ?? stateRef.current;
-      const held = writes.current;
-      clearTimeout(held.settingsTimer);
-      held.settingsTimer = undefined;
-      if (current.kind !== 'open') {
-        return;
-      }
-      const source = serializeComponentCanvas(current.settings);
-      // No file yet and nothing to put in one: nothing is written. A project-level setting (the canvas root's classes or
-      // background) is something, though no component has settings yet.
-      if (source === held.base || (held.base === undefined && source === serializeComponentCanvas(EMPTY_CANVAS_FILE))) {
-        return;
-      }
-      try {
-        const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(held.base === undefined ? {} : { base: held.base }) });
-        held.base = saved.source;
-      } catch (error: unknown) {
-        app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
-        // Someone else changed the file: carry on from what is on disk now.
-        held.base = (await readMetadata(project, 'componentCanvas')).source;
-      }
-    },
-    [app, project, translate],
-  );
+  const saveSettings = useCallback(async (): Promise<void> => {
+    const held = writes.current;
+    clearTimeout(held.settingsTimer);
+    held.settingsTimer = undefined;
+    const store = held.store;
+    if (store === undefined) {
+      return;
+    }
+    try {
+      await store.save();
+    } catch (error: unknown) {
+      app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
+    }
+  }, [app, translate]);
 
   // Ends one canvas without navigating: its settings are written and its page retired (projectMetadataHandlers.ts).
   const retire = useCallback(
@@ -132,7 +139,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       if (closing.kind !== 'open') {
         return;
       }
-      await saveSettings(closing);
+      await saveSettings();
       clearTimeout(writes.current.pageTimer);
       writes.current.active = undefined;
       await removeDefaultsCanvas(project, pageFileOf(closing.id)).catch((error: unknown) => console.warn('Could not retire the component canvas page:', error));
@@ -177,7 +184,14 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
         .then(
           (opened) => {
             origin.current = kept ?? opened.origin;
-            writes.current = { base: opened.base, page: opened.page, active: opened.state.id, settingsTimer: undefined, pageTimer: undefined };
+            writes.current = {
+              store: canvasSettingsStore(settingsIo(app.project.path), opened.base),
+              pageQueue: writes.current.pageQueue,
+              page: opened.page,
+              active: opened.state.id,
+              settingsTimer: undefined,
+              pageTimer: undefined,
+            };
             setState(opened.state);
           },
           (error: unknown) => {
@@ -190,22 +204,28 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   );
 
   const update = useCallback(
-    (change: (current: CanvasOpen) => ComponentCanvasFile): void => {
+    (change: (current: CanvasOpen) => CanvasChange | undefined): void => {
       const current = stateRef.current;
-      if (current.kind !== 'open') {
+      const store = writes.current.store;
+      if (current.kind !== 'open' || store === undefined) {
+        return;
+      }
+      // What the edit is (its scope, its component) is read now; what it applies to is the file as it is when applied.
+      const edit = change(current);
+      if (edit === undefined) {
         return;
       }
       let settings: ComponentCanvasFile;
       try {
-        settings = change(current);
+        settings = store.change(edit);
       } catch (error: unknown) {
         app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
         return;
       }
-      const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
-      const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-      const scope = scopeStillFits(current.scope, frame, layout) ? current.scope : frame;
-      setState({ ...current, settings, layout, frame, scope });
+      const next = withSettings(current, settings);
+      // Two writes of one gesture can arrive before the next render: each builds on the one before.
+      stateRef.current = next;
+      setState(next);
       clearTimeout(writes.current.settingsTimer);
       writes.current.settingsTimer = setTimeout(() => void saveSettings(), CANVAS_TIMING.settingsDelayMs);
     },
@@ -226,6 +246,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   useCanvasPageWrites(state, writes, catalog, { project, translate, shell, setState });
   useCanvasMessages(state, setState, cover);
   useLiveSchema(state, app.scan, setState);
+  useRelinkedSettings(state, writes, setState);
   useLeaveWhenAway(state, app, finish);
   useFrameFollowsEditor(state, app, setState);
   useNoDeviceKeys(state);
@@ -238,39 +259,48 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       canOpen: (component) => component.origin?.kind !== 'package' && component.isLayout !== true && app.project.path.length > 0,
       open,
       exit: () => void finish(origin.current),
-      selectFrame: (key) => {
+      setScope: (section, scope) => {
         const current = stateRef.current;
-        if (current.kind === 'open' && current.layout.frames.some((frame) => frame.key === key)) {
-          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame' });
-          // On the canvas page the frame's instance is what is selected; inside an instance the selection stays.
-          const instance = current.instances.find((candidate) => candidate.key === key);
-          const view = shell.current;
-          const node = instance === undefined || view.editStackRef.current.length > 1 ? undefined : nodeAtPath(view.model?.nodes ?? [], trailOf(instance.path));
-          if (node !== undefined) {
-            view.setSelectedId(node.id);
-          }
-        }
-      },
-      setScope: (scope) => {
-        const current = stateRef.current;
-        if (current.kind === 'open' && scopeStillFits(scope, current.frame, current.layout)) {
-          setState({ ...current, scope });
+        if (current.kind === 'open' && scopeFits(section, scope, current)) {
+          setState({ ...current, scopes: { ...current.scopes, [section]: scope } });
         }
       },
       edit: (edit: FrameEdit) =>
         update((current) => {
-          const target = rootTarget(current);
-          if (target === undefined) {
-            return withFrameEdit(current.settings, current.component.file, current.scope, edit);
+          const component = current.component.file;
+          if (edit.kind === 'background') {
+            const target = rootTarget(current.scopes.background, current);
+            // A root scope holds the canvas root's background (and its classes, editRootClasses).
+            return target === undefined
+              ? (file) => withFrameEdit(file, component, current.scopes.background, edit)
+              : (file) => withRootEdit(file, target, { kind: 'background', value: edit.value });
           }
-          // A root scope holds the canvas root's background (and its classes, editRootClasses); a frame's size is not set there.
-          return edit.kind === 'background' ? withRootEdit(current.settings, target, { kind: 'background', value: edit.value }) : current.settings;
+          // Sizes go to the size scope; a frame's size is never set at a root scope.
+          return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
         }),
+      resetOverrides: (section, setting) =>
+        update((current) => {
+          const scope = current.scopes[section];
+          const component = current.component.file;
+          return rootTarget(scope, current) === undefined ? (file) => withoutOverrides(file, component, scope, setting) : undefined;
+        }),
+      showTargets: (frames) => {
+        const current = stateRef.current;
+        if (current.kind === 'open') {
+          assert(frames === undefined || frames.length <= CANVAS_LIMITS.framesMax, 'A canvas outlines a bounded number of frames');
+          postToCanvas(current.id, { command: 'targets', frames: frames ?? [] });
+        }
+      },
       editRootClasses: (classes) =>
-        update((current) =>
-          withRootEdit(current.settings, rootTarget(current) ?? { kind: 'component', file: current.component.file }, { kind: 'classes', value: classes }),
-        ),
-      setSplit: (split) => update((current) => withSplit(current.settings, current.component.file, split)),
+        update((current) => {
+          const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: current.component.file };
+          return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
+        }),
+      setSplit: (split) =>
+        update((current) => {
+          const component = current.component.file;
+          return (file) => withSplit(file, component, split);
+        }),
       coverRight,
       showFramePanel: () => {
         const current = stateRef.current;
@@ -279,8 +309,15 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           setState({ ...current, framePanel: 'shown' });
         }
       },
-      editProp: (edit) =>
-        update((current) => withFrameEdit(current.settings, current.component.file, rootTarget(current) === undefined ? current.scope : current.frame, edit)),
+      editValues: (scope, edits) => {
+        assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
+        if (edits.length > 0) {
+          update((current) => {
+            const component = current.component.file;
+            return (file) => edits.reduce((next, edit) => withFrameEdit(next, component, scope, edit), file);
+          });
+        }
+      },
       hideFramePanel: () => {
         const current = stateRef.current;
         if (current.kind === 'open' && current.framePanel === 'shown') {
@@ -300,42 +337,61 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   );
 }
 
-// Where a canvas root setting goes at the current scope: the project's default or this component's; undefined at a
-// frame scope.
-function rootTarget(current: CanvasOpen): RootTarget | undefined {
-  if (current.scope === PROJECT_SCOPE) {
+function settingsIo(project: string): CanvasSettingsIo {
+  return {
+    read: async () => (await readMetadata(project, 'componentCanvas')).source,
+    write: async (source, base) => {
+      const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(base === undefined ? {} : { base }) });
+      return saved.source ?? source;
+    },
+  };
+}
+
+// The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit.
+function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
+  const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
+  const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
+  return { ...current, settings, layout, frame, scopes: keptScopes(current, frame, layout) };
+}
+
+// The scopes kept over a new layout or frame: each that still reaches the frame, else its section's default.
+function keptScopes(current: CanvasOpen, frame: string, layout: CanvasOpen['layout']): CanvasOpen['scopes'] {
+  const next = { ...current, frame, layout };
+  const keep = (section: CanvasSection, fallback: string): string => (scopeFits(section, current.scopes[section], next) ? current.scopes[section] : fallback);
+  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? PROJECT_SCOPE : frame) };
+}
+
+// Where a canvas root setting goes at a scope: the project's default or this component's; undefined at a frame scope.
+function rootTarget(scope: string, current: CanvasOpen): RootTarget | undefined {
+  if (scope === PROJECT_SCOPE) {
     return PROJECT_ROOT;
   }
-  return current.scope === COMPONENT_SCOPE ? { kind: 'component', file: current.component.file } : undefined;
+  return scope === COMPONENT_SCOPE ? { kind: 'component', file: current.component.file } : undefined;
 }
 
-// The scope a newly selected canvas root starts at: the component's own when it already sets something of its own,
-// else the project's, which a theme class or a canvas colour usually is.
-function rootScopeFor(current: CanvasOpen): string {
-  const root = canvasRoot(current.settings, current.component.file);
-  return root.backgroundSource === 'component' || root.classesSource === 'component' ? COMPONENT_SCOPE : PROJECT_SCOPE;
-}
-
-// The scope when another frame is selected: "this frame" follows the selection, a wider scope stays while the new frame
-// is in it, and otherwise the new frame itself.
-function scopeAfterSelect(current: CanvasOpen, key: string): string {
-  if (current.scope === current.frame || rootTarget(current) !== undefined) {
-    return key;
+// The scopes after a frame is selected. Another frame (or one after the canvas root or a group) starts each section at
+// its default: props and background at the frame itself, so a wider choice is always made for the frame in front of
+// you, and size at all frames, where a frame's size is usually wanted, unless the size scope chosen still reaches the
+// new frame. The same frame selected again keeps every choice.
+function scopesAfterSelect(current: CanvasOpen, key: string): CanvasOpen['scopes'] {
+  const fresh = key !== current.frame || current.subject === 'root' || current.picked.kind === 'group';
+  if (!fresh) {
+    return current.scopes;
   }
-  return scopeStillFits(current.scope, key, current.layout) ? current.scope : key;
+  const size = current.subject === 'frame' && current.picked.kind !== 'group' && scopeHolds(current.scopes.size, key) ? current.scopes.size : '';
+  return { props: key, size, background: key };
 }
 
-// A scope is the selected frame, every frame, one split value the selected frame shows, or a canvas root scope.
-function scopeStillFits(scope: string, frame: string, layout: CanvasOpen['layout']): boolean {
-  if (scope === '' || scope === frame || scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
-    return true;
+// A section's scope reaches the selected frame: the frame, all frames, any set of its split values (one value, or a
+// group's); the background may also be a canvas root scope while the root is the subject.
+function scopeFits(section: CanvasSection, scope: string, current: Pick<CanvasOpen, 'frame' | 'layout' | 'subject'>): boolean {
+  if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
+    return section === 'background' && current.subject === 'root';
   }
-  const selected = layout.frames.find((candidate) => candidate.key === frame);
-  return selected?.parts.some((part) => frameKeyOfPart(part) === scope) ?? false;
-}
-
-function frameKeyOfPart(part: CanvasOpen['layout']['frames'][number]['parts'][number]): string {
-  return part.value.kind === 'unset' ? part.prop : `${part.prop}=${encodeURIComponent(String(part.value.value))}`;
+  if (!current.layout.frames.some((candidate) => candidate.key === current.frame)) {
+    return scope === '';
+  }
+  return scopeHolds(scope, current.frame);
 }
 
 function pageFileOf(id: string): string {
@@ -374,18 +430,18 @@ async function openCanvas(
     throw new Error(`.stacki/component-canvas.json: ${parsed.error.message}`);
   }
   const snapshot = defaultsSnapshot(components.source, catalogOf(project, app.scan));
-  const component: CanvasComponent = { file, name: scanComponent.name, schema: scanComponent.schema ?? [] };
+  const component: CanvasComponent = { file, name: scanComponent.name, schema: scanComponent.schema ?? [], rest: scanComponent.hasRest === true };
   const layout = buildCanvasLayout(component, parsed.value.components[file]);
   if (layout.total > layout.frames.length) {
     app.showToast(translate('componentCanvas.notice.truncated', { shown: layout.frames.length, total: layout.total }), 'info');
   }
   const id = crypto.randomUUID();
   const pageFile = pageFileOf(id);
-  const page = pageSourceOf({ id, component, layout, settings: parsed.value }, snapshot, translate);
+  const page = pageSourceOf({ id, component, layout, settings: parsed.value }, await withMissingAssets(project, snapshot, parsed.value), translate);
   await createDefaultsCanvas(project, pageFile, page);
   try {
     const pagePath = project + '/' + pageFile;
-    const { root, instances } = await canvasTree(pagePath, page);
+    const { root, instances, boxes } = await canvasTree(pagePath, page);
     const origin: Origin = {
       stack: app.editStackRef.current,
       selectionPath: app.pathFor(app.selectedId),
@@ -417,13 +473,15 @@ async function openCanvas(
         settings: parsed.value,
         layout,
         frame: first.key,
-        scope: first.key,
+        scopes: { props: first.key, size: '', background: first.key },
         scale: 1,
         framePanel: rememberedFramePanel(),
-        defaults: defaultProps(snapshot, file, prettyComponentName(component.name)),
+        defaults: frameDefaults(snapshot, file, prettyComponentName(component.name)),
         instances,
+        boxes,
         root,
         subject: 'frame',
+        picked: { kind: 'component' },
       },
       origin,
       base: stored.source,
@@ -446,17 +504,45 @@ function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | '
     surface: root.background,
     rootClasses: root.classes,
     snapshot,
+    groups: pageItems(groupFrames(layout.frames), component, translate),
     frames: layout.frames.map((frame) => ({
       key: frame.key,
       label: frameLabel(frame, component, translate),
       row: frame.row,
       props: frame.props,
+      assets: frame.assets,
+      literals: frame.literals,
+      content: frame.content,
       omitted: frame.omitted,
       width: frame.resolved.width,
       height: frame.resolved.height,
       background: frame.resolved.background,
     })),
   });
+}
+
+// The snapshot with every file a default or a preview value names that the project no longer has: the page leaves
+// those values out rather than importing a missing file, which would break every frame. The panel says which are gone.
+async function withMissingAssets(project: string, snapshot: DefaultsSnapshot, settings: ComponentCanvasFile): Promise<DefaultsSnapshot> {
+  const named = [...new Set(canvasAssetUses(settings).map((use) => use.file))];
+  const found = await Promise.all(named.map((file) => assetFileExists(project, file)));
+  const missing = [...(await missingAssetFiles(project, snapshot.config)), ...named.filter((_, index) => found[index] !== true)];
+  return { ...snapshot, missingAssets: [...new Set(missing)] };
+}
+
+// The frames' boxes with their headers and captions in words.
+function pageItems(items: readonly CanvasTreeItem[], component: CanvasComponent, translate: Translator, depth = 0): readonly CanvasPageItem[] {
+  assert(depth <= CANVAS_LIMITS.splitPropsMax, 'Boxes nest no deeper than the split');
+  return items.map((item) =>
+    item.kind === 'frame'
+      ? { kind: 'frame', key: item.key, caption: frameLabel({ parts: item.caption }, component, translate) }
+      : {
+          kind: 'group',
+          key: item.key,
+          header: frameLabel({ parts: item.header }, component, translate),
+          children: pageItems(item.children, component, translate, depth + 1),
+        },
+  );
 }
 
 // The insertion catalog from the scan the app already holds, the way the defaults host builds it from a fresh one.
@@ -515,10 +601,24 @@ function previewScale(): number {
 function postToCanvas(id: string, message: Readonly<Record<string, unknown>>): void {
   for (const frame of document.querySelectorAll<HTMLIFrameElement>('.preview-frame-wrap iframe')) {
     try {
-      frame.contentWindow?.postMessage({ ...message, type: CANVAS_MESSAGE, canvas: id }, new URL(frame.src).origin);
+      // Only a frame showing the dev server's page hears it: one still on the app's own blank document (between loads)
+      // would log a mismatched origin for every message.
+      if (frameShows(frame, new URL(frame.src).origin)) {
+        frame.contentWindow?.postMessage({ ...message, type: CANVAS_MESSAGE, canvas: id }, new URL(frame.src).origin);
+      }
     } catch {
       // A frame still loading has no address to post to; it asks again when it is ready.
     }
+  }
+}
+
+// Whether the frame's document is at `origin`. The dev server's page is another origin than the app's, so its location
+// cannot be read: reading it throws, and that is the answer. A document the app can read is its own, not the canvas.
+function frameShows(frame: HTMLIFrameElement, origin: string): boolean {
+  try {
+    return frame.contentWindow?.location.origin === origin;
+  } catch {
+    return true;
   }
 }
 
@@ -541,6 +641,8 @@ function useCanvasPageWrites(
   // what the frames' instances are given, so the page is written again from the file, never from a copy of it.
   const [defaultsVersion, setDefaultsVersion] = useState(0);
   useEffect(() => onMetadataWrite(() => setDefaultsVersion((version) => version + 1)), []);
+  // An asset renamed, moved, deleted or brought back changes what the frames can import.
+  useEffect(() => onAssetEntriesChanged(() => setDefaultsVersion((version) => version + 1)), []);
   useEffect(() => {
     if (open === undefined) {
       return undefined;
@@ -548,10 +650,10 @@ function useCanvasPageWrites(
     const held = writes.current;
     clearTimeout(held.pageTimer);
     held.pageTimer = setTimeout(() => {
-      void (async () => {
+      const rewrite = async (): Promise<void> => {
         const components = await readMetadata(project, 'components');
-        const snapshot = defaultsSnapshot(components.source, catalog.current);
-        const defaults = defaultProps(snapshot, open.component.file, prettyComponentName(open.component.name));
+        const snapshot = await withMissingAssets(project, defaultsSnapshot(components.source, catalog.current), open.settings);
+        const defaults = frameDefaults(snapshot, open.component.file, prettyComponentName(open.component.name));
         if (JSON.stringify(defaults) !== JSON.stringify(open.defaults)) {
           setState((current) => (current.kind === 'open' && current.id === open.id ? { ...current, defaults } : current));
         }
@@ -560,16 +662,21 @@ function useCanvasPageWrites(
           held.page = page;
           // The frames' instances move with the frames: read where they are before the page that has them loads.
           const pagePath = project + '/' + pageFileOf(open.id);
-          const { root, instances } = await canvasTree(pagePath, page);
+          const { root, instances, boxes } = await canvasTree(pagePath, page);
           setState((current) =>
-            current.kind === 'open' && current.id === open.id && (JSON.stringify(current.instances) !== JSON.stringify(instances) || current.root !== root)
-              ? { ...current, instances, root }
+            current.kind === 'open' &&
+            current.id === open.id &&
+            (JSON.stringify(current.instances) !== JSON.stringify(instances) ||
+              JSON.stringify(current.boxes) !== JSON.stringify(boxes) ||
+              current.root !== root)
+              ? { ...current, instances, boxes, root }
               : current,
           );
           await writeText(project, pageFileOf(open.id), page);
-          await reloadCanvasPage(shell.current, pagePath, { before: open.instances, after: instances, root });
+          await reloadCanvasPage(shell.current, pagePath, { before: open.instances, after: instances, boxesBefore: open.boxes, boxesAfter: boxes, root });
         }
-      })().catch((error: unknown) => console.warn('Could not update the component canvas page:', error));
+      };
+      held.pageQueue = held.pageQueue.then(rewrite).catch((error: unknown) => console.warn('Could not update the component canvas page:', error));
     }, CANVAS_TIMING.pageDelayMs);
     return () => clearTimeout(held.pageTimer);
   }, [catalog, defaultsVersion, open, project, setState, shell, translate, writes]);
@@ -581,15 +688,25 @@ function useCanvasPageWrites(
 async function reloadCanvasPage(
   app: ShellView,
   pagePath: string,
-  moved: { readonly before: readonly CanvasInstance[]; readonly after: readonly CanvasInstance[]; readonly root: string },
+  moved: {
+    readonly before: readonly CanvasInstance[];
+    readonly after: readonly CanvasInstance[];
+    readonly boxesBefore: readonly CanvasBox[];
+    readonly boxesAfter: readonly CanvasBox[];
+    readonly root: string;
+  },
 ): Promise<void> {
   if (app.pageStateRef.current.currentPage?.path !== pagePath) {
     return;
   }
   const selectedPath = app.pathFor(app.selectedId);
+  // A box stays selected as the box it is, wherever the rewrite moved it; one the rewrite removed gives way to the
+  // first frame it held, or the root.
+  const box = moved.boxesBefore.find((candidate) => candidate.path === selectedPath);
   // The canvas root stays selected as the root; a frame's instance, as the frame it is (or became).
-  const rootSelected = selectedPath !== undefined && !moved.before.some((instance) => instance.path === selectedPath) && !selectedPath.includes('.');
-  const key = moved.before.find((instance) => instance.path === selectedPath)?.key;
+  const rootSelected =
+    selectedPath !== undefined && box === undefined && !moved.before.some((instance) => instance.path === selectedPath) && !selectedPath.includes('.');
+  const key = box?.kind === 'frame' ? undefined : moved.before.find((instance) => instance.path === selectedPath)?.key;
   const read = await readPage(pagePath);
   const latest = app.pageStateRef.current;
   if (latest.currentPage?.path !== pagePath) {
@@ -598,9 +715,13 @@ async function reloadCanvasPage(
   const next = toEditorPageState(carriedParse(latest.pageState, read));
   assert(next.source === read.source, 'The canvas page shown is the one on disk');
   app.setPageState(next);
-  const path = rootSelected
-    ? moved.root
-    : (moved.after.find((instance) => instance.key === key) ?? (key === undefined ? undefined : narrowerFrame(moved.after, key)))?.path;
+  const keptBox = box === undefined ? undefined : moved.boxesAfter.find((candidate) => candidate.kind === box.kind && candidate.key === box.key);
+  const path =
+    box !== undefined
+      ? (keptBox?.path ?? moved.root)
+      : rootSelected
+        ? moved.root
+        : (moved.after.find((instance) => instance.key === key) ?? (key === undefined ? undefined : narrowerFrame(moved.after, key)))?.path;
   const node = path === undefined || !next.editable ? undefined : nodeAtPath(next.model.nodes, trailOf(path));
   if (node !== undefined) {
     app.setSelectedId(node.id);
@@ -620,10 +741,12 @@ function narrowerFrame(instances: readonly CanvasInstance[], key: string): Canva
   );
 }
 
-// Messages from the canvas page: which frame a press landed in, the zoom, and that it is ready for the selection.
+// Messages from the canvas page: the zoom, and that it is ready for the selection. The selection itself is the editor's
+// (a press on a box or an instance selects it as on any page); the page is told what is selected, so it can mark the
+// frame's caption and keep captions clear of the editor's tag.
 function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.SetStateAction<CanvasState>>, cover: React.MutableRefObject<number>): void {
   const id = state.kind === 'open' ? state.id : undefined;
-  const frame = state.kind === 'open' ? state.frame : undefined;
+  const selection = state.kind === 'open' ? JSON.stringify(selectionOf(state)) : undefined;
   useEffect(() => {
     if (id === undefined) {
       return undefined;
@@ -633,26 +756,14 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
       if (message === undefined || !fromPreview(event.source)) {
         return;
       }
-      if (message.event === 'select' && message.frame !== undefined) {
-        const key = message.frame;
-        // The editor selects the frame's instance from the click itself (AppPanes.tsx selectCanvasPath); a press on a
-        // frame's label or the space around its instance also opens the frame's settings again.
-        if (message.chrome) {
-          rememberFramePanel('shown');
-        }
-        setState((current) =>
-          current.kind === 'open' && current.layout.frames.some((candidate) => candidate.key === key)
-            ? { ...current, frame: key, scope: scopeAfterSelect(current, key), framePanel: message.chrome ? 'shown' : current.framePanel }
-            : current,
-        );
-      } else if (message.event === 'view' && message.scale !== undefined) {
+      if (message.event === 'view' && message.scale !== undefined) {
         // The zoom on screen: the canvas's own times the preview frame's (a fixed-width Desktop is drawn smaller).
         const scale = message.scale * previewScale();
         setState((current) => (current.kind === 'open' && current.scale !== scale ? { ...current, scale } : current));
       } else if (message.event === 'ready') {
         setState((current) => {
           if (current.kind === 'open') {
-            postToCanvas(current.id, { command: 'select', frame: current.frame });
+            postToCanvas(current.id, selectionOf(current));
             // A page that loaded after the popover opened has not heard how much of it the popover covers.
             postToCanvas(current.id, { command: 'inset', right: cover.current / previewScale() });
           }
@@ -664,10 +775,50 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
     return () => window.removeEventListener('message', receive);
   }, [cover, id, setState]);
   useEffect(() => {
-    if (id !== undefined && frame !== undefined) {
-      postToCanvas(id, { command: 'select', frame });
+    if (id === undefined || selection === undefined) {
+      return undefined;
     }
-  }, [frame, id]);
+    const parsed: unknown = JSON.parse(selection);
+    assert(typeof parsed === 'object', 'A canvas selection is an object');
+    assert(parsed !== null, 'A canvas selection is not null');
+    postToCanvas(id, { ...parsed });
+    return measureSelectionTag(id);
+  }, [id, selection]);
+}
+
+// What the canvas page is told is selected: the frame, and whether its component, its box, a group or the root.
+function selectionOf(current: CanvasOpen): Readonly<Record<string, unknown>> {
+  if (current.subject === 'root') {
+    return { command: 'select', frame: current.frame, target: 'root' };
+  }
+  const { picked } = current;
+  return { command: 'select', frame: current.frame, target: picked.kind, ...(picked.kind === 'group' ? { group: picked.key } : {}) };
+}
+
+// How many frames the selection's tag is looked for after a selection: the editor draws it a frame or two later.
+const TAG_MEASURE_FRAMES_MAX = 30;
+
+// The editor's tag over the selection, measured on screen and sent to the canvas page, which hides any caption or
+// heading the tag would cover (canvasChrome.ts hideUnderTag). Its size alone: the page knows where the selection is at
+// every zoom, and the tag keeps its size on screen.
+function measureSelectionTag(id: string): () => void {
+  let frame = 0;
+  let handle = requestAnimationFrame(function look(): void {
+    // Two frames on: the outline drawn before them may still be the last selection's.
+    const tag = frame < 2 ? undefined : (document.querySelector<HTMLElement>('.node-outline.sel .node-outline-tag') ?? undefined);
+    if (tag !== undefined) {
+      // In the canvas page's own pixels: a fixed-width preview frame is drawn smaller than its width.
+      const bounds = tag.getBoundingClientRect();
+      const scale = previewScale();
+      postToCanvas(id, { command: 'tag', width: bounds.width / scale, height: bounds.height / scale, inside: tag.classList.contains('inside') });
+      return;
+    }
+    frame += 1;
+    if (frame < TAG_MEASURE_FRAMES_MAX) {
+      handle = requestAnimationFrame(look);
+    }
+  });
+  return () => cancelAnimationFrame(handle);
 }
 
 function fromPreview(source: unknown): boolean {
@@ -691,12 +842,35 @@ function useLiveSchema(state: CanvasState, scan: ScanResult, setState: React.Dis
       if (current.kind !== 'open' || JSON.stringify(current.component.schema) === JSON.stringify(schema)) {
         return current;
       }
-      const component = { ...current.component, schema };
+      const component = { ...current.component, schema, rest: live?.hasRest === true };
       const layout = buildCanvasLayout(component, current.settings.components[component.file]);
       const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-      return { ...current, component, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
+      return { ...current, component, layout, frame, scopes: keptScopes(current, frame, layout) };
     });
   }, [file, scan.components, setState]);
+}
+
+// A file moved in the project rewrites the canvas settings that named it (electron/project/componentDefaultRelink.ts):
+// the canvas reads them again, keeping what it has not written yet.
+function useRelinkedSettings(state: CanvasState, writes: React.MutableRefObject<Writes>, setState: React.Dispatch<React.SetStateAction<CanvasState>>): void {
+  const id = state.kind === 'open' ? state.id : undefined;
+  useEffect(() => {
+    if (id === undefined) {
+      return undefined;
+    }
+    return onAssetEntriesChanged(() => {
+      void writes.current.store
+        ?.reread()
+        .then((settings) =>
+          setState((current) =>
+            current.kind === 'open' && current.id === id && JSON.stringify(current.settings) !== JSON.stringify(settings)
+              ? withSettings(current, settings)
+              : current,
+          ),
+        )
+        .catch((error: unknown) => console.warn('Could not re-read the component canvas settings:', error));
+    });
+  }, [id, setState, writes]);
 }
 
 // Opening anything that is not the canvas page or inside it ends the canvas (it stays the root of the edit stack while
@@ -712,49 +886,115 @@ function useLeaveWhenAway(state: CanvasState, app: ShellView, finish: (restore: 
   }, [finish, id, project, root]);
 }
 
-// The selected frame follows the editor: the instance selected on the canvas page, or the one opened to edit inside.
-// So the Settings panel, Frame settings and the frame's highlighted label always speak of the same frame. On the canvas
-// page a frame is one thing, so a selection that lands on its wrappers or inside its instance (an action that selects
-// a neighbour or a parent) is moved to the instance.
-function useFrameFollowsEditor(state: CanvasState, app: ShellView, setState: React.Dispatch<React.SetStateAction<CanvasState>>): void {
+// The selected frame follows the editor: the box, group or instance selected on the canvas page, or the instance opened
+// to edit inside. So the Settings panel, Frame settings and the frame's caption always speak of the same frame.
+//
+// It follows during render, not after it: a selection change and the canvas state it implies reach the screen in one
+// paint. Followed in an effect, the outline and the Settings panel moved a frame before Frame settings and the scope
+// did, and the panel's fields (keyed by frame and scope) were mounted twice; recorded in the app, that was the flicker.
+// React re-renders this component at once when its own state is set during its render, before any child sees it.
+//
+// A selection inside an instance (an action that selects a child) is moved to the instance, which is closed here; one
+// on the page's own scaffolding (its <body>, its styles) is the canvas root. Those move the editor's selection, which
+// belongs to another component, so they wait for the effect.
+/** Exported for its regression test (componentCanvasFollow.test.js); the canvas host is its one caller. */
+export function useFrameFollowsEditor(
+  state: CanvasState,
+  app: Pick<ShellView, 'editStack' | 'pathFor' | 'selectedId' | 'model' | 'setSelectedId'>,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+): void {
   const open = state.kind === 'open';
   const inside = app.editStack.length > 1 ? app.editStack[1]?.focusPath : undefined;
   const selected = app.editStack.length === 1 ? app.pathFor(app.selectedId) : undefined;
   const followed = inside ?? selected;
   const instances = state.kind === 'open' ? state.instances : undefined;
+  const boxes = state.kind === 'open' ? state.boxes : undefined;
   const { model, setSelectedId } = app;
+  // What was last followed: only a moved selection (or a rewritten page) is followed again.
+  const done = useRef<{ readonly selection: string; readonly instances: unknown; readonly boxes: unknown } | undefined>(undefined);
+  const selection = `${inside === undefined ? 'page' : 'inside'}|${followed ?? ''}`;
+  if (!open || followed === undefined) {
+    done.current = undefined;
+  } else if (done.current?.selection !== selection || done.current.instances !== instances || done.current.boxes !== boxes) {
+    done.current = { selection, instances, boxes };
+    const next = followedState(state, followed, inside === undefined ? 'page' : 'inside');
+    if (next !== state) {
+      setState(next);
+    }
+  }
   useEffect(() => {
-    if (!open || followed === undefined) {
+    if (!open || followed === undefined || inside !== undefined || isCanvasRoot(followed) || canvasBoxOf(followed) !== undefined) {
       return;
     }
-    if (inside === undefined && isCanvasRoot(followed)) {
-      // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
-      setState((current) => (current.kind === 'open' && current.subject !== 'root' ? { ...current, subject: 'root', scope: rootScopeFor(current) } : current));
+    const instance = canvasInstanceAt(followed);
+    const within = instance !== undefined && (followed === instance.path || followed.startsWith(instance.path + '.'));
+    // Inside an instance: the instance; on the page's scaffolding: the canvas root.
+    const path = within ? instance.path : canvasRootPath();
+    if (path === followed || path === undefined) {
       return;
     }
-    const instance = inside === undefined ? canvasInstanceAt(followed) : canvasInstanceOf(followed);
-    if (instance === undefined) {
-      return;
+    const node = nodeAtPath(model?.nodes ?? [], trailOf(path));
+    if (node !== undefined) {
+      setSelectedId(node.id);
     }
-    if (inside === undefined && instance.path !== followed) {
-      // A frame is its instance: a selection on the frame itself goes up to the canvas root when it came from the
-      // instance (a parent step), and anything else in the frame is the instance.
-      const parentStep = instance.path.startsWith(followed + '.');
-      const node = nodeAtPath(model?.nodes ?? [], trailOf(parentStep ? (canvasRootPath() ?? instance.path) : instance.path));
-      if (node !== undefined) {
-        setSelectedId(node.id);
-      }
-      if (parentStep) {
-        return;
-      }
-    }
-    const key = instance.key;
-    setState((current) =>
-      current.kind === 'open' && (current.frame !== key || current.subject !== 'frame') && current.layout.frames.some((frame) => frame.key === key)
-        ? { ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame' }
-        : current,
-    );
-  }, [followed, inside, instances, model, open, setSelectedId, setState]);
+  }, [followed, inside, model, open, setSelectedId]);
+}
+
+// The canvas state a selection on its page implies; `current` itself when it already says so.
+function followedState(current: CanvasState, followed: string, where: 'page' | 'inside'): CanvasState {
+  if (current.kind !== 'open') {
+    return current;
+  }
+  if (where === 'inside') {
+    const instance = canvasInstanceOf(followed);
+    return instance === undefined ? current : withFramePicked(current, instance.key, { kind: 'component' });
+  }
+  if (isCanvasRoot(followed)) {
+    // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
+    // Its settings start at every component's canvas, where a theme class or a canvas colour usually belongs.
+    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: PROJECT_SCOPE } };
+  }
+  const box = canvasBoxOf(followed);
+  if (box !== undefined) {
+    return box.kind === 'frame' ? withFramePicked(current, box.key, { kind: 'box' }) : withGroupPicked(current, box.key);
+  }
+  const instance = canvasInstanceAt(followed);
+  if (instance === undefined || !(followed === instance.path || followed.startsWith(instance.path + '.'))) {
+    return current; // The scaffolding: the effect selects the root, which is followed then.
+  }
+  return withFramePicked(current, instance.key, { kind: 'component' });
+}
+
+// The canvas with a frame selected, through its component or its box. Another frame starts at its own scope; the same
+// frame keeps the scope it had, unless that was a group's (a group selected before it) or the root's.
+function withFramePicked(current: CanvasState, key: string, picked: CanvasOpen['picked']): CanvasState {
+  if (current.kind !== 'open' || !current.layout.frames.some((frame) => frame.key === key)) {
+    return current;
+  }
+  if (current.frame === key && current.subject === 'frame' && current.picked.kind === picked.kind) {
+    return current;
+  }
+  return { ...current, frame: key, scopes: scopesAfterSelect(current, key), subject: 'frame', picked };
+}
+
+// The canvas with a group's box selected: its edits go to every frame in it (the group's key is their shared values),
+// and the panels show the first of them, or the selected frame where it is one of them.
+function withGroupPicked(current: CanvasState, key: string): CanvasState {
+  if (current.kind !== 'open') {
+    return current;
+  }
+  const pairs = keyPairs(key);
+  const holds = (frame: string): boolean => pairs.every((pair) => keyPairs(frame).includes(pair));
+  const frame = holds(current.frame) ? current.frame : current.layout.frames.find((candidate) => holds(candidate.key))?.key;
+  if (frame === undefined) {
+    return current;
+  }
+  assert(scopeHolds(key, frame), 'A group is a scope of every frame in it');
+  if (current.subject === 'frame' && current.picked.kind === 'group' && current.picked.key === key && current.frame === frame) {
+    return current;
+  }
+  // Every section edits the group: that is what selecting it says.
+  return { ...current, frame, scopes: { props: key, size: key, background: key }, subject: 'frame', picked: { kind: 'group', key } };
 }
 
 // The breakpoint devices do not apply to the canvas (its toolbar hides them), so their number keys do nothing there:

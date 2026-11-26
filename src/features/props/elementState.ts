@@ -330,7 +330,9 @@ export function elementSettings(
   // offers a prop the component would ignore. Always the CSS editor, even
   // when a component types it `style?: string`.
   const styleField: FieldDefinition | undefined =
-    allowAttrs || node.props?.['style'] !== undefined ? { ...(schema.find((field) => field.name === 'style') || {}), name: 'style', type: 'style' } : undefined;
+    allowAttrs || props.offersStyle === true || node.props?.['style'] !== undefined
+      ? { ...(schema.find((field) => field.name === 'style') || {}), name: 'style', type: 'style' }
+      : undefined;
   // The page's wrapper switches through the same Tag field as everything else
   // — it just answers with a layout rather than a tag, so its list is the
   // project's layouts and the change goes through the import rewrite.

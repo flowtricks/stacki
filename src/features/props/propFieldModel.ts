@@ -290,10 +290,13 @@ export function usePropFieldModel(props: PropFieldProps) {
   // Reset removes the attribute; for a required prop that leaves the component without what it needs.
   const resetPlan: ResetPlan = planReset({ field, value, required: required && !spreadsProps(assetContext?.siblingProps) });
   const resetRefusal =
-    resetPlan.kind !== 'disabled' ? undefined : translate(resetPlan.reason === 'already-default' ? 'props.control.resetAlready' : 'props.control.resetNoEmpty');
+    policy === 'preview' || resetPlan.kind !== 'disabled'
+      ? undefined
+      : translate(resetPlan.reason === 'already-default' ? 'props.control.resetAlready' : 'props.control.resetNoEmpty');
   const isColor = isColorField(props.field);
   return {
     ...props,
+    policy,
     field,
     name,
     type,
@@ -398,6 +401,11 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
   const { translate, setMenuPosition, onChange, setCustom, value, field, isSet, showExpr, required, resetPlan } = state;
   const reset = () => {
     setMenuPosition(undefined);
+    // A preview's reset always removes what is set here, so what shows without it comes back.
+    if (state.policy === 'preview') {
+      onChange(undefined, true);
+      return;
+    }
     // Overridden values reset; a required prop gets its valid empty value instead of losing its attribute.
     if (resetPlan.kind === 'disabled') {
       return;

@@ -208,8 +208,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
 function CanvasFramePopup({ canvas }: { readonly canvas: ComponentCanvasControl }) {
   const state = canvas.state;
   // Frame settings speak of the selected frame (the instance selected on the canvas page, or the one opened inside), so
-  // they show at any depth until closed; the zoom bar's toggle and a frame's label open them again.
-  if (state.kind !== 'open' || state.framePanel === 'hidden') {
+  // they show at any depth; minimized, their header stays, and expands them again.
+  if (state.kind !== 'open') {
     return undefined;
   }
   return <CanvasSwatches>{<ComponentCanvasFramePopup canvas={canvas} state={state} />}</CanvasSwatches>;
@@ -770,8 +770,10 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
       app.setPseudoPick(undefined);
     }
   };
-  // On the component canvas's page the tree is its frames: one closed instance per frame (canvasFrameSettings.tsx).
-  const canvasView = canvasNavigatorView(app, componentCanvas, translate);
+  // On the component canvas's page the tree is its boxes, as divs, and in each frame its closed instance
+  // (canvasFrameSettings.tsx). The page is generated, so nothing on it can be changed from here.
+  const canvasView = canvasNavigatorView(app, componentCanvas);
+  const pseudoNodeIds = canvasView === undefined ? { before: app.stateIds.before, after: app.stateIds.after } : withoutBoxes(app.stateIds, canvasView.boxIds);
   return (
     <PanelBoundary name="The Navigator" label={translate('shell.navigator.panelName')} resetKey={page?.path}>
       <StructurePanel
@@ -787,7 +789,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         emptyNodeIds={app.emptyNodeIds ?? new Set<string>()}
         hiddenNodeIds={app.stateIds.hidden}
         inertNodeIds={app.stateIds.inert}
-        pseudoNodeIds={{ before: app.stateIds.before, after: app.stateIds.after }}
+        pseudoNodeIds={pseudoNodeIds}
         selectedPseudo={selectedPseudo(app.selectedId, app.pseudoPick)}
         onSelectPseudo={selectPseudo}
         liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
@@ -804,15 +806,34 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         {...desktopElementActions(app)}
         onOpenCode={app.openCodeWindowById}
         onChangeLayout={app.onChangeLayout}
-        onDropComponent={app.onDropComponent}
-        onDropInsert={app.insertItemAt}
-        onMoveNode={app.moveNode}
+        {...(canvasView === undefined ? { onDropInsert: app.insertItemAt, onDropComponent: app.onDropComponent, onMoveNode: app.moveNode } : CANVAS_READ_ONLY)}
         onCodeChange={app.onCodeChange}
         onOpenCodePanel={() => app.setLeftTab('code')}
         devLog={app.devLog}
       />
     </PanelBoundary>
   );
+}
+
+// What the Navigator may do on the component canvas's page, which is generated and never edited: nothing that would
+// change it. Delete, Cut, Copy, Duplicate and Wrap are greyed out (canChangeStructure), Paste and drops land nowhere.
+const CANVAS_READ_ONLY = {
+  canChangeStructure: () => false,
+  onPasteNode: () => undefined,
+  hasClipboard: false,
+  onMoveNode: () => undefined,
+  onDropComponent: () => undefined,
+} as const;
+
+// The page's ::before and ::after rows without the canvas boxes': a box's caption is its ::before, drawn by the canvas.
+function withoutBoxes(
+  states: { readonly before: ReadonlySet<string>; readonly after: ReadonlySet<string> },
+  boxIds: ReadonlySet<string>,
+): { readonly before: ReadonlySet<string>; readonly after: ReadonlySet<string> } {
+  return {
+    before: new Set([...states.before].filter((id) => !boxIds.has(id))),
+    after: new Set([...states.after].filter((id) => !boxIds.has(id))),
+  };
 }
 
 // The Add elements panel. A click inserts at the selection through the palette's insert; a tile dragged out shows

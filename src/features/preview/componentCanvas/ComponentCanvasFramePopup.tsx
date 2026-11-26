@@ -1,12 +1,11 @@
-// The selected frame's settings, in a popover over the canvas's right edge: which props get their own frames, the
-// frame's size and background, and its preview props. It opens when a frame is selected (its label or the space around
-// its component) and steps aside while an element inside a frame is selected, so the right panel stays the ordinary
-// Style and Settings panel. It never closes on a press outside, since the canvas is where the next frame is picked;
-// the close button and Escape close it. Its header moves it (useFloatingDrag), kept inside the window.
+// The selected frame's settings, in a popover over the canvas's right edge: the frame's size and background. It is
+// always there while a canvas is open, so it can never be lost: its header's button and Escape minimize it to the
+// header alone, and the same button expands it again. It never closes on a press outside, since the canvas is where
+// the next frame is picked. Its header moves it (useFloatingDrag), kept inside the window.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import Popup from '../../../ui/Popup';
-import { CloseIcon } from '../../../ui/Icons';
+import { ChevronDownIcon } from '../../../ui/Icons';
 import { useFloatingDrag } from '../../../ui/useFloatingDrag';
 import { FLOATING_DRAG_HANDLE_ATTRIBUTE } from '../../../ui/floatingDrag';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
@@ -30,13 +29,15 @@ export function ComponentCanvasFramePopup({ canvas, state }: { readonly canvas: 
   const translate = useTranslate();
   const place = useCanvasPlace();
   const drag = useFloatingDrag();
-  assert(state.framePanel === 'shown', 'The popover is drawn only while shown');
   const label = translate('componentCanvas.popup.title');
+  const shown = state.framePanel === 'shown';
+  const toggle = translate(shown ? 'componentCanvas.popup.minimize' : 'componentCanvas.popup.expand');
+  assert(toggle.length > 0, 'The header button says what it does');
   useCoverRight(canvas, place);
   return (
     <Popup
       mode="popover"
-      className="component-canvas-popup"
+      className={`component-canvas-popup${shown ? '' : ' is-minimized'}`}
       role="dialog"
       label={label}
       dismissible={false}
@@ -56,14 +57,16 @@ export function ComponentCanvasFramePopup({ canvas, state }: { readonly canvas: 
         <span className="component-canvas-popup-title">{label}</span>
         <button
           type="button"
-          className="ghost component-canvas-popup-close"
-          aria-label={translate('componentCanvas.popup.close')}
-          onClick={canvas.hideFramePanel}
+          className="ghost component-canvas-popup-toggle"
+          aria-label={toggle}
+          aria-expanded={shown}
+          title={toggle}
+          onClick={shown ? canvas.hideFramePanel : canvas.showFramePanel}
         >
-          <CloseIcon size={14} />
+          <ChevronDownIcon size={14} />
         </button>
       </div>
-      <ComponentCanvasPanel canvas={canvas} state={state} />
+      {shown && <ComponentCanvasPanel canvas={canvas} state={state} />}
     </Popup>
   );
 }

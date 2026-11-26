@@ -14,6 +14,9 @@ import { BracesIcon } from '../../ui/Icons';
 import type { InlineNode } from './richContentModel';
 import { richTextNodes, richTextView, sameRichContent, withoutLayoutSpace, type RichTextCodeReason } from './richTextContent';
 import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
+import { ResetLabel } from '../../ui/ResetLabel';
+import type { PropFieldProvenance } from './propFieldExtras';
+import './propFieldExtras.css';
 
 export { sameRichContent } from './richTextContent';
 
@@ -32,6 +35,10 @@ const CODE_REASON_TIPS: Readonly<Record<RichTextCodeReason, MessageKey>> = {
 
 export function RichTextContentField(props: {
   readonly label: string;
+  /** Where the content comes from when it is not the field's own, and how it is cleared back (a canvas frame). */
+  readonly provenance?: PropFieldProvenance | undefined;
+  readonly own?: boolean | undefined;
+  readonly onReset?: (() => void) | undefined;
   /** The content as written between the instance's tags; undefined when there is none. */
   readonly source: string | undefined;
   /** The same content as the editor reads it, when that differs: an imported image shown as its path. */
@@ -57,7 +64,13 @@ export function RichTextContentField(props: {
     <div className="props-field props-rich-text" key="content">
       {/* The label row every prop field has: the name, then the `{}` that switches the field to its code. */}
       <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
-        <span className="prop-label">{props.label}</span>
+        {props.onReset === undefined ? (
+          <span className="prop-label">{props.label}</span>
+        ) : (
+          <span className={props.provenance?.tone === 'inherited' ? 'prop-label-holder inherited' : 'prop-label-holder'} title={props.provenance?.tip}>
+            <ResetLabel label={props.label} active={props.own === true} onReset={props.onReset} />
+          </span>
+        )}
         <TipAnchor text={tip}>
           <button
             type="button"

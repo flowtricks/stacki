@@ -57,6 +57,9 @@ function pageOf(layout, overrides = {}) {
       label: frame.key || 'Button',
       row: frame.row,
       props: frame.props,
+      assets: frame.assets,
+      literals: frame.literals,
+      content: frame.content,
       omitted: frame.omitted,
       width: frame.resolved.width,
       height: frame.resolved.height,
@@ -103,13 +106,14 @@ test('the canvas page parses, imports the component once, and writes each frame'
   const source = pageOf(layout);
   const importLine = 'import Button from "../../' + BUTTON + '";';
   assert.equal(source.split(importLine).length - 1, 1, 'the component is imported once');
-  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
+  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label={"direction=back&variant=arrow"}'));
   assert.match(
     source,
-    /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; contain-intrinsic-size: 320px 200px !important; background: var\(--swatch-light\) !important"/,
-    'the frame sits in its row and column, at its size and background',
+    /data-fixed-width data-fixed-height style="width: 320px !important; height: 200px !important; background: var\(--swatch-light\) !important"/,
+    'the frame is at its size and background',
   );
-  assert.match(source, /label="Back &quot;&lt;there&gt;&quot;"/, 'prop text is escaped');
+  assert.match(source, /<body [^>]*data-flow="column">/, 'one row for each of the first prop’s values');
+  assert.ok(source.includes('label={"Back \\"\\u003cthere\\u003e\\""}'), 'text that markup would escape is a string expression');
   assert.match(source, /<Button variant="main"[^>]*>Button Text<\/Button>/, 'without a project recipe, the starter defaults fill the slot');
   const chip = { ...snapshot, catalog: [{ ...snapshot.catalog[0], name: 'Chip', slotText: false }] };
   assert.match(pageOf(layout, { snapshot: chip, fallbackText: 'Chip' }), />Chip<\/Button>/, 'an empty default slot shows the component name');
@@ -151,18 +155,14 @@ test('the chrome refuses what could break out of its elements, and the page name
 
 test('only well-formed messages from this canvas are heard', () => {
   const type = chrome.CANVAS_MESSAGE;
-  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), {
-    event: 'select',
-    frame: 'variant=main',
-    chrome: true,
-    scale: undefined,
-  });
+  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined });
+  // The selection is the editor's: the page no longer names a pressed frame, and such a message is not heard.
+  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: 0.5 }, ID).scale, 0.5);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: -1 }, ID).scale, undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: 'other', event: 'ready' }, ID), undefined, 'another canvas');
   assert.equal(chrome.canvasMessage({ type: 'avb:click-node', canvas: ID, event: 'ready' }, ID), undefined, 'another protocol');
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'delete' }, ID), undefined, 'an unknown event');
-  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'x'.repeat(2000) }, ID).frame, undefined, 'an oversized key');
   assert.equal(chrome.canvasMessage(undefined, ID), undefined);
   assert.equal(chrome.canvasMessage('select', ID), undefined);
 });
@@ -229,7 +229,7 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   assert.match(chrome.chromeScript(ID), /"#1e1e1e"/, 'the app’s grey where the site paints none');
   assert.match(
     plain,
-    /html\[data-stacki-ready\] > body > stacki-frame\[data-frame\] \{[^}]*background: transparent !important;/,
+    /html\[data-stacki-ready\] > body stacki-frame\[data-frame\] \{[^}]*background: transparent !important;/,
     'a frame is transparent, whatever the project paints on elements',
   );
   for (const property of ['margin: 0 !important', 'padding: 0 !important', 'border: 0 !important', 'opacity: 1 !important', 'visibility: visible !important']) {
@@ -246,7 +246,31 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   const themed = chrome.chromeStyles('dark', 'var(--background)');
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
-  assert.match(plain, /stacki-frame\[data-frame\]::after \{[^}]*visibility: hidden !important;/, 'a hidden copy of the caption makes the frame as wide as it');
+  // Every box (a frame's, a group's at any depth) is square, paints nothing and has a quiet blue outline with room inside
+  // it; hover and selection are the editor's own outlines, as on any element, so the page draws neither.
+  const framed = /> body stacki-frame\[data-frame\] \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  const grouped = /> body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  for (const box of [framed, grouped]) {
+    for (const bare of ['background: transparent !important', 'border: 0 !important', 'border-radius: 0 !important', 'box-shadow: none !important']) {
+      assert.ok(box.includes(bare), `a box is ${bare}`);
+    }
+    assert.match(box, /outline: 1px solid rgba\(47, 128, 255, 0\.3\) !important;/, 'a quiet blue outline at rest');
+  }
+  assert.match(framed, /padding: 32px !important;/);
+  assert.match(grouped, /padding: 46px 16px 16px !important;/, 'a group holds its heading and its frames inside its padding');
+  assert.doesNotMatch(plain, /content-visibility/, 'paint containment would cut off the caption above a fixed frame');
+  assert.doesNotMatch(plain, /data-box-selected|:hover/, 'the editor draws hover and selection');
+  assert.match(chrome.chromeScript(ID), /outline-width: ' \+ thin \+ 'px/, 'outlines keep their width on screen at any zoom');
+  assert.match(chrome.chromeScript(ID), /padding-inline: ' \+ \(32 \+ extra\)/, 'a caption wider than its component widens the frame evenly');
+  const { frameGapPx, subgroupGapPx, groupGapPx, captionGapPx, headingGapPx } = chrome.CHROME_LIMITS;
+  assert.ok(captionGapPx < headingGapPx && headingGapPx < frameGapPx && frameGapPx < subgroupGapPx && subgroupGapPx < groupGapPx, 'each level is spaced wider');
+  assert.match(plain, /data-flow="column"\] \{ flex-direction: column !important; gap: 32px/, 'groups stack on one left edge');
+  // A caption or heading the editor's tag would cover is hidden while it does, never drawn under it.
+  assert.match(
+    plain,
+    /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before \{ visibility: hidden !important; \}/,
+  );
+  assert.match(chrome.chromeScript(ID), /data\.command === 'tag'/);
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
@@ -333,4 +357,176 @@ test('the canvas root is the page’s <html>: its path is found, and its classes
     'html > body > frame > instance, nothing in between',
   );
   assert.ok(!marked.includes(`<!--avb-s:${bodyPath}-->`), 'the body has no marker pair');
+});
+
+test('the panel shows a frame’s own values as set and everything else as what the field rests on, and stores each write', () => {
+  const panel = loadRenderer('src/app/model/canvasPanelValues.ts');
+  const settings = {
+    frames: {
+      '': { props: { heading: 'Everywhere' } },
+      'variant=main': { assets: { label: { file: 'src/assets/a.png', url: true } }, content: 'Words' },
+    },
+  };
+  const layout = model.buildCanvasLayout(button, settings);
+  const frame = layout.frames.find((candidate) => candidate.key === 'variant=main');
+  const defaults = { props: { id: 'from-defaults' }, text: 'A <b>' };
+  const input = { schema: button.schema, rest: true, settings, frame, scope: frame.key, defaults };
+  const shown = panel.framePanelValues(input);
+  assert.deepEqual(shown.props.label, { type: 'expr', value: 'frameAsset0.src' });
+  assert.deepEqual(shown.props.variant, { type: 'string', value: 'main' }, 'a split value is the frame’s own');
+  assert.equal(shown.props.heading, undefined, 'a wider value is not set here');
+  assert.equal(shown.schema.find((field) => field.name === 'heading').default, 'Everywhere');
+  assert.equal(shown.schema.find((field) => field.name === 'id').default, 'from-defaults');
+  assert.equal(shown.schema.filter((field) => field.name === 'class').length, 1, 'a ...rest component takes a class');
+  assert.equal(shown.imports, `import frameAsset0 from "${'../'.repeat(2)}src/assets/a.png";`);
+  assert.deepEqual(shown.content, { html: 'Words', own: true });
+  assert.deepEqual(panel.framePanelValues({ ...input, scope: '' }).content, { html: 'A &lt;b&gt;', own: false });
+  const stored = (value) => panel.frameEditOf('label', value, shown.bindings);
+  assert.deepEqual(stored({ type: 'expr', value: 'frameAsset0.src' }), {
+    kind: 'asset',
+    name: 'label',
+    asset: { file: 'src/assets/a.png', url: true },
+  });
+  assert.deepEqual(stored({ type: 'expr', value: '[{ i: frameAsset0 }]' }), {
+    kind: 'literal',
+    name: 'label',
+    literal: { source: '[{ i: frameAsset0 }]', imports: { frameAsset0: 'src/assets/a.png' } },
+  });
+  assert.deepEqual(stored({ type: 'expr', value: '["a"]' }), { kind: 'literal', name: 'label', literal: '["a"]' });
+  assert.deepEqual(stored(undefined), { kind: 'inherit', name: 'label' });
+  assert.equal(stored({ type: 'expr', value: 'Astro.props.title' }), undefined, 'code has no preview value');
+  assert.deepEqual(panel.framePickEdit('image', { rel: 'public/images/a.png', root: 'public' }, 'module'), {
+    kind: 'prop',
+    name: 'image',
+    value: '/images/a.png',
+  });
+  assert.equal(panel.framePickEdit('image', { rel: 'src/data/a.json', root: 'src' }, 'module'), undefined);
+  assert.equal(
+    panel.contentHTML([
+      { kind: 'text', value: 'a < {b} ' },
+      { kind: 'element', name: 'br', props: {}, children: undefined },
+    ]),
+    'a &lt; &#123;b&#125; <br>',
+  );
+});
+
+test('a frame’s own content and files reach its instance, as text the page never runs', () => {
+  const layout = model.buildCanvasLayout(button, {
+    split: [],
+    frames: { '': { content: 'Own {words} </stacki-frame>', assets: { heading: { file: 'src/assets/a.png' } } } },
+  });
+  const source = pageOf(layout);
+  assert.ok(source.includes(`import canvasAsset0 from "${'../'.repeat(2)}src/assets/a.png";`));
+  assert.match(source, /heading=\{canvasAsset0\}/);
+  assert.match(source, /<Fragment set:html=\{"Own \\u007bwords\\u007d \\u003c\/stacki-frame\\u003e"\} \/><\/Button>/);
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
+  assert.equal(page.canvasTreeOf(parsed.model.nodes).instances.length, 1);
+});
+
+// The Lumos button split by variant, emphasis and direction: eleven frames.
+const { CANVAS_LIMITS: LIMITS } = require('#dist/shared/properties/componentCanvas.js');
+const SPLIT_UNIONS = [
+  {
+    names: ['variant', 'emphasis', 'direction'],
+    branches: [
+      { forbids: ['direction'], pins: { variant: ['main'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: ['direction', 'emphasis'], pins: { variant: ['link'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: ['direction'], pins: { variant: ['play', 'close'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: [], pins: { variant: ['arrow'] }, defaults: {}, rules: {}, docs: {} },
+    ],
+  },
+];
+const choice = (name, options) => ({ name, type: 'enum', optional: true, options, default: options[0], unions: SPLIT_UNIONS });
+const splitButton = {
+  file: BUTTON,
+  name: 'Button',
+  schema: [
+    choice('variant', ['main', 'link', 'play', 'close', 'arrow']),
+    choice('emphasis', ['primary', 'secondary']),
+    choice('direction', ['forward', 'back']),
+  ],
+};
+
+test('frames that share a value sit in one box that says it once; a lone value gets no box and a lone inner box no level', () => {
+  const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
+  const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
+  assert.equal(layout.frames.length, 11);
+  const words = (parts) => parts.map((part) => `${part.prop}: ${String(part.value.value)}`).join(' · ');
+  const drawn = (items, depth = 0) => {
+    assert.ok(depth <= LIMITS.splitPropsMax, 'bounded by the split');
+    return items.map((item) => (item.kind === 'frame' ? words(item.caption) : [words(item.header), drawn(item.children, depth + 1)]));
+  };
+  const both = ['emphasis: primary', 'emphasis: secondary'];
+  const arrows = ['direction: forward', 'direction: back'];
+  assert.deepEqual(drawn(groups.groupFrames(layout.frames)), [
+    ['variant: main', both],
+    'variant: link',
+    ['variant: play', both],
+    ['variant: close', both],
+    [
+      'variant: arrow',
+      [
+        ['emphasis: primary', arrows],
+        ['emphasis: secondary', arrows],
+      ],
+    ],
+  ]);
+  // A box that would hold nothing but one box takes its header into its own.
+  const narrow = layout.frames.filter((frame) => frame.key.includes('emphasis=primary&variant=arrow') || frame.key === 'variant=link');
+  assert.deepEqual(drawn(groups.groupFrames(narrow)), ['variant: link', ['variant: arrow · emphasis: primary', arrows]]);
+  // One split prop makes no boxes.
+  const single = groups.groupFrames(model.buildCanvasLayout(splitButton, { split: ['variant'] }).frames);
+  assert.ok(single.every((item) => item.kind === 'frame'));
+});
+
+test('the page draws its boxes as real elements the editor selects, names each by its caption, and finds every frame’s instance', () => {
+  const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
+  const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
+  const items = (list, depth = 0) => {
+    assert.ok(depth <= LIMITS.splitPropsMax, 'bounded by the split');
+    return list.map((item) =>
+      item.kind === 'frame'
+        ? { kind: 'frame', key: item.key, caption: 'caption' }
+        : { kind: 'group', key: item.key, header: 'A "box" <1>', children: items(item.children, depth + 1) },
+    );
+  };
+  const source = pageOf(layout, { groups: items(groups.groupFrames(layout.frames)) });
+  assert.equal(source.split('<stacki-group data-group={').length - 1, 6, 'groups are marked elements, named by their key');
+  assert.doesNotMatch(source, /<stacki-(group|frame) data-stacki-unmarked/);
+  assert.equal(source.split(' data-depth="1"').length - 1, 2, 'the two emphasis groups inside arrow are a level down');
+  assert.equal(source.split(' data-heading').length - 1, 1, 'the lone top-level frame is headed as the groups are');
+  assert.ok(source.includes('data-label={"A \\"box\\" \\u003c1\\u003e"}'), 'a label is a string expression with nothing the parser reads');
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
+  const tree = page.canvasTreeOf(parsed.model.nodes);
+  assert.deepEqual(
+    tree.instances.map((instance) => instance.key),
+    layout.frames.map((frame) => frame.key),
+    'instances are found in frame order, however deep their boxes',
+  );
+  assert.equal(tree.boxes.filter((box) => box.kind === 'group').length, 6);
+  assert.equal(tree.boxes.filter((box) => box.kind === 'frame').length, layout.frames.length);
+  assert.ok(
+    tree.boxes.every((box) => box.label === (box.kind === 'group' ? 'A "box" <1>' : 'caption')),
+    'each box reads back its label exactly',
+  );
+  for (const frame of tree.boxes.filter((box) => box.kind === 'frame')) {
+    assert.ok(
+      tree.instances.some((instance) => instance.path.startsWith(frame.path + '.') && instance.key === frame.key),
+      'a frame box holds its instance',
+    );
+  }
+  // Every box is marked with the path the editor selects it by; the page's <body> stays the canvas's own.
+  const marked = serializePageMarked(parsed.model, '', undefined, source);
+  assert.equal(marked.split(/<stacki-group[^>]*data-avb-p/).length - 1, 6, 'groups carry a path');
+  assert.equal(marked.split(/<stacki-frame[^>]*data-avb-p/).length - 1, layout.frames.length, 'frames carry a path');
+  assert.doesNotMatch(marked, /<body[^>]*data-avb-p/);
+  // With the canvas open, a box at exactly its path is that box; anything else is no box.
+  session.noteComponentCanvas({ kind: 'open', id: ID, instances: tree.instances, boxes: tree.boxes, root: tree.root });
+  const group = tree.boxes.find((box) => box.kind === 'group');
+  assert.equal(session.canvasBoxOf(group.path)?.key, group.key);
+  assert.equal(session.canvasBoxOf(tree.instances[0].path), undefined, 'an instance is not a box');
+  assert.equal(session.canvasBoxOf(tree.root), undefined, 'nor is the root');
+  session.noteComponentCanvas({ kind: 'idle' });
 });

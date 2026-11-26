@@ -1,11 +1,13 @@
 // Check tracked editor metadata before CI or an external component refactor is considered done.
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { checkAuthProvider } from './checkAuth';
 import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
 import { readMetadataSource } from '../src/features/settings/projectMetadata';
 import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefaults';
 import { defaultAssetUses } from '../vendor/stacki/shared/properties/componentDefaultValues';
 import { validateMetadata } from '../vendor/stacki/shared/properties/projectMetadata';
-import { canvasIssues, parseComponentCanvasSource } from '../vendor/stacki/shared/properties/componentCanvas';
+import { canvasAssetUses, canvasIssues, parseComponentCanvasSource } from '../vendor/stacki/shared/properties/componentCanvas';
 import { EMPTY_KEEP_LIST, parseStyleKeepList } from '../vendor/stacki/shared/properties/styleKeepList';
 import { checkSelectorUsage } from '../vendor/stacki/electron/properties/selectorUsageFiles';
 import { configOf, foldersFor, readProjectFoldersSource } from '../vendor/stacki/shared/properties/projectFolders';
@@ -56,6 +58,11 @@ export async function checkProject(root: string): Promise<void> {
         settings.catalog.map((component) => component.file),
       ),
     );
+    for (const use of canvasAssetUses(parsed.value)) {
+      if (!existsSync(join(root, use.file))) {
+        canvasProblems.push(`.stacki/component-canvas.json: ${use.owner} preview value ${use.prop} imports ${use.file}, which is not in the project.`);
+      }
+    }
   }
   if (issues.length + canvasProblems.length > 0) {
     throw new Error([...issues, ...canvasProblems].join('\n'));

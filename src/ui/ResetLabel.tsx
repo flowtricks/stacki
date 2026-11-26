@@ -21,6 +21,12 @@ export function ResetLabel(props: {
   readonly onReset: () => void;
   /** Why this value cannot be reset from its label (a default the component's own code computes): the menu shows Reset, disabled, with this reason. */
   readonly resetDisabledReason?: string | undefined;
+  /**
+   * `overridden`: what the field shows is not what every element it edits shows (some set their own): the label is the
+   * Style panel's orange, `tip` says why, and Reset makes them all take this value.
+   */
+  readonly tone?: 'overridden' | undefined;
+  readonly tip?: string | undefined;
 }) {
   const translate = useTranslate();
   const [position, setPosition] = useState<ResetMenuProps['position']>();
@@ -32,10 +38,10 @@ export function ResetLabel(props: {
   return (
     <>
       <span
-        className={`prop-label${props.active ? ' set' : ''}`}
+        className={`prop-label${props.tone === 'overridden' ? ' embed-editor_prop-orange' : props.active ? ' set' : ''}`}
         role={props.active ? 'button' : undefined}
         tabIndex={props.active ? 0 : undefined}
-        title={props.active ? translate('ui.resetLabel.title') : undefined}
+        title={props.tip ?? (props.active ? translate('ui.resetLabel.title') : undefined)}
         onClick={(event) => {
           event.preventDefault();
           if (!props.active) {

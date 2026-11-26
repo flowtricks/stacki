@@ -3,6 +3,7 @@
 // overlay's info (appViewModel.ts).
 
 import { isCanvasRoot, isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
+import { CANVAS_FRAME_TAG, CANVAS_GROUP_TAG, canvasBoxLabel } from '../../features/preview/componentCanvas/canvasPage';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { requestCanvasReports } from '../../editor/canvasQuery';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -215,9 +216,14 @@ export function useCrumbLabels(
 
   // Breadcrumb trail for the canvas toolbar: page → ancestors → selection.
   const crumbLabel = (node: EditorNode): string => {
-    // The component canvas's root is its page's own <html>, not a layout.
-    if (node.kind === 'element' && node.name === 'html' && isComponentCanvasPage(currentPage?.path)) {
-      return 'html'; // i18n-ignore: the element's own tag name, as elements are named everywhere.
+    // The component canvas's root is its page's own <html>, not a layout; its boxes are named by their captions.
+    if (node.kind === 'element' && isComponentCanvasPage(currentPage?.path)) {
+      if (node.name === 'html') {
+        return 'html'; // i18n-ignore: the element's own tag name, as elements are named everywhere.
+      }
+      if (isCanvasBoxTag(node.name)) {
+        return canvasBoxLabel(node);
+      }
     }
     if (node.id === 'layout') {
       return currentLayoutName || node.name || 'layout';
@@ -316,10 +322,10 @@ export function useCanvasMarks(
   if (model && selectedId === 'frontmatter') {
     crumbs.push({ id: 'frontmatter', label: 'Frontmatter' }); // i18n-ignore: the file format's own word, shown as written.
   } else if (model && selectedId) {
-    // On the component canvas's page the frames' wrappers are its own chrome, not the person's markup: the trail names
-    // the canvas root (<html>) and the frame's instance, as the Navigator lists them.
+    // On the component canvas's page the page's scaffolding (its <body>) is not the person's markup: the trail names the
+    // canvas root (<html>), the boxes and the frame's instance, as the Navigator lists them.
     const chain = isComponentCanvasPage(currentPage?.path)
-      ? selectedAncestors.filter((node) => node.kind === 'component' || (node.kind === 'element' && node.name === 'html'))
+      ? selectedAncestors.filter((node) => node.kind === 'component' || (node.kind === 'element' && (node.name === 'html' || isCanvasBoxTag(node.name))))
       : selectedAncestors;
     // A then has no row in the navigator, so the trail doesn't name it either —
     // "if command › then › hero-command" said "then" to no one (see
@@ -447,8 +453,8 @@ export function useOverlayInfo(
         : node.kind === 'map' || node.kind === 'cond' || node.kind === 'branch'
           ? 'map'
           : 'element';
-    // The tag drives the overlay's icon, so it matches the Navigator row.
-    const tag = node.kind === 'element' || node.kind === 'raw' ? node.name : undefined;
+    // The tag drives the overlay's icon, so it matches the Navigator row: a component canvas box is listed as a div.
+    const tag = node.kind === 'element' && isCanvasBoxTag(node.name) ? 'div' : node.kind === 'element' || node.kind === 'raw' ? node.name : undefined;
     return {
       label,
       kind,
@@ -483,4 +489,9 @@ export function describeCanvasNotice(notice: CanvasNotice, translate: Translator
       return exhaustive;
     }
   }
+}
+
+// Whether an element of the component canvas's page is one of its boxes (canvasPage.ts), selected and named as a div.
+function isCanvasBoxTag(name: string): boolean {
+  return name === CANVAS_FRAME_TAG || name === CANVAS_GROUP_TAG;
 }

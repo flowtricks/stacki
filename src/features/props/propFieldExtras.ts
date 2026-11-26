@@ -21,6 +21,14 @@ export interface PropFieldAction {
 export interface PropFieldExtra {
   readonly action?: PropFieldAction;
   readonly lockedReason?: string;
+  /** Where the value shown comes from when it is not simply this field's own: the label says so on hover. */
+  readonly provenance?: PropFieldProvenance;
+}
+
+/** `inherited`: nothing is set here and the label turns orange. `noted`: set here, with something to say about it. */
+export interface PropFieldProvenance {
+  readonly tone: 'inherited' | 'noted';
+  readonly tip: string;
 }
 
 export type PropFieldExtras = (name: string) => PropFieldExtra | undefined;
