@@ -256,19 +256,22 @@ async function runInElectron({ window, project, options }) {
     await driver.key('1', { modifiers: ['shift'] });
     await driver.settle();
   };
-  /** Pans until the point of an element is well inside the canvas, then presses it. */
-  const select = async (selector, fx, fy) => {
+  /** Fits the frames, pans until the point of an element is well inside the canvas, and waits for the view to hold. */
+  const bringToView = async (selector, fx, fy) => {
     await fit();
     await until(
       `${selector} on screen`,
       `(() => { const at = ${framePoint(selector, fx, fy)}; const plane = document.querySelector('.dm-plane'); if (!at || !plane) return false; const box = plane.getBoundingClientRect(); if (at.y > box.top + 60 && at.y < box.bottom - 220 && at.x > box.left + 20 && at.x < box.right - 20) return true; plane.dispatchEvent(new WheelEvent('wheel', { deltaX: at.x - (box.left + box.width / 2), deltaY: at.y - (box.top + box.height / 2), bubbles: true, cancelable: true })); return false; })()`,
     );
     await driver.settle();
-    // A press that lands while the canvas is still showing another frame's version selects nothing: it is pressed
-    // again, within a bound, as the main soak does (designModeSoak.test.js selectOnCanvas).
-    for (let attempt = 1; ; attempt += 1) {
-      const at = await until(`${selector} in the frame`, framePoint(selector, fx, fy));
-      await driver.pointerPress(at);
+    return steady(`${selector} to hold still`, () => driver.evaluate(framePoint(selector, fx, fy)), 5);
+  };
+  /** Brings an element into view and presses it. */
+  const select = async (selector, fx, fy) => {
+    // A press while the canvas is still moving, or showing another frame's version, selects nothing: the view is
+    // brought back and pressed again, within a bound, as the main soak re-presses (designModeSoak.test.js).
+    for (let attempt = 1; attempt <= SELECT_PRESSES_MAX; attempt += 1) {
+      await driver.pointerPress(await bringToView(selector, fx, fy));
       const outlined = until('the outline', `!!document.querySelector('[data-dm-outline="picked"]')`, Boolean, 3_000);
       if (attempt === SELECT_PRESSES_MAX) {
         await outlined;

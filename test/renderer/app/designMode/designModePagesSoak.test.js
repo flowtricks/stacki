@@ -17,6 +17,7 @@ const path = require('node:path');
 /** How long the page is watched after it should have arrived: longer than any late navigation seen. */
 const WATCH_MS = 8_000;
 const SAMPLE_MS = 100;
+const STARTUP_STEADY_POLLS = 40;
 const WAIT_MS_MAX = 60_000;
 /** How long a way in or out may take to arrive on the page. */
 const ARRIVE_MS_MAX = 30_000;
@@ -92,7 +93,7 @@ const SAMPLE = `(() => {
 async function runInElectron({ window, project, options }) {
   const { createDriver } = require('../../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../../helpers/e2e/panelRecorder.js');
-  const { waitFor } = require('../../../helpers/waitFor.js');
+  const { pollUntil, waitFor, waitForSteady } = require('../../../helpers/waitFor.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [], watched: {} };
   const check = (what, condition, detail) => {
@@ -157,7 +158,7 @@ async function runInElectron({ window, project, options }) {
     let arrivedAt;
     let last;
     const started = Date.now();
-    while ((arrivedAt !== undefined || Date.now() - started < ARRIVE_MS_MAX) && (arrivedAt === undefined || Date.now() - arrivedAt < WATCH_MS)) {
+    const take = async () => {
       const sample = await driver.evaluate(SAMPLE).catch(() => undefined);
       if (sample !== undefined) {
         last = sample;
@@ -172,8 +173,15 @@ async function runInElectron({ window, project, options }) {
           left.push(sample);
         }
       }
-      await driver.sleep(SAMPLE_MS);
-    }
+    };
+    // Sampled until the page has been watched for long enough after arriving, or it never arrives.
+    await pollUntil({
+      what: `${label}: watched`,
+      read: take,
+      until: () => (arrivedAt === undefined ? Date.now() - started >= ARRIVE_MS_MAX : Date.now() - arrivedAt >= WATCH_MS),
+      pollIntervalMs: SAMPLE_MS,
+      pollCountMax: (ARRIVE_MS_MAX + WATCH_MS) / SAMPLE_MS,
+    });
     report.watched[label] = { arrivedAfterMs: arrivedAt === undefined ? undefined : arrivedAt - started, last };
     check(`${label}: arrives on the page`, arrivedAt !== undefined, JSON.stringify(last));
     check(`${label}: nothing navigates away for ${WATCH_MS / 1000} s`, arrivedAt !== undefined && left.length === 0, JSON.stringify(left.slice(0, 2)));
@@ -211,7 +219,15 @@ async function runInElectron({ window, project, options }) {
   const ABOUT = { editor: 'about', entry: '', preview: '/about', heading: 'About page' };
   const POST = { editor: 'Blog Template', entry: 'second-post', preview: '/blog/second-post', heading: 'Post second-post' };
   await until('the new pages in the switcher', `(() => { const b = document.querySelector('.page-switch-btn'); if (!b) return false; return true; })()`);
-  await driver.sleep(4_000);
+  // The editor reads the new files and settles: what it shows holds still before the first page is picked.
+  await waitForSteady({
+    what: 'the editor to settle on the new files',
+    read: () => driver.evaluate(SAMPLE),
+    until: () => true,
+    pollIntervalMs: SAMPLE_MS,
+    steadyPollCount: STARTUP_STEADY_POLLS,
+    pollCountMax: WAIT_MS_MAX / SAMPLE_MS,
+  });
 
   await run('a nested page', async () => {
     await switchTo('/docs/guide');
