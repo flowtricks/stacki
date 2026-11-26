@@ -10,6 +10,17 @@ import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
 import { ownClasses } from './frameMeasure';
 import { holdTextEditing, styleTextEditor } from './frameTextEditing';
+import { installRichPointer, openingCaret } from './frameRichCaret';
+import {
+  createRichHistory,
+  insertRichBlocks,
+  isSpareRichLine,
+  richCaret,
+  richElement,
+  tidyRichContent,
+  withoutTrailingEmptyBlocks,
+  type RichHistory,
+} from '../../shared/page/richBlockDom';
 import type { RichBlockChoice } from '../../shared/properties/canvasText';
 
 export interface RichTextCallbacks {
@@ -46,7 +57,7 @@ export function holdsInlineWords(element: Element): boolean {
   return all.length <= RICH_LIMITS.childrenMax && all.every((child) => INLINE_ELEMENTS.has(child.tagName));
 }
 
-export function openRichText(place: RichTextPlace, at: { readonly clientX: number; readonly clientY: number }, callbacks: RichTextCallbacks) {
+export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, callbacks: RichTextCallbacks) {
   const container = place.kind === 'line' ? place.container : instanceBlock(place.block, place.richRoot)?.parentElement;
   if (!(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
     return undefined;
@@ -57,7 +68,9 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
   const original = Array.from(container.childNodes);
   const snapshot = original.map((node) => node.cloneNode(true));
   const read = () => withoutTrailingCaretBreak(place.kind === 'line' ? readWholeHTML(container) : readInstanceHTML(container, original, place.richRoot));
-  const startHTML = read();
+  const kept = () => (place.kind === 'rich' ? withoutTrailingEmptyBlocks(read()) : read());
+  const startHTML = kept();
+  const history = createRichHistory(container);
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
   container.setAttribute('data-avb-text-editor', '');
@@ -77,7 +90,7 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     controller.abort();
     release();
     callbacks.plus(undefined);
-    const html = action === 'apply' ? read() : undefined;
+    const html = action === 'apply' ? kept() : undefined;
     const saved = html !== undefined && html !== startHTML;
     // The rendered nodes go back before the preview patches (its patch knows its own nodes, and one made here would stay
     // beside the rendered one), but not before: a save keeps showing what was typed until its rendering arrives, so a
@@ -137,7 +150,10 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
       // Escape leaves without saving, a click elsewhere saves (the session's dismiss). Enter: in rich text a new block (the
       // browser's own, a paragraph after a heading or quote, an item in a list, out of an empty one); in a line of words
       // a line break. ⌘/Ctrl Enter, and Shift Enter, a line break inside the block in both.
-      if (event.key === 'Escape') {
+      if (undoneBlocks(history, event)) {
+        event.preventDefault();
+        report();
+      } else if (event.key === 'Escape') {
         event.preventDefault();
         finish('cancel');
       } else if (event.key === 'Enter' && (place.kind === 'line' || event.metaKey || event.ctrlKey)) {
@@ -186,14 +202,11 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     },
     { signal: controller.signal },
   );
+  const ownsContent = place.kind === 'line' ? () => true : ownedBy(original, place.richRoot);
+  installRichPointer(container, ownsContent, controller.signal);
   container.focus({ preventScroll: true });
   // The caret where the double click was: focusing an editable element would otherwise put it at the element's start.
-  const caret = document.caretRangeFromPoint(at.clientX, at.clientY);
-  if (caret && container.contains(caret.startContainer)) {
-    caret.collapse(true);
-    window.getSelection()?.removeAllRanges();
-    window.getSelection()?.addRange(caret);
-  }
+  openingCaret(container, ownsContent, at);
   report();
   return {
     finish,
@@ -212,7 +225,7 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     choose: (choice: RichBlockChoice) => {
       held = false;
       if (!closed) {
-        applyRichChoice(container, choice);
+        applyRichChoice(container, history, choice);
         report();
       }
     },
@@ -264,8 +277,8 @@ export function readInstanceHTML(container: Element, original: readonly Node[], 
   const own = ownedBy(original, richRoot);
   const parts: string[] = [];
   for (const node of Array.from(container.childNodes)) {
-    if (node instanceof Element && own(node)) {
-      parts.push(cleanElement(node).outerHTML);
+    if (node instanceof Element && own(node) && !isSpareRichLine(node)) {
+      parts.push(tidied(cleanElement(node)));
     } else if (node instanceof Text && own(node) && node.data.trim() !== '') {
       parts.push(escapeText(node.data));
     }
@@ -274,14 +287,22 @@ export function readInstanceHTML(container: Element, original: readonly Node[], 
   return parts.join('');
 }
 
+// One block's copy as valid HTML: it may become several (a list the browser left inside a paragraph moves out).
+function tidied(copy: Element): string {
+  const holder = copy.ownerDocument.createElement('div');
+  holder.append(copy);
+  tidyRichContent(holder);
+  return holder.innerHTML;
+}
+
 // A copy without the preview's bookkeeping: its marker comments, the `data-avb-*` and `data-astro-*` attributes, the
 // canvas's own classes (`stacki-opened`, ownClasses) and the `astro-*` classes Astro's scoped styles put on rendered
 // elements. A canvas class saved into the page would mark the block as opened in every later preview.
 function cleanElement(element: Element): Element {
   const copy = element.cloneNode(true);
   assert(copy instanceof Element, 'A cloned element is an element');
-  const all = [copy, ...Array.from(copy.querySelectorAll('*'))];
-  for (const node of all) {
+  const marked = [copy, ...Array.from(copy.querySelectorAll('*'))];
+  for (const node of marked) {
     for (const attribute of Array.from(node.attributes)) {
       if (/^data-(?:avb|astro)/.test(attribute.name) || attribute.name === 'contenteditable') {
         node.removeAttribute(attribute.name);
@@ -296,6 +317,7 @@ function cleanElement(element: Element): Element {
       }
     }
   }
+  const all = [copy, ...Array.from(copy.querySelectorAll('*'))];
   // A break at the end of a block shows nothing after it (the browser leaves one after the last line's words go), so
   // none is written; breaks between words, a blank line in the middle included, stay.
   for (const node of all) {
@@ -317,7 +339,7 @@ function readWholeHTML(container: Element): string {
   const parts: string[] = [];
   for (const node of Array.from(container.childNodes)) {
     if (node instanceof Element) {
-      parts.push(cleanElement(node).outerHTML);
+      parts.push(tidied(cleanElement(node)));
     } else if (node instanceof Text) {
       parts.push(escapeText(node.data));
     }
@@ -359,8 +381,24 @@ function emptyBlockBox(container: HTMLElement) {
   return undefined;
 }
 
-/** One `+` choice on the block the caret is in, with the browser's own editing commands (its undo history keeps them). */
-export function applyRichChoice(container: HTMLElement, choice: RichBlockChoice): void {
+// ⌘Z and ⇧⌘Z over a block the `+` placed, which the browser's own history does not know.
+function undoneBlocks(history: RichHistory, event: KeyboardEvent): boolean {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+    return false;
+  }
+  const key = event.key.toLowerCase();
+  if (key === 'z') {
+    return event.shiftKey ? history.redo() : history.undo();
+  }
+  return key === 'y' && history.redo();
+}
+
+/**
+ * One `+` choice on the block the caret is in. Words change with the browser's own editing commands (its undo history
+ * keeps them); an image, a video, a rule or a list is placed as a block of its own (richBlockDom.ts), never inside the
+ * paragraph the caret is in.
+ */
+export function applyRichChoice(container: HTMLElement, history: RichHistory, choice: RichBlockChoice): void {
   // Focus comes back from the host's menu; the caret it left in the empty block is put back, not reset by the focus.
   const selection = window.getSelection();
   const kept = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : undefined;
@@ -369,26 +407,25 @@ export function applyRichChoice(container: HTMLElement, choice: RichBlockChoice)
     selection?.removeAllRanges();
     selection?.addRange(kept);
   }
+  const place = (element: Element) => history.record(() => insertRichBlocks(container, richCaret(container), [element]));
   switch (choice.kind) {
     case 'block':
       document.execCommand('formatBlock', false, `<${choice.block}>`);
       return;
     case 'list':
-      document.execCommand(choice.list === 'ul' ? 'insertUnorderedList' : 'insertOrderedList');
+      place(richElement(document, choice.list));
       return;
     case 'rule':
-      document.execCommand('insertHTML', false, '<hr><p><br></p>');
+      place(richElement(document, 'hr'));
       return;
     case 'link': {
       const href = attributeText(choice.href);
       document.execCommand('insertHTML', false, `<a href="${href}">${escapeText(choice.href)}</a>`);
       return;
     }
-    case 'media': {
-      const address = attributeText(choice.address);
-      document.execCommand('insertHTML', false, choice.media === 'image' ? `<img src="${address}" alt="">` : `<video src="${address}" controls></video>`);
+    case 'media':
+      place(richElement(document, choice.media === 'image' ? 'img' : 'video', choice.address));
       return;
-    }
     default: {
       const exhaustive: never = choice;
       return exhaustive;
