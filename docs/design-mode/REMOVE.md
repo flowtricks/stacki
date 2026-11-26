@@ -65,7 +65,8 @@ project.
   editor's canvas limits). During a drag only the frame's own document is resized, so its media queries answer with
   no new picture. On release the editor's canvas under Design mode takes the width (`useFrameWidthSync.ts`), so the
   frame is pictured again there and the style panel's breakpoint follows. A width the canvas gets from anything else
-  (a breakpoint or Base picked in the style panel) becomes the shown frame's. The first resize gives every frame a
+  (a breakpoint or Base picked in the style panel's dropdown) becomes the shown frame's; picking "Inline styles"
+  never gives it one. The first resize gives every frame a
   width; widths are kept in the session and the draft beside each frame's place. Like a frame's place, a width is not
   in undo history. Start over forgets them, and leaving comes back to the project on Desktop.
 - **Unlinking a component** (right-click an instance in the shown frame, or its Navigator row: "Unlink component")

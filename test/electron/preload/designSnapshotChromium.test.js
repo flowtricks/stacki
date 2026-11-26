@@ -15,13 +15,17 @@
 // one canvas iframe at `#avb-design`, the built preload running in it as in the app, on the page in
 // test/fixtures/design-snapshot/motion.html. The host sends the app's own snapshot requests and draws each answer
 // in an iframe with scripts off, as the canvas does, which is what is measured. The first request holds the page
-// still and is the control: it shows the page as the old copy did. Every wait is a bounded poll or a reply.
+// still and is the control: it shows the page as the old copy did. Every wait is a bounded poll or a reply, and
+// the walk's bound is held by what the page hears itself scrolled to, never by the clock.
 
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { repoPath } = require('../../helpers/sources.js');
+
+/** The most stops one walk of a page makes (DESIGN_SETTLE_LIMITS.stopsMax in the preload). */
+const WALK_STOPS_MAX = 60;
 
 const failures = [];
 let checked = 0;
@@ -38,22 +42,31 @@ const HOST_PAGE =
   'const live = document.getElementById("live");' +
   'let asked = 0;' +
   'window.take = (walking) => new Promise((resolve, reject) => {' +
-  '  const nonce = "t" + (++asked); const began = performance.now(); let heard = false;' +
+  '  const nonce = "t" + (++asked); let heard = false;' +
   '  const timer = setTimeout(() => reject(new Error("no reply")), 40000);' +
   '  const receive = (event) => {' +
   '    const data = event.data; if (event.source !== live.contentWindow || !data || data.nonce !== nonce) return;' +
   '    if (data.type === "stacki:design-snapshot-started") { heard = true; return; }' +
   '    if (data.type !== "stacki:design-snapshot-reply") return;' +
   '    clearTimeout(timer); removeEventListener("message", receive);' +
-  '    resolve({ ok: data.ok, heard, ms: performance.now() - began, html: data.ok ? data.snapshot.html : data.detail });' +
+  '    resolve({ ok: data.ok, heard, html: data.ok ? data.snapshot.html : data.detail });' +
   '  };' +
   '  addEventListener("message", receive);' +
   '  live.contentWindow.postMessage({ type: "stacki:design-snapshot", nonce, walking }, "*");' +
   '});' +
-  'window.draw = (html) => new Promise((resolve) => {' +
+  'window.draw = (html) => new Promise((resolve, reject) => {' +
   '  document.getElementById("copy")?.remove(); const copy = document.createElement("iframe"); copy.id = "copy";' +
   '  copy.setAttribute("sandbox", "allow-same-origin"); copy.srcdoc = html;' +
-  '  copy.onload = () => setTimeout(resolve, 300); document.body.appendChild(copy);' +
+  '  copy.onload = async () => {' +
+  // Drawn once its fonts are in and every animation that has an end has reached it, asked a frame at a time.
+  '    const page = copy.contentDocument; await page.fonts.ready;' +
+  '    const frame = () => new Promise((done) => requestAnimationFrame(done));' +
+  '    const unfinished = (animation) => animation.playState === "running" && animation.timeline instanceof copy.contentWindow.DocumentTimeline' +
+  '      && animation.effect.getComputedTiming().endTime !== Infinity;' +
+  '    for (let at = 0; at < 3600; at += 1) { await frame(); if (at > 0 && !page.getAnimations().some(unfinished)) return resolve(); }' +
+  '    reject(new Error("the copy never came to rest"));' +
+  '  };' +
+  '  document.body.appendChild(copy);' +
   '});' +
   '</script></body></html>';
 
@@ -133,14 +146,21 @@ app.whenReady().then(async () => {
   await live('scrolls.length = 0');
   const held = await run('take("held")');
   out.held = { reply: { ok: held.ok, heard: held.heard }, copy: await read(held), scrolls: await live('scrolls.length') };
-  const walked = await run('take("allowed")');
-  out.walked = { ok: walked.ok, ms: walked.ms, copy: await read(walked), scrollAfter: await live('scrollY') };
-  const again = await run('take("allowed")');
-  out.again = { ms: again.ms, copy: await read(again) };
+  // Every place the page is scrolled to while one copy is taken, heard up to its return to where it was.
+  const scrolled = async (what, take) => {
+    await live('scrolls.length = 0');
+    const reply = await take();
+    await waitFor({ what: what + ': the page is heard back where it was', read: () => live('scrolls.at(-1)'), until: (at) => at === 150 });
+    return { reply, stops: JSON.parse(await live('JSON.stringify(scrolls)')) };
+  };
+  const walked = await scrolled('the walk', () => run('take("allowed")'));
+  out.walked = { ok: walked.reply.ok, stops: walked.stops, copy: await read(walked.reply), scrollAfter: await live('scrollY') };
+  const again = await scrolled('the second copy', () => run('take("allowed")'));
+  out.again = { stops: again.stops, copy: await read(again.reply) };
   // An edit: new elements with entrances of their own, and a style written on an element the page scrubs.
   await live('const section = document.querySelector("#tween"); section.innerHTML = "<div class=card>Four</div><div class=card>Five</div>"; armCards(); document.querySelector(".parallax").style.width = "123px"; 0');
   const edited = await run('take("allowed")');
-  out.edited = { ms: edited.ms, copy: await read(edited) };
+  out.edited = { copy: await read(edited) };
   out.liveStyles = await live('JSON.stringify({ pin: document.querySelector(".pin-spacer").getAttribute("style"), canvases: document.querySelectorAll("canvas").length, menu: document.querySelector("#menu").getAttribute("style") })');
   console.log(JSON.stringify(out));
   app.quit();
@@ -220,10 +240,17 @@ function judge({ webgl, held, walked, again, edited, liveStyles }) {
     console.log('design-snapshot-chromium: no WebGL here, so its picture is not checked');
   }
   whole('first copy', walked.copy, webgl);
-  check('the walk stays within its bound', walked.ms < 20_000, walked.ms);
+  // Bounded by its own count of stops, endless animations and all: two walks of at most WALK_STOPS_MAX, the top,
+  // and the way back.
+  check('the walk stays within its bound', walked.stops.length <= 2 * WALK_STOPS_MAX + 2, walked.stops);
+  check('control: the walk is heard scrolling down the page', walked.stops.filter((at) => at !== 0 && at !== 150).length > 3, walked.stops);
   check('the live page is back where it was scrolled', walked.scrollAfter === 150, walked.scrollAfter);
   whole('a second copy', again.copy, webgl);
-  check('a page already walked is pictured again without walking it', again.ms < walked.ms && again.ms < 5_000, [walked.ms, again.ms]);
+  check(
+    'a page already walked is pictured again without walking it',
+    again.stops.every((at) => at === 0 || at === 150),
+    again.stops,
+  );
   check('after an edit, new entrances are finished', edited.copy.cards.length === 2 && edited.copy.cards.every(Boolean), edited.copy.cards);
   check('and the edit stands, over what was read while walking', Math.round(edited.copy.parallaxWidth) === 123, edited.copy.parallaxWidth);
   const live = JSON.parse(liveStyles);

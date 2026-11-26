@@ -87,4 +87,7 @@ chip is the target (`useStyleContexts`). Clicking the chip picks Base as the dro
 stays picked, following waits: a resized canvas, the link and the `0` key leave the target on Base.
 Reselecting an element on its attribute, and Design mode's inline default, move the target only, never
 the canvas. Picking or adding a query leaves the chip first, so the edit goes into a rule.
+In Design mode, where the canvas width is a frame's own, the chip (and an override note naming the attribute)
+moves the dropdown alone: no canvas move, so no frame is resized. Picking Base or a breakpoint in the dropdown
+still moves it.
 `test/renderer/style/inlineStyleBase.test.js` holds this.

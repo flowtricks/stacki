@@ -4,6 +4,7 @@
 
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { chipStyleOf, inlineActiveOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
+import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   contextKeyOf,
@@ -958,13 +959,21 @@ export function useContextChange(
 
   // The person picking the "Inline styles" chip: the dropdown goes to Base exactly as if Base were picked in it,
   // following and canvas width included. With the target and the canvas already on Base there is nothing to pick.
+  // In Design mode (experimental, docs/design-mode/REMOVE.md), which is what makes the attribute the default
+  // (model/inlineDefault.ts), the canvas width is a frame's own: the chip moves the dropdown alone, and the
+  // follow mode is left as it is. Picking Base in the dropdown there is still a pick of a width.
   const showBaseForAttribute = useCallback(() => {
+    if (inlineDefault() === 'inline') {
+      pickPendingRef.current = undefined;
+      changeContext('', { canvas: 'keep', selector: 'keep' });
+      return;
+    }
     const canvasOnBase = matchedKey === undefined || matchedKey === '';
     if (context === '' && canvasOnBase) {
       return;
     }
     pickContext('', 'attribute');
-  }, [context, matchedKey, pickContext]);
+  }, [context, matchedKey, pickContext, changeContext]);
 
   // The element's rules and the reach of its nested queries have both been answered.
   const settled = (scan === undefined || scan.settled) && !reachPending;

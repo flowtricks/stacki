@@ -232,6 +232,37 @@ test('Design mode: each selection starts on the attribute and on Base, on a narr
   assert.deepEqual(inlineWrites, []);
 });
 
+// In Design mode the canvas's width is the shown frame's own: a pick of the chip that moved it would resize the
+// frame. The chip is left and picked again, as a person does after following to a query.
+test('Design mode: picking the chip on a narrow canvas goes to Base and never moves the canvas', async (context) => {
+  const { panel, canvas } = await mount('tablet', TABLET_WIDTH_PX);
+  context.after(() => {
+    panel.inlineDefault('selector');
+    panel.unmount();
+  });
+  panel.inlineDefault('inline');
+  await step(panel, 'select the other element', () => panel.select('n2'));
+  await step(panel, 'leave the chip', () => press(panel, chip(panel)));
+  assert.match(label(panel), /< 48rem/, 'following takes the canvas row once the attribute is left');
+  const check = watch(panel);
+  await step(panel, 'pick the chip', () => press(panel, chip(panel)));
+  assert.equal(picked(panel), true);
+  assert.equal(label(panel), 'Base');
+  assert.equal(link(panel).getAttribute('aria-pressed'), 'true', 'the follow mode is left as it was');
+  for (const name of ['0 off', '0 on']) {
+    await step(panel, name, () => panel.followToggleKey());
+    assert.equal(label(panel), 'Base');
+  }
+  await panel.settle();
+  assert.equal(label(panel), 'Base', 'it does not flip back');
+  assert.deepEqual(canvas.requests, [], 'neither the pick nor what follows it moves the canvas');
+  check();
+  // Base picked in the dropdown is a pick of a width, here as in the editor.
+  await pickRow(panel, 'Base');
+  assert.equal(picked(panel), true);
+  assert.equal(canvas.requests.length, 1, `the dropdown's Base moves the canvas: ${JSON.stringify(canvas.requests)}`);
+});
+
 test('adding a query while the attribute is the target leaves the attribute', async (context) => {
   const { panel, inlineWrites } = await mount('desktop', DESKTOP_WIDTH_PX);
   context.after(() => panel.unmount());

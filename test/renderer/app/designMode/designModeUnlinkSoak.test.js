@@ -23,6 +23,8 @@ const crypto = require('node:crypto');
 const WAIT_MS_MAX = 30_000;
 const OPEN_WAIT_MS_MAX = 90_000;
 const POLL_MS = 100;
+/** Captures of a redrawn element before it counts as different. */
+const PAINT_POLLS_MAX = 100;
 const TREE_FILES_MAX = 50_000;
 const CHECKS_MIN = 20;
 
@@ -404,7 +406,19 @@ async function runInElectron({ window, project, options }) {
     const delta = sameRect ? largestDifference(pixelsBefore.bitmap, pixelsAfter.bitmap) : 255;
     check(`${name}: the visible frame is the same before and after`, delta <= FRAME_CHANNEL_DELTA_MAX, `largest channel difference ${String(delta)}`);
     report.frameDelta = { ...(report.frameDelta ?? {}), [name]: delta };
-    check(`${name}: the unlinked element is pixel-identical`, Buffer.compare(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap) === 0);
+    // One capture may catch the redrawn frame part painted on a loaded machine: it is captured until it matches, and
+    // an element that really differs never does.
+    const identical = await waitFor({
+      what: `${name}: the element painted as before`,
+      read: async () => Buffer.compare(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap) === 0,
+      until: Boolean,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: PAINT_POLLS_MAX,
+    }).then(
+      () => true,
+      () => false,
+    );
+    check(`${name}: the unlinked element is pixel-identical`, identical);
     return page;
   };
 

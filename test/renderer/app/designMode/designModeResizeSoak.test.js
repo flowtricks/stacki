@@ -418,6 +418,72 @@ async function runInElectron({ window, project, options }) {
     await untilCanvasWidth('the live canvas at 390 again', 390);
   });
 
+  await run('picking Inline styles on a 390 frame moves the dropdown only, and an inline edit shows', async () => {
+    await fitCanvas();
+    const live = () => canvasWidth();
+    check('the frame starts at 390', (await driver.evaluate(drawn('f1'))).width === 390 && (await live()) === 390);
+    await until('an element still picked', `!!document.querySelector('[data-dm-outline="picked"]')`);
+    const chipSelector = 'button.embed-editor_selector-chip.is-inline';
+    const pressed = `document.querySelector('${chipSelector}')?.getAttribute('aria-pressed')`;
+    const dropdown = `(document.querySelector('.embed-editor_context-select .u-select-button')?.textContent || '').trim()`;
+    const pressChip = async () => driver.pointerPress(await driver.panelPoint(`document.querySelector('${chipSelector}')`));
+    await until('the chip', `!!document.querySelector('${chipSelector}')`);
+    if ((await driver.evaluate(pressed)) === 'true') {
+      // Left first, so the dropdown follows the frame to its query and the pick below has a query to leave.
+      await pressChip();
+    }
+    await until('the dropdown on the query that holds at 390', dropdown, (text) => /rem|px/.test(text));
+    report.notes.beforeChip = await driver.evaluate(dropdown);
+    await driver.settle();
+    // Every width the frame is drawn at, and every canvas width, from the click on.
+    await driver.evaluate(
+      `window.__dmWidths = new Set(); window.__dmWidthTimer = setInterval(() => window.__dmWidths.add(${tile('f1')}.querySelector('.dm-body').offsetWidth), 5); 0`,
+    );
+    await pressChip();
+    await until('the chip picked', `${pressed} === 'true'`);
+    await until('the dropdown on Base', dropdown, (text) => text === 'Base');
+    await driver.settle();
+    check('the dropdown reads Base', (await driver.evaluate(dropdown)) === 'Base');
+    check('the frame stays 390', (await driver.evaluate(drawn('f1'))).width === 390);
+    check('the canvas under it stays 390', (await live()) === 390, await live());
+    await shot('04c-inline-base');
+    // Scrolled into view directly: the wheel would be taken by the CSS code editor, which the chip opens above it.
+    await driver.evaluate(`document.querySelector('[data-prop="width"]')?.scrollIntoView({ block: 'center' }); 0`);
+    await driver.settle();
+    const field = await until('the width field in the panel', centreOf('.embed-editor_root [data-prop="width"]'));
+    await driver.pointerPress(field);
+    await driver.key('End');
+    for (let removed = 0; removed < 12; removed += 1) {
+      await driver.key('Backspace');
+    }
+    await driver.typeText('200px');
+    await driver.key('Enter');
+    const indent = `(() => { const f = ${FRAME_DOCUMENT('f1')}; const p = f?.contentDocument?.querySelector('#soak-plain'); return p ? f.contentWindow.getComputedStyle(p).width : undefined; })()`;
+    await until('the inline edit in the frame', indent, (value) => value === '200px');
+    check('the inline edit shows in the frame', true);
+    check(
+      'it is written as the element\u2019s style attribute',
+      await driver.evaluate(`!!${FRAME_DOCUMENT('f1')}.contentDocument.querySelector('#soak-plain').getAttribute('style')?.includes('width')`),
+    );
+    await driver.settle();
+    check('after the edit the dropdown still reads Base', (await driver.evaluate(dropdown)) === 'Base', await driver.evaluate(dropdown));
+    check('after the edit the frame is still 390', (await driver.evaluate(drawn('f1'))).width === 390 && (await live()) === 390);
+    // Dragging the element in the frame writes to the same attribute.
+    await fitCanvas();
+    const grip = await until(
+      'the paragraph to drag',
+      `(() => { const f = ${FRAME_DOCUMENT('f1')}; const p = f?.contentDocument?.querySelector('#soak-plain'); const body = ${tile('f1')}?.querySelector('.dm-body'); if (!p || !body) return undefined; const o = body.getBoundingClientRect(); const z = o.width / body.offsetWidth; const r = p.getBoundingClientRect(); return { x: Math.round(o.left + (r.left + 20) * z), y: Math.round(o.top + (r.top + 8) * z) }; })()`,
+    );
+    await driver.drag(grip, { x: grip.x + 30, y: grip.y + 60 }, { steps: DRAG_STEPS, label: 'move element' });
+    await until('the move written', `!!${FRAME_DOCUMENT('f1')}?.contentDocument?.querySelector('#soak-plain')?.getAttribute('style')?.includes('translate')`);
+    await driver.settle();
+    check('after dragging the element the dropdown still reads Base', (await driver.evaluate(dropdown)) === 'Base', await driver.evaluate(dropdown));
+    check('after dragging the element the frame is still 390', (await driver.evaluate(drawn('f1'))).width === 390 && (await live()) === 390);
+    const widths = await driver.evaluate(`clearInterval(window.__dmWidthTimer); [...window.__dmWidths]`);
+    check('the frame was never drawn at another width', widths.length === 1 && widths[0] === 390, widths);
+    await shot('04d-inline-edit');
+  });
+
   await run('each frame keeps its own width through duplicating and switching', async () => {
     await driver.pointerPress(await until('the first name', centreOf('.dm-tile[data-dm-tile="f1"] .dm-title-name')));
     await until('the frame selected', `!!document.querySelector('.dm-tile.is-selected[data-dm-tile="f1"]')`);
