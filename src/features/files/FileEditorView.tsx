@@ -6,6 +6,7 @@
 // A file that is the one open on the canvas is not edited here: the page editor already writes it (single writer),
 // so the host passes that editor in (`liveEditor`) and it is shown in this frame instead.
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { Extension } from '@codemirror/state';
 import { FILE_EXPLORER_LIMITS, baseName, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
 import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
@@ -30,6 +31,8 @@ export interface FileEditorViewProps {
   readonly path: ExplorerPath;
   readonly hidden: boolean;
   readonly showToast: (message: string, kind: FilesToastKind) => void;
+  /** More editor behaviour from the app: the project's code intelligence. Read when the file's editor is made. */
+  readonly codeExtensions?: Extension | undefined;
   /** The page editor, when this file is the one open on the canvas. */
   readonly liveEditor: ReactNode;
 }
@@ -109,6 +112,7 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
             language={editorLanguageFor(name)}
             {...(codeIndentStyleFor(path) === 'spaces' ? { indentation: 'spaces' as const } : {})}
             stickyHeaders={false}
+            extensions={props.codeExtensions}
             value={text.session.draft}
             onChange={(draft: string) => document.edit(draft)}
           />

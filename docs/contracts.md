@@ -3117,3 +3117,32 @@ collision, and for `filesystem` the system's error code; never a path or file co
   `files:list` that rejects, refuses or does not answer in 10 s is a failure: no placeholder rows stay, the open panel
   says so in a toast and offers Refresh (a listing already held stays on screen).
 - **Access.** The panel follows `code:edit` (`src/lib/roleAccess.ts`). Its shortcut is ⌥F. Studio has no Files panel yet.
+
+## Code intelligence
+
+`shared/ipc/codeIntel.ts` is what a full code editor may ask about its file (suggestions, a
+suggestion's detail, hover, signature help, errors) and what comes back, bounded by
+`CODE_INTEL_LIMITS`. One channel, `codeIntel:request`, carries a question with the editor's whole
+text, so unsaved text is what is analysed. Both sides parse: main parses the renderer's question, the
+intelligence process parses it again, and main and the renderer parse its answer.
+
+The answers come from `electron/lib/codeIntel/`, run as an Electron utility process
+(`serviceProcess.ts`) that `host.ts` starts on the first question, stops when the project closes or
+changes or after ten idle minutes, times out, and restarts a bounded number of times. Main never reads
+types itself.
+
+It reads the project and runs none of it:
+
+- The type checker is the app's own `typescript`, with its own libraries (the build copies them to
+  `dist/electron/typescript-lib/`, because the packager leaves `.d.ts` files out). A project's
+  installed TypeScript is not loaded.
+- `.astro` files are printed as TSX by the app's own `@astrojs/compiler`. `astro.config` is never
+  loaded, and neither are a tsconfig's `plugins` (the language service has no plugin host).
+- From the project it reads sources, `tsconfig`/`jsconfig` JSON (`extends`, `paths`, `baseUrl`,
+  references), `package.json`, `.d.ts` files (Astro's, and what Astro generated in `.astro/`) and
+  stylesheets.
+
+Without installed dependencies only mistakes in the writing itself are reported. `.vue`, `.svelte`
+and `.mdx` components are typed as taking any props. `public/` is taken to be the public folder,
+since reading another from `astro.config` would mean running it. Studio has no intelligence process:
+its editors pass no extension and are unchanged.

@@ -14,6 +14,8 @@ import { isComponentFileName } from '../../../shared/properties/componentNaming'
 import { baseName, parentPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
 import FilesPanel from '../../features/files/FilesPanel';
 import FileEditorView from '../../features/files/FileEditorView';
+import { codeIntelAnswers } from '../../features/codeIntel/codeIntelSession';
+import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import type { FilesHost, ReferenceMove } from '../../features/files/filesHost';
 import { useFilesView } from '../../features/files/filesState';
 import type { ShellView } from '../App';
@@ -32,6 +34,7 @@ export function FilesCover({ app }: { readonly app: ShellView }) {
   const projectPath = app.project.path;
   const view = useFilesView(projectPath);
   const editor = view.editor;
+  const intelligence = useCodeIntel(projectPath, editor?.path);
   // Which editor a file gets is decided when it opens and kept: switching it later would unmount the other with its
   // unsaved text. Both writers are witnessed by the bytes they read, so neither can write over the other.
   const decided = useRef<{ readonly opening: number; readonly live: boolean } | undefined>(undefined);
@@ -51,6 +54,8 @@ export function FilesCover({ app }: { readonly app: ShellView }) {
       path={editor.path}
       hidden={app.leftTab !== 'files'}
       showToast={app.showToast}
+      // Only a file there is something to ask about: a config or a note keeps the plain editor.
+      codeExtensions={codeIntelAnswers(editor.path) ? intelligence : undefined}
       liveEditor={live ? <CodeTab app={app} /> : undefined}
     />
   );

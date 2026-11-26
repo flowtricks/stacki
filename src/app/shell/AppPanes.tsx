@@ -1,4 +1,5 @@
 import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
+import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import { InspectorTabButton } from './InspectorTabButton';
 import { innerSourceOf } from '../../features/props/richTextContent';
 import { sourceRangeForSelection } from '../../features/code/codePanelModel';
@@ -923,6 +924,10 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
   const canCode = can(useCurrentRole(), 'code:edit');
   // A stylesheet or a `<style>` node draws CSS chips throughout, a page in its `<style>` blocks, a script none.
   const codeChips = useCodeChips(codeChipTextOf(codeWin?.language));
+  // A window on a whole project file knows the project; one on a block of a page (its frontmatter, a script or a style)
+  // is a piece of a file, with nothing to ask about on its own.
+  const wholeFile = codeWin?.kind === 'file' && codeWin.area === 'src' ? codeWin.rel : undefined;
+  const intelligence = useCodeIntel(app.project.path, wholeFile);
   if (!codeWin || codeWinValue === undefined || !canCode) {
     return undefined;
   }
@@ -936,7 +941,7 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
       editorKey={isFileWin ? `file:${codeWin.rel}` : targetId}
       revealLine={codeWin.revealLine}
       revealSerial={codeWin.revealSerial}
-      extensions={codeChips.extension}
+      extensions={wholeFile === undefined ? codeChips.extension : [codeChips.extension ?? [], intelligence]}
       overlay={codeChips.overlay}
       onChange={(value) => {
         if (isFileWin) {

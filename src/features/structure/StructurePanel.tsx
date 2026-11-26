@@ -1,4 +1,5 @@
 import { TreeDragRow, useTreeDragCleanup } from '../../ui/TreeDragDrop';
+import type { Extension } from '@codemirror/state';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { PanelSearch } from '../../ui/PanelSearch';
@@ -53,6 +54,8 @@ import { PanelHeader } from '../../ui/PanelHeader';
 import { TOOLTIP_DELAY_MS } from '../../ui/delayedTooltip';
 
 interface StructurePanelProps {
+  /** More editor behaviour for the source shown when a page does not parse: the project's code intelligence. */
+  readonly codeExtensions?: Extension | undefined;
   readonly clientMode?: boolean;
   readonly editRootId?: string | undefined;
   readonly onSetDefaults?: (name: string, id: string) => void;
@@ -155,7 +158,8 @@ function ParseErrorPage({
   projection,
   onCodeChange,
   onOpenCodePanel,
-}: Pick<StructurePanelProps, 'devLog' | 'onCodeChange' | 'onOpenCodePanel'> & {
+  codeExtensions,
+}: Pick<StructurePanelProps, 'devLog' | 'onCodeChange' | 'onOpenCodePanel' | 'codeExtensions'> & {
   readonly projection: Extract<StructureProjection, { readonly tag: 'parse-error' }>;
 }) {
   const translate = useTranslate();
@@ -175,7 +179,7 @@ function ParseErrorPage({
           recovery={[{ label: translate('structure.error.openCode'), run: onOpenCodePanel }]}
         />
         <div className="code-panel-editor">
-          <CodeEditor language="astro" value={projection.state.source} onChange={onCodeChange} />
+          <CodeEditor language="astro" value={projection.state.source} onChange={onCodeChange} extensions={codeExtensions} />
         </div>
       </div>
     </div>
