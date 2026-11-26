@@ -11,16 +11,22 @@ const SNAPSHOT_WAIT_MS_MAX = 6_000;
 export type SnapshotResult =
   { readonly ok: true; readonly snapshot: DesignSnapshot } | { readonly ok: false; readonly failure: DesignSnapshotFailure | 'no-canvas' | 'timed-out' };
 
+// The selector names iframes only, so the element needs no check of its kind against the window's globals.
+const SHOWN_PREVIEW = '.preview-frame-wrap iframe[aria-hidden="false"]';
+
+function shownPreview(): HTMLIFrameElement | undefined {
+  return document.querySelector<HTMLIFrameElement>(SHOWN_PREVIEW) ?? undefined;
+}
+
 /** The editor's current preview frame; its previous page, still shown while a new one loads, is hidden from readers. */
 export function liveCanvasWindow(): Window | undefined {
-  const frame = document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]');
-  return frame instanceof HTMLIFrameElement ? (frame.contentWindow ?? undefined) : undefined;
+  return shownPreview()?.contentWindow ?? undefined;
 }
 
 /** The path of the page the preview is asked to show, as its address spells it. */
 export function livePagePath(): string | undefined {
-  const frame = document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]');
-  return frame instanceof HTMLIFrameElement ? pathOfAddress(frame.src) : undefined;
+  const frame = shownPreview();
+  return frame === undefined ? undefined : pathOfAddress(frame.src);
 }
 
 export function pathOfAddress(address: string): string | undefined {
