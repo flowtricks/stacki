@@ -4,7 +4,7 @@
 // own frames (the direction prop then greyed out); preview values from the Settings panel and backgrounds from Frame
 // settings land in .stacki/component-canvas.json and never in the component or the canvas page; an edit on the canvas
 // page is refused; a double click goes inside an instance, where an element added reaches every frame (with undo),
-// Escape steps back out, and Close canvas leaves from inside. Frame settings close and reopen from the zoom bar. Then
+// Escape steps back out, and Close canvas leaves from inside. Frame settings minimize and expand from their header. Then
 // a modal with its preview switch, a card with slots, a section, a component with required props and one whose union
 // is an imported TypeScript type.
 //
@@ -131,8 +131,9 @@ function electronEnvironment() {
     await canvas.locator('stacki-frame .button_wrap').first().waitFor({ timeout: WAIT_MS });
     results.buttonFrames = await labels(canvas);
     await waitFor(
-      async () => (await navigatorRows(window)).length === results.buttonFrames.length + 1,
-      'the Navigator lists the canvas root and one row per frame',
+      // The root (`html`), then per frame its div (named by its caption) holding its closed instance.
+      async () => (await navigatorRows(window)).length === results.buttonFrames.length * 2 + 1,
+      'the Navigator lists the canvas root, a div per frame and its instance',
     );
     results.navigatorRows = await navigatorRows(window);
     results.stackOnOpen = await window.locator('.titlebar .comp-back').allInnerTexts();
@@ -226,21 +227,23 @@ function electronEnvironment() {
     results.pageEditRefused = read(`.stacki/canvas/${canvasFiles()[0]}`) === pageBefore;
     await shot(window, '03b-page-edit-refused.png');
 
-    // Frame settings close, and reopen from the zoom bar's toggle.
-    await window.getByRole('button', { name: 'Close frame settings' }).click();
-    await waitFor(async () => (await window.locator('[data-testid="component-canvas-panel"]').count()) === 0, 'frame settings closed');
-    const toggle = window.locator('.component-canvas-panel-toggle');
-    results.toggleClosed = await toggle.getAttribute('aria-pressed');
-    await toggle.hover();
-    await window.locator('[role="tooltip"]', { hasText: 'Show frame settings' }).waitFor({ timeout: WAIT_MS });
-    await shot(window, '03c-frame-settings-closed.png');
-    await toggle.click();
+    // Frame settings minimize to their header, and expand again from it: they are never gone.
+    await window.getByRole('button', { name: 'Minimize frame settings' }).click();
+    await waitFor(async () => (await window.locator('[data-testid="component-canvas-panel"]').count()) === 0, 'frame settings minimized');
+    const toggle = window.locator('.component-canvas-popup-toggle');
+    results.toggleClosed = await toggle.getAttribute('aria-expanded');
+    await shot(window, '03c-frame-settings-minimized.png');
+    await window.getByRole('button', { name: 'Expand frame settings' }).click();
     await window.waitForSelector('[data-testid="component-canvas-panel"]', { timeout: WAIT_MS });
-    results.toggleOpen = await toggle.getAttribute('aria-pressed');
+    results.toggleOpen = await toggle.getAttribute('aria-expanded');
 
     // A double click goes inside the main frame's instance: add a line break, in every frame, then undo.
     const mainBody = canvas.locator('stacki-frame[data-frame="variant=main"] .button_wrap').first();
-    await window.locator('[data-node-id]', { hasText: 'variant: main' }).first().dblclick();
+    // The instance's row, under its frame's div (the first frame is variant: main).
+    await window
+      .locator('[data-node-id]', { hasText: /^Button$/ })
+      .first()
+      .dblclick();
     await waitFor(async () => (await window.locator('.titlebar .comp-back').count()) === 2, 'inside the instance: Back and Close canvas');
     results.stackInside = await window.locator('.titlebar .comp-back').allInnerTexts();
     await press(canvas.locator('stacki-frame[data-frame="variant=main"] .button_wrap').first());
