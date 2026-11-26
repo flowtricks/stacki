@@ -290,11 +290,14 @@ function worldMarkup(input: CanvasPageInput, frames: ReadonlyMap<string, Written
       const held = frames.get(item.key);
       assert(held !== undefined, 'A box holds frames the page draws');
       written.add(item.key);
-      return frameMarkup({ ...held.frame, label: item.caption }, held.instance);
+      // Among groups, a frame that stands alone at the top is headed as they are.
+      const heading = depth === 0 && items.some((other) => other.kind === 'group');
+      return frameMarkup({ ...held.frame, label: item.caption }, held.instance, { heading });
     }
     // Unmarked: a box is the canvas's own drawing, never an element anyone can point at; a press on it is the canvas's.
     const children = item.children.map((child) => write(child, depth + 1)).join('\n');
-    return `<stacki-group ${UNMARKED} data-group="${attributeText(item.key)}" data-label="${attributeText(item.header)}">\n${children}\n</stacki-group>`;
+    const named = `data-group="${attributeText(item.key)}" data-label="${attributeText(item.header)}" data-depth="${String(depth)}"`;
+    return `<stacki-group ${UNMARKED} ${named}>\n${children}\n</stacki-group>`;
   };
   const html = items.map((item) => write(item, 0)).join('\n');
   assert(written.size === frames.size, 'Every frame is drawn once');
@@ -304,9 +307,9 @@ function worldMarkup(input: CanvasPageInput, frames: ReadonlyMap<string, Written
 
 const attributeText = (text: string): string => encodeText(text).replaceAll('"', '&quot;');
 
-function frameMarkup(frame: CanvasPageFrame, instance: string): string {
+function frameMarkup(frame: CanvasPageFrame, instance: string, drawn: { readonly heading: boolean }): string {
   const style: string[] = [];
-  const flags: string[] = [];
+  const flags: string[] = drawn.heading ? ['data-heading'] : [];
   if (frame.width !== 'hug') {
     style.push(`width: ${String(frame.width)}px`);
     flags.push('data-fixed-width');

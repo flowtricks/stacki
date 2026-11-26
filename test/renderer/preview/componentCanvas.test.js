@@ -251,12 +251,20 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
   // A frame is a box with room around its component and a blue outline, faint at rest and full when the box is picked.
-  assert.match(plain, /stacki-frame\[data-frame\] \{[^}]*padding: 32px !important;[^}]*outline: 1px solid rgba\(47, 128, 255, 0\.5\) !important;/);
+  assert.match(plain, /stacki-frame\[data-frame\] \{[^}]*padding: 32px !important;[^}]*outline: 1px solid rgba\(47, 128, 255, 0\.3\) !important;/);
   assert.doesNotMatch(plain, /content-visibility/, 'paint containment would cut off the caption above a fixed frame');
   assert.match(plain, /stacki-frame\[data-frame\]\[data-box-selected\] \{ outline: 2px solid #2f80ff !important; outline-offset: -2px !important; \}/);
   assert.match(plain, /stacki-frame\[data-frame\]:hover:not\(:has\(> :hover\)\)/, 'stronger under the pointer on its own padding only');
   assert.match(chrome.chromeScript(ID), /outline-width: ' \+ thin \+ 'px/, 'outlines keep their width on screen at any zoom');
-  assert.match(chrome.chromeScript(ID), /margin-inline-end: ' \+ more \+ 'px/, 'a long caption’s room is beside the frame, not inside it');
+  assert.match(chrome.chromeScript(ID), /padding-inline: ' \+ \(32 \+ extra\)/, 'a caption wider than its component widens the frame evenly');
+  // Groups paint nothing: no fill, border or rounded card, only a heading and spacing, in clear steps.
+  const grouped = /> body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  for (const bare of ['background: transparent !important', 'border: 0 !important', 'box-shadow: none !important', 'padding: 30px 0 0 !important']) {
+    assert.ok(grouped.includes(bare), `a group is ${bare}`);
+  }
+  const { frameGapPx, subgroupGapPx, groupGapPx, captionGapPx, headingGapPx } = chrome.CHROME_LIMITS;
+  assert.ok(captionGapPx < headingGapPx && headingGapPx < frameGapPx && frameGapPx < subgroupGapPx && subgroupGapPx < groupGapPx, 'each level is spaced wider');
+  assert.match(plain, /data-flow="column"\] \{[^}]*align-items: flex-start !important; gap: 52px/, 'groups stack on one left edge');
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
@@ -479,6 +487,8 @@ test('the page draws boxes that are not elements anyone can point at, and still 
   };
   const source = pageOf(layout, { groups: items(groups.groupFrames(layout.frames)) });
   assert.equal(source.split('<stacki-group data-stacki-unmarked').length - 1, 6);
+  assert.equal(source.split(' data-depth="1"').length - 1, 2, 'the two emphasis groups inside arrow are a level down');
+  assert.equal(source.split(' data-heading').length - 1, 1, 'the lone top-level frame is headed as the groups are');
   assert.ok(source.includes('data-label="A &quot;box&quot; &lt;1&gt;"'));
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);

@@ -19,13 +19,15 @@ export const CHROME_LIMITS = {
   framePaddingPx: 32,
   /** On screen, from a component's top to its frame's caption: room for the editor's tag over a selected component. */
   tagRoomScreenPx: 28,
-  captionGapPxMin: 8,
-  captionGapPxMax: 48,
+  // The canvas's spacing, in its own pixels, each step clearly wider than the one inside it: that is all that shows
+  // what belongs together, since the boxes around groups paint nothing.
   captionHeightPx: 16,
-  /** A group box: its padding, the room its header takes at the top, and the space between what it holds. */
-  groupPaddingPx: 24,
-  groupHeaderPx: 44,
-  groupGapPx: 40,
+  captionGapPx: 8,
+  headingHeightPx: 18,
+  headingGapPx: 12,
+  frameGapPx: 20,
+  subgroupGapPx: 40,
+  groupGapPx: 52,
   zoomMin: 0.05,
   zoomMax: 4,
 } as const satisfies Record<string, number>;
@@ -36,8 +38,20 @@ const CLIP_SIDES = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 1000
 const CLIP_BOTTOM = 'polygon(-100000px -100px, 100000px -100px, 100000px 100%, -100000px 100%)';
 const CLIP_BOTH = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 100%, 0 100%)';
 
-// A box header's text against a caption's, measured: 13px semibold to 12px medium.
-const GROUP_FONT_SCALE = 1.12;
+// A frame in a group starts below its caption; a frame that heads itself starts as far down as the frames of the groups
+// beside it do (heading, gap, caption, gap), so frames line up from group to group.
+const CAPTION_ROOM_PX = CHROME_LIMITS.captionHeightPx + CHROME_LIMITS.captionGapPx;
+const LONE_HEADING_GAP_PX = CHROME_LIMITS.headingGapPx + CAPTION_ROOM_PX;
+const GROUP_PADDING_TOP_PX = CHROME_LIMITS.headingHeightPx + CHROME_LIMITS.headingGapPx;
+
+// The three levels of type, brightest first: a group's heading, a heading inside a group, a frame's caption.
+const TYPE_COLORS = {
+  dark: { heading: '#ededed', subheading: '#bdbdbd', caption: '#8c8c8c' },
+  light: { heading: '#161616', subheading: '#404040', caption: '#6e6e6e' },
+} as const;
+const FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+const HEADING_FONT = `600 13px/${String(CHROME_LIMITS.headingHeightPx)}px`;
+const SUBHEADING_FONT = `500 13px/${String(CHROME_LIMITS.headingHeightPx)}px`;
 
 /** The cascade layer the canvas's own rules are in (chromeStyles). */
 const CHROME_LAYER = 'stacki-canvas';
@@ -52,7 +66,7 @@ export const CANVAS_MESSAGE = 'stacki:component-canvas';
  */
 export function chromeStyles(theme: 'light' | 'dark', surface?: string): string {
   const grey = canvasGrey(theme);
-  const label = theme === 'dark' ? '#a3a3a3' : '#6b6b6b';
+  const label = TYPE_COLORS[theme].caption;
   // The page is the canvas: its <html> (the canvas root, which the person selects and gives classes) is the surface, its
   // <body> the pannable, zoomable world, and each frame one element holding its instance, its caption drawn by the frame
   // itself (::before), so nothing but the root and the instances is an element anyone can point at.
@@ -67,7 +81,8 @@ export function chromeStyles(theme: 'light' | 'dark', surface?: string): string 
   // wins, over every later layer and over unlayered rules, so a project that imports its CSS into layers (Lumos does)
   // and marks a rule !important still cannot reach the scaffolding.
   const scaffold = 'html[data-stacki-ready] > body stacki-frame[data-frame]';
-  // A box around the frames that share a split value (canvasGroups.ts): a quiet fill, its header at the top left.
+  // A group of the frames that share a split value (canvasGroups.ts): it paints nothing, and is only its heading at the
+  // top left and the spacing of what it holds.
   const group = 'html[data-stacki-ready] > body stacki-group';
   // A frame is a box with room around its component and a blue outline: faint at rest, stronger under the pointer on its
   // own padding, full when the box itself is selected. Pressing the component selects that, and the editor outlines it;
@@ -76,22 +91,25 @@ export function chromeStyles(theme: 'light' | 'dark', surface?: string): string 
   const css = `@layer ${CHROME_LAYER} {
 html[data-stacki-ready] { height: 100% !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; border: 0 !important; touch-action: none; }
 ${surface === undefined ? '' : `html[data-stacki-ready][data-stacki-surface] { background: ${withFallback(surface, grey)} !important; }`}
-html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 88px 64px 64px !important; border: 0 !important; box-sizing: content-box !important; display: flex !important; flex-flow: row nowrap !important; gap: 96px 64px !important; align-items: flex-start !important; justify-content: flex-start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
-html[data-stacki-ready] > body[data-flow="column"] { flex-direction: column !important; }
+html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 88px 64px 64px !important; border: 0 !important; box-sizing: content-box !important; display: flex !important; flex-flow: row nowrap !important; gap: ${String(CHROME_LIMITS.frameGapPx)}px !important; align-items: stretch !important; justify-content: flex-start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
+html[data-stacki-ready] > body[data-flow="column"] { flex-direction: column !important; align-items: flex-start !important; gap: ${String(CHROME_LIMITS.groupGapPx)}px !important; }
 html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
-${group} { display: flex !important; flex-flow: row nowrap !important; align-items: flex-start !important; justify-content: flex-start !important; gap: ${String(CHROME_LIMITS.groupGapPx)}px !important; flex: 0 0 auto !important; position: relative !important; inset: auto !important; transform: none !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: none !important; max-height: none !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.groupHeaderPx)}px ${String(CHROME_LIMITS.groupPaddingPx)}px ${String(CHROME_LIMITS.groupPaddingPx)}px !important; border: 0 !important; border-radius: 12px !important; outline: 0 !important; background: rgba(128, 128, 128, 0.09) !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
-${group}::before { content: attr(data-label) !important; display: block !important; position: absolute !important; left: ${String(CHROME_LIMITS.groupPaddingPx)}px !important; top: 12px !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 600 13px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; letter-spacing: 0 !important; text-transform: none !important; text-shadow: none !important; white-space: nowrap !important; color: ${label} !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; height: 18px !important; user-select: none !important; visibility: visible !important; }
+${group} { display: flex !important; flex-flow: row nowrap !important; align-items: stretch !important; justify-content: flex-start !important; gap: ${String(CHROME_LIMITS.frameGapPx)}px !important; flex: 0 0 auto !important; position: relative !important; inset: auto !important; transform: none !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: none !important; max-height: none !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: ${String(GROUP_PADDING_TOP_PX)}px 0 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
+${group}:has(> stacki-group) { gap: ${String(CHROME_LIMITS.subgroupGapPx)}px !important; }
+${group}::before { content: attr(data-label) !important; display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: ${HEADING_FONT} ${FONT_STACK} !important; letter-spacing: 0 !important; text-transform: none !important; text-shadow: none !important; white-space: nowrap !important; color: ${TYPE_COLORS[theme].heading} !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; user-select: none !important; visibility: visible !important; }
+${group}:not([data-depth="0"])::before { font: ${SUBHEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].subheading} !important; }
 ${group}::after { content: none !important; }
-html[data-stacki-light] > body stacki-group::before { color: #3f3f3f !important; }
-html[data-stacki-dark] > body stacki-group::before { color: #c9c9c9 !important; }
-${scaffold} { flex: 0 0 auto !important; display: block !important; position: relative !important; inset: auto !important; transform: translate(0) !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; min-height: 24px !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.framePaddingPx)}px !important; border: 0 !important; border-radius: 0 !important; outline: 1px solid rgba(47, 128, 255, 0.5) !important; outline-offset: -1px !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
-${scaffold}:hover:not(:has(> :hover)) { outline-color: rgba(47, 128, 255, 0.85) !important; }
+${scaffold} { flex: 0 0 auto !important; display: block !important; position: relative !important; inset: auto !important; transform: translate(0) !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; min-height: 24px !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.framePaddingPx)}px !important; border: 0 !important; border-radius: 0 !important; outline: 1px solid rgba(47, 128, 255, 0.3) !important; outline-offset: -1px !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
+${scaffold}:hover:not(:has(> :hover)) { outline-color: rgba(47, 128, 255, 0.7) !important; }
 ${scaffold}[data-box-selected] { outline: 2px solid #2f80ff !important; outline-offset: -2px !important; }
-${scaffold}::before { content: attr(data-label) !important; display: block !important; box-sizing: content-box !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; letter-spacing: 0 !important; word-spacing: 0 !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important; text-align: left !important; white-space: nowrap !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; min-width: 0 !important; max-width: none !important; float: none !important; }
-${scaffold}::before { position: absolute !important; left: 0 !important; bottom: 100% !important; top: auto !important; right: auto !important; height: 16px !important; margin-bottom: 8px !important; visibility: visible !important; color: ${label} !important; user-select: none !important; cursor: default !important; overflow: visible !important; }
+${scaffold}::before { content: attr(data-label) !important; display: block !important; box-sizing: content-box !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 400 12px/${String(CHROME_LIMITS.captionHeightPx)}px ${FONT_STACK} !important; letter-spacing: 0 !important; word-spacing: 0 !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important; text-align: left !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; min-width: 0 !important; max-width: 100% !important; float: none !important; }
+${scaffold}::before { position: absolute !important; left: 0 !important; bottom: 100% !important; top: auto !important; right: auto !important; height: ${String(CHROME_LIMITS.captionHeightPx)}px !important; margin-bottom: ${String(CHROME_LIMITS.captionGapPx)}px !important; visibility: visible !important; color: ${label} !important; user-select: none !important; cursor: default !important; }
 ${scaffold}::after { content: none !important; }
-html[data-stacki-light] > body stacki-frame[data-frame]::before { color: #5c5c5c !important; }
-html[data-stacki-dark] > body stacki-frame[data-frame]::before { color: #a3a3a3 !important; }
+html[data-stacki-ready] > body stacki-group > stacki-frame[data-frame] { margin-top: ${String(CAPTION_ROOM_PX)}px !important; }
+${scaffold}[data-heading] { margin-top: ${String(GROUP_PADDING_TOP_PX + CAPTION_ROOM_PX)}px !important; }
+${scaffold}[data-heading]::before { height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; margin-bottom: ${String(LONE_HEADING_GAP_PX)}px !important; font: ${HEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].heading} !important; }
+${typeColorRules('light')}
+${typeColorRules('dark')}
 html[data-stacki-ready] > body stacki-frame[data-frame][data-selected]::before, ${scaffold}[data-box-selected]::before { color: #2f80ff !important; }
 ${scaffold}[data-fixed-width] { max-width: none !important; clip-path: ${CLIP_SIDES} !important; }
 ${scaffold}[data-fixed-height] { clip-path: ${CLIP_BOTTOM} !important; }
@@ -102,6 +120,17 @@ ${scaffold}[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LI
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
+}
+
+// The type's colours over a light or a dark canvas, whatever the app's theme: the script says which it drew on.
+function typeColorRules(on: 'light' | 'dark'): string {
+  const colors = TYPE_COLORS[on];
+  const within = `html[data-stacki-${on}] > body`;
+  return [
+    `${within} stacki-group[data-depth]::before { color: ${colors.subheading} !important; }`,
+    `${within} stacki-group[data-depth="0"]::before, ${within} stacki-frame[data-heading]::before { color: ${colors.heading} !important; }`,
+    `${within} stacki-frame[data-frame]:not([data-heading])::before { color: ${colors.caption} !important; }`,
+  ].join('\n');
 }
 
 /** The app's own canvas grey: the surface where neither a canvas Background setting nor the site's page paints one. */
@@ -146,18 +175,24 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     if (world.style.getPropertyValue('transform') !== transform) world.style.setProperty('transform', transform, 'important');
     frameSizes(view.scale);
   }
-  // Outlines keep their width on screen at any zoom, and a caption stays far enough above its component for the
-  // editor's tag to sit between them. Written as rules, since the chrome sets no custom properties.
+  // Outlines keep their width on screen at any zoom. The spacing never changes with the zoom; only the caption of the
+  // frame whose component is selected moves, to clear the editor's tag: up as far as the gap above it allows, and out
+  // of sight where even that is not enough, never under the tag or over what is above.
   var sizes = document.createElement('style');
   sizes.setAttribute('data-stacki-chrome', '');
   (document.head || root).appendChild(sizes);
   function frameSizes(scale) {
     var thin = Math.round(1000 / scale) / 1000;
-    var gap = Math.round(clamp(${String(CHROME_LIMITS.tagRoomScreenPx)} / scale - ${String(CHROME_LIMITS.framePaddingPx)}, ${String(CHROME_LIMITS.captionGapPxMin)}, ${String(CHROME_LIMITS.captionGapPxMax)}));
     var scaffold = 'html[data-stacki-ready] > body stacki-frame[data-frame]';
-    var rule = '@layer ${CHROME_LAYER} { ' + scaffold + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; } ' + scaffold + '[data-box-selected] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; } ' + scaffold + '::before { margin-bottom: ' + gap + 'px !important; } }';
-    // A frame in a box keeps its caption inside the box: the room above it grows as the caption moves up.
-    rule = rule.slice(0, -1) + 'html[data-stacki-ready] > body stacki-group > stacki-frame[data-frame] { margin-top: ' + (gap + ${String(CHROME_LIMITS.captionHeightPx)}) + 'px !important; } }';
+    var rule = '@layer ${CHROME_LAYER} { ' + scaffold + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; } ' + scaffold + '[data-box-selected] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; } ';
+    var need = Math.ceil(${String(CHROME_LIMITS.tagRoomScreenPx)} / scale - ${String(CHROME_LIMITS.framePaddingPx)});
+    var tagged = scaffold + '[data-selected]:not([data-box-selected])';
+    [[':not([data-heading])', ${String(CHROME_LIMITS.captionGapPx)}], ['[data-heading]', ${String(LONE_HEADING_GAP_PX)}]].forEach(function (kind) {
+      if (need <= kind[1]) return;
+      var declaration = need <= kind[1] + ${String(CHROME_LIMITS.headingGapPx)} ? 'margin-bottom: ' + need + 'px' : 'visibility: hidden';
+      rule += tagged + kind[0] + '::before { ' + declaration + ' !important; } ';
+    });
+    rule += '}';
     if (sizes.textContent !== rule) sizes.textContent = rule;
   }
   function remember() { try { sessionStorage.setItem(KEY, JSON.stringify({ x: view.x, y: view.y, scale: view.scale, moved: moved })); } catch (e) {} post({ event: 'view', scale: view.scale }); }
@@ -178,27 +213,39 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   function frameOf(node) { return node && node.closest ? node.closest('stacki-frame') : null; }
   function frames() { return document.querySelectorAll('stacki-frame'); }
   function groups() { return document.querySelectorAll('stacki-group'); }
-  // A caption longer than its frame must not run into the next one: the room it needs is added beside the frame, as
-  // margin, so the frame's outline still hugs its component.
+  // A caption wider than its small component widens a hugging frame, equally on both sides so the component stays
+  // centred, and the space between frames stays what it is. A fixed frame keeps its width and its caption is cut short.
   var room = document.createElement('style');
   room.setAttribute('data-stacki-chrome', '');
   (document.head || root).appendChild(room);
   var measure = document.createElement('canvas').getContext('2d');
+  var widened = {};
+  function textWidth(element, font) {
+    measure.font = font + ' ${FONT_STACK}';
+    return Math.ceil(measure.measureText(element.getAttribute('data-label') || '').width) + 1;
+  }
   function captionRoom() {
     if (!measure) return;
-    measure.font = '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
-    var all = frames(), rules = '';
+    var all = frames(), rules = '', next = {};
     for (var i = 0; i < all.length; i++) {
-      var more = Math.ceil(measure.measureText(all[i].getAttribute('data-label') || '').width - all[i].offsetWidth);
-      if (more > 0) rules += 'html[data-stacki-ready] > body stacki-frame[data-frame="' + all[i].getAttribute('data-frame') + '"] { margin-inline-end: ' + more + 'px !important; } ';
+      var frame = all[i];
+      if (frame.hasAttribute('data-fixed-width') || frame.hasAttribute('data-fallback')) continue;
+      var key = frame.getAttribute('data-frame');
+      var natural = frame.offsetWidth - 2 * (widened[key] || 0);
+      var extra = Math.max(0, Math.ceil((textWidth(frame, frame.hasAttribute('data-heading') ? '600 13px' : '400 12px') - natural) / 2));
+      next[key] = extra;
+      if (extra > 0) rules += 'html[data-stacki-ready] > body stacki-frame[data-frame="' + key + '"] { padding-inline: ' + (${String(CHROME_LIMITS.framePaddingPx)} + extra) + 'px !important; } ';
     }
     var boxes = groups();
     for (var g = 0; g < boxes.length; g++) {
-      var header = Math.ceil(measure.measureText(boxes[g].getAttribute('data-label') || '').width * ${String(GROUP_FONT_SCALE)}) + ${String(CHROME_LIMITS.groupPaddingPx * 2)};
+      var header = textWidth(boxes[g], boxes[g].getAttribute('data-depth') === '0' ? '600 13px' : '500 13px');
       rules += 'html[data-stacki-ready] > body stacki-group[data-group="' + boxes[g].getAttribute('data-group') + '"] { min-width: ' + header + 'px !important; } ';
     }
     var rule = '@layer ${CHROME_LAYER} { ' + rules + '}';
-    if (room.textContent !== rule) room.textContent = rule;
+    if (room.textContent !== rule) {
+      room.textContent = rule;
+      widened = next;
+    }
   }
   function mark() {
     var all = frames();
