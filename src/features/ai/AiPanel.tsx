@@ -67,6 +67,7 @@ import { EMPTY_CHAT } from './chatReducer';
 import { AgentChoiceNotices, AgentChoicesDialog } from './AgentChoices';
 import { loadAgentChoices } from './agentChoiceStore';
 import './aiShell.css';
+import { useAiHold } from './aiHold'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 export interface AiPanelProps {
   readonly projectPath: string;
@@ -237,19 +238,22 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
       return badge === undefined ? [] : [[id, badge]];
     }),
   );
-  const blocked = !state.trusted ? translate('ai.panel.trustFirst') : composerBlock({ agent, availability, stage, started, translate });
+  const hold = useAiHold(); // Design mode (experimental): docs/design-mode/REMOVE.md
+  const blocked = hold ?? (!state.trusted ? translate('ai.panel.trustFirst') : composerBlock({ agent, availability, stage, started, translate }));
   const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): Promise<void> => runReview(props, chatId, turn, path, action);
   const retry = retryText === undefined ? undefined : (): void => void sendPrompt(chatId, retryText);
   // Start the agent early, invisibly, once it is installed, signed in and allowed here; let go when the chat starts or the panel closes.
   usePrewarm({
     projectPath,
     agent,
-    eligible: state.trusted && availability?.state === 'ready' && setup?.step === 'ready' && stage === undefined && !started,
+    eligible: hold === undefined && state.trusted && availability?.state === 'ready' && setup?.step === 'ready' && stage === undefined && !started,
   });
   // Where the agent's CLI stands is read again each time a chat with it opens, and after each step.
   useEffect(() => {
-    void runSetup(agent, { kind: 'detect' });
-  }, [agent, chatId]);
+    if (hold === undefined) {
+      void runSetup(agent, { kind: 'detect' });
+    }
+  }, [agent, chatId, hold]);
   return (
     <>
       <AgentChoiceNotices onChoose={() => setChoosingAgents(true)} />
@@ -264,7 +268,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
         onReview={review}
         onOpenFile={props.onOpenFile}
       />
-      {!state.trusted ? (
+      {hold !== undefined ? undefined : !state.trusted ? (
         <TrustCard />
       ) : moment.shown ? (
         <SignedInStrip

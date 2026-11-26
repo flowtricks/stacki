@@ -16,10 +16,11 @@ import { brush } from '../../ui/central/centralGeometry';
 import PanelBoundary from '../../ui/PanelBoundary';
 import { DESIGN_MODE_ENABLED, type DesignSessionState } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
-import { DESIGN_NOTICE_KEY, enterDesignMode, exitDesignMode, installReply, type DesignHostSource, type DesignNotice } from './designActions';
+import { DESIGN_NOTICE_KEY, cancelDesignMode, enterDesignMode, exitDesignMode, installReply, type DesignHostSource, type DesignNotice } from './designActions';
+import { setAiHold } from '../../features/ai/aiHold';
 import { draftHandoff } from './designHandoff';
 import { applyDesignRole, clearDesignRole } from './designRole';
-import { isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
+import { designView, isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
 import { DesignBar } from './DesignBar';
 import { DesignBoard } from './DesignBoard';
 import { designWord, useDesignWords, type DesignWords } from './i18n/designWords';
@@ -60,7 +61,13 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
         isActive: isDesignModeActive,
         setActive: (active) => {
           const { app: current, words: currentWords } = latest.current;
-          void (active === 'on' ? enterDesignMode(current, currentWords) : exitDesignMode(current, currentWords, 'keep'));
+          if (active === 'on') {
+            void enterDesignMode(current, currentWords);
+          } else if (designView().phase === 'entering') {
+            void cancelDesignMode();
+          } else {
+            void exitDesignMode(current, currentWords, 'keep');
+          }
         },
         subscribe: subscribeDesignView,
       }),
@@ -70,11 +77,16 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
   // The preview's name follows the language: the catalog may load after the mode's look is applied.
   const roleName = words('mode.name');
   const on = view.session.kind === 'on';
+  const holdReason = words('ai.hold');
   useEffect(() => {
-    if (on) {
-      applyDesignRole(roleName);
+    if (!on) {
+      return undefined;
     }
-  }, [on, roleName]);
+    applyDesignRole(roleName);
+    // The agent cannot work on the copy (main refuses it): the AI panel offers nothing it would refuse.
+    setAiHold(holdReason);
+    return () => setAiHold(undefined);
+  }, [on, roleName, holdReason]);
   useReopenedPage(app, view.session);
   if (view.session.kind !== 'on') {
     return undefined;

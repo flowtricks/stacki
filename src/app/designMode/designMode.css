@@ -4,7 +4,8 @@
 
 .dm-bar {
   position: fixed;
-  z-index: 230;
+  /* Above the floating and expanded AI window (250): Exit must always be in reach. */
+  z-index: 260;
   display: flex;
   align-items: flex-end;
   justify-content: center;

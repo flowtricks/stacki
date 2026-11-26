@@ -15,7 +15,7 @@ import { lowerDesignFence, observeDesignFence, raiseDesignFence } from '../../li
 import { guardDesignWrites } from '../../lib/designMode/designWriteGuard';
 import { isPathWithin } from '../../lib/platform';
 import type { MainHost } from '../mainHost';
-import { createSandbox, removeSandbox, sweepSandboxes } from './designSandbox';
+import { createSandbox, removeSandboxAsync, removeSandboxAtQuit, stopServersIn, sweepSandboxes } from './designSandbox';
 import {
   beginSession,
   capture,
@@ -40,12 +40,13 @@ export interface DesignModeOptions {
 }
 
 export function registerDesignModeHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject'>, options: DesignModeOptions): void {
-  // A sandbox still here at startup was left by a crash or a forced quit: its copy of `.env` goes first.
-  sweepSandboxes(options.appDataRoot);
+  // A sandbox still here at startup was left by a crash or a forced quit: its dev server is stopped and its copy of
+  // `.env` deleted first, in the background, so the app starts at once.
+  void sweepSandboxes(options.appDataRoot).catch(() => undefined);
   guardDesignWrites();
   const sessions = createDesignSessions(host, options);
   observeDesignFence(sessions.observe);
-  options.onQuit(sessions.end);
+  options.onQuit(sessions.endAtQuit);
   host.ipcMain.handle('design:session', (_event, request) => sessions.answer(request));
 }
 
@@ -55,22 +56,41 @@ type EnterRequest = Extract<DesignSessionRequest, { op: 'enter' }>;
 export function createDesignSessions(host: Pick<MainHost, 'openProject'>, options: Pick<DesignModeOptions, 'appDataRoot'>) {
   const appDataRoot = options.appDataRoot;
   let session: Session | undefined = undefined;
-  let entering: 'no' | 'yes' = 'no';
+  let entering: { readonly cancelled: () => boolean; readonly cancel: () => void } | undefined = undefined;
   let handoff: DesignHandoff | undefined = undefined;
+  // Requests on the session run one at a time, in order: each reads the copy as the last one left it.
+  let queue: Promise<unknown> = Promise.resolve();
+  let ending: Promise<void> = Promise.resolve();
 
-  /** Keeps the drafts, lowers the fence and deletes the sandbox. Safe to call when nothing is on. */
-  const end = (): void => {
-    const ending = session;
-    if (ending === undefined) {
+  /** Lowers the fence at once; keeps the drafts, stops the copy's dev server and deletes the copy in the background. */
+  const end = (): Promise<void> => {
+    const closing = session;
+    if (closing === undefined) {
+      return ending;
+    }
+    session = undefined;
+    lowerDesignFence();
+    ending = (async () => {
+      try {
+        keepDraft(appDataRoot, await capture(closing));
+      } finally {
+        await stopServersIn(closing.sandbox.root);
+        await removeSandboxAsync(closing.sandbox.root);
+      }
+    })().catch(() => undefined);
+    return ending;
+  };
+
+  /** As the app quits nothing can be awaited: the drafts as last kept stay, and the copy goes in the background. */
+  const endAtQuit = (): void => {
+    entering?.cancel();
+    const closing = session;
+    if (closing === undefined) {
       return;
     }
     session = undefined;
-    try {
-      keepDraft(appDataRoot, capture(ending));
-    } finally {
-      lowerDesignFence();
-      removeSandbox(ending.sandbox.root);
-    }
+    lowerDesignFence();
+    removeSandboxAtQuit(closing.sandbox.root);
   };
 
   const observe = (channel: string, payload: unknown): void => {
@@ -81,61 +101,99 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
     if (typeof payload === 'string' && isPathWithin(session.sandbox.root, path.resolve(payload))) {
       return;
     }
-    end();
+    void end();
   };
 
   const enter = async (request: EnterRequest): Promise<DesignSessionReply> => {
     const open = host.openProject();
     if (!DESIGN_MODE_ENABLED || open === undefined || path.resolve(open) !== path.resolve(request.projectPath)) {
-      return { kind: 'refused', reason: 'not-open' };
+      return { kind: 'refused', reason: 'not-open', folder: undefined };
     }
-    if (session !== undefined || entering === 'yes') {
-      return { kind: 'refused', reason: 'busy' };
+    if (session !== undefined || entering !== undefined) {
+      return { kind: 'refused', reason: 'busy', folder: undefined };
     }
-    entering = 'yes';
+    const stop: { state: 'running' | 'stopped' } = { state: 'running' };
+    const cancel = {
+      cancelled: () => stop.state === 'stopped',
+      cancel: () => {
+        stop.state = 'stopped';
+      },
+    };
+    entering = cancel;
     try {
-      sweepSandboxes(appDataRoot);
-      const created = await createSandbox({ appDataRoot, realRoot: open });
+      await ending;
+      await sweepSandboxes(appDataRoot);
+      const created = await createSandbox({ appDataRoot, realRoot: open, cancel });
       if (!created.ok) {
-        return { kind: 'refused', reason: created.reason };
+        return { kind: 'refused', reason: created.reason, folder: created.folder };
       }
-      session = beginSession({ appDataRoot, realRoot: open, sandbox: created.sandbox, page: request.page, frameName: request.frameName });
+      session = await beginSession({ appDataRoot, realRoot: open, sandbox: created.sandbox, page: request.page, frameName: request.frameName });
       raiseDesignFence({ sandboxRoot: created.sandbox.root, realRoot: open, refusal: request.refusal, appDataRoot });
       return { kind: 'entered', liveRoot: created.sandbox.live };
     } finally {
-      entering = 'no';
+      entering = undefined;
     }
   };
 
-  const answer = async (request: DesignSessionRequest): Promise<DesignSessionReply> => {
-    if (request.op === 'enter') {
-      return enter(request);
-    }
-    if (request.op === 'take-handoff') {
-      // Only once the window is back on the project, and only once.
-      const taken = session === undefined ? handoff : undefined;
-      handoff = session === undefined ? undefined : handoff;
-      return { kind: 'handoff', handoff: taken };
-    }
-    if (session === undefined) {
+  const onSession = async (request: SessionRequest): Promise<DesignSessionReply> => {
+    const current = session;
+    if (current === undefined) {
       return { kind: 'state', state: { kind: 'off' } };
     }
-    const captured = capture(session);
-    const { next, reply } = operate(appDataRoot, captured, request);
-    session = next;
+    const { next, reply } = await operate(appDataRoot, await capture(current), request);
+    // A session that ended while this ran is not brought back.
+    session = session === current ? next : session;
     if (request.op === 'exit') {
       handoff = request.handoff;
     }
     return reply;
   };
 
-  return { answer, end, observe, current: (): Session | undefined => session };
+  const answer = async (request: DesignSessionRequest): Promise<DesignSessionReply> => {
+    switch (request.op) {
+      case 'enter':
+        return enter(request);
+      case 'cancel':
+        entering?.cancel();
+        return { kind: 'state', state: { kind: 'off' } };
+      case 'take-handoff': {
+        // Only once the window is back on the project, and only once.
+        const taken = session === undefined ? handoff : undefined;
+        handoff = session === undefined ? undefined : handoff;
+        return { kind: 'handoff', handoff: taken };
+      }
+      case 'state':
+      case 'exit':
+      case 'frame-duplicate':
+      case 'frame-switch':
+      case 'frame-rename':
+      case 'frame-delete':
+      case 'frame-image':
+      case 'frame-images':
+      case 'changes':
+      case 'start-over': {
+        const run = queue.then(() => onSession(request));
+        queue = run.catch(() => undefined);
+        return run;
+      }
+      default: {
+        const exhaustive: never = request;
+        throw new Error(`Assertion failed: answer: ${JSON.stringify(exhaustive)}`);
+      }
+    }
+  };
+
+  return { answer, end, endAtQuit, observe, current: (): Session | undefined => session };
 }
 
-type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' }>;
+type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' }>;
 
 /** One request on a captured session: the session after it, and the reply. */
-function operate(appDataRoot: string, session: Session, request: SessionRequest): { readonly next: Session; readonly reply: DesignSessionReply } {
+async function operate(
+  appDataRoot: string,
+  session: Session,
+  request: SessionRequest,
+): Promise<{ readonly next: Session; readonly reply: DesignSessionReply }> {
   const saved = (next: Session) => {
     keepDraft(appDataRoot, next);
     return { next, reply: { kind: 'state', state: stateOf(next) } } as const;
@@ -150,13 +208,13 @@ function operate(appDataRoot: string, session: Session, request: SessionRequest)
     case 'frame-duplicate':
       return saved(duplicateFrame(session, request.name));
     case 'frame-switch':
-      return saved(switchFrame(session, request.frame));
+      return saved(await switchFrame(session, request.frame));
     case 'frame-rename':
       return saved(renameFrame(session, request.frame, request.name));
     case 'frame-delete':
-      return saved(deleteFrame(appDataRoot, session, request.frame));
+      return saved(await deleteFrame(appDataRoot, session, request.frame));
     case 'start-over': {
-      const next = startOver(appDataRoot, session, request.frameName);
+      const next = await startOver(appDataRoot, session, request.frameName);
       return { next, reply: { kind: 'state', state: stateOf(next) } };
     }
     case 'frame-image': {

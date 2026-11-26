@@ -31,6 +31,8 @@ const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'shared/ipc/preloadApi.ts': 1,
   'src/features/style/embed/useInlineTarget.ts': 5,
   'src/features/style/model/inlineDefault.ts': 5,
+  'src/features/ai/AiPanel.tsx': 2,
+  'src/features/ai/aiHold.ts': 1,
 };
 
 function sourceFiles(): readonly string[] {

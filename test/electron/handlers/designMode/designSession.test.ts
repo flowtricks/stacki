@@ -42,6 +42,11 @@ function scratch(): { readonly project: string; readonly appData: string; readon
   write('.git/HEAD', 'ref: refs/heads/main\n');
   write('dist/index.html', '<html></html>');
   write('node_modules/astro/package.json', '{"name":"astro"}');
+  // A second app inside the project, as in a real site that holds its own tooling: never copied but its source.
+  write('studio/node_modules/huge/index.js', 'x');
+  write('studio/dist/app.js', 'x');
+  write('studio/src/index.ts', 'export {};');
+  write('.claude/worktrees/agent/src/pages/index.astro', 'x');
   const appData = path.join(root, 'userData');
   fs.mkdirSync(appData);
   return { project, appData, root };
@@ -65,7 +70,7 @@ function digest(directory: string): string {
   return parts.sort().join('\n');
 }
 
-test('the sandbox is a private copy outside the project: base and live, node_modules in live only, output skipped', async () => {
+test('the sandbox is one private copy outside the project; the project is its original; output is skipped at any depth', async () => {
   const { project, appData } = scratch();
   const before = digest(project);
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
@@ -76,7 +81,10 @@ test('the sandbox is a private copy outside the project: base and live, node_mod
   assert.equal(fs.statSync(sandbox.root).mode & 0o777, 0o700);
   assert.equal(fs.readFileSync(path.join(sandbox.live, '.env'), 'utf8'), 'SECRET=1\n');
   assert.ok(fs.existsSync(path.join(sandbox.live, 'node_modules/astro/package.json')));
-  assert.ok(!fs.existsSync(path.join(sandbox.base, 'node_modules')));
+  assert.equal(sandbox.base, fs.realpathSync(project), 'the original is the project itself, never copied twice');
+  assert.ok(!fs.existsSync(path.join(sandbox.live, 'studio/node_modules')), "a nested app's dependencies are skipped");
+  assert.ok(!fs.existsSync(path.join(sandbox.live, 'studio/dist')), 'and its build');
+  assert.ok(fs.existsSync(path.join(sandbox.live, 'studio/src/index.ts')), 'its source is copied');
   assert.ok(!fs.existsSync(path.join(sandbox.live, '.git')));
   assert.ok(!fs.existsSync(path.join(sandbox.live, 'dist')));
   assert.equal(digest(project), before, 'copying reads the project and writes nothing in it');
@@ -87,7 +95,7 @@ test('a project that links outside itself, or keeps its packages above it, is re
   fs.symlinkSync(os.tmpdir(), path.join(linked.project, 'src/outside'));
   const refused = await createSandbox({ appDataRoot: linked.appData, realRoot: linked.project });
   assert.deepEqual(refused, { ok: false, reason: 'outside-link' });
-  assert.deepEqual(fs.readdirSync(sandboxesRoot(linked.appData)), []);
+  assert.ok(!fs.existsSync(sandboxesRoot(linked.appData)), 'refused before anything was made');
 
   const hoisted = scratch();
   fs.rmSync(path.join(hoisted.project, 'node_modules'), { recursive: true });
@@ -100,14 +108,14 @@ test('a project that links outside itself, or keeps its packages above it, is re
   assert.equal(fs.readlinkSync(path.join(kept.sandbox.live, 'src/pages/styles')), '../styles');
 });
 
-test('a sandbox a crash left behind is swept, with its .env; private folders are checked', () => {
+test('a sandbox a crash left behind is swept, with its .env; private folders are checked', async () => {
   const { appData } = scratch();
   const left = path.join(sandboxesRoot(appData), 'left-by-a-crash', 'live');
   fs.mkdirSync(left, { recursive: true });
   fs.writeFileSync(path.join(left, '.env'), 'SECRET=1\n');
-  assert.equal(sweepSandboxes(appData), 1);
+  assert.equal(await sweepSandboxes(appData), 1);
   assert.deepEqual(fs.readdirSync(sandboxesRoot(appData)), []);
-  assert.equal(sweepSandboxes(path.join(appData, 'never-made')), 0);
+  assert.equal(await sweepSandboxes(path.join(appData, 'never-made')), 0);
   const folder = path.join(appData, 'private');
   ensurePrivateDirectory(folder);
   assert.equal(fs.statSync(folder).mode & 0o777, 0o700);
@@ -118,19 +126,19 @@ test('frames: what live differs by is captured, applied both ways, and described
   const created = await createSandbox({ appDataRoot: appData, realRoot: project });
   assert.ok(created.ok);
   const { base, live, copiedAtMs } = created.sandbox;
-  assert.equal(captureChanges(base, live, copiedAtMs).size, 0, 'a fresh copy differs by nothing');
+  assert.equal((await captureChanges(base, live, copiedAtMs)).size, 0, 'a fresh copy differs by nothing');
   fs.writeFileSync(path.join(live, 'src/styles/global.css'), '.title { color: blue; }\n');
   fs.writeFileSync(path.join(live, 'src/pages/new.astro'), '<p>new</p>\n');
   fs.rmSync(path.join(live, 'src/pages/index.astro'));
-  const changed = captureChanges(base, live, copiedAtMs);
+  const changed = await captureChanges(base, live, copiedAtMs);
   assert.deepEqual([...changed.keys()].sort(), ['src/pages/index.astro', 'src/pages/new.astro', 'src/styles/global.css']);
   assert.equal(changed.get('src/pages/index.astro')?.kind, 'delete');
-  applyFrame({ base, live, from: changed, to: new Map() });
-  assert.equal(captureChanges(base, live, copiedAtMs).size, 0, 'back to the project as copied');
-  applyFrame({ base, live, from: new Map(), to: changed });
+  await applyFrame({ base, live, from: changed, to: new Map() });
+  assert.equal((await captureChanges(base, live, copiedAtMs)).size, 0, 'back to the project as copied');
+  await applyFrame({ base, live, from: new Map(), to: changed });
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: blue; }\n');
   assert.ok(!fs.existsSync(path.join(live, 'src/pages/index.astro')));
-  assert.throws(() => applyFrame({ base, live, from: new Map(), to: new Map([['../escape.txt', { kind: 'delete' }]]) }), /inside the copy/);
+  await assert.rejects(applyFrame({ base, live, from: new Map(), to: new Map([['../escape.txt', { kind: 'delete' }]]) }), /inside the copy/);
   const hunk = describeFile('a.css', 'one\ntwo\nthree\n', 'one\nTWO\nthree\n');
   assert.equal(hunk, 'a.css @@ line 2\n- two\n+ TWO');
 });
@@ -150,7 +158,7 @@ test('drafts keep no secrets, notice a changed project, and refuse a kept path t
   const read = readDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base });
   assert.equal(read.kind, 'draft');
   assert.ok(read.kind === 'draft' && !read.stale && read.draft.frames[0]?.files.size === 1);
-  fs.writeFileSync(path.join(created.sandbox.base, 'src/styles/global.css'), '.changed{}');
+  fs.writeFileSync(path.join(project, 'src/styles/global.css'), '.changed{}');
   const stale = readDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base });
   assert.ok(stale.kind === 'draft' && stale.stale);
   fs.writeFileSync(path.join(draftFolder(appData, project), 'draft.json'), text.replace('src/styles/global.css', '../../escape.css'));
@@ -233,6 +241,7 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.deepEqual(await ask({ op: 'enter', projectPath: path.join(project, 'elsewhere'), refusal: REFUSAL, frameName: 'Original' }), {
     kind: 'refused',
     reason: 'not-open',
+    folder: undefined,
   });
   const entered = await ask({ op: 'enter', projectPath: project, page: 'src/pages/index.astro', refusal: REFUSAL, frameName: 'Original' });
   assert.equal(entered.kind, 'entered');
@@ -254,6 +263,7 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: undefined }, 'not while the copy is still open');
   checkDesignFence('project:close', project);
   assert.equal(designFenceState().kind, 'off');
+  await sessions.end();
   assert.equal(sessions.current(), undefined);
   assert.deepEqual(fs.readdirSync(sandboxesRoot(appData)), []);
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: { text: 'Rebuild it like this', images: [], names: [] } });
@@ -268,7 +278,7 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.equal(fs.readFileSync(path.join(againLive, 'src/styles/global.css'), 'utf8'), '.title { color: purple; }\n');
   const over = await ask({ op: 'start-over', frameName: 'Original' });
   assert.ok(over.kind === 'state' && over.state.kind === 'on' && over.state.frames.length === 1 && over.state.frames[0]?.changedFiles === 0);
-  sessions.end(); // As the app quits.
+  await sessions.end(); // As the window leaves the copy.
   assert.equal(designFenceState().kind, 'off');
   assert.deepEqual(fs.readdirSync(sandboxesRoot(appData)), []);
   assert.equal(digest(project), before);
@@ -285,4 +295,23 @@ test('requests and replies are parsed: unknown ops, bad frame ids, oversized nam
   assert.throws(() => parseDesignSessionReply({ kind: 'state', state: { kind: 'on', frames: [], active: 'f1' } }), /at least one/);
   assert.throws(() => parseDesignSessionReply({ kind: 'refused', reason: 'because' }), /unknown refusal/);
   assert.deepEqual(parseDesignSessionRequest({ op: 'frame-rename', frame: 'f2', name: ' Bold ' }), { op: 'frame-rename', frame: 'f2', name: 'Bold' });
+});
+
+test('the preflight refuses a project past its bounds, naming the largest folder, and leaves nothing', async () => {
+  const { project, appData } = scratch();
+  for (let index = 0; index < 20_050; index += 1) {
+    const folder = path.join(project, 'src/content/many', String(Math.floor(index / 500)));
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, `${index}.md`), 'x');
+  }
+  const refused = await createSandbox({ appDataRoot: appData, realRoot: project });
+  assert.deepEqual(refused, { ok: false, reason: 'too-large', folder: 'src' });
+  assert.ok(!fs.existsSync(sandboxesRoot(appData)) || fs.readdirSync(sandboxesRoot(appData)).length === 0, 'nothing was made');
+});
+
+test('a copy the person cancels stops and leaves nothing', async () => {
+  const { project, appData } = scratch();
+  const cancelled = await createSandbox({ appDataRoot: appData, realRoot: project, cancel: { cancelled: () => true } });
+  assert.deepEqual(cancelled, { ok: false, reason: 'cancelled' });
+  assert.ok(!fs.existsSync(sandboxesRoot(appData)) || fs.readdirSync(sandboxesRoot(appData)).length === 0);
 });

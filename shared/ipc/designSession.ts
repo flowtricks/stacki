@@ -27,7 +27,9 @@ export const DESIGN_SESSION_LIMITS = {
   /** The described change of one frame, as text. */
   changesCharsMax: 60_000,
   /** One frame's picture, a PNG data URL. */
-  imageCharsMax: 16_000_000,
+  imageCharsMax: 4_000_000,
+  /** Every frame picture kept in memory together: the oldest goes first past this. */
+  imagesCharsMax: 24_000_000,
   /** What Send to AI carries across the window's reload. */
   handoffTextCharsMax: 200_000,
   handoffImagesMax: 9,
@@ -59,7 +61,7 @@ export type DesignSessionState =
     };
 
 /** Why the mode did not begin. */
-export const DESIGN_ENTER_REFUSALS = ['not-open', 'too-large', 'outside-link', 'copy-failed', 'busy'] as const;
+export const DESIGN_ENTER_REFUSALS = ['not-open', 'too-large', 'outside-link', 'copy-failed', 'busy', 'cancelled'] as const;
 export type DesignEnterRefusal = (typeof DESIGN_ENTER_REFUSALS)[number];
 
 /** What Send to AI hands to the AI panel once the window is back on the project. */
@@ -91,6 +93,8 @@ export type DesignSessionRequest =
       readonly frameName: string;
     }
   | { readonly op: 'exit'; readonly handoff: DesignHandoff | undefined }
+  /** Stops a copy under way: the enter answers `cancelled` and leaves nothing behind. */
+  | { readonly op: 'cancel' }
   | { readonly op: 'take-handoff' }
   | { readonly op: 'frame-duplicate'; readonly name: string }
   | { readonly op: 'frame-switch'; readonly frame: DesignFrameId }
@@ -104,7 +108,8 @@ export type DesignSessionRequest =
 export type DesignSessionReply =
   | { readonly kind: 'state'; readonly state: DesignSessionState }
   | { readonly kind: 'entered'; readonly liveRoot: string }
-  | { readonly kind: 'refused'; readonly reason: DesignEnterRefusal }
+  /** `folder`: for too-large, the project's top-level folder holding the most files. */
+  | { readonly kind: 'refused'; readonly reason: DesignEnterRefusal; readonly folder: string | undefined }
   | { readonly kind: 'left'; readonly realRoot: string }
   | { readonly kind: 'handoff'; readonly handoff: DesignHandoff | undefined }
   | { readonly kind: 'images'; readonly images: readonly { readonly frame: DesignFrameId; readonly image: string }[] }
@@ -192,6 +197,7 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
     case 'take-handoff':
     case 'frame-images':
     case 'changes':
+    case 'cancel':
       return { op };
     case 'enter':
       return {
@@ -292,7 +298,8 @@ export function parseDesignSessionReply(input: unknown): DesignSessionReply {
       if (reason === undefined) {
         throw new Error('Design session: unknown refusal');
       }
-      return { kind, reason };
+      const folder = value['folder'] === undefined ? undefined : bounded(value['folder'], DESIGN_SESSION_LIMITS.pageCharsMax, 'Design refusal folder');
+      return { kind, reason, folder };
     }
     case 'left':
       return { kind, realRoot: pathText(value['realRoot']) };

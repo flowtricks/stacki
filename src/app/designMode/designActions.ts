@@ -37,6 +37,7 @@ const REFUSAL_WORDS: Readonly<Record<DesignEnterRefusal, DesignWordKey>> = {
   'outside-link': 'toast.outsideLink',
   'copy-failed': 'toast.copyFailed',
   busy: 'toast.busy',
+  cancelled: 'toast.cancelled',
 };
 
 export async function enterDesignMode(app: DesignHostSource, words: DesignWords): Promise<void> {
@@ -53,6 +54,7 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
   try {
     // What the editor still holds is saved first, so the copy is the project as the person sees it.
     await app.flushSave();
+    app.showToast(words('toast.copying'), 'info');
     const reply = await designSession({
       op: 'enter',
       projectPath: app.project.path,
@@ -61,7 +63,11 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
       frameName: words('frame.original'),
     });
     if (reply.kind === 'refused') {
-      app.showToast(words(REFUSAL_WORDS[reply.reason]), 'warning');
+      const named = reply.reason === 'too-large' && reply.folder !== undefined;
+      app.showToast(
+        named ? words('toast.tooLargeFolder', { folder: reply.folder ?? '' }) : words(REFUSAL_WORDS[reply.reason]),
+        reply.reason === 'cancelled' ? 'info' : 'warning',
+      );
       updateDesignView((view) => ({ ...view, phase: 'idle' }));
       return;
     }
@@ -76,6 +82,13 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
     updateDesignView((view) => ({ ...view, phase: 'idle' }));
   } finally {
     release();
+  }
+}
+
+/** Stops a copy under way (the Modes menu row chosen again while it runs). */
+export async function cancelDesignMode(): Promise<void> {
+  if (designView().phase === 'entering') {
+    await designSession({ op: 'cancel' });
   }
 }
 
