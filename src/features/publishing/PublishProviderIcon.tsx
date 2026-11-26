@@ -1,23 +1,14 @@
 import { githubIconPath } from '../../ui/iconPaths';
-import { UploadCloudIcon } from '../../ui/Icons';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
 export function PublishProviderIcon({ provider }: { readonly provider: Hosting['provider'] | 'github' }) {
-  if (provider === 'netlify') {
-    // Netlify's mark is not among the bundled paths or the app's icon set, so it takes the app's hosting icon.
-    return (
-      <span className="publish-provider-icon" data-provider={provider} aria-hidden="true">
-        <UploadCloudIcon size={20} />
-      </span>
-    );
-  }
   return (
     <svg
       className="publish-provider-icon"
       data-provider={provider}
       width={20}
       height={20}
-      viewBox="0 0 24 24"
+      viewBox={provider === 'netlify' ? NETLIFY_VIEW_BOX : '0 0 24 24'}
       fill={provider.startsWith('cloudflare') ? '#f38020' : 'currentColor'}
       aria-hidden="true"
       focusable="false"
@@ -47,4 +38,12 @@ const PROVIDER_PATHS = {
     '.1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 ' +
     '0-2.6025-2.125-4.727-4.7344-4.727',
   vercel: 'm12 1.608 12 20.784H0Z',
+  // The one mark not from Simple Icons: the owner supplied this SVG for the Netlify option, an approved exception to
+  // taking icons only from the app's icon set. Path data is as supplied; its black fill is replaced by currentColor,
+  // like Vercel's mark, so it reads on dark and light surfaces.
+  netlify:
+    'M58.1582 73.5895L119.252 92.1555C121.315 92.7885 122.585 92.4715 123.855 91.2015L141.311 73.9055C142.898 72.4795 142.898 69.9395 141.311 68.5085L123.855 51.2125C122.585 49.9425 121.315 49.6255 119.252 50.2585L58.1582 68.8245C55.6182 69.6175 55.6182 72.7905 58.1582 73.5845V73.5895ZM47.2082 81.8425L47.0482 114.848C47.0482 118.181 47.6812 119.924 49.2682 121.51L68.7873 141.186C70.3743 142.773 72.2773 142.773 73.7073 141.186L90.5263 124.367C92.1133 122.78 92.1133 121.034 90.5263 119.447L51.3312 80.2515C49.5842 78.5045 47.2043 79.4585 47.2043 81.8385L47.2082 81.8425ZM47.2082 60.5765C47.0482 62.9565 49.5882 63.9095 51.3353 62.1635L90.5303 22.9685C92.1172 21.3815 92.1172 19.4785 90.5303 18.0485L73.7113 1.0695C72.2852 -0.3565 70.3783 -0.3565 68.7913 1.0695L49.2723 20.7445C47.6852 22.3315 47.0522 23.6015 47.0522 25.6645L47.2122 60.5765H47.2082ZM22.9292 90.4085C21.3422 91.9955 19.5962 91.9955 18.0092 90.4085L1.19025 73.5895C-0.39675 72.1635 -0.39675 70.2565 1.19025 68.6695L18.0092 51.8505C19.5962 50.2635 21.3422 50.2635 22.9292 51.8505L39.7482 68.6695C41.3353 70.2565 41.3353 72.1595 39.7482 73.5895L22.9292 90.4085Z',
 } as const;
+
+// The supplied Netlify mark is drawn on its own grid.
+const NETLIFY_VIEW_BOX = '0 0 143 143';

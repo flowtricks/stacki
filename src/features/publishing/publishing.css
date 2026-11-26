@@ -532,10 +532,6 @@
   color: var(--text);
 }
 
-span.publish-provider-icon {
-  display: inline-flex;
-}
-
 .publish-avatar img[data-state='loading'] {
   opacity: 0;
 }
