@@ -227,7 +227,11 @@ export function useInlineCard(
     // No rule is the target now: the panel shows the attribute's values over the cascade.
     deselect();
     // In the same update as the pick: a style attribute applies at every width, so the dropdown goes to Base.
-    showBase();
+    // Where the attribute is the default, in Design mode, the canvas width is a frame's own and the pick leaves it
+    // and the follow mode alone: the dropdown goes to Base by the target's own rule (useStyleContexts).
+    if (inlineDefault() !== 'inline') {
+      showBase();
+    }
     setPickedFor(nodeId);
     // The attribute is shown and edited in the CSS code section, so it opens with the pick.
     if (!card.cssCodeOpen) {

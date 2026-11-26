@@ -193,7 +193,8 @@ byte-identical afterwards.
    - `shared/ipc/preloadApi.ts`: `readonly designSession: 'design:session';`.
    - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
      `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
-     `useInlineByDefault` function at the end of the file.
+     `useInlineByDefault` function at the end of the file; in `select`, the `if (inlineDefault() !== 'inline')` around
+     `showBase();`, which stays.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
      `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in
      `ContextAction`, `'canChange'` in `ComponentMenuHeader`'s props, its `useUnlinkMenu()` call and the row it shows.
