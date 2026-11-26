@@ -1,24 +1,52 @@
 // Design mode (experimental, removable: docs/design-mode/REMOVE.md): the renderer's view of the session.
 //
-// Main owns the session (electron/handlers/designMode); this holds its last answered state, the frames' pictures
-// for the board, and what the window is doing about it, so the header button, the bar and the board read one value.
-// Framework-free; React reads it through `useDesignStore`.
+// Main owns the session (electron/handlers/designMode); this holds its last answered state, the documents the
+// canvas's frames show, what is selected on the canvas, and what the window is doing about it, so the header
+// button, the bar and the canvas read one value. Framework-free; React reads it through `useDesignView`.
 import { useSyncExternalStore } from 'react';
-import type { DesignFrameId, DesignSessionState } from '../../../shared/ipc/designSession';
+import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignSessionState } from '../../../shared/ipc/designSession';
+import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 
 export type DesignPhase = 'idle' | 'entering' | 'working' | 'leaving';
+
+/** What the person last picked on the canvas: nothing, a whole frame, or an element in one. */
+export type DesignSelection =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'frame'; readonly frame: DesignFrameId }
+  | { readonly kind: 'element'; readonly frame: DesignFrameId; readonly path: string; readonly copy: number };
+
+/** The canvas's camera: where its origin is on screen, and how large a canvas pixel is drawn. */
+export interface DesignCamera {
+  readonly x: number;
+  readonly y: number;
+  readonly zoom: number;
+}
 
 export interface DesignView {
   readonly session: DesignSessionState;
   readonly phase: DesignPhase;
-  readonly board: 'closed' | 'open';
-  readonly images: ReadonlyMap<DesignFrameId, string>;
+  readonly snapshots: ReadonlyMap<DesignFrameId, DesignSnapshot>;
+  readonly selection: DesignSelection;
+  /** The frame the site's copy is being rewritten to; until it is read, the panels have nothing selected. */
+  readonly switching: DesignFrameId | undefined;
+  /** Undefined until the canvas first fits its frames. */
+  readonly camera: DesignCamera | undefined;
+  /** The one frame shown while it is photographed for the AI. */
+  readonly photo: DesignFrameId | undefined;
 }
 
 /** Mounted readers; a leak past this is a bug, not growth. */
 const LISTENERS_MAX = 50;
 
-let view: DesignView = { session: { kind: 'off' }, phase: 'idle', board: 'closed', images: new Map() };
+let view: DesignView = {
+  session: { kind: 'off' },
+  phase: 'idle',
+  snapshots: new Map(),
+  selection: { kind: 'none' },
+  switching: undefined,
+  camera: undefined,
+  photo: undefined,
+};
 const listeners = new Set<() => void>();
 
 export function designView(): DesignView {
@@ -30,8 +58,8 @@ export function updateDesignView(change: (current: DesignView) => DesignView): v
   if (next === view) {
     return;
   }
-  if (next.session.kind === 'off' && next.board === 'open') {
-    throw new Error('Assertion failed: updateDesignView: the board opens only while the mode is on');
+  if (next.snapshots.size > DESIGN_SESSION_LIMITS.framesMax) {
+    throw new Error('Assertion failed: updateDesignView: at most one snapshot a frame');
   }
   view = next;
   for (const listener of [...listeners]) {

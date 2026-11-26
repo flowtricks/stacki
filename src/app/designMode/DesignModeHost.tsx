@@ -3,11 +3,12 @@
 // The app mounts this once (src/app/shell/AppShell.tsx, one marked line). It registers the "Design mode" button of the
 // AI panel's header (src/features/ai/panelModes.ts). Turning it on copies the project into a sandbox in
 // main and opens the copy (designActions.ts); from then on the window is the normal editor, every panel working on
-// the copy, with three differences this module makes: the bar of frames over the canvas (DesignBar.tsx), the board
-// that shows them side by side (DesignBoard.tsx), and the style panel starting each selection on its Inline styles
+// the copy, with three differences this module makes: its pan and zoom canvas of frames over the preview
+// (DesignCanvas.tsx), its bar (DesignBar.tsx), and the style panel starting each selection on its Inline styles
 // chip (src/features/style/model/inlineDefault.ts). What cannot work on a copy is out of reach (designRole.ts), and
 // main refuses it anyway (electron/lib/designMode/designFence.ts).
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { ShellView } from '../App';
 import { registerPanelMode } from '../../features/ai/panelModes';
 import { setInlineDefault } from '../../features/style/model/inlineDefault';
 import { useLocale } from '../../lib/i18n/useTranslate';
@@ -16,13 +17,14 @@ import { brush } from '../../ui/central/centralGeometry';
 import PanelBoundary from '../../ui/PanelBoundary';
 import { DESIGN_MODE_ENABLED, type DesignSessionState } from '../../../shared/ipc/designSession';
 import { designSession } from './designBridge';
-import { DESIGN_NOTICE_KEY, cancelDesignMode, enterDesignMode, exitDesignMode, installReply, type DesignHostSource, type DesignNotice } from './designActions';
+import { DESIGN_NOTICE_KEY, cancelDesignMode, enterDesignMode, exitDesignMode, type DesignHostSource, type DesignNotice } from './designActions';
+import { installState, type DesignOpsContext } from './designFrameOps';
 import { setAiHold } from '../../features/ai/aiHold';
 import { draftHandoff } from './designHandoff';
 import { applyDesignRole, clearDesignRole } from './designRole';
 import { designView, isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
 import { DesignBar } from './DesignBar';
-import { DesignBoard } from './DesignBoard';
+import { DesignCanvas } from './DesignCanvas';
 import { designWord, useDesignWords, type DesignWords } from './i18n/designWords';
 import './designMode.css';
 
@@ -32,7 +34,7 @@ export const DesignModeIcon = centralIcon(brush);
 /** Where Design mode's header button sits: after comment pins (10), before "+". */
 const MODE_BUTTON_ORDER = 20;
 
-export function DesignModeHost({ app }: { readonly app: DesignHostSource }) {
+export function DesignModeHost({ app }: { readonly app: ShellView }) {
   const words = useDesignWords();
   if (!DESIGN_MODE_ENABLED) {
     return undefined;
@@ -44,12 +46,13 @@ export function DesignModeHost({ app }: { readonly app: DesignHostSource }) {
   );
 }
 
-function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
+function DesignModeGate({ app }: { readonly app: ShellView }) {
   const view = useDesignView();
   const words = useDesignWords();
   const { locale } = useLocale();
   const latest = useRef({ app, words });
   latest.current = { app, words };
+  const context = useMemo<DesignOpsContext>(() => ({ app: () => latest.current.app, words: () => latest.current.words }), []);
   // The header button, registered again when the language changes so its name follows it.
   useEffect(
     () =>
@@ -88,15 +91,25 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
     return () => setAiHold(undefined);
   }, [on, roleName, holdReason]);
   useReopenedPage(app, view.session);
+  useUnselectedFrame(app.selectedId);
   if (view.session.kind !== 'on') {
     return undefined;
   }
   return (
     <>
-      <DesignBar app={app} session={view.session} phase={view.phase} />
-      {view.board === 'open' && <DesignBoard app={app} session={view.session} images={view.images} />}
+      <DesignCanvas context={context} session={view.session} />
+      <DesignBar app={app} context={context} />
     </>
   );
+}
+
+/** An element selected anywhere (the Navigator among them) takes the place of a selected frame. */
+function useUnselectedFrame(selectedId: string | undefined): void {
+  useEffect(() => {
+    if (selectedId !== undefined) {
+      updateDesignView((view) => (view.selection.kind === 'frame' ? { ...view, selection: { kind: 'none' } } : view));
+    }
+  }, [selectedId]);
 }
 
 /** On every project open: is this window on a Design mode copy? Then the mode's look; else, a handoff to take. */
@@ -113,8 +126,11 @@ function useSessionOnOpen(projectPath: string, latest: { readonly current: { rea
       if (reply.state.kind === 'on' && reply.state.liveRoot === projectPath) {
         applyDesignRole(words('mode.name'));
         setInlineDefault('inline');
-        installReply(reply);
-        installReply(await designSession({ op: 'frame-images' }));
+        // The canvas is up with every frame before the copy's dev server is: each shows its kept document.
+        const kept = await designSession({ op: 'frame-snapshots' });
+        const snapshots = new Map(kept.kind === 'snapshots' ? kept.snapshots.map((entry) => [entry.frame, entry.snapshot] as const) : []);
+        updateDesignView((view) => ({ ...view, snapshots }));
+        installState(reply);
         updateDesignView((view) => ({ ...view, phase: 'working' }));
         announceEntered(app, words, reply.state, notice);
         return;
