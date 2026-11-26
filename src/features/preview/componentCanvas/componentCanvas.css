@@ -163,6 +163,7 @@
   margin: 8px 12px 4px;
 }
 .component-canvas-scope .u-segmented-button {
+  flex: 0 1 auto;
   min-width: 0;
 }
 .component-canvas-scope-name {

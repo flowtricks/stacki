@@ -24,7 +24,8 @@ export function frameScopes(frame: ModelFrame, translate: Translator): readonly 
     { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
     ...frame.parts.map((part) => ({
       value: frameKey([part]),
-      label: partLabel(part, translate),
+      // The value alone fits the panel beside the other choices; the tooltip says the whole of it.
+      label: part.value.kind === 'unset' ? translate('componentCanvas.frame.unset') : String(part.value.value),
       about: translate('componentCanvas.panel.scope.part', { part: partLabel(part, translate) }),
     })),
     { value: '', label: translate('componentCanvas.panel.scope.all') },
@@ -48,6 +49,7 @@ export function CanvasScopeControl({ canvas, state }: { readonly canvas: Compone
     <div className="component-canvas-scope">
       <SegmentedControl
         ariaLabel={translate('componentCanvas.panel.scope.label')}
+        widthMode="hug"
         value={state.scope}
         options={scopes.map((scope) => ({
           value: scope.value,
