@@ -287,6 +287,17 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           return rootTarget(scope, current) === undefined ? (file) => withoutOverrides(file, component, scope, setting) : undefined;
         }),
       drawnSize: (frame) => drawn.current.get(frame),
+      paintBackground: (color, end) => {
+        const current = stateRef.current;
+        if (current.kind !== 'open') {
+          return;
+        }
+        const scope = current.scopes.background;
+        const root = scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE;
+        const frames = root ? [] : current.layout.frames.filter((frame) => scopeHolds(scope, frame.key)).map((frame) => frame.key);
+        assert(frames.length <= CANVAS_LIMITS.framesMax, 'A paint reaches a bounded number of frames');
+        postToCanvas(current.id, { command: 'paint', frames, root, value: color, restore: end === 'restore' });
+      },
       showTargets: (frames) => {
         const current = stateRef.current;
         if (current.kind === 'open') {

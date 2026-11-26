@@ -281,6 +281,10 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
     /img\[loading="lazy"\][^;]*;\s*for \(var i = 0; i < lazy\.length; i\+\+\) lazy\[i\]\.setAttribute\('loading', 'eager'\)/,
   );
   assert.match(chrome.chromeScript(ID), /attributeFilter: \[[^\]]*'loading'/, 'an image patched back to lazy is made eager again');
+  // A colour dragged in a picker is painted at once and taken back on a cancel; a value that could end a declaration is never painted.
+  assert.match(chrome.chromeScript(ID), /data\.command === 'paint'/);
+  assert.match(chrome.chromeScript(ID), /!\/\[;\{\}<>\]\/\.test\(data\.value\)/);
+  assert.match(chrome.chromeScript(ID), /data\.restore === true/);
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');

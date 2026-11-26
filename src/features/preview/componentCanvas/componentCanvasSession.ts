@@ -100,6 +100,11 @@ export interface ComponentCanvasControl {
   readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
   /** A frame's size as the canvas draws it now, in its own pixels; undefined before the page has said. */
   readonly drawnSize: (frame: string) => { readonly width: number; readonly height: number } | undefined;
+  /**
+   * A background colour being dragged in a picker, painted at once on what the background's scope reaches, nothing
+   * saved; undefined ends it: `restore` takes the paint back (a cancel), `keep` leaves it for the saved value to replace.
+   */
+  readonly paintBackground: (color: string | undefined, end?: 'restore' | 'keep') => void;
   /** The frames a scope choice would change, outlined on the canvas while it is pointed at; undefined clears them. */
   readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */

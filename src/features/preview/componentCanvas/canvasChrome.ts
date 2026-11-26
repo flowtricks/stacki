@@ -398,6 +398,25 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
       tag = null;
       mark();
     }
+    // A colour being dragged in a picker, painted at once on the frames it will change (or the canvas root), before it
+    // is saved: the page's own rewrite brings the saved value. Without a value, what was painted is taken back.
+    if (data.command === 'paint' && Array.isArray(data.frames)) {
+      var color = typeof data.value === 'string' && data.value.length <= 512 && !/[;{}<>]/.test(data.value) ? data.value : undefined;
+      var painted = data.root === true ? [root] : [].filter.call(frames(), function (frame) { return data.frames.indexOf(frame.getAttribute('data-frame')) >= 0; });
+      for (var p = 0; p < painted.length; p++) {
+        var element = painted[p];
+        if (!element.hasAttribute('data-stacki-paint')) element.setAttribute('data-stacki-paint', element.style.getPropertyValue('background'));
+        if (color === undefined) {
+          var before = element.getAttribute('data-stacki-paint');
+          if (data.restore === true) {
+            if (before) element.style.setProperty('background', before, 'important'); else element.style.removeProperty('background');
+          }
+          element.removeAttribute('data-stacki-paint');
+        } else {
+          element.style.setProperty('background', color, 'important');
+        }
+      }
+    }
     if (data.command === 'targets' && Array.isArray(data.frames)) {
       var all = frames();
       for (var t = 0; t < all.length; t++) flag(all[t], 'data-target', data.frames.indexOf(all[t].getAttribute('data-frame')) >= 0);

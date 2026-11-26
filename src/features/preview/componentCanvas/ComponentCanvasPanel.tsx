@@ -207,7 +207,12 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
           value={value ?? 'transparent'}
           ariaLabel={label}
           onChange={(color, live) => {
-            if (!live) {
+            // Dragging paints the frames at once and saves nothing; letting go saves once. A value let go of that is
+            // what was there (a cancel) takes the paint back; any other stays until the saved one replaces it.
+            if (live) {
+              canvas.paintBackground(color);
+            } else {
+              canvas.paintBackground(undefined, color.trim() === (value ?? 'transparent').trim() ? 'restore' : 'keep');
               commit(color);
             }
           }}
