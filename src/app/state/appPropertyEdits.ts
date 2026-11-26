@@ -858,11 +858,9 @@ function contentSourceGesture(node: EditorNode, change: { readonly next: string;
         return undefined;
       }
       const element = origin.source.slice(ref.span.start, ref.span.end);
-      const rewritten = withInnerSource(
-        element,
-        { name: node.name ?? '', inner: 'source' in node && typeof node.source === 'string' ? node.source : '' },
-        next,
-      );
+      // The view read these bytes from the file: the node's own `source` is only kept for content the printer would
+      // lay out otherwise, so it cannot say what is between the tags.
+      const rewritten = withInnerSource(element, { name: node.name ?? '', inner: change.shown }, next);
       if (rewritten === undefined) {
         return undefined;
       }

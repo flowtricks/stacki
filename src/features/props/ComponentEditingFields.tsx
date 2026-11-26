@@ -3,6 +3,7 @@
 // shows the same content as code. Content the editor cannot give back unchanged opens as code alone, and the toggle's
 // tooltip says why (richTextContent.ts).
 import { useEffect, useRef, useState } from 'react';
+import { EditorView } from '@codemirror/view';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import TipAnchor from '../../ui/TipAnchor';
@@ -11,9 +12,12 @@ import HtmlField from '../../ui/HtmlField';
 import CodeEditor from '../../ui/CodeEditor';
 import { BracesIcon } from '../../ui/Icons';
 import type { InlineNode } from './richContentModel';
-import { richTextNodes, richTextView, sameRichContent, type RichTextCodeReason } from './richTextContent';
+import { richTextNodes, richTextView, sameRichContent, withoutLayoutSpace, type RichTextCodeReason } from './richTextContent';
 
 export { sameRichContent } from './richTextContent';
+
+// Long lines wrap, as in the panel's other code fields.
+const WRAPPED = [EditorView.lineWrapping];
 
 const CODE_REASON_TIPS: Readonly<Record<RichTextCodeReason, MessageKey>> = {
   expression: 'props.richText.codeExpression',
@@ -78,7 +82,7 @@ export function RichTextContentField(props: {
           html={decision.html}
           onWrite={(html) => {
             props.onSetHTML?.(html);
-            props.onSetNodes?.(richTextNodes(html, document));
+            props.onSetNodes?.(withoutLayoutSpace(richTextNodes(html, document)));
           }}
           onClose={() => setOpen(false)}
         />
@@ -141,8 +145,9 @@ function RichTextCode(props: { readonly source: string; readonly onSetSource: ((
   }, [props.source]);
   const { onSetSource } = props;
   return (
+    // The code's own field: the fill, radius and focus of the panel's other code fields (.expr-input).
     <div
-      className="props-rich-text-code"
+      className="props-rich-text-code expr-input"
       onFocus={() => {
         typing.current = true;
       }}
@@ -156,7 +161,15 @@ function RichTextCode(props: { readonly source: string; readonly onSetSource: ((
         }
       }}
     >
-      <CodeEditor value={draft} language="astro" chrome="minimal" {...(onSetSource === undefined ? {} : { onChange: (text: string) => setDraft(text) })} />
+      {/* A block's view: without the indent the page nests it at, which an edit writes back (codeIndentView.ts). */}
+      <CodeEditor
+        value={draft}
+        language="astro"
+        chrome="minimal"
+        indentation="block"
+        extensions={WRAPPED}
+        {...(onSetSource === undefined ? {} : { onChange: (text: string) => setDraft(text) })}
+      />
     </div>
   );
 }

@@ -51,6 +51,67 @@ export function richTextView(source: string | undefined, document: Document): Ri
   return { view: 'rich', html: text };
 }
 
+// Elements whose edges' whitespace is layout, and the ones that keep every space they hold.
+const LAYOUT_TAGS: ReadonlySet<string> = new Set([
+  'p',
+  'div',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'figure',
+  'figcaption',
+  'hr',
+  'img',
+  'video',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'td',
+  'th',
+  'caption',
+  'pre',
+]);
+
+/**
+ * Nodes without the whitespace that only lays the editor's HTML out: the line breaks and indents between blocks and at
+ * a block's edges (the HTML view's, or the page's own nesting), which the printer would write as blank lines and stray
+ * indents before laying the content out in the page's own indentation. A line break inside words is the space it shows
+ * as; a <pre> keeps its bytes.
+ */
+export function withoutLayoutSpace(nodes: readonly InlineNode[], inBlock = true, depth = 0): InlineNode[] {
+  assert(depth <= LIMITS.treeDepthMax, 'Rich text depth is bounded');
+  const layout = (node: InlineNode | undefined) => (node === undefined ? inBlock : node.kind === 'element' && LAYOUT_TAGS.has(node.name));
+  return nodes.flatMap((node, index): InlineNode[] => {
+    if (node.kind === 'element') {
+      if (node.name === 'pre' || node.name === 'textarea' || node.children === undefined) {
+        return [node];
+      }
+      return [{ ...node, children: withoutLayoutSpace(node.children, LAYOUT_TAGS.has(node.name), depth + 1) }];
+    }
+    if (node.kind !== 'text') {
+      return [node];
+    }
+    let value = node.value.replace(/[\t ]*\n\s*/g, '\n');
+    if (value.startsWith('\n') && layout(nodes[index - 1])) {
+      value = value.slice(1);
+    }
+    if (value.endsWith('\n') && layout(nodes[index + 1])) {
+      value = value.slice(0, -1);
+    }
+    value = value.replaceAll('\n', ' ');
+    return value === '' ? [] : [{ ...node, value }];
+  });
+}
+
 /** Tags that never hold children, written self-closing: the page model says so with `children: undefined`. */
 const VOID_TAGS: ReadonlySet<string> = new Set(['br', 'hr', 'img', 'source']);
 

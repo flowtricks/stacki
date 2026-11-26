@@ -236,10 +236,24 @@ function formatBlock(element: Element, depth: number): string[] {
   const indent = CODE_INDENT_UNIT.repeat(depth);
   const nested = [...element.children].some((child) => LINE_TAGS.has(child.localName));
   if (!nested || element.localName === 'pre' || depth >= RICH_TEXT_LIMITS.formatDepthMax) {
-    return [indent + element.outerHTML];
+    return [indent + hangingLines(element, indent)];
   }
   const open = element.outerHTML.slice(0, element.outerHTML.indexOf('>') + 1);
   return [indent + open, ...formatChildren(element, depth + 1), `${indent}</${element.localName}>`];
+}
+
+// A block's markup with its further lines indented under it, not by wherever the file nested them. Whitespace that
+// shows on the page (a <pre>, a <textarea>) is kept exactly.
+function hangingLines(element: Element, indent: string): string {
+  const markup = element.outerHTML;
+  if (element.localName === 'pre' || element.localName === 'textarea' || element.querySelector('pre, textarea') !== null) {
+    return markup;
+  }
+  const closing = `</${element.localName}>`;
+  return markup
+    .split(/\n[ \t]*/)
+    .map((line, index) => (index === 0 ? line : `${indent}${line === closing ? '' : CODE_INDENT_UNIT}${line}`))
+    .join('\n');
 }
 
 function serializeInline(node: ChildNode): string {
