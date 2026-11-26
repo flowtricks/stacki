@@ -62,6 +62,8 @@ interface PreviewPaneProps {
    * pane's viewport at every hover, selection and re-measure, never around the box the frame measures for it.
    */
   readonly canvasWholePath?: string | undefined;
+  /** Nodes the page outlines itself (the component canvas's frame boxes): no hover or selection outline is drawn. */
+  readonly unoutlined?: ((path: string) => boolean) | undefined;
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onEditImage?: PreviewRuntimeProps['onEditImage'];
@@ -273,6 +275,7 @@ function DesignPreview({
           scale={scale}
           viewport={{ w: sizing.viewport.width, h: sizing.viewport.height }}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
+          unoutlined={props.unoutlined}
           selPath={runtime.pendingSelection?.path ?? props.selPath}
           selPseudo={runtime.pendingSelection === undefined ? props.selPseudo : runtime.pendingSelection.pseudo}
           hoverPseudo={runtime.hoverPseudo}

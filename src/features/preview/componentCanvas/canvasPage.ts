@@ -281,10 +281,6 @@ function frameMarkup(frame: CanvasPageFrame, cell: { readonly row: number; reado
   if (frame.height !== 'hug') {
     style.push(`height: ${String(frame.height)}px`);
     flags.push('data-fixed-height');
-    if (frame.width !== 'hug') {
-      // Lazy offscreen rendering needs a size to stand in with; a fixed frame knows its own.
-      style.push(`contain-intrinsic-size: ${String(frame.width)}px ${String(frame.height)}px`);
-    }
   }
   if (frame.background === undefined) {
     flags.push('data-transparent');

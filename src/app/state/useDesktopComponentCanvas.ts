@@ -255,7 +255,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       selectFrame: (key) => {
         const current = stateRef.current;
         if (current.kind === 'open' && current.layout.frames.some((frame) => frame.key === key)) {
-          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame' });
+          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame', picked: 'component' });
           // On the canvas page the frame's instance is what is selected; inside an instance the selection stays.
           const instance = current.instances.find((candidate) => candidate.key === key);
           const view = shell.current;
@@ -466,6 +466,7 @@ async function openCanvas(
         instances,
         root,
         subject: 'frame',
+        picked: 'component',
       },
       origin,
       base: stored.source,
@@ -681,6 +682,7 @@ function narrowerFrame(instances: readonly CanvasInstance[], key: string): Canva
 function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.SetStateAction<CanvasState>>, cover: React.MutableRefObject<number>): void {
   const id = state.kind === 'open' ? state.id : undefined;
   const frame = state.kind === 'open' ? state.frame : undefined;
+  const box = state.kind === 'open' && state.subject === 'frame' && state.picked === 'box';
   useEffect(() => {
     if (id === undefined) {
       return undefined;
@@ -699,7 +701,14 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
         }
         setState((current) =>
           current.kind === 'open' && current.layout.frames.some((candidate) => candidate.key === key)
-            ? { ...current, frame: key, scope: scopeAfterSelect(current, key), framePanel: message.chrome ? 'shown' : current.framePanel }
+            ? {
+                ...current,
+                frame: key,
+                scope: scopeAfterSelect(current, key),
+                subject: 'frame',
+                picked: message.chrome ? 'box' : 'component',
+                framePanel: message.chrome ? 'shown' : current.framePanel,
+              }
             : current,
         );
       } else if (message.event === 'view' && message.scale !== undefined) {
@@ -709,7 +718,7 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
       } else if (message.event === 'ready') {
         setState((current) => {
           if (current.kind === 'open') {
-            postToCanvas(current.id, { command: 'select', frame: current.frame });
+            postToCanvas(current.id, selectionOf(current));
             // A page that loaded after the popover opened has not heard how much of it the popover covers.
             postToCanvas(current.id, { command: 'inset', right: cover.current / previewScale() });
           }
@@ -722,9 +731,13 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
   }, [cover, id, setState]);
   useEffect(() => {
     if (id !== undefined && frame !== undefined) {
-      postToCanvas(id, { command: 'select', frame });
+      postToCanvas(id, { command: 'select', frame, box });
     }
-  }, [frame, id]);
+  }, [box, frame, id]);
+}
+
+function selectionOf(current: CanvasOpen): Readonly<Record<string, unknown>> {
+  return { command: 'select', frame: current.frame, box: current.subject === 'frame' && current.picked === 'box' };
 }
 
 function fromPreview(source: unknown): boolean {
@@ -831,7 +844,7 @@ function useFrameFollowsEditor(state: CanvasState, app: ShellView, setState: Rea
     const key = instance.key;
     setState((current) =>
       current.kind === 'open' && (current.frame !== key || current.subject !== 'frame') && current.layout.frames.some((frame) => frame.key === key)
-        ? { ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame' }
+        ? { ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame', picked: current.frame === key ? current.picked : 'component' }
         : current,
     );
   }, [followed, inside, instances, model, open, setSelectedId, setState]);

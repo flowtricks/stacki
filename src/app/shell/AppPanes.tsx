@@ -68,7 +68,13 @@ import { NavigatorDropLine, navigatorDropPaths } from '../../features/preview/Ca
 import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { pressWasForEditor, type CanvasPress } from '../../features/preview/canvasEditorPress';
-import { canvasInstanceAt, canvasRootPath, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
+import {
+  canvasInstanceAt,
+  canvasRootPath,
+  isCanvasFrameBox,
+  isComponentCanvasPage,
+  useComponentCanvas,
+} from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
 import { CanvasScopeControl } from '../../features/preview/componentCanvas/CanvasScopeControl';
@@ -98,6 +104,9 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const pinPaths = pins.trackPaths;
   const trackPaths = useMemo(() => [...appOverlayPaths, ...pinPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, pinPaths, dropKey]);
   const appOverlays = appOverlayLayer(app);
+  // A selected frame box on the component canvas is outlined by the canvas page itself: the editor draws no outline.
+  const canvasState = useComponentCanvas()?.state;
+  const frameBoxPicked = atCanvasPage(app) && canvasState?.kind === 'open' && canvasState.subject === 'frame' && canvasState.picked === 'box';
   return (
     <>
       <PreviewPane
@@ -129,7 +138,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
           void app.startPreview(app.project.path);
         }}
         pathScope={app.editedRel ? `${app.editedRel}|` : ''}
-        selPath={app.pathFor(app.selectedId)}
+        selPath={frameBoxPicked ? undefined : app.pathFor(app.selectedId)}
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
         navHoverPseudo={hoverPseudo}
@@ -150,7 +159,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
         onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
-        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath, canvasWholePath: canvasRootPath() } : {})}
+        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath, canvasWholePath: canvasRootPath(), unoutlined: isCanvasFrameBox } : {})}
         onSelectedClasses={app.receiveClasses}
         onRenderedPaths={app.setRenderedPaths}
         onNodeStates={app.setNodeStates}
@@ -240,7 +249,7 @@ function canvasContextPosition(app: ShellView, framePath: string | undefined, po
 // On the component canvas's page, the node a canvas path stands for: a frame's instance for anything in its frame, the
 // page's root (<html>) for the space between frames; a path in another file's namespace is left as it is.
 function canvasPageNodePath(path: string): string {
-  if (path.includes('|')) {
+  if (path.includes('|') || isCanvasFrameBox(path)) {
     return path;
   }
   return canvasInstanceAt(path)?.path ?? canvasRootPath() ?? path;

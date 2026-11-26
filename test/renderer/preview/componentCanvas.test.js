@@ -109,7 +109,7 @@ test('the canvas page parses, imports the component once, and writes each frame'
   assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
   assert.match(
     source,
-    /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; contain-intrinsic-size: 320px 200px !important; background: var\(--swatch-light\) !important"/,
+    /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; background: var\(--swatch-light\) !important"/,
     'the frame sits in its row and column, at its size and background',
   );
   assert.ok(source.includes('label={"Back \\"\\u003cthere\\u003e\\""}'), 'text that markup would escape is a string expression');
@@ -249,7 +249,13 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   const themed = chrome.chromeStyles('dark', 'var(--background)');
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
-  assert.match(plain, /stacki-frame\[data-frame\]::after \{[^}]*visibility: hidden !important;/, 'a hidden copy of the caption makes the frame as wide as it');
+  // A frame is a box with room around its component and a blue outline, faint at rest and full when the box is picked.
+  assert.match(plain, /stacki-frame\[data-frame\] \{[^}]*padding: 32px !important;[^}]*outline: 1px solid rgba\(47, 128, 255, 0\.5\) !important;/);
+  assert.doesNotMatch(plain, /content-visibility/, 'paint containment would cut off the caption above a fixed frame');
+  assert.match(plain, /stacki-frame\[data-frame\]\[data-box-selected\] \{ outline: 2px solid #2f80ff !important; outline-offset: -2px !important; \}/);
+  assert.match(plain, /stacki-frame\[data-frame\]:hover:not\(:has\(> :hover\)\)/, 'stronger under the pointer on its own padding only');
+  assert.match(chrome.chromeScript(ID), /outline-width: ' \+ thin \+ 'px/, 'outlines keep their width on screen at any zoom');
+  assert.match(chrome.chromeScript(ID), /margin-inline-end: ' \+ more \+ 'px/, 'a long caption’s room is beside the frame, not inside it');
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');

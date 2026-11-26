@@ -31,6 +31,11 @@ export interface CanvasOpen {
   readonly root: string;
   /** What Frame settings and the Settings panel speak of: a frame (`frame`), or the canvas root. */
   readonly subject: 'frame' | 'root';
+  /**
+   * What the selected frame has selected on the canvas: its box (a press on its padding or caption: the frame is outlined
+   * and the editor draws no outline of the component's) or its component. The panels show the frame either way.
+   */
+  readonly picked: 'box' | 'component';
 }
 
 /** One frame's instance of the component on the canvas page. */
@@ -151,6 +156,11 @@ export function canvasRootPath(): string | undefined {
 /** The instance at exactly `path` in the canvas page, if one is. */
 export function canvasInstanceOf(path: string | undefined): CanvasInstance | undefined {
   return noted.kind === 'open' && path !== undefined ? noted.instances.find((instance) => instance.path === path) : undefined;
+}
+
+/** Whether `path` is a frame's own element on the canvas page: its box, which the page itself outlines. */
+export function isCanvasFrameBox(path: string | undefined): boolean {
+  return noted.kind === 'open' && path !== undefined && noted.instances.some((instance) => framePathOf(instance.path) === path);
 }
 
 // An instance sits directly in its frame (canvasPage.ts frameMarkup).
