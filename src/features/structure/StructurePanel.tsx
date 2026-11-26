@@ -748,7 +748,7 @@ function NavigatorBody({
   // they catch the pointer only while a drag is over the navigator. Otherwise
   // a click on a row's edge would land on a gap and select nothing.
   const [bodyDrag, setBodyDrag] = useState<BodyDrag>('idle');
-  const search = useNavigatorSearch(nodes, state.query, { idle: canvasDrag === undefined && bodyDrag === 'idle' });
+  const search = useNavigatorSearch(nodes, state.query, { idle: canvasDrag === undefined && bodyDrag === 'idle', rowLabels: props.rowLabels });
   // Searched, the tree is a copy holding the matches, drawn open so no match hides in a folded row; the user's own folds are untouched.
   useClearWhenSelectionHidden(props.selectedId, search, state);
   const context = search.filtering ? { ...treeContext, isCollapsed: () => false, highlightWords: search.words, searchSnippets: search.snippets } : treeContext;
@@ -814,9 +814,13 @@ interface NavigatorSearch {
 // The index is built once per tree and only once a query exists; each keystroke is then one walk of it.
 const NO_SNIPPETS: ReadonlyMap<string, string> = new Map();
 
-function useNavigatorSearch(nodes: readonly NavigatorNode[], query: string, { idle }: { readonly idle: boolean }): NavigatorSearch {
+function useNavigatorSearch(
+  nodes: readonly NavigatorNode[],
+  query: string,
+  { idle, rowLabels }: { readonly idle: boolean; readonly rowLabels: ReadonlyMap<string, string> | undefined },
+): NavigatorSearch {
   const searching = isSearching(query);
-  const index = useMemo(() => (searching ? buildNavigatorIndex(nodes) : undefined), [nodes, searching]);
+  const index = useMemo(() => (searching ? buildNavigatorIndex(nodes, rowLabels) : undefined), [nodes, rowLabels, searching]);
   const filtering = searching && idle;
   const result = useMemo(() => (filtering && index !== undefined ? searchNavigator(nodes, index, query) : undefined), [filtering, index, nodes, query]);
   const words = useMemo(() => navigatorHighlightWords(query), [query]);

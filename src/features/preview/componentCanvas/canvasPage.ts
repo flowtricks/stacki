@@ -31,7 +31,7 @@ import {
 import type { FrameLength } from '../../../../shared/properties/componentCanvas';
 import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 import { chromeScript, chromeStyles } from './canvasChrome';
-import type { CanvasInstance } from './componentCanvasSession';
+import type { CanvasBox, CanvasInstance } from './componentCanvasSession';
 
 /** A group box as the page draws it (canvasGroups.ts), its header already in words. */
 export type CanvasPageItem =
@@ -125,21 +125,32 @@ export function canvasInstancesOf(nodes: readonly CanvasTreeNode[]): readonly Ca
   return frameInstancesOf(nodes);
 }
 
-/** The canvas page's root (its <html>, by path) and each frame's instance in it. */
+/** The canvas page's root (its <html>, by path), each frame's instance in it, and the boxes (frames and groups) around them. */
 export interface CanvasTree {
   readonly root: string;
   readonly instances: readonly CanvasInstance[];
+  readonly boxes: readonly CanvasBox[];
 }
 
 /** The parsed canvas page's root and instances; undefined root throws, since the page always writes one <html>. */
 export function canvasTreeOf(nodes: readonly CanvasTreeNode[]): CanvasTree {
   const rootIndex = nodes.findIndex((node) => node.kind === 'element' && node.name === 'html');
   assert(rootIndex >= 0, 'A canvas page has an <html> root');
-  return { root: String(rootIndex), instances: frameInstancesOf(nodes) };
+  const found = boxesOf(nodes);
+  return { root: String(rootIndex), instances: found.instances, boxes: found.boxes };
 }
 
+/** The page's tag for a frame's box and for a group's: real elements of the page, which the editor selects as divs. */
+export const CANVAS_FRAME_TAG = 'stacki-frame';
+export const CANVAS_GROUP_TAG = 'stacki-group';
+
 function frameInstancesOf(nodes: readonly CanvasTreeNode[]): readonly CanvasInstance[] {
+  return boxesOf(nodes).instances;
+}
+
+function boxesOf(nodes: readonly CanvasTreeNode[]): { readonly instances: readonly CanvasInstance[]; readonly boxes: readonly CanvasBox[] } {
   const found: CanvasInstance[] = [];
+  const boxes: CanvasBox[] = [];
   // Depth first, in the page's own order, so the instances come in the order their frames are drawn however deep the
   // boxes around them are.
   const pending: { readonly node: CanvasTreeNode; readonly path: string }[] = nodes.map((node, index) => ({ node, path: String(index) }));
@@ -148,26 +159,49 @@ function frameInstancesOf(nodes: readonly CanvasTreeNode[]): readonly CanvasInst
     if (next === undefined) {
       break;
     }
-    const instance = next.node.kind === 'element' && next.node.name === 'stacki-frame' ? frameInstance(next.node, next.path) : undefined;
+    const element = next.node.kind === 'element' ? next.node.name : undefined;
+    const instance = element === CANVAS_FRAME_TAG ? frameInstance(next.node, next.path) : undefined;
+    if (element === CANVAS_GROUP_TAG) {
+      boxes.push({ kind: 'group', key: keyAttribute(next.node, 'data-group'), path: next.path, label: labelAttribute(next.node) });
+    }
     if (instance === undefined) {
       pending.unshift(...(next.node.children ?? []).map((child, index) => ({ node: child, path: `${next.path}.${String(index)}` })));
     } else {
+      boxes.push({ kind: 'frame', key: instance.key, path: next.path, label: labelAttribute(next.node) });
       found.push(instance);
     }
   }
   assert(found.length <= CANVAS_LIMITS.framesMax, 'A canvas page holds a bounded number of frames');
-  return found;
+  assert(boxes.length <= CANVAS_LIMITS.framesMax * (CANVAS_LIMITS.splitPropsMax + 1), 'A canvas page holds a bounded number of boxes');
+  return { instances: found, boxes };
 }
 
 function frameInstance(frame: CanvasTreeNode, path: string): CanvasInstance | undefined {
-  const attribute = frame.props?.['data-frame'];
-  const key: unknown = attribute?.type === 'expr' && attribute.value !== undefined ? JSON.parse(attribute.value) : undefined;
-  assert(typeof key === 'string', 'A canvas frame names its frame');
+  const key = keyAttribute(frame, 'data-frame');
   const instanceIndex = (frame.children ?? []).findIndex((child) => child.kind === 'component');
   if (instanceIndex < 0) {
     return undefined;
   }
   return { key, path: `${path}.${String(instanceIndex)}` };
+}
+
+// A box's key, written as an expression holding a JSON string (frameMarkup, worldMarkup).
+function keyAttribute(node: CanvasTreeNode, name: 'data-frame' | 'data-group'): string {
+  const attribute = node.props?.[name];
+  const key: unknown = attribute?.type === 'expr' && attribute.value !== undefined ? JSON.parse(attribute.value) : undefined;
+  assert(typeof key === 'string', name === 'data-frame' ? 'A canvas frame names its frame' : 'A canvas group names its group');
+  return key;
+}
+
+/** A box's caption or header, as the page wrote it (an expression holding a JSON string); `` where it wrote none. */
+export function canvasBoxLabel(node: Pick<CanvasTreeNode, 'props'>): string {
+  return labelAttribute(node);
+}
+
+function labelAttribute(node: Pick<CanvasTreeNode, 'props'>): string {
+  const attribute = node.props?.['data-label'];
+  const label: unknown = attribute?.type === 'expr' && attribute.value !== undefined ? JSON.parse(attribute.value) : undefined;
+  return typeof label === 'string' ? label : '';
 }
 
 // The root's classes as literal array items: componentCanvas.ts canvasRootClasses admitted only selector-safe names.
@@ -294,18 +328,16 @@ function worldMarkup(input: CanvasPageInput, frames: ReadonlyMap<string, Written
       const heading = depth === 0 && items.some((other) => other.kind === 'group');
       return frameMarkup({ ...held.frame, label: item.caption }, held.instance, { heading });
     }
-    // Unmarked: a box is the canvas's own drawing, never an element anyone can point at; a press on it is the canvas's.
+    // A real element of the page, as a frame is: the editor selects it as a div, and the Navigator lists it as one.
     const children = item.children.map((child) => write(child, depth + 1)).join('\n');
-    const named = `data-group="${attributeText(item.key)}" data-label="${attributeText(item.header)}" data-depth="${String(depth)}"`;
-    return `<stacki-group ${UNMARKED} ${named}>\n${children}\n</stacki-group>`;
+    const named = `data-group={${escapedLiteral(item.key)}} data-label={${escapedLiteral(item.header)}} data-depth="${String(depth)}"`;
+    return `<${CANVAS_GROUP_TAG} ${named}>\n${children}\n</${CANVAS_GROUP_TAG}>`;
   };
   const html = items.map((item) => write(item, 0)).join('\n');
   assert(written.size === frames.size, 'Every frame is drawn once');
   const stacked = items.some((item) => item.kind === 'group') || input.frames.some((frame) => frame.row > 0);
   return { html, flow: stacked ? 'column' : 'row' };
 }
-
-const attributeText = (text: string): string => encodeText(text).replaceAll('"', '&quot;');
 
 function frameMarkup(frame: CanvasPageFrame, instance: string, drawn: { readonly heading: boolean }): string {
   const style: string[] = [];
@@ -333,10 +365,10 @@ function frameMarkup(frame: CanvasPageFrame, instance: string, drawn: { readonly
   const styleAttribute = style.length === 0 ? '' : ` style="${style.map((declaration) => `${declaration} !important`).join('; ')}"`;
   const flagAttributes = flags.map((flag) => ' ' + flag).join('');
   // The caption is the frame's own (`data-label`, drawn by its ::before), not an element anyone can point at. The frame
-  // itself is marked: a press on its caption or around its instance names it, which the editor reads as the instance
-  // (componentCanvasSession.ts canvasInstanceAt).
-  const label = attributeText(frame.label);
-  return `<stacki-frame data-frame={${key}} data-label="${label}"${flagAttributes}${styleAttribute}>${instance}</stacki-frame>`;
+  // itself is marked: a press on its caption or around its instance selects it, as a div (componentCanvasSession.ts
+  // canvasBoxOf). The label is an expression, so the page's parser hands it back exactly as written (canvasBoxLabel).
+  const label = escapedLiteral(frame.label);
+  return `<${CANVAS_FRAME_TAG} data-frame={${key}} data-label={${label}}${flagAttributes}${styleAttribute}>${instance}</${CANVAS_FRAME_TAG}>`;
 }
 
 // One import per component the frames use, under a name that cannot meet the page's own words (its constants are

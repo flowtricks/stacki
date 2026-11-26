@@ -65,7 +65,6 @@ interface PreviewOverlaysProps {
   readonly viewport?: { readonly w: number; readonly h: number } | undefined;
   readonly spacingHover?: SpacingHover | undefined;
   readonly selPath: string | undefined;
-  readonly unoutlined?: ((path: string) => boolean) | undefined;
   readonly selOcc: number | undefined;
   readonly hoverPath: string | undefined;
   readonly hoverOcc: number | undefined;
@@ -187,10 +186,9 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     highlight === undefined && props.hoverPath && props.hoverPseudo === undefined && !targets.some((target) => target.slot === 'hover')
       ? props.overlayInfo?.(props.hoverPath)?.hostContent === true
       : false;
-  const candidates: readonly OutlineTarget[] = slotHover
+  const outlines: readonly OutlineTarget[] = slotHover
     ? [{ path: props.hoverPath ?? '', slot: 'hover', type: 'hover', occ: props.hoverOcc, pseudo: undefined }, ...targets]
     : targets;
-  const outlines = candidates.filter((target) => props.unoutlined?.(target.path) !== true);
   return outlines.flatMap((outline) => {
     if (outline.pseudo !== undefined) {
       // Inside a component (an instance, or markup rendered by a component file) the pseudo-element reads as the component's: green.

@@ -27,8 +27,9 @@ import {
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { nodeAtPath } from '../../editor/editorTree';
 import type { EditorNode } from '../../editor/pageView';
-import { trailOf } from '../model/pageGestures';
+import { schemaFor, trailOf } from '../model/pageGestures';
 import {
+  canvasBoxOf,
   canvasInstanceOf,
   COMPONENT_SCOPE,
   isCanvasRoot,
@@ -42,8 +43,8 @@ import { contentFieldNodes, contentHTML, frameEditOf, framePickEdit, framePanelV
 import type { PropValues } from '../../features/props/propRules';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { richTextNodes, richTextView } from '../../features/props/richTextContent';
-import { groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
-import { frameLabel, partLabel } from '../../features/preview/componentCanvas/frameLabel';
+import { CANVAS_FRAME_TAG, CANVAS_GROUP_TAG, canvasBoxLabel } from '../../features/preview/componentCanvas/canvasPage';
+import { partLabel } from '../../features/preview/componentCanvas/frameLabel';
 import type { PropFieldAction, PropFieldExtras, PropFieldProvenance } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -53,51 +54,52 @@ import type { ShellView } from '../App';
 import type { StructurePageState } from '../../features/structure/structureModel';
 
 /**
- * The Navigator on the canvas page: the canvas root (the page's <html>), and under it the canvas as it is grouped, one
- * row per box and one per frame (its instance), each named with what the rows above it do not say. A box row folds;
- * it is not an element, so it selects nothing (`groups`).
+ * The Navigator on the canvas page: the canvas root (the page's <html>), and under it the boxes the canvas draws, as
+ * the page holds them: a div per group, named with its heading, and a div per frame, named with its caption, holding the
+ * frame's instance (closed, under the component's own name). The rows are the page's own nodes, so selecting, hovering,
+ * the arrow keys and revealing work on them as on any page; only the page's scaffolding (its <body>, its styles and
+ * script) is left out, and the boxes are listed as the divs they stand for.
  */
 export interface CanvasNavigatorView {
   readonly pageState: StructurePageState;
   readonly rowLabels: ReadonlyMap<string, string>;
-  readonly groups: ReadonlySet<string>;
+  /** The boxes' node ids: their captions are drawn with ::before, which is the canvas's, not a layer of theirs. */
+  readonly boxIds: ReadonlySet<string>;
 }
 
-export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasControl | undefined, translate: Translator): CanvasNavigatorView | undefined {
+export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasControl | undefined): CanvasNavigatorView | undefined {
   const state = canvas?.state;
   const pageState = app.pageState;
   if (state?.kind !== 'open' || pageState?.editable !== true || !atCanvasPage(app)) {
     return undefined;
   }
   const labels = new Map<string, string>();
-  const groups = new Set<string>();
-  const paths = new Map(state.instances.map((instance) => [instance.key, instance.path]));
-  const rows = (items: readonly CanvasTreeItem[], depth: number): EditorNode[] => {
+  const boxIds = new Set<string>();
+  const rows = (children: readonly EditorNode[], depth: number): EditorNode[] => {
     assert(depth <= CANVAS_LIMITS.splitPropsMax, 'The canvas Navigator nests no deeper than the split');
-    return items.flatMap((item): EditorNode[] => {
-      if (item.kind === 'group') {
-        const children = rows(item.children, depth + 1);
-        const id = panelNodeId(`${state.component.file}|group|${item.key}`);
-        labels.set(id, frameLabel({ parts: item.header }, state.component, translate));
-        groups.add(id);
-        return [{ kind: 'element', id, name: 'div', props: {}, children }];
-      }
-      const path = paths.get(item.key);
-      const node = path === undefined ? undefined : nodeAtPath(pageState.model.nodes, trailOf(path));
-      if (node?.kind !== 'component') {
+    return children.flatMap((child): EditorNode[] => {
+      if (child.kind !== 'element' || (child.name !== CANVAS_GROUP_TAG && child.name !== CANVAS_FRAME_TAG)) {
         return [];
       }
-      labels.set(node.id, frameLabel({ parts: item.caption }, state.component, translate));
+      labels.set(child.id, canvasBoxLabel(child));
+      boxIds.add(child.id);
       // Closed, as an instance on a page is: what is inside it is opened from the row, not edited in the canvas page.
-      return [{ ...node, children: undefined }];
+      const held: EditorNode[] =
+        child.name === CANVAS_GROUP_TAG
+          ? rows(child.children ?? [], depth + 1)
+          : (child.children ?? []).flatMap((node): EditorNode[] => (node.kind === 'component' ? [{ ...node, children: undefined }] : []));
+      // Listed as the div it stands for: its generated attributes (key, label, size) are the canvas's, not words to search.
+      return [{ ...child, name: 'div', props: {}, attrOrder: [], children: held }];
     });
   };
-  const nodes = rows(groupFrames(state.layout.frames), 0);
   const root = nodeAtPath(pageState.model.nodes, trailOf(state.root));
   assert(root?.kind === 'element', 'The canvas root is the page’s <html> element');
-  // The root's own children are the canvas's chrome; in the Navigator they are the boxes and frames.
+  const body = (root.children ?? []).find((node) => node.kind === 'element' && node.name === 'body');
+  assert(body?.kind === 'element', 'The canvas page has a <body>');
   labels.set(root.id, 'html'); // i18n-ignore: the element's own tag name, as every element row is named.
-  return { pageState: { ...pageState, model: { ...pageState.model, nodes: [{ ...root, children: nodes }] } }, rowLabels: labels, groups };
+  const nodes = rows(body.children ?? [], 0);
+  assert(nodes.length > 0, 'The canvas Navigator lists the canvas’s boxes');
+  return { pageState: { ...pageState, model: { ...pageState.model, nodes: [{ ...root, children: nodes }] } }, rowLabels: labels, boxIds };
 }
 
 /**
@@ -105,7 +107,13 @@ export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasContr
  * frame's preview values; for the canvas root (<html>), its one field is class, the root's classes at the root's scope.
  */
 export type CanvasInstanceSettings =
-  | { readonly kind: 'instance'; readonly extras: PropFieldExtras; readonly panel: CanvasFramePanel }
+  | {
+      readonly kind: 'instance';
+      /** The frame's instance on the page: what the panel shows, whether the instance, its box or a group is selected. */
+      readonly node: EditorNode;
+      readonly extras: PropFieldExtras;
+      readonly panel: CanvasFramePanel;
+    }
   | { readonly kind: 'root'; readonly classes: readonly string[]; readonly onSetProp: (name: string, value: Attr | undefined) => void };
 
 /** The settings panel's values and writers for a frame, in the panel's own props (propsPanelTypes.ts). */
@@ -132,15 +140,17 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
   if (isCanvasRoot(path)) {
     return rootSettings(canvas, state);
   }
-  const instance = canvasInstanceOf(path);
-  const frame = instance === undefined ? undefined : state.layout.frames.find((candidate) => candidate.key === instance.key);
-  if (frame === undefined) {
+  const frame = selectedFrame(state, path);
+  const instance = frame === undefined ? undefined : state.instances.find((candidate) => candidate.key === frame.key);
+  const node = instance === undefined ? undefined : nodeAtPath(app.model?.nodes ?? [], trailOf(instance.path));
+  if (frame === undefined || node?.kind !== 'component') {
     return undefined;
   }
   // Splitting changes the canvas settings everyone shares, which only a role that may edit components does.
   const mayEdit = can(role, 'component:edit');
   return {
     kind: 'instance',
+    node,
     extras: (name) => {
       const candidate = state.layout.candidates.find((entry) => entry.name === name);
       const split = splitPartOf(frame, name) !== undefined;
@@ -172,7 +182,8 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
   const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? frame.key : state.scope;
   const id = panelNodeId(`${state.id}|${frame.key}|${scope}`);
   const values = framePanelValues({
-    schema: app.selectedSchema,
+    // The component's own fields, whether its instance, its box or a group around it is selected.
+    schema: schemaFor(app.scan.components.find((entry) => entry.path.replaceAll('\\', '/').endsWith('/' + state.component.file))),
     rest: state.component.rest === true,
     settings: state.settings.components[state.component.file],
     frame,
@@ -357,6 +368,21 @@ function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen): Canvas
       canvas.editRootClasses(text === '' ? undefined : [...new Set(text.split(/\s+/))]);
     },
   };
+}
+
+// The frame the Settings panel shows for a selection on the canvas page, read from the selection itself so the panel
+// changes in the same render as the selection: an instance's frame, a frame box's own, or for a group box the selected
+// frame when it is in the group (else the group's first).
+function selectedFrame(state: CanvasOpen, path: string | undefined): ModelFrame | undefined {
+  const box = canvasBoxOf(path);
+  const key = box === undefined ? canvasInstanceOf(path)?.key : box.kind === 'frame' ? box.key : groupFrame(state, box.key);
+  return key === undefined ? undefined : state.layout.frames.find((candidate) => candidate.key === key);
+}
+
+function groupFrame(state: CanvasOpen, group: string): string | undefined {
+  const pairs = keyPairs(group);
+  const holds = (key: string): boolean => pairs.every((pair) => keyPairs(key).includes(pair));
+  return holds(state.frame) ? state.frame : state.layout.frames.find((candidate) => holds(candidate.key))?.key;
 }
 
 // Whether the open file is the component canvas's page itself, not an instance opened inside it.

@@ -84,7 +84,7 @@ export interface NavigatorSearchResult {
 }
 
 /** The index of a tree: one walk, folding each node's text once. */
-export function buildNavigatorIndex(nodes: readonly NavigatorNode[]): NavigatorSearchIndex {
+export function buildNavigatorIndex(nodes: readonly NavigatorNode[], rowLabels?: ReadonlyMap<string, string>): NavigatorSearchIndex {
   const index = new Map<string, NavigatorIndexEntry>();
   const stack: { readonly node: NavigatorNode; readonly depth: number }[] = nodes.map((node) => ({ node, depth: 0 }));
   // Every pass pops one node and pushes its children, so the walk visits each node once.
@@ -92,7 +92,7 @@ export function buildNavigatorIndex(nodes: readonly NavigatorNode[]): NavigatorS
     const entry = stack.pop();
     assert(entry !== undefined, 'The stack had a node');
     assert(entry.depth <= LIMITS.treeDepthMax, 'The Navigator index walks no deeper than a page tree');
-    index.set(entry.node.id, entryOf(entry.node));
+    index.set(entry.node.id, entryOf(entry.node, rowLabels?.get(entry.node.id)));
     for (const child of childrenOf(entry.node)) {
       stack.push({ node: child, depth: entry.depth + 1 });
     }
@@ -265,7 +265,8 @@ function childrenOf(node: NavigatorNode): readonly NavigatorNode[] {
 // words its source holds for it: direct text, string props and attributes (alt, title, label, heading="…"),
 // and string literals in set:html or {"…"}. A closed component is searched by what the page holds for it, which
 // is its slot text and its string props: the words of its own file are not part of this page.
-function entryOf(node: NavigatorNode): NavigatorIndexEntry {
+// A row's label where the tree names it (StructurePanel rowLabels: the component canvas's boxes) is a name too.
+function entryOf(node: NavigatorNode, label: string | undefined): NavigatorIndexEntry {
   const classes: string[] = [];
   const attributes = new Map<string, string | undefined>();
   let id = '';
@@ -288,7 +289,7 @@ function entryOf(node: NavigatorNode): NavigatorIndexEntry {
     comment = foldSearchText(node.value);
   }
   const content = contentOf(node);
-  const names = foldSearchText(nodeText(node, tag)) + ' ' + classes.join(' ') + ' ' + id;
+  const names = foldSearchText(nodeText(node, tag)) + ' ' + classes.join(' ') + ' ' + id + (label === undefined ? '' : ' ' + foldSearchText(label));
   const text = names + (comment === undefined ? '' : ' ' + comment) + ' ' + foldSearchText(content);
   return { text, names, content, tag, classes, id, attributes, comment };
 }

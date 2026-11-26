@@ -431,3 +431,13 @@ test('5,000 content-rich nodes searched by content cost no more than the same wo
   });
   assert.ok(largeTime <= smallTime * 6, `${largeTime} ns vs ${smallTime} ns`);
 });
+
+test('a row named by the tree (the component canvas’s boxes) is found by that name', () => {
+  const inner = element('div', {});
+  const box = element('div', {}, [inner]);
+  const nodes = [box];
+  const labels = new Map([[box.id, 'variant: play']]);
+  const found = search.searchNavigator(nodes, search.buildNavigatorIndex(nodes, labels), 'play');
+  assert.deepEqual(flatten(found.nodes), [box.id], 'the named row matches, its unnamed child does not');
+  assert.equal(run(nodes, 'play').matchCount, 0, 'without the name nothing says play');
+});

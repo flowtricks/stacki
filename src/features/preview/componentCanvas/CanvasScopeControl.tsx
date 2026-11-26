@@ -1,7 +1,7 @@
 // Where the next edit of a frame goes: this frame, every frame of one split value, or every frame. One setting, drawn
 // at the top of the Settings panel and in Frame settings (the same state, so the two always agree): prop values, slot
 // content, size and background all follow it. Selecting another frame, or opening a canvas, puts it back on the frame.
-import { frameKey } from '../../../../shared/properties/componentCanvas';
+import { frameKey, keyPairs } from '../../../../shared/properties/componentCanvas';
 import { assert } from '../../../../shared/core/assert';
 import SegmentedControl from '../../../ui/SegmentedControl';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
@@ -18,10 +18,24 @@ export interface CanvasScope {
   readonly about?: string;
 }
 
-/** The scopes a frame's edits can go to, narrowest first; a frame that is also every frame has one. */
-export function frameScopes(frame: ModelFrame, translate: Translator): readonly CanvasScope[] {
+/**
+ * The scopes a frame's edits can go to, narrowest first; a frame that is also every frame has one. `group` is the key of
+ * a group box selected around the frame (several split values at once), offered after the frame's own.
+ */
+export function frameScopes(frame: ModelFrame, translate: Translator, group?: string): readonly CanvasScope[] {
+  const pairs = group === undefined ? [] : keyPairs(group);
+  const grouped = frame.parts.filter((part) => pairs.includes(frameKey([part])));
   const scopes: readonly CanvasScope[] = [
     { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
+    ...(group === undefined || grouped.length < 2 || group === frame.key
+      ? []
+      : [
+          {
+            value: group,
+            label: grouped.map((part) => (part.value.kind === 'unset' ? translate('componentCanvas.frame.unset') : String(part.value.value))).join(' · '),
+            about: translate('componentCanvas.panel.scope.part', { part: grouped.map((part) => partLabel(part, translate)).join(' · ') }),
+          },
+        ]),
     ...frame.parts.map((part) => ({
       value: frameKey([part]),
       // The value alone fits the panel beside the other choices; the tooltip says the whole of it.
@@ -41,7 +55,7 @@ export function CanvasScopeControl({ canvas, state }: { readonly canvas: Compone
   if (frame === undefined) {
     return undefined;
   }
-  const scopes = frameScopes(frame, translate);
+  const scopes = frameScopes(frame, translate, state.subject === 'frame' && state.picked.kind === 'group' ? state.picked.key : undefined);
   if (scopes.length < 2) {
     return undefined;
   }

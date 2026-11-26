@@ -27,15 +27,30 @@ export interface CanvasOpen {
   readonly defaults: ComponentRecipe;
   /** Each frame's instance on the canvas page, by its path in the page's tree: what the navigator lists and a click selects. */
   readonly instances: readonly CanvasInstance[];
+  /** The frames' boxes and the groups around them, by path: real elements of the page, selected and listed as divs. */
+  readonly boxes: readonly CanvasBox[];
   /** The canvas page's root (its <html>) by path: the canvas itself, selected by a click between frames. */
   readonly root: string;
   /** What Frame settings and the Settings panel speak of: a frame (`frame`), or the canvas root. */
   readonly subject: 'frame' | 'root';
   /**
-   * What the selected frame has selected on the canvas: its box (a press on its padding or caption: the frame is outlined
-   * and the editor draws no outline of the component's) or its component. The panels show the frame either way.
+   * What is selected on the canvas: the selected frame's component, its box (a press on its padding or caption), or a
+   * group box around it (then the scope is that group's). The panels show the frame in every case.
    */
-  readonly picked: 'box' | 'component';
+  readonly picked: CanvasPick;
+}
+
+/** What is selected on the canvas page while a frame is the subject (CanvasOpen.picked). */
+export type CanvasPick = { readonly kind: 'component' } | { readonly kind: 'box' } | { readonly kind: 'group'; readonly key: string };
+
+/** A box on the canvas page: a frame's (around its instance) or a group's (around the frames that share its values). */
+export interface CanvasBox {
+  readonly kind: 'frame' | 'group';
+  /** A frame's key, or the pairs every frame in the group shares (a frame key too). */
+  readonly key: string;
+  readonly path: string;
+  /** Its caption or header, as the canvas draws it: the name its Navigator row and its tag show. */
+  readonly label: string;
 }
 
 /** One frame's instance of the component on the canvas page. */
@@ -157,9 +172,9 @@ export function canvasInstanceOf(path: string | undefined): CanvasInstance | und
   return noted.kind === 'open' && path !== undefined ? noted.instances.find((instance) => instance.path === path) : undefined;
 }
 
-/** Whether `path` is a frame's own element on the canvas page: its box, which the page itself outlines. */
-export function isCanvasFrameBox(path: string | undefined): boolean {
-  return noted.kind === 'open' && path !== undefined && noted.instances.some((instance) => framePathOf(instance.path) === path);
+/** The box (a frame's or a group's) at exactly `path` in the open canvas page, if one is. */
+export function canvasBoxOf(path: string | undefined): CanvasBox | undefined {
+  return noted.kind === 'open' && path !== undefined ? noted.boxes.find((box) => box.path === path) : undefined;
 }
 
 // An instance sits directly in its frame (canvasPage.ts frameMarkup).

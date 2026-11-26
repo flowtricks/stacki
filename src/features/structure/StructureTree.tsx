@@ -32,7 +32,7 @@ export interface StructureTreeContext {
   readonly selectedPseudo?: PseudoKind | undefined;
   readonly onSelectPseudo?: (id: string, pseudo: PseudoKind) => void;
   readonly liveClassesById?: ReadonlyMap<string, readonly string[]>;
-  /** Labels that stand in for rows' own, by node id: the component canvas names each frame's instance by its frame. */
+  /** Labels that stand in for rows' own, by node id: the component canvas names its boxes by their captions. */
   readonly rowLabels?: ReadonlyMap<string, string>;
   readonly currentLayoutName: string;
   /** The search's folded words: rows draw them marked in their label. Absent when nothing is searched. */
@@ -387,6 +387,7 @@ function TreeRow(props: TreeRowProps) {
       style={{ paddingInlineStart: navigatorIndent(props.depth) }}
       dropBehavior={treeRowDropBehavior(props)}
       draggable={
+        props.rowLabels === undefined &&
         props.canEdit(node.id) &&
         node.id !== props.editRootId &&
         !(props.clientMode && node.id === 'layout') &&
@@ -425,7 +426,8 @@ function treeRowHandlers(props: TreeRowProps) {
   const { node } = props;
   return {
     onDragStart: (event: React.DragEvent<HTMLDivElement>): void => {
-      if (!props.canEdit(node.id) || node.id === props.editRootId || (props.clientMode && node.id === 'layout')) {
+      // A list of named rows (the component canvas's boxes) is generated, not a file: its rows never move.
+      if (props.rowLabels !== undefined || !props.canEdit(node.id) || node.id === props.editRootId || (props.clientMode && node.id === 'layout')) {
         event.preventDefault();
         return;
       }

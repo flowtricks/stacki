@@ -106,7 +106,7 @@ test('the canvas page parses, imports the component once, and writes each frame'
   const source = pageOf(layout);
   const importLine = 'import Button from "../../' + BUTTON + '";';
   assert.equal(source.split(importLine).length - 1, 1, 'the component is imported once');
-  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
+  assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label={"direction=back&variant=arrow"}'));
   assert.match(
     source,
     /data-fixed-width data-fixed-height style="width: 320px !important; height: 200px !important; background: var\(--swatch-light\) !important"/,
@@ -155,18 +155,14 @@ test('the chrome refuses what could break out of its elements, and the page name
 
 test('only well-formed messages from this canvas are heard', () => {
   const type = chrome.CANVAS_MESSAGE;
-  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), {
-    event: 'select',
-    frame: 'variant=main',
-    chrome: true,
-    scale: undefined,
-  });
+  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined });
+  // The selection is the editor's: the page no longer names a pressed frame, and such a message is not heard.
+  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: 0.5 }, ID).scale, 0.5);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: -1 }, ID).scale, undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: 'other', event: 'ready' }, ID), undefined, 'another canvas');
   assert.equal(chrome.canvasMessage({ type: 'avb:click-node', canvas: ID, event: 'ready' }, ID), undefined, 'another protocol');
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'delete' }, ID), undefined, 'an unknown event');
-  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'x'.repeat(2000) }, ID).frame, undefined, 'an oversized key');
   assert.equal(chrome.canvasMessage(undefined, ID), undefined);
   assert.equal(chrome.canvasMessage('select', ID), undefined);
 });
@@ -250,21 +246,31 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   const themed = chrome.chromeStyles('dark', 'var(--background)');
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
-  // A frame is a box with room around its component and a blue outline, faint at rest and full when the box is picked.
-  assert.match(plain, /stacki-frame\[data-frame\] \{[^}]*padding: 32px !important;[^}]*outline: 1px solid rgba\(47, 128, 255, 0\.3\) !important;/);
+  // Every box (a frame's, a group's at any depth) is square, paints nothing and has a quiet blue outline with room inside
+  // it; hover and selection are the editor's own outlines, as on any element, so the page draws neither.
+  const framed = /> body stacki-frame\[data-frame\] \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  const grouped = /> body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  for (const box of [framed, grouped]) {
+    for (const bare of ['background: transparent !important', 'border: 0 !important', 'border-radius: 0 !important', 'box-shadow: none !important']) {
+      assert.ok(box.includes(bare), `a box is ${bare}`);
+    }
+    assert.match(box, /outline: 1px solid rgba\(47, 128, 255, 0\.3\) !important;/, 'a quiet blue outline at rest');
+  }
+  assert.match(framed, /padding: 32px !important;/);
+  assert.match(grouped, /padding: 46px 16px 16px !important;/, 'a group holds its heading and its frames inside its padding');
   assert.doesNotMatch(plain, /content-visibility/, 'paint containment would cut off the caption above a fixed frame');
-  assert.match(plain, /stacki-frame\[data-frame\]\[data-box-selected\] \{ outline: 2px solid #2f80ff !important; outline-offset: -2px !important; \}/);
-  assert.match(plain, /stacki-frame\[data-frame\]:hover:not\(:has\(> :hover\)\)/, 'stronger under the pointer on its own padding only');
+  assert.doesNotMatch(plain, /data-box-selected|:hover/, 'the editor draws hover and selection');
   assert.match(chrome.chromeScript(ID), /outline-width: ' \+ thin \+ 'px/, 'outlines keep their width on screen at any zoom');
   assert.match(chrome.chromeScript(ID), /padding-inline: ' \+ \(32 \+ extra\)/, 'a caption wider than its component widens the frame evenly');
-  // Groups paint nothing: no fill, border or rounded card, only a heading and spacing, in clear steps.
-  const grouped = /> body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
-  for (const bare of ['background: transparent !important', 'border: 0 !important', 'box-shadow: none !important', 'padding: 30px 0 0 !important']) {
-    assert.ok(grouped.includes(bare), `a group is ${bare}`);
-  }
   const { frameGapPx, subgroupGapPx, groupGapPx, captionGapPx, headingGapPx } = chrome.CHROME_LIMITS;
   assert.ok(captionGapPx < headingGapPx && headingGapPx < frameGapPx && frameGapPx < subgroupGapPx && subgroupGapPx < groupGapPx, 'each level is spaced wider');
-  assert.match(plain, /data-flow="column"\] \{[^}]*align-items: flex-start !important; gap: 52px/, 'groups stack on one left edge');
+  assert.match(plain, /data-flow="column"\] \{ flex-direction: column !important; gap: 32px/, 'groups stack on one left edge');
+  // A caption or heading the editor's tag would cover is hidden while it does, never drawn under it.
+  assert.match(
+    plain,
+    /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before \{ visibility: hidden !important; \}/,
+  );
+  assert.match(chrome.chromeScript(ID), /data\.command === 'tag'/);
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
@@ -474,7 +480,7 @@ test('frames that share a value sit in one box that says it once; a lone value g
   assert.ok(single.every((item) => item.kind === 'frame'));
 });
 
-test('the page draws boxes that are not elements anyone can point at, and still finds every frame’s instance', () => {
+test('the page draws its boxes as real elements the editor selects, names each by its caption, and finds every frame’s instance', () => {
   const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
   const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
   const items = (list, depth = 0) => {
@@ -486,10 +492,11 @@ test('the page draws boxes that are not elements anyone can point at, and still 
     );
   };
   const source = pageOf(layout, { groups: items(groups.groupFrames(layout.frames)) });
-  assert.equal(source.split('<stacki-group data-stacki-unmarked').length - 1, 6);
+  assert.equal(source.split('<stacki-group data-group={').length - 1, 6, 'groups are marked elements, named by their key');
+  assert.doesNotMatch(source, /<stacki-(group|frame) data-stacki-unmarked/);
   assert.equal(source.split(' data-depth="1"').length - 1, 2, 'the two emphasis groups inside arrow are a level down');
   assert.equal(source.split(' data-heading').length - 1, 1, 'the lone top-level frame is headed as the groups are');
-  assert.ok(source.includes('data-label="A &quot;box&quot; &lt;1&gt;"'));
+  assert.ok(source.includes('data-label={"A \\"box\\" \\u003c1\\u003e"}'), 'a label is a string expression with nothing the parser reads');
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
   const tree = page.canvasTreeOf(parsed.model.nodes);
@@ -498,4 +505,28 @@ test('the page draws boxes that are not elements anyone can point at, and still 
     layout.frames.map((frame) => frame.key),
     'instances are found in frame order, however deep their boxes',
   );
+  assert.equal(tree.boxes.filter((box) => box.kind === 'group').length, 6);
+  assert.equal(tree.boxes.filter((box) => box.kind === 'frame').length, layout.frames.length);
+  assert.ok(
+    tree.boxes.every((box) => box.label === (box.kind === 'group' ? 'A "box" <1>' : 'caption')),
+    'each box reads back its label exactly',
+  );
+  for (const frame of tree.boxes.filter((box) => box.kind === 'frame')) {
+    assert.ok(
+      tree.instances.some((instance) => instance.path.startsWith(frame.path + '.') && instance.key === frame.key),
+      'a frame box holds its instance',
+    );
+  }
+  // Every box is marked with the path the editor selects it by; the page's <body> stays the canvas's own.
+  const marked = serializePageMarked(parsed.model, '', undefined, source);
+  assert.equal(marked.split(/<stacki-group[^>]*data-avb-p/).length - 1, 6, 'groups carry a path');
+  assert.equal(marked.split(/<stacki-frame[^>]*data-avb-p/).length - 1, layout.frames.length, 'frames carry a path');
+  assert.doesNotMatch(marked, /<body[^>]*data-avb-p/);
+  // With the canvas open, a box at exactly its path is that box; anything else is no box.
+  session.noteComponentCanvas({ kind: 'open', id: ID, instances: tree.instances, boxes: tree.boxes, root: tree.root });
+  const group = tree.boxes.find((box) => box.kind === 'group');
+  assert.equal(session.canvasBoxOf(group.path)?.key, group.key);
+  assert.equal(session.canvasBoxOf(tree.instances[0].path), undefined, 'an instance is not a box');
+  assert.equal(session.canvasBoxOf(tree.root), undefined, 'nor is the root');
+  session.noteComponentCanvas({ kind: 'idle' });
 });

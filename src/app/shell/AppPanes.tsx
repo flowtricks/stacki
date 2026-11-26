@@ -49,10 +49,11 @@ import { openAppSettings } from '../settings/LazySettings';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView, InstructionsView } from '../appPanels';
 import CmsFileFields from '../../features/cms/CmsFileFields';
 import { selectInstruction, useInstructionSelection } from '../../features/instructions/instructionSelection';
-import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
+import { holdsInlineText, commentAbove, schemaFor, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
 import { assert } from '../../../shared/core/assert';
+import { useListProps } from '../state/useListProps';
 import PanelBoundary from '../../ui/PanelBoundary';
 import { KeptTabPanel } from '../../ui/KeptTabPanel';
 import { PropPreviewContext } from '../../features/props/propPreviewContext';
@@ -69,9 +70,9 @@ import { navigatorDropShown, subscribeCanvasDrag } from '../../editor/canvasDrag
 import { codeChipTextOf, useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { pressWasForEditor, type CanvasPress } from '../../features/preview/canvasEditorPress';
 import {
+  canvasBoxOf,
   canvasInstanceAt,
   canvasRootPath,
-  isCanvasFrameBox,
   isComponentCanvasPage,
   useComponentCanvas,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
@@ -104,9 +105,6 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const pinPaths = pins.trackPaths;
   const trackPaths = useMemo(() => [...appOverlayPaths, ...pinPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, pinPaths, dropKey]);
   const appOverlays = appOverlayLayer(app);
-  // A selected frame box on the component canvas is outlined by the canvas page itself: the editor draws no outline.
-  const canvasState = useComponentCanvas()?.state;
-  const frameBoxPicked = atCanvasPage(app) && canvasState?.kind === 'open' && canvasState.subject === 'frame' && canvasState.picked === 'box';
   return (
     <>
       <PreviewPane
@@ -138,7 +136,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
           void app.startPreview(app.project.path);
         }}
         pathScope={app.editedRel ? `${app.editedRel}|` : ''}
-        selPath={frameBoxPicked ? undefined : app.pathFor(app.selectedId)}
+        selPath={app.pathFor(app.selectedId)}
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
         navHoverPseudo={hoverPseudo}
@@ -159,7 +157,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
         onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
-        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath, canvasWholePath: canvasRootPath(), unoutlined: isCanvasFrameBox } : {})}
+        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath, canvasWholePath: canvasRootPath() } : {})}
         onSelectedClasses={app.receiveClasses}
         onRenderedPaths={app.setRenderedPaths}
         onNodeStates={app.setNodeStates}
@@ -246,13 +244,15 @@ function canvasContextPosition(app: ShellView, framePath: string | undefined, po
   return { ...point, nodeId: node.id };
 }
 
-// On the component canvas's page, the node a canvas path stands for: a frame's instance for anything in its frame, the
-// page's root (<html>) for the space between frames; a path in another file's namespace is left as it is.
+// On the component canvas's page, the node a canvas path stands for: a box (a frame's or a group's) itself, a frame's
+// instance for anything inside it, the page's root (<html>) for the space between boxes; a path in another file's
+// namespace is left as it is.
 function canvasPageNodePath(path: string): string {
-  if (path.includes('|') || isCanvasFrameBox(path)) {
+  if (path.includes('|') || canvasBoxOf(path) !== undefined) {
     return path;
   }
-  return canvasInstanceAt(path)?.path ?? canvasRootPath() ?? path;
+  const instance = canvasInstanceAt(path);
+  return instance !== undefined && (path === instance.path || path.startsWith(instance.path + '.')) ? instance.path : (canvasRootPath() ?? path);
 }
 
 // Whether the open file is the component canvas's page itself, not an instance opened inside it.
@@ -309,10 +309,9 @@ export function selectCanvasPath(
     app.setRevealTick((count) => count + 1);
   };
   if (atCanvasPage(app)) {
-    // On the component canvas's own page a frame is one thing: a click anywhere in it (its label, its body, inside its
-    // instance) selects the frame's instance, closed, and a click between frames selects the canvas itself, its root.
-    const instance = canvasInstanceAt(path);
-    const target = instance?.path ?? canvasRootPath();
+    // On the component canvas's own page a box (a frame's or a group's) is selected as the div it is; a click inside an
+    // instance selects the instance, closed; a click between boxes selects the canvas itself, its root.
+    const target = path === undefined ? canvasRootPath() : canvasPageNodePath(path);
     reveal(target === undefined || app.model === undefined ? undefined : nodeAtPath(app.model.nodes, trailOf(target)));
     return;
   }
@@ -551,6 +550,15 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
   // A component canvas frame's instance: its props are that frame's preview values (canvasFrameSettings.tsx).
   const componentCanvas = useComponentCanvas();
   const canvasInstance = useCanvasInstanceSettings(app, componentCanvas);
+  // A box or a group on the component canvas shows its frame's instance, as if the instance were selected.
+  const canvasComponent = componentCanvas?.state.kind === 'open' && canvasInstance?.kind === 'instance' ? componentCanvas.state.component.file : undefined;
+  const scanComponent =
+    canvasComponent === undefined ? undefined : app.scan.components.find((entry) => entry.path.replaceAll('\\', '/').endsWith('/' + canvasComponent));
+  const canvasListProps = useListProps(app.project.path, scanComponent?.path);
+  const settingsApp: ShellView =
+    canvasInstance?.kind === 'instance' && app.selectedNode?.id !== canvasInstance.node.id && scanComponent !== undefined
+      ? { ...app, selectedNode: canvasInstance.node, selectedComponent: scanComponent, selectedSchema: schemaFor(scanComponent), listProps: canvasListProps }
+      : app;
   useEffect(() => {
     if (fallback !== undefined) {
       setRightTab(fallback);
@@ -574,7 +582,7 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
         <PropPreviewContext.Provider value={propPreview}>
           <PropFieldExtrasContext.Provider value={canvasInstance?.kind === 'instance' ? canvasInstance.extras : undefined}>
             <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
-              <PropsPanel {...settingsOf(app, translate, canvasInstance)} />
+              <PropsPanel {...settingsOf(settingsApp, translate, canvasInstance)} />
             </PanelBoundary>
           </PropFieldExtrasContext.Provider>
         </PropPreviewContext.Provider>
@@ -769,9 +777,12 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
       richTextContent: false,
     };
   }
-  if (canvasInstance?.kind !== 'instance' || node?.kind !== 'component') {
+  if (canvasInstance?.kind !== 'instance') {
     return { ...values, ...kept, onChangeTag, onSetComment };
   }
+  // The frame's instance, whether it, its box or a group around it is the selection.
+  const instance = canvasInstance.node;
+  assert(instance.kind === 'component', 'A canvas frame shows its instance');
   const { id, props, ...frame } = canvasInstance.panel;
   // The writers of a page's own code, loops and expressions have nothing to write to on a frame.
   const general = withoutPageWriters(kept);
@@ -780,7 +791,7 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
     ...general,
     ...frame,
     valuePolicy: 'preview' as const,
-    node: { ...node, id, props, attrOrder: Object.keys(props), children: undefined },
+    node: { ...instance, id, props, attrOrder: Object.keys(props), children: undefined },
     allowAttrs: false,
     comment: '',
     bindContext: undefined,
