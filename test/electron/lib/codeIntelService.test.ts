@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { test, type TestContext } from 'node:test';
 import { createCodeIntelService } from '#dist/electron/lib/codeIntel/service.js';
 import { shippedLibraryFiles, type LibraryFiles } from '#dist/electron/lib/codeIntel/typeFiles.js';
+import { createProjectIndex, type ProjectWatching } from '#dist/electron/lib/codeIntel/projectIndex.js';
 import { parseCodeIntelReply, type CodeCompletion, type CodeIntelQuery, type CodeIntelReply } from '#dist/shared/ipc/codeIntel.js';
 import { toExplorerPath } from '#dist/shared/ipc/fileExplorer.js';
 import waits from '../../helpers/waitFor.js';
@@ -31,10 +32,13 @@ interface Site {
 function site(
   context: TestContext,
   files: Readonly<Record<string, string>>,
-  options: { readonly libraries?: LibraryFiles; readonly bare?: 'bare' } = {},
+  options: { readonly libraries?: LibraryFiles; readonly bare?: 'bare'; readonly watching?: ProjectWatching } = {},
 ): Site {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-intel-')));
-  const service = createCodeIntelService(options.libraries === undefined ? {} : { libraries: options.libraries });
+  const service = createCodeIntelService({
+    ...(options.libraries === undefined ? {} : { libraries: options.libraries }),
+    ...(options.watching === undefined ? {} : { watching: options.watching }),
+  });
   context.after(() => {
     service.dispose();
     fs.rmSync(root, { recursive: true, force: true });
@@ -273,8 +277,17 @@ test('served and imported paths', (context) => {
   assert.deepEqual(project.labels(PAGE, '<img src="../‸" />'), []);
 });
 
-test('a changed or added file is read again', async (context) => {
-  const project = site(context, { 'src/lib/a.ts': 'export function use(value: number): number { return value; }\n', [PAGE]: '' });
+// Run twice: with the platform's own way of noticing changes, and with the repeated walk Linux uses, so the walking path
+// is proven on every platform and not only on the one that uses it.
+for (const watching of [undefined, 'walk'] as const) {
+  test(`a changed or added file is read again (${watching ?? 'platform default'})`, async (context) => {
+    await changedFileIsReadAgain(context, watching);
+  });
+}
+
+async function changedFileIsReadAgain(context: TestContext, watching: ProjectWatching | undefined): Promise<void> {
+  const files = { 'src/lib/a.ts': 'export function use(value: number): number { return value; }\n', [PAGE]: '' };
+  const project = site(context, files, watching === undefined ? {} : { watching });
   const text = page('import { use } from "../lib/a";\nuse(1);', '');
   assert.deepEqual(project.errors(PAGE, text), []);
   project.write('src/lib/a.ts', 'export function use(value: string): string { return value; }\n');
@@ -289,6 +302,31 @@ test('a changed or added file is read again', async (context) => {
   });
   assert.equal(errors.length, 1);
   assert.equal(project.labels(PAGE, '<Lat‸')[0], 'Late');
+}
+
+// The walking index alone, on a fake clock: once the interval passes, the next question's takeChanges reports
+// everything changed and the generation moves, even though nothing asked for the file list. The type checker asks for
+// the list only after the generation moves, so an expiry checked only inside the walk never fired (the Linux bug).
+test('without a watch, the interval expires on the next question, not only on the next walk', (context) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-intel-index-')));
+  let nowMs = 1_000;
+  const index = createProjectIndex(root, { clock: () => nowMs, watching: 'walk' });
+  context.after(() => {
+    index.dispose();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  assert.deepEqual(index.files().files, []);
+  assert.deepEqual(index.takeChanges(), []);
+  const generation = index.generation();
+  nowMs += 4_000;
+  assert.deepEqual(index.takeChanges(), [], 'within the interval nothing is reported');
+  assert.equal(index.generation(), generation);
+  fs.writeFileSync(path.join(root, 'late.ts'), 'export {};\n');
+  nowMs += 2_000;
+  assert.equal(index.takeChanges(), 'all', 'past it, everything counts as changed');
+  assert.equal(index.generation(), generation + 1, 'and the generation moves, so roots are collected again');
+  assert.deepEqual(index.takeChanges(), [], 'reported once per interval');
+  assert.deepEqual(index.files().files, [`${root.replace(/\\/g, '/')}/late.ts`], 'the walk that follows finds the new file');
 });
 
 test("the packaged app's copy of TypeScript's libraries is enough", (context) => {

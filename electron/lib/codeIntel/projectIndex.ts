@@ -38,10 +38,19 @@ export interface ProjectIndex {
   readonly dispose: () => void;
 }
 
-export function createProjectIndex(root: string, clock: () => number = Date.now): ProjectIndex {
+/** How changes are found: a native recursive watch where the platform affords one, or a repeated walk. */
+export type ProjectWatching = 'native' | 'walk';
+
+export interface ProjectIndexOptions {
+  readonly clock?: () => number;
+  /** Defaults to the platform's choice (`walk` on Linux); a test passes `walk` to prove the walking path anywhere. */
+  readonly watching?: ProjectWatching;
+}
+
+export function createProjectIndex(root: string, options: ProjectIndexOptions = {}): ProjectIndex {
+  const clock = options.clock ?? Date.now;
   const base = slashed(root).replace(/\/+$/, '');
   let walked: ProjectFiles | undefined;
-  let walkedAtMs = 0;
   let generation = 0;
   let changes: string[] | 'all' = [];
   const noted = (relative: string | undefined, event: string): void => {
@@ -64,23 +73,37 @@ export function createProjectIndex(root: string, clock: () => number = Date.now)
       }
     }
   };
-  const watcher = watchFolder(base, noted);
+  const watcher = (options.watching ?? platformWatching()) === 'native' ? watchFolder(base, noted) : undefined;
+  // With no watch, everything counts as changed once the interval has passed. The check runs on every question (each one
+  // takes the changes first), not only when the file list is asked for: the type checker asks for the list only after
+  // the generation moves, so a check inside the walk alone would never run again once the roots were known.
+  let checkedAtMs = clock();
+  const expireUnwatched = (): void => {
+    if (watcher !== undefined) {
+      return;
+    }
+    const now = clock();
+    if (now - checkedAtMs > REWALK_UNWATCHED_MS) {
+      const before = generation;
+      checkedAtMs = now;
+      walked = undefined;
+      generation += 1;
+      changes = 'all';
+      assert(generation > before, 'An expired walk moves the generation, so every cache keyed on it is rebuilt');
+    }
+  };
   return {
     root: base,
     files: () => {
-      const stale = watcher === undefined && clock() - walkedAtMs > REWALK_UNWATCHED_MS;
-      if (walked === undefined || stale) {
+      expireUnwatched();
+      if (walked === undefined) {
         walked = walk(base);
-        walkedAtMs = clock();
-        if (stale) {
-          generation += 1;
-          changes = 'all';
-        }
       }
       return walked;
     },
     generation: () => generation,
     takeChanges: () => {
+      expireUnwatched();
       const taken = changes;
       changes = [];
       return taken;
@@ -95,12 +118,13 @@ function ignoredChange(relative: string): boolean {
   return parts.some((part) => part === '.git' || part === 'node_modules' || part === 'dist');
 }
 
+// On Linux, Node makes a recursive watch out of one watch per file, `node_modules` included, which a large project
+// cannot afford: the walk is repeated instead.
+function platformWatching(): ProjectWatching {
+  return process.platform === 'linux' ? 'walk' : 'native';
+}
+
 function watchFolder(root: string, noted: (relative: string | undefined, event: string) => void): fs.FSWatcher | undefined {
-  // On Linux, Node makes a recursive watch out of one watch per file, `node_modules` included, which a large project
-  // cannot afford: the walk is repeated instead.
-  if (process.platform === 'linux') {
-    return undefined;
-  }
   try {
     const watcher = fs.watch(root, { recursive: true, persistent: false }, (event, file) => {
       noted(typeof file === 'string' ? slashed(file) : undefined, event);

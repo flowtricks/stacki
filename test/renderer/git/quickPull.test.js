@@ -19,17 +19,48 @@ const { pullBranch, readIncomingCommits } = require('#dist/electron/git/gitPull.
 const { resolveMerge } = require('#dist/electron/git/gitBranches.js');
 
 const execute = promisify(execFile);
-const git = (cwd, args) =>
-  execute('git', args, {
+// Every git run still going, the test's own and the ones the real main-process code makes through `git`. A run whose
+// working folder is a clone keeps that folder open on Windows, and removing it then fails with EBUSY; so the clones are
+// removed only once none is left.
+const gitRuns = new Set();
+/** Rounds of waiting for git runs; a run that settles may have started another only while the window is mounted. */
+const GIT_SETTLE_ROUNDS_MAX = 8;
+const git = (cwd, args) => {
+  const run = execute('git', args, {
     cwd,
     timeout: 20000,
     maxBuffer: 1024 * 1024,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' },
   });
+  gitRuns.add(run);
+  const settle = () => gitRuns.delete(run);
+  run.then(settle, settle);
+  return run;
+};
+
+async function gitRunsSettled() {
+  for (let round = 0; round < GIT_SETTLE_ROUNDS_MAX && gitRuns.size > 0; round += 1) {
+    await Promise.allSettled([...gitRuns]);
+  }
+  assert.equal(gitRuns.size, 0, `every git run has exited before the clones are removed (${gitRuns.size} left)`);
+}
 
 async function repositories(context) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-quick-pull-'));
-  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // One hook, in a fixed order: node:test runs after-hooks first-registered first and skips the rest when one throws,
+  // so a removal registered here ahead of the window's unmount ran while the window's git was still going (EBUSY on
+  // Windows), and then the window was never unmounted and the suite hung until its time limit.
+  const teardown = [];
+  context.after(async () => {
+    try {
+      for (const step of teardown) {
+        await step();
+      }
+    } finally {
+      await gitRunsSettled();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
   const remote = path.join(root, 'remote.git');
   const author = path.join(root, 'author');
   const reader = path.join(root, 'reader');
@@ -58,6 +89,7 @@ async function repositories(context) {
   return {
     reader,
     remote,
+    teardown,
     commit,
     // A commit someone else made and sent to the local bare remote.
     incoming: async (content, file) => {
@@ -209,7 +241,8 @@ async function mount(context) {
   const root = createRoot(document.getElementById('root'));
   app.setActualRole(app.ADMIN_VIEW);
   await act(async () => root.render(React.createElement(Window)));
-  context.after(async () => {
+  // Unmounted before the clones are removed: the window's own checks run git in the reader clone.
+  repository.teardown.push(async () => {
     await act(async () => root.unmount());
     dom.window.close();
   });

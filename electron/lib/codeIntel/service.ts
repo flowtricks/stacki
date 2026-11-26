@@ -19,7 +19,7 @@ import { frontmatterRange, isComponentTag, markupContext, type EmbeddedBlock, ty
 import { exportedSpecifier, owningPackage, packageManifest, type PackageManifest } from './packageSpecifier';
 import { pathCompletions, servesPaths, type PathPlace } from './pathSuggest';
 import { extensionOf, folderOf, joined, slashed, within } from './paths';
-import { createProjectIndex, type ProjectIndex } from './projectIndex';
+import { createProjectIndex, type ProjectIndex, type ProjectIndexOptions, type ProjectWatching } from './projectIndex';
 import { blockLanguage, createStyleIndex, fileStyles, STYLESHEET_EXTENSIONS, type StyleIndex } from './styleIndex';
 import { markupClassSuggestions, stylesheetCompletions, variableSuggestions, type StyleSources } from './styleSuggest';
 import { completions, noCompletions, suggestion } from './suggestion';
@@ -51,7 +51,7 @@ export interface CodeIntelService {
   readonly dispose: () => void;
 }
 
-export function createCodeIntelService(options: { readonly libraries?: LibraryFiles } = {}): CodeIntelService {
+export function createCodeIntelService(options: { readonly libraries?: LibraryFiles; readonly watching?: ProjectWatching } = {}): CodeIntelService {
   const libraries = options.libraries ?? libraryFiles();
   let workspace: Workspace | undefined;
   return {
@@ -59,7 +59,7 @@ export function createCodeIntelService(options: { readonly libraries?: LibraryFi
       const root = slashed(request.projectPath).replace(/\/+$/, '');
       if (workspace?.root !== root) {
         workspace?.dispose();
-        workspace = createWorkspace(root, libraries);
+        workspace = createWorkspace(root, libraries, options.watching === undefined ? {} : { watching: options.watching });
       }
       return answer(workspace, request);
     },
@@ -90,8 +90,8 @@ interface Workspace {
   readonly dispose: () => void;
 }
 
-function createWorkspace(root: string, libraries: LibraryFiles): Workspace {
-  const index = createProjectIndex(root);
+function createWorkspace(root: string, libraries: LibraryFiles, indexOptions: ProjectIndexOptions): Workspace {
+  const index = createProjectIndex(root, indexOptions);
   const registry = ts.createDocumentRegistry(ts.sys.useCaseSensitiveFileNames, root);
   const versions = new Map<string, string>();
   const projects = new Map<string, TypeProject>();

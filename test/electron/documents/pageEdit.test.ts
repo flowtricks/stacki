@@ -299,13 +299,29 @@ test('an edit that sets a value the source already holds writes nothing at all',
   // (the rename of index.astro that the fixture's own writeFileSync made). A marker written now is
   // delivered after what came before it: once it is heard and the watcher holds still, those events
   // are forgotten, and only what the edits themselves cause is judged below.
+  // The watch also starts in its own time: on macOS the event stream is scheduled on another thread, and
+  // a write made before it runs is never reported (CI heard nothing for 10 s after one marker). So the
+  // marker is written again on every poll until it is heard, which also proves the watch is live before
+  // its silence is trusted below. The poll bound of waitForSteady bounds the writes.
   const marker = 'watch-marker.txt';
-  fs.writeFileSync(path.join(path.dirname(file), marker), 'x');
+  const heardMarker = (events: readonly string[]): boolean => events.some((event) => event.endsWith(marker));
+  let markerWrites = 0;
+  const writeMarker = (): void => {
+    markerWrites += 1;
+    fs.writeFileSync(path.join(path.dirname(file), marker), String(markerWrites));
+  };
+  writeMarker();
   await waitForSteady({
     what: 'the watcher heard the marker and went quiet',
-    read: () => [...heard],
-    until: (events: readonly string[]) => events.some((event) => event.endsWith(marker)),
+    read: () => {
+      if (!heardMarker(heard)) {
+        writeMarker();
+      }
+      return { markerWrites, heard: [...heard] };
+    },
+    until: (observed: { readonly heard: readonly string[] }) => heardMarker(observed.heard),
   });
+  assert.ok(markerWrites >= 1, 'the marker was written');
   heard.length = 0;
   // The default export is the module object the main process's CommonJS code calls into; the
   // namespace imported above is a frozen view of it and cannot be patched.

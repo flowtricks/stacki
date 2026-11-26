@@ -20,6 +20,7 @@ const shared = require('#dist/shared/properties/emdashInstall.js');
 const { detectEmDash } = require('#dist/electron/content/emdashProject.js');
 const { emDashConfigIsWired } = require('#dist/electron/parse/emdashConfig.js');
 const { RUN_CANCELLED } = require('#dist/electron/project/starter.js');
+const { commandNeedsShell } = require('#dist/electron/lib/platform.js');
 
 const FIXTURE = repoPath('test/fixtures/emdash/site');
 
@@ -246,7 +247,11 @@ test('a clean project: one install run, in the project folder, no shell, bounded
   const result = await run(root, deps, logs);
   assert.equal(commits.length, 0);
   assert.equal(calls[0].cwd, root);
-  assert.equal(calls[0].program, process.platform === 'win32' ? 'npm.cmd' : 'npm');
+  // The manager is started by its bare name on every platform: on Windows the runner sends it through cmd.exe, which finds
+  // npm.cmd, bun.exe or pnpm.exe, whichever the person's install made (commandNeedsShell).
+  assert.equal(calls[0].program, 'npm');
+  assert.equal(commandNeedsShell(calls[0].program, 'win32'), true, 'Windows finds the bare name through cmd.exe');
+  assert.equal(commandNeedsShell(calls[0].program, 'darwin'), false, 'elsewhere it runs with no shell');
   assert.deepEqual(calls[0].args, [...addArguments('npm')]);
   assert.equal(calls[0].options.timeoutMs, shared.EMDASH_INSTALL_LIMITS.runMsMax);
   assert.ok(calls[0].options.signal instanceof AbortSignal);
