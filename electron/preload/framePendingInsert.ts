@@ -2,12 +2,17 @@
 //
 // The rebuilt page used to be the only way a new node reached the canvas: write the source,
 // let the dev server compile and render the page, patch the difference in
-// (docs/insert-latency.md has the measured stages). The canvas already knows what the writer
-// will emit (the editor built the node from the same template), so it draws a stand-in at once:
-// a plain element built from that template, or for a component a neutral labelled block, in the
-// place the page will put the real one. The stand-in is tagged with the path the new node will
-// have, and the siblings after it are renumbered (shared/page/canvasInsert.ts), so the selection
-// outline, the hover outline and the Navigator's reveal find it straight away.
+// (docs/insert-latency.md has the measured stages).
+//
+// For a plain element the canvas knows what the writer will emit (the editor built the node from
+// the same template), so it draws it at once, in the place the page will put the real one. A
+// component is rendered by the server, so the canvas shows only what is real: a copy of an
+// instance the page already holds written the same way (canvasTwin.ts), and otherwise nothing.
+// Nothing stays invisible only while the render is on time (it usually is: about a tenth of a
+// second); past `waitingMs` a quiet bar, with no label, holds the place until it arrives. Either
+// way an element tagged with the path the new node will have is in the page at once, and the
+// siblings after it are renumbered (shared/page/canvasInsert.ts), so the selection outline, the
+// hover outline and the Navigator's reveal find the right node.
 //
 // The rebuilt page is still the authority, exactly as for a reorder shown ahead of its write
 // (frameMove.ts). A patch is the difference between the server's previous rendering and its new
@@ -25,16 +30,18 @@ import { assert } from '../../shared/core/assert';
 import { insertedNodeToken, renumberedInsertPath, renumberedWrapPath, type CanvasInsert } from '../../shared/page/canvasInsert';
 import { canvasMovesPending, pendingKeptFrom, putBackPaths, renumberPaths, runOf, sourceStamps, type Undo } from './frameMove';
 import { isChildNode, isComment, isElement } from './frameBasics';
+import { revealWhenDrawn } from './frameReveal';
 
 export const FRAME_INSERT_LIMITS = {
   /** Inserts shown at once before the page confirms any: choices faster than a render. */
   pendingMax: 16,
   /** How long a shown insert waits for the rendering that confirms it (frameMove.ts says why this long). */
   holdMs: 20_000,
+  /** How long a component's render may take before its place is marked: well past an ordinary render, short of a wait that reads as nothing happening. */
+  waitingMs: 600,
 } as const satisfies Record<string, number>;
 
 export const PENDING_INSERT_ATTRIBUTE = 'data-avb-pending-insert';
-const PENDING_NAME_ATTRIBUTE = 'data-avb-pending-name';
 const PATH_ATTRIBUTE = 'data-avb-p';
 
 interface Shown {
@@ -45,6 +52,8 @@ interface Shown {
   readonly release?: () => void;
   /** The stamp of the source the insert was planned over, when the editor said (pendingKeptFrom). */
   readonly base?: string | undefined;
+  /** Marked once its render has been waited for longer than `waitingMs`. */
+  readonly wait: Wait;
 }
 
 let shown: Shown[] = [];
@@ -52,6 +61,8 @@ let shown: Shown[] = [];
 // same stamps is a render of the old file.
 let shownFrom: string | undefined;
 let holdTimer: ReturnType<typeof setTimeout> | undefined;
+// One per insert shown, so there are never more than `pendingMax`.
+let waitingTimers: readonly ReturnType<typeof setTimeout>[] = [];
 let stylesheet: CSSStyleSheet | undefined;
 
 /**
@@ -65,15 +76,17 @@ export function showCanvasInsert(insert: CanvasInsert, base?: string): boolean {
     return false;
   }
   const stamps = shown.length === 0 ? sourceStamps(document) : shownFrom;
-  const entry = applyInsert(insert);
+  const entry = applyInsert(insert, 'quiet');
   if (entry === undefined) {
     return false;
   }
   installPendingStyle();
-  shown = [...shown, { ...entry, base }];
+  shown = [...shown, { ...entry, base, wait: 'quiet' }];
   shownFrom = stamps;
   clearTimeout(holdTimer);
   holdTimer = setTimeout(revertCanvasInserts, FRAME_INSERT_LIMITS.holdMs);
+  const timer = setTimeout(() => markSlow(insert), FRAME_INSERT_LIMITS.waitingMs);
+  waitingTimers = [...waitingTimers.slice(1 - FRAME_INSERT_LIMITS.pendingMax), timer];
   announceInserted();
   assert(shown.length <= FRAME_INSERT_LIMITS.pendingMax, 'showCanvasInsert: pending inserts stay inside their bound');
   return true;
@@ -96,7 +109,8 @@ export function canvasInsertsPending(): boolean {
 
 /** The patcher's two moments (morphClient.ts): before it patches, and after. */
 export function listenForCanvasInserts(): void {
-  let replay: readonly Pick<Shown, 'insert' | 'base'>[] = [];
+  let replay: readonly Replayed[] = [];
+  let confirmed = false;
   document.addEventListener('avb:before-morph', (event) => {
     if (shown.length === 0) {
       replay = [];
@@ -110,6 +124,7 @@ export function listenForCanvasInserts(): void {
       shownFrom,
     );
     replay = shown.slice(from);
+    confirmed = from > 0 || replay.length === 0;
     takeBack();
     if (replay.length === 0) {
       forget();
@@ -120,28 +135,57 @@ export function listenForCanvasInserts(): void {
   document.addEventListener('avb:after-patch', () => {
     const inserts = replay;
     replay = [];
+    if (confirmed) {
+      confirmed = false;
+      // The new node is on the page only now: a reveal asked for while nothing was drawn happens
+      // once the frame has mapped this rendering, which it does on `avb:morphed`, right after.
+      setTimeout(revealWhenDrawn, 0);
+    }
     if (inserts.length === 0) {
       return;
     }
     // The patch rebuilt what it touched, so each is found and drawn again; one that no
     // longer applies is left to the next rendering.
-    const kept: Shown[] = [];
-    for (const { insert, base } of inserts) {
-      const entry = applyInsert(insert);
-      if (entry !== undefined) {
-        kept.push({ ...entry, base });
-      }
-    }
-    shown = kept;
-    if (kept.length === 0) {
-      forget();
-    }
+    drawAgain(inserts);
   });
 }
 
 // --- Internals ---------------------------------------------------------------------
 
+type Replayed = Pick<Shown, 'insert' | 'base' | 'wait'>;
+
+// Draws taken-back inserts again, each as marked or as quiet as its own wait has made it.
+function drawAgain(inserts: readonly Replayed[]): void {
+  const kept: Shown[] = [];
+  for (const { insert, base, wait } of inserts) {
+    const entry = applyInsert(insert, wait);
+    if (entry !== undefined) {
+      kept.push({ ...entry, base, wait });
+    }
+  }
+  shown = kept;
+  if (kept.length === 0) {
+    forget();
+  }
+}
+
+// This insert's wait is over: if it is still not rendered, its place is marked with a bar.
+function markSlow(insert: CanvasInsert): void {
+  if (!shown.some((entry) => entry.insert === insert)) {
+    return; // Rendered or refused meanwhile.
+  }
+  const inserts = shown.map((entry): Shown => (entry.insert === insert ? { ...entry, wait: 'marked' } : entry));
+  takeBack();
+  drawAgain(inserts);
+  announceInserted();
+  revealWhenDrawn();
+}
+
 function forget(): void {
+  for (const timer of waitingTimers) {
+    clearTimeout(timer);
+  }
+  waitingTimers = [];
   clearTimeout(holdTimer);
   holdTimer = undefined;
   shown = [];
@@ -168,7 +212,12 @@ function announceInserted(): void {
   document.dispatchEvent(new CustomEvent('avb:morphed', { detail: undefined }));
 }
 
-function applyInsert(insert: CanvasInsert): Shown | undefined {
+/** Whether a component still to be rendered is invisible, or holds its place with a bar. */
+type Wait = 'quiet' | 'marked';
+
+type Applied = Omit<Shown, 'base' | 'wait'>;
+
+function applyInsert(insert: CanvasInsert, wait: Wait): Applied | undefined {
   if (insert.node.kind === 'wrap') {
     return applyWrap(insert, insert.node);
   }
@@ -179,7 +228,7 @@ function applyInsert(insert: CanvasInsert): Shown | undefined {
   // The anchor is numbered as before the insert, so it is found before anything renumbers.
   const paths = renumberPaths((token) => renumberedInsertPath(token, insert));
   const token = insertedNodeToken(insert);
-  const nodes = standInNodes(insert, token, place);
+  const nodes = standInNodes(insert, token, place, wait);
   if (nodes === undefined) {
     putBackPaths(paths);
     return undefined;
@@ -223,11 +272,21 @@ function placeOf(insert: CanvasInsert): { readonly parent: ParentNode; readonly 
 }
 
 // The stand-in's nodes: the marker pair around one element, or a copy of what another node rendered.
-function standInNodes(insert: CanvasInsert, token: string, place: { readonly marked: boolean }): ChildNode[] | undefined {
-  if (insert.node.kind === 'clone') {
-    return cloneOf(insert.scope + insert.node.from.join('.'), token);
+function standInNodes(insert: CanvasInsert, token: string, place: { readonly marked: boolean }, wait: Wait): ChildNode[] | undefined {
+  let drawn = insert.node;
+  if (drawn.kind === 'clone') {
+    // The page's paths are numbered as after the insert by now, the copied node's with them.
+    const copy = cloneOf(renumberedInsertPath(insert.scope + drawn.from.join('.'), insert), token);
+    if (drawn.twinOf === undefined) {
+      return copy;
+    }
+    // A twin the page does not render, or one opened since it was rendered, is not what will land.
+    if (copy !== undefined && !hasLiveState(copy)) {
+      return copy;
+    }
+    drawn = { kind: 'component', name: drawn.twinOf };
   }
-  const made = standIn(insert, token);
+  const made = standIn(drawn, token, wait);
   return place.marked ? [document.createComment(`avb-s:${token}`), made, document.createComment(`avb-e:${token}`)] : [made];
 }
 
@@ -248,7 +307,13 @@ function cloneOf(sourceToken: string, token: string): ChildNode[] | undefined {
       copy.data = renamedMarker(copy.data, rename);
     }
   }
-  return copies.length > 0 ? copies : undefined;
+  return copies.some(isElement) ? copies : undefined;
+}
+
+// Something opened since the server rendered it (a disclosure, a menu): the new instance lands closed.
+function hasLiveState(nodes: readonly ChildNode[]): boolean {
+  const opened = '[open], [aria-expanded="true"]';
+  return nodes.some((node) => isElement(node) && (node.matches(opened) || node.querySelector(opened) !== null));
 }
 
 function retag(root: Element, rename: (value: string) => string): void {
@@ -272,8 +337,7 @@ function renamedMarker(data: string, rename: (value: string) => string): string 
   return match?.[1] !== undefined && match[2] !== undefined ? `avb-${match[1]}:${rename(match[2])}` : data;
 }
 
-function standIn(insert: CanvasInsert, token: string): Element {
-  const node = insert.node;
+function standIn(node: CanvasInsert['node'], token: string, wait: Wait): Element {
   switch (node.kind) {
     case 'element': {
       const element = document.createElement(node.tag);
@@ -288,11 +352,9 @@ function standIn(insert: CanvasInsert, token: string): Element {
     case 'clone':
     case 'wrap':
       throw new Error('standIn: a clone is made by cloneOf and a wrap by applyWrap');
-    case 'component': {
-      const block = document.createElement('div');
-      block.setAttribute(PENDING_NAME_ATTRIBUTE, node.name);
-      return tagged(block, token, 'component');
-    }
+    case 'component':
+      // A template takes no box, so nothing shows and nothing beside it moves; it still names the place.
+      return tagged(document.createElement(wait === 'quiet' ? 'template' : 'div'), token, 'component');
     default: {
       const exhaustive: never = node;
       return exhaustive;
@@ -306,24 +368,23 @@ function tagged(element: Element, token: string, kind: 'element' | 'component'):
   return element;
 }
 
-// A component's stand-in is a neutral block with the component's name: a background fill, no
-// border, the same size whatever the component is, until the real render replaces it.
+// A component still waiting for a slow render: a quiet bar across its place, with no border and no
+// words, so nothing in it can be taken for the component's own content.
 function installPendingStyle(): void {
   if (stylesheet !== undefined && document.adoptedStyleSheets.includes(stylesheet)) {
     return; // A document that replaced this one (a client-side navigation) starts without it.
   }
   stylesheet = new CSSStyleSheet();
   stylesheet.replaceSync(
-    `[${PENDING_INSERT_ATTRIBUTE}="component"] { display: block; min-height: 64px; background: rgba(127, 127, 127, 0.14); }` +
-      `[${PENDING_INSERT_ATTRIBUTE}="component"]::before { content: attr(${PENDING_NAME_ATTRIBUTE}); display: block; padding: 8px 12px; ` +
-      'font: 12px/1.4 system-ui, sans-serif; color: rgba(127, 127, 127, 0.9); }',
+    `div[${PENDING_INSERT_ATTRIBUTE}="component"] { display: block; align-self: stretch; justify-self: stretch; box-sizing: border-box; ` +
+      'min-width: min(100%, 160px); height: 40px; border-radius: 4px; background: rgba(127, 127, 127, 0.14); }',
   );
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, stylesheet];
 }
 
 // A wrap: the wrapper takes the wrapped node's place and path, the node's run moves inside it, and
 // every path under the node gains a step. Taking it back puts the run where it stood.
-function applyWrap(insert: CanvasInsert, wrap: Extract<CanvasInsert['node'], { kind: 'wrap' }>): Shown | undefined {
+function applyWrap(insert: CanvasInsert, wrap: Extract<CanvasInsert['node'], { kind: 'wrap' }>): Applied | undefined {
   const sourceToken = insert.scope + wrap.from.join('.');
   const run = runOf(sourceToken);
   const first = run?.[0];

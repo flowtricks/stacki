@@ -319,6 +319,7 @@
     "shared/ipc/updateState.ts",
     "shared/page/canvasInsert.ts",
     "shared/page/canvasMove.ts",
+    "shared/page/canvasTwin.ts",
     "shared/page/capability.ts",
     "shared/page/commentLabel.ts",
     "shared/page/frontmatter.ts",

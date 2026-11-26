@@ -69,7 +69,7 @@ test('the element stand-in carries the template: tag, string attributes and star
   assert.deepEqual(image?.node, { kind: 'element', tag: 'img', attributes: [], text: undefined });
 });
 
-test('a component is a labelled block, and only a legal name is one', () => {
+test('a component is its name, and only a legal name is one', () => {
   const plan = planCanvasInsert(tree, { parentId: 'main', index: 0 }, { kind: 'component', name: 'Section', props: {} }, pathOf);
   assert.deepEqual(plan?.node, { kind: 'component', name: 'Section' });
   assert.equal(planCanvasInsert(tree, { parentId: 'main', index: 0 }, { kind: 'component', name: 'a b', props: {} }, pathOf), undefined);
@@ -175,4 +175,52 @@ test('a wrap plans a plain wrapper at the node’s place and renumbers everythin
   assert.equal(renumberedWrapPath('0.3', plan), '0.3', 'siblings keep their numbers');
   assert.equal(renumberedWrapPath('0', plan), '0');
   assert.deepEqual(parseCanvasInsert(JSON.parse(JSON.stringify(plan))), plan);
+});
+
+// A component the page already holds, written the same way, is copied from what the server rendered.
+const instance = (id: string, text: string, indented = false): CanvasInsertTreeNode => ({
+  id,
+  kind: 'component',
+  name: 'RichText',
+  props: { variant: { type: 'string', value: 'main' }, class: { type: 'string', value: 'x' } },
+  children: [
+    { id: `${id}-p`, kind: 'element', name: 'p', props: {}, children: [{ kind: 'text', value: indented ? `\n    ${text}\n  ` : text }] },
+    ...(indented ? [{ kind: 'comment', value: ' note ' }] : []),
+  ],
+});
+const picked = {
+  kind: 'component',
+  name: 'RichText',
+  props: { class: { type: 'string', value: 'x' }, variant: { type: 'string', value: 'main' } },
+  children: [{ kind: 'element', name: 'p', props: {}, children: [{ kind: 'text', value: 'Hello' }] }],
+};
+const twinPaths = new Map([
+  ['main', '0'],
+  ['other', '0.0'],
+  ['looped', '0.1.0'],
+  ['twin', '0.2'],
+]);
+const planIn = (roots: readonly CanvasInsertTreeNode[], source: typeof picked, paths = twinPaths) =>
+  planCanvasInsert(roots, { parentId: 'main', index: 0 }, source, (id) => paths.get(id));
+const holding = (...children: CanvasInsertTreeNode[]): readonly CanvasInsertTreeNode[] => [{ id: 'main', kind: 'element', children }];
+
+test('a component written like one on the page is copied from it, whatever the indentation, comments and attribute order', () => {
+  const plan = planIn(holding(instance('other', 'Other'), leaf('x'), instance('twin', 'Hello', true)), picked);
+  assert.deepEqual(plan?.node, { kind: 'clone', from: [0, 2], twinOf: 'RichText' });
+  assert.deepEqual(parseCanvasInsert(structuredClone(plan)), plan, 'it crosses into the frame as it is');
+});
+
+test('anything written differently is no twin: other words, props or children, a loop, another file, a script', () => {
+  const alone = { kind: 'component', name: 'RichText' };
+  const roots = holding(instance('other', 'Other'), instance('twin', 'Hello'));
+  assert.deepEqual(planIn(holding(instance('other', 'Other')), picked)?.node, alone, 'other words');
+  assert.deepEqual(planIn(roots, { ...picked, props: { ...picked.props, class: { type: 'expr', value: 'x' } } })?.node, alone, 'a prop of another type');
+  assert.deepEqual(planIn(roots, { ...picked, children: [] })?.node, alone, 'no children');
+  const looped = holding(leaf('other'), { id: 'loop', kind: 'map', children: [instance('looped', 'Hello')] });
+  assert.deepEqual(planIn(looped, picked)?.node, alone, 'a loop reads its own item');
+  const elsewhere = new Map([...twinPaths, ['twin', 'src/Card.astro|0.2']]);
+  assert.deepEqual(planIn(roots, picked, elsewhere)?.node, alone, 'another file');
+  const scripted = { ...picked, children: [{ kind: 'raw', name: 'script', props: {}, children: [] }] };
+  assert.deepEqual(planIn(roots, scripted)?.node, alone, 'a kind whose source is not all it renders');
+  assert.equal(parseCanvasInsert({ ...planIn(roots, picked), node: { kind: 'clone', from: [0], twinOf: 'a b' } }), undefined);
 });
