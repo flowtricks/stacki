@@ -124,7 +124,7 @@ function writeFixture(project) {
     await canvas.locator('stacki-frame .button_wrap').first().waitFor({ timeout: WAIT_MS });
     results.buttonFrames = await labels(canvas);
     await waitFor(
-      // html, then per frame its div (named by its caption) holding its closed instance.
+      // The root (`html`), then per frame its div (named by its caption) holding its closed instance.
       async () => (await navigatorRows(window)).length === results.buttonFrames.length * 2 + 1,
       'the Navigator lists the canvas root, a div per frame and its instance',
     );
