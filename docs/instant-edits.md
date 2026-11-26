@@ -122,8 +122,8 @@ matched selectors) is one canvas round trip within a frame of the change; it is 
 (`test/renderer/style/panelRefresh.test.js`) and not timed.
 
 Component inserts since 2026-11-25, in the real app on a copy of the Lumos framework (RichText,
-Accordion, Card, Heading, one run each): the first visible change is the real content, 111 to 153 ms
-after Enter (written at 46 to 72 ms, then one page render and patch); a second RichText written like
+Accordion, Card, Heading): the first visible change is the real content, 111 to 199 ms
+after Enter (written at 46 to 82 ms, then one page render and patch); a second RichText written like
 the first showed its content at 19 ms and did not move when the render landed. A component that took
 1.8 s to render got the bar at 621 ms.
 
