@@ -1,7 +1,7 @@
 // The sign-in settings a person set only in their shell's startup files, for the AI panel's agents.
 //
 // Why: an app opened from the Dock or a launcher (macOS, Linux) never runs .zprofile, .zshrc or .profile, so
-// an API key, a config folder or a company proxy set there is missing, although the same CLI works in a
+// a token, a Codex key, a config folder or a company proxy set there is missing, although the same CLI works in a
 // terminal. Stacki asks the person's shell once, the way its own terminal starts it (a login shell that is
 // also interactive, so .zshrc counts), and takes only the names on the lists below.
 //
@@ -24,6 +24,7 @@ import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import { assert } from '../../shared/core/assert';
 import type { AgentId } from '../../shared/properties/ai/agentIds';
+import { withoutClaudeAPIKey } from './claudeSubscriptionOnly';
 
 export const LOGIN_SHELL_LIMITS = {
   readMsMax: 10_000,
@@ -65,7 +66,7 @@ interface AgentSettings {
 export const SIGN_IN_SETTINGS: Readonly<Record<AgentId, AgentSettings>> = {
   claude: {
     names: [
-      'ANTHROPIC_API_KEY',
+      // Never ANTHROPIC_API_KEY: the panel does not sign Claude in with a key (claudeSubscriptionOnly.ts).
       'ANTHROPIC_AUTH_TOKEN',
       'CLAUDE_CODE_OAUTH_TOKEN',
       'ANTHROPIC_PROFILE',
@@ -310,7 +311,7 @@ export class LoginShellSettings {
   /** `agent`'s environment: the app's, plus its sign-in settings from the login shell. Waits only for the first read. */
   async environmentFor(agent: AgentId): Promise<Environment> {
     const shell = await this.shellSettings();
-    return withSignInSettings(agent, this.deps.environment(), shell);
+    return withoutClaudeAPIKey(agent, withSignInSettings(agent, this.deps.environment(), shell));
   }
 
   private shellSettings(): Promise<ReadonlyMap<string, string>> {

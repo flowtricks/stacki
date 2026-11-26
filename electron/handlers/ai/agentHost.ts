@@ -24,6 +24,8 @@
 // agent's asking mode; the adapter's environment is the person's shell
 // environment with Stacki's own variables and any host agent session's removed.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { claudeSessionMeta, withoutClaudeAPIKey } from '../../lib/claudeSubscriptionOnly';
+import type { SessionPermit } from './agentSetup';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -165,6 +167,8 @@ export interface AgentHostDeps {
    * person's login shell sets (lib/loginShellSettings.ts). Nothing else gets these. Absent: `environment`.
    */
   readonly agentEnvironment?: (agent: AgentId) => Promise<Readonly<Record<string, string | undefined>>>;
+  /** Asked before an agent's process starts or takes a message (agentSetup.ts `permit`). Absent: always allowed. */
+  readonly permit?: (agent: AgentId) => Promise<SessionPermit>;
   readonly now: () => number;
   /** The person's home folder, where user skills live (`~/.claude/skills`); the operating system's by default. */
   readonly home?: () => string;
@@ -973,6 +977,14 @@ export class AgentHost {
   private async ensureProcess(agent: AgentId, root: string): Promise<Result<AgentProcess, AiFailure>> {
     // Waited for first, so everything from "is one running?" to registering the new one stays in one step.
     const stops = this.stops;
+    const permit = this.deps.permit === undefined ? 'allowed' : await this.deps.permit(agent);
+    if (permit !== 'allowed') {
+      return err(
+        permit === 'sign-in'
+          ? { code: 'sign-in', ...described('ai.error.signIn', { agent: AGENTS[agent].label }) }
+          : { code: 'agent-failed', ...described('ai.error.signInUnchecked', { agent: AGENTS[agent].label }) },
+      );
+    }
     const agentEnvironment = this.deps.agentEnvironment === undefined ? this.deps.environment() : await this.deps.agentEnvironment(agent);
     if (this.stops !== stops) {
       // The project closed or the app is quitting while the first read of the shell's settings was under way.
@@ -1029,7 +1041,7 @@ export class AgentHost {
   }): AgentProcess {
     const runnable = runnableAdapterCli(cli, this.deps.environment());
     const environment = {
-      ...adapterEnvironment(agentEnvironment, ADAPTERS[agent].cliVariable, runnable),
+      ...adapterEnvironment(withoutClaudeAPIKey(agent, agentEnvironment), ADAPTERS[agent].cliVariable, runnable),
       ...autoCompactEnvironment(agent, this.deps.autoCompactPercent?.()),
     };
     const spawnedAt = this.deps.now();
@@ -1115,7 +1127,7 @@ export class AgentHost {
     }
     const init = ready.value;
     const stored = record.sessionId;
-    const base = { cwd: runtime.root, mcpServers: [] };
+    const base = { cwd: runtime.root, mcpServers: [], ...claudeSessionMeta(runtime.agent) };
     if (stored !== undefined && init.resumeSession) {
       const resumedAt = this.deps.now();
       const resumed = await this.openSession(process, runtime, 'session/resume', { ...base, sessionId: stored }, stored);
@@ -1824,7 +1836,8 @@ export class AgentHost {
         return;
       }
       const startedAt = this.deps.now();
-      const answer = await process.value.connection.request('session/new', { cwd: root, mcpServers: [] }, AI_LIMITS.requestMsMax);
+      const params = { cwd: root, mcpServers: [], ...claudeSessionMeta(agent) };
+      const answer = await process.value.connection.request('session/new', params, AI_LIMITS.requestMsMax);
       const session = answer.ok ? parseSessionResult(answer.value, undefined) : undefined;
       if (session?.ok === true) {
         const options = session.value.options.map(chatOption);

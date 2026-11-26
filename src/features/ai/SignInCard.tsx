@@ -24,7 +24,8 @@ export const SIGNED_IN_RETRY_MS = 12_000;
 
 /** Where a sign-in stands, from the agent's CLI (`setup`) and the agent's own answer (`expired`). */
 export type SignInStage =
-  | { readonly kind: 'start'; readonly expired: boolean }
+  /** `apiKey`: an API key is set up for the agent, and the card says it is not used here. */
+  | { readonly kind: 'start'; readonly expired: boolean; readonly apiKey?: boolean }
   | { readonly kind: 'waiting'; readonly expired: boolean; readonly url: string | undefined; readonly needsCode: boolean; readonly output: string }
   | {
       readonly kind: 'failed';
@@ -46,7 +47,7 @@ export function signInStage({ setup, expired }: { readonly setup: SetupState | u
     return { kind: 'failed', expired, message: setup.message, messageRef: setup.messageRef, details: setup.details };
   }
   if (setup?.step === 'signed-out') {
-    return { kind: 'start', expired: false };
+    return setup.reason === 'api-key' ? { kind: 'start', expired: false, apiKey: true } : { kind: 'start', expired: false };
   }
   return expired ? { kind: 'start', expired: true } : undefined;
 }
@@ -80,7 +81,7 @@ export function SignInCard({
         <Frame
           icon={<LockGlyph size={16} />}
           title={translate('ai.signIn.title', { agent: label })}
-          text={stage.expired ? translate('ai.signIn.expired') : translate('ai.signIn.toStart')}
+          text={stage.apiKey === true ? translate('ai.signIn.noApiKeys') : stage.expired ? translate('ai.signIn.expired') : translate('ai.signIn.toStart')}
           details={details}
         >
           <div className="ai-signin-actions">

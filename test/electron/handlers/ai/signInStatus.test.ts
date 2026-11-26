@@ -151,21 +151,21 @@ test('the agent’s own commands get the agent environment; the installer does n
   const fake = fakeBin(context);
   fake.cli(
     'claude',
-    `if [ -n "$ANTHROPIC_API_KEY" ]; then ${answer('{"loggedIn":true,"authMethod":"api_key","orgName":"Saved Org"}').replace('\n', '; ')}; fi\n${answer('{"loggedIn":false}', 1)}`,
+    `if [ -n "$ANTHROPIC_AUTH_TOKEN" ]; then ${answer('{"loggedIn":true,"authMethod":"oauth_token","orgName":"Saved Org"}').replace('\n', '; ')}; fi\n${answer('{"loggedIn":false}', 1)}`,
   );
   const installs: (string | undefined)[] = [];
-  const secret = 'fake-key-for-this-test';
-  const setup = fake.make({ agentEnvironment: async () => ({ PATH: fake.bin, HOME: fake.bin, ANTHROPIC_API_KEY: secret }) });
+  const secret = 'fake-token-for-this-test';
+  const setup = fake.make({ agentEnvironment: async () => ({ PATH: fake.bin, HOME: fake.bin, ANTHROPIC_AUTH_TOKEN: secret }) });
   assert.deepEqual(await setup.act('claude', { kind: 'detect' }), {
     agent: 'claude',
     step: 'ready',
-    account: { name: undefined, plan: undefined, email: undefined, source: 'api-key' },
+    account: { name: undefined, plan: undefined, email: undefined, source: 'token' },
   });
   assert.doesNotMatch(JSON.stringify(fake.states) + fake.lines.join('\n'), new RegExp(secret));
   const installer = fake.make({
-    agentEnvironment: async () => ({ ANTHROPIC_API_KEY: secret }),
+    agentEnvironment: async () => ({ ANTHROPIC_AUTH_TOKEN: secret }),
     spawnPipe: (_command, environment) => {
-      installs.push(environment['ANTHROPIC_API_KEY']);
+      installs.push(environment['ANTHROPIC_AUTH_TOKEN']);
       return {
         onData: () => undefined,
         onExit: (listener: (code: number) => void) => setImmediate(() => listener(1)),
@@ -200,11 +200,13 @@ test('a sign-in whose command succeeds but cannot be checked is not called faile
 test('which sign-in Claude will use follows its documented order, from names alone; boundaries reject unknown kinds', () => {
   assert.equal(claudeSignInSource('claude.ai', {}), 'account');
   assert.equal(claudeSignInSource(undefined, {}), 'account');
-  assert.equal(claudeSignInSource('claude.ai', { ANTHROPIC_API_KEY: 'x' }), 'api-key');
-  assert.equal(claudeSignInSource('api_key', { ANTHROPIC_API_KEY: 'x', ANTHROPIC_AUTH_TOKEN: 'y' }), 'token');
-  assert.equal(claudeSignInSource('api_key', { ANTHROPIC_AUTH_TOKEN: 'y', CLAUDE_CODE_USE_BEDROCK: '1' }), 'cloud');
+  assert.equal(claudeSignInSource('oauth_token', { ANTHROPIC_AUTH_TOKEN: 'y' }), 'token');
+  assert.equal(claudeSignInSource('oauth_token', { ANTHROPIC_AUTH_TOKEN: 'y', CLAUDE_CODE_USE_BEDROCK: '1' }), 'cloud');
   assert.equal(claudeSignInSource('claude.ai', { CLAUDE_CODE_USE_VERTEX: '0' }), 'account');
-  assert.equal(claudeSignInSource('api_key_helper', {}), 'api-key');
+  for (const authMethod of ['api_key', 'api_key_helper']) {
+    const printed = { stdout: JSON.stringify({ loggedIn: true, authMethod, apiKeySource: 'apiKeyHelper' }), stderr: '', exitCode: 0 };
+    assert.deepEqual(readClaudeStatus(printed, {}), { kind: 'signed-out', reason: 'api-key' }, 'a key in effect is not a sign-in');
+  }
   assert.equal(claudeSignInSource('oauth_token', {}), 'token');
   assert.equal(claudeSignInSource('third_party', {}), 'cloud');
   assert.deepEqual(readClaudeStatus({ stdout: '[]', stderr: '', exitCode: 0 }, {}), { kind: 'unreadable' });

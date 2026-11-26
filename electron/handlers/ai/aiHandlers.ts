@@ -103,6 +103,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       snapshots: GIT_SNAPSHOTS,
       environment: buildShellEnv,
       agentEnvironment,
+      permit: (agent) => agentSetup().permit(agent),
       now: Date.now,
       version: options.version(),
       askBeforeTrust: options.askBeforeTrust,

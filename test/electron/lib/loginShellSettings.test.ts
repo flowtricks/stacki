@@ -58,7 +58,6 @@ test('a noisy startup file: each agent gets only its own listed settings, whole,
   const claude = await settings.environmentFor('claude');
   assert.deepEqual(claude, {
     ...fake.base,
-    ANTHROPIC_API_KEY: 'fake-claude-key',
     ANTHROPIC_CUSTOM_HEADERS: 'X-One: 1\nX-Two: a=b',
     CLAUDE_CONFIG_DIR: '/tmp/fake config',
     HTTPS_PROXY: 'http://proxy.example:8080',
@@ -67,14 +66,16 @@ test('a noisy startup file: each agent gets only its own listed settings, whole,
   assert.deepEqual(codex, { ...fake.base, OPENAI_API_KEY: 'fake-codex-key', HTTPS_PROXY: 'http://proxy.example:8080' });
   assert.deepEqual(fake.starts(), ['-ilc'], 'asked once for the whole run, as the terminal’s shell behaves');
   assert.deepEqual(fake.lines, [], 'a read that works says nothing, so no value is logged');
-  assert.equal(adapterEnvironment(claude, 'CLAUDE_CODE_EXECUTABLE', '/bin/claude')['ANTHROPIC_API_KEY'], 'fake-claude-key');
+  assert.equal('ANTHROPIC_API_KEY' in adapterEnvironment(claude, 'CLAUDE_CODE_EXECUTABLE', '/bin/claude'), false, 'no key, from the shell either');
 });
 
 test('the app’s own environment wins, in either spelling of a proxy variable', posix, async (context) => {
-  const fake = fakeShell(context, `${STARTUP}\nexport https_proxy='http://other.example'\nexport ANTHROPIC_API_KEY='from-shell'`);
+  const fake = fakeShell(context, `${STARTUP}\nexport https_proxy='http://other.example'\nexport ANTHROPIC_AUTH_TOKEN='from-shell'`);
   // The fake shell inherits the app's values and then overrides them, as a real startup file can.
-  const claude = await fake.settings({ ANTHROPIC_API_KEY: 'from-app', https_proxy: 'http://app.example' }).environmentFor('claude');
-  assert.equal(claude['ANTHROPIC_API_KEY'], 'from-app');
+  const app = { ANTHROPIC_AUTH_TOKEN: 'from-app', ANTHROPIC_API_KEY: 'a-terminal-launch-key', https_proxy: 'http://app.example' };
+  const claude = await fake.settings(app).environmentFor('claude');
+  assert.equal(claude['ANTHROPIC_AUTH_TOKEN'], 'from-app');
+  assert.equal('ANTHROPIC_API_KEY' in claude, false, 'the app’s own key is taken off too');
   assert.equal(claude['https_proxy'], 'http://app.example');
   assert.equal(claude['HTTPS_PROXY'], undefined);
 });
@@ -103,11 +104,11 @@ test('cloud credentials are taken only for a cloud that is switched on', () => {
 
 test('the parser keeps listed names between the two marks and nothing else', () => {
   const mark = '__STACKI_0123456789abcdef__';
-  const block = ['ANTHROPIC_API_KEY=a=b', 'HOME=/h', 'NODE_OPTIONS=--require /x', 'CODEX_HOME=', '=odd', 'junk', ''].join('\0');
-  assert.deepEqual([...(parseShellEnvironment(`noise${mark}${block}${mark}more`, mark) ?? [])], [['ANTHROPIC_API_KEY', 'a=b']]);
-  assert.equal(parseShellEnvironment(`${mark}ANTHROPIC_API_KEY=a\0`, mark), undefined, 'a block that never closed');
-  assert.equal(parseShellEnvironment('ANTHROPIC_API_KEY=a', mark), undefined);
-  const long = `${mark}ANTHROPIC_API_KEY=${'a'.repeat(40_000)}\0${mark}`;
+  const block = ['ANTHROPIC_AUTH_TOKEN=a=b', 'HOME=/h', 'NODE_OPTIONS=--require /x', 'CODEX_HOME=', '=odd', 'junk', ''].join('\0');
+  assert.deepEqual([...(parseShellEnvironment(`noise${mark}${block}${mark}more`, mark) ?? [])], [['ANTHROPIC_AUTH_TOKEN', 'a=b']]);
+  assert.equal(parseShellEnvironment(`${mark}ANTHROPIC_AUTH_TOKEN=a\0`, mark), undefined, 'a block that never closed');
+  assert.equal(parseShellEnvironment('ANTHROPIC_AUTH_TOKEN=a', mark), undefined);
+  const long = `${mark}ANTHROPIC_AUTH_TOKEN=${'a'.repeat(40_000)}\0${mark}`;
   assert.equal(parseShellEnvironment(long, mark)?.size, 0, 'an overlong value is dropped');
 });
 

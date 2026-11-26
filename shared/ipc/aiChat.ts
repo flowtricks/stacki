@@ -908,7 +908,8 @@ export function parseSetupAction(input: unknown): SetupAction {
 export type SetupState =
   | { readonly agent: AgentId; readonly step: 'missing' }
   | { readonly agent: AgentId; readonly step: 'installing' }
-  | { readonly agent: AgentId; readonly step: 'signed-out' }
+  /** `reason`: Claude's only sign-in in effect is an API key, which the panel does not use. */
+  | { readonly agent: AgentId; readonly step: 'signed-out'; readonly reason?: 'api-key' }
   /** The sign-in could not be checked (the CLI timed out, stopped or printed something unreadable). Nothing is blocked. */
   | { readonly agent: AgentId; readonly step: 'unchecked' }
   /**
@@ -960,6 +961,7 @@ export function parseSetupState(input: unknown): SetupState {
     case 'missing':
     case 'installing':
     case 'signed-out':
+      return value['reason'] === 'api-key' ? { agent, step, reason: 'api-key' } : { agent, step };
     case 'unchecked':
       return { agent, step };
     case 'signing-in':

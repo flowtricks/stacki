@@ -38,9 +38,16 @@ const home = process.env.FAKE_CONFIG_DIR;
 const mode = (flag) => fs.existsSync(path.join(home, 'mode-' + flag));
 let args = process.argv.slice(2);
 let approved = [];
+let flags;
 if (args[0] === '--settings') {
-  approved = JSON.parse(args[1]).enabledMcpjsonServers;
+  flags = JSON.parse(args[1]);
+  approved = flags.enabledMcpjsonServers ?? [];
   args = args.slice(2);
+}
+// Every Claude command of the panel switches the API key routes off and starts with no key.
+if (name === 'claude') {
+  if (process.env.ANTHROPIC_API_KEY !== undefined) { process.stderr.write('a key reached claude'); process.exit(70); }
+  if (flags?.apiKeyHelper !== '' || flags?.env?.ANTHROPIC_API_KEY !== '') { process.stderr.write('claude without the no-key settings'); process.exit(71); }
 }
 fs.appendFileSync(path.join(home, 'calls'), name + ' ' + process.argv.slice(2).join(' ') + ' @' + process.cwd() + '\\n');
 const [, verb, server] = args;
@@ -131,7 +138,7 @@ function world(context: { after: (run: () => void) => void }) {
   const make = (extra: { readonly signInMs?: number; readonly codex?: 'absent' } = {}) => {
     const service = new McpSignIn({
       findCli: (agent) => (agent === 'codex' && extra.codex === 'absent' ? undefined : clis[agent]),
-      environment: async () => ({ HOME: home, PATH: '/usr/bin:/bin', FAKE_CONFIG_DIR: config }),
+      environment: async () => ({ HOME: home, PATH: '/usr/bin:/bin', FAKE_CONFIG_DIR: config, ANTHROPIC_API_KEY: 'sk-ant-fake-for-this-test' }),
       projectServers: signInServers,
       trusted: () => trusted,
       openExternal: (url) => opened.push(url),
@@ -207,7 +214,7 @@ test('Claude: sign in through the browser, connected without a restart, kept acr
   assert.equal(it.opened.length, 1, 'the page opens once, whole');
   assert.equal(it.calls().filter((line) => / login figma --no-browser/.test(line)).length, 1);
   assert.ok(fs.existsSync(path.join(it.config, 'claude-token-figma')), 'stored by the CLI, in the folder its sessions read');
-  assert.ok(it.calls().every((line) => !line.includes('--settings') || line.includes('{"enabledMcpjsonServers":["figma"]}')));
+  assert.ok(it.calls().every((line) => !line.includes('enabledMcpjsonServers') || line.includes('"enabledMcpjsonServers":["figma"],')));
   assert.equal(fs.existsSync(path.join(it.project, '.claude')), false, 'no approval is written anywhere');
   const outside = JSON.stringify(it.told) + it.lines.join('\n');
   assert.doesNotMatch(outside, /auth\.fake\.example|fake-state|fake-code|redirect_uri|token-for/);

@@ -39,6 +39,7 @@ import { MCP_LIMITS } from '../../../shared/properties/mcpConfig';
 import type { AgentId } from '../../../shared/properties/ai/agentIds';
 import { spawnPipeProcess, spawnPseudoTerminal, stripTerminalCodes, type SetupCommand, type SetupProcess } from './agentSetup';
 import { realFileSystem, resolveWindowsCommand, type CommandFileSystem } from './windowsCommand';
+import { claudeSettingsArguments, withoutClaudeAPIKey } from '../../lib/claudeSubscriptionOnly';
 
 export const MCP_SIGN_IN_LIMITS = {
   /** How long a sign-in may wait for the browser: the CLIs' own limit. */
@@ -277,7 +278,7 @@ export class McpSignIn {
     // Keyed by the resolved program: an update is a different file, so it is asked again.
     let support = this.support.get(cli);
     if (support === undefined) {
-      support = this.run(root, agent, ['mcp', 'login', '--help']).then((run) => {
+      support = this.run(root, agent, [...(agent === 'claude' ? claudeSettingsArguments() : []), 'mcp', 'login', '--help']).then((run) => {
         if (run === undefined || run.exitCode < 0) {
           this.support.delete(cli); // Nothing was learned; ask again next time.
           return 'none';
@@ -450,7 +451,7 @@ export class McpSignIn {
     if (cli === undefined) {
       return undefined;
     }
-    const environment = await this.deps.environment(agent);
+    const environment = withoutClaudeAPIKey(agent, await this.deps.environment(agent));
     const resolved = resolveWindowsCommand(
       { command: cli, args: [...args] },
       {
@@ -520,7 +521,7 @@ function keyOf(root: string, agent: AgentId, name: string): string {
 /** The one-command approval of this project server (see the head comment). The name is a plain identifier. */
 function approval(name: string): readonly string[] {
   assert(isSignInServerName(name), 'approval: a plain server name');
-  return ['--settings', JSON.stringify({ enabledMcpjsonServers: [name] })];
+  return claudeSettingsArguments({ enabledMcpjsonServers: [name] });
 }
 
 async function mapBounded<T, R>(items: readonly T[], atOnce: number, run: (item: T) => Promise<R>): Promise<readonly R[]> {

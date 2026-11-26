@@ -16,6 +16,11 @@
 // The CLI stores the credentials itself: Stacki never sees or keeps them, and only reads what the
 // status command prints (the account's email and plan, and which kind of sign-in is in use).
 //
+// Claude never signs in with an Anthropic API key here (lib/claudeSubscriptionOnly.ts): its commands run without
+// the variable and with the flag settings that switch the other key routes off. A status that still reports a key
+// (an organisation's managed settings, or the key a Console sign-in saved) reads as signed out, and the card offers
+// the subscription sign-in. A session starts only on a recent status that found another sign-in (`permit`).
+//
 // A status check has three answers, never two: signed in, signed out (the CLI said so), or "couldn't
 // check" (it timed out, stopped, or printed something that cannot be read). Only a real "not signed
 // in" blocks the composer. A check that could not be made is tried again after each delay in
@@ -40,9 +45,20 @@ import { SETUP_DETAILS_CHARS_MAX, type SetupAccount, type SetupAction, type Setu
 import { AGENTS, AGENT_IDS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { findCli, type CliFileSystem } from './agentRegistry';
 import { isSwitchedOn, SIGN_IN_SETTINGS } from '../../lib/loginShellSettings';
+import { claudeSettingsArguments, withoutClaudeAPIKey } from '../../lib/claudeSubscriptionOnly';
 import { describeAttempt, realFileSystem, resolveWindowsCommand, type CommandFileSystem, type CommandLine, type ResolvedCommand } from './windowsCommand';
 import { described } from './aiMessages';
 import type { Described, TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
+
+/**
+ * How long a status that allowed a session stands before the next one asks again. Why not every message: a status
+ * is a process of its own. Why not longer: a Console sign-in made in a terminal meanwhile saves a key. Signing in or
+ * out here, and a check that finds anything else, ends it at once.
+ */
+export const SESSION_PERMIT_MS = 2 * 60 * 1000;
+
+/** Whether a Claude session may start: yes, not until the person signs in, or not while the sign-in cannot be checked. */
+export type SessionPermit = 'allowed' | 'sign-in' | 'unchecked';
 
 export const SETUP_LIMITS = {
   outputCharsMax: SETUP_DETAILS_CHARS_MAX,
@@ -79,7 +95,11 @@ export interface StatusOutput {
 }
 
 /** What a status command's output says. `unreadable` is not an answer about the sign-in: nothing was learned. */
-export type StatusReading = { readonly kind: 'signed-in'; readonly account: SetupAccount } | { readonly kind: 'signed-out' } | { readonly kind: 'unreadable' };
+export type StatusReading =
+  | { readonly kind: 'signed-in'; readonly account: SetupAccount }
+  /** `reason`: the sign-in in effect is an API key, which the panel does not use. */
+  | { readonly kind: 'signed-out'; readonly reason?: 'api-key' }
+  | { readonly kind: 'unreadable' };
 
 export const AGENT_SETUP: Readonly<Record<AgentId, AgentSetupCommands>> = {
   claude: {
@@ -87,9 +107,9 @@ export const AGENT_SETUP: Readonly<Record<AgentId, AgentSetupCommands>> = {
       platform === 'win32'
         ? { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://claude.ai/install.ps1 | iex'] }
         : { command: '/bin/bash', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] },
-    status: ['auth', 'status'],
-    signIn: ['auth', 'login', '--claudeai'],
-    signOut: ['auth', 'logout'],
+    status: [...claudeSettingsArguments(), 'auth', 'status'],
+    signIn: [...claudeSettingsArguments(), 'auth', 'login', '--claudeai'],
+    signOut: [...claudeSettingsArguments(), 'auth', 'logout'],
     signInHosts: ['claude.ai', 'claude.com', 'anthropic.com', 'console.anthropic.com', 'platform.claude.com'],
     readStatus: readClaudeStatus,
   },
@@ -125,6 +145,8 @@ export interface SetupDeps {
   readonly agentEnvironment?: (agent: AgentId) => Promise<Readonly<Record<string, string | undefined>>>;
   /** A sign-in command succeeded but the status could not be checked: the agent is no longer held as signed out. */
   readonly signInCompleted?: (agent: AgentId) => void;
+  /** The clock the session permit ages by; tests set it. */
+  readonly now?: () => number;
   /** The status check's bounds; tests shorten them. */
   readonly statusTimeoutMs?: number;
   readonly statusRetryDelaysMs?: readonly number[];
@@ -169,6 +191,10 @@ export class AgentSetup {
   private readonly revisions = new Map<AgentId, number>();
   private readonly checks = new Map<AgentId, { readonly revision: number; readonly result: Promise<SetupState> }>();
   private readonly retries = new Map<AgentId, ReturnType<typeof setTimeout>>();
+  /** When each agent was last found able to sign a session in; absent once anything says otherwise. */
+  private readonly permitted = new Map<AgentId, number>();
+  /** The check a permit is waiting for, so sessions starting together share one status process. */
+  private readonly permits = new Map<AgentId, Promise<SessionPermit>>();
 
   constructor(private readonly deps: SetupDeps) {}
 
@@ -193,6 +219,42 @@ export class AgentSetup {
     }
   }
 
+  /**
+   * Whether a Claude session may start now. Only a status that found a sign-in other than an API key allows one,
+   * because a saved Console key or a managed one cannot be switched off for a session: while the status cannot be
+   * checked, none starts. Other agents, and a missing CLI (the session says so itself), are always allowed.
+   */
+  permit(agent: AgentId): Promise<SessionPermit> {
+    if (agent !== 'claude') {
+      return Promise.resolve('allowed');
+    }
+    const at = this.permitted.get(agent);
+    if (at !== undefined && this.now() - at < SESSION_PERMIT_MS) {
+      return Promise.resolve('allowed');
+    }
+    if (this.running.has(agent)) {
+      return Promise.resolve('sign-in'); // Installing or signing in.
+    }
+    const waiting = this.permits.get(agent);
+    if (waiting !== undefined) {
+      return waiting;
+    }
+    const asked = this.detect(agent)
+      .then((state): SessionPermit => {
+        if (state.step === 'ready' || state.step === 'missing') {
+          return 'allowed';
+        }
+        return state.step === 'unchecked' ? 'unchecked' : 'sign-in';
+      })
+      .finally(() => this.permits.delete(agent));
+    this.permits.set(agent, asked);
+    return asked;
+  }
+
+  private now(): number {
+    return (this.deps.now ?? Date.now)();
+  }
+
   /** Stops every setup process and pending retry: the app is quitting. */
   stopAll(): void {
     for (const agent of AGENT_IDS) {
@@ -211,6 +273,11 @@ export class AgentSetup {
 
   private set(state: SetupState): SetupState {
     this.supersede(state.agent);
+    if (state.step === 'ready') {
+      this.permitted.set(state.agent, this.now());
+    } else {
+      this.permitted.delete(state.agent);
+    }
     this.states.set(state.agent, state);
     this.deps.publish(state);
     return state;
@@ -264,7 +331,7 @@ export class AgentSetup {
       case 'signed-in':
         return this.set({ agent, step: 'ready', account: reading.account });
       case 'signed-out':
-        return this.set({ agent, step: 'signed-out' });
+        return this.set({ agent, step: 'signed-out', ...(reading.reason === undefined ? {} : { reason: reading.reason }) });
       case 'unreadable': {
         // How it ended and the exit code only: what an unreadable status printed may name the account.
         this.log(agent, `the sign-in status could not be checked (${run.end}, code ${run.exitCode})`);
@@ -303,8 +370,9 @@ export class AgentSetup {
     this.retries.set(agent, timer);
   }
 
-  private agentEnvironment(agent: AgentId): Promise<Readonly<Record<string, string | undefined>>> {
-    return this.deps.agentEnvironment === undefined ? Promise.resolve(this.deps.environment()) : this.deps.agentEnvironment(agent);
+  private async agentEnvironment(agent: AgentId): Promise<Readonly<Record<string, string | undefined>>> {
+    const environment = this.deps.agentEnvironment === undefined ? this.deps.environment() : await this.deps.agentEnvironment(agent);
+    return withoutClaudeAPIKey(agent, environment);
   }
 
   private async install(agent: AgentId): Promise<SetupState> {
@@ -316,7 +384,7 @@ export class AgentSetup {
     // An installer is not the agent: it gets the plain environment, never the sign-in settings.
     const { output, exitCode, attempt } = await this.collect(agent, command, {
       timeoutMs: SETUP_LIMITS.installMsMax,
-      environment: this.deps.environment(),
+      environment: withoutClaudeAPIKey(agent, this.deps.environment()),
     });
     if (exitCode !== 0) {
       return this.set({
@@ -407,6 +475,8 @@ export class AgentSetup {
       void this.detect(agent).then((state) => {
         if (state.step === 'unchecked') {
           // The CLI said the sign-in worked and then could not be asked: that is not a failed sign-in.
+          // The subscription sign-in this app just ran is what Claude now uses.
+          this.permitted.set(agent, this.now());
           this.deps.signInCompleted?.(agent);
           this.deps.publish(this.state(agent));
         } else if (state.step !== 'ready') {
@@ -658,7 +728,12 @@ export function readClaudeStatus(printed: StatusOutput, environment: Readonly<Re
     return { kind: 'unreadable' };
   }
   const text = (key: string): string | undefined => (typeof status[key] === 'string' && status[key] !== '' ? status[key] : undefined);
-  const source = claudeSignInSource(text('authMethod'), environment);
+  const method = text('authMethod');
+  // What requests would use. (`apiKeySource` alone is not that: a key saved beside a subscription sign-in lies unused.)
+  if (method === 'api_key' || method === 'api_key_helper') {
+    return { kind: 'signed-out', reason: 'api-key' };
+  }
+  const source = claudeSignInSource(method, environment);
   if (source !== 'account') {
     // A saved account may be named beside a key that is used instead of it: naming it would mislead.
     return { kind: 'signed-in', account: { ...NO_ACCOUNT, source } };
@@ -670,28 +745,20 @@ export function readClaudeStatus(printed: StatusOutput, environment: Readonly<Re
 }
 
 /**
- * Which sign-in Claude will use, in its documented order (https://code.claude.com/docs/en/authentication): a cloud
- * provider, then ANTHROPIC_AUTH_TOKEN, then ANTHROPIC_API_KEY (the Agent SDK the panel runs through uses a key
- * whenever it is present), then what the CLI itself reports (`authMethod`), which covers a key helper and tokens.
- * Only whether a variable is set is looked at, never its value.
+ * Which kind of sign-in Claude will use when it is not an API key, in its documented order
+ * (https://code.claude.com/docs/en/authentication): a cloud provider, then ANTHROPIC_AUTH_TOKEN, then what the CLI
+ * itself reports (`authMethod`), which covers tokens. Only whether a variable is set is looked at, never its value.
  */
 export function claudeSignInSource(authMethod: string | undefined, environment: Readonly<Record<string, string | undefined>>): SignInSource {
-  const has = (name: string): boolean => (environment[name] ?? '') !== '';
   if (SIGN_IN_SETTINGS.claude.clouds.some((cloud) => cloud.switches.some((name) => isSwitchedOn(environment[name])))) {
     return 'cloud';
   }
-  if (has('ANTHROPIC_AUTH_TOKEN')) {
+  if ((environment['ANTHROPIC_AUTH_TOKEN'] ?? '') !== '') {
     return 'token';
-  }
-  if (has('ANTHROPIC_API_KEY')) {
-    return 'api-key';
   }
   switch (authMethod) {
     case 'third_party':
       return 'cloud';
-    case 'api_key':
-    case 'api_key_helper':
-      return 'api-key';
     case 'oauth_token':
       return 'token';
     case undefined:

@@ -45,9 +45,12 @@ function fakeCli(script: (process: FakeProcess) => void) {
   const make = (command: { command: string; args: readonly string[] }) => {
     let data: (text: string) => void = () => undefined;
     let done: (code: number) => void = () => undefined;
+    // Claude's commands begin with the settings that switch the API key routes off (claudeSubscriptionOnly.test.ts); the
+    // scripts here read the command after them.
+    const flagged = command.args[0] === '--settings';
     const process: FakeProcess = {
       command: command.command,
-      args: command.args,
+      args: flagged ? command.args.slice(2) : command.args,
       written: [],
       emit: (text) => data(text),
       exit: (code) => done(code),
