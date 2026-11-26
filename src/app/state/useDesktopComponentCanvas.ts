@@ -327,13 +327,10 @@ function rootScopeFor(current: CanvasOpen): string {
   return root.backgroundSource === 'component' || root.classesSource === 'component' ? COMPONENT_SCOPE : PROJECT_SCOPE;
 }
 
-// The scope when another frame is selected: "this frame" follows the selection, a wider scope stays while the new frame
-// is in it, and otherwise the new frame itself.
+// The scope after a frame is selected: another frame (or coming from the canvas root) starts at the frame itself, so a
+// wider scope is always a choice made for the frame in front of you; the same frame selected again keeps it.
 function scopeAfterSelect(current: CanvasOpen, key: string): string {
-  if (current.scope === current.frame || rootTarget(current) !== undefined) {
-    return key;
-  }
-  return scopeStillFits(current.scope, key, current.layout) ? current.scope : key;
+  return key !== current.frame || rootTarget(current) !== undefined ? key : current.scope;
 }
 
 // A scope is the selected frame, every frame, one split value the selected frame shows, or a canvas root scope.

@@ -157,3 +157,18 @@
   line-height: inherit;
   cursor: default;
 }
+/* The scope control above a frame's fields, and in Frame settings: one line, long split values cut off. */
+.component-canvas-scope {
+  flex: 0 0 auto;
+  margin: 8px 12px 4px;
+}
+.component-canvas-scope .u-segmented-button {
+  min-width: 0;
+}
+.component-canvas-scope-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

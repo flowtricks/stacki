@@ -30,15 +30,13 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
   const { name, type, isSet, showExpr, onLabelClick, onLabelContextMenu, required, missingRequired, deprecated } = state;
   // Set is the overridden state: the label takes the accent, as a value the
   // instance gives rather than the component's default.
-  const classes = ['prop-label', ...(isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
+  const provenance = usePropFieldExtra(state.field.name)?.provenance;
+  const inherited = provenance?.tone === 'inherited';
+  const classes = ['prop-label', ...(inherited ? ['inherited'] : isSet ? ['set'] : []), ...(deprecated === undefined ? [] : ['deprecated'])];
+  const ownTitle = isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined;
 
   return (
-    <span
-      className={classes.join(' ')}
-      title={isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined}
-      onClick={onLabelClick}
-      onContextMenu={onLabelContextMenu}
-    >
+    <span className={classes.join(' ')} title={provenance?.tip ?? ownTitle} onClick={onLabelClick} onContextMenu={onLabelContextMenu}>
       <FieldTypeIcon type={type} name={name} />
       {name}
       {required && (

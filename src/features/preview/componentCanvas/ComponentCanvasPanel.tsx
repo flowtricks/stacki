@@ -4,7 +4,7 @@
 // their own frames and the frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode } from 'react';
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, canvasRoot, frameBackground, frameKey, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, canvasRoot, frameBackground, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
 import Dropdown from '../../../ui/Dropdown';
 import InfoHint from '../../../ui/InfoHint';
 import SegmentedControl from '../../../ui/SegmentedControl';
@@ -14,7 +14,8 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import ColorSwatch from '../../style/components/ColorSwatch';
 import VariableConnect from '../../style/VariableConnect';
 import type { ModelFrame } from './canvasModel';
-import { frameLabel, partLabel, prettyComponentName } from './frameLabel';
+import { frameLabel, prettyComponentName } from './frameLabel';
+import { CanvasScopeControl } from './CanvasScopeControl';
 import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 import { CAPTION_LABEL_FOR } from '../../../ui/captionLabel';
@@ -65,11 +66,6 @@ function FrameSection({
   readonly entry: FrameEntry | undefined;
 }) {
   const translate = useTranslate();
-  const scopes = [
-    { value: frame.key, label: translate('componentCanvas.panel.scope.frame') },
-    ...frame.parts.map((part) => ({ value: frameKey([part]), label: translate('componentCanvas.panel.scope.part', { part: partLabel(part, translate) }) })),
-    { value: '', label: translate('componentCanvas.panel.scope.all') },
-  ].filter((option, index, all) => all.findIndex((other) => other.value === option.value) === index);
   return (
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.frame.title')}>
       <Heading title={translate('componentCanvas.panel.frame.title')} hint={translate('componentCanvas.panel.frame.about')} />
@@ -84,13 +80,7 @@ function FrameSection({
           />
         </div>
       )}
-      <div className="props-field">
-        <label htmlFor={CAPTION_LABEL_FOR}>
-          {translate('componentCanvas.panel.scope.label')}
-          <InfoHint text={translate('componentCanvas.panel.scope.hint')} />
-        </label>
-        <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
-      </div>
+      <CanvasScopeControl canvas={canvas} state={state} />
       <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
       <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
       <BackgroundField canvas={canvas} state={state} frame={frame} entry={entry} />

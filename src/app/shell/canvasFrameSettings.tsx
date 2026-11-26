@@ -12,7 +12,18 @@ import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { toNodeId, type NodeId } from '../../../shared/core/brand';
 import { can } from '../../../shared/properties/projectRoles';
-import { CANVAS_LIMITS, canvasContent, canvasRoot, type FrameEdit } from '../../../shared/properties/componentCanvas';
+import {
+  CANVAS_LIMITS,
+  canvasContent,
+  canvasRoot,
+  frameKey,
+  keyPairs,
+  resolveFrame,
+  settingLevel,
+  type ComponentCanvas,
+  type FrameEdit,
+  type FrameSetting,
+} from '../../../shared/properties/componentCanvas';
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { nodeAtPath } from '../../editor/editorTree';
 import { trailOf } from '../model/pageGestures';
@@ -30,8 +41,8 @@ import { contentFieldNodes, contentHTML, frameEditOf, framePickEdit, framePanelV
 import type { PropValues } from '../../features/props/propRules';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { richTextNodes, richTextView } from '../../features/props/richTextContent';
-import { frameLabel } from '../../features/preview/componentCanvas/frameLabel';
-import type { PropFieldAction, PropFieldExtras } from '../../features/props/propFieldExtras';
+import { frameLabel, partLabel } from '../../features/preview/componentCanvas/frameLabel';
+import type { PropFieldAction, PropFieldExtras, PropFieldProvenance } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -120,7 +131,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
           : {
               action: splitAction(state, { name, count: candidate.values.length }, { canvas, translate, onRefused: (text) => app.showToast(text, 'info') }),
             }),
-        ...(split ? { lockedReason: translate('componentCanvas.split.locked', { name }) } : {}),
+        ...(split ? { lockedReason: translate('componentCanvas.split.locked', { name }) } : provenanceExtra(state, frame, `prop:${name}`, translate)),
       };
     },
     panel: framePanel({ app, canvas, state, frame, drafts, translate }),
@@ -222,6 +233,7 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
     contentValue: {
       nodes: contentFieldNodes(richTextNodes(values.content.html, document)),
       own: values.content.own,
+      ...provenanceExtra(state, frame, 'content', translate),
       onReset: () => write([{ kind: 'content', value: undefined }]),
     },
   };
@@ -238,6 +250,37 @@ function panelNodeId(words: string): NodeId {
     hex += (hash >>> 0).toString(16).padStart(8, '0');
   }
   return toNodeId(`g${hex}`);
+}
+
+// Where a setting shown at the current scope comes from, when that is not the scope itself: a wider level that gives
+// it, or a narrower one the selected frame has, which wins on that frame whatever is set here.
+function provenanceExtra(state: CanvasOpen, frame: ModelFrame, setting: FrameSetting, translate: Translator): { readonly provenance?: PropFieldProvenance } {
+  const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? frame.key : state.scope;
+  const settings = state.settings.components[state.component.file];
+  const level = settingLevel(settings, frame.key, scope, setting);
+  if (level.kind === 'own' || level.kind === 'none') {
+    return {};
+  }
+  const source = level.kind === 'inherited' ? level.from : level.by;
+  const tone = level.kind === 'overridden' && entryAt(settings, scope, setting) ? 'noted' : 'inherited';
+  return { provenance: { tone, tip: levelTip(source, frame, translate) } };
+}
+
+// Whether the scope's own entry holds the setting.
+function entryAt(settings: ComponentCanvas | undefined, scope: string, setting: FrameSetting): boolean {
+  return resolveFrame(settings, scope).origins.get(setting) === scope;
+}
+
+// Who a value is set for, by the key of its entry as this frame meets it.
+function levelTip(source: string, frame: ModelFrame, translate: Translator): string {
+  if (source === frame.key && source !== '') {
+    return translate('componentCanvas.level.frame');
+  }
+  if (source === '') {
+    return translate('componentCanvas.level.all');
+  }
+  const named = frame.parts.filter((part) => keyPairs(source).includes(frameKey([part]))).map((part) => partLabel(part, translate));
+  return translate('componentCanvas.level.part', { part: named.join(' · ') });
 }
 
 interface Unfinished {

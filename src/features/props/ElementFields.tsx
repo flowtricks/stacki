@@ -27,6 +27,8 @@ import type { FieldFocus } from './fieldFocus';
 import { RichTextContentField } from './ComponentEditingFields';
 import { plainChildrenHTML } from './richTextContent';
 import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
+import type { PropFieldProvenance } from './propFieldExtras';
+import './propFieldExtras.css';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
@@ -39,6 +41,9 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
       <RichTextContentField
         label={translate('props.element.content')}
         key={node.id}
+        provenance={held?.provenance}
+        own={held?.own}
+        onReset={held?.onReset}
         source={state.contentSource ?? plainChildrenHTML(node.children)}
         onSetNodes={onSetInline}
         onSetSource={state.onSetContentSource}
@@ -54,6 +59,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
               active={contentSet}
               name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}
               onReset={held === undefined ? () => onSetInline([]) : held.onReset}
+              provenance={held?.provenance}
             />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
@@ -104,14 +110,19 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   );
 }
 
-function ContentLabel(props: { readonly active: boolean; readonly name: string; readonly onReset: () => void }) {
+function ContentLabel(props: {
+  readonly active: boolean;
+  readonly name: string;
+  readonly onReset: () => void;
+  readonly provenance?: PropFieldProvenance | undefined;
+}) {
   const translate = useTranslate();
   const [position, setPosition] = useState<FieldPosition>();
   return (
     <>
       <span
-        className={`prop-label${props.active ? ' set' : ''}`}
-        title={props.active ? translate('props.element.resetHint') : undefined}
+        className={`prop-label${props.provenance?.tone === 'inherited' ? ' inherited' : props.active ? ' set' : ''}`}
+        title={props.provenance?.tip ?? (props.active ? translate('props.element.resetHint') : undefined)}
         onClick={(event) => {
           event.preventDefault();
           if (!props.active) {

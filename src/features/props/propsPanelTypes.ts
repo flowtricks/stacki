@@ -14,6 +14,7 @@ import type { VariableRename } from '../../../shared/engine/variableRename';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
 import type { InlineCandidate } from './richContentModel';
+import type { PropFieldProvenance } from './propFieldExtras';
 import type { TextPiece } from './textConnect';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
@@ -23,6 +24,7 @@ import LinkField from './LinkField';
 export interface ContentValue {
   readonly nodes: readonly InlineCandidate[];
   readonly own: boolean;
+  readonly provenance?: PropFieldProvenance | undefined;
   readonly onReset: () => void;
 }
 export type SelectedNode = PageNode | { readonly kind: 'frontmatter'; readonly id: string };

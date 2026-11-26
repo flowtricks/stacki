@@ -21,3 +21,13 @@
 .prop-field-actions {
   white-space: nowrap;
 }
+
+/* A value that comes from somewhere else: the Style panel's orange (features/style/tokens.css). */
+.prop-label.inherited {
+  color: var(--color-prop-orange, #ffbc86);
+  background: var(--color-prop-orange-bg, rgba(223, 100, 12, 0.2));
+}
+.prop-label-holder.inherited > .prop-label:not(.set) {
+  color: var(--color-prop-orange, #ffbc86);
+  background: var(--color-prop-orange-bg, rgba(223, 100, 12, 0.2));
+}

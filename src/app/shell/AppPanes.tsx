@@ -71,6 +71,7 @@ import { pressWasForEditor, type CanvasPress } from '../../features/preview/canv
 import { canvasInstanceAt, canvasRootPath, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
+import { CanvasScopeControl } from '../../features/preview/componentCanvas/CanvasScopeControl';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
 
@@ -539,7 +540,8 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
   const fallback = visible.some((tab) => tab.id === app.rightTab) ? undefined : visible[0]?.id;
   const { setRightTab } = app;
   // A component canvas frame's instance: its props are that frame's preview values (canvasFrameSettings.tsx).
-  const canvasInstance = useCanvasInstanceSettings(app, useComponentCanvas());
+  const componentCanvas = useComponentCanvas();
+  const canvasInstance = useCanvasInstanceSettings(app, componentCanvas);
   useEffect(() => {
     if (fallback !== undefined) {
       setRightTab(fallback);
@@ -557,6 +559,9 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
         </PanelBoundary>
       </KeptTabPanel>
       <KeptTabPanel shown={app.rightTab === 'settings'}>
+        {canvasInstance?.kind === 'instance' && componentCanvas?.state.kind === 'open' && (
+          <CanvasScopeControl canvas={componentCanvas} state={componentCanvas.state} />
+        )}
         <PropPreviewContext.Provider value={propPreview}>
           <PropFieldExtrasContext.Provider value={canvasInstance?.kind === 'instance' ? canvasInstance.extras : undefined}>
             <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
