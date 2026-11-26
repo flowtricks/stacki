@@ -500,7 +500,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Salva',
   'ai.pins.send.busy': 'L’agente sta ancora rispondendo in questa chat. Attendi che finisca o interrompilo.',
-  'ai.pins.send.none': 'Niente da inviare. Fissa un commento o includi un pin dall’elenco.',
   'ai.pins.send.notReady': 'Prima configura l’agente nel pannello della chat.',
   'ai.pins.send.oneByOne': 'Invia ogni pin come messaggio a sé, uno dopo l’altro: qui non è possibile seguire i subagent di questo agente.',
   'ai.pins.send.running': 'I pin vengono ancora inviati uno alla volta.',

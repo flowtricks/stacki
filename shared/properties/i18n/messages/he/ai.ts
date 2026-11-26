@@ -520,7 +520,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'שמירה',
   'ai.pins.send.busy': 'הסוכן עדיין עונה בצ׳אט הזה. יש להמתין שיסיים, או לעצור אותו.',
-  'ai.pins.send.none': 'אין מה לשלוח. אפשר לנעוץ תגובה, או לכלול נעץ מהרשימה.',
   'ai.pins.send.notReady': 'קודם יש להגדיר את הסוכן בחלונית הצ׳אט.',
   'ai.pins.send.oneByOne': 'כל נעץ נשלח כהודעה נפרדת, בזה אחר זה: אי אפשר לעקוב כאן אחרי סוכני המשנה של הסוכן הזה.',
   'ai.pins.send.running': 'הנעצים עדיין נשלחים בזה אחר זה.',

@@ -500,7 +500,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Kaydet',
   'ai.pins.send.busy': 'Ajan bu sohbette hâlâ yanıt veriyor. Bitirmesini bekleyin veya durdurun.',
-  'ai.pins.send.none': 'Gönderilecek bir şey yok. Bir yorum iğneleyin veya listeden bir iğneyi dahil edin.',
   'ai.pins.send.notReady': 'Önce sohbet panelinde ajanı kurun.',
   'ai.pins.send.oneByOne': 'Her iğneyi art arda ayrı bir mesaj olarak gönderir: bu ajanın alt ajanları burada takip edilemez.',
   'ai.pins.send.running': 'İğneler hâlâ tek tek gönderiliyor.',

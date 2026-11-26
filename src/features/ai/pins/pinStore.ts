@@ -657,12 +657,13 @@ export function sentPinOf(chat: ChatId, turn: TurnId, number: number): CommentPi
 // Send all
 // ---------------------------------------------------------------------------
 
-/** Where "Send all" stands for the chat it would go to: ready (and how), or why not. */
+/** Where "Send all" stands for the chat it would go to: nothing to send (there is no Send), ready (and how), or why not. */
 export type SendReadiness =
+  | { readonly kind: 'empty'; readonly count: 0 }
   | { readonly kind: 'ready'; readonly mode: PinSendMode; readonly count: number }
   | { readonly kind: 'blocked'; readonly reason: SendBlock; readonly count: number };
 
-export type SendBlock = SendRefusal | 'busy' | 'running' | 'not-ready';
+export type SendBlock = Exclude<SendRefusal, 'none'> | 'busy' | 'running' | 'not-ready';
 
 /** Whether "Send all" can go now: something to send, within one message's bounds, the chat idle and its agent ready. */
 export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): SendReadiness {
@@ -672,6 +673,9 @@ export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): S
   const mode = pinSendMode(agent);
   const count = chosen.length;
   const refusal = sendRefusal(chosen, mode);
+  if (refusal === 'none') {
+    return { kind: 'empty', count: 0 };
+  }
   if (refusal !== undefined) {
     return { kind: 'blocked', reason: refusal, count };
   }

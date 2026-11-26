@@ -476,7 +476,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': '保存',
   'ai.pins.send.busy': '代理仍在此聊天中回复。请等它完成，或将其停止。',
-  'ai.pins.send.none': '没有可发送的内容。请钉一条评论，或从列表中纳入一个图钉。',
   'ai.pins.send.notReady': '请先在聊天面板中设置代理。',
   'ai.pins.send.oneByOne': '将每个图钉作为单独的消息依次发送：此处无法跟踪该代理的子代理。',
   'ai.pins.send.running': '图钉仍在逐个发送中。',

@@ -545,7 +545,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Zapisz',
   'ai.pins.send.busy': 'Agent nadal odpowiada na tym czacie. Poczekaj, aż skończy, lub go zatrzymaj.',
-  'ai.pins.send.none': 'Nie ma nic do wysłania. Przypnij komentarz lub uwzględnij pinezkę z listy.',
   'ai.pins.send.notReady': 'Najpierw skonfiguruj agenta w panelu czatu.',
   'ai.pins.send.oneByOne': 'Wysyła każdą pinezkę jako osobną wiadomość, jedną po drugiej: podagentów tego agenta nie można tu śledzić.',
   'ai.pins.send.running': 'Pinezki są nadal wysyłane jedna po drugiej.',

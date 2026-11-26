@@ -501,7 +501,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Opslaan',
   'ai.pins.send.busy': 'De agent antwoordt nog in deze chat. Wacht tot hij klaar is of stop hem.',
-  'ai.pins.send.none': 'Niets te versturen. Pin een opmerking vast of selecteer een pin in de lijst.',
   'ai.pins.send.notReady': 'Stel eerst de agent in het chatpaneel in.',
   'ai.pins.send.oneByOne': 'Verstuurt elke pin als een eigen bericht, na elkaar: de subagents van deze agent kunnen hier niet worden gevolgd.',
   'ai.pins.send.running': 'Pins worden nog een voor een verzonden.',

@@ -479,7 +479,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Simpan',
   'ai.pins.send.busy': 'Agen masih menjawab di obrolan ini. Tunggu sampai selesai, atau hentikan.',
-  'ai.pins.send.none': 'Tidak ada yang bisa dikirim. Sematkan komentar, atau sertakan pin dari daftar.',
   'ai.pins.send.notReady': 'Siapkan agen di panel obrolan terlebih dahulu.',
   'ai.pins.send.oneByOne': 'Mengirim tiap pin sebagai pesan tersendiri, satu per satu: subagen milik agen ini tidak dapat dipantau di sini.',
   'ai.pins.send.running': 'Pin masih dikirim satu per satu.',

@@ -503,7 +503,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Speichern',
   'ai.pins.send.busy': 'Der Agent antwortet in diesem Chat noch. Warte, bis er fertig ist, oder stoppe ihn.',
-  'ai.pins.send.none': 'Nichts zu senden. Hefte einen Kommentar an oder schließe einen Pin aus der Liste ein.',
   'ai.pins.send.notReady': 'Richte zuerst den Agenten im Chat-Bereich ein.',
   'ai.pins.send.oneByOne': 'Sendet jeden Pin nacheinander als eigene Nachricht: Die Subagenten dieses Agenten lassen sich hier nicht verfolgen.',
   'ai.pins.send.running': 'Die Pins werden noch einzeln gesendet.',

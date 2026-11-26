@@ -479,7 +479,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': '保存',
   'ai.pins.send.busy': 'エージェントはこのチャットでまだ返信中です。完了を待つか、停止してください。',
-  'ai.pins.send.none': '送信するものがありません。コメントをピン留めするか、一覧のピンを含めてください。',
   'ai.pins.send.notReady': '先にチャットパネルでエージェントを設定してください。',
   'ai.pins.send.oneByOne': 'ピンを1件ずつ別々のメッセージとして順に送信します。このエージェントのサブエージェントはここでは追跡できません。',
   'ai.pins.send.running': 'ピンはまだ1件ずつ送信中です。',

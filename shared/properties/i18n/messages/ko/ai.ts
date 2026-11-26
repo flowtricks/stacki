@@ -478,7 +478,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': '저장',
   'ai.pins.send.busy': '에이전트가 이 채팅에서 아직 답변 중입니다. 끝날 때까지 기다리거나 중지하세요.',
-  'ai.pins.send.none': '보낼 항목이 없습니다. 댓글을 고정하거나 목록에서 핀을 포함하세요.',
   'ai.pins.send.notReady': '먼저 채팅 패널에서 에이전트를 설정하세요.',
   'ai.pins.send.oneByOne': '핀을 각각 별도의 메시지로 차례로 보냅니다. 여기서는 이 에이전트의 하위 에이전트를 추적할 수 없습니다.',
   'ai.pins.send.running': '핀을 아직 하나씩 보내는 중입니다.',

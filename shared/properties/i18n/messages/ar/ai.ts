@@ -587,7 +587,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'حفظ',
   'ai.pins.send.busy': 'لا يزال الوكيل يرد في هذه الدردشة. انتظر حتى ينتهي، أو أوقفه.',
-  'ai.pins.send.none': 'لا شيء لإرساله. ثبّت تعليقًا، أو ضمّن دبوسًا من القائمة.',
   'ai.pins.send.notReady': 'أعدّ الوكيل في لوحة الدردشة أولًا.',
   'ai.pins.send.oneByOne': 'يرسل كل دبوس في رسالة مستقلة، واحدًا تلو الآخر: لا يمكن متابعة الوكلاء الفرعيين لهذا الوكيل هنا.',
   'ai.pins.send.running': 'لا تزال الدبابيس تُرسل واحدًا تلو الآخر.',

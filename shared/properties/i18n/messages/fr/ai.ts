@@ -502,7 +502,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': 'Enregistrer',
   'ai.pins.send.busy': 'L’agent répond encore dans cette conversation. Attendez qu’il termine ou arrêtez-le.',
-  'ai.pins.send.none': 'Rien à envoyer. Épinglez un commentaire ou incluez une épingle de la liste.',
   'ai.pins.send.notReady': 'Configurez d’abord l’agent dans le panneau de conversation.',
   'ai.pins.send.oneByOne': 'Envoie chaque épingle dans son propre message, l’une après l’autre : les sous-agents de cet agent ne peuvent pas être suivis ici.',
   'ai.pins.send.running': 'Les épingles sont encore envoyées une par une.',

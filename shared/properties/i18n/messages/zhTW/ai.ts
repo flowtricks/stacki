@@ -476,7 +476,6 @@ export const messages = {
   'ai.pins.rowPlace': '{page} · {element} · {width}', // same
   'ai.pins.save': '儲存',
   'ai.pins.send.busy': '代理程式仍在此對話中回覆。請等它完成，或將它停止。',
-  'ai.pins.send.none': '沒有可傳送的內容。請釘上註解，或從清單納入圖釘。',
   'ai.pins.send.notReady': '請先在對話面板中設定代理程式。',
   'ai.pins.send.oneByOne': '將每個圖釘各以一則訊息依序傳送：此處無法追蹤這個代理程式的子代理程式。',
   'ai.pins.send.running': '圖釘仍在逐一傳送中。',
