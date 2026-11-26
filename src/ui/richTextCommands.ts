@@ -3,6 +3,7 @@
 // a contentEditable that keeps the browser's own undo history: ⌘Z steps back
 // through toolbar actions, shortcuts and Markdown conversions alike.
 import { assert } from '../../shared/core/assert';
+import { insertRichBlocks, richCaret, richElement, richHistoryOf } from '../../shared/page/richBlockDom';
 import { BLOCKS, escapeHTML, type Block, type BlockShortcut, type InlineShortcut } from './richTextModel';
 
 /** The inline marks the toolbar toggles. */
@@ -95,13 +96,16 @@ export function performAction(host: HTMLElement, action: Exclude<RichTextAction,
       toggleList(action.list);
       return;
     case 'rule':
-      insertRule();
+      insertRule(host);
       return;
     case 'clear':
       clearFormatting();
       return;
     case 'history':
-      document.execCommand(action.step);
+      // A block placed whole (a rule, an image) is not in the browser's own history; it is taken back from the editor's.
+      if (!richHistoryOf(host)[action.step]()) {
+        document.execCommand(action.step);
+      }
       return;
     default: {
       const exhaustive: never = action;
@@ -191,9 +195,14 @@ export function toggleList(list: 'ul' | 'ol'): void {
   document.execCommand(list === 'ul' ? 'insertUnorderedList' : 'insertOrderedList');
 }
 
-/** A horizontal rule, with a paragraph after it to keep typing in. */
-export function insertRule(): void {
-  document.execCommand('insertHTML', false, '<hr><p><br></p>');
+/** A horizontal rule, a block of its own, with a paragraph after it to keep typing in. */
+export function insertRule(host: HTMLElement): void {
+  insertBlock(host, richElement(host.ownerDocument, 'hr'));
+}
+
+/** Places a block (a rule, an image, a video) beside the caret's block, never inside it. */
+export function insertBlock(host: HTMLElement, block: Element): void {
+  richHistoryOf(host).record(() => insertRichBlocks(host, richCaret(host), [block]));
 }
 
 /** Removes inline formatting and links from the selection. */
@@ -248,7 +257,7 @@ export function applyBlockShortcut(host: HTMLElement, shortcut: BlockShortcut): 
       toggleList(shortcut.list);
       return;
     case 'rule':
-      insertRule();
+      insertRule(host);
       return;
     default: {
       const exhaustive: never = shortcut;

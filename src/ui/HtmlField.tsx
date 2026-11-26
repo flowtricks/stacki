@@ -13,6 +13,7 @@ import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
 import { HtmlToolbar, MOD } from './HtmlToolbar';
 import { containsHTML, editableHTML } from './htmlFieldModel';
+import { isSpareRichLine, richElement, richHistoryOf, tidyRichContent, withoutTrailingEmptyBlocks } from '../../shared/page/richBlockDom';
 import {
   applyBlockShortcut,
   applyInlineShortcut,
@@ -20,6 +21,7 @@ import {
   EMPTY_FORMAT,
   inCode,
   inParagraph,
+  insertBlock,
   lineBeforeCaret,
   performAction,
   rangeIn,
@@ -29,7 +31,7 @@ import {
   type FormatState,
   type RichTextAction,
 } from './richTextCommands';
-import { blockShortcut, cleanPastedHTML, escapeHTML, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
+import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
 import Menu, { type MenuEntry } from './Menu';
 import { PlusIcon } from './Icons';
 import './contentInputs.css';
@@ -145,7 +147,7 @@ function useHtmlEditor(options: {
     emit: () => {
       if (host.current !== undefined) {
         // Always leave a paragraph when emptied so the HTML field keeps its editor.
-        const html = editableHTML(host.current.innerHTML, document, { media }).html;
+        const html = editableHTML(writtenHTML(host.current, { rich: media }), document, { media }).html;
         emitted.current = containsHTML(html) ? html : `<p>${html}</p>`;
         refresh();
         onChange(emitted.current);
@@ -365,8 +367,7 @@ function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlac
     const element = editor.restore();
     setMedia(undefined);
     if (element !== undefined) {
-      const source = escapeHTML(address).replaceAll('"', '&quot;');
-      document.execCommand('insertHTML', false, kind === 'image' ? `<img src="${source}" alt="">` : `<video src="${source}" controls></video>`);
+      insertBlock(element, richElement(element.ownerDocument, kind === 'image' ? 'img' : 'video', address));
       editor.emit();
     }
   };
@@ -433,6 +434,12 @@ function keyDown(editor: Editor, event: KeyboardEvent<HTMLDivElement>, onAction:
     return;
   }
   const mod = MOD === '⌘' ? event.metaKey : event.ctrlKey;
+  // ⌘Z over a block placed whole, which the browser's own history does not know; every other undo is the browser's.
+  if (mod && !event.altKey && event.key.toLowerCase() === 'z' && richHistoryOf(element)[event.shiftKey ? 'redo' : 'undo']()) {
+    event.preventDefault();
+    editor.emit();
+    return;
+  }
   if (mod && event.shiftKey && event.code === 'KeyV') {
     const { plainPaste } = editor;
     plainPaste.current = true;
@@ -581,6 +588,18 @@ function restoreSelection(element: HTMLDivElement | undefined, range: Range | un
     selection?.addRange(range);
   }
   return element;
+}
+
+// What the field writes: valid HTML, and in rich text without the empty paragraph kept open at its end.
+function writtenHTML(host: HTMLElement, options: { readonly rich: boolean }): string {
+  const copy = host.ownerDocument.createElement('div');
+  copy.innerHTML = host.innerHTML;
+  Array.from(copy.children)
+    .filter(isSpareRichLine)
+    .forEach((line) => line.remove());
+  copy.querySelectorAll('[data-avb-line]').forEach((line) => line.removeAttribute('data-avb-line'));
+  tidyRichContent(copy);
+  return options.rich ? withoutTrailingEmptyBlocks(copy.innerHTML) : copy.innerHTML;
 }
 
 // An empty editor shows its placeholder; a rule or a list is content, not empty.

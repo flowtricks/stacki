@@ -242,11 +242,15 @@ function EditableExprInput(props: ExprInputProps) {
 }
 
 // A multi-line field shows its indentation as tabs, as every code editor does.
-// A field with chips or an API is the exception: their offsets are offsets into
-// the value, so that field's document has to be the value byte for byte.
+// A field with a single chip is the exception, and so is a one-line value in a
+// field with chips or an API: there the document is the value byte for byte.
 function exprCodeView(initial: ExprInputProps, value: string): CodeView {
-  const plain = !initial.multiline || initial.chip !== undefined || initial.chipsOf !== undefined || initial.apiRef !== undefined;
-  return plain ? sourceCodeView(value) : openCodeView(value, { extent: 'document', classify: codeLineClassifier(initial.language) });
+  const addressed = initial.chipsOf !== undefined || initial.apiRef !== undefined;
+  // Several lines are always laid out to read, whether or not the field takes new ones.
+  const plain = initial.chip !== undefined || ((!initial.multiline || addressed) && !value.includes('\n'));
+  // Code of several lines is shown without the indent the file nests its later lines at; an edit writes it back.
+  const extent = value.includes('\n') ? 'block' : 'document';
+  return plain ? sourceCodeView(value) : openCodeView(value, { extent, classify: codeLineClassifier(initial.language) });
 }
 
 function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs): EditorView {
@@ -410,7 +414,7 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
       return;
     }
     apiRef.current = {
-      replaceRange: (from, to, text) => exprReplace(refs.view.current, from, to, text),
+      replaceRange: (from, to, text) => (exprReplace(refs.view.current, from, to, text) === undefined ? undefined : refs.codeView.current.source),
       insert: (text) => {
         const view = refs.view.current;
         if (!view) {
@@ -418,9 +422,9 @@ function useExprAPI(apiRef: ExprInputProps['apiRef'], refs: ExprRefs): void {
         }
         const end = view.state.doc.length;
         const { from, to } = refs.touched.current ? view.state.selection.main : { from: end, to: end };
-        const value = exprReplace(view, from, to, text);
+        exprReplace(view, from, to, text);
         view.focus();
-        return value;
+        return refs.codeView.current.source;
       },
     };
     return () => {

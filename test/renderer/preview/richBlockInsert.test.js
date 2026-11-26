@@ -1,0 +1,130 @@
+// Goal: a block put into rich text (an image, a video, a rule, a list) is always a block of its own: it never lands
+// inside a paragraph, heading or quote; it replaces an empty line, goes before or after a block the caret is at an edge
+// of, and splits one the caret is inside. What the browser's own commands leave nested is moved out before saving.
+// Method: JSDOM, a caret set in the markup, and the shared functions both editors use (shared/page/richBlockDom.ts).
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { JSDOM } = require('jsdom');
+const loadRenderer = require('../../helpers/rendererModule');
+
+function editor(markup, run) {
+  const dom = new JSDOM(`<!doctype html><body><div id="host">${markup}</div></body>`);
+  const { window } = dom;
+  for (const name of ['Node', 'Element', 'HTMLElement', 'Text']) {
+    global[name] = window[name];
+  }
+  global.window = window;
+  global.document = window.document;
+  const rich = loadRenderer('shared/page/richBlockDom.ts');
+  const host = window.document.getElementById('host');
+  const caret = (node, offset) => {
+    const range = window.document.createRange();
+    range.setStart(node, offset);
+    range.collapse(true);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    return range;
+  };
+  const insert = (range, kind = 'img') => rich.insertRichBlocks(host, range, [rich.richElement(window.document, kind, '/a.png')]);
+  const saved = () => {
+    const copy = host.cloneNode(true);
+    Array.from(copy.children)
+      .filter(rich.isSpareRichLine)
+      .forEach((line) => line.remove());
+    return copy.innerHTML.replaceAll(' data-avb-line=""', '');
+  };
+  try {
+    run({ host, caret, insert, saved, rich });
+  } finally {
+    window.close();
+  }
+}
+
+const IMG = '<img src="/a.png" alt="">';
+
+test('an empty paragraph is replaced, with a line left to go on typing in', () => {
+  editor('<p>one</p><p><br></p><p>two</p>', ({ host, caret, insert, saved }) => {
+    insert(caret(host.children[1], 0));
+    assert.equal(saved(), `<p>one</p>${IMG}<p>two</p>`);
+    assert.equal(host.children.length, 4);
+    assert.equal(window.getSelection().focusNode, host.children[2], 'the caret is in the spare line');
+  });
+});
+
+for (const [name, tag] of [
+  ['paragraph', 'p'],
+  ['heading', 'h2'],
+  ['quote', 'blockquote'],
+]) {
+  test(`the middle of a ${name} splits it around the block`, () => {
+    editor(`<${tag}>onetwo</${tag}>`, ({ host, caret, insert, saved }) => {
+      insert(caret(host.firstChild.firstChild, 3));
+      assert.equal(saved(), `<${tag}>one</${tag}>${IMG}<${tag}>two</${tag}>`);
+    });
+  });
+}
+
+test('the end and the start of a paragraph keep it whole', () => {
+  editor('<p>one</p><p>two</p>', ({ host, caret, insert, saved }) => {
+    const first = host.firstChild;
+    insert(caret(first.firstChild, 3));
+    assert.equal(saved(), `<p>one</p>${IMG}<p>two</p>`);
+    assert.equal(host.firstChild, first, 'the paragraph itself is kept');
+  });
+  editor('<p>one</p>', ({ host, caret, insert, saved }) => {
+    insert(caret(host.firstChild.firstChild, 0), 'hr');
+    assert.equal(saved(), '<hr><p>one</p>');
+  });
+});
+
+test('a list splits between its items, and an empty item leaves it', () => {
+  editor('<ul><li>a</li><li><br></li><li>b</li></ul>', ({ host, caret, insert, saved }) => {
+    insert(caret(host.querySelectorAll('li')[1], 0));
+    assert.equal(saved(), `<ul><li>a</li></ul>${IMG}<ul><li>b</li></ul>`);
+  });
+});
+
+test('inline markup around the caret is split without leaving empty elements', () => {
+  editor('<p><strong>bold</strong> after</p>', ({ host, caret, insert, saved }) => {
+    insert(caret(host.querySelector('strong').firstChild, 4));
+    assert.equal(saved(), `<p><strong>bold</strong></p>${IMG}<p> after</p>`);
+  });
+});
+
+test('a block put in is taken back and again, until something was typed after it', () => {
+  editor('<p>one</p><p><br></p>', ({ host, caret, rich }) => {
+    const history = rich.createRichHistory(host);
+    const before = host.innerHTML;
+    const range = caret(host.children[1], 0);
+    history.record(() => rich.insertRichBlocks(host, range, [rich.richElement(window.document, 'hr')]));
+    const after = host.innerHTML;
+    assert.equal(history.undo(), true);
+    assert.equal(host.innerHTML, before);
+    assert.equal(history.redo(), true);
+    assert.equal(host.innerHTML, after);
+    host.firstChild.firstChild.data = 'one more';
+    assert.equal(history.undo(), false, 'typing is the browser history first');
+  });
+});
+
+test('what is saved is valid HTML: no block inside a paragraph, no styles the browser wrote', () => {
+  editor('<p><ul><li>a</li></ul></p><p>x<span style="letter-spacing: 1px">y</span></p>', ({ rich }) => {
+    const root = window.document.createElement('div');
+    const wrapper = window.document.createElement('p');
+    const list = window.document.createElement('ul');
+    list.innerHTML = '<li>a</li>';
+    wrapper.append('lead ', list);
+    root.append(wrapper);
+    root.insertAdjacentHTML('beforeend', '<p>x<span style="letter-spacing: 1px">y</span></p>');
+    rich.tidyRichContent(root);
+    assert.equal(root.innerHTML, '<p>lead </p><ul><li>a</li></ul><p>xy</p>');
+  });
+});
+
+test('empty paragraphs at the end are not saved; one between blocks is', () => {
+  editor('', ({ rich }) => {
+    assert.equal(rich.withoutTrailingEmptyBlocks('<p>a</p><p><br></p><p></p>'), '<p>a</p>');
+    assert.equal(rich.withoutTrailingEmptyBlocks('<p>a</p><p></p><p>b</p>'), '<p>a</p><p></p><p>b</p>');
+    assert.equal(rich.withoutTrailingEmptyBlocks('<hr><p>&nbsp;</p>'), '<hr>');
+  });
+});

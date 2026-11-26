@@ -53,7 +53,9 @@ export function installCanvasText(
     if (!selects() || canvasDragged() || !catalog || !(event.target instanceof Element)) {
       return;
     }
-    const hit = findTextHit(catalog, event);
+    // A double click inside rich text but on no words (between its paragraphs, in its padding) is still typing in it:
+    // the caret goes to the nearest line. The component opens by its name tag, the Navigator or the context menu.
+    const hit = findTextHit(catalog, event) ?? findRichBoxHit(catalog, event);
     if (!hit) {
       refuseBlockedText(catalog, event, post);
       return;
@@ -179,6 +181,64 @@ export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 
     }
   }
   return nearest?.hit;
+}
+
+// The rich text whose editable box holds the clicked element: the element whose children are an instance's blocks.
+// Of that instance's words, the ones drawn nearest the click open the editor. Exported for the regression suite.
+export function findRichBoxHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 'target' | 'clientX' | 'clientY'>): TextHit | undefined {
+  const rich = catalog.targets.filter((target) => target.breaks === 'rich' && target.richRoot !== undefined);
+  if (rich.length === 0 || !(event.target instanceof Element)) {
+    return undefined;
+  }
+  // The innermost box wins: rich text inside rich text is edited as its own.
+  let box: Element | undefined = event.target;
+  for (let depth = 0; box && depth < 32; depth++, box = box.parentElement ?? undefined) {
+    let nearest: { readonly hit: TextHit; readonly distance: number; readonly gap: number } | undefined;
+    for (const target of rich) {
+      if (target.scope !== undefined && !isEditableThroughProps(textReach({ loaded: true, covering: target }))) {
+        continue;
+      }
+      const parent = blockHolding(box, target);
+      const match = parent === undefined ? undefined : matchCanvasText(target, parent);
+      if (!match) {
+        continue;
+      }
+      for (const line of textLineBoxes(match)) {
+        const gap = verticalGapToBox(line, event.clientY);
+        const distance = distanceToBox(line, event.clientX, event.clientY);
+        if (!nearest || gap < nearest.gap || (gap === nearest.gap && distance < nearest.distance)) {
+          nearest = { hit: { target, match }, distance, gap };
+        }
+      }
+    }
+    if (nearest) {
+      return nearest.hit;
+    }
+  }
+  return undefined;
+}
+
+// The element holding a rich target's words, when `box` is the instance's editable box: one of the box's own children
+// is a block of the instance, and holds those words.
+function blockHolding(box: Element, target: CanvasTextTarget): Element | undefined {
+  const root = target.richRoot ?? '';
+  const isBlock = (element: Element) => pathsOf(element).some((path) => path.startsWith(`${root}.`) && /^\d+$/.test(path.slice(root.length + 1)));
+  const block = Array.from(box.children)
+    .slice(0, 500)
+    .find(
+      (child) =>
+        isBlock(child) &&
+        (pathsOf(child).includes(target.parent) || target.parent.startsWith(`${pathsOf(child).find((path) => path.startsWith(`${root}.`)) ?? ''}.`)),
+    );
+  if (block === undefined) {
+    return undefined;
+  }
+  if (pathsOf(block).includes(target.parent)) {
+    return block;
+  }
+  return Array.from(block.querySelectorAll('*'))
+    .slice(0, 500)
+    .find((element) => pathsOf(element).includes(target.parent));
 }
 
 // Exported for the regression suite, with findTextHit. A double click on text
