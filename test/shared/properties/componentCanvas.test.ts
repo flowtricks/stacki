@@ -511,3 +511,11 @@ test('overrides: frames a scope reaches that a narrower entry sets are found, ke
   assert.equal(heightReset.components[button]?.frames?.['variant=main'], undefined);
   assert.equal(withoutOverrides(file, button, '', 'prop:label'), file, 'nothing narrower says label: the file is unchanged');
 });
+
+test('an empty text stored by an older version is no value: the wider one shows through', () => {
+  const settings = { frames: { '': { props: { label: 'Go' } }, 'variant=main': { props: { label: '', size: 2 } } } };
+  const resolved = resolveFrame(settings, 'variant=main');
+  assert.equal(resolved.props['label'], 'Go');
+  assert.equal(resolved.origins.get('prop:label'), '');
+  assert.equal(resolved.props['size'], 2);
+});

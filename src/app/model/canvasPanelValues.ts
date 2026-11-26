@@ -1,10 +1,12 @@
 // What the Settings panel shows for a component canvas frame, and what each of its writes stores. Pure.
 //
 // The panel is the ordinary one, so it is given what an instance on a page gives it: attributes that are set, and a
-// schema whose defaults are what shows where nothing is set. "Set" means set at the scope the edit goes to (this frame,
-// a variant group, all frames); everything the frame gets from anywhere else (a wider scope, the component defaults, a
-// sample for a required prop) becomes the field's default, so it reads as the field's placeholder or resting choice,
-// as a component's own default does. A split prop is the frame's own value.
+// schema whose defaults are what shows where nothing is set. Every value the frame is actually given is an attribute,
+// shown as real text and a marked label: the scope's own (blue), a wider scope's (orange, with where it comes from:
+// canvasFrameSettings.tsx provenanceExtra), the component defaults' (blue, as Set component defaults made it) and the
+// canvas's sample for a required prop (blue). Only the component's own code fallback stays the field's resting default,
+// unmarked, as on a page. Showing a value saves nothing: only an edit writes, to the scope. A split prop is the
+// frame's own value.
 //
 // Writes go the other way: an attribute the panel would write into a page becomes a preview value
 // (componentCanvas.ts): text, a number or on and off; an imported file under src/; or a list or object of plain data.
@@ -60,15 +62,23 @@ export function framePanelValues(input: FramePanelInput): FramePanelValues {
     }
   }
   const shown = resolveFrame(settings, scope);
-  const fields = fieldsOf(input).map((field) => (Object.hasOwn(own, field.name) ? field : restingField(field, { shown, defaults, names })));
+  const fields = fieldsOf(input);
   assert(fields.length >= schema.length, 'The panel keeps every field of the component');
+  const given: Record<string, Attr> = {};
+  for (const field of fields) {
+    const attribute = Object.hasOwn(own, field.name) ? undefined : givenAttribute(field, { shown, defaults, names });
+    if (attribute !== undefined) {
+      given[field.name] = attribute;
+    }
+  }
   const html = shown.content ?? defaultContent(defaults);
   return {
-    props: own,
+    props: { ...given, ...own },
     schema: fields,
     imports: names.frontmatter(),
     bindings: names.files(),
-    content: { html, own: entry?.content !== undefined },
+    // Words the frame shows are set, wherever they come from; empty is nothing set.
+    content: { html, own: entry?.content !== undefined || html !== '' },
   };
 }
 
@@ -86,7 +96,9 @@ function fieldsOf(input: Pick<FramePanelInput, 'schema' | 'rest'>): readonly Fie
 
 // The scope's own entry as attributes, written as picking each value by hand would write it.
 function ownAttributes(known: ReadonlySet<string>, entry: FrameEntry | undefined, names: NameTable): Record<string, Attr> {
-  const values = { props: entry?.props ?? {}, assets: entry?.assets ?? {}, literals: entry?.literals ?? {} };
+  // An empty text an older version stored is no value: the field shows what the frame is given instead.
+  const props = Object.fromEntries(Object.entries(entry?.props ?? {}).filter(([, value]) => value !== ''));
+  const values = { props, assets: entry?.assets ?? {}, literals: entry?.literals ?? {} };
   const attributes = defaultAttributes(values, (file) => names.name(file)).filter(([name]) => known.has(name));
   assert(attributes.length <= LIMITS.attrsPerNodeMax, 'A frame entry holds a bounded number of values');
   return Object.fromEntries(attributes);
@@ -99,54 +111,39 @@ function splitAttribute({ value }: { readonly value: string | boolean }, field: 
   return field?.numeric === true ? { type: 'expr', value } : { type: 'string', value };
 }
 
-const OWN_DEFAULT_KEYS: ReadonlySet<string> = new Set(['computedDefault', 'defaultExpr', 'defaultAsset', 'hint']);
-
-function withoutOwnDefault(field: FieldDefinition): FieldDefinition {
-  const kept = Object.fromEntries(Object.entries(field).filter(([key]) => !OWN_DEFAULT_KEYS.has(key)));
-  return { ...kept, name: field.name, type: field.type };
-}
-
 interface Resting {
   readonly shown: ResolvedFrame;
   readonly defaults: ComponentRecipe;
   readonly names: NameTable;
 }
 
-// A field the scope sets nothing for: its default is what the frame is given from elsewhere, so the control rests on
-// it. The component's own default stays where nothing else gives the prop a value.
-function restingField(field: FieldDefinition, resting: Resting): FieldDefinition {
-  const value = restingValue(field, resting);
-  if (value === undefined) {
-    return field;
-  }
-  // The component's own computed or imported default no longer describes what shows.
-  const kept: FieldDefinition = { ...field, default: value };
-  return withoutOwnDefault(kept);
-}
-
-function restingValue(field: FieldDefinition, { shown, defaults, names }: Resting): string | number | boolean | undefined {
+// The value a field the scope sets nothing for is given anyway, as an attribute: a wider scope's, the component
+// defaults', or the canvas's sample for a required prop; undefined where only the component's own code would give one.
+function givenAttribute(field: FieldDefinition, { shown, defaults, names }: Resting): Attr | undefined {
   const name = field.name;
   if (shown.unset.has(name)) {
     return undefined;
   }
   for (const held of [shown, defaults]) {
     const value = held.props?.[name];
-    if (value !== undefined) {
-      return value;
-    }
     const asset = held.assets?.[name];
-    if (asset !== undefined) {
-      // Rooted, as the asset card reads a project file named from outside it (assetPath.ts assetRelCandidates).
-      return '/' + asset.file;
-    }
     const literal = held.literals?.[name];
-    if (literal !== undefined) {
-      // With the panel's own names for its files, so a list edited from here keeps its imports.
-      return defaultAttributes({ literals: { [name]: literal } }, (file) => names.name(file))[0]?.[1].value;
+    const values =
+      value !== undefined
+        ? { props: { [name]: value } }
+        : asset !== undefined
+          ? { assets: { [name]: asset } }
+          : literal !== undefined
+            ? { literals: { [name]: literal } }
+            : undefined;
+    if (values !== undefined) {
+      // With the panel's own names for its files, so a list or a picture edited from here keeps its imports.
+      return defaultAttributes(values, (file) => names.name(file)).find(([held]) => held === name)?.[1];
     }
   }
   // What the canvas draws for a required prop nothing gives (canvasModel.ts); an element id's made-up one is not worth showing.
-  return field.optional === false && field.default === undefined && name !== 'id' ? sampleValue(field) : undefined;
+  const sample = field.optional === false && field.default === undefined && name !== 'id' ? sampleValue(field) : undefined;
+  return sample === undefined ? undefined : defaultAttributes({ props: { [name]: sample } }, (file) => names.name(file))[0]?.[1];
 }
 
 // The slot's markup where no scope sets it: the defaults' words, or their plain-text children. Children that are
@@ -221,7 +218,8 @@ export function contentFieldNodes<Node extends ContentNode>(nodes: readonly Node
  * names the panel gave the project files (FramePanelValues.bindings).
  */
 export function frameEditOf(name: string, value: Attr | undefined, bindings: ReadonlyMap<string, string>): FrameEdit | undefined {
-  if (value === undefined) {
+  // A field emptied says nothing at this scope: what a wider scope or the defaults give shows again, never an empty value.
+  if (value === undefined || (value.type === 'string' && value.value === '')) {
     return { kind: 'inherit', name };
   }
   const preview = previewValue(value);

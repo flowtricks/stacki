@@ -49,7 +49,7 @@ import { openAppSettings } from '../settings/LazySettings';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView, InstructionsView } from '../appPanels';
 import CmsFileFields from '../../features/cms/CmsFileFields';
 import { selectInstruction, useInstructionSelection } from '../../features/instructions/instructionSelection';
-import { holdsInlineText, commentAbove, schemaFor, trailOf } from '../model/pageGestures';
+import { holdsInlineText, commentAbove, schemaFor, trailOf, withClassField } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
 import { assert } from '../../../shared/core/assert';
@@ -587,7 +587,7 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
           </div>
         )}
         <PropPreviewContext.Provider value={propPreview}>
-          <PropFieldExtrasContext.Provider value={canvasInstance?.kind === 'instance' ? canvasInstance.extras : undefined}>
+          <PropFieldExtrasContext.Provider value={canvasInstance === undefined ? undefined : canvasInstance.extras}>
             <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
               <PropsPanel {...settingsOf(settingsApp, translate, canvasInstance)} />
             </PanelBoundary>
@@ -771,10 +771,17 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
     return {
       ...values,
       ...kept,
-      node: { ...node, props: { class: { type: 'string' as const, value: canvasInstance.classes.join(' ') } }, attrOrder: ['class'], children: [] },
+      // No class attribute where no class is set: an empty one would mark the label set (blue) with nothing in it.
+      node: {
+        ...node,
+        props: canvasInstance.classes.length === 0 ? {} : { class: { type: 'string' as const, value: canvasInstance.classes.join(' ') } },
+        attrOrder: canvasInstance.classes.length === 0 ? [] : ['class'],
+        children: [],
+      },
       // The page's own <html>, never a layout: no layout picker, no tag.
       isLayout: false,
-      schema: [],
+      // Its one field, there whether or not a class is set, as an element's class field is.
+      schema: withClassField([]),
       onSetProp: canvasInstance.onSetProp,
       // However the class field writes its list (one prop, a patch, or the whole attribute list), it is the root's classes.
       onSetProps: (_nodeId: string, patch: PropValues) => canvasInstance.onSetProp('class', patch['class']),
