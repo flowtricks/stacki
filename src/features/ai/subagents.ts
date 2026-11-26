@@ -11,6 +11,7 @@
 // `parent` (Claude's `_meta.claudeCode.parentToolUseId`), directly or through a nested call. A call that
 // names a parent the transcript does not hold belongs to no unit and stays in the coordinator's list.
 // Nothing here reads the clock or the DOM; durations come from the host's stamps.
+import { withoutPinNumber } from '../../../shared/properties/ai/commentPinBrief';
 import { assert } from '../../../shared/core/assert';
 import type { ChatOption, ToolKindName, TurnId } from '../../../shared/properties/ai/chatModel';
 import type { ChatView, PermissionItem, ToolItem, TranscriptItem } from './chatReducer';
@@ -147,7 +148,7 @@ export function isWorking(status: SubagentStatus): boolean {
 export function subagentName(agent: Pick<Subagent, 'title'>): string {
   const title = agent.title.startsWith(CODEX_SUBAGENT_PREFIX) ? agent.title.slice(CODEX_SUBAGENT_PREFIX.length) : agent.title;
   const line = (title.split('\n')[0] ?? title).trim();
-  return line === FOLLOW_UP_TOOL ? '' : cleanTitle(line);
+  return line === FOLLOW_UP_TOOL ? '' : withoutPinNumber(cleanTitle(line));
 }
 
 /** Characters of a subagent's title kept; a longer one is cut with an ellipsis (the row cuts it again to its width). */

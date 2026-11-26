@@ -239,6 +239,20 @@ export function pinNumberOfTitle(title: string): number | undefined {
   return Number.isSafeInteger(number) && number >= 1 && number <= PIN_LIMITS.numberMax ? number : undefined;
 }
 
+/**
+ * A subagent's title as the panel shows it: without the "Pin 3:" the brief asks for (pinNumberOfTitle still reads it to
+ * match the subagent to its pin). Why: the chat shows no pin numbers, so the number says nothing there. A title that is
+ * only the number stays as it is.
+ */
+export function withoutPinNumber(title: string): string {
+  const match = /^\s*\**\s*pin\s*#?\s*\d{1,4}\s*\**\s*[:.\-–—]\s*/iu.exec(title);
+  if (match === null) {
+    return title;
+  }
+  const rest = title.slice(match[0].length).trim();
+  return rest === '' ? title : rest;
+}
+
 // ---------------------------------------------------------------------------
 // Local helpers
 // ---------------------------------------------------------------------------

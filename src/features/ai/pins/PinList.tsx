@@ -111,13 +111,13 @@ function PinRow({
     <li className={`ai-pin-row${pin.included || pin.delivery.kind === 'sent' ? '' : ' is-excluded'}`}>
       <button type="button" className="ai-pin-row-open" onClick={() => jumpToPin(pin.id)} aria-label={translate('ai.pins.jump', { number: pin.number })}>
         <span className={`ai-pin-number is-${progress.kind}`}>{pin.number}</span>
-        {image === undefined ? <span className="ai-pin-thumb is-empty" /> : <img className="ai-pin-thumb" src={image} alt="" />}
         <span className="ai-pin-row-text">
           <span className={words.trim() === '' ? 'ai-pin-row-comment is-empty' : 'ai-pin-row-comment'}>
             {words.trim() === '' ? translate('ai.pins.noComment') : commentLine(words, ROW_COMMENT_CHARS_MAX)}
           </span>
           <span className="ai-pin-row-place">{translate('ai.pins.rowPlace', { page: pin.place.pageLabel, element: pin.place.elementLabel, width })}</span>
         </span>
+        {image !== undefined && <img className="ai-pin-thumb" src={image} alt="" />}
       </button>
       {detached && <DetachedPill />}
       {pin.savedAt === undefined ? <UnsavedPill /> : <PinProgressPill progress={progress} />}

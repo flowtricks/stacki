@@ -2798,8 +2798,10 @@ stopped, waiting and running pins stay with their status. A finished pin holding
 saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts` `loadChatView`),
 so pins that finished while the app was closed go too. The chat's message keeps its own words and thumbnail.
 
-**Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's number, thumbnail, words
-and names, and its status (opening its subagent when it has one); a pin still on the board opens on the canvas. No
+**Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's words and names, its
+status (opening its subagent when it has one) and its thumbnail at the row's end; no pin numbers (the chat refers to
+none: subagent titles are shown without their `Pin <n>:`, `withoutPinNumber`, which matching still reads). A pin still
+on the board opens on the canvas. No
 Edit or Resend. Proofs: `test/shared/properties/ai/commentPins.test.ts`, `test/electron/handlers/ai/pinBoardStore.test.ts`,
 `test/electron/handlers/ai/agentHostPins.test.ts` (the stand-in adapter as Claude's coordinator),
 `test/renderer/ai/pinModel.test.js`, `test/renderer/ai/pinStore.test.js`, `test/renderer/ai/pinsMessage.test.js`.

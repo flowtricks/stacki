@@ -475,21 +475,34 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 .ai-pins-message-pin {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
-.ai-pins-message-open {
-  flex: none;
+/* A pin's words and where it is: one column starting at the card's text edge, the same for every row. */
+.ai-pins-message-words {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.ai-pins-message-open {
   cursor: pointer;
 }
-.ai-pins-message-open:disabled {
-  cursor: default;
+button.ai-pins-message-open:hover:not(:disabled) .ai-pins-message-comment {
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+}
+/* The crop at the row's end (the start in a right-to-left interface), one size for every row, level with the words. */
+.ai-pins-message-thumb {
+  width: 48px;
+  height: 34px;
+  margin-top: 1px;
 }
 .ai-pins-message-text {
   flex: 1;
@@ -542,8 +555,7 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 }
 
 /* A pin's number in a row or a message darkens with the row it opens, as the canvas pin does. */
-button.ai-pin-row-open:hover:not(:disabled) .ai-pin-number.is-draft,
-button.ai-pins-message-open:hover:not(:disabled) .ai-pin-number {
+button.ai-pin-row-open:hover:not(:disabled) .ai-pin-number.is-draft {
   background: var(--accent-pressed);
 }
 button.ai-pins-message-open:hover:not(:disabled) {

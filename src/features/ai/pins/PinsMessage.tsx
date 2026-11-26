@@ -1,8 +1,9 @@
-// A message of comment pins in the transcript: each pin numbered, with the crop it was sent with, the person's own
-// words, and the page and element in their names, never a path, a locator or the instructions the agent was given.
-// Each pin shows how it stands, read from the transcript (its subagent, or its own turn), so the message is where
-// the pins' progress is followed; a pin still on the board opens on the canvas, and one with a subagent opens that
-// subagent's transcript.
+// A message of comment pins in the transcript: each pin's own words, the page and element in their names (never a path,
+// a locator or the instructions the agent was given), how it stands, and the crop it was sent with at the row's end.
+// No pin numbers: nothing in the chat refers to them (subagent titles drop theirs, subagents.ts subagentName). Every
+// row's words start at the card's text edge, under its title, with or without an image. How a pin stands is read from
+// the transcript (its subagent, or its own turn); a pin still on the board opens on the canvas, and one with a
+// subagent opens that subagent's transcript from its status.
 import type { ChatAttachmentName, ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { PinSendMode, SentPin } from '../../../../shared/properties/ai/commentPinBrief';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
@@ -37,27 +38,29 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
             const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view, 'running');
             const onBoard = sentPinOf(chat, turn, pin.number);
             const call = mode === 'subagents' ? pinSubagentCall(view, turn, pin.number) : undefined;
+            const words = (
+              <>
+                <span className={pin.comment.trim() === '' ? 'ai-pins-message-comment is-empty' : 'ai-pins-message-comment'}>
+                  {pin.comment.trim() === '' ? translate('ai.pins.noComment') : pin.comment}
+                </span>
+                <span className="ai-pins-message-place">{translate('ai.pins.messagePlace', { page: pin.pageLabel, element: pin.elementLabel })}</span>
+              </>
+            );
             return (
               <li key={pin.number} className="ai-pins-message-pin">
-                <button
-                  type="button"
-                  className="ai-pins-message-open"
-                  disabled={onBoard === undefined}
-                  aria-label={translate('ai.pins.jump', { number: pin.number })}
-                  onClick={() => {
-                    if (onBoard !== undefined) {
-                      jumpToPin(onBoard.id);
-                    }
-                  }}
-                >
-                  <span className="ai-pin-number">{pin.number}</span>
-                  {thumbnail !== undefined && <img className="ai-pin-thumb" src={thumbnail} alt="" />}
-                </button>
                 <span className="ai-pins-message-text">
-                  <span className={pin.comment.trim() === '' ? 'ai-pins-message-comment is-empty' : 'ai-pins-message-comment'}>
-                    {pin.comment.trim() === '' ? translate('ai.pins.noComment') : pin.comment}
-                  </span>
-                  <span className="ai-pins-message-place">{translate('ai.pins.messagePlace', { page: pin.pageLabel, element: pin.elementLabel })}</span>
+                  {onBoard === undefined ? (
+                    <span className="ai-pins-message-words">{words}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ai-pins-message-words ai-pins-message-open"
+                      aria-label={translate('ai.pins.jump', { number: pin.number })}
+                      onClick={() => jumpToPin(onBoard.id)}
+                    >
+                      {words}
+                    </button>
+                  )}
                   <span className="ai-pins-message-foot">
                     {call !== undefined && onOpenSubagent !== undefined ? (
                       <button
@@ -73,6 +76,7 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
                     )}
                   </span>
                 </span>
+                {thumbnail !== undefined && <img className="ai-pin-thumb ai-pins-message-thumb" src={thumbnail} alt="" />}
               </li>
             );
           })}
