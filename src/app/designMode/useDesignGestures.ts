@@ -3,11 +3,13 @@
 // The canvas hears every pointer itself (a frame's iframe takes none), so one place decides what a gesture is:
 // a press on a frame's name selects the frame and a drag moves it; a press in a frame's page selects the element
 // under it; Option-drag anywhere on a frame drags a copy out of it; the space between frames pans, and so does any
-// drag with Space held or the middle button. A selected frame is also dragged by its page.
+// drag with Space held or the middle button. A selected frame is also dragged by its page. Any other drag in a page
+// takes the element there (or the picked one, under the pointer) and moves it freely; the picked element's handles
+// resize it.
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import { parseDesignFrameId, type DesignFrameId, type DesignPlace } from '../../../shared/ipc/designSession';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
-import { nodeAtFramePoint } from './designFrameDom';
+import { nodeAtFramePoint, nodeBox } from './designFrameDom';
 import {
   clearSelection,
   clampPlace,
@@ -17,8 +19,10 @@ import {
   nextFrameId,
   selectElement,
   selectFrame,
+  writeElementStyle,
   type DesignOpsContext,
 } from './designFrameOps';
+import { gripElement, pullElement, releaseElement, type ElementGrip, type ElementHandle, type ElementPull } from './designElementDrag';
 import { designView, updateDesignView, type DesignCamera } from './designStore';
 
 /** A press that moves this far is a drag. */
@@ -26,6 +30,7 @@ const DRAG_PX = 4;
 
 export type DesignDrag =
   | { readonly kind: 'move'; readonly frame: DesignFrameId; readonly at: DesignPlace }
+  | { readonly kind: 'element'; readonly frame: DesignFrameId; readonly node: DesignNodeAt; readonly pull: ElementPull }
   /** A copy on its way out of `source`, already keyed by the id it will have. */
   | { readonly kind: 'copy'; readonly source: DesignFrameId; readonly id: DesignFrameId; readonly at: DesignPlace };
 
@@ -40,6 +45,12 @@ interface Press {
   readonly y: number;
   readonly target: 'board' | { readonly frame: DesignFrameId; readonly part: 'title' | 'body' };
   readonly intent: 'pan' | 'pick' | 'copy';
+  /** The resize handle pressed, if one was. */
+  readonly handle: Exclude<ElementHandle, 'move'> | undefined;
+  /** The node of the page under the press. */
+  readonly node: DesignNodeAt | undefined;
+  /** The element taken hold of, once the press has become a drag of one. */
+  grip: ElementGrip | undefined;
   readonly camera: DesignCamera;
   state: 'pressed' | 'dragging';
 }
@@ -66,17 +77,41 @@ export function tileAt(target: unknown): PressedTile | undefined {
   };
 }
 
+/** The document a frame shows: a replacement still loading over it is hidden. */
+function shownDocument(body: Element): Document | undefined {
+  const frame = [...body.querySelectorAll('iframe')].find((entry) => entry.style.visibility !== 'hidden');
+  return frame?.contentDocument ?? undefined;
+}
+
 /** The element under a screen point of a frame's page. */
 function nodeUnder(pressed: PressedTile, clientX: number, clientY: number): DesignNodeAt | undefined {
-  // The shown document: a replacement still loading over it is hidden.
-  const frame = [...pressed.element.querySelectorAll('iframe')].find((entry) => entry.style.visibility !== 'hidden');
-  const document = frame?.contentDocument ?? undefined;
+  const document = shownDocument(pressed.element);
   const camera = designView().camera;
   if (document === undefined || camera === undefined) {
     return undefined;
   }
   const box = pressed.element.getBoundingClientRect();
   return nodeAtFramePoint(document, (clientX - box.left) / camera.zoom, (clientY - box.top) / camera.zoom);
+}
+
+/** The node a drag takes: the picked one when its handle, or a point inside it, was pressed. */
+function grippedNode(held: Press, frame: DesignFrameId, body: Element | undefined): DesignNodeAt | undefined {
+  const selection = designView().selection;
+  const picked = selection.kind === 'element' && selection.frame === frame ? { path: selection.path, copy: selection.copy } : undefined;
+  if (held.handle !== undefined) {
+    return picked;
+  }
+  const document = body === undefined ? undefined : shownDocument(body);
+  if (picked !== undefined && body !== undefined && document !== undefined) {
+    const box = nodeBox(document, picked);
+    const outer = body.getBoundingClientRect();
+    const x = (held.x - outer.left) / held.camera.zoom;
+    const y = (held.y - outer.top) / held.camera.zoom;
+    if (box !== undefined && x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {
+      return picked;
+    }
+  }
+  return held.node;
 }
 
 function framePlace(frame: DesignFrameId): DesignPlace | undefined {
@@ -97,12 +132,16 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
   const end = useCallback((): Press | undefined => {
     const held = press.current;
     press.current = undefined;
+    plane.current?.removeAttribute('data-dm-dragging');
     unlisten.current?.();
     unlisten.current = undefined;
     return held;
-  }, []);
+  }, [plane]);
   const cancel = useCallback(() => {
-    end();
+    const held = end();
+    if (held?.grip !== undefined) {
+      releaseElement(held.grip);
+    }
     showDrag(undefined);
   }, [end, showDrag]);
   useEffect(() => () => unlisten.current?.(), []);
@@ -137,6 +176,8 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     }
     const tile = tileAt(event.target);
     const panning = event.button === 1 || space.current === 'held' || tile === undefined;
+    const handleName = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-dm-handle]')?.dataset['dmHandle'] : undefined;
+    const handle = handleName === 'e' || handleName === 's' || handleName === 'se' ? handleName : undefined;
     event.currentTarget.setPointerCapture(event.pointerId);
     setHover(undefined);
     press.current = {
@@ -146,6 +187,9 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
       target: tile === undefined ? 'board' : { frame: tile.frame, part: tile.part },
       intent: panning ? 'pan' : event.altKey ? 'copy' : 'pick',
       camera,
+      handle,
+      node: tile?.part === 'body' && !panning ? nodeUnder(tile, event.clientX, event.clientY) : undefined,
+      grip: undefined,
       state: 'pressed',
     };
     unlisten.current = listenUntilRelease();
@@ -180,7 +224,31 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     const selected = selection.kind === 'frame' && selection.frame === held.target.frame;
     if (held.target.part === 'title' || selected) {
       showDrag({ kind: 'move', frame: held.target.frame, at });
+      return;
     }
+    dragElement(held.target.frame, { x: dx / held.camera.zoom, y: dy / held.camera.zoom });
+  };
+
+  /** Moves or resizes an element: the picked one when the press was on it (or its handle), else the one pressed. */
+  const dragElement = (frame: DesignFrameId, delta: DesignPlace): void => {
+    const held = press.current;
+    if (held === undefined) {
+      return;
+    }
+    if (held.grip === undefined) {
+      const body = plane.current?.querySelector(`.dm-tile[data-dm-tile="${frame}"] .dm-body`) ?? undefined;
+      const document = body === undefined ? undefined : shownDocument(body);
+      const node = grippedNode(held, frame, body);
+      if (document === undefined || node === undefined) {
+        return;
+      }
+      held.grip = gripElement(document, node, held.handle ?? 'move');
+      if (held.grip === undefined) {
+        return;
+      }
+    }
+    const pull = pullElement(held.grip, delta, held.camera.zoom);
+    showDrag({ kind: 'element', frame, node: held.grip.node, pull });
   };
 
   /** The pointer over the canvas with nothing pressed: what a click would pick. */
@@ -207,6 +275,8 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
         return;
       }
       held.state = 'dragging';
+      // Escape is the drag's while one is under way (useDesignKeys.ts).
+      plane.current?.setAttribute('data-dm-dragging', '');
     }
     dragTo(held, dx, dy);
   };
@@ -237,12 +307,15 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     }
     const done = dragRef.current;
     showDrag(undefined);
+    const grip = held.grip;
     if (held.state === 'pressed') {
       if (event.button === 0) {
         click(held, event);
       }
     } else if (done?.kind === 'copy') {
       duplicateFrame(context, done.source, done.at);
+    } else if (done?.kind === 'element' && grip !== undefined) {
+      writeElementStyle(context, done.frame, done.node, done.pull.change, () => releaseElement(grip));
     } else if (done?.kind === 'move') {
       moveFrame(context, done.frame, done.at);
     }

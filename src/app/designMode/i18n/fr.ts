@@ -26,6 +26,7 @@ export const designModeFr: DesignCatalog = {
   'toast.lastFrame': 'Le canevas garde au moins un cadre.',
   'toast.pageTooLarge': 'Cette page est trop grande pour être affichée comme cadre en mode Design.',
   'toast.frameUnread': 'l’éditeur n’a pas encore lu la page de ce cadre. Sélectionnez-le à nouveau.',
+  'toast.styleIsCode': 'Le style de cet élément est écrit sous forme de code : impossible de le déplacer ou de le redimensionner ici.',
   'fence.refusal': 'Indisponible en mode Design : rien n’est enregistré dans votre projet pendant la conception.',
   'enter.copying': 'Copie de votre site',
   'toast.entered': 'Le mode Design est activé. Vos modifications restent dans cette copie, et l’historique d’annulation précédent est effacé.',

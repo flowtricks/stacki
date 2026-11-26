@@ -26,6 +26,7 @@ export const designModeIt: DesignCatalog = {
   'toast.lastFrame': 'La tela mantiene almeno un frame.',
   'toast.pageTooLarge': 'Questa pagina è troppo grande per essere mostrata come frame in modalità Design.',
   'toast.frameUnread': 'l’editor non ha ancora letto la pagina di questo frame. Selezionalo di nuovo.',
+  'toast.styleIsCode': 'Lo stile di questo elemento è scritto come codice, quindi qui non si può spostare né ridimensionare.',
   'fence.refusal': 'Non disponibile in modalità design: mentre progetti non viene salvato nulla nel tuo progetto.',
   'enter.copying': 'Copia del sito in corso',
   'toast.entered': 'La modalità design è attiva. Le modifiche restano in questa copia e la cronologia degli annullamenti precedente viene cancellata.',

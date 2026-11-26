@@ -142,6 +142,7 @@ function tilesOf(
     hover: hover?.frame === frame.id ? hover.node : undefined,
     picked: picked?.frame === frame.id ? picked.node : undefined,
     hidden: view.photo !== undefined && view.photo !== frame.id,
+    guides: drag?.kind === 'element' && drag.frame === frame.id ? drag.pull.guides : [],
   }));
   if (drag?.kind === 'copy') {
     const source = session.frames.find((frame) => frame.id === drag.source);

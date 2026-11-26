@@ -26,6 +26,7 @@ export const designModePtBR: DesignCatalog = {
   'toast.lastFrame': 'A tela mantém pelo menos um quadro.',
   'toast.pageTooLarge': 'Esta página é grande demais para aparecer como quadro no modo Design.',
   'toast.frameUnread': 'o editor ainda não leu a página deste quadro. Selecione-o novamente.',
+  'toast.styleIsCode': 'O estilo deste elemento está escrito como código, por isso não é possível movê-lo ou redimensioná-lo aqui.',
   'fence.refusal': 'Não disponível no Modo de design: nada é salvo no seu projeto enquanto você cria o design.',
   'enter.copying': 'Copiando seu site',
   'toast.entered': 'O Modo de design está ativado. Suas alterações ficam nesta cópia, e o histórico de desfazer anterior é apagado.',

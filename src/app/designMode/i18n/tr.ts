@@ -26,6 +26,7 @@ export const designModeTr: DesignCatalog = {
   'toast.lastFrame': 'Tuvalde en az bir çerçeve kalır.',
   'toast.pageTooLarge': 'Bu sayfa, Tasarım modunda çerçeve olarak gösterilemeyecek kadar büyük.',
   'toast.frameUnread': 'düzenleyici bu çerçevenin sayfasını henüz okumadı. Yeniden seçin.',
+  'toast.styleIsCode': 'Bu öğenin stili kod olarak yazılmış, bu yüzden burada taşınamaz veya boyutlandırılamaz.',
   'fence.refusal': 'Tasarım modunda kullanılamaz: tasarım yaparken projenize hiçbir şey kaydedilmez.',
   'enter.copying': 'Siteniz kopyalanıyor',
   'toast.entered': 'Tasarım modu açık. Değişiklikleriniz bu kopyada kalır ve önceki geri alma geçmişi temizlendi.',

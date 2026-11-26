@@ -34,6 +34,9 @@ export function useDesignKeys(context: DesignOpsContext, plane: RefObject<HTMLDi
         take(event);
         latest.current();
       } else if (event.key === 'Escape') {
+        if (plane.current?.hasAttribute('data-dm-dragging') === true) {
+          return;
+        }
         if (selection.kind === 'element') {
           take(event);
           selectFrame(context, selection.frame);

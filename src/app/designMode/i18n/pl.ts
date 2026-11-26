@@ -26,6 +26,7 @@ export const designModePl: DesignCatalog = {
   'toast.lastFrame': 'Na płótnie zostaje co najmniej jedna ramka.',
   'toast.pageTooLarge': 'Ta strona jest zbyt duża, aby pokazać ją jako ramkę w trybie projektowania.',
   'toast.frameUnread': 'edytor nie odczytał jeszcze strony tej ramki. Wybierz ją ponownie.',
+  'toast.styleIsCode': 'Styl tego elementu jest zapisany jako kod, więc nie można go tu przesunąć ani zmienić jego rozmiaru.',
   'fence.refusal': 'Niedostępne w trybie projektowania: podczas projektowania nic nie zapisuje się w Twoim projekcie.',
   'enter.copying': 'Kopiowanie Twojej strony',
   'toast.entered': 'Tryb projektowania jest włączony. Twoje zmiany zostają w tej kopii, a wcześniejsza historia cofania została wyczyszczona.',

@@ -26,6 +26,7 @@ export const designModeJa: DesignCatalog = {
   'toast.lastFrame': 'キャンバスには少なくとも1つのフレームが残ります。',
   'toast.pageTooLarge': 'このページは大きすぎるため、デザインモードでフレームとして表示できません。',
   'toast.frameUnread': 'エディターはまだこのフレームのページを読み込んでいません。もう一度選択してください。',
+  'toast.styleIsCode': 'この要素のスタイルはコードで書かれているため、ここでは移動やサイズ変更ができません。',
   'fence.refusal': 'デザインモードでは使えません。デザイン中は何もプロジェクトに保存されません。',
   'enter.copying': 'サイトをコピー中',
   'toast.entered': 'デザインモードがオンになりました。変更はこのコピー内に保持され、これまでの操作履歴は消去されます。',

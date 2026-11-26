@@ -26,6 +26,7 @@ export const designModeNl: DesignCatalog = {
   'toast.lastFrame': 'Een canvas houdt minstens één frame.',
   'toast.pageTooLarge': 'Deze pagina is te groot om als frame in de ontwerpmodus te tonen.',
   'toast.frameUnread': 'de editor heeft de pagina van dit frame nog niet gelezen. Kies het opnieuw.',
+  'toast.styleIsCode': 'De stijl van dit element is als code geschreven, dus het kan hier niet worden verplaatst of vergroot.',
   'fence.refusal': 'Niet beschikbaar in de ontwerpmodus: tijdens het ontwerpen wordt niets in je project opgeslagen.',
   'enter.copying': 'Je site wordt gekopieerd',
   'toast.entered': 'De ontwerpmodus staat aan. Je wijzigingen blijven in deze kopie en de eerdere geschiedenis voor ongedaan maken wordt gewist.',

@@ -26,6 +26,7 @@ export const designModeEnglish = {
   'toast.lastFrame': 'A canvas keeps at least one frame.',
   'toast.pageTooLarge': 'This page is too large to show as a frame in Design mode.',
   'toast.frameUnread': 'the editor has not read this frame’s page yet. Pick it again.',
+  'toast.styleIsCode': 'This element’s style is written as code, so it can’t be moved or resized here.',
   'fence.refusal': 'Not available in Design mode: nothing is saved to your project while you design.',
   'enter.copying': 'Copying your site',
   'toast.entered': 'Design mode is on. Your changes stay in this copy, and undo history from before is cleared.',

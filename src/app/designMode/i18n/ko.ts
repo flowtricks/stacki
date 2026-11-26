@@ -26,6 +26,7 @@ export const designModeKo: DesignCatalog = {
   'toast.lastFrame': '캔버스에는 프레임이 하나 이상 남습니다.',
   'toast.pageTooLarge': '이 페이지는 너무 커서 디자인 모드에서 프레임으로 표시할 수 없습니다.',
   'toast.frameUnread': '편집기가 아직 이 프레임의 페이지를 읽지 못했습니다. 다시 선택하세요.',
+  'toast.styleIsCode': '이 요소의 스타일은 코드로 작성되어 있어 여기서 이동하거나 크기를 바꿀 수 없습니다.',
   'fence.refusal': '디자인 모드에서는 사용할 수 없습니다. 디자인하는 동안에는 아무것도 프로젝트에 저장되지 않습니다.',
   'enter.copying': '사이트 복사 중',
   'toast.entered': '디자인 모드가 켜졌습니다. 변경 내용은 이 사본에만 남으며, 이전의 실행 취소 기록은 지워집니다.',

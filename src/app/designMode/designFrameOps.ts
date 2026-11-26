@@ -17,6 +17,9 @@ import {
   type DesignSessionState,
 } from '../../../shared/ipc/designSession';
 import { cleanError } from '../../lib/cleanError';
+import { inlineStyleWrite } from '../../features/style/model/inlineTarget';
+import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
+import type { StyleChange } from './designElementDrag';
 import { designSession } from './designBridge';
 import { dropCapture, flushCaptures, noteCanvasChange } from './designCaptureQueue';
 import { designView, updateDesignView, type DesignSelection } from './designStore';
@@ -164,6 +167,61 @@ export function selectFrame(context: DesignOpsContext, frame: DesignFrameId): vo
 export function clearSelection(context: DesignOpsContext): void {
   updateDesignView((view) => ({ ...view, selection: { kind: 'none' } }));
   context.app().setSelectedId(undefined);
+}
+
+/** How long the panels may take to take up a pick whose frame is already shown. */
+const PICK_WAIT_MS_MAX = 3_000;
+
+/**
+ * Writes a drag's change as the picked element's inline style, in its frame's version of the page: the frame is
+ * shown first when it is not, and the write is the editor's own, so undo takes it back. `refused` is called when
+ * nothing could be written, so the canvas puts the frame back as it was.
+ */
+export function writeElementStyle(context: DesignOpsContext, frame: DesignFrameId, node: DesignNodeAt, change: StyleChange, refused: () => void): void {
+  const selected = designView().selection;
+  if (selected.kind !== 'element' || selected.frame !== frame || selected.path !== node.path) {
+    selectElement(context, frame, node.path, node.copy);
+  }
+  void enqueue(context, async () => {
+    const deadline = performance.now() + PICK_WAIT_MS_MAX;
+    while (context.app().pathFor(context.app().selectedId) !== node.path) {
+      if (performance.now() >= deadline) {
+        refused();
+        throw new Error(context.words()('toast.frameUnread'));
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, READ_POLL_MS));
+    }
+    const app = context.app();
+    const target = app.selectedNode;
+    if (target === undefined || (target.kind !== 'element' && target.kind !== 'component')) {
+      refused();
+      app.showToast(context.words()('toast.styleIsCode'), 'warning');
+      return;
+    }
+    const next = styleAfter(target.props?.['style'], change);
+    if (next === undefined) {
+      refused();
+      app.showToast(context.words()('toast.styleIsCode'), 'warning');
+      return;
+    }
+    app.setProp(target.id, 'style', { type: 'string', value: next }, true, app.pathFor(target.id));
+  });
+}
+
+/** The style attribute's next text, or undefined when it is code or cannot be edited a declaration at a time. */
+function styleAfter(attribute: { readonly type: string; readonly value?: string } | undefined, change: StyleChange): string | undefined {
+  if (attribute !== undefined && attribute.type !== 'string') {
+    return undefined;
+  }
+  let text = attribute?.value ?? '';
+  for (const [property, value] of change) {
+    const written = inlineStyleWrite(text, [property], { tag: 'set', value });
+    if (written.tag !== 'write' || written.next === undefined) {
+      return undefined;
+    }
+    text = written.next;
+  }
+  return text;
 }
 
 /** The id the next duplicate gets, which the canvas uses for it before main answers. */

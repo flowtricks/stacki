@@ -26,6 +26,7 @@ export const designModeDe: DesignCatalog = {
   'toast.lastFrame': 'Eine Arbeitsfläche behält mindestens einen Frame.',
   'toast.pageTooLarge': 'Diese Seite ist zu groß, um sie im Designmodus als Frame anzuzeigen.',
   'toast.frameUnread': 'Der Editor hat die Seite dieses Frames noch nicht gelesen. Wähle ihn erneut aus.',
+  'toast.styleIsCode': 'Der Stil dieses Elements ist als Code geschrieben, daher lässt es sich hier nicht verschieben oder skalieren.',
   'fence.refusal': 'Im Design-Modus nicht verfügbar: Während du gestaltest, wird nichts in deinem Projekt gespeichert.',
   'enter.copying': 'Deine Website wird kopiert',
   'toast.entered': 'Der Design-Modus ist aktiv. Deine Änderungen bleiben in dieser Kopie, und der bisherige Rückgängig-Verlauf wird gelöscht.',

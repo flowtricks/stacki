@@ -5,7 +5,11 @@ import { DESIGN_SESSION_LIMITS, type DesignFrameView, type DesignPlace } from '.
 import type { DesignNodeAt, DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import { DesignFrameDocument, type FrameMeasure } from './DesignFrameDocument';
 import { nodeBox } from './designFrameDom';
+import type { SnapGuide } from './designElementMath';
 import { useDesignWords } from './i18n/designWords';
+
+/** The picked element's resize handles: its right edge, its bottom edge and their corner. */
+const HANDLES = ['e', 's', 'se'] as const;
 
 /** A frame with no document yet is drawn this large. */
 export const EMPTY_FRAME = { widthPx: 1_440, heightPx: 900 } as const;
@@ -18,6 +22,8 @@ export interface DesignTileProps {
   readonly mark: 'none' | 'active' | 'selected';
   readonly hover: DesignNodeAt | undefined;
   readonly picked: DesignNodeAt | undefined;
+  /** Snap lines of an element being dragged in this frame. */
+  readonly guides?: readonly SnapGuide[];
   /** A copy being dragged, not yet a frame. */
   readonly ghost?: boolean;
   readonly hidden?: boolean;
@@ -62,6 +68,13 @@ export function DesignFrameTile(props: DesignTileProps) {
         )}
         {measure !== undefined && <Outline measure={measure} node={props.hover} kind="hover" />}
         {measure !== undefined && <Outline measure={measure} node={props.picked} kind="picked" />}
+        {props.guides?.map((guide) => (
+          <div
+            key={`${guide.axis}${String(guide.at)}`}
+            className={`dm-guide is-${guide.axis}`}
+            style={guide.axis === 'x' ? { left: guide.at } : { top: guide.at }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -72,7 +85,11 @@ function Outline({ measure, node, kind }: { readonly measure: FrameMeasure; read
   if (box === undefined) {
     return undefined;
   }
-  return <div className={`dm-outline is-${kind}`} data-dm-outline={kind} style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />;
+  return (
+    <div className={`dm-outline is-${kind}`} data-dm-outline={kind} style={{ left: box.x, top: box.y, width: box.width, height: box.height }}>
+      {kind === 'picked' && HANDLES.map((handle) => <span key={handle} className={`dm-handle is-${handle}`} data-dm-handle={handle} />)}
+    </div>
+  );
 }
 
 function RenameField({ name, zoom, onDone }: { readonly name: string; readonly zoom: number; readonly onDone: (name: string | undefined) => void }) {

@@ -26,6 +26,7 @@ export const designModeEs: DesignCatalog = {
   'toast.lastFrame': 'El lienzo conserva al menos un marco.',
   'toast.pageTooLarge': 'Esta página es demasiado grande para mostrarse como marco en el modo de diseño.',
   'toast.frameUnread': 'el editor aún no ha leído la página de este marco. Selecciónalo de nuevo.',
+  'toast.styleIsCode': 'El estilo de este elemento está escrito como código, así que no se puede mover ni redimensionar aquí.',
   'fence.refusal': 'No disponible en el Modo de diseño: nada se guarda en tu proyecto mientras diseñas.',
   'enter.copying': 'Copiando tu sitio',
   'toast.entered': 'El Modo de diseño está activado. Tus cambios se quedan en esta copia y se borra el historial de deshacer anterior.',

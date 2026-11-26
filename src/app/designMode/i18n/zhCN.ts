@@ -26,6 +26,7 @@ export const designModeZhCN: DesignCatalog = {
   'toast.lastFrame': '画布至少保留一个画框。',
   'toast.pageTooLarge': '此页面过大，无法在设计模式中显示为画框。',
   'toast.frameUnread': '编辑器尚未读取此画框的页面。请重新选择。',
+  'toast.styleIsCode': '此元素的样式是用代码编写的，因此无法在此移动或调整大小。',
   'fence.refusal': '设计模式下不可用：设计期间不会向项目保存任何内容。',
   'enter.copying': '正在复制网站',
   'toast.entered': '设计模式已开启。你的更改只保留在此副本中，之前的撤销历史记录已清除。',

@@ -26,6 +26,7 @@ export const designModeId: DesignCatalog = {
   'toast.lastFrame': 'Kanvas menyimpan setidaknya satu bingkai.',
   'toast.pageTooLarge': 'Halaman ini terlalu besar untuk ditampilkan sebagai bingkai di mode Desain.',
   'toast.frameUnread': 'editor belum membaca halaman bingkai ini. Pilih lagi.',
+  'toast.styleIsCode': 'Gaya elemen ini ditulis sebagai kode, jadi tidak bisa dipindah atau diubah ukurannya di sini.',
   'fence.refusal': 'Tidak tersedia di Mode desain: tidak ada yang disimpan ke proyek Anda selama Anda mendesain.',
   'enter.copying': 'Menyalin situs Anda',
   'toast.entered': 'Mode desain aktif. Perubahan Anda tetap di salinan ini, dan riwayat urungkan sebelumnya telah dihapus.',

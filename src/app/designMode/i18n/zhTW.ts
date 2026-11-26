@@ -26,6 +26,7 @@ export const designModeZhTW: DesignCatalog = {
   'toast.lastFrame': '畫布至少保留一個畫框。',
   'toast.pageTooLarge': '此頁面過大，無法在設計模式中顯示為畫框。',
   'toast.frameUnread': '編輯器尚未讀取此畫框的頁面。請重新選取。',
+  'toast.styleIsCode': '此元素的樣式是以程式碼撰寫，因此無法在此移動或調整大小。',
   'fence.refusal': '設計模式中無法使用：設計期間不會將任何內容儲存到專案。',
   'enter.copying': '正在拷貝網站',
   'toast.entered': '設計模式已開啟。你的變更只會保留在此副本中，先前的復原記錄已清除。',

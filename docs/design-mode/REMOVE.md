@@ -27,8 +27,11 @@ project.
   each frame's source changes as diffs.
 - **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
   together.
-- **Not yet:** dragging, resizing or unlinking elements and editing text inside a frame; opening a component from
-  a frame; undo for a removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
+- **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
+  its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
+  inline style through the editor's own write (so ⌘Z takes them back), in rem.
+- **Not yet:** unlinking a component and editing text inside a frame; opening a component from a frame; undo for a
+  removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
 
 ## Switching it off without removing it
 

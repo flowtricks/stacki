@@ -539,6 +539,63 @@ async function runInElectron({ window, project, options }) {
     await until('the new copy at 72px', frameIndent(copy), (size) => size === '72px');
   });
 
+  await run('an element is dragged and resized in its frame, Escape lets go, and undo takes it back', async () => {
+    await pressAt('the zoom button', centreOf('.dm-zoom'));
+    await driver.settle();
+    const [first, second] = await driver.evaluate(`${TILES}.map((t) => t.dataset.dmTile)`);
+    await selectInFrame(second, '#soak-plain');
+    const translateIn = (id) =>
+      `(() => { const doc = ${FRAME_DOCUMENT}('${id}'); const e = doc && doc.querySelector('#soak-plain'); return e ? doc.defaultView.getComputedStyle(e).translate : undefined; })()`;
+    const pageNow = () => fs.readFileSync(path.join(liveRootNow(), 'src/pages/index.astro'), 'utf8');
+    const lineNow = () =>
+      pageNow()
+        .split('\n')
+        .find((line) => line.includes('id="soak-plain"')) ?? '';
+    const untilFile = (what, test) => waitFor({ what, read: lineNow, until: test, pollIntervalMs: POLL_MS, pollCountMax: WAIT_MS_MAX / POLL_MS });
+    const zoom = await driver.evaluate(
+      `(() => { const b = document.querySelector('.dm-tile[data-dm-tile="${second}"] .dm-body'); return b.getBoundingClientRect().width / b.offsetWidth; })()`,
+    );
+    const from = await point('the element', framePointOf(second, '#soak-plain'));
+    // Held and then let go of with Escape: nothing is written.
+    const before = lineNow();
+    driver.contents.sendInputEvent({ type: 'mouseDown', x: from.x, y: from.y, button: 'left', clickCount: 1 });
+    driver.contents.sendInputEvent({ type: 'mouseMove', x: from.x + 30, y: from.y + 30, button: 'left' });
+    await until('the element follows the pointer', translateIn(second), (value) => value !== undefined && value !== 'none');
+    check('the element follows the pointer while it is held', true);
+    await driver.key('Escape');
+    driver.contents.sendInputEvent({ type: 'mouseUp', x: from.x + 30, y: from.y + 30, button: 'left', clickCount: 1 });
+    await until('the element back', translateIn(second), (value) => value === 'none');
+    await driver.settle();
+    check('Escape lets go without writing', lineNow() === before, lineNow());
+    // A drag that is released.
+    await driver.drag(from, { x: from.x + 90, y: from.y + 60 }, { steps: 10, label: 'move element' });
+    await untilFile('the move written', (line) => /translate: [^;"]+rem [^;"]+rem/.test(line));
+    const moved = /translate: ([-\d.]+)rem ([-\d.]+)rem/.exec(lineNow());
+    const offBy = moved === null ? Infinity : Math.max(Math.abs(Number(moved[1]) * 16 - 90 / zoom), Math.abs(Number(moved[2]) * 16 - 60 / zoom));
+    check('the move is written in rem as an inline style, where it was dropped', offBy <= 7 / zoom + 1, `${lineNow()} zoom ${zoom} off ${offBy}`);
+    await untilCanvas('the live page moved', `getComputedStyle(document.querySelector('#soak-plain')).translate`, (value) => value !== 'none');
+    await until('the frame moved', translateIn(second), (value) => value !== undefined && value !== 'none');
+    check('the other frame is untouched', (await driver.evaluate(translateIn(first))) === 'none');
+    await driver.settle();
+    await shot('09c-moved');
+    await driver.menu('CmdOrCtrl+Z', 'Undo');
+    await untilFile('the move undone', (line) => !line.includes('translate'));
+    await until('the frame back', translateIn(second), (value) => value === 'none');
+    check('undo takes the move back, in the file and the frame', true);
+    await driver.settle();
+    // The corner handle resizes.
+    const corner = await point('the corner handle', centreOf(`.dm-tile[data-dm-tile="${second}"] [data-dm-handle="se"]`));
+    const handleCentre = await driver.evaluate(
+      `(() => { const r = document.querySelector('.dm-tile[data-dm-tile="${second}"] [data-dm-handle="se"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
+    );
+    check('the picked element has a corner handle', corner !== undefined);
+    await driver.drag(handleCentre, { x: handleCentre.x - 70, y: handleCentre.y + 40 }, { steps: 8, label: 'resize' });
+    await untilFile('the size written', (line) => /width: [\d.]+rem/.test(line) && /height: [\d.]+rem/.test(line));
+    check('the corner handle writes width and height in rem', true, lineNow());
+    await driver.settle();
+    await shot('09d-resized');
+  });
+
   await run('publishing and pulling stay out of reach, and the bar holds in a narrow window', async () => {
     check(
       'the chip that would end the mode\u2019s look is not shown',

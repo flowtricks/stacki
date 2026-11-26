@@ -190,6 +190,45 @@ body:has(.dm-bar) .toast-stack {
 .dm-outline.is-hover {
   opacity: 0.55;
 }
+.dm-handle {
+  position: absolute;
+  width: calc(var(--dm-line) * 5);
+  height: calc(var(--dm-line) * 5);
+  border-radius: calc(var(--dm-line));
+  background: var(--accent);
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+.dm-handle.is-e {
+  left: 100%; /* physical: a handle on the element's right edge, as the page is drawn */
+  top: 50%;
+  cursor: ew-resize;
+}
+.dm-handle.is-s {
+  left: 50%; /* physical: the middle of the bottom edge */
+  top: 100%;
+  cursor: ns-resize;
+}
+.dm-handle.is-se {
+  left: 100%; /* physical: the bottom right corner */
+  top: 100%;
+  cursor: nwse-resize;
+}
+.dm-guide {
+  position: absolute;
+  background: var(--accent);
+  pointer-events: none;
+}
+.dm-guide.is-x {
+  top: 0;
+  bottom: 0;
+  width: var(--dm-line);
+}
+.dm-guide.is-y {
+  left: 0; /* physical: a snap line across the whole page */
+  right: 0;
+  height: var(--dm-line);
+}
 .dm-menu-anchor {
   position: fixed;
   width: 1px;
@@ -199,7 +238,8 @@ body:has(.dm-bar) .toast-stack {
 /* While a frame is photographed for the AI: the frame alone, with nothing of Design mode over it. */
 .dm-capturing .dm-bar,
 .dm-canvas.is-photo .dm-title,
-.dm-canvas.is-photo .dm-outline {
+.dm-canvas.is-photo .dm-outline,
+.dm-canvas.is-photo .dm-guide {
   visibility: hidden;
 }
 .dm-canvas.is-photo .dm-tile .dm-body {
