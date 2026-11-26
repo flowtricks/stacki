@@ -35,8 +35,22 @@ export interface RichTextCallbacks {
   /** The content as HTML and where the caret's block is (element positions: a block, then a list item), said when
    *  either changes, for whoever shows the node being typed. Nothing is saved by it. */
   readonly draft: (html: string, caret: readonly number[]) => void;
+  /** Names this edit: the host's answers about its save carry it. */
+  readonly edit: string;
   /** The instance's content as HTML, posted once when an edit is kept; undefined when nothing changed or it was cancelled. */
-  readonly done: (html: string | undefined) => void;
+  readonly done: (html: string | undefined, base: string) => void;
+  /** A kept edit did not reach the page: the editor is to open again on what was typed, which is still on screen. */
+  readonly unsaved: (kept: RichTextKept) => void;
+  /** No rendering and no answer came for a kept edit. */
+  readonly unconfirmed: () => void;
+}
+
+/** What an editor opened again after an unsaved edit starts from: what the first one opened on. */
+export interface RichTextKept {
+  readonly original: readonly ChildNode[];
+  readonly snapshot: readonly Node[];
+  readonly startHTML: string;
+  readonly opened: string;
 }
 
 /** Elements a session reads back, and the depth it walks a block for, both bounded. */
@@ -53,6 +67,53 @@ const awaiting = new Map<Element, () => void>();
  *  swept away when it lands, with what was typed into it. */
 export function awaitingRichRender(element: Element): boolean {
   return Array.from(awaiting.keys()).some((box) => box.isConnected && (box.contains(element) || element.contains(box)));
+}
+
+// A kept edit on screen until the page answers: its rendering (the rendered nodes go back first, so the patch finds
+// them) or the host's word that nothing changed; or its refusal, or silence past the bound, after which the editor is
+// opened again on what was typed.
+function showUntilRendered(entry: {
+  readonly container: Element;
+  readonly edit: string;
+  readonly putBack: () => void;
+  readonly unsaved: () => void;
+  readonly unconfirmed: () => void;
+}): void {
+  const { container, putBack, unsaved, unconfirmed } = entry;
+  const shown = new AbortController();
+  const end = () => {
+    clearTimeout(timer);
+    shown.abort();
+    awaiting.delete(container);
+  };
+  const settle = () => {
+    end();
+    putBack();
+  };
+  const keep = () => {
+    end();
+    unsaved();
+  };
+  const timer = setTimeout(() => {
+    unconfirmed();
+    keep();
+  }, SHOWN_SAVE_MS_MAX);
+  awaiting.set(container, settle);
+  document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
+  window.addEventListener(
+    'message',
+    (event) => {
+      const data: unknown = event.data;
+      const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
+      const mine = typeof data === 'object' && data !== null && 'edit' in data && data.edit === entry.edit;
+      if (type === 'avb:rich-settled' && mine) {
+        settle();
+      } else if ((type === 'avb:rich-refused' && mine) || type === 'avb:insert-revert' || type === 'avb:move-revert') {
+        keep();
+      }
+    },
+    { signal: shown.signal },
+  );
 }
 
 /** Gives up on a rendering that has not come: the boxes holding `element` show the page's own nodes again. */
@@ -89,7 +150,7 @@ export function holdsInlineWords(element: Element): boolean {
   return all.length <= RICH_LIMITS.childrenMax && all.every((child) => INLINE_ELEMENTS.has(child.tagName));
 }
 
-export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, callbacks: RichTextCallbacks) {
+export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, callbacks: RichTextCallbacks, kept?: RichTextKept) {
   const container = place.kind === 'line' ? place.container : instanceBlock(place.block, place.richRoot)?.parentElement;
   if (!(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
     return undefined;
@@ -97,12 +158,12 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   if (place.kind === 'line' && !holdsInlineWords(container)) {
     return undefined;
   }
-  const original = Array.from(container.childNodes);
-  const snapshot = original.map((node) => node.cloneNode(true));
+  const original = kept?.original ?? Array.from(container.childNodes);
+  const snapshot = kept?.snapshot ?? original.map((node) => node.cloneNode(true));
   const read = () => withoutTrailingCaretBreak(place.kind === 'line' ? readWholeHTML(container) : readInstanceHTML(container, original, place.richRoot));
-  const opened = read();
-  const kept = () => (place.kind === 'rich' ? savedRich(read(), opened) : savedLine(read(), opened));
-  const startHTML = kept();
+  const opened = kept?.opened ?? read();
+  const written = () => (place.kind === 'rich' ? savedRich(read(), opened) : savedLine(read(), opened));
+  const startHTML = kept?.startHTML ?? written();
   const history = createRichHistory(container);
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
@@ -115,6 +176,15 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   const controller = new AbortController();
   const listen = { capture: true, signal: controller.signal };
   let closed = false;
+  // A rendering that arrived while this editor was open: the nodes it opened on are not the page's latest.
+  let rendered = false;
+  document.addEventListener(
+    'avb:before-morph',
+    () => {
+      rendered = true;
+    },
+    { signal: controller.signal },
+  );
   const finish = (action: 'apply' | 'cancel') => {
     if (closed) {
       return;
@@ -123,7 +193,7 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     controller.abort();
     release();
     callbacks.plus(undefined);
-    const html = action === 'apply' ? kept() : undefined;
+    const html = action === 'apply' ? written() : undefined;
     // Whitespace alone is no change: the host writes nothing for it, so no rendering would ever take it back.
     const saved = html !== undefined && withoutSpacing(html) !== withoutSpacing(startHTML);
     // The rendered nodes go back before the preview patches (its patch knows its own nodes, and one made here would stay
@@ -131,29 +201,16 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     // break or a paragraph shows at once. Bounded, as the canvas's other shown edits are.
     const putBack = () => container.replaceChildren(...snapshot);
     if (saved) {
-      // Put back at the rendering, or at once when the host refuses the save (its take-back messages, as for the
-      // canvas's other shown edits), so the page never keeps showing an edit the file did not get.
-      const shown = new AbortController();
-      const settle = () => {
-        clearTimeout(timer);
-        shown.abort();
-        awaiting.delete(container);
-        putBack();
-      };
-      const timer = setTimeout(settle, SHOWN_SAVE_MS_MAX);
-      awaiting.set(container, settle);
-      document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
-      window.addEventListener(
-        'message',
-        (event) => {
-          const data: unknown = event.data;
-          const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
-          if (type === 'avb:insert-revert' || type === 'avb:move-revert') {
-            settle();
-          }
-        },
-        { signal: shown.signal },
-      );
+      // The rendered nodes go back at the rendering, or when the host says nothing changed, so a break or a paragraph
+      // shows at once. When the host refuses the save, or nothing comes at all, what was typed stays on screen and the
+      // editor opens on it again: typed words are never taken away unsaved.
+      showUntilRendered({
+        container,
+        edit: callbacks.edit,
+        putBack,
+        unsaved: () => callbacks.unsaved({ original, snapshot, startHTML, opened }),
+        unconfirmed: callbacks.unconfirmed,
+      });
     } else {
       putBack();
     }
@@ -165,7 +222,12 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     container.removeAttribute('data-avb-text-editor');
     container.removeAttribute('data-avb-text-blocks');
     container.blur();
-    callbacks.done(saved ? html : undefined);
+    callbacks.done(saved ? html : undefined, startHTML);
+    if (!saved && rendered && kept !== undefined) {
+      // Unsaved words were left behind after the page had moved on: what went back is older than the page, and only
+      // loading it again is sure to show it.
+      window.location.reload();
+    }
   };
   // Whether the latest press began in the editor: a drag is decided by where it began.
   let pressed = false;
@@ -313,7 +375,10 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   installRichPointer(container, ownsContent, controller.signal);
   container.focus({ preventScroll: true });
   // The caret where the double click was: focusing an editable element would otherwise put it at the element's start.
-  openingCaret(container, ownsContent, at);
+  // Opened again on unsaved words, it stays where the browser left it.
+  if (kept === undefined) {
+    openingCaret(container, ownsContent, at);
+  }
   report();
   return {
     finish,

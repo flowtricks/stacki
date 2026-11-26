@@ -797,19 +797,19 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
   // Replaces a node's inline children wholesale (rich Content field edits).
   // Nodes arrive from the editor without ids — assign fresh ones.
   const setNodeInline = useCallback(
-    (nodeId: string, kids: readonly InlineNode[]) => {
+    (nodeId: string, kids: readonly InlineNode[]): boolean => {
       // Step 9: the node restated with its new inline children.
       const state = pageStateRef.current.pageState;
       const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
       if (!node || node.kind === 'text') {
-        return;
+        return false;
       }
       const next = withChildren(node, inlineWithIds(kids, 0));
       // Content was explicitly edited. The printer's layout-preservation comparison
       // ignores whitespace, so keeping the old inner source could restore a deleted
       // space on save and send a different value back to the focused field.
       Reflect.deleteProperty(next, 'source');
-      commitEdit(nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false }));
+      return commitEdit(nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false }));
     },
     [commitEdit, pageStateRef],
   );

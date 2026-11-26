@@ -456,6 +456,7 @@ export function nodeGesture(nodeId: string, next: EditorNode, options: { readonl
     coalesceKey: options.coalesceKey,
     urgency: options.urgency,
     stream: `node:${nodeId}`,
+    restates: nodeId,
     request: (refOf) => {
       const target = refOf(nodeId);
       if (target === undefined) {

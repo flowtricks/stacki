@@ -60,7 +60,7 @@ function session(breaks, run) {
     // JSDOM renders no source stamps, so a finished edit is refused as a changed page: the words the editor would save
     // are read from its drafts, which carry the same value the save does (canvasTextWithoutLineEnds on both).
     const drafts = () => posted.filter((message) => message.type === 'avb:text-draft').map((message) => message.value);
-    run({ paragraph, text, caret, press, posted, drafts, saves: () => posted.filter((message) => message.type === 'avb:text-save') });
+    run({ canvas, window, paragraph, text, caret, press, posted, drafts, saves: () => posted.filter((message) => message.type === 'avb:text-save') });
   } finally {
     canvas.dismiss();
     window.close();
@@ -137,3 +137,25 @@ test('an Enter that ends an IME composition is the IME’s', () => {
     assert.equal(paragraph.getAttribute('contenteditable'), 'true');
   });
 });
+
+for (const answer of ['avb:rich-refused', 'avb:insert-revert']) {
+  test(`a save the page did not take (${answer}) keeps the typed words in an open editor, and can be saved again`, () => {
+    session('line', ({ canvas, window, paragraph, posted }) => {
+      paragraph.firstChild.data = 'Hello typed words';
+      canvas.dismiss();
+      const [first] = posted.filter((message) => message.type === 'avb:rich-save');
+      assert.equal(first.base, 'Hello world');
+      assert.equal(paragraph.hasAttribute('contenteditable'), false, 'saved: shown as typed while the page answers');
+      window.dispatchEvent(new window.MessageEvent('message', { data: { type: answer, edit: first.edit.id } }));
+      assert.equal(paragraph.textContent, 'Hello typed words', 'the words are still on screen');
+      assert.equal(paragraph.getAttribute('contenteditable'), 'true', 'and the editor is open on them');
+      canvas.dismiss();
+      const saves = posted.filter((message) => message.type === 'avb:rich-save');
+      assert.equal(saves.length, 2, 'leaving it tries the save again');
+      assert.equal(saves[1].html, 'Hello typed words');
+      assert.equal(saves[1].base, 'Hello world');
+      window.dispatchEvent(new window.MessageEvent('message', { data: { type: 'avb:rich-settled', edit: saves[1].edit.id } }));
+      assert.equal(paragraph.textContent, 'Hello world', 'told there is nothing to write, the page shows its own words');
+    });
+  });
+}

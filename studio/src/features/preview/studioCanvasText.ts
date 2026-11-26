@@ -80,8 +80,10 @@ export function studioCanvasText(
     format: canvasTextFormatter(nodes, (rootId, children) => {
       try {
         replace(applyEdits(source, [inlineContentEdit(source, rootId, children)]));
+        return true;
       } catch (error: unknown) {
         reportErrorToast(error instanceof Error ? error.message : String(error));
+        return false;
       }
     }),
     // The selected node's page path: its text from a prop or a slot is marked.

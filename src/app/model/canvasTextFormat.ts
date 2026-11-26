@@ -27,7 +27,8 @@ import type { CanvasTextFormatter } from '../../features/preview/useCanvasText';
  */
 export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & InlineCandidate>(
   nodes: readonly Node[],
-  setInline: (rootId: string, children: readonly InlineNode[]) => void,
+  /** False: nothing was written now (the editor is saving something else, or the node is gone). */
+  setInline: (rootId: string, children: readonly InlineNode[]) => boolean,
 ): CanvasTextFormatter {
   const contentOf = (textId: string) => {
     const found = inlineRootOf(nodes, textId);
@@ -73,27 +74,33 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       return splitIntoParagraphs(nodes, { rootId: content.rootId, children: typed, trail: content.trail }, setInline);
     },
     contentOwner: (textId, breaks) => contentOwnerOf(nodes, textId, breaks)?.id,
-    richText: (textId, html, breaks) => {
-      const instance = contentOwnerOf(nodes, textId, breaks);
+    content: (ownerId) => {
+      const instance = nodeById(nodes, ownerId);
+      return instance === undefined ? undefined : plainChildrenHTML(instance.children);
+    },
+    richText: (ownerId, html, bases) => {
+      const instance = nodeById(nodes, ownerId);
       if (instance?.id === undefined || richTextView(html, document).view !== 'rich') {
-        return false;
+        return 'refused';
       }
       const before = plainChildrenHTML(instance.children);
       if (before === undefined) {
-        return false; // The content holds more than rich text since the editor opened: never write over it.
+        return 'conflict'; // The content holds more than rich text since the editor opened: never write over it.
       }
       if (sameRichContent(before, html, document)) {
-        return true; // Nothing a reader would see changed: the file keeps its bytes.
+        return 'unchanged'; // Nothing a reader would see changed: the file keeps its bytes.
+      }
+      if (!bases.some((base) => sameRichContent(before, base, document))) {
+        return 'conflict';
       }
       // The blocks the page already held keep the file's own line breaks around them in the frame; the printer lays the
       // content out itself, and would write those as blank lines.
       const next = withoutLayoutSpace(richTextNodes(html, document));
       // A line of words stays one: blocks typed into content the component may draw inside a <p> are refused.
       if (isInlineOnly(instance.children ?? []) && next.length > 0 && !isInlineOnly(next)) {
-        return false;
+        return 'refused';
       }
-      setInline(instance.id, next);
-      return true;
+      return setInline(instance.id, next) ? 'written' : 'busy';
     },
   };
 }
@@ -275,6 +282,18 @@ function attributesOf(props: InlineCandidate['props']): Record<string, Attr> {
     }
   }
   return out;
+}
+
+function nodeById<Node extends CanvasFormatTree<Node>>(nodes: readonly Node[], id: string): Node | undefined {
+  const stack: Node[] = [...nodes];
+  for (let visited = 0; visited < LIMITS.treeNodesMax; visited += 1) {
+    const node = stack.pop();
+    if (node === undefined || node.id === id) {
+      return node;
+    }
+    stack.push(...(node.children ?? []));
+  }
+  return undefined;
 }
 
 function parentOf<Node extends CanvasFormatTree<Node>>(nodes: readonly Node[], id: string): Node | undefined {

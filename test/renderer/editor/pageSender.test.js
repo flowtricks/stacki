@@ -449,3 +449,20 @@ test('a live gesture refused again and again for one reason is reported once per
   await sendText('G', 'live');
   assert.equal(box.notices.length, 4, 'after a write of the stream applied, a refusal is news again');
 });
+
+// A gesture can name a node by a handle the page's reading no longer has: the page was read again under it. Its effect
+// on that reading is nothing, which once counted as "applied": no write, no word, and the edit was gone.
+test('a gesture naming a node that is not in the page is refused and said, never reported saved', async () => {
+  const { disk, box, queue, send } = harness(PAGE);
+  const text = box.state.model.nodes[0].children[0].children[0];
+  const stale = { ...text, id: 'n9.9.9', value: 'Typed' };
+  const gesture = editGestures.nodeGesture(stale.id, stale, { coalesceKey: undefined, urgency: false });
+  const record = step();
+  queue.addGesture(PATH, gesture, record);
+  const sent = await edits.sendGesture({ path: PATH, origin: box.state.origin, gesture, record: step(), send: engine(disk) });
+  assert.equal(sent.tag, 'refused');
+  assert.equal(sent.reason, 'anchor-moved');
+  assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
+  assert.equal(disk.text, PAGE, 'nothing was written');
+  assert.equal(box.notices.length, 1, 'the person is told');
+});

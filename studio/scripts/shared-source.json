@@ -1705,6 +1705,7 @@
     "src/features/preview/canvasTextOverlay.ts",
     "src/features/preview/canvasTextRefresh.ts",
     "src/features/preview/canvasTextSelection.ts",
+    "src/features/preview/canvasRichSave.ts",
     "src/features/preview/canvasTextSource.ts",
     "src/features/preview/contextPosition.ts",
     "src/features/preview/deviceIcons.ts",
