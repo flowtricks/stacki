@@ -119,6 +119,131 @@ export function createRichHistory(host: HTMLElement): RichHistory {
   };
 }
 
+// The host's own child that is an image, a video or a rule.
+function isMediaChild(host: HTMLElement, node: Node | undefined): node is Element {
+  return node instanceof Element && node.parentNode === host && MEDIA_TAGS.has(node.tagName);
+}
+
+// The one image, video or rule the selection holds, and nothing else.
+function selectedMedia(host: HTMLElement, range: Range): Element | undefined {
+  if (range.startContainer !== host || range.endContainer !== host || range.endOffset !== range.startOffset + 1) {
+    return undefined;
+  }
+  const node = host.childNodes[range.startOffset];
+  return isMediaChild(host, node) ? node : undefined;
+}
+
+/**
+ * Backspace and Delete beside an image, a video or a rule that is a block of its own, which the browser's keys get
+ * wrong: Backspace after one unwraps the paragraph into loose words, Delete before one does nothing. An empty line goes
+ * and the block stays; otherwise the key takes the block, as it does one that is selected. True when the key is spent.
+ */
+export function deleteBesideRichMedia(host: HTMLElement, history: RichHistory, key: 'Backspace' | 'Delete'): boolean {
+  const selection = host.ownerDocument.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  if (range === undefined || !host.contains(range.commonAncestorContainer)) {
+    return false;
+  }
+  const back = key === 'Backspace';
+  const selected = selectedMedia(host, range);
+  if (selected !== undefined) {
+    history.record(() => {
+      const next = selected.nextElementSibling ?? undefined;
+      const previous = selected.previousElementSibling ?? undefined;
+      selected.remove();
+      caretBeside(host, previous, next);
+    });
+    return true;
+  }
+  if (!range.collapsed) {
+    return false;
+  }
+  const position = topPosition(host, range.startContainer, range.startOffset);
+  const block = position.top;
+  if (block === undefined || MEDIA_TAGS.has(block.tagName)) {
+    return false;
+  }
+  const rest = host.ownerDocument.createRange();
+  rest.selectNodeContents(block);
+  if (back) {
+    rest.setEnd(range.startContainer, range.startOffset);
+  } else {
+    rest.setStart(range.startContainer, range.startOffset);
+  }
+  const neighbour = (back ? block.previousElementSibling : block.nextElementSibling) ?? undefined;
+  const atEdge = rest.toString().trim() === '' && rest.cloneContents().querySelector(`${CONTENT_SELECTOR}, li ~ li`) === null;
+  if (!atEdge || !isMediaChild(host, neighbour)) {
+    return false;
+  }
+  history.record(() => {
+    if (isBlank(block)) {
+      const beyond = (back ? neighbour.previousElementSibling : neighbour.nextElementSibling) ?? undefined;
+      block.remove();
+      caretBeside(host, back ? beyond : undefined, back ? undefined : beyond);
+      if (beyond === undefined || MEDIA_TAGS.has(beyond.tagName)) {
+        selectRichMedia(neighbour);
+      }
+    } else {
+      neighbour.remove();
+    }
+  });
+  return true;
+}
+
+// After a block went: the end of the block before, else the start of the one after.
+function caretBeside(host: HTMLElement, previous: Element | undefined, next: Element | undefined): void {
+  if (previous !== undefined && TYPING_BLOCKS.has(previous.tagName)) {
+    const items = previous.querySelectorAll('li');
+    const end = items[items.length - 1] ?? previous;
+    collapseAt(end, end.childNodes.length);
+  } else if (next !== undefined && TYPING_BLOCKS.has(next.tagName)) {
+    collapseAt(next.querySelector('li') ?? next, 0);
+  } else {
+    collapseAt(host, 0);
+  }
+}
+
+/** Selects an image, a video or a rule whole, as a press on it does. */
+export function selectRichMedia(media: Element): void {
+  const document = media.ownerDocument;
+  const range = document.createRange();
+  range.selectNode(media);
+  const selection = document.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+/**
+ * Before words go in: a caret between two blocks (beside an image, or with one selected) gets a paragraph of its own
+ * first, so nothing is ever typed loose among the blocks.
+ */
+export function keepTypingInBlocks(host: HTMLElement, history: RichHistory): void {
+  const range = richCaret(host);
+  if (range.startContainer !== host || host.children.length === 0) {
+    return;
+  }
+  const media = selectedMedia(host, range);
+  if (!range.collapsed && media === undefined) {
+    return;
+  }
+  const index = media === undefined ? range.startOffset : range.startOffset + 1;
+  if (media === undefined && !isMediaChild(host, host.childNodes[index]) && !isMediaChild(host, host.childNodes[index - 1])) {
+    return;
+  }
+  const paragraph = host.ownerDocument.createElement('p');
+  paragraph.setAttribute(SPARE_LINE, '');
+  paragraph.append(host.ownerDocument.createElement('br'));
+  history.record(() => {
+    const next = host.childNodes[index];
+    if (next === undefined) {
+      host.append(paragraph);
+    } else {
+      next.before(paragraph);
+    }
+    collapseAt(paragraph, 0);
+  });
+}
+
 const histories = new WeakMap<HTMLElement, RichHistory>();
 
 /** The one history of an editor that outlives its edits (the dialog's field): made on first use. */

@@ -14,6 +14,9 @@ import { HtmlToolbar, MOD } from './HtmlToolbar';
 import { containsHTML, editableHTML } from './htmlFieldModel';
 import { pasteRichText } from '../../shared/page/richPaste';
 import {
+  deleteBesideRichMedia,
+  keepTypingInBlocks,
+  selectRichMedia,
   isSpareRichLine,
   leaveQuoteOnEnter,
   richElement,
@@ -234,6 +237,13 @@ function HtmlBody(props: BodyProps) {
           editor.emit();
         }}
         onKeyDown={(event) => {
+          if (props.blocks === 'insert' && (event.key === 'Backspace' || event.key === 'Delete')) {
+            if (deleteBesideRichMedia(event.currentTarget, richHistoryOf(event.currentTarget), event.key)) {
+              event.preventDefault();
+              editor.emit();
+              return;
+            }
+          }
           if (props.blocks === 'insert' && event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
             if (leaveQuoteOnEnter(event.currentTarget, richHistoryOf(event.currentTarget))) {
               event.preventDefault();
@@ -251,7 +261,17 @@ function HtmlBody(props: BodyProps) {
           }
           keyDown(editor, event, props.onAction);
         }}
-        onClick={(event) => followLink(event, { open: event.metaKey || event.ctrlKey })}
+        onClick={(event) => {
+          if (props.blocks === 'insert' && event.target instanceof Element && event.target.matches('img, video, hr')) {
+            selectRichMedia(event.target);
+          }
+          followLink(event, { open: event.metaKey || event.ctrlKey });
+        }}
+        onBeforeInput={(event) => {
+          if (props.blocks === 'insert') {
+            keepTypingInBlocks(event.currentTarget, richHistoryOf(event.currentTarget));
+          }
+        }}
         onPaste={(event) => {
           event.preventDefault();
           paste(editor, event.clipboardData, { media: props.blocks === 'insert' });

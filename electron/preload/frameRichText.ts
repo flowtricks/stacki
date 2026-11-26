@@ -14,6 +14,9 @@ import { holdTextEditing, styleTextEditor } from './frameTextEditing';
 import { installRichPointer, openingCaret } from './frameRichCaret';
 import {
   createRichHistory,
+  deleteBesideRichMedia,
+  keepTypingInBlocks,
+  selectRichMedia,
   insertRichBlocks,
   isSpareRichLine,
   leaveQuoteOnEnter,
@@ -166,6 +169,11 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
       // Escape leaves without saving, a click elsewhere saves (the session's dismiss). Enter: in rich text a new block (the
       // browser's own, a paragraph after a heading or quote, an item in a list, out of an empty one); in a line of words
       // a line break. ⌘/Ctrl Enter, and Shift Enter, a line break inside the block in both.
+      if (place.kind === 'rich' && (event.key === 'Backspace' || event.key === 'Delete') && deleteBesideRichMedia(container, history, event.key)) {
+        event.preventDefault();
+        report();
+        return;
+      }
       if (undoneBlocks(history, event)) {
         event.preventDefault();
         report();
@@ -223,6 +231,28 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     },
     listen,
   );
+  if (place.kind === 'rich') {
+    // A press on an image selects it, so the next Backspace takes it; words never go in loose between the blocks.
+    window.addEventListener(
+      'mouseup',
+      (event) => {
+        const pressed = event.target;
+        if (event.button === 0 && pressed instanceof Element && container.contains(pressed) && pressed.matches('img, video, hr')) {
+          selectRichMedia(pressed);
+        }
+      },
+      listen,
+    );
+    container.addEventListener(
+      'beforeinput',
+      (event) => {
+        if (event.inputType === 'insertText') {
+          keepTypingInBlocks(container, history);
+        }
+      },
+      { signal: controller.signal },
+    );
+  }
   // What is typed, said once the browser has finished the change that raised it, and only when it differs.
   let said = '';
   let saying: ReturnType<typeof setTimeout> | undefined;

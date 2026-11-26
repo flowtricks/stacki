@@ -163,3 +163,27 @@ test('Enter at the end of a quote goes on as a paragraph; inside it the browser 
     assert.equal(host.innerHTML, '<blockquote>quote</blockquote><p><br></p>');
   });
 });
+
+test('Backspace and Delete beside an image take it, or the empty line; never leaving loose words', () => {
+  const run = (markup, at, offset, key) => {
+    let result;
+    editor(markup, ({ host, caret, rich }) => {
+      caret(at(host), offset);
+      assert.equal(rich.deleteBesideRichMedia(host, rich.createRichHistory(host), key), true);
+      result = host.innerHTML;
+    });
+    return result;
+  };
+  assert.equal(
+    run('<img src="/a.png"><p>after</p>', (host) => host.children[1].firstChild, 0, 'Backspace'),
+    '<p>after</p>',
+  );
+  assert.equal(
+    run('<p>before</p><hr>', (host) => host.firstChild.firstChild, 6, 'Delete'),
+    '<p>before</p>',
+  );
+  assert.equal(
+    run('<p>a</p><hr><p><br></p>', (host) => host.children[2], 0, 'Backspace'),
+    '<p>a</p><hr>',
+  );
+});
