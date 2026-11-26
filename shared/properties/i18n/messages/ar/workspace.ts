@@ -130,6 +130,8 @@ export const messages = {
     other: 'نقل {count} عنصر',
   },
   'workspace.files.undo.rename': 'إعادة تسمية {name}',
+  'workspace.notifications.copied': 'تم النسخ',
+  'workspace.notifications.copy': 'نسخ',
   'workspace.notifications.dismiss': 'تجاهل الإشعار',
   'workspace.notifications.label': 'الإشعارات',
   'workspace.notifications.loadMore': 'تحميل المزيد ({count})',

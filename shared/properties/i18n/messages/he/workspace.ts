@@ -118,6 +118,8 @@ export const messages = {
     other: 'העברת {count} פריטים',
   },
   'workspace.files.undo.rename': 'שינוי השם של {name}',
+  'workspace.notifications.copied': 'הועתק',
+  'workspace.notifications.copy': 'העתקה',
   'workspace.notifications.dismiss': 'סגירת ההתראה',
   'workspace.notifications.label': 'התראות',
   'workspace.notifications.loadMore': 'טעינת עוד ({count})',

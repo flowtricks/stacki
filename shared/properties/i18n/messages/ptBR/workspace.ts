@@ -115,6 +115,8 @@ export const messages = {
     other: 'Mover {count} itens',
   },
   'workspace.files.undo.rename': 'Renomear {name}',
+  'workspace.notifications.copied': 'Copiado',
+  'workspace.notifications.copy': 'Copiar',
   'workspace.notifications.dismiss': 'Dispensar notificação',
   'workspace.notifications.label': 'Notificações',
   'workspace.notifications.loadMore': 'Carregar mais ({count})',

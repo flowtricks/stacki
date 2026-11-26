@@ -110,6 +110,8 @@ export const messages = {
     other: '항목 {count}개 이동',
   },
   'workspace.files.undo.rename': '{name} 이름 바꾸기',
+  'workspace.notifications.copied': '복사됨',
+  'workspace.notifications.copy': '복사',
   'workspace.notifications.dismiss': '알림 닫기',
   'workspace.notifications.label': '알림',
   'workspace.notifications.loadMore': '더 불러오기({count})',

@@ -183,7 +183,8 @@
   }
 }
 
-.toast-recovery {
+.toast-recovery,
+.toast-copy {
   display: inline-block;
   margin-block: 6px 0;
   margin-inline: 0 8px;

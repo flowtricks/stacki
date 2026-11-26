@@ -37,7 +37,7 @@ import {
   type EmDashPreviewState,
 } from '../../shared/properties/emdashInstall';
 import { PNPM_TOLERATE_IGNORED_BUILDS, detectPackageManager } from '../project/packageManager';
-import type { PackageManager } from '../../shared/properties/packageManager';
+import { packageManagerProgram, type PackageManager } from '../../shared/properties/packageManager';
 import { RUN_CANCELLED, runCreateCommand } from '../project/starter';
 import { ensureToolPath, git } from '../lib/nodeTools';
 import { commit } from '../git/gitSnapshot';
@@ -296,7 +296,7 @@ async function install(
   const options = { signal: context.controller.signal, timeoutMs: EMDASH_INSTALL_LIMITS.runMsMax };
   try {
     context.onLog(`> ${plan.command}\n\n`);
-    await context.deps.runCommand(windows ? `${plan.manager}.cmd` : plan.manager, addArguments(plan.manager), root, context.onLog, options);
+    await context.deps.runCommand(packageManagerProgram(plan.manager, { windows }), addArguments(plan.manager), root, context.onLog, options);
     writeLiveConfigIfAbsent(root);
     appendIgnoreLines(root);
     config = registerInAstroConfig(root, context.deps.verifyConfig);

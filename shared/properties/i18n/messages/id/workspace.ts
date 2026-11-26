@@ -111,6 +111,8 @@ export const messages = {
     other: 'Pindahkan {count} item',
   },
   'workspace.files.undo.rename': 'Ganti nama {name}',
+  'workspace.notifications.copied': 'Disalin',
+  'workspace.notifications.copy': 'Salin',
   'workspace.notifications.dismiss': 'Tutup notifikasi',
   'workspace.notifications.label': 'Notifikasi',
   'workspace.notifications.loadMore': 'Muat lebih banyak ({count})',
