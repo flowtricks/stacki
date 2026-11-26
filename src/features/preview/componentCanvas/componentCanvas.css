@@ -22,20 +22,41 @@
   padding: 0;
   overflow: hidden;
   border-radius: 10px;
-  /* The right panel's own fill, so its fields look as they do there; lifted by the menus' shadow, not a border. */
+  /* The right panel's own fill, so its fields look as they do there. A faded edge and no shadow: the owner's exception
+     to fills-not-borders, with the comment pins pill's and the canvas zoom bar's edge. */
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
   background: var(--bg-panel);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  box-shadow: none;
 }
-.component-canvas-popup-head {
+/* The whole header is one button: every point of the row toggles. Its padding and the 1px edge around it add up to the
+   8px (12px at the start) its words have always stood in from the popover. */
+.component-canvas-popup.component-canvas-popup button.component-canvas-popup-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
-  padding: 8px;
-  padding-block-end: 4px;
-  padding-inline-start: 12px;
-  cursor: move;
+  width: 100%;
+  margin: 0;
+  padding: 7px;
+  padding-block-end: 3px;
+  padding-inline-start: 11px;
+  border: 0;
+  border-radius: 9px 9px 0 0;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
   user-select: none;
   touch-action: none;
+}
+.component-canvas-popup.component-canvas-popup button.component-canvas-popup-head:hover {
+  background: var(--bg-hover);
+}
+/* Inside the row, since the popover clips what reaches past it. */
+.component-canvas-popup.component-canvas-popup button.component-canvas-popup-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .component-canvas-popup-title {
   flex: 1 1 auto;
@@ -44,15 +65,19 @@
   font-weight: 600;
   color: var(--text);
 }
-.component-canvas-popup-toggle {
-  cursor: pointer;
+.component-canvas-popup-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 5px;
+  color: var(--text-dim);
 }
-/* Expanded, the chevron points up: pressing it folds the popover to its header. */
-.component-canvas-popup:not(.is-minimized) .component-canvas-popup-toggle svg {
+/* Expanded, the chevron points up: pressing the header folds the popover to it. */
+.component-canvas-popup:not(.is-minimized) .component-canvas-popup-chevron svg {
   transform: rotate(180deg);
 }
-.component-canvas-popup.is-minimized .component-canvas-popup-head {
-  padding-block-end: 8px;
+.component-canvas-popup.component-canvas-popup.is-minimized button.component-canvas-popup-head {
+  padding-block-end: 7px;
+  border-radius: 9px;
 }
 .component-canvas-popup .props-title {
   padding-top: 4px;
