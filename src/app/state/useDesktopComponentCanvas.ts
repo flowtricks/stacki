@@ -244,7 +244,9 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
     }
   }, []);
   useCanvasPageWrites(state, writes, catalog, { project, translate, shell, setState });
-  useCanvasMessages(state, setState, cover);
+  // The frames' drawn sizes, as the page last told them: read when a size turns Fixed, never drawn from.
+  const drawn = useRef<ReadonlyMap<string, { readonly width: number; readonly height: number }>>(new Map());
+  useCanvasMessages(state, setState, { cover, drawn });
   useLiveSchema(state, app.scan, setState);
   useRelinkedSettings(state, writes, setState);
   useLeaveWhenAway(state, app, finish);
@@ -284,6 +286,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           const component = current.component.file;
           return rootTarget(scope, current) === undefined ? (file) => withoutOverrides(file, component, scope, setting) : undefined;
         }),
+      drawnSize: (frame) => drawn.current.get(frame),
       showTargets: (frames) => {
         const current = stateRef.current;
         if (current.kind === 'open') {
@@ -744,7 +747,15 @@ function narrowerFrame(instances: readonly CanvasInstance[], key: string): Canva
 // Messages from the canvas page: the zoom, and that it is ready for the selection. The selection itself is the editor's
 // (a press on a box or an instance selects it as on any page); the page is told what is selected, so it can mark the
 // frame's caption and keep captions clear of the editor's tag.
-function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.SetStateAction<CanvasState>>, cover: React.MutableRefObject<number>): void {
+function useCanvasMessages(
+  state: CanvasState,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+  refs: {
+    readonly cover: React.MutableRefObject<number>;
+    readonly drawn: React.MutableRefObject<ReadonlyMap<string, { readonly width: number; readonly height: number }>>;
+  },
+): void {
+  const { cover, drawn } = refs;
   const id = state.kind === 'open' ? state.id : undefined;
   const selection = state.kind === 'open' ? JSON.stringify(selectionOf(state)) : undefined;
   useEffect(() => {
@@ -756,7 +767,9 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
       if (message === undefined || !fromPreview(event.source)) {
         return;
       }
-      if (message.event === 'view' && message.scale !== undefined) {
+      if (message.event === 'sizes') {
+        drawn.current = message.sizes;
+      } else if (message.event === 'view' && message.scale !== undefined) {
         // The zoom on screen: the canvas's own times the preview frame's (a fixed-width Desktop is drawn smaller).
         const scale = message.scale * previewScale();
         setState((current) => (current.kind === 'open' && current.scale !== scale ? { ...current, scale } : current));
@@ -773,7 +786,7 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [cover, id, setState]);
+  }, [cover, drawn, id, setState]);
   useEffect(() => {
     if (id === undefined || selection === undefined) {
       return undefined;

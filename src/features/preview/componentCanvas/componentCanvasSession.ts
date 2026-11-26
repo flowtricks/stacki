@@ -98,6 +98,8 @@ export interface ComponentCanvasControl {
   readonly edit: (edit: FrameEdit) => void;
   /** Drops what scopes narrower than the section's own say about `setting`, so every frame it reaches shows its value. */
   readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
+  /** A frame's size as the canvas draws it now, in its own pixels; undefined before the page has said. */
+  readonly drawnSize: (frame: string) => { readonly width: number; readonly height: number } | undefined;
   /** The frames a scope choice would change, outlined on the canvas while it is pointed at; undefined clears them. */
   readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */

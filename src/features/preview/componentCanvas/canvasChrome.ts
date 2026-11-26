@@ -7,6 +7,7 @@
 // instead of one preview per frame. Panning and zooming transform the world, which the canvas measures through, so
 // the outlines stay on what they outline at every zoom.
 import { assert } from '../../../../shared/core/assert';
+import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 
 export const CHROME_LIMITS = {
   /** The widest a frame grows while it hugs its component: the Desktop frame width of the all-breakpoints canvas. */
@@ -333,11 +334,27 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     flag(root, 'data-stacki-light', light);
     flag(root, 'data-stacki-dark', !light);
   }
+  // Every image on the canvas loads now. A component's lazy image (Lumos's Img is lazy unless told otherwise) waits
+  // for the browser to judge it near the viewport, and the canvas is a panned, zoomed world inside a root that never
+  // scrolls: a frame's image could stay unloaded, its box showing only the image's placeholder fill. On a canvas every
+  // frame is there to be seen, so none waits. Only the attribute on the rendered page changes, never the component.
+  function eager() {
+    var lazy = world.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]');
+    for (var i = 0; i < lazy.length; i++) lazy[i].setAttribute('loading', 'eager');
+  }
+  // Each frame's size as drawn, told to the editor when it changes: a size turned Fixed starts at what the frame shows.
+  var told = '';
+  function tellSizes() {
+    var all = frames(), sizes = {};
+    for (var i = 0; i < all.length; i++) sizes[all[i].getAttribute('data-frame')] = [all[i].offsetWidth, all[i].offsetHeight];
+    var text = JSON.stringify(sizes);
+    if (text !== told) { told = text; post({ event: 'sizes', frames: sizes }); }
+  }
   var queued = false;
-  function settle() { queued = false; apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); }
+  function settle() { queued = false; eager(); apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); tellSizes(); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
-  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
+  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading'] });
   // The site's styles arrive in <head> after this script runs (the dev server injects them): settle again as they do.
   if (document.head) new MutationObserver(queue).observe(document.head, { childList: true });
   window.addEventListener('load', queue);
@@ -395,10 +412,11 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     }
   });
   if (typeof ResizeObserver === 'function') {
-    var refit = new ResizeObserver(function () { captionRoom(); if (!moved) fit(); });
+    var refit = new ResizeObserver(function () { captionRoom(); tellSizes(); if (!moved) fit(); });
     refit.observe(world);
     refit.observe(root);
   }
+  eager();
   fallbacks();
   captionRoom();
   pageBackground();
@@ -412,8 +430,10 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
 }
 
 interface CanvasMessage {
-  readonly event: 'view' | 'ready';
+  readonly event: 'view' | 'ready' | 'sizes';
   readonly scale: number | undefined;
+  /** Each frame's drawn width and height in the canvas's own pixels, by key (`sizes`). */
+  readonly sizes: ReadonlyMap<string, { readonly width: number; readonly height: number }>;
 }
 
 // What the page posts is untrusted until read here: the site's own scripts share its window.
@@ -426,11 +446,30 @@ export function canvasMessage(input: unknown, id: string): CanvasMessage | undef
     return undefined;
   }
   const event = read('event');
-  if (event !== 'view' && event !== 'ready') {
+  if (event !== 'view' && event !== 'ready' && event !== 'sizes') {
     return undefined;
   }
   const scaleValue = read('scale');
   const scale = typeof scaleValue === 'number' && Number.isFinite(scaleValue) && scaleValue > 0 ? scaleValue : undefined;
   assert(id.length > 0, 'A canvas message is read for one canvas');
-  return { event, scale };
+  return { event, scale, sizes: event === 'sizes' ? frameSizesOf(read('frames')) : new Map() };
+}
+
+// The frames' sizes a `sizes` message holds: string keys to two whole, bounded pixel lengths; anything else is left out.
+function frameSizesOf(input: unknown): ReadonlyMap<string, { readonly width: number; readonly height: number }> {
+  const sizes = new Map<string, { readonly width: number; readonly height: number }>();
+  if (typeof input !== 'object' || input === null) {
+    return sizes;
+  }
+  const length = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= CANVAS_LIMITS.sizePxMax ? value : undefined;
+  for (const [key, value] of Object.entries(input).slice(0, CANVAS_LIMITS.framesMax)) {
+    const width = Array.isArray(value) ? length(value[0]) : undefined;
+    const height = Array.isArray(value) ? length(value[1]) : undefined;
+    if (key.length <= CANVAS_LIMITS.keyCharsMax && width !== undefined && height !== undefined) {
+      sizes.set(key, { width, height });
+    }
+  }
+  assert(sizes.size <= CANVAS_LIMITS.framesMax, 'A canvas reports a bounded number of frames');
+  return sizes;
 }

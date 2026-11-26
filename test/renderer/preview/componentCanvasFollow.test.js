@@ -229,3 +229,41 @@ test('a selection change reaches Frame settings in the same commit, with no elem
   assert.equal(commits.at(-1).scope, held.scope);
   canvas.noteComponentCanvas({ kind: 'idle' });
 });
+
+// The owner's report: with All frames chosen, pressing Fixed did nothing. The field showed the selected frame's own
+// value (a Hug an older This-frame default had stored), which wins on that frame, so the all-frames write never showed.
+// The size fields now show the target's own value, start Fixed at the frame's drawn size, and say quietly (orange,
+// with Reset) that a frame keeps its own; the canvas shows the change on every other frame.
+test('Fixed at All frames shows Fixed at once, from the drawn size, and says which frame keeps its own', async (context) => {
+  const { state: opened } = openCanvas();
+  const link = opened.layout.frames[1].key;
+  const settings = { version: 1, components: { [BUTTON]: { split: ['variant', 'emphasis'], frames: { [link]: { width: 'hug' } } } } };
+  const edits = [];
+  const panelControl = { ...control, drawnSize: (key) => (key === link ? { width: 183, height: 96 } : undefined), edit: (edit) => edits.push(edit) };
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  context.after(() => act(async () => root.unmount()));
+  const draw = (state) => act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: panelControl, state })));
+  const base = { ...opened, settings, frame: link, scopes: { props: link, size: '', background: link } };
+  canvas.noteComponentCanvas(base);
+  await draw(base);
+  const width = () => host.querySelectorAll('.component-canvas-section')[0].querySelectorAll('.props-field')[0];
+  const pressed = () => width().querySelector('[role="radio"][aria-checked="true"]')?.textContent;
+  assert.equal(pressed(), 'Hug', 'nothing set at All frames: Hug');
+  const fixed = [...width().querySelectorAll('[role="radio"]')].find((button) => button.textContent === 'Fixed');
+  await act(async () => fixed.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
+  assert.deepEqual(edits, [{ kind: 'field', field: 'width', value: 183 }], 'Fixed starts at the frame’s drawn width, written to All frames');
+  // The store answers with the all-frames width; the frame's own Hug still wins on that frame.
+  const after = {
+    ...base,
+    settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 'hug' } } } } },
+  };
+  await draw(after);
+  assert.equal(pressed(), 'Fixed', 'the field shows what All frames is now, not the selected frame’s own Hug');
+  assert.equal(width().querySelector('input')?.value, '183');
+  const label = width().querySelector('.prop-label');
+  assert.match(label.className, /embed-editor_prop-orange/, 'a frame keeping its own value is said in orange');
+  assert.match(label.title, /^This frame has its own value\. 1 frame here keeps its own value/, 'and why the selected frame did not change');
+  canvas.noteComponentCanvas({ kind: 'idle' });
+});

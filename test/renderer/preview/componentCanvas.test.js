@@ -271,6 +271,12 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
     /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before \{ visibility: hidden !important; \}/,
   );
   assert.match(chrome.chromeScript(ID), /data\.command === 'tag'/);
+  // A lazy image waits for a viewport test a panned, zoomed canvas never answers: every image on the canvas loads now.
+  assert.match(
+    chrome.chromeScript(ID),
+    /img\[loading="lazy"\][^;]*;\s*for \(var i = 0; i < lazy\.length; i\+\+\) lazy\[i\]\.setAttribute\('loading', 'eager'\)/,
+  );
+  assert.match(chrome.chromeScript(ID), /attributeFilter: \[[^\]]*'loading'/, 'an image patched back to lazy is made eager again');
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
