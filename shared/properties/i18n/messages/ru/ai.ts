@@ -287,6 +287,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'Агент не предлагает такую настройку.',
   'ai.error.signIn': 'Войдите в {agent}, чтобы продолжить.',
   'ai.error.signInUnchecked': 'Stacki не удалось проверить вход в {agent}, поэтому ничего не отправлено. Повторите попытку.',
+  'ai.error.pinPictures': 'Не удалось подготовить изображения меток, поэтому ничего не отправлено: {detail}',
   'ai.error.stillAnswering': 'Агент ещё отвечает. Остановите его или подождите.',
   'ai.error.stillAnsweringCompact': 'Агент ещё отвечает. Сожмите разговор, когда он закончит.',
   'ai.error.stopped': '{agent} остановился{detail}',

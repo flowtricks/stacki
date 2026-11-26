@@ -18,6 +18,7 @@ import { test } from 'node:test';
 import { AgentHost } from '#dist/electron/handlers/ai/agentHost.js';
 import { AgentSetup, SESSION_PERMIT_MS, type SessionPermit } from '#dist/electron/handlers/ai/agentSetup.js';
 import { ChatStore } from '#dist/electron/handlers/ai/chatStore.js';
+import { PinPictures } from '#dist/electron/handlers/ai/pinPictures.js';
 import { CLAUDE_NO_API_KEY_SETTINGS, withoutClaudeAPIKey } from '#dist/electron/lib/claudeSubscriptionOnly.js';
 import { toRecord } from '#dist/shared/core/record.js';
 import { parseSetupState, type SetupState } from '#dist/shared/ipc/aiChat.js';
@@ -248,7 +249,9 @@ test('the adapter has no key, and every session it opens or reopens carries the 
   }
   const methods = new Set(it.sessions().map((request) => request.method));
   assert.deepEqual([...methods].sort(), ['session/fork', 'session/new']);
+  const rule = new PinPictures(path.join(it.bin, 'user')).readRule(it.root);
+  const settings = { ...CLAUDE_NO_API_KEY_SETTINGS, permissions: { allow: [rule] } };
   for (const request of it.sessions()) {
-    assert.deepEqual(request.params['_meta'], { claudeCode: { options: { settings: CLAUDE_NO_API_KEY_SETTINGS } } }, request.method);
+    assert.deepEqual(request.params['_meta'], { claudeCode: { options: { settings } } }, request.method);
   }
 });

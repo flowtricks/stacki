@@ -10,9 +10,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { AgentHost } from '#dist/electron/handlers/ai/agentHost.js';
 import { ChatStore } from '#dist/electron/handlers/ai/chatStore.js';
+import { PIN_PICTURE_LIMITS, PinPictures, readRuleFor } from '#dist/electron/handlers/ai/pinPictures.js';
+import { toRecord } from '#dist/shared/core/record.js';
+import { toChatId } from '#dist/shared/properties/ai/chatModel.js';
 import type { ChatEvent } from '#dist/shared/properties/ai/chatModel.js';
 import { parseAiEventsPush } from '#dist/shared/ipc/aiChat.js';
 import { parsePinBrief } from '#dist/shared/properties/ai/commentPinBrief.js';
@@ -23,7 +27,10 @@ function temporary(name: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), `stacki-pins-${name}-`));
 }
 
-function fakeHost() {
+type Request = { readonly method: string; readonly params: Record<string, unknown> };
+
+/** `heard` is told each request the host writes to the adapter, before the adapter gets it. */
+function fakeHost(heard: (request: Request) => void = () => undefined) {
   const root = fs.realpathSync(temporary('project'));
   const userData = temporary('user');
   const bin = temporary('bin');
@@ -59,8 +66,25 @@ function fakeHost() {
     version: 'test',
     askBeforeTrust: () => true,
     entryOf: () => FAKE_ADAPTER,
-    spawnAdapter: (entry: string, cwd: string, environment: Record<string, string | undefined>) =>
-      spawn(process.execPath, [entry], { cwd, env: { ...environment }, stdio: ['pipe', 'pipe', 'pipe'] }),
+    spawnAdapter: (entry: string, cwd: string, environment: Record<string, string | undefined>) => {
+      const child = spawn(process.execPath, [entry], { cwd, env: { ...environment }, stdio: ['pipe', 'pipe', 'pipe'] });
+      const tap = new PassThrough();
+      tap.on('data', (chunk: Buffer) => {
+        for (const line of chunk
+          .toString('utf8')
+          .split('\n')
+          .filter((text) => text.trim() !== '')) {
+          const message = toRecord(JSON.parse(line));
+          const method = message?.['method'];
+          if (typeof method === 'string') {
+            heard({ method, params: toRecord(message?.['params']) ?? {} });
+          }
+        }
+      });
+      tap.pipe(child.stdin);
+      Object.defineProperty(child, 'stdin', { value: tap });
+      return child;
+    },
   });
   // Resolves once `condition` holds, checked after each push; the test runner's own timeout bounds a wait that never ends.
   const until = (condition: () => boolean): Promise<void> =>
@@ -74,7 +98,7 @@ function fakeHost() {
       waiters.add(check);
       check();
     });
-  return { root, store, host, until, events: (): readonly ChatEvent[] => pushes };
+  return { root, userData, store, host, until, events: (): readonly ChatEvent[] => pushes };
 }
 
 const entry = (number: number, file: string, images: readonly number[]) => ({
@@ -180,4 +204,131 @@ test('a subagent send refuses a model its subagents cannot take', () => {
   assert.throws(() => parsePinBrief({ mode: 'subagents', pins: [bad] }), /cannot run that model/);
   assert.equal(parsePinBrief({ mode: 'single', pins: [bad] }).pins[0]?.model, 'claude-opus-4-8');
   assert.throws(() => parsePinBrief({ mode: 'single', pins: [{ ...bad, modelName: '' }] }), /modelName/);
+});
+
+const picture = (words: string) => Buffer.from(words).toString('base64');
+const pinned = (number: number) => ({
+  kind: 'image' as const,
+  name: 'Pinned area',
+  mimeType: 'image/png' as const,
+  data: picture(`the area pin ${number} points at`),
+  note: `Pin ${number}, image 1: the pinned area`,
+});
+
+/** The instructions block of a prompt, and what each pin's own lines in it name as picture files. */
+function pictureFilesOf(prompt: unknown): ReadonlyMap<number, readonly string[]> {
+  const first: unknown = Array.isArray(prompt) ? prompt[0] : undefined;
+  const text = toRecord(first)?.['text'];
+  assert.ok(typeof text === 'string' && text.startsWith('<comment-pins>'));
+  assert.match(text, /A subagent gets only the words you give it, never the images attached to this message/);
+  const files = new Map<number, string[]>();
+  let pin = 0;
+  for (const line of text.split('\n')) {
+    pin = Number(/^Pin (\d+)$/.exec(line)?.[1] ?? pin);
+    const file = /^ {4}(.+\.(?:png|jpg|webp|gif)) \(Pin /.exec(line)?.[1];
+    if (file !== undefined) {
+      files.set(pin, [...(files.get(pin) ?? []), file]);
+    }
+  }
+  return files;
+}
+
+test('parallel pins: each subagent’s words name its own pictures, readable without asking, and they go with the turn', async (context) => {
+  // What each pin's subagent would open, read at the moment the main agent receives the message.
+  const opened = new Map<number, string[]>();
+  const paths: string[] = [];
+  const allowed: unknown[] = [];
+  const { root, userData, store, host, events, until } = fakeHost((request) => {
+    if (request.method === 'session/new') {
+      const meta = toRecord(toRecord(toRecord(request.params['_meta'])?.['claudeCode'])?.['options']);
+      allowed.push(toRecord(toRecord(meta?.['settings'])?.['permissions'])?.['allow']);
+    }
+    if (request.method === 'session/prompt') {
+      for (const [pin, files] of pictureFilesOf(request.params['prompt'])) {
+        paths.push(...files);
+        opened.set(
+          pin,
+          files.map((file) => fs.readFileSync(file).toString('base64')),
+        );
+        if (process.platform !== 'win32') {
+          assert.equal(fs.statSync(files[0] ?? '').mode & 0o077, 0, 'the person’s alone');
+        }
+      }
+    }
+  });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = store.create(root, 'claude', 'New chat', 1);
+  assert.ok(chat !== undefined);
+  const added = { ...pinned(2), data: picture('an image added to pin 2'), note: 'Pin 2, image 2: an image the person added' };
+  const brief = parsePinBrief({
+    mode: 'subagents',
+    pins: [entry(1, 'src/pages/index.astro', [0]), entry(2, 'src/pages/about.astro', [1, 2]), entry(3, 'src/pages/index.astro', [])],
+  });
+  const started = await host.prompt(root, chat.id, 'Comments on 3 pins', [pinned(1), pinned(2), added], { pins: brief });
+  assert.ok(started.ok, JSON.stringify(started));
+  await until(() => events().some((event) => event.kind === 'turn-end'));
+  assert.deepEqual(
+    [...opened],
+    [
+      [1, [pinned(1).data]],
+      [2, [pinned(2).data, added.data]],
+    ],
+    'each pin’s own pictures and no one else’s; a pin without pictures names none',
+  );
+  const rule = new PinPictures(userData).readRule(root);
+  assert.deepEqual(allowed[0], [rule], 'the session may read that folder, and nothing more is allowed');
+  const folder = rule.slice('Read('.length + 1, -'/**)'.length);
+  for (const file of paths) {
+    assert.ok(file.startsWith(`${folder}${path.sep}`), 'under the folder the rule names');
+    assert.ok(path.relative(root, file).startsWith('..'), 'never in the project');
+    assert.equal(fs.existsSync(file), false, 'removed once the turn ended');
+  }
+});
+
+test('pictures are kept while a pin has asked a question, and go with the chat or the agents', async (context) => {
+  const paths: string[] = [];
+  const { root, store, host, events, until } = fakeHost((request) => {
+    if (request.method === 'session/prompt') {
+      paths.push(...[...pictureFilesOf(request.params['prompt']).values()].flat());
+    }
+  });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const asking = { ...entry(1, 'src/pages/index.astro', [0]), comment: 'ask which blue' };
+  const send = async () => {
+    const chat = store.create(root, 'claude', 'New chat', 1);
+    assert.ok(chat !== undefined);
+    const ended = events().filter((event) => event.kind === 'turn-end').length;
+    const started = await host.prompt(root, chat.id, 'Comments on 1 pin', [pinned(1)], { pins: parsePinBrief({ mode: 'subagents', pins: [asking] }) });
+    assert.ok(started.ok, JSON.stringify(started));
+    await until(() => events().filter((event) => event.kind === 'turn-end').length > ended);
+    return chat.id;
+  };
+  const first = await send();
+  const [kept] = paths;
+  assert.ok(kept !== undefined && fs.existsSync(kept), 'the answer may start the pin again');
+  host.forget(root, first);
+  assert.equal(fs.existsSync(kept), false, 'gone with its chat');
+  await send();
+  const second = paths.at(-1) ?? '';
+  assert.ok(fs.existsSync(second));
+  host.stopAll();
+  assert.equal(fs.existsSync(second), false, 'gone when the agents stop');
+});
+
+test('what a crash left is swept once it is a day old; the read rule is an absolute path rule on every system', () => {
+  const userData = temporary('sweep');
+  const pictures = new PinPictures(userData);
+  const brief = parsePinBrief({ mode: 'subagents', pins: [entry(1, 'src/pages/index.astro', [0])] });
+  const written = pictures.keep('/site', toChatId(`c${'a'.repeat(24)}`), brief, [pinned(1)]);
+  assert.ok(written.ok);
+  const file = written.value.get(1)?.[0]?.path ?? '';
+  const another = new PinPictures(userData);
+  another.sweep(Date.now());
+  assert.ok(fs.existsSync(file), 'a young folder may be another running Stacki’s');
+  another.sweep(Date.now() + PIN_PICTURE_LIMITS.staleMsMin + 1_000);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(readRuleFor('/Users/a/Library/Application Support/Stacki/x'), 'Read(//Users/a/Library/Application Support/Stacki/x/**)');
+  assert.equal(readRuleFor('C:\\Users\\a\\x'), 'Read(//c/Users/a/x/**)');
 });

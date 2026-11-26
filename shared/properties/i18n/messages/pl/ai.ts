@@ -287,6 +287,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'Agent nie oferuje tego ustawienia.',
   'ai.error.signIn': 'Zaloguj się do {agent}, aby kontynuować.',
   'ai.error.signInUnchecked': 'Stacki nie mógł sprawdzić logowania do {agent}, więc nic nie zostało wysłane. Spróbuj ponownie.',
+  'ai.error.pinPictures': 'Nie udało się przygotować obrazów pinezek, więc nic nie zostało wysłane: {detail}',
   'ai.error.stillAnswering': 'Agent wciąż odpowiada. Zatrzymaj go lub poczekaj.',
   'ai.error.stillAnsweringCompact': 'Agent wciąż odpowiada. Kompaktuj, gdy skończy.',
   'ai.error.stopped': '{agent} zatrzymał się{detail}',

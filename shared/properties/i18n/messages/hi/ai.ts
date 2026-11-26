@@ -261,6 +261,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'एजेंट यह सेटिंग नहीं देता।',
   'ai.error.signIn': 'जारी रखने के लिए {agent} में साइन इन करें।',
   'ai.error.signInUnchecked': 'Stacki आपका {agent} साइन-इन जाँच नहीं सका, इसलिए कुछ नहीं भेजा गया। फिर से कोशिश करें।',
+  'ai.error.pinPictures': 'पिन के चित्र तैयार नहीं हो सके, इसलिए कुछ नहीं भेजा गया: {detail}',
   'ai.error.stillAnswering': 'एजेंट अभी जवाब दे रहा है। उसे रोकें या प्रतीक्षा करें।',
   'ai.error.stillAnsweringCompact': 'एजेंट अभी जवाब दे रहा है। उसके पूरा होने पर संक्षिप्त करें।',
   'ai.error.stopped': '{agent} रुक गया{detail}',

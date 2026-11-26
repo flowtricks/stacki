@@ -272,6 +272,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'הסוכן לא מציע את ההגדרה הזו.',
   'ai.error.signIn': 'יש להתחבר ל-{agent} כדי להמשיך.',
   'ai.error.signInUnchecked': 'Stacki לא הצליח לבדוק את החיבור ל-{agent}, ולכן דבר לא נשלח. אפשר לנסות שוב.',
+  'ai.error.pinPictures': 'לא ניתן היה להכין את תמונות הנעצים, ולכן דבר לא נשלח: {detail}',
   'ai.error.stillAnswering': 'הסוכן עדיין עונה. אפשר לעצור אותו או להמתין.',
   'ai.error.stillAnsweringCompact': 'הסוכן עדיין עונה. אפשר לדחוס כשיסיים.',
   'ai.error.stopped': '{agent} נעצר{detail}',

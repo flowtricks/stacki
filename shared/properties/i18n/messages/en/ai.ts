@@ -261,6 +261,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'The agent does not offer that setting.',
   'ai.error.signIn': 'Sign in to {agent} to continue.',
   'ai.error.signInUnchecked': 'Stacki couldn’t check your {agent} sign-in, so nothing was sent. Try again.',
+  'ai.error.pinPictures': 'The pins’ pictures couldn’t be prepared, so nothing was sent: {detail}',
   'ai.error.stillAnswering': 'The agent is still answering. Stop it or wait.',
   'ai.error.stillAnsweringCompact': 'The agent is still answering. Compact when it is done.',
   'ai.error.stopped': '{agent} stopped{detail}',

@@ -261,6 +261,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'Ajan bu ayarı sunmuyor.',
   'ai.error.signIn': 'Devam etmek için {agent} oturumu açın.',
   'ai.error.signInUnchecked': 'Stacki {agent} oturumunuzu denetleyemedi, bu yüzden hiçbir şey gönderilmedi. Yeniden deneyin.',
+  'ai.error.pinPictures': 'İğnelerin görselleri hazırlanamadı, bu yüzden hiçbir şey gönderilmedi: {detail}',
   'ai.error.stillAnswering': 'Ajan hâlâ yanıt veriyor. Durdurun veya bekleyin.',
   'ai.error.stillAnsweringCompact': 'Ajan hâlâ yanıt veriyor. Bittiğinde sıkıştırın.',
   'ai.error.stopped': '{agent} durdu{detail}',

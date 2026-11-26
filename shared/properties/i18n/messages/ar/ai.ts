@@ -312,6 +312,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'لا يوفر الوكيل هذا الإعداد.',
   'ai.error.signIn': 'سجّل الدخول إلى {agent} للمتابعة.',
   'ai.error.signInUnchecked': 'تعذّر على Stacki التحقق من تسجيل دخولك إلى {agent}، لذا لم يُرسل شيء. حاول مرة أخرى.',
+  'ai.error.pinPictures': 'تعذّر تجهيز صور الدبابيس، لذا لم يُرسل شيء: {detail}',
   'ai.error.stillAnswering': 'ما زال الوكيل يجيب. أوقفه أو انتظر.',
   'ai.error.stillAnsweringCompact': 'ما زال الوكيل يجيب. اضغط المحادثة عندما ينتهي.',
   'ai.error.stopped': 'توقف {agent}{detail}',

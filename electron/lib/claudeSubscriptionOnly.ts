@@ -37,7 +37,12 @@ export function withoutClaudeAPIKey(agent: AgentId, environment: Environment): E
   return Object.fromEntries(Object.entries(environment).filter(([name]) => name.toUpperCase() !== API_KEY_VARIABLE));
 }
 
-/** What the adapter is asked with when it opens or reopens a session (`session/new`, resume, load and fork). */
-export function claudeSessionMeta(agent: AgentId): { readonly _meta?: Readonly<Record<string, unknown>> } {
-  return agent === 'claude' ? { _meta: { claudeCode: { options: { settings: CLAUDE_NO_API_KEY_SETTINGS } } } } : {};
+/**
+ * What the adapter is asked with when it opens or reopens a session (`session/new`, resume, load and fork): the
+ * settings above, and `allow`, the permission rules the session has besides the person's own (permission lists merge
+ * with their files', so nothing of theirs is replaced).
+ */
+export function claudeSessionMeta(agent: AgentId, allow: readonly string[]): { readonly _meta?: Readonly<Record<string, unknown>> } {
+  const settings = { ...CLAUDE_NO_API_KEY_SETTINGS, ...(allow.length === 0 ? {} : { permissions: { allow } }) };
+  return agent === 'claude' ? { _meta: { claudeCode: { options: { settings } } } } : {};
 }

@@ -99,6 +99,8 @@ import { withAgentTitle, type ChatRecord, type ChatStore } from './chatStore';
 import { EventPump } from './eventPump';
 import { cancelled, PermissionBroker } from './permissionBroker';
 import { buildPrompt, inside, type BuiltPrompt } from './promptBlocks';
+import { PinPictures, type PinPictureFiles } from './pinPictures';
+import { pinQuestionsOf } from '../../../shared/properties/ai/commentPinBrief';
 import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import {
   idleTimeoutMs,
@@ -475,7 +477,11 @@ export class AgentHost {
   private warmQueued: WarmTarget | undefined = undefined;
   private warmTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
+  private readonly pictures: PinPictures;
+
   constructor(private readonly deps: AgentHostDeps) {
+    this.pictures = new PinPictures(deps.userData);
+    this.pictures.sweep(Date.now());
     this.pump = new EventPump({
       store: (projectPath, chat, events) => this.deps.store.append(projectPath, chat, events),
       send: (channel, payload) => this.deps.send(channel, payload),
@@ -882,6 +888,7 @@ export class AgentHost {
   /** A chat being deleted: its turn is stopped and its runtime forgotten. */
   forget(root: string, chat: ChatId): void {
     this.cancel(root, chat);
+    this.pictures.drop(root, chat);
     this.timings.forget(chat);
     this.chats.delete(chat);
   }
@@ -900,6 +907,7 @@ export class AgentHost {
       this.stop(process);
     }
     this.chats.clear();
+    this.pictures.dropAll();
     assert(this.processes.size === 0, 'stopAll: no agent is left running');
   }
 
@@ -942,6 +950,15 @@ export class AgentHost {
     if (!ready.ok) {
       return ready;
     }
+    // Pins that run each in a subagent need their pictures as files: a subagent never sees the message's images.
+    let pinPictures: PinPictureFiles | undefined;
+    if (content.pins?.mode === 'subagents') {
+      const kept = this.pictures.keep(runtime.root, runtime.chat, content.pins, content.attachments);
+      if (!kept.ok) {
+        return kept;
+      }
+      pinPictures = kept.value;
+    }
     return buildPrompt(
       {
         root: runtime.root,
@@ -951,8 +968,25 @@ export class AgentHost {
         commands: runtime.commands,
         read: (file) => this.deps.files.read(file),
       },
-      content,
+      { ...content, ...(pinPictures === undefined ? {} : { pinPictures }) },
     );
+  }
+
+  // The settings of a session: for Claude, the no-key ones and reading this project's pin pictures without asking.
+  private sessionMeta(agent: AgentId, root: string): ReturnType<typeof claudeSessionMeta> {
+    return claudeSessionMeta(agent, agent === 'claude' ? [this.pictures.readRule(root)] : []);
+  }
+
+  // A turn's end removes the pictures its pins had, unless a pin asked the person something: the answer may start
+  // that pin again, which opens the same files.
+  private releasePinPictures(runtime: ChatRuntime, turn: TurnId): void {
+    const said = this.deps.store
+      .read(runtime.root, runtime.chat)
+      .events.flatMap((event) => (event.kind === 'text' && event.turn === turn ? [event.text] : []))
+      .join('\n');
+    if (pinQuestionsOf(said).length === 0) {
+      this.pictures.drop(runtime.root, runtime.chat);
+    }
   }
 
   /** The Settings toggle as it stands now. Asked once per turn, when it begins: the ledger keeps the answer on the turn. */
@@ -1127,7 +1161,7 @@ export class AgentHost {
     }
     const init = ready.value;
     const stored = record.sessionId;
-    const base = { cwd: runtime.root, mcpServers: [], ...claudeSessionMeta(runtime.agent) };
+    const base = { cwd: runtime.root, mcpServers: [], ...this.sessionMeta(runtime.agent, runtime.root) };
     if (stored !== undefined && init.resumeSession) {
       const resumedAt = this.deps.now();
       const resumed = await this.openSession(process, runtime, 'session/resume', { ...base, sessionId: stored }, stored);
@@ -1336,6 +1370,9 @@ export class AgentHost {
     }));
     this.emit(runtime, events);
     this.pump.flush();
+    if (purpose === 'message') {
+      this.releasePinPictures(runtime, turn);
+    }
     runtime.release();
     this.releaseAwake(process);
   }
@@ -1836,7 +1873,7 @@ export class AgentHost {
         return;
       }
       const startedAt = this.deps.now();
-      const params = { cwd: root, mcpServers: [], ...claudeSessionMeta(agent) };
+      const params = { cwd: root, mcpServers: [], ...this.sessionMeta(agent, root) };
       const answer = await process.value.connection.request('session/new', params, AI_LIMITS.requestMsMax);
       const session = answer.ok ? parseSessionResult(answer.value, undefined) : undefined;
       if (session?.ok === true) {

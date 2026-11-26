@@ -262,6 +262,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'L’agent ne propose pas ce réglage.',
   'ai.error.signIn': 'Connectez-vous à {agent} pour continuer.',
   'ai.error.signInUnchecked': 'Stacki n’a pas pu vérifier votre connexion à {agent}, rien n’a donc été envoyé. Réessayez.',
+  'ai.error.pinPictures': 'Les images des épingles n’ont pas pu être préparées, rien n’a donc été envoyé : {detail}',
   'ai.error.stillAnswering': 'L’agent répond encore. Arrêtez-le ou patientez.',
   'ai.error.stillAnsweringCompact': 'L’agent répond encore. Compactez quand il aura terminé.',
   'ai.error.stopped': '{agent} s’est arrêté{detail}',

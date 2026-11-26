@@ -246,6 +246,7 @@ export const messages = {
   'ai.error.settingUnavailable': '该代理不提供此设置。',
   'ai.error.signIn': '登录 {agent} 以继续。',
   'ai.error.signInUnchecked': 'Stacki 无法检查你的 {agent} 登录状态，因此未发送任何内容。请重试。',
+  'ai.error.pinPictures': '无法准备图钉的图片，因此未发送任何内容：{detail}',
   'ai.error.stillAnswering': '代理仍在回复。请停止它或等待。',
   'ai.error.stillAnsweringCompact': '代理仍在回复。请在完成后再压缩。',
   'ai.error.stopped': '{agent} 已停止{detail}',

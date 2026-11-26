@@ -2859,6 +2859,16 @@ words, component, width, image indexes). The renderer sends the pins' images as 
 `text` and a `pins` sent part (number, comment, page and element names, thumbnail index) only: never the instructions,
 a path or a locator. A pin naming an image the message lacks is `invalid`; pins never steer (`ai.error.pinsSteer`).
 
+**Pictures for subagents** (`electron/handlers/ai/pinPictures.ts`). A subagent gets only the words of the Agent
+tool's prompt, never the message's images. So for a `subagents` send the host also writes each pin's pictures to
+`userData/ai/pin-pictures/<project>/<chat>/pin-<n>-image-<k>.<ext>` (owner-only, never in the project), lists each
+pin's own paths in its lines of the instructions, and asks the main agent to pass them on for the subagent to open
+with its Read tool; the images still travel inline too. Every Claude session of the project gets one added permission
+rule, `Read(//<that project's folder>/**)`, in its flag settings, so those reads do not ask. A chat's pictures are
+removed when the turn ends, unless a pin asked a question, and in any case at its next pin send, when the chat is
+deleted and when the agents stop; folders a day old (a crash's) are swept when the host starts. A picture that cannot
+be written refuses the send. A managed policy that ignores added rules would make the read ask on a permission card.
+
 **Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
 Agent call per pin titled `Pin <n>: …`, in the waves `pinWaves` computed: pins start together in number order, at most
 `PIN_LIMITS.concurrencyMax` (4) at once, all calls of a wave in one message; the rest read "Waiting". Pins that change

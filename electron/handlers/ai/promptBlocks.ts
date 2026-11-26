@@ -31,6 +31,7 @@ import type { SentPart } from '../../../shared/properties/ai/chatModel';
 import { isProjectRelativePath, type PromptPart } from '../../../shared/properties/ai/mentions';
 import { sentPinsOf, type PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import { pinInstructions } from './pinInstructions';
+import type { PinPictureFiles } from './pinPictures';
 
 /** What building a prompt needs to know about the project, the person's home and the agent. */
 export interface PromptSource {
@@ -53,6 +54,8 @@ export interface PromptContent {
   readonly parts: readonly PromptPart[] | undefined;
   /** Comment pins sent with "Send all"; absent for any other message. */
   readonly pins?: PinBrief | undefined;
+  /** Each pin's pictures as files, for pins that run each in a subagent (pinPictures.ts). */
+  readonly pinPictures?: PinPictureFiles | undefined;
 }
 
 export interface BuiltPrompt {
@@ -70,19 +73,19 @@ export function buildPrompt(source: PromptSource, content: PromptContent): Resul
   if (pins === undefined || !built.ok) {
     return built;
   }
-  return withPins(built.value, pins, content.attachments);
+  return withPins(built.value, pins, content);
 }
 
 // Comment pins come before everything else the message holds: their instructions are the message, and the
 // images after them are theirs. The transcript keeps the pins as one part, after the message's own.
-function withPins(built: BuiltPrompt, pins: PinBrief, attachments: readonly PromptAttachment[]): Result<BuiltPrompt, AiFailure> {
+function withPins(built: BuiltPrompt, pins: PinBrief, { attachments, pinPictures }: PromptContent): Result<BuiltPrompt, AiFailure> {
   const images = attachments.filter((attachment) => attachment.kind === 'image').length;
   if (pins.pins.some((pin) => pin.images.some((index) => index >= attachments.length || attachments[index]?.kind !== 'image'))) {
     return err(invalid('A pin names an image the message does not carry.'));
   }
   assert(images <= AI_LIMITS.attachmentsMax, 'withPins: the attachments are bounded');
   const sent: SentPart[] = [...(built.sent ?? []), { kind: 'pins', mode: pins.mode, pins: sentPinsOf(pins) }];
-  const blocks = [{ type: 'text', text: pinInstructions(pins) }, ...built.blocks];
+  const blocks = [{ type: 'text', text: pinInstructions(pins, pinPictures) }, ...built.blocks];
   assert(blocks.length === built.blocks.length + 1, 'withPins: one block of instructions');
   return ok({ blocks, sent });
 }

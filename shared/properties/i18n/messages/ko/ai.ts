@@ -248,6 +248,7 @@ export const messages = {
   'ai.error.settingUnavailable': '에이전트가 해당 설정을 제공하지 않습니다.',
   'ai.error.signIn': '계속하려면 {agent}에 로그인하세요.',
   'ai.error.signInUnchecked': '{agent} 로그인을 확인할 수 없어 아무것도 보내지 않았습니다. 다시 시도하세요.',
+  'ai.error.pinPictures': '핀 이미지를 준비할 수 없어 아무것도 보내지 않았습니다: {detail}',
   'ai.error.stillAnswering': '에이전트가 아직 응답 중입니다. 중지하거나 기다리세요.',
   'ai.error.stillAnsweringCompact': '에이전트가 아직 응답 중입니다. 완료되면 압축하세요.',
   'ai.error.stopped': '{agent}이(가) 중지되었습니다{detail}',

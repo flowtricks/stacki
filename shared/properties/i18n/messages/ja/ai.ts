@@ -249,6 +249,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'エージェントはその設定に対応していません。',
   'ai.error.signIn': '続けるには {agent} にサインインしてください。',
   'ai.error.signInUnchecked': '{agent} のサインインを確認できなかったため、何も送信していません。もう一度お試しください。',
+  'ai.error.pinPictures': 'ピンの画像を準備できなかったため、何も送信していません: {detail}',
   'ai.error.stillAnswering': 'エージェントはまだ応答中です。停止するか、お待ちください。',
   'ai.error.stillAnsweringCompact': 'エージェントはまだ応答中です。完了してから圧縮してください。',
   'ai.error.stopped': '{agent} が停止しました{detail}',

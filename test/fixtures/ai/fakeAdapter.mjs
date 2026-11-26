@@ -182,7 +182,8 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     }
     if (text.includes('<comment-pins>')) {
       await runPins(sessionId, params.prompt);
-      for (const word of ['All', ' pins', ' done.']) {
+      // A pin comment of "ask which blue" ends the coordinator's answer with that pin's question.
+      for (const word of text.includes('ask which blue') ? ['Question for pin 1: Which blue?'] : ['All', ' pins', ' done.']) {
         update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
       }
       send({ id, result: { stopReason: 'end_turn' } });

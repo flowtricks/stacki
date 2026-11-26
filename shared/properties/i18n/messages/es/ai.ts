@@ -262,6 +262,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'El agente no ofrece ese ajuste.',
   'ai.error.signIn': 'Inicia sesión en {agent} para continuar.',
   'ai.error.signInUnchecked': 'Stacki no pudo comprobar tu sesión de {agent}, así que no se envió nada. Inténtalo de nuevo.',
+  'ai.error.pinPictures': 'No se pudieron preparar las imágenes de los pins, así que no se envió nada: {detail}',
   'ai.error.stillAnswering': 'El agente sigue respondiendo. Deténlo o espera.',
   'ai.error.stillAnsweringCompact': 'El agente sigue respondiendo. Compacta cuando termine.',
   'ai.error.stopped': '{agent} se detuvo{detail}',

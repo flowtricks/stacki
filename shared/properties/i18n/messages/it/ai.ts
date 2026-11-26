@@ -261,6 +261,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'L’agente non offre questa impostazione.',
   'ai.error.signIn': 'Accedi a {agent} per continuare.',
   'ai.error.signInUnchecked': 'Stacki non è riuscito a controllare l’accesso a {agent}, quindi non è stato inviato nulla. Riprova.',
+  'ai.error.pinPictures': 'Non è stato possibile preparare le immagini dei pin, quindi non è stato inviato nulla: {detail}',
   'ai.error.stillAnswering': 'L’agente sta ancora rispondendo. Interrompilo o attendi.',
   'ai.error.stillAnsweringCompact': 'L’agente sta ancora rispondendo. Compatta quando ha finito.',
   'ai.error.stopped': '{agent} si è fermato{detail}',

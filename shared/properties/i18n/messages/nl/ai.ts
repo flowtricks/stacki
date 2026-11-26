@@ -261,6 +261,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'De agent biedt die instelling niet aan.',
   'ai.error.signIn': 'Meld je aan bij {agent} om verder te gaan.',
   'ai.error.signInUnchecked': 'Stacki kon je aanmelding bij {agent} niet controleren, dus er is niets verzonden. Probeer het opnieuw.',
+  'ai.error.pinPictures': 'De afbeeldingen van de pins konden niet worden klaargezet, dus er is niets verzonden: {detail}',
   'ai.error.stillAnswering': 'De agent is nog aan het antwoorden. Stop hem of wacht.',
   'ai.error.stillAnsweringCompact': 'De agent is nog aan het antwoorden. Vat samen als hij klaar is.',
   'ai.error.stopped': '{agent} is gestopt{detail}',

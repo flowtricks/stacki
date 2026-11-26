@@ -13,14 +13,15 @@
 // In both, a pin that cannot be done without the person's answer asks in the written form `pinQuestionsOf` reads.
 // Pure: the host passes the brief, and a test reads the text.
 import { assert } from '../../../shared/core/assert';
+import type { PinPictureFile, PinPictureFiles } from './pinPictures';
 import { isReferenceChip } from '../../../shared/properties/ai/mentions';
 import { PIN_LIMITS, PIN_QUESTION_LEAD, pinWaves, type PinBrief, type PinBriefEntry } from '../../../shared/properties/ai/commentPinBrief';
 
 /** The text block for a brief, wrapped in a tag so the agent reads it as one set of instructions. */
-export function pinInstructions(brief: PinBrief): string {
+export function pinInstructions(brief: PinBrief, pictures?: PinPictureFiles): string {
   assert(brief.pins.length >= 1, 'pinInstructions: a brief has a pin');
   assert(brief.pins.length <= PIN_LIMITS.pinsPerSendMax, 'pinInstructions: a brief is bounded');
-  const body = brief.mode === 'subagents' ? subagentsText(brief.pins) : singleText(brief.pins);
+  const body = brief.mode === 'subagents' ? subagentsText(brief.pins, pictures ?? new Map()) : singleText(brief.pins);
   return `<comment-pins>\n${body}\n</comment-pins>`;
 }
 
@@ -31,7 +32,7 @@ const EDIT_RULES = [
   'other pins may be editing the same files at this moment: read a file again right before changing it, and when an edit is refused because the file changed or its old text is gone, read it again and redo only your own change, never restoring older text',
 ];
 
-function subagentsText(pins: readonly PinBriefEntry[]): string {
+function subagentsText(pins: readonly PinBriefEntry[], pictures: PinPictureFiles): string {
   const waves = pinWaves(pins.map((pin) => pin.number));
   const waveLines = waves.map((wave, index) => `  Wave ${index + 1}: ${wave.map((number) => `pin ${number}`).join(', ')}`);
   const waiting =
@@ -52,7 +53,7 @@ function subagentsText(pins: readonly PinBriefEntry[]): string {
           '- The person chose a model for some pins. For a pin with a "Model:" line, set its Agent call\'s model parameter to exactly that value. For a pin without one, leave the model parameter out.',
         ]
       : []),
-    '- Give each subagent its pin below, word for word, and tell it which images are its own.',
+    '- Give each subagent its pin below, word for word, its picture file paths included. A subagent gets only the words you give it, never the images attached to this message: tell it to open every picture file of its pin with its Read tool before it changes anything.',
     ...mentionRules(pins, "Give a pin's subagent the paths of the files its pin mentions, and the text of any skill or instructions it mentions."),
     `- Tell every subagent these edit rules: ${EDIT_RULES.join('; ')}; change only what its pin asks for.`,
     '- Tell every subagent to end its report with one or two plain sentences a designer reads: what changed on the page, in words, without code, file paths or tags. The person sees that report.',
@@ -62,7 +63,12 @@ function subagentsText(pins: readonly PinBriefEntry[]): string {
     ),
     '- When every pin has finished, answer with one short line per pin, in plain words a designer reads: what changed, why it could not be done, or its question in the form below.',
     '',
-    ...pins.flatMap((pin) => [...pinLines(pin), ...(pin.model === undefined ? [] : [`  Model: ${pin.model}`]), '']),
+    ...pins.flatMap((pin) => [
+      ...pinLines(pin),
+      ...pictureLines(pictures.get(pin.number) ?? []),
+      ...(pin.model === undefined ? [] : [`  Model: ${pin.model}`]),
+      '',
+    ]),
   ];
   return lines.join('\n').trimEnd();
 }
@@ -118,6 +124,16 @@ function pinLines(pin: PinBriefEntry): readonly string[] {
     ...(pin.componentFile === undefined ? [] : [`  Component: an instance of ${pin.componentFile}; the change may belong in that file`]),
     `  Images: ${images}`,
   ];
+}
+
+// The pin's own pictures as files its subagent can open: the same pictures as the images attached to the message.
+function pictureLines(files: readonly PinPictureFile[]): readonly string[] {
+  return files.length === 0
+    ? []
+    : [
+        "  Picture files, for this pin's subagent to open with its Read tool:",
+        ...files.map((file) => `    ${file.path}${file.note === undefined ? '' : ` (${file.note})`}`),
+      ];
 }
 
 // A comment over several lines stays one field: each further line is indented under it.

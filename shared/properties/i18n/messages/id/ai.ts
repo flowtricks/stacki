@@ -248,6 +248,7 @@ export const messages = {
   'ai.error.settingUnavailable': 'Agen tidak menyediakan pengaturan itu.',
   'ai.error.signIn': 'Masuk ke {agent} untuk melanjutkan.',
   'ai.error.signInUnchecked': 'Stacki tidak dapat memeriksa status masuk {agent} Anda, jadi tidak ada yang dikirim. Coba lagi.',
+  'ai.error.pinPictures': 'Gambar pin tidak dapat disiapkan, jadi tidak ada yang dikirim: {detail}',
   'ai.error.stillAnswering': 'Agen masih menjawab. Hentikan atau tunggu.',
   'ai.error.stillAnsweringCompact': 'Agen masih menjawab. Padatkan setelah selesai.',
   'ai.error.stopped': '{agent} berhenti{detail}',
