@@ -1,7 +1,6 @@
 // One editor's questions to code intelligence (shared/ipc/codeIntel.ts): each carries the editor's text as it is now,
-// and each answer is parsed before the editor sees it. Until a first answer has come back the editor keeps its own
-// grammar suggestions and never waits, so a project whose types are still being read feels like an editor, not a
-// spinner.
+// and each answer is parsed before the editor sees it. Until a first answer has come back the editor's own grammar
+// suggestions do not wait for one, so a project whose types are still being read feels like an editor, not a spinner.
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { CODE_INTEL_LIMITS, parseCodeIntelReply, UNAVAILABLE, type CodeIntelQuery, type CodeIntelReply } from '../../../shared/ipc/codeIntel';
 

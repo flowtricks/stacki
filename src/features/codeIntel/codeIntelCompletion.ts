@@ -49,12 +49,9 @@ export function codeIntelCompletion(session: CodeIntelSession, words: Completion
     }
     return answer;
   };
+  // Waited for however long it takes: CodeMirror shows the other source's suggestions meanwhile, and this answer joins
+  // them when it comes, so what is typed before the project has been read still gets its suggestions.
   const project: CompletionSource = async (context) => {
-    if (!session.ready()) {
-      // Asked all the same, so the answer that ends the waiting is on its way; the editor does not wait for it.
-      void asked(context);
-      return nothing();
-    }
     const text = context.state.doc.toString();
     const found = await asked(context);
     if (context.aborted || found === undefined || found.items.length === 0) {
@@ -222,7 +219,7 @@ function requiredMark(completion: Completion, words: CompletionWords): Element |
   const element = document.createElement('span');
   element.className = 'code-intel-required';
   element.textContent = '*';
-  element.title = words.required();
+  element.setAttribute('role', 'img');
   element.setAttribute('aria-label', words.required());
   return element;
 }
