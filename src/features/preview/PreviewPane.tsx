@@ -56,6 +56,7 @@ interface PreviewPaneProps {
   readonly selPseudo?: PseudoLayer | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
+  readonly canvasPathOf?: PreviewRuntimeProps['canvasPathOf'];
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly onEditImage?: PreviewRuntimeProps['onEditImage'];

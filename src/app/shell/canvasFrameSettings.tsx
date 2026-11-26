@@ -9,12 +9,14 @@
 // (features/preview) and the navigator's tree (features/structure).
 import { assert } from '../../../shared/core/assert';
 import { can } from '../../../shared/properties/projectRoles';
-import { CANVAS_LIMITS } from '../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, canvasRoot } from '../../../shared/properties/componentCanvas';
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { nodeAtPath } from '../../editor/editorTree';
 import { trailOf } from '../model/pageGestures';
 import {
   canvasInstanceOf,
+  COMPONENT_SCOPE,
+  isCanvasRoot,
   isComponentCanvasPage,
   PROJECT_SCOPE,
   type CanvasOpen,
@@ -30,7 +32,7 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import type { ShellView } from '../App';
 import type { StructurePageState } from '../../features/structure/structureModel';
 
-/** The Navigator on the canvas page: one row per frame, its instance, named as the frame is. */
+/** The Navigator on the canvas page: the canvas root (the page's <html>), and under it one row per frame, its instance, named as the frame is. */
 export interface CanvasNavigatorView {
   readonly pageState: StructurePageState;
   readonly rowLabels: ReadonlyMap<string, string>;
@@ -54,14 +56,20 @@ export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasContr
     return [{ ...node, children: undefined }];
   });
   assert(nodes.length <= CANVAS_LIMITS.framesMax, 'The canvas Navigator lists a bounded number of frames');
-  return { pageState: { ...pageState, model: { ...pageState.model, nodes } }, rowLabels: labels };
+  const root = nodeAtPath(pageState.model.nodes, trailOf(state.root));
+  assert(root?.kind === 'element', 'The canvas root is the page’s <html> element');
+  // The root's own children are the canvas's chrome; in the Navigator they are the frames.
+  labels.set(root.id, 'html'); // i18n-ignore: the element's own tag name, as every element row is named.
+  return { pageState: { ...pageState, model: { ...pageState.model, nodes: [{ ...root, children: nodes }] } }, rowLabels: labels };
 }
 
-/** What the Settings panel does differently while a frame's instance is selected on the canvas page. */
-export interface CanvasInstanceSettings {
-  readonly extras: PropFieldExtras;
-  readonly onSetProp: (name: string, value: Attr | undefined) => void;
-}
+/**
+ * What the Settings panel does differently on the canvas page: for a frame's instance, its props are the frame's
+ * preview values; for the canvas root (<html>), its one field is class, the root's classes at the root's scope.
+ */
+export type CanvasInstanceSettings =
+  | { readonly kind: 'instance'; readonly extras: PropFieldExtras; readonly onSetProp: (name: string, value: Attr | undefined) => void }
+  | { readonly kind: 'root'; readonly classes: readonly string[]; readonly onSetProp: (name: string, value: Attr | undefined) => void };
 
 export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanvasControl | undefined): CanvasInstanceSettings | undefined {
   const translate = useTranslate();
@@ -71,6 +79,9 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
   if (canvas === undefined || state?.kind !== 'open' || !atCanvasPage(app)) {
     return undefined;
   }
+  if (isCanvasRoot(path)) {
+    return rootSettings(canvas, state);
+  }
   const instance = canvasInstanceOf(path);
   const frame = instance === undefined ? undefined : state.layout.frames.find((candidate) => candidate.key === instance.key);
   if (frame === undefined) {
@@ -79,6 +90,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
   // Splitting changes the canvas settings everyone shares, which only a role that may edit components does.
   const mayEdit = can(role, 'component:edit');
   return {
+    kind: 'instance',
     extras: (name) => {
       const candidate = state.layout.candidates.find((entry) => entry.name === name);
       const split = splitPartOf(frame, name) !== undefined;
@@ -97,7 +109,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
       }
       if (value === undefined) {
         // Cleared: back to what a wider scope or the insertion defaults give, or, set nowhere wider, not given at all.
-        const scope = state.scope === PROJECT_SCOPE ? state.frame : state.scope;
+        const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? state.frame : state.scope;
         const own = state.settings.components[state.component.file]?.frames?.[scope]?.props?.[name] !== undefined;
         canvas.editProp(own ? { kind: 'inherit', name } : { kind: 'unset', name });
         return;
@@ -108,6 +120,24 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
         return;
       }
       canvas.editProp({ kind: 'prop', name, value: preview });
+    },
+  };
+}
+
+// The canvas root's class field: the classes the root draws with, written to the root's "Apply to" scope (Frame
+// settings). Cleared, the scope's own list goes and a wider one shows; names a class cannot have are refused there.
+function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen): CanvasInstanceSettings {
+  const classes = canvasRoot(state.settings, state.component.file).classes;
+  assert(classes.length <= CANVAS_LIMITS.rootClassesMax, 'The canvas root carries a bounded number of classes');
+  return {
+    kind: 'root',
+    classes,
+    onSetProp: (name, value) => {
+      if (name !== 'class') {
+        return; // The root's only field: anything else is the generated page's and is never written.
+      }
+      const text = value?.type === 'string' ? value.value.trim() : '';
+      canvas.editRootClasses(text === '' ? undefined : [...new Set(text.split(/\s+/))]);
     },
   };
 }

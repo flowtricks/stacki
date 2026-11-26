@@ -32,7 +32,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Высота',
   'componentCanvas.panel.hug': 'По содержимому',
   'componentCanvas.panel.pixels': '{side} в пикселях',
+  'componentCanvas.panel.root.about': 'Холст позади всех фреймов: элемент html страницы. Его классы находятся на панели настроек.',
+  'componentCanvas.panel.root.title': 'Холст',
   'componentCanvas.panel.scope.all': 'Все фреймы',
+  'componentCanvas.panel.scope.component': 'Этот компонент',
   'componentCanvas.panel.scope.frame': 'Этот фрейм',
   'componentCanvas.panel.scope.hint':
     'Где действуют заданные вами размер, фон и значения свойств: в этом фрейме, во всех фреймах одного значения или во всех фреймах. Собственная настройка фрейма важнее более общей.',

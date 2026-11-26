@@ -123,7 +123,10 @@ function writeFixture(project) {
     await canvas.locator('stacki-frame').nth(4).waitFor({ timeout: WAIT_MS });
     await canvas.locator('stacki-frame .button_wrap').first().waitFor({ timeout: WAIT_MS });
     results.buttonFrames = await labels(canvas);
-    await waitFor(async () => (await navigatorRows(window)).length === results.buttonFrames.length, 'the Navigator lists one row per frame');
+    await waitFor(
+      async () => (await navigatorRows(window)).length === results.buttonFrames.length + 1,
+      'the Navigator lists the canvas root and one row per frame',
+    );
     results.navigatorRows = await navigatorRows(window);
     results.stackOnOpen = await window.locator('.titlebar .comp-back').allInnerTexts();
     results.firstSelected = await window
@@ -137,16 +140,16 @@ function writeFixture(project) {
     // An arrow frame's instance, from its Navigator row: the Settings panel shows its props, and the own-frames toggle
     // beside direction's {} splits the arrow frames by direction.
     await window.locator('[data-node-id]', { hasText: 'arrow' }).first().click();
-    const directionToggle = window.locator('button.component-canvas-split[aria-label^="Give each value of direction"]');
+    const directionToggle = window.locator('button.prop-field-extra[aria-label^="Give each value of direction"]');
     await directionToggle.waitFor({ timeout: WAIT_MS });
     await shot(window, '02a-settings-panel.png');
     await directionToggle.click();
     await waitFor(async () => (await canvas.locator('stacki-frame').count()) === 6, 'the arrow frames split by direction');
     results.splitFrames = await labels(canvas);
-    await press(canvas.locator('stacki-frame[data-frame="direction=back&variant=arrow"] stacki-frame-label'));
+    await press(canvas.locator('stacki-frame[data-frame="direction=back&variant=arrow"]'));
     await waitFor(async () => (await window.locator('.prop-field-locked', { hasText: 'direction' }).count()) === 1, 'direction is locked in its frames');
     results.directionLocked = true;
-    results.toggleOn = await window.locator('button.component-canvas-split.on[aria-label="Show direction in one frame"]').getAttribute('aria-pressed');
+    results.toggleOn = await window.locator('button.prop-field-extra.on[aria-label="Show direction in one frame"]').getAttribute('aria-pressed');
     await waitForFile(
       () => read('.stacki/component-canvas.json'),
       (text) => text.includes('"direction"'),
@@ -175,12 +178,17 @@ function writeFixture(project) {
     results.componentUntouched = read('src/components/Button.astro') === buttonBefore;
     await settled(canvas);
     await shot(window, '03-preview-values.png');
-    // The background's variable circle, the Style panel's own, at every Apply to level.
+    // The background's variable circle, the Style panel's own, at every Apply to level: a frame's, then the canvas
+    // root's (its html row), whose background is the surface every frame sits on.
     for (const [scope, file] of [
       ['All frames', '03a-circle-all-frames.png'],
       ['This frame', '03a-circle-this-frame.png'],
       ['All components', '03a-circle-all-components.png'],
     ]) {
+      if (scope === 'All components') {
+        await window.locator('[data-node-id]', { hasText: 'html' }).first().click();
+        await waitFor(async () => (await window.locator('.component-canvas-section[aria-label="Canvas"]').count()) === 1, 'the root settings show');
+      }
       await pick(window, 'Apply to', scope);
       await window.locator('.component-canvas-color .embed-editor_varconnect').hover();
       await waitFor(
@@ -192,13 +200,14 @@ function writeFixture(project) {
     }
     // Bound to a variable: the chip, and a swatch resolved on the canvas page's root with nothing selected inside.
     await window.locator('.component-canvas-color .embed-editor_varconnect-dot').click();
-    await window.getByText('#ebebeb').first().click();
+    await window.locator('text=#ebebeb >> visible=true').first().click();
     await waitForFile(
       () => read('.stacki/component-canvas.json'),
       (text) => text.includes('var(--'),
     );
     results.swatchFill = await window.locator('.component-canvas-color .u-color-swatch-fill').evaluate((fill) => fill.style.background);
     await shot(window, '03a-bound-variable.png');
+    await window.locator('[data-node-id]', { hasText: 'direction: back' }).first().click();
     await pick(window, 'Apply to', 'All frames');
 
     // An edit on the canvas page itself (delete the selected instance) is refused with a toast; nothing is written.
@@ -284,7 +293,7 @@ function writeFixture(project) {
     await window.locator('.props-field', { hasText: 'preview' }).first().locator('button, [role="radio"]', { hasText: 'True' }).first().click();
     await waitFor(async () => (await canvas.locator('stacki-frame .modal_wrap.preview').count()) >= 1, 'the modal previews');
     results.modalFrames = await labels(canvas);
-    results.modalFallback = await canvas.locator('stacki-frame-body[data-fallback]').count();
+    results.modalFallback = await canvas.locator('stacki-frame[data-fallback]').count();
     await settled(canvas);
     await shot(window, '08-modal.png');
     await window.getByRole('button', { name: 'Close Modal canvas' }).click();
@@ -330,14 +339,14 @@ function writeFixture(project) {
     await shot(window, '13-menu.png');
     await window.getByRole('menuitem', { name: 'Open in canvas' }).click();
     await window.waitForSelector('[data-testid="component-canvas-panel"]', { timeout: WAIT_MS });
-    await window.locator('[data-node-id]').first().click();
-    await window.locator('button.component-canvas-split[aria-label^="Give each value of emphasis"]').click();
+    await window.locator('[data-node-id]', { hasText: 'variant: main' }).first().click();
+    await window.locator('button.prop-field-extra[aria-label^="Give each value of emphasis"]').click();
     await waitFor(async () => (await canvas.locator('stacki-frame').count()) > 6, 'emphasis splits the frames');
     results.manyFrames = await canvas.locator('stacki-frame').count();
     await settled(canvas);
     await shot(window, '14-many-frames.png');
-    await press(canvas.locator('stacki-frame[data-frame="direction=forward&emphasis=primary&variant=arrow"] stacki-frame-label'));
-    await window.locator('button.component-canvas-split.on').first().hover();
+    await press(canvas.locator('stacki-frame[data-frame="direction=forward&emphasis=primary&variant=arrow"]'));
+    await window.locator('button.prop-field-extra.on').first().hover();
     await window.locator('[role="tooltip"]', { hasText: 'in one frame' }).waitFor({ timeout: WAIT_MS });
     await shot(window, '15-disabled-tooltip.png');
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1100, 760));
@@ -429,7 +438,8 @@ async function navigatorRows(window) {
 }
 
 async function labels(canvas) {
-  return canvas.locator('stacki-frame-label').allTextContents();
+  // A frame's caption is its own (data-label), drawn by the frame: not an element.
+  return canvas.locator('stacki-frame').evaluateAll((frames) => frames.map((frame) => frame.getAttribute('data-label') ?? ''));
 }
 
 // Polls a condition the app should reach, within a bound.
@@ -443,7 +453,7 @@ async function settled(canvas) {
     what: 'the canvas world settles',
     read: () =>
       canvas
-        .locator('stacki-canvas-world')
+        .locator('body')
         .evaluate((world) => `${world.style.transform}|${world.offsetWidth}|${world.offsetHeight}`)
         .catch(() => 'none'),
     until: () => true,

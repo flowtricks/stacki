@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'ऊँचाई',
   'componentCanvas.panel.hug': 'कंटेंट के अनुसार',
   'componentCanvas.panel.pixels': '{side} पिक्सेल में',
+  'componentCanvas.panel.root.about': 'हर फ़्रेम के पीछे का कैनवास: पेज का html एलिमेंट। इसकी क्लास सेटिंग पैनल में हैं।',
+  'componentCanvas.panel.root.title': 'कैनवास',
   'componentCanvas.panel.scope.all': 'सभी फ़्रेम',
+  'componentCanvas.panel.scope.component': 'यह कंपोनेंट',
   'componentCanvas.panel.scope.frame': 'यह फ़्रेम',
   'componentCanvas.panel.scope.hint':
     'आपके सेट किए गए आकार, पृष्ठभूमि और प्रॉप मान कहाँ लागू हों: इस फ़्रेम पर, किसी एक मान के हर फ़्रेम पर, या हर फ़्रेम पर। फ़्रेम की अपनी सेटिंग ज़्यादा व्यापक सेटिंग से ऊपर रहती है।',

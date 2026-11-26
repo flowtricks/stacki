@@ -47,6 +47,11 @@ export interface PreviewRuntimeProps {
   readonly refreshKey?: string | number;
   readonly device: PreviewDevice;
   readonly onSelectPath?: (path: string | undefined, info: CanvasSelectInfo) => void;
+  /**
+   * The node a canvas path is shown as, where the open file names a node by something else than the frame does: on the
+   * component canvas, the space between frames (the page's <body>, the frames' wrappers) is the page's root. Absent: as is.
+   */
+  readonly canvasPathOf?: ((path: string) => string) | undefined;
   readonly onContextPath?: (
     path: string | undefined,
     point: ContextPoint & {
@@ -461,12 +466,14 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
         break;
       }
       if (hoverShown(message.token, refs.render.current)) {
-        if (message.path !== undefined) {
-          rememberCanvasHover({ path: message.path, pseudo: message.pseudo, occurrence: message.occurrence, deep: message.deep }, Date.now());
+        const hovered = shownPath(message.path, refs);
+        if (hovered !== undefined) {
+          rememberCanvasHover({ path: hovered, pseudo: message.pseudo, occurrence: message.occurrence, deep: message.deep }, Date.now());
         }
-        noteDeepHover(message.path, message.deep);
+        noteDeepHover(hovered, message.deep);
         drawSentBoxes(message.path, message.boxes, setters);
-        setters.setCanvasHover(message.path);
+        drawAsShown(message.path, hovered, setters);
+        setters.setCanvasHover(hovered);
         setters.setCanvasHoverPseudo(message.pseudo);
         setters.setHoverOcc(message.occurrence);
       } else {
@@ -650,6 +657,25 @@ function receiveClick(message: Extract<PreviewMessage, { readonly kind: 'click-n
 // Hands the boxes a hover or click carried to the overlay in the same step as the path, so the
 // outline is drawn at once: the frame's later `avb:rects` for the tracked paths replaces them
 // with the same boxes (or newer ones, if the page moved in between).
+// The path a frame's report is shown under (PreviewRuntimeProps.canvasPathOf); the boxes it sent are drawn for it.
+function shownPath(path: string | undefined, refs: RuntimeRefs): string | undefined {
+  const mapped = path === undefined ? undefined : (refs.props.current.canvasPathOf?.(path) ?? path);
+  assert(mapped === undefined || mapped.length > 0, 'shownPath: a shown path names a node');
+  return mapped;
+}
+
+// A path shown as another node (shownPath) is drawn where the frame measured it: the node it stands for has no boxes
+// of its own from the frame, and in the space it stands for they are the same place.
+function drawAsShown(path: string | undefined, shown: string | undefined, setters: RuntimeSetters): void {
+  if (path === undefined || shown === undefined || shown === path) {
+    return;
+  }
+  setters.setRects((previous) => {
+    const measured = previous[path];
+    return measured === undefined || previous[shown] === measured ? previous : { ...previous, [shown]: measured };
+  });
+}
+
 function drawSentBoxes(path: string | undefined, boxes: readonly Box[] | undefined, setters: RuntimeSetters): void {
   if (path === undefined || boxes === undefined) {
     return;
@@ -669,8 +695,10 @@ function showPendingSelection(message: Extract<PreviewMessage, { readonly kind: 
   if (judgeEventToken(message.token, refs.render.current).tag !== 'current') {
     return; // A rendering the frame has not vouched for is not drawn as a selection.
   }
+  const pending = shownPath(message.path, refs) ?? message.path;
   drawSentBoxes(message.path, message.boxes, setters);
-  setters.setPendingSelection({ path: message.path, occurrence: message.occurrence, pseudo: undefined });
+  drawAsShown(message.path, pending, setters);
+  setters.setPendingSelection({ path: pending, occurrence: message.occurrence, pseudo: undefined });
 }
 
 // The real selection takes over from the pending one the moment it changes; a click that selects

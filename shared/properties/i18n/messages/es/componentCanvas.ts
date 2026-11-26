@@ -30,7 +30,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Alto',
   'componentCanvas.panel.hug': 'Al contenido',
   'componentCanvas.panel.pixels': '{side} en píxeles',
+  'componentCanvas.panel.root.about': 'El lienzo situado detrás de todos los marcos: el elemento html de la página. Sus clases están en el panel de ajustes.',
+  'componentCanvas.panel.root.title': 'Lienzo',
   'componentCanvas.panel.scope.all': 'Todos los marcos',
+  'componentCanvas.panel.scope.component': 'Este componente',
   'componentCanvas.panel.scope.frame': 'Este marco',
   'componentCanvas.panel.scope.hint':
     'Dónde se aplican el tamaño, el fondo y los valores de props que definas: en este marco, en todos los marcos de un valor o en todos los marcos. El ajuste propio de un marco prevalece sobre uno más amplio.',

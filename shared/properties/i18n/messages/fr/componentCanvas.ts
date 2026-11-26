@@ -31,7 +31,10 @@ export const messages = {
   'componentCanvas.panel.height': 'Hauteur',
   'componentCanvas.panel.hug': 'Au contenu',
   'componentCanvas.panel.pixels': '{side} en pixels',
+  'componentCanvas.panel.root.about': 'Le canevas derrière tous les cadres : l’élément html de la page. Ses classes se trouvent dans le panneau Réglages.',
+  'componentCanvas.panel.root.title': 'Canevas',
   'componentCanvas.panel.scope.all': 'Tous les cadres',
+  'componentCanvas.panel.scope.component': 'Ce composant',
   'componentCanvas.panel.scope.frame': 'Ce cadre',
   'componentCanvas.panel.scope.hint':
     'Où s’appliquent la taille, l’arrière-plan et les valeurs de props que vous définissez : à ce cadre, à tous les cadres d’une même valeur ou à tous les cadres. Le réglage propre à un cadre l’emporte sur un réglage plus large.',

@@ -4,7 +4,8 @@
 // Method: parse known-good files and each known-bad shape (bounds, key order, unknown keys, injected colours), write
 // edits at the all-frames, per-variant and per-frame scopes and resolve frames through them, build the frames of a
 // Lumos-style button (a variant union with an arrow direction only the arrow variant takes) and check the pruning, the
-// layout and the frame bound, and keep settings across a rename, a deletion and a change of split.
+// layout and the frame bound, and keep settings across a rename, a deletion and a change of split. The canvas root's
+// classes and surface resolve from the component, then the project, and the parser bounds and refuses bad names.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -28,6 +29,9 @@ import {
   withProjectBackground,
   frameBackground,
   renameCanvasVariables,
+  canvasRoot,
+  withRootEdit,
+  PROJECT_ROOT,
 } from '#dist/shared/properties/componentCanvas.js';
 import { COMPONENT_CANVAS_FILE_SCHEMA } from '#dist/shared/properties/cli/files/componentCanvasFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
@@ -304,16 +308,22 @@ test('the project background is kept through every edit, and a file without it i
 
 test('a frame shows its own background, then its scopes and component, then the project, then nothing', () => {
   let file = withProjectBackground(EMPTY_CANVAS_FILE, 'var(--background)');
-  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), { value: 'var(--background)', source: { kind: 'project' } });
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main'), button), {
+    value: 'var(--background)',
+    source: { kind: 'project' },
+  });
   file = withFrameEdit(file, button, '', { kind: 'background', value: 'black' });
-  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), { value: 'black', source: { kind: 'entry', key: '' } });
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main'), button), {
+    value: 'black',
+    source: { kind: 'entry', key: '' },
+  });
   file = withFrameEdit(file, button, 'variant=main', { kind: 'background', value: 'transparent' });
-  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main')), {
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main'), button), {
     value: 'transparent',
     source: { kind: 'entry', key: 'variant=main' },
   });
   const none = withProjectBackground(EMPTY_CANVAS_FILE, undefined);
-  assert.deepEqual(frameBackground(none, resolveFrame(undefined, '')), { value: undefined, source: { kind: 'none' } });
+  assert.deepEqual(frameBackground(none, resolveFrame(undefined, ''), button), { value: undefined, source: { kind: 'none' } });
 });
 
 test('renaming a variable renames it in every background, and leaves longer names and the file otherwise alone', () => {
@@ -327,4 +337,64 @@ test('renaming a variable renames it in every background, and leaves longer name
     file,
     'nothing to rename keeps the same file',
   );
+});
+
+test('the canvas root: classes and surface from the component, else the project; bounded, and older files still read', () => {
+  const component = { kind: 'component', file: button } as const;
+  assert.deepEqual(canvasRoot(EMPTY_CANVAS_FILE, button), { background: undefined, backgroundSource: 'none', classes: [], classesSource: 'none' });
+  let file = withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['theme-dark'] });
+  file = withRootEdit(file, PROJECT_ROOT, { kind: 'background', value: 'var(--background)' });
+  assert.deepEqual(canvasRoot(file, button), {
+    background: 'var(--background)',
+    backgroundSource: 'project',
+    classes: ['theme-dark'],
+    classesSource: 'project',
+  });
+  file = withRootEdit(file, component, { kind: 'classes', value: ['theme-brand', 'u-text-large'] });
+  assert.deepEqual(canvasRoot(file, button).classes, ['theme-brand', 'u-text-large'], "a component's list replaces the project's");
+  assert.equal(canvasRoot(file, button).classesSource, 'component');
+  assert.equal(canvasRoot(file, 'src/components/Card.astro').classesSource, 'project', 'other components keep the project list');
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main'), button), {
+    value: 'var(--background)',
+    source: { kind: 'project' },
+  });
+  file = withRootEdit(file, component, { kind: 'background', value: '#000' });
+  assert.deepEqual(frameBackground(file, resolveFrame(file.components[button], 'variant=main'), button), { value: '#000', source: { kind: 'root' } });
+  const text = serializeComponentCanvas(file);
+  const parsed = parseComponentCanvasSource(text);
+  assert.ok(parsed.ok);
+  assert.equal(serializeComponentCanvas(parsed.value), text, 'round-trips byte for byte, classes in their order');
+  assert.doesNotThrow(() => validateMetadata('componentCanvas', text), 'the metadata transport accepts it');
+  assert.equal(
+    checkValue({ kind: 'object', fields: COMPONENT_CANVAS_FILE_SCHEMA.fields }, JSON.parse(text), 'componentCanvas'),
+    undefined,
+    'the CLI reference accepts what the app writes',
+  );
+  // Cleared at the component, the project's shows again, and the component leaves the file when nothing else is set.
+  file = withRootEdit(file, component, { kind: 'classes', value: undefined });
+  file = withRootEdit(file, component, { kind: 'background', value: undefined });
+  assert.equal(file.components[button], undefined);
+  assert.deepEqual(canvasRoot(file, button).classes, ['theme-dark']);
+  // The project's root survives a frame edit, a split change and a background change.
+  file = withSplit(withFrameEdit(file, button, '', { kind: 'background', value: 'red' }), button, ['variant']);
+  file = withProjectBackground(file, '#111');
+  assert.deepEqual(file.classes, ['theme-dark']);
+  // Bounds and refusals.
+  const many = Array.from({ length: CANVAS_LIMITS.rootClassesMax + 1 }, (_, index) => `c${String(index)}`);
+  assert.throws(() => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: many }), /at most/);
+  assert.throws(() => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['a b'] }), /not a class name/);
+  assert.throws(() => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['"><script>'] }), /not a class name/);
+  assert.throws(() => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['stacki-designer'] }), /keeps for itself/);
+  assert.throws(() => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['x', 'x'] }), /twice/);
+  assert.throws(
+    () => withRootEdit(EMPTY_CANVAS_FILE, PROJECT_ROOT, { kind: 'classes', value: ['x'.repeat(CANVAS_LIMITS.classNameCharsMax + 1)] }),
+    /not a class name/,
+  );
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { root: { colour: 'red' } } } }), /unknown key colour/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, classes: 'theme-dark', components: {} }), /list/);
+  // A file from before the root has none, and reads as before.
+  assert.deepEqual(parseComponentCanvasFile({ version: 1, components: { [button]: { split: ['variant'] } } }), {
+    version: 1,
+    components: { [button]: { split: ['variant'] } },
+  });
 });
