@@ -269,7 +269,7 @@ const AgentRow = memo(function AgentRow({
   const working = isWorking(agent.status);
   const timeline = groupSteps(unit.children, { working });
   const name = displayName(agent, projectPath, translate);
-  const model = agentModelLabel(agent, options, translate);
+  const model = agentModelLabel(agent, options);
   const summary =
     timeline.tasks === 0
       ? working
@@ -289,7 +289,7 @@ const AgentRow = memo(function AgentRow({
         <span className="ai-step-chevron">{open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}</span>
         <SubagentDot status={agent.status} />
         <span className="ai-running-name">{name}</span>
-        <span className={`ai-agent-model${agent.model.kind === 'inherited' ? ' ai-agent-model-inherited' : ''}`}>{model}</span>
+        <span className="ai-agent-model">{model}</span>
         <span className="ai-agent-time-cell">
           <SubagentTime status={agent.status} />
         </span>

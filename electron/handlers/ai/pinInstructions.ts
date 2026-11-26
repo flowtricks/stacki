@@ -34,6 +34,8 @@ function subagentsText(pins: readonly PinBriefEntry[]): string {
     ...waveLines,
     '- Give each subagent its pin below, word for word, and tell it which images are its own.',
     '- Tell every subagent: make small, targeted edits and never rewrite a whole file; read a file again right before changing it, since other pins may be editing the project at the same time; change only what its pin asks for.',
+    '- Tell every subagent to end its report with one or two plain sentences a designer reads: what changed on the page, in words, without code, file paths or tags. The person sees that report.',
+    '- Run every subagent in the foreground (never in the background), so each pin shows as finished only when its work is done.',
     '- If a pin needs a file another pin of the same wave also needs (a shared stylesheet, a layout), run that pin after the wave instead.',
     '- When every pin has finished, answer with one short line per pin, in plain words a designer reads: what changed, or why it could not be done.',
     '',

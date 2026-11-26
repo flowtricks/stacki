@@ -11,29 +11,25 @@ export const messages = {
     one: '{count} bestand bewerkt',
     other: '{count} bestanden bewerkt',
   },
-  'ai.activity.fetched': {
-    one: '{count} pagina opgehaald',
-    other: '{count} pagina’s opgehaald',
-  },
-  'ai.activity.ran': {
-    one: '{count} opdracht uitgevoerd',
-    other: '{count} opdrachten uitgevoerd',
+  'ai.activity.other': {
+    one: '{count} andere stap gezet',
+    other: '{count} andere stappen gezet',
   },
   'ai.activity.read': {
     one: '{count} bestand gelezen',
     other: '{count} bestanden gelezen',
   },
   'ai.activity.searched': {
-    one: '{count} keer gezocht',
-    other: '{count} keer gezocht',
-  },
-  'ai.activity.used': {
-    one: '{count} tool gebruikt',
-    other: '{count} tools gebruikt',
+    one: '{count} keer het project doorgekeken',
+    other: '{count} keer het project doorgekeken',
   },
   'ai.activity.usedTools': {
-    one: '{count} tool gebruikt',
-    other: '{count} tools gebruikt',
+    one: '{count} stap gezet',
+    other: '{count} stappen gezet',
+  },
+  'ai.activity.web': {
+    one: '{count} ding op het web opgezocht',
+    other: '{count} dingen op het web opgezocht',
   },
   'ai.agent.badge.installing': 'Installeren',
   'ai.agent.badge.notInstalled': 'Niet geïnstalleerd',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'Deze chat heeft nog geen berichten om te kopiëren',
   'ai.export.truncated': 'De rest van de chat was te lang om te kopiëren.',
   'ai.export.you': 'Jij',
+  'ai.files.component': 'Component {name}',
+  'ai.files.homePage': 'Startpagina',
+  'ai.files.layout': 'Lay-out {name}',
+  'ai.files.page': 'Pagina {name}',
   'ai.find.close': 'Zoeken sluiten',
   'ai.find.count': {
     one: '{count} resultaat',
@@ -714,10 +714,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Nadenken',
   'ai.status.phase.waiting': 'Wachten op jou',
   'ai.step.build': 'Het project gebouwd',
-  'ai.step.check': 'Opmaak en lint gecontroleerd',
+  'ai.step.check': 'De code op fouten gecontroleerd',
   'ai.step.commandMany': {
-    one: '{count} opdracht uitgevoerd',
-    other: '{count} opdrachten uitgevoerd',
+    one: '{count} taak in het project uitgevoerd',
+    other: '{count} taken in het project uitgevoerd',
   },
   'ai.step.commit': 'Wijzigingen gecommit',
   'ai.step.commitMany': {
@@ -754,10 +754,10 @@ export const messages = {
     other: '{count} scripts uitgevoerd',
   },
   'ai.step.scriptNamed': '{name} uitgevoerd',
-  'ai.step.searchFor': 'Het project doorzocht op „{query}”',
+  'ai.step.searchFor': 'In het project gezocht naar „{query}”',
   'ai.step.searchMany': {
-    one: 'Het project {count} keer doorzocht',
-    other: 'Het project {count} keer doorzocht',
+    one: 'Het project {count} keer doorgekeken',
+    other: 'Het project {count} keer doorgekeken',
   },
   'ai.step.test': 'De tests uitgevoerd',
   'ai.step.web': 'Iets op het web opgezocht',
@@ -769,7 +769,7 @@ export const messages = {
     one: '{count} eerdere stap',
     other: '{count} eerdere stappen',
   },
-  'ai.steps.hideCommands': 'Opdrachten verbergen',
+  'ai.steps.hideCommands': 'Technische details verbergen',
   'ai.steps.label': 'Stappen',
   'ai.steps.more': {
     one: '{count} meer niet getoond',
@@ -779,7 +779,7 @@ export const messages = {
     one: '{count} bezig',
     other: '{count} bezig',
   },
-  'ai.steps.showCommands': 'Opdrachten tonen',
+  'ai.steps.showCommands': 'Technische details tonen',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} taak',
@@ -880,13 +880,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Vervolgbericht',
   'ai.subagents.label': 'Agents', // same
-  'ai.subagents.model.inherited': '{model} (overgenomen)',
-  'ai.subagents.model.session': 'Sessiemodel',
+  'ai.subagents.modelLine': 'Model: {model}', // same
   'ai.subagents.more': {
     one: '{count} eerdere agent niet getoond',
     other: '{count} eerdere agents niet getoond',
   },
-  'ai.subagents.openTranscript': 'Transcript openen',
+  'ai.subagents.openTranscript': 'Alle stappen bekijken',
   'ai.subagents.result': 'Resultaat',
   'ai.subagents.running': {
     one: '{count} agent aan het werk',
@@ -943,13 +942,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Naar bestanden gezocht',
   'ai.toolName.findTool': 'Naar een tool gezocht',
   'ai.toolName.followUp': 'Een vervolgbericht verzonden',
-  'ai.toolName.generic': 'Een tool gebruikt',
+  'ai.toolName.generic': 'Een stap gezet',
   'ai.toolName.helper': 'Een helper gestart',
   'ai.toolName.plan': 'Een plan voorgesteld',
   'ai.toolName.read': 'Een bestand gelezen',
   'ai.toolName.readWebPage': 'Een webpagina gelezen',
-  'ai.toolName.run': 'Een opdracht uitgevoerd',
-  'ai.toolName.searchCode': 'Het project doorzocht',
+  'ai.toolName.run': 'Een taak in het project uitgevoerd',
+  'ai.toolName.searchCode': 'Het project doorgekeken',
   'ai.toolName.searchWeb': 'Het web doorzocht',
   'ai.toolName.session': 'Een sessie gestart',
   'ai.toolName.skill': 'Een vaardigheid gebruikt',

@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '编辑了 {count} 个文件',
   },
-  'ai.activity.fetched': {
-    other: '获取了 {count} 个页面',
-  },
-  'ai.activity.ran': {
-    other: '运行了 {count} 条命令',
+  'ai.activity.other': {
+    other: '执行了 {count} 个其他步骤',
   },
   'ai.activity.read': {
     other: '读取了 {count} 个文件',
   },
   'ai.activity.searched': {
-    other: '搜索了 {count} 次',
-  },
-  'ai.activity.used': {
-    other: '使用了 {count} 个工具',
+    other: '浏览了项目 {count} 次',
   },
   'ai.activity.usedTools': {
-    other: '使用了 {count} 个工具',
+    other: '执行了 {count} 个步骤',
+  },
+  'ai.activity.web': {
+    other: '在网上查了 {count} 项内容',
   },
   'ai.agent.badge.installing': '正在安装',
   'ai.agent.badge.notInstalled': '未安装',
@@ -259,6 +256,10 @@ export const messages = {
   'ai.export.empty': '此聊天还没有可复制的消息',
   'ai.export.truncated': '聊天的其余部分太长，无法复制。',
   'ai.export.you': '你',
+  'ai.files.component': '{name} 组件',
+  'ai.files.homePage': '首页',
+  'ai.files.layout': '{name} 布局',
+  'ai.files.page': '{name} 页面',
   'ai.find.close': '关闭查找',
   'ai.find.count': {
     other: '找到 {count} 个匹配项',
@@ -673,9 +674,9 @@ export const messages = {
   'ai.status.phase.thinking': '正在思考',
   'ai.status.phase.waiting': '正在等待你',
   'ai.step.build': '构建了项目',
-  'ai.step.check': '检查了格式和 lint',
+  'ai.step.check': '检查了代码是否有错误',
   'ai.step.commandMany': {
-    other: '运行了 {count} 条命令',
+    other: '在项目中运行了 {count} 项任务',
   },
   'ai.step.commit': '提交了更改',
   'ai.step.commitMany': {
@@ -706,9 +707,9 @@ export const messages = {
     other: '运行了 {count} 个脚本',
   },
   'ai.step.scriptNamed': '运行了 {name}',
-  'ai.step.searchFor': '在项目中搜索了“{query}”',
+  'ai.step.searchFor': '在项目中查找了“{query}”',
   'ai.step.searchMany': {
-    other: '搜索了项目 {count} 次',
+    other: '浏览了项目 {count} 次',
   },
   'ai.step.test': '运行了测试',
   'ai.step.web': '在网上查了点东西',
@@ -718,7 +719,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '{count} 个更早的步骤',
   },
-  'ai.steps.hideCommands': '隐藏命令',
+  'ai.steps.hideCommands': '隐藏技术细节',
   'ai.steps.label': '步骤',
   'ai.steps.more': {
     other: '另有 {count} 项未显示',
@@ -726,7 +727,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 个运行中',
   },
-  'ai.steps.showCommands': '显示命令',
+  'ai.steps.showCommands': '显示技术细节',
   'ai.steps.summary': '{tasks}，{running}',
   'ai.steps.tasks': {
     other: '{count} 个任务',
@@ -820,12 +821,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '后续消息',
   'ai.subagents.label': '代理',
-  'ai.subagents.model.inherited': '{model}（继承）',
-  'ai.subagents.model.session': '会话模型',
+  'ai.subagents.modelLine': '模型：{model}',
   'ai.subagents.more': {
     other: '另有 {count} 个较早的代理未显示',
   },
-  'ai.subagents.openTranscript': '打开对话记录',
+  'ai.subagents.openTranscript': '查看所有步骤',
   'ai.subagents.result': '结果',
   'ai.subagents.running': {
     other: '{count} 个代理正在工作',
@@ -876,13 +876,13 @@ export const messages = {
   'ai.toolName.findFiles': '查找了文件',
   'ai.toolName.findTool': '查找了一个工具',
   'ai.toolName.followUp': '发送了一条跟进消息',
-  'ai.toolName.generic': '使用了一个工具',
+  'ai.toolName.generic': '执行了一个步骤',
   'ai.toolName.helper': '启动了一个助手',
   'ai.toolName.plan': '提出了一个方案',
   'ai.toolName.read': '读取了一个文件',
   'ai.toolName.readWebPage': '读取了一个网页',
-  'ai.toolName.run': '运行了一条命令',
-  'ai.toolName.searchCode': '搜索了项目',
+  'ai.toolName.run': '在项目中运行了一项任务',
+  'ai.toolName.searchCode': '浏览了项目',
   'ai.toolName.searchWeb': '搜索了网络',
   'ai.toolName.session': '启动了一个会话',
   'ai.toolName.skill': '使用了一项技能',

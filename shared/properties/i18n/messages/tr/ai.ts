@@ -11,29 +11,25 @@ export const messages = {
     one: '{count} dosya düzenledi',
     other: '{count} dosya düzenledi',
   },
-  'ai.activity.fetched': {
-    one: '{count} sayfa getirdi',
-    other: '{count} sayfa getirdi',
-  },
-  'ai.activity.ran': {
-    one: '{count} komut çalıştırdı',
-    other: '{count} komut çalıştırdı',
+  'ai.activity.other': {
+    one: '{count} başka adım attı',
+    other: '{count} başka adım attı',
   },
   'ai.activity.read': {
     one: '{count} dosya okudu',
     other: '{count} dosya okudu',
   },
   'ai.activity.searched': {
-    one: '{count} kez aradı',
-    other: '{count} kez aradı',
-  },
-  'ai.activity.used': {
-    one: '{count} araç kullandı',
-    other: '{count} araç kullandı',
+    one: 'projeyi {count} kez inceledi',
+    other: 'projeyi {count} kez inceledi',
   },
   'ai.activity.usedTools': {
-    one: '{count} araç kullanıldı',
-    other: '{count} araç kullanıldı',
+    one: '{count} adım atıldı',
+    other: '{count} adım atıldı',
+  },
+  'ai.activity.web': {
+    one: 'web’de {count} şey aradı',
+    other: 'web’de {count} şey aradı',
   },
   'ai.agent.badge.installing': 'Yükleniyor',
   'ai.agent.badge.notInstalled': 'Yüklü değil',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'Bu sohbette henüz kopyalanacak mesaj yok',
   'ai.export.truncated': 'Sohbetin geri kalanı kopyalanamayacak kadar uzundu.',
   'ai.export.you': 'Siz',
+  'ai.files.component': '{name} bileşeni',
+  'ai.files.homePage': 'Ana sayfa',
+  'ai.files.layout': '{name} düzeni',
+  'ai.files.page': '{name} sayfası',
   'ai.find.close': 'Aramayı kapat',
   'ai.find.count': {
     one: '{count} eşleşme',
@@ -712,10 +712,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Düşünüyor',
   'ai.status.phase.waiting': 'Sizi bekliyor',
   'ai.step.build': 'Projeyi derledi',
-  'ai.step.check': 'Biçimlendirmeyi ve lint’i kontrol etti',
+  'ai.step.check': 'Kodu hatalara karşı kontrol etti',
   'ai.step.commandMany': {
-    one: '{count} komut çalıştırdı',
-    other: '{count} komut çalıştırdı',
+    one: 'Projede {count} görev çalıştırdı',
+    other: 'Projede {count} görev çalıştırdı',
   },
   'ai.step.commit': 'Değişiklikleri kaydetti',
   'ai.step.commitMany': {
@@ -754,8 +754,8 @@ export const messages = {
   'ai.step.scriptNamed': '{name} çalıştırdı',
   'ai.step.searchFor': 'Projede “{query}” aradı',
   'ai.step.searchMany': {
-    one: 'Projede {count} kez arama yaptı',
-    other: 'Projede {count} kez arama yaptı',
+    one: 'Projeyi {count} kez inceledi',
+    other: 'Projeyi {count} kez inceledi',
   },
   'ai.step.test': 'Testleri çalıştırdı',
   'ai.step.web': 'Web’de bir şey aradı',
@@ -767,7 +767,7 @@ export const messages = {
     one: '{count} önceki adım',
     other: '{count} önceki adım',
   },
-  'ai.steps.hideCommands': 'Komutları gizle',
+  'ai.steps.hideCommands': 'Teknik ayrıntıları gizle',
   'ai.steps.label': 'Adımlar',
   'ai.steps.more': {
     one: '{count} tane daha gösterilmiyor',
@@ -777,7 +777,7 @@ export const messages = {
     one: '{count} çalışıyor',
     other: '{count} çalışıyor',
   },
-  'ai.steps.showCommands': 'Komutları göster',
+  'ai.steps.showCommands': 'Teknik ayrıntıları göster',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} görev',
@@ -878,13 +878,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Takip mesajı',
   'ai.subagents.label': 'Ajanlar',
-  'ai.subagents.model.inherited': '{model} (devralındı)',
-  'ai.subagents.model.session': 'Oturum modeli',
+  'ai.subagents.modelLine': 'Model: {model}', // same
   'ai.subagents.more': {
     one: 'Önceki {count} ajan gösterilmiyor',
     other: 'Önceki {count} ajan gösterilmiyor',
   },
-  'ai.subagents.openTranscript': 'Dökümü aç',
+  'ai.subagents.openTranscript': 'Tüm adımları gör',
   'ai.subagents.result': 'Sonuç',
   'ai.subagents.running': {
     one: '{count} ajan çalışıyor',
@@ -941,13 +940,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Dosya aradı',
   'ai.toolName.findTool': 'Bir araç aradı',
   'ai.toolName.followUp': 'Bir takip mesajı gönderdi',
-  'ai.toolName.generic': 'Bir araç kullandı',
+  'ai.toolName.generic': 'Bir adım attı',
   'ai.toolName.helper': 'Bir yardımcı başlattı',
   'ai.toolName.plan': 'Bir plan önerdi',
   'ai.toolName.read': 'Bir dosyayı okudu',
   'ai.toolName.readWebPage': 'Bir web sayfasını okudu',
-  'ai.toolName.run': 'Bir komut çalıştırdı',
-  'ai.toolName.searchCode': 'Projede arama yaptı',
+  'ai.toolName.run': 'Projede bir görev çalıştırdı',
+  'ai.toolName.searchCode': 'Projeyi inceledi',
   'ai.toolName.searchWeb': "Web'de arama yaptı",
   'ai.toolName.session': 'Bir oturum başlattı',
   'ai.toolName.skill': 'Bir beceri kullandı',

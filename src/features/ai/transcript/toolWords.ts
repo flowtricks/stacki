@@ -748,9 +748,15 @@ function findSubject(args: readonly string[]): string | undefined {
 }
 
 /** The name of the file a read or edit touched: its diff's path, else its first location. */
+// The file a read or edit was about: its path from the project's `src/` folder when it has one (so a page or a
+// component can be named as such, agentSteps.ts friendlyFile), else its file name.
 function fileSubject(call: StepInput): string | undefined {
   const path = call.diffs[0]?.path ?? call.paths[0];
-  return path === undefined || path === '' ? undefined : safeSubject(baseName(path));
+  if (path === undefined || path === '') {
+    return undefined;
+  }
+  const inSource = /(?:^|\/)src\/(.+)$/u.exec(path.replaceAll('\\', '/'))?.[1];
+  return safeSubject(inSource === undefined ? baseName(path) : `src/${inSource}`);
 }
 
 /**

@@ -3,7 +3,7 @@
 // finished, and reads "1 agent working", "1 background command", "1 agent finished"; a click opens the panel, a
 // second click, Escape or a press outside closes it. The panel counts its sections (Running with its rows, Finished
 // folded with its count), an agent opens to "31 tasks, 1 running" and its steps; a step opens to its calls in words,
-// and its "Show commands" stays closed (even after the chat's "Expand all") until clicked, which reveals the exact
+// and its "Show technical details" stays closed (even after the chat's "Expand all") until clicked, which reveals the exact
 // command highlighted, the paths and the error. The negative space: no raw JSON, no tool-call or agent id, no run of
 // hex, no secret env value and no command line is in the default DOM; no row has a Stop of its own (the adapter
 // cannot stop one subagent for Stacki); the panel's one "Stop all", at its top, shows only while the turn can be
@@ -260,7 +260,7 @@ test('an agent opens to its steps; a step opens to its calls; its commands stay 
   const fold = panel.querySelector('.ai-step-fold');
   assert.ok(fold.textContent.includes('earlier steps'), 'the older steps fold');
   await click(fold);
-  assert.ok(byText(panel, '.ai-step', 'Edited 3 files (Button.astro, Hero.astro, …)'), 'the earlier steps open');
+  assert.ok(byText(panel, '.ai-step', 'Edited 3 files (Button component, Hero component, …)'), 'the earlier steps open');
   assertDesignerFriendly(container, 'the opened agent and its earlier steps');
 
   // A step opens to its calls in words; the commands are still not drawn.
@@ -272,7 +272,7 @@ test('an agent opens to its steps; a step opens to its calls; its commands stay 
   );
   assert.ok(tests.querySelector('.ai-step-call.ai-step-failed'), 'the failed run is marked failed');
   const reveal = tests.querySelector('.ai-step-reveal');
-  assert.equal(reveal.textContent, 'Show commands');
+  assert.equal(reveal.textContent, 'Show technical details');
   assert.equal(reveal.getAttribute('aria-expanded'), 'false');
   await act(async () => ui.expandAllItems(CHAT));
   assert.equal(tests.querySelector('.ai-step-technical') ?? undefined, undefined, 'Expand all opens steps, never the commands');
@@ -281,12 +281,12 @@ test('an agent opens to its steps; a step opens to its calls; its commands stay 
   // Revealed: the exact commands, highlighted, and the failure's raw payload behind its own Show details.
   await click(reveal);
   const technical = tests.querySelector('.ai-step-technical');
-  assert.ok(technical, 'Show commands reveals the technical rows');
+  assert.ok(technical, 'Show technical details reveals the technical rows');
   const commands = [...technical.querySelectorAll('.code-inline')].map((code) => code.textContent);
   assert.deepEqual(commands, ['env -u ELECTRON_RUN_AS_NODE npm test -- subagents', 'env -u ELECTRON_RUN_AS_NODE npm test -- subagents']);
   assert.ok(technical.querySelector('.ai-tool-details'), 'a JSON error sits behind Show details');
   assert.ok(!technical.textContent.includes('"stack"'), 'and stays closed');
-  assert.equal(reveal.textContent, 'Hide commands');
+  assert.equal(reveal.textContent, 'Hide technical details');
 
   // A file step (opened by Expand all) reveals its paths, shortened, whole in the tooltip.
   assert.equal(byText(panel, '.ai-step', 'Edited 3 files').getAttribute('aria-expanded'), 'true');

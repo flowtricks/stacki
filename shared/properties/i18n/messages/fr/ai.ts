@@ -11,29 +11,25 @@ export const messages = {
     one: 'a modifié {count} fichier',
     other: 'a modifié {count} fichiers',
   },
-  'ai.activity.fetched': {
-    one: 'a récupéré {count} page',
-    other: 'a récupéré {count} pages',
-  },
-  'ai.activity.ran': {
-    one: 'a exécuté {count} commande',
-    other: 'a exécuté {count} commandes',
+  'ai.activity.other': {
+    one: 'a effectué {count} autre étape',
+    other: 'a effectué {count} autres étapes',
   },
   'ai.activity.read': {
     one: 'a lu {count} fichier',
     other: 'a lu {count} fichiers',
   },
   'ai.activity.searched': {
-    one: 'a recherché {count} fois',
-    other: 'a recherché {count} fois',
-  },
-  'ai.activity.used': {
-    one: 'a utilisé {count} outil',
-    other: 'a utilisé {count} outils',
+    one: 'a parcouru le projet {count} fois',
+    other: 'a parcouru le projet {count} fois',
   },
   'ai.activity.usedTools': {
-    one: '{count} outil utilisé',
-    other: '{count} outils utilisés',
+    one: '{count} étape effectuée',
+    other: '{count} étapes effectuées',
+  },
+  'ai.activity.web': {
+    one: 'a cherché {count} chose sur le web',
+    other: 'a cherché {count} choses sur le web',
   },
   'ai.agent.badge.installing': 'Installation',
   'ai.agent.badge.notInstalled': 'Non installé',
@@ -276,6 +272,10 @@ export const messages = {
   'ai.export.empty': 'Cette conversation ne contient encore aucun message à copier',
   'ai.export.truncated': 'Le reste de la conversation était trop long pour être copié.',
   'ai.export.you': 'Vous',
+  'ai.files.component': 'Composant {name}',
+  'ai.files.homePage': 'Page d’accueil',
+  'ai.files.layout': 'Mise en page {name}',
+  'ai.files.page': 'Page {name}',
   'ai.find.close': 'Fermer la recherche',
   'ai.find.count': {
     one: '{count} résultat',
@@ -715,10 +715,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Réflexion',
   'ai.status.phase.waiting': 'En attente de votre réponse',
   'ai.step.build': 'A construit le projet',
-  'ai.step.check': 'A vérifié le format et le lint',
+  'ai.step.check': 'A vérifié que le code ne contient pas d’erreurs',
   'ai.step.commandMany': {
-    one: 'A exécuté {count} commande',
-    other: 'A exécuté {count} commandes',
+    one: 'A exécuté {count} tâche dans le projet',
+    other: 'A exécuté {count} tâches dans le projet',
   },
   'ai.step.commit': 'A validé les modifications',
   'ai.step.commitMany': {
@@ -755,10 +755,10 @@ export const messages = {
     other: 'A exécuté {count} scripts',
   },
   'ai.step.scriptNamed': 'A exécuté {name}',
-  'ai.step.searchFor': 'A cherché « {query} » dans le projet',
+  'ai.step.searchFor': 'A cherché « {query} » dans le projet',
   'ai.step.searchMany': {
-    one: 'A cherché {count} fois dans le projet',
-    other: 'A cherché {count} fois dans le projet',
+    one: 'A parcouru le projet {count} fois',
+    other: 'A parcouru le projet {count} fois',
   },
   'ai.step.test': 'A exécuté les tests',
   'ai.step.web': 'A cherché quelque chose sur le web',
@@ -770,7 +770,7 @@ export const messages = {
     one: '{count} étape précédente',
     other: '{count} étapes précédentes',
   },
-  'ai.steps.hideCommands': 'Masquer les commandes',
+  'ai.steps.hideCommands': 'Masquer les détails techniques',
   'ai.steps.label': 'Étapes',
   'ai.steps.more': {
     one: '{count} de plus non affichés',
@@ -780,7 +780,7 @@ export const messages = {
     one: '{count} en cours',
     other: '{count} en cours',
   },
-  'ai.steps.showCommands': 'Afficher les commandes',
+  'ai.steps.showCommands': 'Afficher les détails techniques',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} tâche',
@@ -881,13 +881,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Message de suivi',
   'ai.subagents.label': 'Agents', // same
-  'ai.subagents.model.inherited': '{model} (hérité)',
-  'ai.subagents.model.session': 'Modèle de la session',
+  'ai.subagents.modelLine': 'Modèle : {model}',
   'ai.subagents.more': {
     one: '{count} agent précédent non affiché',
     other: '{count} agents précédents non affichés',
   },
-  'ai.subagents.openTranscript': 'Ouvrir la transcription',
+  'ai.subagents.openTranscript': 'Voir toutes les étapes',
   'ai.subagents.result': 'Résultat',
   'ai.subagents.running': {
     one: '{count} agent au travail',
@@ -944,13 +943,13 @@ export const messages = {
   'ai.toolName.findFiles': 'A cherché des fichiers',
   'ai.toolName.findTool': 'A cherché un outil',
   'ai.toolName.followUp': 'A envoyé un message de suivi',
-  'ai.toolName.generic': 'A utilisé un outil',
+  'ai.toolName.generic': 'A effectué une étape',
   'ai.toolName.helper': 'A lancé un assistant',
   'ai.toolName.plan': 'A proposé un plan',
   'ai.toolName.read': 'A lu un fichier',
   'ai.toolName.readWebPage': 'A lu une page web',
-  'ai.toolName.run': 'A exécuté une commande',
-  'ai.toolName.searchCode': 'A fouillé le projet',
+  'ai.toolName.run': 'A exécuté une tâche dans le projet',
+  'ai.toolName.searchCode': 'A parcouru le projet',
   'ai.toolName.searchWeb': 'A cherché sur le web',
   'ai.toolName.session': 'A démarré une session',
   'ai.toolName.skill': 'A utilisé une compétence',

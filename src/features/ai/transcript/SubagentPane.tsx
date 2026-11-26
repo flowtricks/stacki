@@ -64,7 +64,7 @@ export function ChatTranscript(props: ComponentProps<typeof Transcript>) {
         </button>
         {agent !== undefined && <SubagentDot status={agent.status} />}
         <span className="ai-agent-name">{title}</span>
-        {agent !== undefined && <span className="ai-agent-model">{modelLabel(agent.model, view.options, translate)}</span>}
+        {agent !== undefined && <span className="ai-agent-model">{modelLabel(agent.model, view.options)}</span>}
         {agent !== undefined && <SubagentTime status={agent.status} />}
       </div>
       <Transcript key={`agent:${call}`} {...props} view={sub} reading={NO_SIGN_IN} retryHeldByCard={true} empty={translate('ai.subagents.empty')} />

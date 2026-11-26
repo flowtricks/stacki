@@ -11,29 +11,25 @@ export const messages = {
     one: '{count} फ़ाइल संपादित की',
     other: '{count} फ़ाइलें संपादित कीं',
   },
-  'ai.activity.fetched': {
-    one: '{count} पेज लाया',
-    other: '{count} पेज लाया',
-  },
-  'ai.activity.ran': {
-    one: '{count} कमांड चलाई',
-    other: '{count} कमांड चलाईं',
+  'ai.activity.other': {
+    one: '{count} और चरण पूरा किया',
+    other: '{count} और चरण पूरे किए',
   },
   'ai.activity.read': {
     one: '{count} फ़ाइल पढ़ी',
     other: '{count} फ़ाइलें पढ़ीं',
   },
   'ai.activity.searched': {
-    one: '{count} बार खोजा',
-    other: '{count} बार खोजा',
-  },
-  'ai.activity.used': {
-    one: '{count} टूल इस्तेमाल किया',
-    other: '{count} टूल इस्तेमाल किए',
+    one: '{count} बार प्रोजेक्ट को देखा-परखा',
+    other: '{count} बार प्रोजेक्ट को देखा-परखा',
   },
   'ai.activity.usedTools': {
-    one: '{count} टूल इस्तेमाल किया',
-    other: '{count} टूल इस्तेमाल किए',
+    one: '{count} चरण पूरा किया',
+    other: '{count} चरण पूरे किए',
+  },
+  'ai.activity.web': {
+    one: 'वेब पर {count} चीज़ खोजी',
+    other: 'वेब पर {count} चीज़ें खोजीं',
   },
   'ai.agent.badge.installing': 'इंस्टॉल हो रहा है',
   'ai.agent.badge.notInstalled': 'इंस्टॉल नहीं है',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'इस चैट में कॉपी करने लायक अभी कोई संदेश नहीं है',
   'ai.export.truncated': 'चैट का बाकी हिस्सा कॉपी करने के लिए बहुत लंबा था।',
   'ai.export.you': 'आप',
+  'ai.files.component': '{name} कंपोनेंट',
+  'ai.files.homePage': 'होम पेज',
+  'ai.files.layout': '{name} लेआउट',
+  'ai.files.page': '{name} पेज',
   'ai.find.close': 'खोज बंद करें',
   'ai.find.count': {
     one: '{count} मिलान',
@@ -713,10 +713,10 @@ export const messages = {
   'ai.status.phase.thinking': 'सोच रहा है',
   'ai.status.phase.waiting': 'आपकी प्रतीक्षा में',
   'ai.step.build': 'प्रोजेक्ट बिल्ड किया',
-  'ai.step.check': 'फ़ॉर्मैटिंग और लिंट जाँचा',
+  'ai.step.check': 'कोड में गलतियाँ जाँचीं',
   'ai.step.commandMany': {
-    one: '{count} कमांड चलाई',
-    other: '{count} कमांड चलाई',
+    one: 'प्रोजेक्ट में {count} काम चलाया',
+    other: 'प्रोजेक्ट में {count} काम चलाए',
   },
   'ai.step.commit': 'बदलाव कमिट किए',
   'ai.step.commitMany': {
@@ -755,8 +755,8 @@ export const messages = {
   'ai.step.scriptNamed': '{name} चलाया',
   'ai.step.searchFor': 'प्रोजेक्ट में “{query}” खोजा',
   'ai.step.searchMany': {
-    one: 'प्रोजेक्ट में {count} बार खोजा',
-    other: 'प्रोजेक्ट में {count} बार खोजा',
+    one: 'प्रोजेक्ट को {count} बार देखा-परखा',
+    other: 'प्रोजेक्ट को {count} बार देखा-परखा',
   },
   'ai.step.test': 'टेस्ट चलाए',
   'ai.step.web': 'वेब पर कुछ खोजा',
@@ -768,7 +768,7 @@ export const messages = {
     one: '{count} पिछला चरण',
     other: '{count} पिछले चरण',
   },
-  'ai.steps.hideCommands': 'कमांड छिपाएँ',
+  'ai.steps.hideCommands': 'तकनीकी विवरण छिपाएँ',
   'ai.steps.label': 'चरण',
   'ai.steps.more': {
     one: '{count} और नहीं दिखाए गए',
@@ -778,7 +778,7 @@ export const messages = {
     one: '{count} चल रहा है',
     other: '{count} चल रहे हैं',
   },
-  'ai.steps.showCommands': 'कमांड दिखाएँ',
+  'ai.steps.showCommands': 'तकनीकी विवरण दिखाएँ',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} कार्य',
@@ -879,13 +879,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'अनुवर्ती संदेश',
   'ai.subagents.label': 'एजेंट',
-  'ai.subagents.model.inherited': '{model} (विरासत में)',
-  'ai.subagents.model.session': 'सत्र मॉडल',
+  'ai.subagents.modelLine': 'मॉडल: {model}',
   'ai.subagents.more': {
     one: '{count} पिछला एजेंट नहीं दिखाया गया',
     other: '{count} पिछले एजेंट नहीं दिखाए गए',
   },
-  'ai.subagents.openTranscript': 'ट्रांसक्रिप्ट खोलें',
+  'ai.subagents.openTranscript': 'सभी चरण देखें',
   'ai.subagents.result': 'परिणाम',
   'ai.subagents.running': {
     one: '{count} एजेंट काम कर रहा है',
@@ -942,13 +941,13 @@ export const messages = {
   'ai.toolName.findFiles': 'फ़ाइलें खोजीं',
   'ai.toolName.findTool': 'एक टूल खोजा',
   'ai.toolName.followUp': 'एक अनुवर्ती संदेश भेजा',
-  'ai.toolName.generic': 'एक टूल इस्तेमाल किया',
+  'ai.toolName.generic': 'एक चरण पूरा किया',
   'ai.toolName.helper': 'एक सहायक शुरू किया',
   'ai.toolName.plan': 'एक योजना सुझाई',
   'ai.toolName.read': 'एक फ़ाइल पढ़ी',
   'ai.toolName.readWebPage': 'एक वेब पेज पढ़ा',
-  'ai.toolName.run': 'एक कमांड चलाई',
-  'ai.toolName.searchCode': 'प्रोजेक्ट में खोजा',
+  'ai.toolName.run': 'प्रोजेक्ट में एक काम चलाया',
+  'ai.toolName.searchCode': 'प्रोजेक्ट को देखा-परखा',
   'ai.toolName.searchWeb': 'वेब पर खोजा',
   'ai.toolName.session': 'एक सेशन शुरू किया',
   'ai.toolName.skill': 'एक स्किल इस्तेमाल की',

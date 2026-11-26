@@ -11,29 +11,25 @@ export const messages = {
     one: 'editó {count} archivo',
     other: 'editó {count} archivos',
   },
-  'ai.activity.fetched': {
-    one: 'obtuvo {count} página',
-    other: 'obtuvo {count} páginas',
-  },
-  'ai.activity.ran': {
-    one: 'ejecutó {count} comando',
-    other: 'ejecutó {count} comandos',
+  'ai.activity.other': {
+    one: 'dio {count} paso más',
+    other: 'dio {count} pasos más',
   },
   'ai.activity.read': {
     one: 'leyó {count} archivo',
     other: 'leyó {count} archivos',
   },
   'ai.activity.searched': {
-    one: 'buscó {count} vez',
-    other: 'buscó {count} veces',
-  },
-  'ai.activity.used': {
-    one: 'usó {count} herramienta',
-    other: 'usó {count} herramientas',
+    one: 'revisó el proyecto {count} vez',
+    other: 'revisó el proyecto {count} veces',
   },
   'ai.activity.usedTools': {
-    one: 'Usó {count} herramienta',
-    other: 'Usó {count} herramientas',
+    one: 'Dio {count} paso',
+    other: 'Dio {count} pasos',
+  },
+  'ai.activity.web': {
+    one: 'buscó {count} cosa en la web',
+    other: 'buscó {count} cosas en la web',
   },
   'ai.agent.badge.installing': 'Instalando',
   'ai.agent.badge.notInstalled': 'No instalado',
@@ -276,6 +272,10 @@ export const messages = {
   'ai.export.empty': 'Este chat aún no tiene mensajes que copiar',
   'ai.export.truncated': 'El resto del chat era demasiado largo para copiarlo.',
   'ai.export.you': 'Tú',
+  'ai.files.component': 'Componente {name}',
+  'ai.files.homePage': 'Página de inicio',
+  'ai.files.layout': 'Diseño {name}',
+  'ai.files.page': 'Página {name}',
   'ai.find.close': 'Cerrar la búsqueda',
   'ai.find.count': {
     one: '{count} coincidencia',
@@ -713,10 +713,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Pensando',
   'ai.status.phase.waiting': 'Esperándote',
   'ai.step.build': 'Compiló el proyecto',
-  'ai.step.check': 'Revisó el formato y el lint',
+  'ai.step.check': 'Revisó el código en busca de errores',
   'ai.step.commandMany': {
-    one: 'Ejecutó {count} comando',
-    other: 'Ejecutó {count} comandos',
+    one: 'Ejecutó {count} tarea en el proyecto',
+    other: 'Ejecutó {count} tareas en el proyecto',
   },
   'ai.step.commit': 'Confirmó los cambios',
   'ai.step.commitMany': {
@@ -755,8 +755,8 @@ export const messages = {
   'ai.step.scriptNamed': 'Ejecutó {name}',
   'ai.step.searchFor': 'Buscó «{query}» en el proyecto',
   'ai.step.searchMany': {
-    one: 'Buscó en el proyecto {count} vez',
-    other: 'Buscó en el proyecto {count} veces',
+    one: 'Revisó el proyecto {count} vez',
+    other: 'Revisó el proyecto {count} veces',
   },
   'ai.step.test': 'Ejecutó las pruebas',
   'ai.step.web': 'Buscó algo en la web',
@@ -768,7 +768,7 @@ export const messages = {
     one: '{count} paso anterior',
     other: '{count} pasos anteriores',
   },
-  'ai.steps.hideCommands': 'Ocultar comandos',
+  'ai.steps.hideCommands': 'Ocultar detalles técnicos',
   'ai.steps.label': 'Pasos',
   'ai.steps.more': {
     one: '{count} más sin mostrar',
@@ -778,7 +778,7 @@ export const messages = {
     one: '{count} en ejecución',
     other: '{count} en ejecución',
   },
-  'ai.steps.showCommands': 'Mostrar comandos',
+  'ai.steps.showCommands': 'Mostrar detalles técnicos',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} tarea',
@@ -879,13 +879,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Mensaje de seguimiento',
   'ai.subagents.label': 'Agentes',
-  'ai.subagents.model.inherited': '{model} (heredado)',
-  'ai.subagents.model.session': 'Modelo de la sesión',
+  'ai.subagents.modelLine': 'Modelo: {model}',
   'ai.subagents.more': {
     one: '{count} agente anterior no se muestra',
     other: '{count} agentes anteriores no se muestran',
   },
-  'ai.subagents.openTranscript': 'Abrir transcripción',
+  'ai.subagents.openTranscript': 'Ver todos los pasos',
   'ai.subagents.result': 'Resultado',
   'ai.subagents.running': {
     one: '{count} agente trabajando',
@@ -942,13 +941,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Buscó archivos',
   'ai.toolName.findTool': 'Buscó una herramienta',
   'ai.toolName.followUp': 'Envió un mensaje de seguimiento',
-  'ai.toolName.generic': 'Usó una herramienta',
+  'ai.toolName.generic': 'Dio un paso',
   'ai.toolName.helper': 'Inició un ayudante',
   'ai.toolName.plan': 'Propuso un plan',
   'ai.toolName.read': 'Leyó un archivo',
   'ai.toolName.readWebPage': 'Leyó una página web',
-  'ai.toolName.run': 'Ejecutó un comando',
-  'ai.toolName.searchCode': 'Buscó en el proyecto',
+  'ai.toolName.run': 'Ejecutó una tarea en el proyecto',
+  'ai.toolName.searchCode': 'Revisó el proyecto',
   'ai.toolName.searchWeb': 'Buscó en la web',
   'ai.toolName.session': 'Inició una sesión',
   'ai.toolName.skill': 'Usó una habilidad',

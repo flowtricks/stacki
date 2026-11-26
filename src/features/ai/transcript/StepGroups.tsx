@@ -4,6 +4,8 @@
 // lists its calls in the same words, and under them a "Show commands" control, closed by default, behind which
 // sit the technical rows: the exact command (highlighted), the full path (shortened in the middle, whole in its
 // tooltip), each call's time, and a failed call's error (a log, or a raw payload behind its own "Show details").
+// A step's own row shows a time only while it runs: a finished step's seconds ("0.0s" for an edit) add nothing a
+// designer acts on, and the subagent's total stays in its head.
 // Nothing technical is in the DOM until the person asks for it; "Expand all" in the chat menu opens the steps,
 // never the commands.
 //
@@ -22,7 +24,6 @@ import {
   callLabel,
   splitEarlier,
   STEP_LIMITS,
-  stepDurationMs,
   stepLabel,
   type StepCall,
   type StepGroup,
@@ -141,7 +142,7 @@ const StepRow = memo(function StepRow({
         <StepMark status={group.status} />
         <span className="ai-step-label">{label}</span>
         <span className="ai-step-time-cell">
-          <StepTime status={group.status} startedAt={group.startedAt} durationMs={stepDurationMs(group)} />
+          {group.status === 'running' && <StepTime status={group.status} startedAt={group.startedAt} durationMs={undefined} />}
         </span>
       </button>
       {open && (
@@ -153,7 +154,7 @@ const StepRow = memo(function StepRow({
                   <StepMark status={call.status} />
                   <span className="ai-step-label">{callLabel(call, translate)}</span>
                   <span className="ai-step-time-cell">
-                    <StepTime status={call.status} startedAt={call.item.at} durationMs={callDurationMs(call.item)} />
+                    {call.status === 'running' && <StepTime status={call.status} startedAt={call.item.at} durationMs={undefined} />}
                   </span>
                 </li>
               ))}

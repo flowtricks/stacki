@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '{count} 件のファイルを編集',
   },
-  'ai.activity.fetched': {
-    other: '{count} ページを取得',
-  },
-  'ai.activity.ran': {
-    other: '{count} 件のコマンドを実行',
+  'ai.activity.other': {
+    other: 'その他の手順を {count} 件実行',
   },
   'ai.activity.read': {
     other: '{count} 件のファイルを読み取り',
   },
   'ai.activity.searched': {
-    other: '{count} 回検索',
-  },
-  'ai.activity.used': {
-    other: '{count} 個のツールを使用',
+    other: 'プロジェクトを {count} 回調査',
   },
   'ai.activity.usedTools': {
-    other: '{count} 個のツールを使用',
+    other: '{count} 件の手順を実行',
+  },
+  'ai.activity.web': {
+    other: 'Webで {count} 件を調査',
   },
   'ai.agent.badge.installing': 'インストール中',
   'ai.agent.badge.notInstalled': '未インストール',
@@ -262,6 +259,10 @@ export const messages = {
   'ai.export.empty': 'このチャットにはまだコピーできるメッセージがありません',
   'ai.export.truncated': 'チャットの残りは長すぎてコピーできませんでした。',
   'ai.export.you': 'あなた',
+  'ai.files.component': '{name}コンポーネント',
+  'ai.files.homePage': 'ホームページ',
+  'ai.files.layout': '{name}レイアウト',
+  'ai.files.page': '{name}ページ',
   'ai.find.close': '検索を閉じる',
   'ai.find.count': {
     other: '{count} 件の一致',
@@ -678,9 +679,9 @@ export const messages = {
   'ai.status.phase.thinking': '思考中',
   'ai.status.phase.waiting': 'あなたの操作を待っています',
   'ai.step.build': 'プロジェクトをビルドしました',
-  'ai.step.check': 'フォーマットとlintを確認しました',
+  'ai.step.check': 'コードに間違いがないか確認しました',
   'ai.step.commandMany': {
-    other: '{count} 件のコマンドを実行しました',
+    other: 'プロジェクトで {count} 件の作業を実行しました',
   },
   'ai.step.commit': '変更をコミットしました',
   'ai.step.commitMany': {
@@ -711,9 +712,9 @@ export const messages = {
     other: '{count} 件のスクリプトを実行しました',
   },
   'ai.step.scriptNamed': '{name} を実行しました',
-  'ai.step.searchFor': 'プロジェクトで「{query}」を検索しました',
+  'ai.step.searchFor': 'プロジェクトで「{query}」を探しました',
   'ai.step.searchMany': {
-    other: 'プロジェクトを {count} 回検索しました',
+    other: 'プロジェクトを {count} 回調べました',
   },
   'ai.step.test': 'テストを実行しました',
   'ai.step.web': 'Webで調べものをしました',
@@ -723,7 +724,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '以前の {count} ステップ',
   },
-  'ai.steps.hideCommands': 'コマンドを隠す',
+  'ai.steps.hideCommands': '技術的な詳細を隠す',
   'ai.steps.label': 'ステップ',
   'ai.steps.more': {
     other: '他 {count} 件は非表示',
@@ -731,7 +732,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 件実行中',
   },
-  'ai.steps.showCommands': 'コマンドを表示',
+  'ai.steps.showCommands': '技術的な詳細を表示',
   'ai.steps.summary': '{tasks}、{running}',
   'ai.steps.tasks': {
     other: '{count} 件のタスク',
@@ -825,12 +826,11 @@ export const messages = {
   },
   'ai.subagents.followUp': 'フォローアップメッセージ',
   'ai.subagents.label': 'エージェント',
-  'ai.subagents.model.inherited': '{model}（継承）',
-  'ai.subagents.model.session': 'セッションのモデル',
+  'ai.subagents.modelLine': 'モデル: {model}',
   'ai.subagents.more': {
     other: '以前の {count} 件のエージェントは非表示',
   },
-  'ai.subagents.openTranscript': 'トランスクリプトを開く',
+  'ai.subagents.openTranscript': 'すべての手順を見る',
   'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 件のエージェントが作業中',
@@ -881,13 +881,13 @@ export const messages = {
   'ai.toolName.findFiles': 'ファイルを探しました',
   'ai.toolName.findTool': 'ツールを探しました',
   'ai.toolName.followUp': 'フォローアップメッセージを送りました',
-  'ai.toolName.generic': 'ツールを使いました',
+  'ai.toolName.generic': '1つの手順を実行しました',
   'ai.toolName.helper': 'ヘルパーを起動しました',
   'ai.toolName.plan': 'プランを提案しました',
   'ai.toolName.read': 'ファイルを読みました',
   'ai.toolName.readWebPage': 'Webページを読みました',
-  'ai.toolName.run': 'コマンドを実行しました',
-  'ai.toolName.searchCode': 'プロジェクトを検索しました',
+  'ai.toolName.run': 'プロジェクトで作業を実行しました',
+  'ai.toolName.searchCode': 'プロジェクトを調べました',
   'ai.toolName.searchWeb': 'Webを検索しました',
   'ai.toolName.session': 'セッションを開始しました',
   'ai.toolName.skill': 'スキルを使いました',

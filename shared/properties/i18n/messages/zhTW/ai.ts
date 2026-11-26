@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '編輯了 {count} 個檔案',
   },
-  'ai.activity.fetched': {
-    other: '擷取了 {count} 個頁面',
-  },
-  'ai.activity.ran': {
-    other: '執行了 {count} 個指令',
+  'ai.activity.other': {
+    other: '執行了 {count} 個其他步驟',
   },
   'ai.activity.read': {
     other: '讀取了 {count} 個檔案',
   },
   'ai.activity.searched': {
-    other: '搜尋了 {count} 次',
-  },
-  'ai.activity.used': {
-    other: '使用了 {count} 個工具',
+    other: '瀏覽了專案 {count} 次',
   },
   'ai.activity.usedTools': {
-    other: '使用了 {count} 個工具',
+    other: '執行了 {count} 個步驟',
+  },
+  'ai.activity.web': {
+    other: '在網路上查了 {count} 項內容',
   },
   'ai.agent.badge.installing': '安裝中',
   'ai.agent.badge.notInstalled': '未安裝',
@@ -259,6 +256,10 @@ export const messages = {
   'ai.export.empty': '此對話還沒有可複製的訊息',
   'ai.export.truncated': '對話的其餘部分太長，無法複製。',
   'ai.export.you': '你',
+  'ai.files.component': '{name} 元件',
+  'ai.files.homePage': '首頁',
+  'ai.files.layout': '{name} 版面配置',
+  'ai.files.page': '{name} 頁面',
   'ai.find.close': '關閉尋找',
   'ai.find.count': {
     other: '找到 {count} 個符合項目',
@@ -672,9 +673,9 @@ export const messages = {
   'ai.status.phase.thinking': '思考中',
   'ai.status.phase.waiting': '等候你的回應',
   'ai.step.build': '建置了專案',
-  'ai.step.check': '檢查了格式與 lint',
+  'ai.step.check': '檢查了程式碼是否有錯誤',
   'ai.step.commandMany': {
-    other: '執行了 {count} 個指令',
+    other: '在專案中執行了 {count} 項工作',
   },
   'ai.step.commit': '提交了變更',
   'ai.step.commitMany': {
@@ -705,9 +706,9 @@ export const messages = {
     other: '執行了 {count} 個指令碼',
   },
   'ai.step.scriptNamed': '執行了 {name}',
-  'ai.step.searchFor': '在專案中搜尋了「{query}」',
+  'ai.step.searchFor': '在專案中尋找了「{query}」',
   'ai.step.searchMany': {
-    other: '搜尋了專案 {count} 次',
+    other: '瀏覽了專案 {count} 次',
   },
   'ai.step.test': '執行了測試',
   'ai.step.web': '在網路上查了點東西',
@@ -717,7 +718,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '{count} 個較早的步驟',
   },
-  'ai.steps.hideCommands': '隱藏指令',
+  'ai.steps.hideCommands': '隱藏技術細節',
   'ai.steps.label': '步驟',
   'ai.steps.more': {
     other: '另有 {count} 項未顯示',
@@ -725,7 +726,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 個執行中',
   },
-  'ai.steps.showCommands': '顯示指令',
+  'ai.steps.showCommands': '顯示技術細節',
   'ai.steps.summary': '{tasks}，{running}',
   'ai.steps.tasks': {
     other: '{count} 個任務',
@@ -819,12 +820,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '後續訊息',
   'ai.subagents.label': '代理程式',
-  'ai.subagents.model.inherited': '{model}（繼承）',
-  'ai.subagents.model.session': '工作階段模型',
+  'ai.subagents.modelLine': '模型：{model}',
   'ai.subagents.more': {
     other: '另有 {count} 個較早的代理程式未顯示',
   },
-  'ai.subagents.openTranscript': '開啟對話紀錄',
+  'ai.subagents.openTranscript': '查看所有步驟',
   'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 個代理程式正在工作',
@@ -875,13 +875,13 @@ export const messages = {
   'ai.toolName.findFiles': '尋找了檔案',
   'ai.toolName.findTool': '尋找了一個工具',
   'ai.toolName.followUp': '傳送了一則後續訊息',
-  'ai.toolName.generic': '使用了一個工具',
+  'ai.toolName.generic': '執行了一個步驟',
   'ai.toolName.helper': '啟動了一個助手',
   'ai.toolName.plan': '提出了一個方案',
   'ai.toolName.read': '讀取了一個檔案',
   'ai.toolName.readWebPage': '讀取了一個網頁',
-  'ai.toolName.run': '執行了一個指令',
-  'ai.toolName.searchCode': '搜尋了專案',
+  'ai.toolName.run': '在專案中執行了一項工作',
+  'ai.toolName.searchCode': '瀏覽了專案',
   'ai.toolName.searchWeb': '搜尋了網路',
   'ai.toolName.session': '啟動了一個工作階段',
   'ai.toolName.skill': '使用了一項技能',

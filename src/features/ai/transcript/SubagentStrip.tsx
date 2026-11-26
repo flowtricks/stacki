@@ -122,12 +122,12 @@ export function SubagentRow({
 }) {
   const translate = useTranslate();
   const name = displayName(agent, projectPath, translate);
-  const model = agentModelLabel(agent, options, translate);
+  const model = agentModelLabel(agent, options);
   return (
     <button className={`ai-agent ai-agent-${agent.status.kind}`} title={agentTooltip(name, agent.role, model)} onClick={() => onOpen(agent.call)}>
       <SubagentDot status={agent.status} />
       <span className="ai-agent-name">{name}</span>
-      <span className={`ai-agent-model${agent.model.kind === 'inherited' ? ' ai-agent-model-inherited' : ''}`}>{model}</span>
+      <span className="ai-agent-model">{model}</span>
       <span className="ai-agent-time-cell">
         <SubagentTime status={agent.status} />
       </span>
@@ -153,8 +153,8 @@ export function displayName(
 }
 
 /** The model column: the model a subagent runs on; empty for a follow-up, which is a message and runs on nothing of its own. */
-export function agentModelLabel(agent: Pick<Subagent, 'kind' | 'model'>, options: readonly ChatOption[], translate: Translator): string {
-  return agent.kind === 'follow-up' ? '' : modelLabel(agent.model, options, translate);
+export function agentModelLabel(agent: Pick<Subagent, 'kind' | 'model'>, options: readonly ChatOption[]): string {
+  return agent.kind === 'follow-up' ? '' : modelLabel(agent.model, options);
 }
 
 /** A follow-up's state in one word: Sent (it went, nothing has come of it yet), Working, Done, or the failure. */
@@ -177,15 +177,16 @@ export function followUpWord(status: SubagentStatus, work: { readonly calls: num
   }
 }
 
-/** "Sonnet" for a model the call chose; the session's model, marked inherited, otherwise. */
-export function modelLabel(model: SubagentModel, options: readonly ChatOption[], translate: Translator): string {
+/**
+ * "Sonnet" for a model the call chose; the chat's own model otherwise, by its plain name (no "inherited": the person
+ * does not need to know where it came from), or nothing when the chat does not say which it is.
+ */
+export function modelLabel(model: SubagentModel, options: readonly ChatOption[]): string {
   switch (model.kind) {
     case 'chosen':
       return chosenModelName(model.id, options);
-    case 'inherited': {
-      const session = sessionModelName(options);
-      return session === undefined ? translate('ai.subagents.model.session') : translate('ai.subagents.model.inherited', { model: session });
-    }
+    case 'inherited':
+      return sessionModelName(options) ?? '';
     default: {
       const exhaustive: never = model;
       return exhaustive;
@@ -238,6 +239,9 @@ export function SubagentDot({ status }: { readonly status: SubagentStatus }) {
 }
 
 /** Elapsed time while it works (one shared ticker), its duration once done, nothing when the stamps are missing. */
+/** The shortest finished time worth showing: below it the time reads "0.0s". */
+const DURATION_SHOWN_MS_MIN = 100;
+
 export function SubagentTime({ status }: { readonly status: SubagentStatus }) {
   switch (status.kind) {
     case 'queued':
@@ -247,7 +251,8 @@ export function SubagentTime({ status }: { readonly status: SubagentStatus }) {
     case 'done':
     case 'failed':
     case 'stopped':
-      return status.durationMs === undefined ? undefined : <Duration milliseconds={status.durationMs} />;
+      // Under a tenth of a second ("0.0s", a helper started in the background) says nothing: no time is shown.
+      return status.durationMs === undefined || status.durationMs < DURATION_SHOWN_MS_MIN ? undefined : <Duration milliseconds={status.durationMs} />;
     default: {
       const exhaustive: never = status;
       return exhaustive;

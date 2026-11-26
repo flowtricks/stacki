@@ -12,6 +12,7 @@
 // names a parent the transcript does not hold belongs to no unit and stays in the coordinator's list.
 // Nothing here reads the clock or the DOM; durations come from the host's stamps.
 import { withoutPinNumber } from '../../../shared/properties/ai/commentPinBrief';
+import { plainWords, withoutInternalMarkup } from './internalText';
 import { assert } from '../../../shared/core/assert';
 import type { ChatOption, ToolKindName, TurnId } from '../../../shared/properties/ai/chatModel';
 import type { ChatView, PermissionItem, ToolItem, TranscriptItem } from './chatReducer';
@@ -280,13 +281,18 @@ export function stripState(list: SubagentList, options: { readonly open: boolean
   return options.open ? { kind: 'review', list, finished: total, failed } : { kind: 'summary', finished: total, failed };
 }
 
-/** The first paragraph of a result, on one line, cut to `RESULT_SUMMARY_CHARS_MAX`; undefined for an empty one. */
+/**
+ * The first paragraph of a result as plain words on one line (no Markdown marks, no bookkeeping tags), cut to
+ * `RESULT_SUMMARY_CHARS_MAX`; undefined for an empty one, or one that held only bookkeeping.
+ */
 export function resultSummary(result: string | undefined): string | undefined {
-  if (result === undefined) {
+  const words = result === undefined ? undefined : withoutInternalMarkup(result);
+  if (words === undefined) {
     return undefined;
   }
-  const paragraph = result
+  const paragraph = words
     .split(/\n\s*\n/u)
+    .map(plainWords)
     .map((part) => part.replace(/\s+/gu, ' ').trim())
     .find((part) => part !== '');
   if (paragraph === undefined) {
@@ -683,20 +689,12 @@ function targetOf(call: ToolItem, units: readonly ToolItem[]): string | undefine
 }
 
 /**
- * An agent's report without the bookkeeping Claude appends to it: the line that names the agent's id and the
- * `<usage>` block with its token counts. What is left is what the agent said.
+ * An agent's report without the bookkeeping the agents append to it (internalText.ts): the lines that name the
+ * agent's id, the `<usage>` block with its token counts, the tools it used, a background launch's note. What is left
+ * is what the agent said; undefined when nothing is.
  */
 export function reportOf(result: string | undefined): string | undefined {
-  if (result === undefined) {
-    return undefined;
-  }
-  const kept = result
-    .replace(/<usage>[\s\S]*?<\/usage>/gu, '')
-    .split('\n')
-    .filter((line) => !/^\s*agentId:/iu.test(line))
-    .join('\n')
-    .trim();
-  return kept === '' ? undefined : kept;
+  return result === undefined ? undefined : withoutInternalMarkup(result);
 }
 
 /** The unit as it was, when nothing it shows has changed. */

@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: 'menyunting {count} file',
   },
-  'ai.activity.fetched': {
-    other: 'mengambil {count} halaman',
-  },
-  'ai.activity.ran': {
-    other: 'menjalankan {count} perintah',
+  'ai.activity.other': {
+    other: 'melakukan {count} langkah lain',
   },
   'ai.activity.read': {
     other: 'membaca {count} file',
   },
   'ai.activity.searched': {
-    other: 'mencari {count} kali',
-  },
-  'ai.activity.used': {
-    other: 'memakai {count} alat',
+    other: 'menelusuri proyek {count} kali',
   },
   'ai.activity.usedTools': {
-    other: 'Memakai {count} alat',
+    other: 'Melakukan {count} langkah',
+  },
+  'ai.activity.web': {
+    other: 'mencari {count} hal di web',
   },
   'ai.agent.badge.installing': 'Menginstal',
   'ai.agent.badge.notInstalled': 'Belum terinstal',
@@ -261,6 +258,10 @@ export const messages = {
   'ai.export.empty': 'Obrolan ini belum memiliki pesan untuk disalin',
   'ai.export.truncated': 'Sisa obrolan terlalu panjang untuk disalin.',
   'ai.export.you': 'Anda',
+  'ai.files.component': 'Komponen {name}',
+  'ai.files.homePage': 'Halaman beranda',
+  'ai.files.layout': 'Tata letak {name}',
+  'ai.files.page': 'Halaman {name}',
   'ai.find.close': 'Tutup pencarian',
   'ai.find.count': {
     other: '{count} hasil',
@@ -678,9 +679,9 @@ export const messages = {
   'ai.status.phase.thinking': 'Berpikir',
   'ai.status.phase.waiting': 'Menunggu Anda',
   'ai.step.build': 'Membangun proyek',
-  'ai.step.check': 'Memeriksa format dan lint',
+  'ai.step.check': 'Memeriksa kesalahan pada kode',
   'ai.step.commandMany': {
-    other: 'Menjalankan {count} perintah',
+    other: 'Menjalankan {count} tugas di proyek',
   },
   'ai.step.commit': 'Meng-commit perubahan',
   'ai.step.commitMany': {
@@ -711,7 +712,7 @@ export const messages = {
     other: 'Menjalankan {count} skrip',
   },
   'ai.step.scriptNamed': 'Menjalankan {name}',
-  'ai.step.searchFor': 'Menelusuri proyek untuk “{query}”',
+  'ai.step.searchFor': 'Mencari “{query}” di proyek',
   'ai.step.searchMany': {
     other: 'Menelusuri proyek {count} kali',
   },
@@ -723,7 +724,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '{count} langkah sebelumnya',
   },
-  'ai.steps.hideCommands': 'Sembunyikan perintah',
+  'ai.steps.hideCommands': 'Sembunyikan detail teknis',
   'ai.steps.label': 'Langkah',
   'ai.steps.more': {
     other: '{count} lainnya tidak ditampilkan',
@@ -731,7 +732,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} berjalan',
   },
-  'ai.steps.showCommands': 'Tampilkan perintah',
+  'ai.steps.showCommands': 'Tampilkan detail teknis',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     other: '{count} tugas',
@@ -825,12 +826,11 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Pesan lanjutan',
   'ai.subagents.label': 'Agen',
-  'ai.subagents.model.inherited': '{model} (diwarisi)',
-  'ai.subagents.model.session': 'Model sesi',
+  'ai.subagents.modelLine': 'Model: {model}', // same
   'ai.subagents.more': {
     other: '{count} agen sebelumnya tidak ditampilkan',
   },
-  'ai.subagents.openTranscript': 'Buka transkrip',
+  'ai.subagents.openTranscript': 'Lihat semua langkah',
   'ai.subagents.result': 'Hasil',
   'ai.subagents.running': {
     other: '{count} agen berjalan',
@@ -881,12 +881,12 @@ export const messages = {
   'ai.toolName.findFiles': 'Mencari file',
   'ai.toolName.findTool': 'Mencari sebuah alat',
   'ai.toolName.followUp': 'Mengirim pesan lanjutan',
-  'ai.toolName.generic': 'Menggunakan sebuah alat',
+  'ai.toolName.generic': 'Melakukan satu langkah',
   'ai.toolName.helper': 'Memulai sebuah pembantu',
   'ai.toolName.plan': 'Mengusulkan sebuah rencana',
   'ai.toolName.read': 'Membaca sebuah file',
   'ai.toolName.readWebPage': 'Membaca sebuah halaman web',
-  'ai.toolName.run': 'Menjalankan sebuah perintah',
+  'ai.toolName.run': 'Menjalankan sebuah tugas di proyek',
   'ai.toolName.searchCode': 'Menelusuri proyek',
   'ai.toolName.searchWeb': 'Menelusuri web',
   'ai.toolName.session': 'Memulai sebuah sesi',

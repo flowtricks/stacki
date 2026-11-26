@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '파일 {count}개 편집함',
   },
-  'ai.activity.fetched': {
-    other: '페이지 {count}개 가져옴',
-  },
-  'ai.activity.ran': {
-    other: '명령 {count}개 실행함',
+  'ai.activity.other': {
+    other: '기타 단계 {count}개 진행함',
   },
   'ai.activity.read': {
     other: '파일 {count}개 읽음',
   },
   'ai.activity.searched': {
-    other: '{count}번 검색함',
-  },
-  'ai.activity.used': {
-    other: '도구 {count}개 사용함',
+    other: '프로젝트를 {count}번 살펴봄',
   },
   'ai.activity.usedTools': {
-    other: '도구 {count}개 사용함',
+    other: '단계 {count}개 진행함',
+  },
+  'ai.activity.web': {
+    other: '웹에서 {count}건 찾아봄',
   },
   'ai.agent.badge.installing': '설치 중',
   'ai.agent.badge.notInstalled': '설치되지 않음',
@@ -261,6 +258,10 @@ export const messages = {
   'ai.export.empty': '아직 복사할 메시지가 이 채팅에 없습니다',
   'ai.export.truncated': '채팅의 나머지는 너무 길어 복사하지 못했습니다.',
   'ai.export.you': '나',
+  'ai.files.component': '{name} 컴포넌트',
+  'ai.files.homePage': '홈 페이지',
+  'ai.files.layout': '{name} 레이아웃',
+  'ai.files.page': '{name} 페이지',
   'ai.find.close': '찾기 닫기',
   'ai.find.count': {
     other: '일치 항목 {count}개',
@@ -677,9 +678,9 @@ export const messages = {
   'ai.status.phase.thinking': '생각 중',
   'ai.status.phase.waiting': '응답 대기 중',
   'ai.step.build': '프로젝트를 빌드했습니다',
-  'ai.step.check': '서식과 린트를 확인했습니다',
+  'ai.step.check': '코드에 실수가 없는지 확인했습니다',
   'ai.step.commandMany': {
-    other: '명령 {count}개를 실행했습니다',
+    other: '프로젝트에서 작업 {count}개를 실행했습니다',
   },
   'ai.step.commit': '변경 사항을 커밋했습니다',
   'ai.step.commitMany': {
@@ -710,9 +711,9 @@ export const messages = {
     other: '스크립트 {count}개를 실행했습니다',
   },
   'ai.step.scriptNamed': '{name}을(를) 실행했습니다',
-  'ai.step.searchFor': '프로젝트에서 “{query}”을(를) 검색했습니다',
+  'ai.step.searchFor': '프로젝트에서 “{query}”을(를) 찾아봤습니다',
   'ai.step.searchMany': {
-    other: '프로젝트를 {count}번 검색했습니다',
+    other: '프로젝트를 {count}번 살펴봤습니다',
   },
   'ai.step.test': '테스트를 실행했습니다',
   'ai.step.web': '웹에서 무언가를 찾아봤습니다',
@@ -722,7 +723,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '이전 단계 {count}개',
   },
-  'ai.steps.hideCommands': '명령 숨기기',
+  'ai.steps.hideCommands': '기술 세부 정보 숨기기',
   'ai.steps.label': '단계',
   'ai.steps.more': {
     other: '{count}개는 표시되지 않음',
@@ -730,7 +731,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count}개 실행 중',
   },
-  'ai.steps.showCommands': '명령 표시',
+  'ai.steps.showCommands': '기술 세부 정보 표시',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     other: '작업 {count}개',
@@ -824,12 +825,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '후속 메시지',
   'ai.subagents.label': '에이전트',
-  'ai.subagents.model.inherited': '{model} (상속됨)',
-  'ai.subagents.model.session': '세션 모델',
+  'ai.subagents.modelLine': '모델: {model}',
   'ai.subagents.more': {
     other: '이전 에이전트 {count}개 숨김',
   },
-  'ai.subagents.openTranscript': '대화 기록 열기',
+  'ai.subagents.openTranscript': '모든 단계 보기',
   'ai.subagents.result': '결과',
   'ai.subagents.running': {
     other: '에이전트 {count}개 작업 중',
@@ -880,13 +880,13 @@ export const messages = {
   'ai.toolName.findFiles': '파일을 찾았습니다',
   'ai.toolName.findTool': '도구를 찾았습니다',
   'ai.toolName.followUp': '후속 메시지를 보냈습니다',
-  'ai.toolName.generic': '도구를 사용했습니다',
+  'ai.toolName.generic': '한 단계를 진행했습니다',
   'ai.toolName.helper': '도우미를 시작했습니다',
   'ai.toolName.plan': '계획을 제안했습니다',
   'ai.toolName.read': '파일을 읽었습니다',
   'ai.toolName.readWebPage': '웹페이지를 읽었습니다',
-  'ai.toolName.run': '명령을 실행했습니다',
-  'ai.toolName.searchCode': '프로젝트를 검색했습니다',
+  'ai.toolName.run': '프로젝트에서 작업을 실행했습니다',
+  'ai.toolName.searchCode': '프로젝트를 살펴봤습니다',
   'ai.toolName.searchWeb': '웹을 검색했습니다',
   'ai.toolName.session': '세션을 시작했습니다',
   'ai.toolName.skill': '스킬을 사용했습니다',
