@@ -49,9 +49,13 @@ export const CODE_INTEL_LIMITS = {
   /** How long one request may take: the first builds the project's types. A process past it is restarted. */
   firstRequestTimeoutMs: 60_000,
   requestTimeoutMs: 15_000,
-  /** The process's heap limit, and how long it may sit unused before it is stopped. */
-  heapMegabytesMax: 1_536,
-  idleStopMs: 10 * 60_000,
+  /** The process's JavaScript heap limit, which V8 enforces by ending the process. */
+  heapMegabytesMax: 1_024,
+  /** Memory the process may hold in all, compiled code and the compiler's WebAssembly included: past it after an
+   * answer, the process ends and the next question starts a fresh one. */
+  residentMegabytesMax: 1_536,
+  /** How long it may sit unused before it is stopped. */
+  idleStopMs: 5 * 60_000,
   /** Restarts after a crash or a timeout inside `crashWindowMs`; past them it stays off until the project changes. */
   restartsMax: 3,
   crashWindowMs: 5 * 60_000,
@@ -188,6 +192,7 @@ export type CodeIntelReply =
 export const UNAVAILABLE: CodeIntelReply = { kind: 'unavailable' };
 
 function bounded(maximum: number) {
+  assert(maximum > 0, 'A text bound is positive');
   return (input: unknown): string => {
     const value = text(input);
     if (value.length > maximum) {
@@ -198,6 +203,7 @@ function bounded(maximum: number) {
 }
 
 function capped<T>(maximum: number, parse: (input: unknown) => T) {
+  assert(maximum > 0, 'A list bound is positive');
   return (input: unknown): T[] => {
     const values = list(parse)(input);
     if (values.length > maximum) {
@@ -208,6 +214,7 @@ function capped<T>(maximum: number, parse: (input: unknown) => T) {
 }
 
 function member<T extends string>(values: readonly T[], input: unknown): T {
+  assert(values.length > 0, 'A choice has values');
   const found = values.find((value) => value === input);
   if (found === undefined) {
     throw new Error('Code intelligence: unknown value');
@@ -230,6 +237,8 @@ function parseEntryRef(input: unknown): CompletionEntryRef {
 }
 
 function parseQuery(input: unknown, documentLength: number): CodeIntelQuery {
+  assert(documentLength >= 0, 'A document has a length');
+  assert(documentLength <= CODE_INTEL_LIMITS.documentCharsMax, 'The document was bounded before its query is read');
   const source = record(input);
   const position = (): number => {
     const value = count(source['position']);
@@ -267,7 +276,9 @@ export function parseCodeIntelRequest(input: unknown): CodeIntelRequest {
   if (path === '') {
     throw new Error('Code intelligence: a file is named');
   }
-  return { projectPath: pathText(source['projectPath']), path, text: document, query: parseQuery(source['query'], document.length) };
+  const query = parseQuery(source['query'], document.length);
+  assert(!('position' in query) || query.position <= document.length, 'A question points into its document');
+  return { projectPath: pathText(source['projectPath']), path, text: document, query };
 }
 
 function parseEdit(input: unknown): CodeEdit {
@@ -276,6 +287,7 @@ function parseEdit(input: unknown): CodeEdit {
   if (edit.to < edit.from) {
     throw new Error('Code intelligence: an edit keeps its order');
   }
+  assert(edit.insert.length <= CODE_INTEL_LIMITS.editCharsMax, 'An edit stays within its bound');
   return edit;
 }
 
@@ -309,17 +321,21 @@ function range(source: Record<string, unknown>): { readonly from: number; readon
   if (to < from) {
     throw new Error('Code intelligence: a range keeps its order');
   }
+  assert(from >= 0, 'A range starts inside the document');
   return { from, to };
 }
 
 function parseCompletions(input: unknown): CodeCompletions {
   const source = record(input);
-  return {
+  const completions = {
     ...range(source),
     items: capped(CODE_INTEL_LIMITS.completionsMax, parseCompletion)(source['items']),
     exclusive: boolean(source['exclusive']),
     incomplete: boolean(source['incomplete']),
   };
+  assert(completions.items.length <= CODE_INTEL_LIMITS.completionsMax, 'An answer lists a bounded number of suggestions');
+  assert(completions.from <= completions.to, 'The replaced range keeps its order');
+  return completions;
 }
 
 function parseDetail(input: unknown): CodeCompletionDetail {

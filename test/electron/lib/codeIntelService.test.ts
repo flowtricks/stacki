@@ -13,7 +13,9 @@ import { createCodeIntelService } from '#dist/electron/lib/codeIntel/service.js'
 import { shippedLibraryFiles, type LibraryFiles } from '#dist/electron/lib/codeIntel/typeFiles.js';
 import { parseCodeIntelReply, type CodeCompletion, type CodeIntelQuery, type CodeIntelReply } from '#dist/shared/ipc/codeIntel.js';
 import { toExplorerPath } from '#dist/shared/ipc/fileExplorer.js';
+import waits from '../../helpers/waitFor.js';
 
+const { waitFor } = waits;
 const repositoryPath = (relative: string): string => fileURLToPath(new URL(`../../../${relative}`, import.meta.url));
 const ASTRO = repositoryPath('studio/node_modules/astro');
 
@@ -277,12 +279,14 @@ test('a changed or added file is read again', async (context) => {
   assert.deepEqual(project.errors(PAGE, text), []);
   project.write('src/lib/a.ts', 'export function use(value: string): string { return value; }\n');
   project.write('src/components/Late.astro', '<p />\n');
-  // The watch reports in its own time, within a bounded wait.
-  let errors: readonly string[] = [];
-  for (let attempt = 0; attempt < 100 && errors.length === 0; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    errors = project.errors(PAGE, text);
-  }
+  // The watch reports in its own time (and where there is none, the next walk finds it): wait for the answer to change.
+  const errors = await waitFor({
+    what: 'the changed export to be checked',
+    read: () => project.errors(PAGE, text),
+    until: (found) => found.length > 0,
+    pollCountMax: 600,
+    pollIntervalMs: 25,
+  });
   assert.equal(errors.length, 1);
   assert.equal(project.labels(PAGE, '<Lat‸')[0], 'Late');
 });
