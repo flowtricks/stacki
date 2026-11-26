@@ -465,6 +465,9 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading'] });
   // The site's styles arrive in <head> after this script runs (the dev server injects them): settle again as they do.
   if (document.head) new MutationObserver(queue).observe(document.head, { childList: true });
+  // An edit of the canvas root's classes changes <html> alone, in place: the page's background follows its theme. Only
+  // what a theme can hang on is watched, never the attributes this script sets on the root.
+  new MutationObserver(queue).observe(root, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-stacki-surface'] });
   window.addEventListener('load', queue);
   window.addEventListener('wheel', function (event) {
     event.preventDefault();

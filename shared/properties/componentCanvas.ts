@@ -1123,6 +1123,28 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
   return next;
 }
 
+/**
+ * A root setting edited on one component's canvas (`component`, the one in front of the person), at the scope chosen
+ * there. Set or cleared for the project, that component's own value of the same setting goes too: its own replaces the
+ * project's (CanvasRoot), so left in place the edit would not show on the canvas it was made on. Other components keep
+ * theirs.
+ */
+export function withShownRootEdit(file: ComponentCanvasFile, target: RootTarget, component: string, edit: RootEdit): ComponentCanvasFile {
+  const written = withRootEdit(file, target, edit);
+  if (target.kind === 'component' || written.components[component]?.root?.[edit.kind] === undefined) {
+    return written;
+  }
+  const shown = withRootEdit(written, { kind: 'component', file: component }, { kind: edit.kind, value: undefined });
+  assert(shown.components[component]?.root?.[edit.kind] === undefined, 'A project edit shows on the canvas it was made on');
+  return shown;
+}
+
+/** Whether a component's canvas root sets anything of its own, over the project's. */
+export function hasOwnCanvasRoot(file: ComponentCanvasFile, component: string): boolean {
+  const own = file.components[component]?.root;
+  return own?.background !== undefined || own?.classes !== undefined;
+}
+
 /** Where a canvas root setting comes from: the component, the project, or nowhere. */
 export type RootSource = 'component' | 'project' | 'none';
 

@@ -17,7 +17,8 @@ import {
   withFrameEdit,
   canvasRoot,
   PROJECT_ROOT,
-  withRootEdit,
+  hasOwnCanvasRoot,
+  withShownRootEdit,
   type RootTarget,
   withSplit,
   withArrangement,
@@ -317,7 +318,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       editRootClasses: (classes) =>
         update((current) => {
           const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: current.component.file };
-          return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
+          return (file) => withShownRootEdit(file, target, current.component.file, { kind: 'classes', value: classes });
         }),
       setSplit: (split) =>
         update((current) => {
@@ -384,7 +385,7 @@ export function frameSettingChange(current: CanvasOpen, edit: FrameEdit): Canvas
     // A root scope holds the canvas root's background (and its classes, editRootClasses).
     return target === undefined
       ? (file) => withFrameEdit(file, component, current.scopes.background, edit)
-      : (file) => withRootEdit(file, target, { kind: 'background', value: edit.value });
+      : (file) => withShownRootEdit(file, target, component, { kind: 'background', value: edit.value });
   }
   // Sizes go to the size scope; a frame's size is never set at a root scope.
   return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
@@ -408,7 +409,7 @@ function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): Canva
 function keptScopes(current: CanvasOpen, frame: string, layout: CanvasOpen['layout']): CanvasOpen['scopes'] {
   const next = { ...current, frame, layout };
   const keep = (section: CanvasSection, fallback: string): string => (scopeFits(section, current.scopes[section], next) ? current.scopes[section] : fallback);
-  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? PROJECT_SCOPE : frame) };
+  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? shownRootScope(next) : frame) };
 }
 
 // A resize let go of, as one change: each side it changed is written where a typed size goes (the size target), or,
@@ -1088,6 +1089,13 @@ export function useFrameFollowsEditor(
   }, [followed, inside, model, open, setSelectedId]);
 }
 
+// The root scope the canvas root's settings start at: the one whose values the canvas draws, so the class field and the
+// background never show a value this component's own replaces. That is every component's canvas, where a theme class or
+// a canvas colour usually belongs, unless this component has a setting of its own.
+function shownRootScope(current: Pick<CanvasOpen, 'settings' | 'component'>): string {
+  return hasOwnCanvasRoot(current.settings, current.component.file) ? COMPONENT_SCOPE : PROJECT_SCOPE;
+}
+
 // The canvas state a selection on its page implies; `current` itself when it already says so.
 function followedState(current: CanvasState, followed: string, where: 'page' | 'inside'): CanvasState {
   if (current.kind !== 'open') {
@@ -1099,8 +1107,7 @@ function followedState(current: CanvasState, followed: string, where: 'page' | '
   }
   if (isCanvasRoot(followed)) {
     // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
-    // Its settings start at every component's canvas, where a theme class or a canvas colour usually belongs.
-    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: PROJECT_SCOPE } };
+    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: shownRootScope(current) } };
   }
   const box = canvasBoxOf(followed);
   if (box !== undefined) {

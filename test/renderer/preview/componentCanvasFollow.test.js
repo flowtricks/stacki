@@ -317,3 +317,39 @@ test('a wider edit writes its own scope only: frames and variants keep their own
   // The negative space: a frame without values of its own takes the wider value.
   assert.equal(wide.components[BUTTON].frames[second], undefined, 'nothing is written for a frame that had nothing');
 });
+
+// The owner's report: selecting <html> started at All components even where this component had classes of its own, so
+// the class field showed the project's theme-dark while the canvas drew the component's theme-invert.
+test('the canvas root’s settings start at the level whose values the canvas draws', async (context) => {
+  const { model, tree, state: opened } = openCanvas();
+  const rootPath = tree.root;
+  const rootId = canvas.nodeAtPath(model.nodes, rootPath.split('.').map(Number)).id;
+  const scopeWith = async (settings) => {
+    let latest;
+    let select;
+    function Harness() {
+      const [selectedId, setSelectedId] = React.useState(undefined);
+      const [state, setState] = React.useState({ ...opened, settings });
+      select = setSelectedId;
+      latest = state;
+      canvas.noteComponentCanvas(state);
+      const pathFor = (id) => (id === rootId ? rootPath : undefined);
+      canvas.useFrameFollowsEditor(state, { editStack: [{}], pathFor, selectedId, model, setSelectedId }, setState);
+      return false;
+    }
+    const root = createRoot(document.createElement('div'));
+    context.after(() => act(async () => root.unmount()));
+    await act(async () => root.render(React.createElement(Harness)));
+    await act(async () => select(rootId));
+    assert.equal(latest.subject, 'root', 'the canvas root is the subject');
+    return latest.scopes.background;
+  };
+  const project = { version: 1, classes: ['theme-dark'], components: {} };
+  assert.equal(await scopeWith(project), '*project', 'nothing of its own: every component’s canvas');
+  const own = (root) => ({ ...project, components: { [BUTTON]: { root } } });
+  assert.equal(await scopeWith(own({ classes: ['theme-invert'] })), '*component', 'own classes: this component');
+  assert.equal(await scopeWith(own({ background: '#000' })), '*component', 'own background: this component');
+  const other = { ...project, components: { 'src/components/Card.astro': { root: { classes: ['theme-brand'] } } } };
+  assert.equal(await scopeWith(other), '*project', 'another component’s own classes change nothing here');
+  canvas.noteComponentCanvas({ kind: 'idle' });
+});

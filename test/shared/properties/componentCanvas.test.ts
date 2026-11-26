@@ -39,6 +39,8 @@ import {
   settingLevel,
   canvasRoot,
   withRootEdit,
+  withShownRootEdit,
+  hasOwnCanvasRoot,
   PROJECT_ROOT,
   arrangementOf,
   settingMixed,
@@ -348,6 +350,29 @@ test('renaming a variable renames it in every background, and leaves longer name
     file,
     'nothing to rename keeps the same file',
   );
+});
+
+// The owner's report: theme-dark was set on the canvas root at All components while the component's own list
+// (theme-invert) replaced it, so the panel showed theme-dark and the canvas stayed light.
+test('a project root edit shows on the canvas it was made on: that component’s own value of the setting goes', () => {
+  const card = 'src/components/Card.astro';
+  let file = withRootEdit(EMPTY_CANVAS_FILE, { kind: 'component', file: button }, { kind: 'classes', value: ['theme-invert'] });
+  file = withRootEdit(file, { kind: 'component', file: button }, { kind: 'background', value: '#000' });
+  file = withRootEdit(file, { kind: 'component', file: card }, { kind: 'classes', value: ['theme-brand'] });
+  const themed = withShownRootEdit(file, PROJECT_ROOT, button, { kind: 'classes', value: ['theme-dark'] });
+  assert.deepEqual(canvasRoot(themed, button).classes, ['theme-dark'], 'what was typed is what the canvas draws');
+  assert.equal(canvasRoot(themed, button).background, '#000', 'the other setting stays the component’s own');
+  assert.deepEqual(canvasRoot(themed, card).classes, ['theme-brand'], 'another component keeps its own');
+  // Removing at All components reverts the canvas too, rather than bringing back the hidden list.
+  const removed = withShownRootEdit(file, PROJECT_ROOT, button, { kind: 'classes', value: undefined });
+  assert.deepEqual(canvasRoot(removed, button).classes, []);
+  assert.equal(hasOwnCanvasRoot(removed, button), true, 'its background is still its own');
+  const bare = withShownRootEdit(removed, PROJECT_ROOT, button, { kind: 'background', value: undefined });
+  assert.equal(hasOwnCanvasRoot(bare, button), false);
+  // The negative space: an edit at this component leaves the project's alone.
+  const own = withShownRootEdit(themed, { kind: 'component', file: button }, button, { kind: 'classes', value: ['u-wide'] });
+  assert.deepEqual(own.classes, ['theme-dark']);
+  assert.deepEqual(canvasRoot(own, button).classes, ['u-wide']);
 });
 
 test('the canvas root: classes and surface from the component, else the project; bounded, and older files still read', () => {

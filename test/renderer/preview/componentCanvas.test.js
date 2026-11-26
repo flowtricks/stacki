@@ -256,6 +256,10 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
     'a canvas background setting marks the root',
   );
   assert.doesNotMatch(pageOf(layout), /\} data-stacki-surface>/);
+  // Transparent paints nothing of its own: the site page's themed background shows, as with no setting.
+  assert.doesNotMatch(pageOf(layout, { surface: 'transparent' }), /\} data-stacki-surface>|\[data-stacki-surface\] \{ background/);
+  // A theme change edits <html> alone, so the script watches it and paints the page's background again.
+  assert.match(chrome.chromeScript(ID), /\.observe\(root, \{ attributes: true, attributeFilter: \['class', 'data-theme', 'data-stacki-surface'\] \}\)/);
   const themed = chrome.chromeStyles('dark', 'var(--background)');
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
