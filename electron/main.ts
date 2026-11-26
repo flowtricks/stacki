@@ -32,6 +32,7 @@ import { isPathDescendant, sameFilesystemPath } from './lib/platform';
 import type { BrowserWindow as Window, MessageBoxOptions, OpenDialogOptions } from 'electron';
 import { toRecord } from '../shared/core/record';
 import { parseOptionalString, parseRecents, parseSettings } from './app/mainValidation';
+import { HTTP_CACHE_CLEANUP_WAIT_MS_MAX, cleanUpHttpCacheOnce } from './app/httpCacheCleanup';
 import type { AppSettings } from './app/mainValidation';
 import { sendUsageCount, shouldCountUsage, usageDay, USAGE_NOTICE_VERSION } from './app/usageCounts';
 import type { RecentProject } from './lib/mainTypes';
@@ -496,10 +497,30 @@ function createWindow() {
   });
 }
 
+// Settled once the one-time cache cleanup has finished or been given up on; the first load waits for
+// it, so no preview is drawn from what it removes. The window itself is not held back.
+let httpCacheCleanup: Promise<unknown> = Promise.resolve();
+
 // The app's own page, in `window`.
-function loadApp(window: Window): Promise<void> {
+async function loadApp(window: Window): Promise<void> {
+  await httpCacheCleanup;
   const devServerUrl = process.env['VITE_DEV_SERVER_URL'];
-  return devServerUrl ? window.loadURL(devServerUrl) : window.loadFile(RUNTIME_PATHS.rendererIndex);
+  await (devServerUrl ? window.loadURL(devServerUrl) : window.loadFile(RUNTIME_PATHS.rendererIndex));
+}
+
+// Images older versions let into the disk cache for a year are still there (electron/app/httpCacheCleanup.ts).
+function startHttpCacheCleanup(): Promise<unknown> {
+  return cleanUpHttpCacheOnce({
+    doneVersion: settings.httpCacheCleanupVersion,
+    clearCache: () => session.defaultSession.clearCache(),
+    waitMsMax: HTTP_CACHE_CLEANUP_WAIT_MS_MAX,
+    remember: (version) => {
+      settings = { ...settings, httpCacheCleanupVersion: version };
+      if (!writeSettings()) {
+        console.warn('[startup] the HTTP cache cleanup was not remembered; it runs again next launch');
+      }
+    },
+  });
 }
 
 // Errors from before the window exists, and ones that arrive while it is being made, wait here until the recovery
@@ -630,9 +651,9 @@ function buildMenu() {
 }
 
 // ⌘R and ⇧⌘R refresh the site, the same function as the toolbar's refresh button (the renderer owns it), wherever focus is and
-// only while a project is open. ⇧⌘R clears the HTTP cache first, so a replaced image or font shows. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in dev, where the main side is
-// bound in at require time and a window reload would keep running old code, and a window reload in a packaged build.
-// electron/app/reloadRouting.ts holds the refresh decision.
+// only while a project is open. ⇧⌘R clears the HTTP cache first. The View menu's "Reload Stacki" reloads Stacki itself: a relaunch in
+// dev, where the main side is bound in at require time and a window reload would keep running old code, and a window reload in a
+// packaged build. electron/app/reloadRouting.ts holds the refresh decision.
 function runReload(command: ReloadCommand): void {
   switch (command) {
     case 'refreshSite':
@@ -808,6 +829,7 @@ app.whenReady().then(
     }
     // The window first: it starts the renderer loading while this process does the rest of its
     // start (language, icon, menu), instead of the renderer waiting for all of it.
+    httpCacheCleanup = startHttpCacheCleanup();
     createWindow();
     await refreshMainLocale();
     setApplicationIcon();
@@ -1003,6 +1025,7 @@ const SETTINGS_DEFAULTS: AppSettings = {
   // On: CSS in code editors shows variables, easings, shadows, gradients and clip-paths as chips that open their editors.
   codeChips: true,
   localePreference: LOCALE_PREFERENCE_DEFAULT,
+  httpCacheCleanupVersion: 0,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
 let usageCountInFlight: AbortController | undefined;

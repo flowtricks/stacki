@@ -35,6 +35,7 @@ export const RUNTIME_PATHS = {
   componentPreview: unpackedPath('dist/electron/previewServer/componentPreview.js'),
   studioEntry: unpackedPath('dist/electron/previewServer/studioEntry.js'),
   previewWarmup: unpackedPath('dist/electron/previewServer/previewWarmup.js'),
+  previewImageCache: unpackedPath('dist/electron/previewServer/previewImageCache.js'),
 } as const;
 
 /** An icon or other file the build copies to dist/resources/. */

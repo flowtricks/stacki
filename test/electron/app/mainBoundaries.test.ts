@@ -223,6 +223,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     aiReviewChanges: false,
     codeChips: true,
     localePreference: 'system',
+    httpCacheCleanupVersion: 0,
   });
   assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
   assert.equal(parseSettings({ sound: true, aiAskBeforeTrust: true }).aiAskBeforeTrust, true);
@@ -282,6 +283,7 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       aiReviewChanges: false,
       codeChips: true,
       localePreference: 'system',
+      httpCacheCleanupVersion: 0,
     },
   );
   assert.throws(() => parseSettings({ sound: false, usageCountsEnabled: 'no' }), /boolean/);

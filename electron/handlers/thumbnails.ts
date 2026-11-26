@@ -15,6 +15,7 @@ import { isWin } from '../lib/mainHelpers';
 import { findFreePort, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { hasDependencies } from '../project/projectFiles';
 import { serverAlive } from '../preview/devServerChecks';
+import { imageCacheConfigArgs } from '../preview/imageCacheConfig';
 import type { DevServers } from './devServers';
 import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
@@ -143,6 +144,8 @@ async function withTemporaryServer(projectPath: string, signal: AbortSignal, cap
     // Keep a temporary server in our process group. A detached Astro daemon
     // cannot be cancelled while it is still compiling and has no lock file yet.
     '--ignore-lock',
+    // The project's own config plus one thing: no picture is photographed from an image cached before it was replaced.
+    ...imageCacheConfigArgs(projectPath),
   ]);
   const spawnState: { error?: Error } = {};
   proc.on('error', (error) => {

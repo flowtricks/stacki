@@ -98,6 +98,9 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/handlers/devServers.ts': {
     writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
   },
+  'electron/preview/imageCacheConfig.ts': {
+    writeFileSync: { count: 1, reason: 'a generated dev server config in node_modules/.avb, never a page' },
+  },
   'electron/project/explorerOps.ts': {
     renameSync: {
       count: 4,

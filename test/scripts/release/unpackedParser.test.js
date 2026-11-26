@@ -48,6 +48,7 @@ const ENTRIES = [
   'dist/electron/lib/componentSources.js',
   'dist/electron/previewServer/studioEntry.js',
   'dist/electron/previewServer/previewWarmup.js',
+  'dist/electron/previewServer/previewImageCache.js',
   'dist/electron/previewServer/designMode/designRender.js', // Design mode (experimental): docs/design-mode/REMOVE.md
 ];
 
@@ -182,6 +183,7 @@ function checkGeneratedConfig(directory) {
     local('dist/electron/previewServer/componentPreview.js'),
     local('dist/electron/previewServer/studioEntry.js'),
     local('dist/electron/previewServer/previewWarmup.js'),
+    local('dist/electron/previewServer/previewImageCache.js'),
     JSON.stringify([directory]),
     JSON.stringify(''),
     JSON.stringify(''),

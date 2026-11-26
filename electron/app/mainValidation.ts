@@ -29,6 +29,8 @@ export interface AppSettings {
   readonly codeChips: boolean;
   /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
   readonly localePreference: LocalePreference;
+  /** The last one-time HTTP cache cleanup that finished (electron/app/httpCacheCleanup.ts); 0: none. */
+  readonly httpCacheCleanupVersion: number;
 }
 
 export function parseSettings(input: unknown): AppSettings {
@@ -47,6 +49,8 @@ export function parseSettings(input: unknown): AppSettings {
     aiAutoCompactPercent: optional(parseAutoCompactPercent), // Strict: the in-app setter relies on it (main.ts withAutoCompactPercent).
     codeChips: defaultWhenInvalid(boolean),
     localePreference: defaultWhenInvalid(parseLocalePreferenceValue),
+    // Housekeeping: a damaged value reads as never run, and the cleanup runs again.
+    httpCacheCleanupVersion: defaultWhenInvalid(count),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
@@ -64,6 +68,7 @@ export function parseSettings(input: unknown): AppSettings {
     aiReviewChanges: value.aiReviewChanges ?? false,
     codeChips: value.codeChips ?? true,
     localePreference: value.localePreference ?? 'system',
+    httpCacheCleanupVersion: value.httpCacheCleanupVersion ?? 0,
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
     ...(value.aiAutoCompactPercent === undefined ? {} : { aiAutoCompactPercent: value.aiAutoCompactPercent }),
   };
