@@ -4,7 +4,8 @@
 // one look: the next resize of the pane, either way, wider or still too narrow, goes back to the pane's own width and
 // the choice is over. Rounding jitter and the layout the pick itself causes are not resizes.
 // Method: the real sizing hook (usePreviewSizing) in jsdom, over a pane whose width the test sets and announces
-// through the ResizeObserver, as a window or panel resize does. A pick settles on the real clock. Each step reads the frame's own width (undefined:
+// through the ResizeObserver, as a window or panel resize does. A pick settles after a delay: the tests that need it past
+// drive node:test's mock timers by the hook's own constant. Each step reads the frame's own width (undefined:
 // filling), the width and scale it draws at, and the device the toolbar presses.
 
 const assert = require('node:assert/strict');
@@ -104,8 +105,8 @@ async function mount({ widthPx, breakpoints = pin.BREAKPOINT_DEFAULTS, preview =
     handle,
     read,
     render,
-    // Past the pick's settle window, on the real clock.
-    settle: () => act(async () => new Promise((resolve) => setTimeout(resolve, pin.DESKTOP_PICK_SETTLE_MS + 50))),
+    // Past the pick's settle window, on the test's own clock (driveClock).
+    settle: (context) => act(async () => context.mock.timers.tick(pin.DESKTOP_PICK_SETTLE_MS)),
     resize: (next, height = paneHeightPx) =>
       act(async () => {
         paneHeightPx = height;
@@ -118,6 +119,9 @@ async function mount({ widthPx, breakpoints = pin.BREAKPOINT_DEFAULTS, preview =
     unmount: () => act(async () => root.unmount()),
   };
 }
+
+// Before the canvas mounts, so the hook's settle timer is the test's to run.
+const driveClock = (context) => context.mock.timers.enable({ apis: ['setTimeout'] });
 
 const filling = (page, active) => ({ frame: undefined, page, scale: 1, active });
 const framed = (panePx) => ({ frame: 1440, page: 1440, scale: Number(((panePx - 24) / 1440).toFixed(3)), active: 'desktop' });
@@ -154,7 +158,8 @@ test('choosing Desktop where it fits leaves nothing behind: shrinking afterwards
   await canvas.unmount();
 });
 
-test('choosing Desktop in a narrow pane is one look: the next resize goes back to the pane’s own width', async () => {
+test('choosing Desktop in a narrow pane is one look: the next resize goes back to the pane’s own width', async (context) => {
+  driveClock(context);
   const canvas = await mount({ widthPx: 900 });
   for (const [panePx, page, active, what] of [
     [860, 842, 'laptop', 'narrower'],
@@ -164,7 +169,7 @@ test('choosing Desktop in a narrow pane is one look: the next resize goes back t
   ]) {
     await canvas.resize(900);
     await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
-    await canvas.settle();
+    await canvas.settle(context);
     assert.deepEqual(canvas.read(), framed(900), 'as typing 1440 would, every time it is chosen');
     await canvas.resize(panePx);
     assert.deepEqual(canvas.read(), filling(page, active), what);
@@ -175,21 +180,23 @@ test('choosing Desktop in a narrow pane is one look: the next resize goes back t
   await canvas.unmount();
 });
 
-test('a change of height alone is a resize too', async () => {
+test('a change of height alone is a resize too', async (context) => {
+  driveClock(context);
   const canvas = await mount({ widthPx: 900 });
   await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
-  await canvas.settle();
+  await canvas.settle(context);
   await canvas.resize(900, 640);
   assert.deepEqual(canvas.read(), filling(882, 'laptop'));
   await canvas.unmount();
 });
 
-test('jitter, and the layout the pick itself causes, keep the look', async () => {
+test('jitter, and the layout the pick itself causes, keep the look', async (context) => {
+  driveClock(context);
   const canvas = await mount({ widthPx: 900 });
   await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
   await canvas.resize(884);
   assert.deepEqual(canvas.read(), framed(884), 'the pane moving right after the click is the click’s own layout');
-  await canvas.settle();
+  await canvas.settle(context);
   await canvas.resize(887, 697);
   assert.deepEqual(canvas.read(), framed(887), 'a few pixels either way');
   await canvas.resize(889);
@@ -221,13 +228,14 @@ test('a page switch or a reload opens on the ordinary canvas; a resize alone is 
   await canvas.unmount();
 });
 
-test('past a wider breakpoint: the ordinary canvas shows it, a pick of Desktop stops short until the next resize', async () => {
+test('past a wider breakpoint: the ordinary canvas shows it, a pick of Desktop stops short until the next resize', async (context) => {
+  driveClock(context);
   const wide = { id: 'bp-1', name: 'Wide', direction: 'up', setting: { value: 100, unit: 'rem' } };
   const canvas = await mount({ widthPx: 1800, breakpoints: pin.resolveBreakpoints([wide, ...pin.BREAKPOINT_DEFAULTS]) });
   assert.deepEqual(canvas.read(), filling(1782, 'bp-1'), 'the real width');
   await canvas.run(({ sizing }) => sizing.pickDevice('desktop'));
   assert.deepEqual(canvas.read(), filling(1599, 'desktop'));
-  await canvas.settle();
+  await canvas.settle(context);
   await canvas.resize(2000);
   assert.deepEqual(canvas.read(), filling(1982, 'bp-1'), 'the real width again');
   await canvas.unmount();
