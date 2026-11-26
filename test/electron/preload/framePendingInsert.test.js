@@ -79,20 +79,81 @@ test('marker comments travel with the stand-in so the regions find it', () => {
   }
 });
 
-test('a component is a labelled block with a background rule and no border', () => {
+const section = () => insertAt(2, { kind: 'component', name: 'Section' }, { path: [0, 1], placement: 'after' });
+
+test('a component draws nothing: a node with no box and no words holds its path while the server renders', () => {
   const dom = page();
   try {
-    pending.showCanvasInsert(insertAt(2, { kind: 'component', name: 'Section' }, { path: [0, 1], placement: 'after' }));
+    assert.equal(pending.showCanvasInsert(section()), true);
     const node = document.querySelector(`[${MARK}="component"]`);
-    assert.equal(node.getAttribute('data-avb-pending-name'), 'Section');
-    const rule = document.adoptedStyleSheets.at(-1).text;
-    assert.match(rule, /background:/);
-    assert.doesNotMatch(rule, /border/);
+    assert.equal(node.tagName, 'TEMPLATE');
+    assert.equal(node.getAttribute('data-avb-p'), '0.2', 'the selection finds the new node, not a neighbour');
+    assert.equal(document.querySelector('main').textContent, 'onetwo', 'no name and no made-up content');
   } finally {
     pending.revertCanvasInserts();
     dom.window.close();
   }
 });
+
+test('a slow render gets a bar with a background, no border and no label, which the render then replaces', (context) => {
+  const dom = page();
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    pending.listenForCanvasInserts();
+    pending.showCanvasInsert(section());
+    context.mock.timers.tick(599);
+    assert.equal(document.querySelector(`[${MARK}]`).tagName, 'TEMPLATE', 'still quiet');
+    context.mock.timers.tick(1);
+    const bar = document.querySelector(`[${MARK}="component"]`);
+    assert.equal(bar.tagName, 'DIV');
+    assert.equal(bar.textContent, '');
+    assert.deepEqual(paths(), ['0', '0.0', '0.1', '0.2', '1']);
+    const rule = document.adoptedStyleSheets.at(-1).text;
+    assert.match(rule, /background:/);
+    assert.match(rule, /align-self: stretch/);
+    assert.doesNotMatch(rule, /border:|content:/);
+    patchWith(renderingOf(dom, OLD));
+    assert.equal(document.querySelector(`[${MARK}]`).tagName, 'DIV', 'a render of the old file keeps the bar, not a new quiet wait');
+    patchWith(renderingOf(dom, NEW));
+    assert.equal(document.querySelectorAll(`[${MARK}]`).length, 0);
+  } finally {
+    pending.revertCanvasInserts();
+    dom.window.close();
+  }
+});
+
+const twin = { kind: 'clone', from: [0, 1], twinOf: 'Card' };
+
+test('a twin is copied from the page at once, numbered from where the original now is', () => {
+  const dom = page();
+  try {
+    assert.equal(pending.showCanvasInsert(insertAt(0, twin)), true);
+    const copy = document.querySelector('[data-avb-p="0.0"]');
+    assert.equal(copy.textContent, 'two', 'the original after the new node, found under its new number');
+    assert.equal(copy.tagName, 'P');
+    assert.deepEqual(paths(), ['0', '0.0', '0.1', '0.2', '1']);
+  } finally {
+    pending.revertCanvasInserts();
+    dom.window.close();
+  }
+});
+
+for (const [why, change] of [
+  ['one opened since it was rendered', (original) => original.setAttribute('aria-expanded', 'true')],
+  ['one the page does not render', (original) => original.replaceWith(document.createComment('nothing'))],
+]) {
+  test(`a twin that is ${why} is not copied: the render is waited for`, () => {
+    const dom = page();
+    try {
+      change(document.querySelector('[data-avb-p="0.1"]'));
+      assert.equal(pending.showCanvasInsert(insertAt(0, twin)), true);
+      assert.equal(document.querySelector(`[${MARK}]`).tagName, 'TEMPLATE');
+    } finally {
+      pending.revertCanvasInserts();
+      dom.window.close();
+    }
+  });
+}
 
 test('an element with nothing rendered inside takes its first child inside', () => {
   const dom = page();

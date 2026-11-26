@@ -68,6 +68,7 @@ export const revealPath = (nodePath: string, occurrence: number): void => {
   assert(stopWatch === undefined, 'revealPath: no earlier reveal is still watching');
   const box = boxOf(nodePath, occurrence);
   if (box === undefined) {
+    undrawn = { nodePath, occurrence };
     return;
   }
   if (pathIsPageRoot(box.measuredPath)) {
@@ -129,10 +130,22 @@ export const revealPath = (nodePath: string, occurrence: number): void => {
   stopWatch = stopGlideAndForget;
 };
 
+// The last reveal that found no box: a node selected before anything of it is drawn (a component
+// still being rendered, framePendingInsert.ts). One, forgotten by the next reveal or canvas pick.
+let undrawn: { readonly nodePath: string; readonly occurrence: number } | undefined;
+
+/** Reveals the node the last reveal could not find, if the selection has not moved on since. */
+export const revealWhenDrawn = (): void => {
+  if (undrawn !== undefined) {
+    revealPath(undrawn.nodePath, undrawn.occurrence);
+  }
+};
+
 // Ends the reveal in progress, if any. Every new reveal does this first, and a
 // canvas selects with it too: once the selection has moved on, the old target
 // must never be acted on.
 export const cancelReveal = (): void => {
+  undrawn = undefined;
   stopWatch?.();
   assert(stopWatch === undefined, 'cancelReveal: a stopped watch forgets itself');
 };

@@ -35,7 +35,8 @@ reads the operation union, checks every named module exists and that nothing is 
 
 | Action | Strategy | Where |
 |---|---|---|
-| Insert element or component | Stand-in at the future path (element from the writer's template; component as a labelled neutral block) | `shared/page/canvasInsert.ts`, `framePendingInsert.ts` |
+| Insert element | Stand-in at the future path, from the writer's template | `shared/page/canvasInsert.ts`, `framePendingInsert.ts` |
+| Insert component | A copy of an instance already on the page that is written the same way; otherwise nothing is drawn until the render, and a quiet bar with no label after 600 ms | same, `shared/page/canvasTwin.ts` |
 | Duplicate | Deep copy of what the original rendered, paths renamed | same (`clone`) |
 | Wrap | Plain wrapper where the node stood, node inside, paths under it renumbered | same (`wrap`) |
 | Delete | Elements removed, kept detached | `framePendingDelete.ts` |
@@ -107,8 +108,8 @@ write began to the rendered node on the canvas, median / worst ms.
 |---|---|---|---|
 | Insert p | about 1 ms | 121 / 149 | 37 / 71 |
 | Insert div | about 1 ms | 128 / 133 | 33 / 43 |
-| Insert Section component | about 1 ms (labelled block) | 129 / 134 | 36 / 40 |
-| Insert Image component | about 1 ms (labelled block) | 129 / 149 | 34 / 46 |
+| Insert Section component | about 1 ms (the labelled block of that day) | 129 / 134 | 36 / 40 |
+| Insert Image component | about 1 ms (the labelled block of that day) | 129 / 149 | 34 / 46 |
 | Delete | about 1 ms | 120 / 139 | 36 / 52 |
 | Reorder | about 1 ms | 122 / 146 | 35 / 38 |
 | Attribute | about 1 ms | 129 / 138 | 34 / 41 |
@@ -119,6 +120,12 @@ The "before" column is the same bench with the app's write announcement not reac
 (the state before `cc062913`, and the symlink bug fixed after it). Panel refresh (the style panel's
 matched selectors) is one canvas round trip within a frame of the change; it is tested in jsdom
 (`test/renderer/style/panelRefresh.test.js`) and not timed.
+
+Component inserts since 2026-11-25, in the real app on a copy of the Lumos framework (RichText,
+Accordion, Card, Heading): the first visible change is the real content, 111 to 199 ms
+after Enter (written at 46 to 82 ms, then one page render and patch); a second RichText written like
+the first showed its content at 19 ms and did not move when the render landed. A component that took
+1.8 s to render got the bar at 621 ms.
 
 Not measured: duplicate, wrap and undo and redo (their first visual change is the same frame code;
 undo and redo start after the app's revert call returns, tens of milliseconds at most).
