@@ -41,7 +41,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
     focus: () => focus, // The selected node's page path.
     editing: () => (active ? typing?.key : undefined),
     editingElement: () => (active ? typing?.element : undefined),
-    contains: (event: MouseEvent) => (rich ? event.target instanceof Node && rich.container.contains(event.target) : (active?.editor.contains(event) ?? false)),
+    contains: (event: MouseEvent) => (rich ? rich.contains(event) : (active?.editor.contains(event) ?? false)),
     dismiss: () => finish('apply'),
     // A scroll or resize ends the edit, unless it is the open's own settling.
     dismissOnMovement: () => {

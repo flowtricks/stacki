@@ -9,6 +9,7 @@
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
 import { ownClasses } from './frameMeasure';
+import { holdTextEditing, styleTextEditor } from './frameTextEditing';
 import type { RichBlockChoice } from '../../shared/properties/canvasText';
 
 export interface RichTextCallbacks {
@@ -57,6 +58,9 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
   container.setAttribute('data-avb-text-editor', '');
+  styleTextEditor(undefined);
+  // Presses inside are the browser's from here: a caret, a word, a drag across blocks.
+  const release = holdTextEditing(container);
   document.execCommand('defaultParagraphSeparator', false, 'p');
   const controller = new AbortController();
   const listen = { capture: true, signal: controller.signal };
@@ -67,6 +71,7 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     }
     closed = true;
     controller.abort();
+    release();
     callbacks.plus(undefined);
     const html = action === 'apply' ? read() : undefined;
     const saved = html !== undefined && html !== startHTML;
@@ -108,6 +113,15 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     container.blur();
     callbacks.done(saved ? html : undefined);
   };
+  // Whether the latest press began in the editor: a drag is decided by where it began.
+  let pressed = false;
+  window.addEventListener(
+    'mousedown',
+    (event) => {
+      pressed = event.target instanceof Node && container.contains(event.target);
+    },
+    listen,
+  );
   window.addEventListener(
     'keydown',
     (event) => {
@@ -160,6 +174,9 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
   return {
     finish,
     container,
+    /** Whether a click is the editor's: on it, or ending a press that began in it. A drag that leaves the block ends
+     *  with its click on whatever holds both ends, and dragging selected words out leaves them unselected. */
+    contains: (event: MouseEvent) => pressed || (event.target instanceof Node && container.contains(event.target)),
     /** Says again where the `+` goes, for a host that has rebuilt its catalog. */
     replus: report,
     hold: () => {

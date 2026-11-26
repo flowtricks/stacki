@@ -4,13 +4,7 @@ import { createTextBuffer, type TextRunChange } from './frameTextBuffer';
 import { placeTextCaret, textEditorRoot, textSelection, type TextSpace } from './frameTextSelection';
 import { installNativeTextEvents } from './frameTextNativeEvents';
 import { installInterceptedPointer, pointOnWords } from './frameTextPointer';
-
-let editingRoot: HTMLElement | undefined;
-let stylesheet: CSSStyleSheet | undefined;
-
-export function isCanvasTextEditing(target: unknown): boolean {
-  return target instanceof Node && !!editingRoot?.contains(target);
-}
+import { holdTextEditing, isCanvasTextEditing, styleTextEditor } from './frameTextEditing';
 
 export interface NativeTextResult {
   /** What to save: empty when nothing changed or the edit was cancelled. */
@@ -97,11 +91,11 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
     for (const edge of trimmed) {
       edge.node.data = edge.data;
     }
-    editingRoot = undefined;
+    release();
     root.blur();
     done({ changes, restored, keep });
   };
-  editingRoot = root;
+  const release = holdTextEditing(root);
   const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused, breaks });
   const stopPointer = installInterceptedPointer(root, match.nodes);
   root.focus({ preventScroll: true });
@@ -163,17 +157,8 @@ function installNativeTextStyle(root: HTMLElement, breaks: CanvasTextBreaks | un
   const computed = getComputedStyle(root).whiteSpace;
   // Typed line breaks show as lines; spaces still collapse as they did, so nothing moves when the editor opens.
   const whitespace = breaks !== undefined && /^(normal|nowrap)$/.test(computed) ? 'pre-line' : computed;
-  if (!stylesheet) {
-    stylesheet = new CSSStyleSheet();
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, stylesheet];
-  }
-  // Editing must preserve collapsed source indentation as well as preformatted
-  // text. The browser owns the caret; only its default focus outline is suppressed.
-  stylesheet.replaceSync(
-    '[data-avb-text-editor] { outline: none !important; caret-color: auto !important;' +
-      ` white-space: ${whitespace} !important; }` +
-      '[data-avb-text-editor], [data-avb-text-editor] * { cursor: text !important; }',
-  );
+  // Editing must preserve collapsed source indentation as well as preformatted text.
+  styleTextEditor(whitespace);
 }
 
 /** Height growth that is layout noise, not a new line: sub-pixel rounding. */

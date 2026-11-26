@@ -1,4 +1,4 @@
-import { isCanvasTextEditing } from './frameTextNative';
+import { isCanvasTextEditing } from './frameTextEditing';
 import { canvasCursorCSS, canvasInert, canvasSelects, guardCanvasNavigation, trackCanvasGesture } from './frameInteraction';
 // Which frame this is, and what that changes. A class on <html> says canvas
 // (`stacki-designer`) or interactive preview (`stacki-preview`); a design-mode

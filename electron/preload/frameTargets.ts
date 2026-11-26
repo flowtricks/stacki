@@ -5,6 +5,7 @@
 import { assert } from '../../shared/core/assert';
 import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
+import { isCanvasTextEditing } from './frameTextEditing';
 import { PRELOAD_LIMITS, isElement, type Rect } from './frameBasics';
 import {
   PATH_ATTR,
@@ -528,6 +529,11 @@ function listenForContextMenu(): void {
     'contextmenu',
     (event) => {
       if (!canvasSelects()) {
+        return;
+      }
+      // In the text being edited a right click is the editor's: it selects nothing else and ends nothing.
+      if (isCanvasTextEditing(event.target)) {
+        event.stopImmediatePropagation();
         return;
       }
       event.preventDefault();

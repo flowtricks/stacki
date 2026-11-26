@@ -135,6 +135,7 @@
     "electron/preload/frameStyleSources.ts",
     "electron/preload/frameText.ts",
     "electron/preload/frameTextBuffer.ts",
+    "electron/preload/frameTextEditing.ts",
     "electron/preload/frameTextMarks.ts",
     "electron/preload/frameTextMatch.ts",
     "electron/preload/frameTextNative.ts",
