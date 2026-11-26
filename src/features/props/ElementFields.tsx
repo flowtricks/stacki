@@ -32,11 +32,13 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
-  const contentSet = (node.children?.length ?? 0) > 0;
+  const held = state.contentValue;
+  const contentSet = held === undefined ? (node.children?.length ?? 0) > 0 : held.own;
   if (state.richTextContent === true && node.kind === 'component') {
     return (
       <RichTextContentField
         label={translate('props.element.content')}
+        key={node.id}
         source={state.contentSource ?? plainChildrenHTML(node.children)}
         onSetNodes={onSetInline}
         onSetSource={state.onSetContentSource}
@@ -51,7 +53,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             <ContentLabel
               active={contentSet}
               name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}
-              onReset={() => onSetInline([])}
+              onReset={held === undefined ? () => onSetInline([]) : held.onReset}
             />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
@@ -61,7 +63,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
           </label>
           <RichContent
             key={node.id}
-            nodes={canvasDraftInline(isInlineOnly(node.children) ? node.children : [], draft)}
+            nodes={held === undefined ? canvasDraftInline(isInlineOnly(node.children) ? node.children : [], draft) : isInlineOnly(held.nodes) ? held.nodes : []}
             {...richContextProp(bindContext || loopContext)}
             insertRef={contentInsertRef}
             onChange={onSetInline}

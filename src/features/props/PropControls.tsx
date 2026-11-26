@@ -230,7 +230,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
   // Only ordinary instances encode the default as an omitted prop.
   const omittedDefault = policy === 'instance' ? defaultText : undefined;
   // An unset recipe uses the placeholder so choosing its fallback still commits.
-  const selected = raw ?? (policy === 'instance' ? (defaultText ?? '') : '');
+  const selected = raw ?? (policy === 'defaults' ? '' : (defaultText ?? ''));
   const selectedOption = selected === omittedDefault ? '' : selected;
   // Keep an out-of-schema current value selectable rather than losing it.
   const choices = raw === undefined || field.options.includes(raw) ? field.options : [raw, ...field.options];
@@ -472,7 +472,7 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
   // A literal default previews as itself; an expression default (`heroImage.src`)
   // previews as the file it imports, when the schema reader could follow it.
   const defaultPreview = state.field.defaultExpr ? state.field.defaultAsset : typeof fallback === 'string' ? fallback : undefined;
-  const fallbackValue = policy === 'instance' ? defaultPreview : undefined;
+  const fallbackValue = policy === 'defaults' ? undefined : defaultPreview;
   const renderedFallback = name === 'image' ? assetContext.layoutImage : undefined;
 
   const nodeName = String(assetContext.nodeName || '').toLowerCase();

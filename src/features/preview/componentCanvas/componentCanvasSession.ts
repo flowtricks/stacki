@@ -6,7 +6,7 @@ import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
 import type { ComponentCanvasFile, FrameEdit } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
-import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
+import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
 
 export interface CanvasOpen {
@@ -23,8 +23,8 @@ export interface CanvasOpen {
   readonly scale: number;
   /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
   readonly framePanel: 'shown' | 'hidden';
-  /** The props the component defaults give an inserted instance: what a frame shows where it sets nothing. */
-  readonly defaults: Readonly<Record<string, DefaultValue>>;
+  /** What the component defaults give an inserted instance: what a frame shows where it sets nothing. */
+  readonly defaults: ComponentRecipe;
   /** Each frame's instance on the canvas page, by its path in the page's tree: what the navigator lists and a click selects. */
   readonly instances: readonly CanvasInstance[];
   /** The canvas page's root (its <html>) by path: the canvas itself, selected by a click between frames. */
@@ -70,10 +70,11 @@ export interface ComponentCanvasControl {
   /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */
   readonly showFramePanel: () => void;
   /**
-   * A preview prop value from the Settings panel: written to the Apply to scope (this frame unless a wider one is
-   * chosen; the project level holds no props, so there it is this frame). Never to the component or its instances.
+   * Preview values from the Settings panel, written together to the frame scope `scope` (a frame, a split value or
+   * `` for every frame): the scope the field showed, even when a pick answers after the selection moved. Never to the
+   * component or its instances.
    */
-  readonly editProp: (edit: Extract<FrameEdit, { readonly kind: 'prop' | 'unset' | 'inherit' }>) => void;
+  readonly editValues: (scope: string, edits: readonly FrameEdit[]) => void;
   /** The canvas root's classes at the root's "Apply to" scope (this component or the project); undefined clears them there. */
   readonly editRootClasses: (classes: readonly string[] | undefined) => void;
   /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */

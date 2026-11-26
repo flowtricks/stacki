@@ -20,7 +20,14 @@ import {
   type DefaultsSnapshot,
   type ResolvedNode,
 } from '../../../../shared/properties/componentDefaults';
-import { defaultAttributes, elementMarkup, mergeDefaultValues, withoutMissingAssets } from '../../../../shared/properties/componentDefaultValues';
+import {
+  defaultAttributes,
+  elementMarkup,
+  mergeDefaultValues,
+  withoutMissingAssets,
+  type AssetDefaults,
+  type LiteralDefaults,
+} from '../../../../shared/properties/componentDefaultValues';
 import type { FrameLength } from '../../../../shared/properties/componentCanvas';
 import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 import { chromeScript, chromeStyles } from './canvasChrome';
@@ -31,6 +38,10 @@ export interface CanvasPageFrame {
   readonly label: string;
   readonly row: number;
   readonly props: Readonly<Record<string, DefaultValue>>;
+  readonly assets?: AssetDefaults;
+  readonly literals?: LiteralDefaults;
+  /** The default slot's markup, in place of the insertion defaults' content; `` is an empty slot. */
+  readonly content?: string | undefined;
   readonly omitted: ReadonlySet<string>;
   readonly width: FrameLength;
   readonly height: FrameLength;
@@ -164,11 +175,11 @@ function rootClassList(classes: readonly string[]): string {
     .join('');
 }
 
-/** The props an inserted instance is given (the component defaults), which a frame shows unless it sets its own. */
-export function defaultProps(snapshot: DefaultsSnapshot, component: string, fallbackText: string): Readonly<Record<string, DefaultValue>> {
-  const props = baseRecipe({ snapshot, component, fallbackText }).props ?? {};
-  assert(Object.keys(props).length <= DEFAULT_LIMITS.propsMax, 'Default props are bounded');
-  return props;
+/** What an inserted instance is given (the component defaults), which a frame shows unless it sets its own. */
+export function frameDefaults(snapshot: DefaultsSnapshot, component: string, fallbackText: string): ComponentRecipe {
+  const recipe = baseRecipe({ snapshot, component, fallbackText });
+  assert(Object.keys(recipe.props ?? {}).length <= DEFAULT_LIMITS.propsMax, 'Default props are bounded');
+  return recipe;
 }
 
 // The recipe every frame starts from: the project's own, else the starter one, and text for a default slot that would
@@ -185,20 +196,43 @@ function baseRecipe(input: Pick<CanvasPageInput, 'snapshot' | 'component' | 'fal
 
 function instanceMarkup(input: CanvasPageInput, recipe: ComponentRecipe, frame: CanvasPageFrame, imports: ImportTable): string {
   // A frame's own value replaces the default of that prop, wherever the recipe holds it (an image, a list).
-  const merged = mergeDefaultValues(recipe, { props: frame.props });
+  const merged = mergeDefaultValues(recipe, { props: frame.props, assets: frame.assets ?? {}, literals: frame.literals ?? {} });
   const shown = <T>(values: Readonly<Record<string, T>> | undefined): Readonly<Record<string, T>> =>
     Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => !frame.omitted.has(name)));
   const props = shown(merged.props);
   const held = { assets: shown(merged.assets), literals: shown(merged.literals) };
+  // The frame's own slot content stands in place of the defaults' words and children.
+  const { text: defaultText, children: defaultChildren, ...rest } = recipe;
+  const content =
+    frame.content === undefined
+      ? { ...(defaultText === undefined ? {} : { text: defaultText }), ...(defaultChildren === undefined ? {} : { children: defaultChildren }) }
+      : {};
   const config: ComponentDefaults = {
     version: 1,
-    components: { ...input.snapshot.config.components, [input.component]: { ...recipe, props, ...held } },
+    components: { ...input.snapshot.config.components, [input.component]: { ...rest, ...content, props, ...held } },
   };
   const resolved = resolveComponentRecipe(input.component, config, input.snapshot.catalog);
   // A recipe the resolver refuses (a cycle, a missing child) still draws the component, with its props and no children.
   const node: ResolvedNode = resolved.ok ? resolved.value : { component: input.component, props, ...held, content: { kind: 'empty' } };
   const gone = new Set(input.snapshot.missingAssets);
-  return renderNode(withoutMissingAssets(node, (file) => !gone.has(file)).node, imports, 0);
+  const shownNode = withoutMissingAssets(node, (file) => !gone.has(file)).node;
+  if (frame.content === undefined || frame.content === '') {
+    return renderNode(frame.content === '' ? { ...shownNode, content: { kind: 'empty' } } : shownNode, imports, 0);
+  }
+  return renderNode({ ...shownNode, content: { kind: 'children', children: [{ literal: '', verbatim: slotHTML(frame.content) }] } }, imports, 0);
+}
+
+// A frame's content as one expression-free slot child: set:html takes it as HTML text, never as Astro source, and the
+// escapes keep the page's own parser from reading a brace or a tag inside the string.
+function slotHTML(content: string): string {
+  return `<Fragment set:html={${escapedLiteral(content)}} />`;
+}
+
+// A string as a JavaScript literal with no brace or angle bracket in it for the page's own parser to read.
+function escapedLiteral(text: string): string {
+  const literal = JSON.stringify(text).replace(/[<>{}]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  assert(!/[<>{}]/.test(literal), 'A written string is escaped');
+  return literal;
 }
 
 function renderNode(node: ResolvedNode, imports: ImportTable, depth: number): string {
@@ -225,7 +259,12 @@ function renderNode(node: ResolvedNode, imports: ImportTable, depth: number): st
 
 function renderProp(name: string, attribute: { readonly type: 'string' | 'expr'; readonly value: string }): string {
   assert(/^[A-Za-z_$][\w$:-]*$/.test(name), 'A prop name is an attribute name');
-  return attribute.type === 'string' ? ` ${name}="${encodeText(attribute.value).replaceAll('"', '&quot;')}"` : ` ${name}={${attribute.value}}`;
+  if (attribute.type !== 'string') {
+    return ` ${name}={${attribute.value}}`;
+  }
+  // Astro hands a component's attribute text on as written, entities and all, so text that markup would need an
+  // entity for (HTML for a rich text prop, a quote, an ampersand) is given as a string expression instead.
+  return /[&<>"{}\r\n]/.test(attribute.value) ? ` ${name}={${escapedLiteral(attribute.value)}}` : ` ${name}="${attribute.value}"`;
 }
 
 function frameMarkup(frame: CanvasPageFrame, cell: { readonly row: number; readonly column: number }, instance: string): string {

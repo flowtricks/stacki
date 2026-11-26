@@ -7,7 +7,8 @@ import Popup from '../../ui/Popup';
 // editors a value opens — its own code and its variable's source — each
 // closing on a press outside (propBindings.tsx).
 
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { PropValuePolicyContext } from './propValuePolicy';
 import { useCodeAccess } from '../../ui/CodeAccess';
 import type { RefObject } from 'react';
 import type { TemplateHole } from '../../editor/bindings';
@@ -270,7 +271,10 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   // at the caret (fieldFocus.ts). A click with no pointerdown before it — the
   // keyboard — finds the field as it is then.
   const focusRef = useRef<FieldFocus | undefined>(undefined);
-  if (!useCodeAccess()) {
+  const code = useCodeAccess();
+  // A preview has no page around it: nothing is in scope to connect to.
+  const preview = useContext(PropValuePolicyContext) === 'preview';
+  if (!code || preview) {
     return undefined;
   }
   return (

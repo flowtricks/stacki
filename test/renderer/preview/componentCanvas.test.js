@@ -57,6 +57,9 @@ function pageOf(layout, overrides = {}) {
       label: frame.key || 'Button',
       row: frame.row,
       props: frame.props,
+      assets: frame.assets,
+      literals: frame.literals,
+      content: frame.content,
       omitted: frame.omitted,
       width: frame.resolved.width,
       height: frame.resolved.height,
@@ -109,7 +112,7 @@ test('the canvas page parses, imports the component once, and writes each frame'
     /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; contain-intrinsic-size: 320px 200px !important; background: var\(--swatch-light\) !important"/,
     'the frame sits in its row and column, at its size and background',
   );
-  assert.match(source, /label="Back &quot;&lt;there&gt;&quot;"/, 'prop text is escaped');
+  assert.ok(source.includes('label={"Back \\"\\u003cthere\\u003e\\""}'), 'text that markup would escape is a string expression');
   assert.match(source, /<Button variant="main"[^>]*>Button Text<\/Button>/, 'without a project recipe, the starter defaults fill the slot');
   const chip = { ...snapshot, catalog: [{ ...snapshot.catalog[0], name: 'Chip', slotText: false }] };
   assert.match(pageOf(layout, { snapshot: chip, fallbackText: 'Chip' }), />Chip<\/Button>/, 'an empty default slot shows the component name');
@@ -333,4 +336,69 @@ test('the canvas root is the page’s <html>: its path is found, and its classes
     'html > body > frame > instance, nothing in between',
   );
   assert.ok(!marked.includes(`<!--avb-s:${bodyPath}-->`), 'the body has no marker pair');
+});
+
+test('the panel shows a frame’s own values as set and everything else as what the field rests on, and stores each write', () => {
+  const panel = loadRenderer('src/app/model/canvasPanelValues.ts');
+  const settings = {
+    frames: {
+      '': { props: { heading: 'Everywhere' } },
+      'variant=main': { assets: { label: { file: 'src/assets/a.png', url: true } }, content: 'Words' },
+    },
+  };
+  const layout = model.buildCanvasLayout(button, settings);
+  const frame = layout.frames.find((candidate) => candidate.key === 'variant=main');
+  const defaults = { props: { id: 'from-defaults' }, text: 'A <b>' };
+  const input = { schema: button.schema, rest: true, settings, frame, scope: frame.key, defaults };
+  const shown = panel.framePanelValues(input);
+  assert.deepEqual(shown.props.label, { type: 'expr', value: 'frameAsset0.src' });
+  assert.deepEqual(shown.props.variant, { type: 'string', value: 'main' }, 'a split value is the frame’s own');
+  assert.equal(shown.props.heading, undefined, 'a wider value is not set here');
+  assert.equal(shown.schema.find((field) => field.name === 'heading').default, 'Everywhere');
+  assert.equal(shown.schema.find((field) => field.name === 'id').default, 'from-defaults');
+  assert.equal(shown.schema.filter((field) => field.name === 'class').length, 1, 'a ...rest component takes a class');
+  assert.equal(shown.imports, `import frameAsset0 from "${'../'.repeat(2)}src/assets/a.png";`);
+  assert.deepEqual(shown.content, { html: 'Words', own: true });
+  assert.deepEqual(panel.framePanelValues({ ...input, scope: '' }).content, { html: 'A &lt;b&gt;', own: false });
+  const stored = (value) => panel.frameEditOf('label', value, shown.bindings);
+  assert.deepEqual(stored({ type: 'expr', value: 'frameAsset0.src' }), {
+    kind: 'asset',
+    name: 'label',
+    asset: { file: 'src/assets/a.png', url: true },
+  });
+  assert.deepEqual(stored({ type: 'expr', value: '[{ i: frameAsset0 }]' }), {
+    kind: 'literal',
+    name: 'label',
+    literal: { source: '[{ i: frameAsset0 }]', imports: { frameAsset0: 'src/assets/a.png' } },
+  });
+  assert.deepEqual(stored({ type: 'expr', value: '["a"]' }), { kind: 'literal', name: 'label', literal: '["a"]' });
+  assert.deepEqual(stored(undefined), { kind: 'inherit', name: 'label' });
+  assert.equal(stored({ type: 'expr', value: 'Astro.props.title' }), undefined, 'code has no preview value');
+  assert.deepEqual(panel.framePickEdit('image', { rel: 'public/images/a.png', root: 'public' }, 'module'), {
+    kind: 'prop',
+    name: 'image',
+    value: '/images/a.png',
+  });
+  assert.equal(panel.framePickEdit('image', { rel: 'src/data/a.json', root: 'src' }, 'module'), undefined);
+  assert.equal(
+    panel.contentHTML([
+      { kind: 'text', value: 'a < {b} ' },
+      { kind: 'element', name: 'br', props: {}, children: undefined },
+    ]),
+    'a &lt; &#123;b&#125; <br>',
+  );
+});
+
+test('a frame’s own content and files reach its instance, as text the page never runs', () => {
+  const layout = model.buildCanvasLayout(button, {
+    split: [],
+    frames: { '': { content: 'Own {words} </stacki-frame>', assets: { heading: { file: 'src/assets/a.png' } } } },
+  });
+  const source = pageOf(layout);
+  assert.ok(source.includes(`import canvasAsset0 from "${'../'.repeat(2)}src/assets/a.png";`));
+  assert.match(source, /heading=\{canvasAsset0\}/);
+  assert.match(source, /<Fragment set:html=\{"Own \\u007bwords\\u007d \\u003c\/stacki-frame\\u003e"\} \/><\/Button>/);
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
+  assert.equal(page.canvasTreeOf(parsed.model.nodes).instances.length, 1);
 });

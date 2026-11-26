@@ -29,6 +29,9 @@ import {
   withProjectBackground,
   frameBackground,
   renameCanvasVariables,
+  canvasAssetUses,
+  relinkCanvasAssets,
+  settingLevel,
   canvasRoot,
   withRootEdit,
   PROJECT_ROOT,
@@ -116,7 +119,7 @@ test('each known-bad shape is refused with its reason', () => {
   const tooMany = Object.fromEntries(Array.from({ length: CANVAS_LIMITS.entriesMax + 1 }, (_, index) => [`variant=v${String(index)}`, {}]));
   assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { frames: tooMany } } }), /more than 256/);
   const longValue = 'x'.repeat(CANVAS_LIMITS.valueCharsMax + 1);
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { frames: { '': { props: { label: longValue } } } } } }), /at most 2000/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { frames: { '': { props: { label: longValue } } } } } }), /at most 16384/);
 });
 
 test('frame keys are sorted pairs, with a bare name for not set', () => {
@@ -397,4 +400,79 @@ test('the canvas root: classes and surface from the component, else the project;
     version: 1,
     components: { [button]: { split: ['variant'] } },
   });
+});
+
+test('a frame holds imported files, literal data and slot content, each prop in one place; older files read as before', () => {
+  const settings = {
+    frames: {
+      '': { assets: { image: { file: 'src/assets/a.png' } }, content: 'All' },
+      'variant=arrow': {
+        literals: { items: { source: '[{ icon: one }]', imports: { one: 'src/assets/one.svg' } } },
+        props: { image: '/public.png' },
+        content: 'Arrow {braces} <strong>bold</strong>',
+      },
+    },
+  };
+  const file = parseComponentCanvasFile({ version: 1, components: { [button]: settings } });
+  assert.deepEqual(parseComponentCanvasFile(JSON.parse(serializeComponentCanvas(file))), file);
+  checkValue({ kind: 'object', fields: COMPONENT_CANVAS_FILE_SCHEMA.fields }, JSON.parse(serializeComponentCanvas(file)), 'componentCanvas');
+  const arrow = resolveFrame(file.components[button], 'variant=arrow');
+  assert.deepEqual(arrow.assets, {}, 'a narrower text value takes the prop out of the wider asset');
+  assert.equal(arrow.props['image'], '/public.png');
+  assert.equal(arrow.content, 'Arrow {braces} <strong>bold</strong>');
+  assert.equal(resolveFrame(file.components[button], 'variant=main').assets['image']?.file, 'src/assets/a.png');
+  const refused = (entry: unknown, reason: RegExp) =>
+    assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { frames: { '': entry } } } }), reason);
+  refused({ props: { image: 'x' }, assets: { image: { file: 'src/a.png' } } }, /set once/);
+  refused({ unset: ['image'], assets: { image: { file: 'src/a.png' } } }, /either given a value or unset/);
+  refused({ assets: { image: { file: 'public/a.png' } } }, /under src/);
+  refused({ literals: { items: 'process.exit()' } }, /literal/);
+  refused({ content: '<script>run()</script>' }, /no script/);
+  refused({ content: '<img src="x" onerror="run()">' }, /no script/);
+  refused({ content: 'x'.repeat(CANVAS_LIMITS.contentCharsMax + 1) }, /at most/);
+});
+
+test('edits move a prop between its places, and an all-frames write leaves narrower values alone', () => {
+  let file = withFrameEdit(EMPTY_CANVAS_FILE, button, 'variant=arrow', { kind: 'prop', name: 'label', value: 'Arrow' });
+  file = withFrameEdit(file, button, '', { kind: 'prop', name: 'label', value: 'All' });
+  assert.equal(resolveFrame(file.components[button], 'variant=arrow').props['label'], 'Arrow');
+  assert.equal(resolveFrame(file.components[button], 'variant=main').props['label'], 'All');
+  file = withFrameEdit(file, button, '', { kind: 'asset', name: 'label', asset: { file: 'src/a.png', url: true } });
+  assert.deepEqual(file.components[button]?.frames?.[''], { assets: { label: { file: 'src/a.png', url: true } } });
+  file = withFrameEdit(file, button, '', { kind: 'inherit', name: 'label' });
+  assert.equal(file.components[button]?.frames?.[''], undefined);
+  file = withFrameEdit(file, button, '', { kind: 'content', value: '' });
+  assert.equal(resolveFrame(file.components[button], 'variant=main').content, '', 'an empty slot is a value');
+});
+
+test('a setting says whether it is set at the scope, inherited from a wider one or overridden on the frame', () => {
+  let file = withFrameEdit(EMPTY_CANVAS_FILE, button, '', { kind: 'field', field: 'width', value: 300 });
+  const frame = 'variant=arrow';
+  const level = (scope: string) => settingLevel(file.components[button], frame, scope, 'width');
+  assert.deepEqual(level(''), { kind: 'own' });
+  assert.deepEqual(level(frame), { kind: 'inherited', from: '' });
+  file = withFrameEdit(file, button, frame, { kind: 'field', field: 'width', value: 120 });
+  assert.deepEqual(level(frame), { kind: 'own' });
+  assert.deepEqual(level(''), { kind: 'overridden', by: frame });
+  assert.deepEqual(settingLevel(file.components[button], frame, frame, 'height'), { kind: 'none' });
+});
+
+test('a moved file keeps being the one a frame names, itself or inside a list', () => {
+  const file = parseComponentCanvasFile({
+    version: 1,
+    components: {
+      [button]: {
+        frames: { '': { assets: { image: { file: 'src/assets/a.png' } }, literals: { list: { source: '[a]', imports: { a: 'src/assets/a.png' } } } } },
+      },
+    },
+  });
+  const moved = relinkCanvasAssets(file, 'src/assets', 'src/media');
+  assert.deepEqual(
+    canvasAssetUses(moved).map((use) => [use.owner, use.prop, use.file]),
+    [
+      [button, 'image', 'src/media/a.png'],
+      [button, 'list', 'src/media/a.png'],
+    ],
+  );
+  assert.equal(relinkCanvasAssets(file, 'src/other', 'src/elsewhere'), file);
 });

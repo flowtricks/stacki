@@ -1,15 +1,18 @@
 // The ordinary Navigator and Settings panel on the component canvas's page (useDesktopComponentCanvas.ts). The page is
 // generated from the canvas settings, so neither panel may write it: the Navigator lists each frame's instance under
-// its frame's name, and the Settings panel shows the selected instance's props as the frame renders them, with every
-// change going to that frame's preview values in `.stacki/component-canvas.json`. Beside each prop that can be split
+// its frame's name, and the Settings panel shows the selected frame's preview values (src/app/model/canvasPanelValues.ts)
+// with every writer it has replaced by one that goes to `.stacki/component-canvas.json`: a writer left as the page's
+// would be refused, since the page is never edited. Beside each prop that can be split
 // into frames, next to its {} button, a toggle gives each of its values a frame of its own; a prop that is split is
 // the frame's own and is greyed out, since each of its values already has a frame.
 //
 // Here in the app layer because it joins three features: the props panel's row extras (features/props), the canvas
 // (features/preview) and the navigator's tree (features/structure).
+import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { toNodeId, type NodeId } from '../../../shared/core/brand';
 import { can } from '../../../shared/properties/projectRoles';
-import { CANVAS_LIMITS, canvasRoot } from '../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, canvasContent, canvasRoot, type FrameEdit } from '../../../shared/properties/componentCanvas';
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { nodeAtPath } from '../../editor/editorTree';
 import { trailOf } from '../model/pageGestures';
@@ -22,7 +25,11 @@ import {
   type CanvasOpen,
   type ComponentCanvasControl,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
-import { previewValue, splitPartOf } from '../../features/preview/componentCanvas/canvasModel';
+import { splitPartOf, type ModelFrame } from '../../features/preview/componentCanvas/canvasModel';
+import { contentFieldNodes, contentHTML, frameEditOf, framePickEdit, framePanelValues } from '../model/canvasPanelValues';
+import type { PropValues } from '../../features/props/propRules';
+import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
+import { richTextNodes, richTextView } from '../../features/props/richTextContent';
 import { frameLabel } from '../../features/preview/componentCanvas/frameLabel';
 import type { PropFieldAction, PropFieldExtras } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
@@ -64,16 +71,29 @@ export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasContr
 }
 
 /**
- * What the Settings panel does differently on the canvas page: for a frame's instance, its props are the frame's
- * preview values; for the canvas root (<html>), its one field is class, the root's classes at the root's scope.
+ * What the Settings panel does differently on the canvas page: for a frame's instance, its values and writers are the
+ * frame's preview values; for the canvas root (<html>), its one field is class, the root's classes at the root's scope.
  */
 export type CanvasInstanceSettings =
-  | { readonly kind: 'instance'; readonly extras: PropFieldExtras; readonly onSetProp: (name: string, value: Attr | undefined) => void }
+  | { readonly kind: 'instance'; readonly extras: PropFieldExtras; readonly panel: CanvasFramePanel }
   | { readonly kind: 'root'; readonly classes: readonly string[]; readonly onSetProp: (name: string, value: Attr | undefined) => void };
+
+/** The settings panel's values and writers for a frame, in the panel's own props (propsPanelTypes.ts). */
+export type CanvasFramePanel = Pick<
+  PropsPanelProps,
+  'schema' | 'onSetProp' | 'onSetProps' | 'onReplaceProps' | 'onSetAssetProp' | 'onSetInline' | 'onSetContentSource' | 'contentValue' | 'offersStyle'
+> & {
+  /** Names the instance by its frame and scope, so a field holds nothing over from another one. */
+  readonly id: NodeId;
+  readonly props: Readonly<Record<string, Attr>>;
+  readonly frontmatterSource: string;
+  readonly contentSource: string;
+};
 
 export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanvasControl | undefined): CanvasInstanceSettings | undefined {
   const translate = useTranslate();
   const role = useCurrentRole();
+  const drafts = useUnfinishedCode((name) => app.showToast(translate('componentCanvas.error.previewValue', { name }), 'info'));
   const state = canvas?.state;
   const path = app.pathFor(app.selectedId);
   if (canvas === undefined || state?.kind !== 'open' || !atCanvasPage(app)) {
@@ -103,23 +123,158 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
         ...(split ? { lockedReason: translate('componentCanvas.split.locked', { name }) } : {}),
       };
     },
-    onSetProp: (name, value) => {
+    panel: framePanel({ app, canvas, state, frame, drafts, translate }),
+  };
+}
+
+interface FrameWriting {
+  readonly app: ShellView;
+  readonly canvas: ComponentCanvasControl;
+  readonly state: CanvasOpen;
+  readonly frame: ModelFrame;
+  readonly drafts: UnfinishedCode;
+  readonly translate: Translator;
+}
+
+function framePanel(writing: FrameWriting): CanvasFramePanel {
+  const { app, canvas, state, frame, drafts, translate } = writing;
+  // A root scope belongs to the canvas root; a frame's fields then write to the frame.
+  const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? frame.key : state.scope;
+  const id = panelNodeId(`${state.id}|${frame.key}|${scope}`);
+  const values = framePanelValues({
+    schema: app.selectedSchema,
+    rest: state.component.rest === true,
+    settings: state.settings.components[state.component.file],
+    frame,
+    scope,
+    defaults: state.defaults,
+  });
+  const refuse = (name: string): void => {
+    app.showToast(translate('componentCanvas.error.previewValue', { name }), 'info');
+  };
+  const write = (edits: readonly FrameEdit[]): void => canvas.editValues(scope, edits);
+  // A split prop is the frame's own: greyed out, and refused here as well.
+  const editsOf = (patch: PropValues): readonly FrameEdit[] =>
+    Object.entries(patch).flatMap(([name, value]) => {
       if (splitPartOf(frame, name) !== undefined) {
-        return; // A split prop is the frame's own: greyed out, and refused here as well.
+        return [];
       }
-      if (value === undefined) {
-        // Cleared: back to what a wider scope or the insertion defaults give, or, set nowhere wider, not given at all.
-        const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? state.frame : state.scope;
-        const own = state.settings.components[state.component.file]?.frames?.[scope]?.props?.[name] !== undefined;
-        canvas.editProp(own ? { kind: 'inherit', name } : { kind: 'unset', name });
-        return;
+      const edit = frameEditOf(name, value, values.bindings);
+      if (edit === undefined) {
+        refuse(name);
+        return [];
       }
-      const preview = previewValue(value);
-      if (preview === undefined) {
-        app.showToast(translate('componentCanvas.error.previewValue', { name }), 'info');
-        return;
+      return [edit];
+    });
+  const setProp: PropsPanelProps['onSetProp'] = (name, value, immediate) => {
+    if (splitPartOf(frame, name) !== undefined) {
+      return;
+    }
+    const edit = frameEditOf(name, value, values.bindings);
+    if (edit !== undefined) {
+      drafts.drop();
+      write([edit]);
+    } else if (value !== undefined) {
+      // Code on its way to being a value (a quote not yet closed) is held in its field, not refused at each key.
+      drafts.hold({ id, name, value }, immediate === true ? 'now' : 'later');
+    }
+  };
+  const writeContent = (html: string): void => {
+    if (html === values.content.html) {
+      return;
+    }
+    try {
+      canvasContent(html);
+    } catch {
+      refuse(translate('props.element.content'));
+      return;
+    }
+    write([{ kind: 'content', value: html }]);
+  };
+  return {
+    id,
+    props: drafts.held?.id === id ? { ...values.props, [drafts.held.name]: drafts.held.value } : values.props,
+    schema: values.schema,
+    frontmatterSource: values.imports,
+    offersStyle: state.component.rest === true,
+    onSetProp: setProp,
+    onSetProps: (_nodeId: string, patch: PropValues) => write(editsOf(patch)),
+    onReplaceProps: (_nodeId: string, props: Readonly<Record<string, Attr>>) => write(editsOf(props)),
+    onSetAssetProp: (_nodeId, name, picked, reference, also) => {
+      const edit = framePickEdit(name, picked, reference);
+      if (edit === undefined) {
+        refuse(name);
+      } else {
+        write([edit, ...editsOf(also ?? {})]);
       }
-      canvas.editProp({ kind: 'prop', name, value: preview });
+    },
+    onSetInline: (nodes) => writeContent(contentHTML(nodes)),
+    onSetContentSource: (source) => {
+      const view = richTextView(source, document);
+      // Expressions and components are code the canvas never runs; every other markup is shown as written.
+      if (view.view === 'code' && (view.reason === 'expression' || view.reason === 'component')) {
+        refuse(translate('props.element.content'));
+      } else {
+        writeContent(source);
+      }
+    },
+    contentSource: values.content.html,
+    contentValue: {
+      nodes: contentFieldNodes(richTextNodes(values.content.html, document)),
+      own: values.content.own,
+      onReset: () => write([{ kind: 'content', value: undefined }]),
+    },
+  };
+}
+
+// A node id in the gesture form (shared/core/brand.ts), the same for the same words: four rounds of FNV-1a.
+function panelNodeId(words: string): NodeId {
+  let hex = '';
+  for (let round = 0; round < 4; round++) {
+    let hash = 0x811c9dc5 ^ round;
+    for (let index = 0; index < words.length; index++) {
+      hash = Math.imul(hash ^ words.charCodeAt(index), 0x01000193);
+    }
+    hex += (hash >>> 0).toString(16).padStart(8, '0');
+  }
+  return toNodeId(`g${hex}`);
+}
+
+interface Unfinished {
+  readonly id: string;
+  readonly name: string;
+  readonly value: Attr;
+}
+
+interface UnfinishedCode {
+  readonly held: Unfinished | undefined;
+  readonly hold: (draft: Unfinished, when: 'now' | 'later') => void;
+  readonly drop: () => void;
+}
+
+// How long typed code may stay unfinished before the field is told it has no preview value.
+const UNFINISHED_CODE_MS = 2_500;
+
+// What is typed in a field's code view and stores nothing yet: shown in the field until it becomes a value, and said
+// once when typing stops there.
+function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
+  const [held, setHeld] = useState<Unfinished | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return {
+    held,
+    hold: (draft, when) => {
+      clearTimeout(timer.current);
+      setHeld(draft);
+      if (when === 'now') {
+        onRefused(draft.name);
+      } else {
+        timer.current = setTimeout(() => onRefused(draft.name), UNFINISHED_CODE_MS);
+      }
+    },
+    drop: () => {
+      clearTimeout(timer.current);
+      setHeld(undefined);
     },
   };
 }

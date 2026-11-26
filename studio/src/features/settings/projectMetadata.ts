@@ -10,6 +10,7 @@ import {
 import { readSource, preparePath, safePath } from '../project/projectServer';
 import { parseDefaultsSource } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { relinkDefaultAssets } from '../../../vendor/stacki/shared/properties/componentDefaultValues';
+import { parseComponentCanvasSource, relinkCanvasAssets, serializeComponentCanvas } from '../../../vendor/stacki/shared/properties/componentCanvas';
 import type { createRooms } from '../collaboration/rooms';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -76,8 +77,25 @@ export async function metadataRoute(
   return true;
 }
 
+// The component canvas's preview values name src/ files as component defaults do.
+async function relinkMovedCanvasValues(root: string, rooms: ReturnType<typeof createRooms>, moved: { readonly from: string; readonly to: string }) {
+  const stored = await readMetadataSource(root, 'componentCanvas');
+  if (stored.source === undefined) {
+    return;
+  }
+  const parsed = parseComponentCanvasSource(stored.source);
+  if (!parsed.ok) {
+    return;
+  }
+  const relinked = relinkCanvasAssets(parsed.value, moved.from, moved.to);
+  if (relinked !== parsed.value) {
+    await saveMetadata(root, rooms, { kind: 'componentCanvas', source: serializeComponentCanvas(relinked), base: stored.source });
+  }
+}
+
 /** Component defaults import src/ files by path, so they follow an asset (or folder) that moved. */
 export async function relinkMovedDefaults(root: string, rooms: ReturnType<typeof createRooms>, moved: { readonly from: string; readonly to: string }) {
+  await relinkMovedCanvasValues(root, rooms, moved);
   const stored = await readMetadataSource(root, 'components');
   if (stored.source === undefined) {
     return;

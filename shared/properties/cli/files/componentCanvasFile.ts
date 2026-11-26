@@ -33,6 +33,28 @@ const frameEntry: ValueSchema = objectOf({
     arrayOf(text(CANVAS_LIMITS.propNameCharsMax, { pattern: PROP_NAME }), CANVAS_LIMITS.valuesMax, { unique: true }),
     'Props shown as not set here, over a wider entry.',
   ),
+  assets: field(
+    mapOf(
+      jsonValue('{ "file": "src/assets/hero.png" }, plus "url": true where the page reads its address (name.src)'),
+      CANVAS_LIMITS.valuesMax,
+      'a prop name',
+      PROP_NAME,
+    ),
+    'Imported files under src/ that props preview with, as .stacki/components.json holds asset defaults.',
+  ),
+  literals: field(
+    mapOf(
+      jsonValue('a list or object of plain data as source text, or { "source": "...", "imports": { "name": "src/..." } }'),
+      CANVAS_LIMITS.valuesMax,
+      'a prop name',
+      PROP_NAME,
+    ),
+    'Lists and objects that props preview with, as .stacki/components.json holds literal defaults. Read as data, never run.',
+  ),
+  content: field(
+    text(CANVAS_LIMITS.contentCharsMax),
+    'The default slot markup these frames show: HTML with no script, style or event handler; "" is an empty slot.',
+  ),
   width: field(length('width'), 'The frame width; absent: a wider entry decides, else hug.'),
   height: field(length('height'), 'The frame height; absent: a wider entry decides, else hug.'),
   background: field(text(CANVAS_LIMITS.backgroundCharsMax, { charsMin: 1 }), 'A CSS colour or var(--...) behind the component; absent: transparent.'),

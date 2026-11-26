@@ -5,6 +5,7 @@ import { assert } from '../../../../shared/core/assert';
 import type { PropField } from '../../../../shared/properties/propSchema';
 import type { Attr } from '../../../../shared/page/pageNodeTypes';
 import type { DefaultValue } from '../../../../shared/properties/componentDefaults';
+import type { AssetDefaults, LiteralDefaults } from '../../../../shared/properties/componentDefaultValues';
 import {
   CANVAS_LIMITS,
   canvasFrames,
@@ -26,15 +27,25 @@ export interface CanvasComponent {
   readonly file: string;
   readonly name: string;
   readonly schema: readonly PropField[];
+  /** Whether the component passes other attributes on (`...rest`), `style` among them. */
+  readonly rest?: boolean;
 }
 
 export interface ModelFrame extends CanvasFrame {
   readonly resolved: ResolvedFrame;
   /** What the frame's instance is given, over the component's insertion defaults. */
   readonly props: Readonly<Record<string, DefaultValue>>;
+  /** Imported files and literal data the instance is given, over the insertion defaults. */
+  readonly assets: AssetDefaults;
+  readonly literals: LiteralDefaults;
+  /** The default slot's markup; undefined: the insertion defaults' content. */
+  readonly content: string | undefined;
   /** Props the instance is not given, even when the insertion defaults give them. */
   readonly omitted: ReadonlySet<string>;
 }
+
+/** Attributes every element takes, which a frame may hold even where the component declares no prop for them. */
+export const FRAME_ATTRIBUTES = ['class', 'style'] as const;
 
 export interface CanvasLayout {
   readonly split: readonly string[];
@@ -58,13 +69,13 @@ export function buildCanvasLayout(component: CanvasComponent, settings: Componen
   const frames = made.frames.map((frame, index): ModelFrame => {
     const resolved = resolveFrame(settings, frame.key);
     const instance = instanceProps(component.schema, frame.parts, resolved, index);
-    return { ...frame, resolved, props: instance.props, omitted: instance.omitted };
+    return { ...frame, resolved, ...instance, content: resolved.content };
   });
   assert(frames.length <= CANVAS_LIMITS.framesMax, 'The layout draws a bounded number of frames');
   return { split, candidates, frames, total: made.total };
 }
 
-export function fieldControl(field: PropField): FieldControl | undefined {
+export function fieldControl(field: Pick<PropField, 'type' | 'options'>): FieldControl | undefined {
   if (field.type === 'boolean') {
     return { kind: 'switch' };
   }
@@ -110,31 +121,38 @@ function stringOf(value: DefaultValue | undefined): string | undefined {
   return value === undefined ? undefined : String(value);
 }
 
+interface InstanceValues {
+  readonly props: Readonly<Record<string, DefaultValue>>;
+  readonly assets: AssetDefaults;
+  readonly literals: LiteralDefaults;
+  readonly omitted: ReadonlySet<string>;
+}
+
 // The instance's props: preview values, then the split values over them; not set where the frame says so; nothing
 // the frame's variant forbids; and a usable value for a required prop nothing gives.
-function instanceProps(
-  schema: readonly PropField[],
-  parts: readonly FramePart[],
-  resolved: ResolvedFrame,
-  index: number,
-): { readonly props: Readonly<Record<string, DefaultValue>>; readonly omitted: ReadonlySet<string> } {
-  const names = new Set(schema.map((field) => field.name));
+function instanceProps(schema: readonly PropField[], parts: readonly FramePart[], resolved: ResolvedFrame, index: number): InstanceValues {
+  const names = new Set([...schema.map((field) => field.name), ...FRAME_ATTRIBUTES]);
   // A map while the frame's values are laid over one another, a plain record once settled: the record is what the
   // page writer reads, and building it by key would read as a model write to the adapter-surface gate.
   const given = new Map<string, DefaultValue>();
-  const omitted = new Set<string>();
+  // A stored value for a prop the component no longer has is kept in the file and left out here.
+  const known = <T>(held: Readonly<Record<string, T>>): Map<string, T> => new Map(Object.entries(held).filter(([name]) => names.has(name)));
+  const assets = known(resolved.assets);
+  const literals = known(resolved.literals);
+  const omitted = new Set<string>(resolved.unset);
   for (const [name, value] of Object.entries(resolved.props)) {
-    // A stored value for a prop the component no longer has is kept in the file and left out here.
     if (names.has(name)) {
       given.set(name, typed(schema, name, value));
     }
   }
-  for (const name of resolved.unset) {
-    omitted.add(name);
-  }
+  const drop = (name: string): void => {
+    given.delete(name);
+    assets.delete(name);
+    literals.delete(name);
+  };
   for (const part of parts) {
+    drop(part.prop);
     if (part.value.kind === 'unset') {
-      given.delete(part.prop);
       omitted.add(part.prop);
     } else {
       given.set(part.prop, typed(schema, part.prop, part.value.value));
@@ -144,18 +162,19 @@ function instanceProps(
   const unions = unionsOf(schema);
   for (const field of schema) {
     if (!unionAllows(unions, field.name, heldBy(schema, parts, Object.fromEntries(given)))) {
-      given.delete(field.name);
+      drop(field.name);
       omitted.add(field.name);
     }
   }
+  const held = (name: string): boolean => given.has(name) || assets.has(name) || literals.has(name) || omitted.has(name);
   // An element id is what many components need before they render at all (a modal its triggers open by id), and one
   // per frame keeps the page's ids unique; it is only a preview value, like every other.
   const id = schema.find((field) => field.name === 'id' && fieldControl(field)?.kind === 'text');
-  if (id !== undefined && !given.has('id') && !omitted.has('id')) {
+  if (id !== undefined && !held('id')) {
     given.set('id', `stacki-canvas-${String(index + 1)}`);
   }
   for (const field of schema) {
-    if (field.optional || given.has(field.name) || omitted.has(field.name) || field.default !== undefined) {
+    if (field.optional || held(field.name) || field.default !== undefined) {
       continue;
     }
     const sample = sampleValue(field);
@@ -169,7 +188,7 @@ function instanceProps(
     Object.keys(props).every((name) => names.has(name)),
     'An instance is given only props the component has',
   );
-  return { props, omitted };
+  return { props, assets: Object.fromEntries(assets), literals: Object.fromEntries(literals), omitted };
 }
 
 // Numeric options are written as numbers (`size={3}`), the way the component's type reads them.
@@ -182,7 +201,7 @@ function typed(schema: readonly PropField[], name: string, value: DefaultValue):
 }
 
 // What a required prop shows when nothing gives it a value: its first option, off, its minimum, or its own name as text.
-function sampleValue(field: PropField): DefaultValue | undefined {
+export function sampleValue(field: Pick<PropField, 'name' | 'type' | 'options' | 'min'>): DefaultValue | undefined {
   const control = fieldControl(field);
   if (control === undefined) {
     return undefined;

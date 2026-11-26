@@ -13,6 +13,7 @@ import { defaultsCanvasRoute } from '../../../shared/properties/defaultsCanvas';
 import {
   EMPTY_CANVAS_FILE,
   parseComponentCanvasSource,
+  canvasAssetUses,
   serializeComponentCanvas,
   withFrameEdit,
   canvasRoot,
@@ -27,12 +28,14 @@ import {
 import type { DefaultComponent, DefaultsSnapshot } from '../../../shared/properties/componentDefaults';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 import { parsePageSource, readPage, writeText } from '../../ipc/bridge';
 import { carriedParse, toEditorPageState } from '../../editor/pageState';
 import { createDefaultsCanvas, onMetadataWrite, readMetadata, removeDefaultsCanvas, writeMetadata } from '../../ipc/projectMetadataBridge';
-import { defaultsSnapshot, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
+import { assetFileExists, defaultsSnapshot, missingAssetFiles, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
+import { onAssetEntriesChanged } from '../../ipc/assetBridge';
 import { buildCanvasLayout, type CanvasComponent } from '../../features/preview/componentCanvas/canvasModel';
-import { canvasPageSource, canvasTreeOf, defaultProps, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
+import { canvasPageSource, canvasTreeOf, frameDefaults, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
 import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentCanvas/canvasChrome';
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
@@ -205,7 +208,10 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
       const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
       const scope = scopeStillFits(current.scope, frame, layout) ? current.scope : frame;
-      setState({ ...current, settings, layout, frame, scope });
+      const next = { ...current, settings, layout, frame, scope };
+      // Two writes of one gesture can arrive before the next render: each builds on the one before.
+      stateRef.current = next;
+      setState(next);
       clearTimeout(writes.current.settingsTimer);
       writes.current.settingsTimer = setTimeout(() => void saveSettings(), CANVAS_TIMING.settingsDelayMs);
     },
@@ -226,6 +232,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   useCanvasPageWrites(state, writes, catalog, { project, translate, shell, setState });
   useCanvasMessages(state, setState, cover);
   useLiveSchema(state, app.scan, setState);
+  useRelinkedSettings(state, project, writes, setState);
   useLeaveWhenAway(state, app, finish);
   useFrameFollowsEditor(state, app, setState);
   useNoDeviceKeys(state);
@@ -279,8 +286,12 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           setState({ ...current, framePanel: 'shown' });
         }
       },
-      editProp: (edit) =>
-        update((current) => withFrameEdit(current.settings, current.component.file, rootTarget(current) === undefined ? current.scope : current.frame, edit)),
+      editValues: (scope, edits) => {
+        assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
+        if (edits.length > 0) {
+          update((current) => edits.reduce((file, edit) => withFrameEdit(file, current.component.file, scope, edit), current.settings));
+        }
+      },
       hideFramePanel: () => {
         const current = stateRef.current;
         if (current.kind === 'open' && current.framePanel === 'shown') {
@@ -374,14 +385,14 @@ async function openCanvas(
     throw new Error(`.stacki/component-canvas.json: ${parsed.error.message}`);
   }
   const snapshot = defaultsSnapshot(components.source, catalogOf(project, app.scan));
-  const component: CanvasComponent = { file, name: scanComponent.name, schema: scanComponent.schema ?? [] };
+  const component: CanvasComponent = { file, name: scanComponent.name, schema: scanComponent.schema ?? [], rest: scanComponent.hasRest === true };
   const layout = buildCanvasLayout(component, parsed.value.components[file]);
   if (layout.total > layout.frames.length) {
     app.showToast(translate('componentCanvas.notice.truncated', { shown: layout.frames.length, total: layout.total }), 'info');
   }
   const id = crypto.randomUUID();
   const pageFile = pageFileOf(id);
-  const page = pageSourceOf({ id, component, layout, settings: parsed.value }, snapshot, translate);
+  const page = pageSourceOf({ id, component, layout, settings: parsed.value }, await withMissingAssets(project, snapshot, parsed.value), translate);
   await createDefaultsCanvas(project, pageFile, page);
   try {
     const pagePath = project + '/' + pageFile;
@@ -420,7 +431,7 @@ async function openCanvas(
         scope: first.key,
         scale: 1,
         framePanel: rememberedFramePanel(),
-        defaults: defaultProps(snapshot, file, prettyComponentName(component.name)),
+        defaults: frameDefaults(snapshot, file, prettyComponentName(component.name)),
         instances,
         root,
         subject: 'frame',
@@ -451,12 +462,24 @@ function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | '
       label: frameLabel(frame, component, translate),
       row: frame.row,
       props: frame.props,
+      assets: frame.assets,
+      literals: frame.literals,
+      content: frame.content,
       omitted: frame.omitted,
       width: frame.resolved.width,
       height: frame.resolved.height,
       background: frame.resolved.background,
     })),
   });
+}
+
+// The snapshot with every file a default or a preview value names that the project no longer has: the page leaves
+// those values out rather than importing a missing file, which would break every frame. The panel says which are gone.
+async function withMissingAssets(project: string, snapshot: DefaultsSnapshot, settings: ComponentCanvasFile): Promise<DefaultsSnapshot> {
+  const named = [...new Set(canvasAssetUses(settings).map((use) => use.file))];
+  const found = await Promise.all(named.map((file) => assetFileExists(project, file)));
+  const missing = [...(await missingAssetFiles(project, snapshot.config)), ...named.filter((_, index) => found[index] !== true)];
+  return { ...snapshot, missingAssets: [...new Set(missing)] };
 }
 
 // The insertion catalog from the scan the app already holds, the way the defaults host builds it from a fresh one.
@@ -541,6 +564,8 @@ function useCanvasPageWrites(
   // what the frames' instances are given, so the page is written again from the file, never from a copy of it.
   const [defaultsVersion, setDefaultsVersion] = useState(0);
   useEffect(() => onMetadataWrite(() => setDefaultsVersion((version) => version + 1)), []);
+  // An asset renamed, moved, deleted or brought back changes what the frames can import.
+  useEffect(() => onAssetEntriesChanged(() => setDefaultsVersion((version) => version + 1)), []);
   useEffect(() => {
     if (open === undefined) {
       return undefined;
@@ -550,8 +575,8 @@ function useCanvasPageWrites(
     held.pageTimer = setTimeout(() => {
       void (async () => {
         const components = await readMetadata(project, 'components');
-        const snapshot = defaultsSnapshot(components.source, catalog.current);
-        const defaults = defaultProps(snapshot, open.component.file, prettyComponentName(open.component.name));
+        const snapshot = await withMissingAssets(project, defaultsSnapshot(components.source, catalog.current), open.settings);
+        const defaults = frameDefaults(snapshot, open.component.file, prettyComponentName(open.component.name));
         if (JSON.stringify(defaults) !== JSON.stringify(open.defaults)) {
           setState((current) => (current.kind === 'open' && current.id === open.id ? { ...current, defaults } : current));
         }
@@ -691,12 +716,49 @@ function useLiveSchema(state: CanvasState, scan: ScanResult, setState: React.Dis
       if (current.kind !== 'open' || JSON.stringify(current.component.schema) === JSON.stringify(schema)) {
         return current;
       }
-      const component = { ...current.component, schema };
+      const component = { ...current.component, schema, rest: live?.hasRest === true };
       const layout = buildCanvasLayout(component, current.settings.components[component.file]);
       const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
       return { ...current, component, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
     });
   }, [file, scan.components, setState]);
+}
+
+// A file moved in the project rewrites the canvas settings that named it (electron/project/componentDefaultRelink.ts).
+// While nothing here is waiting to be written, the canvas takes what is on disk, so its next save builds on it.
+function useRelinkedSettings(
+  state: CanvasState,
+  project: string,
+  writes: React.MutableRefObject<Writes>,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+): void {
+  const id = state.kind === 'open' ? state.id : undefined;
+  useEffect(() => {
+    if (id === undefined) {
+      return undefined;
+    }
+    const adopt = async (): Promise<void> => {
+      const held = writes.current;
+      const stored = await readMetadata(project, 'componentCanvas');
+      if (held.settingsTimer !== undefined || stored.source === undefined || stored.source === held.base) {
+        return;
+      }
+      const parsed = parseComponentCanvasSource(stored.source);
+      if (!parsed.ok) {
+        return;
+      }
+      held.base = stored.source;
+      setState((current) => {
+        if (current.kind !== 'open' || current.id !== id) {
+          return current;
+        }
+        const layout = buildCanvasLayout(current.component, parsed.value.components[current.component.file]);
+        const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
+        return { ...current, settings: parsed.value, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
+      });
+    };
+    return onAssetEntriesChanged(() => void adopt().catch((error: unknown) => console.warn('Could not re-read the component canvas settings:', error)));
+  }, [id, project, setState, writes]);
 }
 
 // Opening anything that is not the canvas page or inside it ends the canvas (it stays the root of the edit stack while

@@ -71,6 +71,7 @@ import { pressWasForEditor, type CanvasPress } from '../../features/preview/canv
 import { canvasInstanceAt, canvasRootPath, isComponentCanvasPage, useComponentCanvas } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
+import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
 
 // The Settings panel's CSS fields (the style prop) draw the code editors' chips.
@@ -727,10 +728,11 @@ function selectedContentSource(app: ShellView): string | undefined {
   return source === undefined || range === undefined ? undefined : innerSourceOf(source.slice(range.from, range.to));
 }
 
-// The Settings tab's values and handlers. A component canvas frame's instance keeps its props only: what it is given is
-// that frame's preview values (canvasFrameSettings.tsx), and its content, tag, attributes and comment are the generated
-// canvas page's, which is never edited, so they are not offered.
-function settingsOf(app: ShellView, translate: Translator, canvasInstance: CanvasInstanceSettings | undefined) {
+// The Settings tab's values and handlers. A component canvas frame's instance is the ordinary panel over the frame's
+// preview values (canvasFrameSettings.tsx): its values, its fields' defaults and every writer are the frame's. Its tag,
+// free attributes and comment are the generated canvas page's, which is never edited, so they are not offered; nothing
+// on that page is in scope, so there is no data to connect to.
+function settingsOf(app: ShellView, translate: Translator, canvasInstance: CanvasInstanceSettings | undefined): PropsPanelProps {
   const values = settingsValues(app);
   const handlers = settingsHandlers(app, translate);
   const { onChangeTag, onSetComment, ...kept } = handlers;
@@ -756,15 +758,37 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
   if (canvasInstance?.kind !== 'instance' || node?.kind !== 'component') {
     return { ...values, ...kept, onChangeTag, onSetComment };
   }
+  const { id, props, ...frame } = canvasInstance.panel;
+  // The writers of a page's own code, loops and expressions have nothing to write to on a frame.
+  const general = withoutPageWriters(kept);
   return {
     ...values,
-    ...kept,
-    node: { ...node, children: undefined },
-    onSetProp: canvasInstance.onSetProp,
-    takesSlotText: false,
+    ...general,
+    ...frame,
+    valuePolicy: 'preview' as const,
+    node: { ...node, id, props, attrOrder: Object.keys(props), children: undefined },
     allowAttrs: false,
-    richTextContent: false,
+    comment: '',
+    bindContext: undefined,
+    loopContext: undefined,
+    frontmatterImports: undefined,
+    onRenameProp: () => undefined,
+    onSetContent: () => undefined,
+    onSetText: () => undefined,
+    onSetTextPieces: undefined,
+    onRenameVariable: undefined,
+    onCommitLoopHead: undefined,
   };
+}
+
+const PAGE_WRITERS = ['onSetFrontmatter', 'onEditLoopProperty', 'onSetLoopSource'] as const;
+
+function withoutPageWriters<T extends object>(handlers: T): Omit<T, (typeof PAGE_WRITERS)[number]> {
+  const kept = { ...handlers };
+  for (const name of PAGE_WRITERS) {
+    Reflect.deleteProperty(kept, name);
+  }
+  return kept;
 }
 
 // What the Settings tab shows about the selection.
