@@ -177,7 +177,10 @@ function fakeMain(over = {}) {
         ? { agent: payload.agent, step, account: over.account ?? { name: 'Timothy Ricks', plan: 'Max', email: 'designer@example.com', source: 'account' } }
         : { agent: payload.agent, step };
     }),
-    onAiSetup: () => () => undefined,
+    onAiSetup: (callback) => {
+      listeners.setup = callback;
+      return () => undefined;
+    },
     aiCancel: record('aiCancel', { ok: true }),
     aiSetOption: record('aiSetOption', { ok: true, value: { set: true } }),
     aiChatUpdate: record('aiChatUpdate', { ok: true, value: summary }),
@@ -1143,6 +1146,39 @@ test('a key, token or cloud sign-in is named quietly, without a value; an accoun
   assert.equal(note.tagName, 'SPAN', 'it only tells');
   assert.match(note.getAttribute('title'), /Codex is using an API key, not an account sign-in\. Usage may be billed to that key\./);
   assert.equal(ai.accountLabel('claude', { name: undefined, plan: undefined, email: undefined, source: 'cloud' }, ai.ENGLISH_TRANSLATE), 'Cloud sign-in');
+});
+
+test('a Claude chat says when it is billed per use, and what a sign-in that is no subscription needs', async (context) => {
+  ai.resetAiStore();
+  window.localStorage.clear();
+  const claude = { ...summary, agent: 'claude' };
+  const { calls, listeners } = fakeMain({ trusted: true, chats: [claude] });
+  const { container, root } = await mount();
+  context.after(() => act(() => root.unmount()));
+  const account = { name: undefined, plan: 'Max', email: undefined, source: 'account' };
+  const push = async (state) => {
+    await act(async () => listeners.setup({ agent: 'claude', ...state }));
+    await settle();
+  };
+  await push({ step: 'ready', account });
+  assert.equal(container.querySelector('.ai-billing') === null, true, 'a subscription within its plan says nothing');
+  await push({ step: 'ready', account, billing: 'extra-usage' });
+  const warning = container.querySelector('.ai-billing');
+  assert.equal(warning?.querySelector('.ai-billing-label').textContent, 'Billed per use, not your subscription');
+  assert.equal(warning?.querySelector('button.ai-primary').textContent, 'Sign in with subscription');
+  await push({ step: 'signed-out', reason: 'billed' });
+  assert.equal(container.querySelector('.ai-billing') === null, true, 'a stopped turn warns in the card, once');
+  const card = () => container.querySelector('.ai-signin');
+  assert.equal(card()?.querySelector('strong').textContent, 'Billed per use, not your subscription');
+  assert.equal(card()?.querySelector('p').textContent, 'Stacki stopped the reply to avoid more charges.');
+  await push({ step: 'signed-out', reason: 'not-subscription' });
+  assert.equal(card()?.querySelector('p').textContent, 'Stacki needs a Claude subscription sign-in.');
+  await act(async () => card().querySelector('button.ai-primary').click());
+  await settle();
+  assert.equal(
+    calls.some((call) => call.name === 'aiSetup' && call.payload.agent === 'claude' && call.payload.action.kind === 'signIn'),
+    true,
+  );
 });
 
 test('a chat whose agent needs a server sign-in says so above the composer, with Sign in right there', async (context) => {

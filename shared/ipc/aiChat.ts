@@ -904,12 +904,19 @@ export function parseSetupAction(input: unknown): SetupAction {
   }
 }
 
+/**
+ * `not-subscription`: the sign-in in effect is not proven to be a Claude subscription. `billed`: a running session
+ * was billed per use and was stopped.
+ */
+export const SIGNED_OUT_REASONS = ['not-subscription', 'billed'] as const;
+export type SignedOutReason = (typeof SIGNED_OUT_REASONS)[number];
+
 /** Where an agent's own CLI stands, in the order a person goes through it. */
 export type SetupState =
   | { readonly agent: AgentId; readonly step: 'missing' }
   | { readonly agent: AgentId; readonly step: 'installing' }
-  /** `reason`: Claude's only sign-in in effect is an API key, which the panel does not use. */
-  | { readonly agent: AgentId; readonly step: 'signed-out'; readonly reason?: 'api-key' }
+  /** `reason`: why a Claude that has some sign-in still needs the panel's subscription sign-in (`SIGNED_OUT_REASONS`). */
+  | { readonly agent: AgentId; readonly step: 'signed-out'; readonly reason?: SignedOutReason }
   /** The sign-in could not be checked (the CLI timed out, stopped or printed something unreadable). Nothing is blocked. */
   | { readonly agent: AgentId; readonly step: 'unchecked' }
   /**
@@ -923,7 +930,8 @@ export type SetupState =
       readonly needsCode: boolean;
       readonly output: string;
     }
-  | { readonly agent: AgentId; readonly step: 'ready'; readonly account: SetupAccount }
+  /** `billing`: a running session said it is charged beyond the subscription, which the panel warns about. */
+  | { readonly agent: AgentId; readonly step: 'ready'; readonly account: SetupAccount; readonly billing?: 'extra-usage' }
   /** A step that did not work: what to say, and the CLI's own output for "Copy details". */
   | {
       readonly agent: AgentId;
@@ -960,8 +968,10 @@ export function parseSetupState(input: unknown): SetupState {
   switch (step) {
     case 'missing':
     case 'installing':
-    case 'signed-out':
-      return value['reason'] === 'api-key' ? { agent, step, reason: 'api-key' } : { agent, step };
+    case 'signed-out': {
+      const reason = SIGNED_OUT_REASONS.find((candidate) => candidate === value['reason']);
+      return reason === undefined ? { agent, step } : { agent, step, reason };
+    }
     case 'unchecked':
       return { agent, step };
     case 'signing-in':
@@ -983,7 +993,8 @@ export function parseSetupState(input: unknown): SetupState {
       if (source === undefined) {
         throw new Error('account.source: unknown kind of sign-in');
       }
-      return { agent, step, account: { name, plan: field(account['plan']), email: field(account['email']), source } };
+      const shown = { name, plan: field(account['plan']), email: field(account['email']), source };
+      return value['billing'] === 'extra-usage' ? { agent, step, account: shown, billing: 'extra-usage' } : { agent, step, account: shown };
     }
     case 'failed': {
       const during = value['during'] === 'install' || value['during'] === 'sign-in' || value['during'] === 'sign-out' ? value['during'] : undefined;

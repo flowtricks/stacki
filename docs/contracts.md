@@ -2583,31 +2583,50 @@ under the composer checks again when pressed, as does focusing the window or ope
 retries on its own after each of `STATUS_RETRY_DELAYS_MS` and then stops. An agent that refuses a
 prompt still shows the sign-in card. A `ready` account carries `source` (`account`, `api-key`, `token`
 or `cloud`), the kind only; anything but `account` is named under the composer, because it may be
-billed differently. `api-key` is Codex's alone.
+billed differently. `api-key` and `cloud` are Codex's alone.
 
-**No API key for Claude** (`lib/claudeSubscriptionOnly.ts`). The panel never signs Claude in with an Anthropic API key,
-with or without another sign-in. Every Claude process it starts (status, sign-in, sign-out, install, MCP commands, the
-adapter, so chats, pin subagents, resumed and forked chats and model listing) has `ANTHROPIC_API_KEY` removed and gets
-the flag settings `{"apiKeyHelper":"","env":{"ANTHROPIC_API_KEY":""}}` (`--settings`; through the adapter,
-`_meta.claudeCode.options.settings` on every session request). Why both: a settings file's `env` block replaces the
-inherited variable, and `claude auth status` does not report a key from a project's `env` block in an untrusted folder;
-command-line settings rank above user, project and local files, and with Claude Code 2.1.332 and a local fake API no
-request carried a made-up key from any of them, while their other `env` entries stayed. Managed settings and the key a
-Console sign-in saves outrank or ignore these. Both read as `authMethod` `api_key` or `api_key_helper` when requests
-would use them, which the panel reads as `signed-out` with `reason: "api-key"`: the sign-in card offers the
-subscription sign-in and says keys are not supported. Because of those two routes, no Claude session starts or takes
-a message without a status that found another sign-in within `SESSION_PERMIT_MS` (2 minutes; signing in or out ends it
-at once). While the status cannot be checked the composer still takes typing, but the send is refused
-(`ai.error.signInUnchecked`). A change made outside Stacki is seen when the permit has aged. `ANTHROPIC_AUTH_TOKEN`,
-`CLAUDE_CODE_OAUTH_TOKEN`, cloud switches, Anthropic profiles, `CLAUDE_CONFIG_DIR`, Codex and the built-in terminal are
-unchanged. Commands the agent runs inside a session see an empty `ANTHROPIC_API_KEY`.
+**Claude on a subscription only** (`lib/claudeSubscriptionOnly.ts`, `agentSetup.ts`). Three layers, each failing closed.
+
+1. *Routes switched off.* Every Claude process the panel starts (status, token check, sign-in, sign-out, install, MCP
+   commands, the adapter, so chats, pin subagents, resumed and forked chats and model listing) has
+   `CLAUDE_BLOCKED_VARIABLES` removed (API key, bearer token, API address, extra headers, Unix socket, named and
+   federation profiles, the Bedrock, Mantle, AWS, Vertex, Google Cloud, Foundry and gateway switches),
+   `ANTHROPIC_CONFIG_DIR` pointed at the null device, and the flag settings `CLAUDE_SUBSCRIPTION_SETTINGS`: an empty
+   `apiKeyHelper`, the same variables empty and the same folder (`--settings`; through the adapter,
+   `_meta.claudeCode.options.settings` on every session request). Why both: a settings file's `env` block replaces the
+   inherited environment, and command-line settings rank above user, project and local files. With Claude Code 2.1.332,
+   made-up credentials and a local fake API, each route planted at each of those levels was neutralised. Commands the
+   agent runs inside a session see the same empty variables.
+2. *Proof of a subscription* (`readClaudeStatus`). Signed in needs `apiProvider` `firstParty` and either `authMethod`
+   `claude.ai` with `subscriptionType` `pro`, `max`, `team` or `enterprise`, or `authMethod` `oauth_token` that the
+   token check names `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`). `auth status` says `oauth_token` for every
+   token, so the check (`CLAUDE_TOKEN_CHECK_ARGS`) writes only the `initialize` control request, which sends nothing to
+   the model, and reads `account.tokenSource` (within `tokenCheckMsMax`; the CLI calls Anthropic first for a token, so
+   offline this is slow and then unchecked). Anything else, including a claude.ai sign-in without a plan and a method
+   not known here, is `signed-out` with `reason: "not-subscription"`: the card says a subscription sign-in is needed.
+   `permit` asks again for every message and new session (messages asking together share one check). While the status
+   cannot be checked the composer still takes typing, but the send is refused (`ai.error.signInUnchecked`).
+3. *What the running session says* (`shared/properties/ai/claudeBilling.ts`). Every session asks the adapter
+   (`_meta.claudeCode.emitRawSDKMessages`) for `system`/`init` and `rate_limit_event`, passed on as
+   `_claude/sdkMessage`. An `apiKeySource` other than `none` cancels the turn and holds Claude `signed-out` with
+   `reason: "billed"` until a sign-in or sign-out in Stacki (or a restart). `/login managed key` is also reported
+   beside a subscription that pays, so it asks the status again and stops only when that finds no proven subscription.
+   `rate_limit_info.isUsingOverage` puts `billing: "extra-usage"` on the `ready` state until a later event says
+   otherwise or `resetsAt` passes. Both billing states show `BillingWarning` or its card ("Billed per use, not your
+   subscription"), in the panel and, because pins start work without it, under the comment pins' bar.
+
+What this cannot see: managed (organisation) settings outrank the command line. A key, token or cloud provider they set
+fails the proof; a custom API address they set is reported nowhere. Extra usage is only known once a reply reports it,
+and an API key a session picks up is only known as its turn starts, so that one request may already be charged. Whether
+a `CLAUDE_CODE_OAUTH_TOKEN` was made by a subscription is taken from its documented meaning. `CLAUDE_CONFIG_DIR` is not
+a billing route; the sign-in in that folder is checked like any other. Codex and the built-in terminal are unchanged.
 
 **Sign-in settings from the shell** (`lib/loginShellSettings.ts`; macOS and Linux). An app opened from
 the Dock never runs shell startup files, so the person's shell is run once per app run, as a login and
 interactive shell (`-ilc`, as the terminal behaves), the first time an agent is checked or started:
 never at boot, asynchronously, within `LOGIN_SHELL_LIMITS`, and its `env -0` is read between two
-random marks. Only the names in `SIGN_IN_SETTINGS` are kept (never `ANTHROPIC_API_KEY`), each agent gets only its own, a cloud
-provider's credentials only while its switch is on, and the app's own environment wins. They reach
+random marks. Only the names in `SIGN_IN_SETTINGS` are kept (for Claude, nothing that changes how it is billed), each
+agent gets only its own, and the app's own environment wins. They reach
 the agent's status, sign-in and sign-out commands and its adapter, never installers, the dev server,
 git or the window; values are never logged or stored. A read that fails leaves the app's environment.
 Windows reads nothing: user and system variables already reach the app, and variables set only in a
@@ -2620,7 +2639,7 @@ where they read it and lasts across chats and restarts; Stacki handles no token.
 the `Status:` line of `claude mcp get <name>`; sign in with `claude mcp login <name> --no-browser` in
 a pseudo-terminal (it gives up without one; nothing is typed); `claude mcp logout <name>`. Those
 refuse a `.mcp.json` server not yet approved in Claude's own screen, so each gets
-`--settings {"enabledMcpjsonServers":["<name>"]}` (with the no-key settings in the same argument): one server, one command, written nowhere; a
+`--settings {"enabledMcpjsonServers":["<name>"]}` (with the subscription settings in the same argument): one server, one command, written nowhere; a
 rejected server stays rejected. Codex: `codex mcp list --json` (`auth_status`),
 `codex mcp login <name> [--no-browser]`, `codex mcp logout <name>`. A CLI whose help lists no
 `mcp login` is too old and says so. With `--no-browser` main opens the printed page itself, only an

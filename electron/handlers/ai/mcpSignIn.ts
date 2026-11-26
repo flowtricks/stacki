@@ -39,7 +39,7 @@ import { MCP_LIMITS } from '../../../shared/properties/mcpConfig';
 import type { AgentId } from '../../../shared/properties/ai/agentIds';
 import { spawnPipeProcess, spawnPseudoTerminal, stripTerminalCodes, type SetupCommand, type SetupProcess } from './agentSetup';
 import { realFileSystem, resolveWindowsCommand, type CommandFileSystem } from './windowsCommand';
-import { claudeSettingsArguments, withoutClaudeAPIKey } from '../../lib/claudeSubscriptionOnly';
+import { claudeSettingsArguments, claudeSubscriptionEnvironment } from '../../lib/claudeSubscriptionOnly';
 
 export const MCP_SIGN_IN_LIMITS = {
   /** How long a sign-in may wait for the browser: the CLIs' own limit. */
@@ -451,7 +451,7 @@ export class McpSignIn {
     if (cli === undefined) {
       return undefined;
     }
-    const environment = withoutClaudeAPIKey(agent, await this.deps.environment(agent));
+    const environment = claudeSubscriptionEnvironment(agent, await this.deps.environment(agent));
     const resolved = resolveWindowsCommand(
       { command: cli, args: [...args] },
       {

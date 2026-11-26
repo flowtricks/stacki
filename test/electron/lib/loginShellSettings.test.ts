@@ -1,5 +1,5 @@
 // Goal: sign-in settings set only in shell startup files reach the AI agents, and nothing more does. Only listed
-// names are kept, each agent gets only its own, cloud credentials only with their switch on, the app's own
+// names are kept, each agent gets only its own, nothing that changes how Claude is billed, the app's own
 // environment wins, startup-file chatter cannot be taken for a value, the shell is asked once, a hung, flooding,
 // broken or missing shell falls back to the app's environment within its bounds, and no value is ever logged.
 // Methodology: a fake shell (a /bin/sh script given as the shell) in a temporary HOME: it records how it was
@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
+import { CLAUDE_BLOCKED_VARIABLES } from '#dist/electron/lib/claudeSubscriptionOnly.js';
 import { LoginShellSettings, parseShellEnvironment, readLoginShell, withSignInSettings } from '#dist/electron/lib/loginShellSettings.js';
 import { adapterEnvironment } from '#dist/electron/handlers/ai/agentHost.js';
 
@@ -36,12 +37,16 @@ function fakeShell(context: { after: (run: () => void) => void }, startup: strin
   return { home, shell, base, lines, settings, starts };
 }
 
+/** What Claude starts with when the shell adds nothing: `base`, and a profile folder with nothing in it. */
+const claudeOf = (base: Readonly<Record<string, string>>) => ({ ...base, ANTHROPIC_CONFIG_DIR: os.devNull });
+
 const STARTUP = [
   "echo 'Welcome! ANTHROPIC_API_KEY=not-this-one'",
   "printf '__STACKI_guess__ANTHROPIC_AUTH_TOKEN=nor-this\\000__STACKI_guess__\\n'",
   "echo 'a warning' >&2",
   "export ANTHROPIC_API_KEY='fake-claude-key'",
   'export ANTHROPIC_CUSTOM_HEADERS="X-One: 1\nX-Two: a=b"',
+  'export CLAUDE_CODE_CERT_STORE="one\ntwo=three"',
   "export CLAUDE_CONFIG_DIR='/tmp/fake config'",
   "export OPENAI_API_KEY='fake-codex-key'",
   "export HTTPS_PROXY='http://proxy.example:8080'",
@@ -58,9 +63,10 @@ test('a noisy startup file: each agent gets only its own listed settings, whole,
   const claude = await settings.environmentFor('claude');
   assert.deepEqual(claude, {
     ...fake.base,
-    ANTHROPIC_CUSTOM_HEADERS: 'X-One: 1\nX-Two: a=b',
+    CLAUDE_CODE_CERT_STORE: 'one\ntwo=three',
     CLAUDE_CONFIG_DIR: '/tmp/fake config',
     HTTPS_PROXY: 'http://proxy.example:8080',
+    ANTHROPIC_CONFIG_DIR: os.devNull,
   });
   const codex = await settings.environmentFor('codex');
   assert.deepEqual(codex, { ...fake.base, OPENAI_API_KEY: 'fake-codex-key', HTTPS_PROXY: 'http://proxy.example:8080' });
@@ -70,45 +76,34 @@ test('a noisy startup file: each agent gets only its own listed settings, whole,
 });
 
 test('the app’s own environment wins, in either spelling of a proxy variable', posix, async (context) => {
-  const fake = fakeShell(context, `${STARTUP}\nexport https_proxy='http://other.example'\nexport ANTHROPIC_AUTH_TOKEN='from-shell'`);
+  const fake = fakeShell(context, `${STARTUP}\nexport https_proxy='http://other.example'\nexport CLAUDE_CODE_OAUTH_TOKEN='from-shell'`);
   // The fake shell inherits the app's values and then overrides them, as a real startup file can.
-  const app = { ANTHROPIC_AUTH_TOKEN: 'from-app', ANTHROPIC_API_KEY: 'a-terminal-launch-key', https_proxy: 'http://app.example' };
+  const app = { CLAUDE_CODE_OAUTH_TOKEN: 'from-app', ANTHROPIC_API_KEY: 'a-terminal-launch-key', https_proxy: 'http://app.example' };
   const claude = await fake.settings(app).environmentFor('claude');
-  assert.equal(claude['ANTHROPIC_AUTH_TOKEN'], 'from-app');
+  assert.equal(claude['CLAUDE_CODE_OAUTH_TOKEN'], 'from-app');
   assert.equal('ANTHROPIC_API_KEY' in claude, false, 'the app’s own key is taken off too');
   assert.equal(claude['https_proxy'], 'http://app.example');
   assert.equal(claude['HTTPS_PROXY'], undefined);
 });
 
-test('cloud credentials are taken only for a cloud that is switched on', () => {
+test('nothing that changes how Claude is billed is taken, whatever the startup file switches on', () => {
   const shell = new Map([
+    ...CLAUDE_BLOCKED_VARIABLES.map((name) => [name, '1'] as const),
     ['AWS_PROFILE', 'work'],
-    ['AWS_SECRET_ACCESS_KEY', 'fake'],
     ['GOOGLE_APPLICATION_CREDENTIALS', '/fake.json'],
-    ['ANTHROPIC_FOUNDRY_API_KEY', 'fake'],
+    ['CLAUDE_CODE_OAUTH_TOKEN', 'fake-subscription-token'],
   ]);
-  assert.deepEqual(withSignInSettings('claude', {}, shell), {});
-  assert.deepEqual(withSignInSettings('claude', {}, new Map([...shell, ['CLAUDE_CODE_USE_BEDROCK', '0']])), {});
-  assert.deepEqual(withSignInSettings('claude', {}, new Map([...shell, ['CLAUDE_CODE_USE_BEDROCK', '1']])), {
-    CLAUDE_CODE_USE_BEDROCK: '1',
-    AWS_PROFILE: 'work',
-    AWS_SECRET_ACCESS_KEY: 'fake',
-  });
-  // The switch may come from the app and the credentials from the shell.
-  assert.deepEqual(withSignInSettings('claude', { CLAUDE_CODE_USE_VERTEX: '1' }, shell), {
-    CLAUDE_CODE_USE_VERTEX: '1',
-    GOOGLE_APPLICATION_CREDENTIALS: '/fake.json',
-  });
-  assert.deepEqual(withSignInSettings('codex', {}, new Map([...shell, ['CLAUDE_CODE_USE_BEDROCK', '1']])), {});
+  assert.deepEqual(withSignInSettings('claude', {}, shell), { CLAUDE_CODE_OAUTH_TOKEN: 'fake-subscription-token' });
+  assert.deepEqual(withSignInSettings('codex', {}, shell), {});
 });
 
 test('the parser keeps listed names between the two marks and nothing else', () => {
   const mark = '__STACKI_0123456789abcdef__';
-  const block = ['ANTHROPIC_AUTH_TOKEN=a=b', 'HOME=/h', 'NODE_OPTIONS=--require /x', 'CODEX_HOME=', '=odd', 'junk', ''].join('\0');
-  assert.deepEqual([...(parseShellEnvironment(`noise${mark}${block}${mark}more`, mark) ?? [])], [['ANTHROPIC_AUTH_TOKEN', 'a=b']]);
-  assert.equal(parseShellEnvironment(`${mark}ANTHROPIC_AUTH_TOKEN=a\0`, mark), undefined, 'a block that never closed');
-  assert.equal(parseShellEnvironment('ANTHROPIC_AUTH_TOKEN=a', mark), undefined);
-  const long = `${mark}ANTHROPIC_AUTH_TOKEN=${'a'.repeat(40_000)}\0${mark}`;
+  const block = ['CLAUDE_CODE_OAUTH_TOKEN=a=b', 'HOME=/h', 'NODE_OPTIONS=--require /x', 'CODEX_HOME=', '=odd', 'junk', ''].join('\0');
+  assert.deepEqual([...(parseShellEnvironment(`noise${mark}${block}${mark}more`, mark) ?? [])], [['CLAUDE_CODE_OAUTH_TOKEN', 'a=b']]);
+  assert.equal(parseShellEnvironment(`${mark}CLAUDE_CODE_OAUTH_TOKEN=a\0`, mark), undefined, 'a block that never closed');
+  assert.equal(parseShellEnvironment('CLAUDE_CODE_OAUTH_TOKEN=a', mark), undefined);
+  const long = `${mark}CLAUDE_CODE_OAUTH_TOKEN=${'a'.repeat(40_000)}\0${mark}`;
   assert.equal(parseShellEnvironment(long, mark)?.size, 0, 'an overlong value is dropped');
 });
 
@@ -117,13 +112,13 @@ test('a startup file that never returns, floods, exits early or a missing shell:
   // Long enough for the system to start a new script, short against the 30 s the startup file would take: the
   // "timed-out" line below is what shows the bound ended the wait.
   const settings = hung.settings({}, 3_000);
-  assert.deepEqual(await settings.environmentFor('claude'), hung.base);
-  assert.deepEqual(await settings.environmentFor('claude'), hung.base);
+  assert.deepEqual(await settings.environmentFor('claude'), claudeOf(hung.base));
+  assert.deepEqual(await settings.environmentFor('claude'), claudeOf(hung.base));
   assert.deepEqual(hung.starts(), ['-ilc'], 'not asked again');
   assert.match(hung.lines.join('\n'), /were not read \(timed-out\)/);
 
   const early = fakeShell(context, "export ANTHROPIC_API_KEY='fake'\nexit 1");
-  assert.deepEqual(await early.settings().environmentFor('claude'), early.base);
+  assert.deepEqual(await early.settings().environmentFor('claude'), claudeOf(early.base));
   assert.match(early.lines.join('\n'), /unreadable/);
   assert.doesNotMatch(early.lines.join('\n'), /fake'/);
 
@@ -147,5 +142,5 @@ test('Windows reads nothing and starts no shell', async () => {
     platform: 'win32',
     shell: () => assert.fail('no shell on Windows'),
   });
-  assert.deepEqual(await settings.environmentFor('claude'), { Path: 'C:\\x' });
+  assert.deepEqual(await settings.environmentFor('claude'), claudeOf({ Path: 'C:\\x' }));
 });

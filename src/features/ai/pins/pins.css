@@ -139,10 +139,18 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   inset-inline: 12px;
   z-index: 20;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   pointer-events: none;
   container-type: inline-size;
   container-name: pin-bar;
+}
+/* The billing warning under the bar: over the canvas, so it takes the pointer and casts the bar's shadow. */
+.ai-pin-bar-slot > .ai-billing {
+  max-width: 100%;
+  pointer-events: auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 .ai-pin-bar {
   display: flex;

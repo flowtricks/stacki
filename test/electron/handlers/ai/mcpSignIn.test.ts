@@ -44,7 +44,7 @@ if (args[0] === '--settings') {
   approved = flags.enabledMcpjsonServers ?? [];
   args = args.slice(2);
 }
-// Every Claude command of the panel switches the API key routes off and starts with no key.
+// Every Claude command of the panel switches other billing routes off and starts with no key.
 if (name === 'claude') {
   if (process.env.ANTHROPIC_API_KEY !== undefined) { process.stderr.write('a key reached claude'); process.exit(70); }
   if (flags?.apiKeyHelper !== '' || flags?.env?.ANTHROPIC_API_KEY !== '') { process.stderr.write('claude without the no-key settings'); process.exit(71); }

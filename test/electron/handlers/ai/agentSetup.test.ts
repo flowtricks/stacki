@@ -39,13 +39,16 @@ interface FakeProcess {
   killed: boolean;
 }
 
+/** The fields of `claude auth status` that make a sign-in a subscription. */
+const SUBSCRIPTION = { authMethod: 'claude.ai', apiProvider: 'firstParty', subscriptionType: 'max' } as const;
+
 function fakeCli(script: (process: FakeProcess) => void) {
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-ai-setup-'));
   const started: FakeProcess[] = [];
   const make = (command: { command: string; args: readonly string[] }) => {
     let data: (text: string) => void = () => undefined;
     let done: (code: number) => void = () => undefined;
-    // Claude's commands begin with the settings that switch the API key routes off (claudeSubscriptionOnly.test.ts); the
+    // Claude's commands begin with the settings that switch other billing routes off (claudeSubscriptionOnly.test.ts); the
     // scripts here read the command after them.
     const flagged = command.args[0] === '--settings';
     const process: FakeProcess = {
@@ -117,7 +120,7 @@ test('not installed → installing → signed out, by the official installer', a
       process.emit('Installing Claude Code…\n');
       process.exit(0);
     } else if (process.args.join(' ') === 'auth status') {
-      process.emit(JSON.stringify({ loggedIn: signedIn, email: 'designer@example.com', orgName: 'Acme Studio', subscriptionType: 'max' }));
+      process.emit(JSON.stringify({ ...SUBSCRIPTION, loggedIn: signedIn, email: 'designer@example.com', orgName: 'Acme Studio' }));
       process.exit(signedIn ? 0 : 1);
     }
   });
@@ -191,7 +194,7 @@ test('cancel stops the sign-in; a sign-in that ends signed out is a failure with
         process.exit(1);
       }
     } else if (process.args.join(' ') === 'auth status') {
-      process.emit(JSON.stringify({ loggedIn: signedIn }));
+      process.emit(JSON.stringify({ ...SUBSCRIPTION, loggedIn: signedIn }));
       process.exit(0);
     } else if (process.args.join(' ') === 'auth logout') {
       signedIn = false;
@@ -225,13 +228,14 @@ test('the readers: sign-in addresses, code prompts, terminal codes and each CLI�
   assert.ok(!asksForCode('Signing in… waiting for the browser'));
   assert.equal(stripTerminalCodes('\x1b[2K\x1b[1mBold\x1b[0m\x1b]0;title\x07'), 'Bold');
   const none = { name: undefined, plan: undefined, email: undefined, source: 'account' };
-  const claude = (stdout: string, exitCode: number) => readClaudeStatus({ stdout, stderr: '', exitCode }, {});
+  const claude = (stdout: string, exitCode: number) => readClaudeStatus({ stdout, stderr: '', exitCode });
+  const subscribed = (fields: Readonly<Record<string, string>>) => claude(JSON.stringify({ ...SUBSCRIPTION, loggedIn: true, ...fields }), 0);
   // A personal account's organisation is named after its email: that is no display name.
-  assert.deepEqual(claude('{"loggedIn":true,"email":"a@b.c","orgName":"a@b.c\'s Organization","subscriptionType":"team_plus"}', 0), {
+  assert.deepEqual(subscribed({ email: 'a@b.c', orgName: "a@b.c's Organization", subscriptionType: 'team' }), {
     kind: 'signed-in',
-    account: { name: undefined, plan: 'Team Plus', email: 'a@b.c', source: 'account' },
+    account: { name: undefined, plan: 'Team', email: 'a@b.c', source: 'account' },
   });
-  assert.deepEqual(claude('{"loggedIn":true,"orgName":"Timothy Ricks","subscriptionType":"max"}', 0), {
+  assert.deepEqual(subscribed({ orgName: 'Timothy Ricks' }), {
     kind: 'signed-in',
     account: { name: 'Timothy Ricks', plan: 'Max', email: undefined, source: 'account' },
   });
@@ -247,7 +251,7 @@ function claudeCli(onLogin: (process: FakeProcess) => void, status: () => { read
       onLogin(process);
     } else if (process.args.join(' ') === 'auth status') {
       const answer = status();
-      process.emit(JSON.stringify({ loggedIn: answer.signedIn }));
+      process.emit(JSON.stringify({ ...SUBSCRIPTION, loggedIn: answer.signedIn }));
       process.exit(answer.exit);
     }
   });

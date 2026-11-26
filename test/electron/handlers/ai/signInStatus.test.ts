@@ -1,9 +1,9 @@
 // Goal: a status check that could not be made is never shown as signed out. Signed in, signed out (the CLI said
 // so) and "couldn't check" (timed out, crashed, unreadable) are three answers; a failed check is retried a stated
 // number of times and then left until asked again; Claude's answer is read from normal output only (warnings on
-// the error stream cannot spoil it) while Codex, which answers on the error stream, is still read; and the key,
-// token or cloud sign-in in use is told by its kind alone. The agent's own commands get the agent environment;
-// installers do not.
+// the error stream cannot spoil it) while Codex, which answers on the error stream, is still read; and Codex's key,
+// token or cloud sign-in is told by its kind alone. The agent's own commands get the agent environment;
+// installers do not. Which of Claude's sign-ins count is claudeSubscriptionOnly.test.ts.
 // Methodology: AgentSetup from dist/ with real child processes: a fake `claude` and `codex` (small /bin/sh
 // scripts in a temporary folder that is also HOME and the whole PATH), so the two streams, exit codes, signals
 // and timeouts are the platform's own. Skipped on Windows, which has no /bin/sh. Nothing real is run.
@@ -12,14 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import {
-  AgentSetup,
-  claudeSignInSource,
-  readClaudeStatus,
-  readCodexStatus,
-  STATUS_RETRY_DELAYS_MS,
-  type SetupDeps,
-} from '#dist/electron/handlers/ai/agentSetup.js';
+import { AgentSetup, readClaudeStatus, readCodexStatus, STATUS_RETRY_DELAYS_MS, type SetupDeps } from '#dist/electron/handlers/ai/agentSetup.js';
 import { parseSetupState, type SetupState } from '#dist/shared/ipc/aiChat.js';
 import { waitFor, waitForSteady } from '../../../helpers/waitFor.js';
 
@@ -55,14 +48,14 @@ function fakeBin(context: { after: (run: () => void) => void }) {
   return { bin, cli, runs, states, lines, make };
 }
 
+/** What `claude auth status` prints for a subscription sign-in, in the fields Stacki reads. */
+const SUBSCRIBED = '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","subscriptionType":"max"}';
+
 const answer = (json: string, exit = 0) => `printf '%s\\n' '${json}'\nexit ${exit}`;
 
 test('Claude: warnings on the error stream and chatter before the object do not make a signed-in person signed out', posix, async (context) => {
   const fake = fakeBin(context);
-  fake.cli(
-    'claude',
-    `echo '(node:1) Warning: {unrelated} deprecation' >&2\necho 'updating shims {ok}'\n${answer('{"loggedIn":true,"subscriptionType":"max"}')}`,
-  );
+  fake.cli('claude', `echo '(node:1) Warning: {unrelated} deprecation' >&2\necho 'updating shims {ok}'\n${answer(SUBSCRIBED)}`);
   const state = await fake.make().act('claude', { kind: 'detect' });
   assert.deepEqual(state, { agent: 'claude', step: 'ready', account: { name: undefined, plan: 'Max', email: undefined, source: 'account' } });
   assert.deepEqual(parseSetupState(JSON.parse(JSON.stringify(state))).step, 'ready');
@@ -128,7 +121,7 @@ test('a check that could not be made is retried a bounded number of times, then 
 test('a retry that succeeds settles the state, and a newer answer is never overwritten by an older check', posix, async (context) => {
   const fake = fakeBin(context);
   const flag = path.join(fake.bin, 'ok');
-  fake.cli('claude', `if [ -f '${flag}' ]; then ${answer('{"loggedIn":true}').replace('\n', '; ')}; fi\n: > '${flag}'\nexit 3`);
+  fake.cli('claude', `if [ -f '${flag}' ]; then ${answer(SUBSCRIBED).replace('\n', '; ')}; fi\n: > '${flag}'\nexit 3`);
   const setup = fake.make({ statusRetryDelaysMs: [5] });
   assert.equal((await setup.act('claude', { kind: 'detect' })).step, 'unchecked');
   await waitFor({ what: 'the retry', read: () => fake.states.at(-1)?.step === 'ready', until: Boolean });
@@ -137,7 +130,7 @@ test('a retry that succeeds settles the state, and a newer answer is never overw
   fs.writeFileSync(slow, '');
   fake.cli(
     'claude',
-    `if [ -f '${slow}' ]; then /bin/rm '${slow}'; /bin/sleep 0.4; ${answer('{"loggedIn":false}', 1).replace('\n', '; ')}; fi\n${answer('{"loggedIn":true}')}`,
+    `if [ -f '${slow}' ]; then /bin/rm '${slow}'; /bin/sleep 0.4; ${answer('{"loggedIn":false}', 1).replace('\n', '; ')}; fi\n${answer(SUBSCRIBED)}`,
   );
   const older = setup.act('claude', { kind: 'detect' });
   await waitFor({ what: 'the slow check to start', read: () => !fs.existsSync(slow), until: Boolean });
@@ -149,23 +142,21 @@ test('a retry that succeeds settles the state, and a newer answer is never overw
 
 test('the agent’s own commands get the agent environment; the installer does not', posix, async (context) => {
   const fake = fakeBin(context);
-  fake.cli(
-    'claude',
-    `if [ -n "$ANTHROPIC_AUTH_TOKEN" ]; then ${answer('{"loggedIn":true,"authMethod":"oauth_token","orgName":"Saved Org"}').replace('\n', '; ')}; fi\n${answer('{"loggedIn":false}', 1)}`,
-  );
+  // Claude answers as signed in only where its own sign-in settings reach it.
+  fake.cli('claude', `if [ -n "$CLAUDE_CONFIG_DIR" ]; then ${answer(SUBSCRIBED).replace('\n', '; ')}; fi\n${answer('{"loggedIn":false}', 1)}`);
   const installs: (string | undefined)[] = [];
-  const secret = 'fake-token-for-this-test';
-  const setup = fake.make({ agentEnvironment: async () => ({ PATH: fake.bin, HOME: fake.bin, ANTHROPIC_AUTH_TOKEN: secret }) });
+  const secret = 'fake-folder-for-this-test';
+  const setup = fake.make({ agentEnvironment: async () => ({ PATH: fake.bin, HOME: fake.bin, CLAUDE_CONFIG_DIR: secret }) });
   assert.deepEqual(await setup.act('claude', { kind: 'detect' }), {
     agent: 'claude',
     step: 'ready',
-    account: { name: undefined, plan: undefined, email: undefined, source: 'token' },
+    account: { name: undefined, plan: 'Max', email: undefined, source: 'account' },
   });
   assert.doesNotMatch(JSON.stringify(fake.states) + fake.lines.join('\n'), new RegExp(secret));
   const installer = fake.make({
-    agentEnvironment: async () => ({ ANTHROPIC_AUTH_TOKEN: secret }),
+    agentEnvironment: async () => ({ CLAUDE_CONFIG_DIR: secret }),
     spawnPipe: (_command, environment) => {
-      installs.push(environment['ANTHROPIC_AUTH_TOKEN']);
+      installs.push(environment['CLAUDE_CONFIG_DIR']);
       return {
         onData: () => undefined,
         onExit: (listener: (code: number) => void) => setImmediate(() => listener(1)),
@@ -197,23 +188,13 @@ test('a sign-in whose command succeeds but cannot be checked is not called faile
   assert.ok(!fake.states.some((state) => state.step === 'failed'));
 });
 
-test('which sign-in Claude will use follows its documented order, from names alone; boundaries reject unknown kinds', () => {
-  assert.equal(claudeSignInSource('claude.ai', {}), 'account');
-  assert.equal(claudeSignInSource(undefined, {}), 'account');
-  assert.equal(claudeSignInSource('oauth_token', { ANTHROPIC_AUTH_TOKEN: 'y' }), 'token');
-  assert.equal(claudeSignInSource('oauth_token', { ANTHROPIC_AUTH_TOKEN: 'y', CLAUDE_CODE_USE_BEDROCK: '1' }), 'cloud');
-  assert.equal(claudeSignInSource('claude.ai', { CLAUDE_CODE_USE_VERTEX: '0' }), 'account');
-  for (const authMethod of ['api_key', 'api_key_helper']) {
-    const printed = { stdout: JSON.stringify({ loggedIn: true, authMethod, apiKeySource: 'apiKeyHelper' }), stderr: '', exitCode: 0 };
-    assert.deepEqual(readClaudeStatus(printed, {}), { kind: 'signed-out', reason: 'api-key' }, 'a key in effect is not a sign-in');
-  }
-  assert.equal(claudeSignInSource('oauth_token', {}), 'token');
-  assert.equal(claudeSignInSource('third_party', {}), 'cloud');
-  assert.deepEqual(readClaudeStatus({ stdout: '[]', stderr: '', exitCode: 0 }, {}), { kind: 'unreadable' });
-  assert.deepEqual(readClaudeStatus({ stdout: '{"loggedIn":"yes"}', stderr: '', exitCode: 0 }, {}), { kind: 'unreadable' });
+test('boundaries refuse what cannot be read, and unknown kinds', () => {
+  assert.deepEqual(readClaudeStatus({ stdout: '[]', stderr: '', exitCode: 0 }), { kind: 'unreadable' });
+  assert.deepEqual(readClaudeStatus({ stdout: '{"loggedIn":"yes"}', stderr: '', exitCode: 0 }), { kind: 'unreadable' });
   assert.deepEqual(readCodexStatus({ stdout: '', stderr: '', exitCode: 0 }), { kind: 'unreadable' });
   assert.deepEqual(readCodexStatus({ stdout: '', stderr: 'Logged in using ChatGPT', exitCode: 2 }), { kind: 'unreadable' });
   assert.equal(parseSetupState({ agent: 'claude', step: 'unchecked' }).step, 'unchecked');
+  assert.deepEqual(parseSetupState({ agent: 'claude', step: 'signed-out', reason: 'made-up' }), { agent: 'claude', step: 'signed-out' });
   assert.throws(() => parseSetupState({ agent: 'claude', step: 'ready', account: {} }), /source/);
   assert.throws(() => parseSetupState({ agent: 'claude', step: 'ready', account: { source: 'sk-secret' } }), /source/);
 });

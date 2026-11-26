@@ -171,6 +171,13 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       runCompaction(id, sessionId, text);
       return;
     }
+    if (text.includes('report billing')) {
+      // Claude's own start-of-turn message, as the adapter passes it on for a session that asked for it; the turn
+      // then stays held until the host cancels it.
+      send({ method: '_claude/sdkMessage', params: { sessionId, message: { type: 'system', subtype: 'init', apiKeySource: 'ANTHROPIC_API_KEY' } } });
+      held = { id, sessionId };
+      return;
+    }
     if (text.includes('hold')) {
       update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Working' } });
       held = { id, sessionId };

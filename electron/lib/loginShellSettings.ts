@@ -7,7 +7,7 @@
 //
 // What keeps this narrow:
 // - Only listed names are kept, and each agent gets only its own list: Claude never sees a Codex key, nor
-//   Codex an Anthropic one. A cloud provider's credentials are taken only when that provider is switched on.
+//   Codex an Anthropic one. Claude's list holds nothing that changes how it is billed (claudeSubscriptionOnly.ts).
 // - Only the agent's own CLI and adapter get them. Installers, the dev server, git and the terminal do not
 //   (the terminal's shell reads its startup files itself).
 // - The app's own environment wins over the shell's.
@@ -24,7 +24,7 @@ import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import { assert } from '../../shared/core/assert';
 import type { AgentId } from '../../shared/properties/ai/agentIds';
-import { withoutClaudeAPIKey } from './claudeSubscriptionOnly';
+import { claudeSubscriptionEnvironment } from './claudeSubscriptionOnly';
 
 export const LOGIN_SHELL_LIMITS = {
   readMsMax: 10_000,
@@ -44,142 +44,55 @@ const PROXY_PAIRS = [
 
 const PROXY_NAMES: readonly string[] = PROXY_PAIRS.flat();
 
-/** A cloud provider: its switches, and the names taken only when one of them is on. */
-interface CloudSettings {
-  readonly switches: readonly string[];
-  readonly names: readonly string[];
-}
-
-interface AgentSettings {
-  readonly names: readonly string[];
-  readonly clouds: readonly CloudSettings[];
-}
-
 /**
  * The lists, from each CLI's own documentation.
- * Claude: https://code.claude.com/docs/en/env-vars, /authentication, /amazon-bedrock, /claude-platform-on-aws,
- * /google-vertex-ai, /microsoft-foundry and /network-config.
+ * Claude: https://code.claude.com/docs/en/env-vars, /authentication and /network-config. The panel runs it on a
+ * subscription only, so no key, bearer token, profile, gateway address or cloud provider is taken.
  * Codex: https://developers.openai.com/codex/environment-variables and /auth, and the codex-acp adapter's
  * README (OPENAI_API_KEY, CODEX_API_KEY). Codex documents no proxy variable; its HTTP client reads the usual ones.
  * A custom Codex provider may name any variable (`env_key` in config.toml): those cannot be listed here.
  */
-export const SIGN_IN_SETTINGS: Readonly<Record<AgentId, AgentSettings>> = {
-  claude: {
-    names: [
-      // Never ANTHROPIC_API_KEY: the panel does not sign Claude in with a key (claudeSubscriptionOnly.ts).
-      'ANTHROPIC_AUTH_TOKEN',
-      'CLAUDE_CODE_OAUTH_TOKEN',
-      'ANTHROPIC_PROFILE',
-      'ANTHROPIC_FEDERATION_RULE_ID',
-      'ANTHROPIC_ORGANIZATION_ID',
-      'ANTHROPIC_WORKSPACE_ID',
-      'CLAUDE_CONFIG_DIR',
-      'ANTHROPIC_BASE_URL',
-      'ANTHROPIC_CUSTOM_HEADERS',
-      'NODE_EXTRA_CA_CERTS',
-      'CLAUDE_CODE_CERT_STORE',
-      'CLAUDE_CODE_CLIENT_CERT',
-      'CLAUDE_CODE_CLIENT_KEY',
-      'CLAUDE_CODE_CLIENT_KEY_PASSPHRASE',
-      'CLAUDE_CODE_PROXY_RESOLVES_HOSTS',
-      ...PROXY_NAMES,
-    ],
-    clouds: [
-      {
-        switches: ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_ANTHROPIC_AWS'],
-        names: [
-          'AWS_PROFILE',
-          'AWS_ACCESS_KEY_ID',
-          'AWS_SECRET_ACCESS_KEY',
-          'AWS_SESSION_TOKEN',
-          'AWS_BEARER_TOKEN_BEDROCK',
-          'AWS_SHARED_CREDENTIALS_FILE',
-          'AWS_CONFIG_FILE',
-          'AWS_REGION',
-          'AWS_DEFAULT_REGION',
-          'ANTHROPIC_BEDROCK_BASE_URL',
-          'ANTHROPIC_BEDROCK_MANTLE_BASE_URL',
-          'ANTHROPIC_BEDROCK_REGION_PREFIX',
-          'ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION',
-          'ANTHROPIC_AWS_WORKSPACE_ID',
-          'ANTHROPIC_AWS_API_KEY',
-          'ANTHROPIC_AWS_BASE_URL',
-          'CLAUDE_CODE_SKIP_BEDROCK_AUTH',
-          'CLAUDE_CODE_SKIP_MANTLE_AUTH',
-          'CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH',
-        ],
-      },
-      {
-        switches: ['CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD'],
-        names: [
-          'CLOUD_ML_REGION',
-          'ANTHROPIC_VERTEX_PROJECT_ID',
-          'ANTHROPIC_VERTEX_BASE_URL',
-          'GOOGLE_APPLICATION_CREDENTIALS',
-          'GOOGLE_CLOUD_PROJECT',
-          'GCLOUD_PROJECT',
-          'CLAUDE_CODE_SKIP_VERTEX_AUTH',
-          'ANTHROPIC_GOOGLE_CLOUD_PROJECT',
-          'ANTHROPIC_GOOGLE_CLOUD_LOCATION',
-          'ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID',
-          'ANTHROPIC_GOOGLE_CLOUD_BASE_URL',
-          'CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH',
-        ],
-      },
-      {
-        switches: ['CLAUDE_CODE_USE_FOUNDRY'],
-        names: [
-          'ANTHROPIC_FOUNDRY_RESOURCE',
-          'ANTHROPIC_FOUNDRY_BASE_URL',
-          'ANTHROPIC_FOUNDRY_AUTH_TOKEN',
-          'ANTHROPIC_FOUNDRY_API_KEY',
-          'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
-        ],
-      },
-    ],
-  },
-  codex: {
-    names: [
-      'OPENAI_API_KEY',
-      'CODEX_API_KEY',
-      'CODEX_ACCESS_TOKEN',
-      'OPENAI_FEDERATION_RULE_ID',
-      'OPENAI_IDENTITY_TOKEN_FILE',
-      'OPENAI_WORKLOAD_IDENTITY_CONTEXT',
-      'CODEX_HOME',
-      'CODEX_CA_CERTIFICATE',
-      'SSL_CERT_FILE',
-      ...PROXY_NAMES,
-    ],
-    clouds: [],
-  },
+export const SIGN_IN_SETTINGS: Readonly<Record<AgentId, readonly string[]>> = {
+  claude: [
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'CLAUDE_CONFIG_DIR',
+    'NODE_EXTRA_CA_CERTS',
+    'CLAUDE_CODE_CERT_STORE',
+    'CLAUDE_CODE_CLIENT_CERT',
+    'CLAUDE_CODE_CLIENT_KEY',
+    'CLAUDE_CODE_CLIENT_KEY_PASSPHRASE',
+    'CLAUDE_CODE_PROXY_RESOLVES_HOSTS',
+    ...PROXY_NAMES,
+  ],
+  codex: [
+    'OPENAI_API_KEY',
+    'CODEX_API_KEY',
+    'CODEX_ACCESS_TOKEN',
+    'OPENAI_FEDERATION_RULE_ID',
+    'OPENAI_IDENTITY_TOKEN_FILE',
+    'OPENAI_WORKLOAD_IDENTITY_CONTEXT',
+    'CODEX_HOME',
+    'CODEX_CA_CERTIFICATE',
+    'SSL_CERT_FILE',
+    ...PROXY_NAMES,
+  ],
 };
 
 /** Every name any agent may take: what is kept from the shell's answer. Everything else is dropped as it is read. */
-const LISTED_NAMES: ReadonlySet<string> = new Set(
-  Object.values(SIGN_IN_SETTINGS).flatMap((agent) => [...agent.names, ...agent.clouds.flatMap((cloud) => [...cloud.switches, ...cloud.names])]),
-);
+const LISTED_NAMES: ReadonlySet<string> = new Set(Object.values(SIGN_IN_SETTINGS).flat());
 
 type Environment = Readonly<Record<string, string | undefined>>;
-
-/** A switch variable as the CLIs read it: set, and not turned off. */
-export function isSwitchedOn(value: string | undefined): boolean {
-  return value !== undefined && value !== '' && value !== '0' && value.toLowerCase() !== 'false';
-}
 
 /**
  * `base` (the app's own environment) with `agent`'s settings from the login shell added where the app has none.
  */
 export function withSignInSettings(agent: AgentId, base: Environment, shell: ReadonlyMap<string, string>): Environment {
-  const lists = SIGN_IN_SETTINGS[agent];
   const inApp = (name: string): boolean => {
     const pair = PROXY_PAIRS.find((names) => names.some((candidate) => candidate === name));
     return (pair ?? [name]).some((candidate) => base[candidate] !== undefined);
   };
-  const on = (name: string): boolean => isSwitchedOn(inApp(name) ? base[name] : shell.get(name));
-  const wanted = [...lists.names, ...lists.clouds.filter((cloud) => cloud.switches.some(on)).flatMap((cloud) => [...cloud.switches, ...cloud.names])];
   const result: Record<string, string | undefined> = { ...base };
-  for (const name of wanted) {
+  for (const name of SIGN_IN_SETTINGS[agent]) {
     const value = shell.get(name);
     if (value !== undefined && !inApp(name)) {
       result[name] = value;
@@ -311,7 +224,7 @@ export class LoginShellSettings {
   /** `agent`'s environment: the app's, plus its sign-in settings from the login shell. Waits only for the first read. */
   async environmentFor(agent: AgentId): Promise<Environment> {
     const shell = await this.shellSettings();
-    return withoutClaudeAPIKey(agent, withSignInSettings(agent, this.deps.environment(), shell));
+    return claudeSubscriptionEnvironment(agent, withSignInSettings(agent, this.deps.environment(), shell));
   }
 
   private shellSettings(): Promise<ReadonlyMap<string, string>> {

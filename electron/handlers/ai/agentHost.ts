@@ -24,8 +24,9 @@
 // agent's asking mode; the adapter's environment is the person's shell
 // environment with Stacki's own variables and any host agent session's removed.
 import { spawn, type ChildProcess } from 'node:child_process';
-import { claudeSessionMeta, withoutClaudeAPIKey } from '../../lib/claudeSubscriptionOnly';
-import type { SessionPermit } from './agentSetup';
+import { claudeSessionMeta, claudeSubscriptionEnvironment } from '../../lib/claudeSubscriptionOnly';
+import type { SessionPermit, SessionVerdict } from './agentSetup';
+import { CLAUDE_RAW_MESSAGE_METHOD, parseClaudeSessionSignal, type ClaudeBillingSignal } from '../../../shared/properties/ai/claudeBilling';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -171,6 +172,8 @@ export interface AgentHostDeps {
   readonly agentEnvironment?: (agent: AgentId) => Promise<Readonly<Record<string, string | undefined>>>;
   /** Asked before an agent's process starts or takes a message (agentSetup.ts `permit`). Absent: always allowed. */
   readonly permit?: (agent: AgentId) => Promise<SessionPermit>;
+  /** What a running Claude session says about who pays (agentSetup.ts `sessionSignal`). Absent: nothing is watched. */
+  readonly sessionSignal?: (agent: AgentId, signal: ClaudeBillingSignal) => Promise<SessionVerdict>;
   readonly now: () => number;
   /** The person's home folder, where user skills live (`~/.claude/skills`); the operating system's by default. */
   readonly home?: () => string;
@@ -972,7 +975,7 @@ export class AgentHost {
     );
   }
 
-  // The settings of a session: for Claude, the no-key ones and reading this project's pin pictures without asking.
+  // The settings of a session: for Claude, the subscription ones and reading this project's pin pictures without asking.
   private sessionMeta(agent: AgentId, root: string): ReturnType<typeof claudeSessionMeta> {
     return claudeSessionMeta(agent, agent === 'claude' ? [this.pictures.readRule(root)] : []);
   }
@@ -1075,7 +1078,7 @@ export class AgentHost {
   }): AgentProcess {
     const runnable = runnableAdapterCli(cli, this.deps.environment());
     const environment = {
-      ...adapterEnvironment(withoutClaudeAPIKey(agent, agentEnvironment), ADAPTERS[agent].cliVariable, runnable),
+      ...adapterEnvironment(claudeSubscriptionEnvironment(agent, agentEnvironment), ADAPTERS[agent].cliVariable, runnable),
       ...autoCompactEnvironment(agent, this.deps.autoCompactPercent?.()),
     };
     const spawnedAt = this.deps.now();
@@ -1431,7 +1434,30 @@ export class AgentHost {
     return events;
   }
 
+  // What Claude's session says about who pays. A stopped turn is cancelled the way "Stop agent" cancels it.
+  private watchBilling(process: AgentProcess, params: unknown): void {
+    const watch = this.deps.sessionSignal;
+    const parsed = parseClaudeSessionSignal(params);
+    if (process.agent !== 'claude' || watch === undefined || parsed === undefined) {
+      return;
+    }
+    void watch(process.agent, parsed.signal).then((verdict) => {
+      if (verdict !== 'stop') {
+        return;
+      }
+      const runtime = this.runtimeOfSession(process, parsed.sessionId);
+      if (runtime !== undefined) {
+        this.permissions.cancel(runtime.chat);
+      }
+      process.connection.notify('session/cancel', { sessionId: parsed.sessionId });
+    });
+  }
+
   private handleNotification(process: AgentProcess, method: string, params: unknown): void {
+    if (method === CLAUDE_RAW_MESSAGE_METHOD) {
+      this.watchBilling(process, params);
+      return;
+    }
     if (method !== 'session/update') {
       return; // Auth status and other extensions: the turn's own answer says what matters.
     }

@@ -76,8 +76,17 @@ dom.window.avb = {
   aiAck: () => undefined,
   onAiEvents: () => () => undefined,
   onAiAgentStatus: () => () => undefined,
-  onAiSetup: () => () => undefined,
+  onAiSetup: (listener) => {
+    pushSetup = listener;
+    return () => undefined;
+  },
+  aiSetup: async (payload) => {
+    setupCalls.push(payload.action.kind);
+    return { agent: payload.agent, step: 'signing-in', url: undefined, needsCode: false, output: '' };
+  },
 };
+let pushSetup;
+const setupCalls = [];
 
 const translate = (key) => key;
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -162,6 +171,39 @@ test('the mode tip goes when the mode is left under the pointer, and does not re
     await act(async () => ui.pins.setCommentMode('on'));
     await settle();
     assert.equal(tipText(), '');
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test('Claude billed beyond the subscription: the warning stands under the bar, with the way to sign in', async () => {
+  const root = await mount();
+  const warning = () => document.querySelector('.ai-pin-bar-slot > .ai-billing');
+  const account = { name: undefined, plan: 'Max', email: undefined, source: 'account' };
+  try {
+    for (const quiet of [
+      { agent: 'claude', step: 'ready', account },
+      { agent: 'claude', step: 'signed-out' },
+      { agent: 'claude', step: 'signed-out', reason: 'not-subscription' },
+      { agent: 'claude', step: 'unchecked' },
+    ]) {
+      await act(async () => pushSetup(quiet));
+      assert.equal(warning() === null, true, `no warning: ${quiet.step} ${quiet.reason ?? ''}`);
+    }
+    for (const loud of [
+      { agent: 'claude', step: 'ready', account, billing: 'extra-usage' },
+      { agent: 'claude', step: 'signed-out', reason: 'billed' },
+    ]) {
+      await act(async () => pushSetup(loud));
+      assert.equal(warning()?.querySelector('.ai-billing-label').textContent, 'Billed per use, not your subscription');
+      assert.equal(warning()?.querySelector('button').textContent, 'Sign in with subscription');
+    }
+    await act(async () => Simulate.mouseEnter(warning().querySelector('.ai-billing-label')));
+    await untilTip();
+    assert.equal(tipText(), 'Stacki stopped the reply to avoid more charges.');
+    await act(async () => Simulate.click(warning().querySelector('button')));
+    await settle();
+    assert.deepEqual(setupCalls, ['signIn']);
   } finally {
     await act(async () => root.unmount());
   }

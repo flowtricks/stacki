@@ -20,11 +20,13 @@ import { bubbleText as centralBubbleText, close as centralClose } from '../../..
 import FittedTooltip from '../../../ui/FittedTooltip';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useAiState } from '../aiStore';
+import { BillingWarning, billingWarning } from '../BillingWarning';
 import { setPanelMode } from '../panelModes';
 import { TipButton } from '../sessions/TipButton';
 import { COMMENT_MODE_ID } from './commentMode';
 import { PinList } from './PinList';
 import {
+  pinAgent,
   progressOf,
   sendAllPins,
   sendReadiness,
@@ -111,6 +113,8 @@ export function PinBar() {
     return undefined;
   }
   const readiness = sendReadiness(pins, ai);
+  // Asked of Claude whenever it is the agent "Send all" would go to (a warning is only ever Claude's).
+  const warning = billingWarning(ai.setups.get(pinAgent(ai)));
   const moving = pins.moving === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.moving);
   const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined).length;
   const empty = saved === 0 && moving === undefined;
@@ -158,6 +162,8 @@ export function PinBar() {
           )}
         {pins.listOpen && <PinList anchor={listButton.current ?? undefined} />}
       </div>
+      {/* Pins start work with the panel out of view, so the warning about its billing stands here too. */}
+      {warning !== undefined && <BillingWarning kind={warning} />}
     </div>
   );
 }

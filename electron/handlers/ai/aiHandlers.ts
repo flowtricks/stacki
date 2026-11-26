@@ -104,6 +104,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       environment: buildShellEnv,
       agentEnvironment,
       permit: (agent) => agentSetup().permit(agent),
+      sessionSignal: (agent, signal) => agentSetup().sessionSignal(agent, signal),
       now: Date.now,
       version: options.version(),
       askBeforeTrust: options.askBeforeTrust,

@@ -54,6 +54,7 @@ import { agentBadge, type AgentBadge } from './agentSwitch';
 import { SetupCard } from './SetupCard';
 import { TrustCard } from './TrustCard';
 import { McpSignInCard } from './McpSignInCard';
+import { BillingWarning, billingWarning } from './BillingWarning';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
@@ -302,6 +303,8 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
         items={view.items}
         eligible={hold === undefined && state.trusted && availability?.state === 'ready'}
       />
+      {/* A stopped turn's warning is the sign-in card itself; extra usage goes on, so its warning stands here. */}
+      {billingWarning(setup) === 'extra-usage' && <BillingWarning kind="extra-usage" />}
       <RunningChip view={view} chatId={chatId} projectPath={projectPath} />
       <ChatComposer chat={chatId} agent={agent} view={view} draft={draft} projectPath={projectPath} disabled={blocked} state={state} />
     </>
