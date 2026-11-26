@@ -1311,6 +1311,7 @@
     "src/app/state/projectSources.ts",
     "src/app/state/useListProps.ts",
     "src/app/styles.css",
+    "src/editor/richAssetImports.ts",
     "src/editor/attrOrder.ts",
     "src/editor/attributesBinding.ts",
     "src/editor/bindingPath.ts",

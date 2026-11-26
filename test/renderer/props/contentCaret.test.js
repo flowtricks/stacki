@@ -28,6 +28,7 @@ buildSync({
 });
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 global.window = dom.window;
+global.NodeFilter = dom.window.NodeFilter;
 global.document = dom.window.document;
 global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
@@ -44,7 +45,7 @@ function Editor({ source }) {
   pageStateRef.current = { pageState: page };
   reload = (source) => setPage(parsePage(source));
   const { setNodeInline } = useContentEdits(
-    { pageStateRef },
+    { pageStateRef, projectRef: { current: undefined } },
     {
       commitEdit(gesture) {
         const model = gesture.apply(page.model);

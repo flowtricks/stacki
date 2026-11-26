@@ -37,6 +37,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
       <RichTextContentField
         label={translate('props.element.content')}
         source={state.contentSource ?? plainChildrenHTML(node.children)}
+        shown={state.contentShown}
         onSetNodes={onSetInline}
         onSetSource={state.onSetContentSource}
       />
