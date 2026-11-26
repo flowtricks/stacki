@@ -295,7 +295,8 @@ const TAG_COMMANDS: Readonly<Record<'strong' | 'em' | 's', string>> = {
 /** The text of the caret's block from its start up to the caret. */
 export function lineBeforeCaret(host: HTMLElement): string | undefined {
   const range = rangeIn(host);
-  return range === undefined ? undefined : lineRange(host, range).toString();
+  // The browser types a space that ends a line as a non-breaking one; a Markdown prefix is typed with a space.
+  return range === undefined ? undefined : lineRange(host, range).toString().replaceAll('\u00a0', ' ');
 }
 
 /** The block the caret is in, when it is a plain paragraph (or bare text). */

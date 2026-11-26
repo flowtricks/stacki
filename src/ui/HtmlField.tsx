@@ -418,8 +418,16 @@ function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlac
         setMedia({ kind: choice.media, place: { top: (place?.top ?? 0) + (place?.height ?? 0) + 6, left: 12 } });
         pickMedia(choice.media, (address) => insertMedia(choice.media, address));
         return;
+      case 'list': {
+        // A list of its own, beside the line it replaces: the browser's command would nest it in that paragraph.
+        const element = editor.restore();
+        if (element !== undefined) {
+          insertBlock(element, richElement(element.ownerDocument, choice.list));
+          editor.emit();
+        }
+        return;
+      }
       case 'block':
-      case 'list':
       case 'rule':
       case 'link':
         onAction(choice);

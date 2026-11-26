@@ -16,6 +16,9 @@ import { richTextNodes, richTextView, sameRichContent, withoutLayoutSpace, type 
 
 export { sameRichContent } from './richTextContent';
 
+// How many of the dialog's own writes it knows as its own when the page answers.
+const RECENT_WRITES_MAX = 32;
+
 // Long lines wrap, as in the panel's other code fields.
 const WRAPPED = [EditorView.lineWrapping];
 
@@ -97,10 +100,11 @@ export function RichTextContentField(props: {
 function RichTextDialog(props: { readonly label: string; readonly html: string; readonly onWrite: (html: string) => void; readonly onClose: () => void }) {
   const translate = useTranslate();
   const [draft, setDraft] = useState(props.html);
-  const written = useRef(props.html);
+  // What was written lately, newest last: the page may answer an earlier write after a later one was made.
+  const written = useRef<readonly string[]>([props.html]);
   useEffect(() => {
-    if (!sameRichContent(props.html, written.current, document)) {
-      written.current = props.html;
+    if (!written.current.some((html) => sameRichContent(props.html, html, document))) {
+      written.current = [props.html];
       setDraft(props.html);
     }
   }, [props.html]);
@@ -115,7 +119,7 @@ function RichTextDialog(props: { readonly label: string; readonly html: string; 
               label={props.label}
               blocks="insert"
               onChange={(html) => {
-                written.current = html;
+                written.current = [...written.current.slice(1 - RECENT_WRITES_MAX), html];
                 setDraft(html);
                 props.onWrite(html);
               }}

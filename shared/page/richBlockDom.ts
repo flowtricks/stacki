@@ -63,7 +63,7 @@ export interface RichHistory {
 interface Snapshot {
   readonly nodes: readonly ChildNode[];
   readonly html: string;
-  readonly caret: Range | undefined;
+  readonly caret: readonly [Node, number, Node, number] | undefined;
 }
 
 export function createRichHistory(host: HTMLElement): RichHistory {
@@ -71,16 +71,19 @@ export function createRichHistory(host: HTMLElement): RichHistory {
   const undone: { readonly before: Snapshot; readonly after: Snapshot }[] = [];
   const take = (): Snapshot => {
     const selection = host.ownerDocument.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
-    const inside = range !== undefined && host.contains(range.commonAncestorContainer);
-    return { nodes: Array.from(host.childNodes), html: host.innerHTML, caret: inside ? range.cloneRange() : undefined };
+    // The caret as positions, not a Range: a range moves when the nodes it is in are taken out and put back.
+    const anchor = selection?.anchorNode ?? undefined;
+    const focus = selection?.focusNode ?? undefined;
+    const caret =
+      selection !== null && anchor !== undefined && focus !== undefined && host.contains(anchor)
+        ? ([anchor, selection.anchorOffset, focus, selection.focusOffset] as const)
+        : undefined;
+    return { nodes: Array.from(host.childNodes), html: host.innerHTML, caret };
   };
   const restore = (snapshot: Snapshot): void => {
     host.replaceChildren(...snapshot.nodes);
     if (snapshot.caret !== undefined) {
-      const selection = host.ownerDocument.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(snapshot.caret.cloneRange());
+      host.ownerDocument.getSelection()?.setBaseAndExtent(...snapshot.caret);
     }
   };
   return {
@@ -345,6 +348,12 @@ const RENAMED: readonly (readonly [string, string])[] = [
  * typed where a space shows the same, and bold and italic as <strong> and <em>.
  */
 export function withoutTypingResidue(root: Element, opened: string): void {
+  // A break at the end of a block shows nothing after it, and the browser keeps one in every line it opens.
+  for (const element of [root, ...Array.from(root.querySelectorAll(TYPED_EMPTY))]) {
+    for (let end = element.lastChild; element !== root && end instanceof Element && end.tagName === 'BR'; end = element.lastChild) {
+      end.remove();
+    }
+  }
   for (const [from, to] of RENAMED) {
     if (!new RegExp(`<${from}[\\s>]`, 'i').test(opened)) {
       for (const element of Array.from(root.querySelectorAll(from))) {
