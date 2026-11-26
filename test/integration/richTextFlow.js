@@ -119,6 +119,10 @@ function writeFixture(project) {
     const canvas = window.frameLocator('iframe').first();
     await canvas.locator('.rich-text h2').waitFor({ timeout: WAIT_MS });
     // `RICH_TEXT_LOOKS=<locale>` (de, ar …) takes the pictures a consistency review needs instead of the flow.
+    if (process.env['RICH_TEXT_CARET'] !== undefined) {
+      await caretPass(window, canvas, page, results, Number(process.env['RICH_TEXT_CARET']));
+      return;
+    }
     if (process.env['RICH_TEXT_KEYS'] === '1') {
       await keyPass(window, canvas, page, results);
       return;
@@ -344,6 +348,66 @@ async function lookPass(window, canvas, locale, results) {
 
 // The Lumos Paragraph with line breaks and rich text on, typed into from the Content field and on the canvas: each step
 // reads the canvas and the file, collects any error toast, and times how long a break takes to show and to be saved.
+// Typing into the Content field with real keys, character by character, `pauseMs` between them (0: as fast as keys
+// go; about a second: each save and the page's reload land between two keys). After every key the field's words, the
+// caret (as a count of characters) and the file are read: the caret must sit right after what was just typed.
+async function caretPass(window, canvas, page, results, pauseMs) {
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+  const source = () => (/<LumosParagraph id="lumos-p">([\s\S]*?)<\/LumosParagraph>/.exec(page())?.[1] ?? '').trim();
+  const read = () =>
+    window.evaluate(() => {
+      const box = document.querySelector('.rich-content');
+      const selection = document.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      if (selection?.rangeCount) {
+        range.setEnd(selection.getRangeAt(0).endContainer, selection.getRangeAt(0).endOffset);
+      }
+      return { text: box.innerText.replace(/ /g, ' '), caret: range.toString().replace(/ /g, ' ').length, focused: document.activeElement === box };
+    });
+  await canvas.locator('#lumos-p').click({ position: { x: 160, y: 8 } });
+  await window.getByText('Settings', { exact: true }).first().click();
+  await window.click('.rich-content');
+  await window.keyboard.press(`${mod}+ArrowDown`);
+  const steps = [];
+  const type = async (label, key) => {
+    const before = await read();
+    await (key === 'Enter' ? window.keyboard.press('Enter') : window.keyboard.type(key));
+    if (pauseMs > 0) {
+      await window.waitForTimeout(pauseMs);
+    }
+    const after = await read();
+    // The caret moves on by what was typed, the words before it stay in place.
+    const ok = after.focused && after.caret === before.caret + (key === 'Enter' ? 0 : 1); // A break is no character in the range's words.
+    steps.push({ label, ok, caret: after.caret, tail: after.text.slice(Math.max(0, after.caret - 12), after.caret + 4) });
+  };
+  for (const key of ['Enter', ...'More text'.split('')]) {
+    await type(key === ' ' ? 'space' : key, key);
+  }
+  await type('second space', ' ');
+  await type('a word after two spaces', 'x');
+  await waitForFile(source, (text) => text.includes('More text')).catch(() => undefined);
+  // In the middle of the first line: after "Lorem".
+  await window.evaluate(() => {
+    const box = document.querySelector('.rich-content');
+    const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.data.indexOf('Lorem');
+      if (at >= 0) {
+        document.getSelection().collapse(node, at + 'Lorem'.length);
+        return;
+      }
+    }
+  });
+  await type('middle of line one', 'Z');
+  await type('a space in the middle', ' ');
+  await window.waitForTimeout(1500);
+  results.caretSteps = steps;
+  results.caretAllOk = steps.every((entry) => entry.ok);
+  results.caretSource = source();
+  results.caretBox = (await read()).text;
+}
+
 async function keyPass(window, canvas, page, results) {
   const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
   const toast = () => window.locator('body').evaluate((body) => (/[^.\n]*(?:couldn.t|could not|cannot|can.t)[^.\n]*/i.exec(body.innerText) ?? [''])[0]);
