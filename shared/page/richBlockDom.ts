@@ -302,6 +302,113 @@ function collapseAt(node: Node, offset: number): void {
 }
 
 /**
+ * Enter at the end of a quote goes on as a paragraph, as after a heading; the browser would start a second quote.
+ * True when it did that, and the key is spent. A quote holding paragraphs or a list keeps the browser's own Enter.
+ */
+export function leaveQuoteOnEnter(host: HTMLElement, history: RichHistory): boolean {
+  const selection = host.ownerDocument.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  if (range === undefined || !range.collapsed || !host.contains(range.startContainer)) {
+    return false;
+  }
+  const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+  const quote = start?.closest('blockquote') ?? undefined;
+  if (quote === undefined || quote.parentElement !== host || quote.querySelector('p, ul, ol, div') !== null) {
+    return false;
+  }
+  const rest = host.ownerDocument.createRange();
+  rest.setStart(range.startContainer, range.startOffset);
+  rest.setEnd(quote, quote.childNodes.length);
+  if (rest.toString().trim() !== '') {
+    return false;
+  }
+  const paragraph = host.ownerDocument.createElement('p');
+  paragraph.append(host.ownerDocument.createElement('br'));
+  history.record(() => {
+    quote.after(paragraph);
+    collapseAt(paragraph, 0);
+  });
+  return true;
+}
+
+// What the browser leaves behind while typing that nobody asked for. Each is cleared only when the content as it opened
+// had none of its kind, so the author's own (an empty paragraph, a non-breaking space, a <b>) is never rewritten.
+const TYPED_EMPTY = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre';
+const NON_BREAKING = /\u00a0|&nbsp;|&#160;|&#xa0;/i;
+const RENAMED: readonly (readonly [string, string])[] = [
+  ['b', 'strong'],
+  ['i', 'em'],
+];
+
+/**
+ * The content as it is saved after typing in it: no empty block an Enter left behind, no non-breaking space the browser
+ * typed where a space shows the same, and bold and italic as <strong> and <em>.
+ */
+export function withoutTypingResidue(root: Element, opened: string): void {
+  for (const [from, to] of RENAMED) {
+    if (!new RegExp(`<${from}[\\s>]`, 'i').test(opened)) {
+      for (const element of Array.from(root.querySelectorAll(from))) {
+        const renamed = root.ownerDocument.createElement(to);
+        for (const attribute of Array.from(element.attributes)) {
+          renamed.setAttribute(attribute.name, attribute.value);
+        }
+        renamed.append(...Array.from(element.childNodes));
+        element.replaceWith(renamed);
+      }
+    }
+  }
+  if (!NON_BREAKING.test(opened)) {
+    const blocks = Array.from(root.querySelectorAll(TYPED_EMPTY));
+    (blocks.length === 0 ? [root] : blocks).forEach(plainSpaces);
+  }
+  if (!/<(p|h[1-6]|li|blockquote|pre)(\s[^<>]*)?>\s*<\/\1>/i.test(opened)) {
+    for (const block of Array.from(root.querySelectorAll(TYPED_EMPTY)).reverse()) {
+      if (isBlank(block) && block.querySelector('br') === null) {
+        const list = block.parentElement;
+        block.remove();
+        if (list !== null && (list.tagName === 'UL' || list.tagName === 'OL') && list.children.length === 0) {
+          list.remove();
+        }
+      }
+    }
+  }
+}
+
+// In one block's words: a lone non-breaking space between two characters is a space, and one that ends the block shows
+// nothing. A run of spaces keeps the ones that make it show.
+function plainSpaces(block: Element): void {
+  if (block.tagName === 'PRE') {
+    return;
+  }
+  const walker = block.ownerDocument.createTreeWalker(block, 4);
+  const texts: Text[] = [];
+  for (let node = walker.nextNode(); node && texts.length < RICH_DOM_LIMITS.nodesMax; node = walker.nextNode()) {
+    if (node instanceof Text) {
+      texts.push(node);
+    }
+  }
+  const whole = texts.map((node) => node.data).join('');
+  const trimmed = whole.replace(/\u00a0+$/, '').length;
+  let at = 0;
+  for (const node of texts) {
+    const next = Array.from(node.data, (character, index) => {
+      const position = at + index;
+      if (character !== '\u00a0') {
+        return character;
+      }
+      if (position >= trimmed) {
+        return '';
+      }
+      return /\S/.test(whole.charAt(position - 1)) && /\S/.test(whole.charAt(position + 1)) ? ' ' : character;
+    }).join('');
+    at += node.data.length;
+    if (next !== node.data) {
+      node.data = next;
+    }
+  }
+}
+
+/**
  * Makes a copy of the content valid HTML before it is written: a paragraph, heading or code block never holds another
  * block (the browser's list commands leave `<p><ul>`), so the inner block moves out between what was around it; and
  * the `style` attributes the browser writes while joining blocks go, with the bare `<span>`s that carried them. The

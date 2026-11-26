@@ -342,6 +342,7 @@
     "shared/page/pseudoPath.ts",
     "shared/page/ref.ts",
     "shared/page/richBlockDom.ts",
+    "shared/page/richPaste.ts",
     "shared/page/snapshot.ts",
     "shared/page/sourceProjection.ts",
     "shared/page/variantOverride.ts",

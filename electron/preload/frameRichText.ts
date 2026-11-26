@@ -9,12 +9,15 @@
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
 import { ownClasses } from './frameMeasure';
+import { pasteRichText } from '../../shared/page/richPaste';
 import { holdTextEditing, styleTextEditor } from './frameTextEditing';
 import { installRichPointer, openingCaret } from './frameRichCaret';
 import {
   createRichHistory,
   insertRichBlocks,
   isSpareRichLine,
+  leaveQuoteOnEnter,
+  withoutTypingResidue,
   richCaret,
   richElement,
   tidyRichContent,
@@ -68,7 +71,8 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   const original = Array.from(container.childNodes);
   const snapshot = original.map((node) => node.cloneNode(true));
   const read = () => withoutTrailingCaretBreak(place.kind === 'line' ? readWholeHTML(container) : readInstanceHTML(container, original, place.richRoot));
-  const kept = () => (place.kind === 'rich' ? withoutTrailingEmptyBlocks(read()) : read());
+  const opened = read();
+  const kept = () => (place.kind === 'rich' ? savedRich(read(), opened) : savedLine(read(), opened));
   const startHTML = kept();
   const history = createRichHistory(container);
   const attribute = container.getAttribute('contenteditable');
@@ -147,6 +151,7 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
         return;
       }
       event.stopImmediatePropagation();
+      plainPaste = (event.metaKey || event.ctrlKey) && event.shiftKey && event.code === 'KeyV';
       // Escape leaves without saving, a click elsewhere saves (the session's dismiss). Enter: in rich text a new block (the
       // browser's own, a paragraph after a heading or quote, an item in a list, out of an empty one); in a line of words
       // a line break. ⌘/Ctrl Enter, and Shift Enter, a line break inside the block in both.
@@ -156,10 +161,53 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
       } else if (event.key === 'Escape') {
         event.preventDefault();
         finish('cancel');
+      } else if (
+        event.key === 'Enter' &&
+        place.kind === 'rich' &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        leaveQuoteOnEnter(container, history)
+      ) {
+        event.preventDefault();
+        report();
       } else if (event.key === 'Enter' && (place.kind === 'line' || event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         document.execCommand('insertLineBreak');
         report();
+      }
+    },
+    listen,
+  );
+  // A paste keeps its structure and none of its styles, blocks beside the caret's block, never inside it. Nothing is
+  // dropped in: the browser would write what it is given, styles and all, wherever the pointer is.
+  let plainPaste = false;
+  window.addEventListener(
+    'paste',
+    (event) => {
+      if (!(event.target instanceof Node) || !container.contains(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const data = event.clipboardData ?? undefined;
+      if (data !== undefined) {
+        pasteRichText(
+          { host: container, history, kind: place.kind, media: place.kind === 'rich' },
+          { html: data.getData('text/html'), text: data.getData('text/plain'), plain: plainPaste },
+        );
+        report();
+      }
+      plainPaste = false;
+    },
+    listen,
+  );
+  window.addEventListener(
+    'drop',
+    (event) => {
+      if (event.target instanceof Node && container.contains(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
       }
     },
     listen,
@@ -285,6 +333,20 @@ export function readInstanceHTML(container: Element, original: readonly Node[], 
   }
   assert(parts.length <= RICH_LIMITS.childrenMax, 'Rich text reads a bounded number of blocks');
   return parts.join('');
+}
+
+// What a rich text edit writes: the blocks without what typing leaves behind.
+function savedRich(html: string, opened: string): string {
+  return withoutTrailingEmptyBlocks(savedLine(html, opened));
+}
+
+function savedLine(html: string, opened: string): string {
+  const holder = document.createElement('template');
+  holder.innerHTML = html;
+  const root = document.createElement('div');
+  root.append(holder.content);
+  withoutTypingResidue(root, opened);
+  return root.innerHTML;
 }
 
 // One block's copy as valid HTML: it may become several (a list the browser left inside a paragraph moves out).

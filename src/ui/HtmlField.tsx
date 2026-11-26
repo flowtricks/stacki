@@ -8,12 +8,20 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
 import { chooseAsset } from './assetPick';
 import { assetValueFor } from './assetPath';
-import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
 import { HtmlToolbar, MOD } from './HtmlToolbar';
 import { containsHTML, editableHTML } from './htmlFieldModel';
-import { isSpareRichLine, richElement, richHistoryOf, tidyRichContent, withoutTrailingEmptyBlocks } from '../../shared/page/richBlockDom';
+import { pasteRichText } from '../../shared/page/richPaste';
+import {
+  isSpareRichLine,
+  leaveQuoteOnEnter,
+  richElement,
+  richHistoryOf,
+  withoutTypingResidue,
+  tidyRichContent,
+  withoutTrailingEmptyBlocks,
+} from '../../shared/page/richBlockDom';
 import {
   applyBlockShortcut,
   applyInlineShortcut,
@@ -31,7 +39,7 @@ import {
   type FormatState,
   type RichTextAction,
 } from './richTextCommands';
-import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
+import { blockShortcut, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
 import Menu, { type MenuEntry } from './Menu';
 import { PlusIcon } from './Icons';
 import './contentInputs.css';
@@ -124,6 +132,8 @@ function useHtmlEditor(options: {
   const saved = useRef<Range>();
   const plainPaste = useRef(false);
   const emitted = useRef<string>();
+  // The content as it came from outside: what typing leaves behind is told from the author's own by it.
+  const opened = useRef(value);
   const [format, setFormat] = useState<FormatState>(EMPTY_FORMAT);
   const [bubble, setBubble] = useState<LinkBubble>();
   const [counts, setCounts] = useState(textCounts(''));
@@ -137,6 +147,7 @@ function useHtmlEditor(options: {
     if (host.current && value !== emitted.current) {
       host.current.innerHTML = projection.html;
       emitted.current = value;
+      opened.current = value;
       refresh();
     }
   });
@@ -147,7 +158,7 @@ function useHtmlEditor(options: {
     emit: () => {
       if (host.current !== undefined) {
         // Always leave a paragraph when emptied so the HTML field keeps its editor.
-        const html = editableHTML(writtenHTML(host.current, { rich: media }), document, { media }).html;
+        const html = editableHTML(writtenHTML(host.current, { rich: media, opened: opened.current }), document, { media }).html;
         emitted.current = containsHTML(html) ? html : `<p>${html}</p>`;
         refresh();
         onChange(emitted.current);
@@ -223,6 +234,13 @@ function HtmlBody(props: BodyProps) {
           editor.emit();
         }}
         onKeyDown={(event) => {
+          if (props.blocks === 'insert' && event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            if (leaveQuoteOnEnter(event.currentTarget, richHistoryOf(event.currentTarget))) {
+              event.preventDefault();
+              editor.emit();
+              return;
+            }
+          }
           // Rich text a component holds: Enter starts a new block (the browser's own), ⌘/Ctrl Enter breaks the line
           // inside the block, as typing on the canvas does.
           if (props.blocks === 'insert' && event.key === 'Enter' && (MOD === '⌘' ? event.metaKey : event.ctrlKey)) {
@@ -236,7 +254,7 @@ function HtmlBody(props: BodyProps) {
         onClick={(event) => followLink(event, { open: event.metaKey || event.ctrlKey })}
         onPaste={(event) => {
           event.preventDefault();
-          paste(editor, event.clipboardData);
+          paste(editor, event.clipboardData, { media: props.blocks === 'insert' });
         }}
         onDrop={(event) => event.preventDefault()}
       />
@@ -501,9 +519,9 @@ function typedShortcut(editor: Editor, event: Event): void {
   }
 }
 
-// A paste: a link over selected text links it; HTML keeps its structure, cleaned;
-// anything else, or a ⇧⌘V paste, comes in as plain text.
-function paste(editor: Editor, data: DataTransfer): void {
+// A paste: a link over selected text links it; HTML keeps its structure, cleaned; anything else, or a ⇧⌘V paste,
+// comes in as plain text. Blocks are placed beside the caret's block (richPaste.ts).
+function paste(editor: Editor, data: DataTransfer, options: { readonly media: boolean }): void {
   const element = editor.host.current;
   const { plainPaste } = editor;
   const plain = plainPaste.current;
@@ -511,16 +529,14 @@ function paste(editor: Editor, data: DataTransfer): void {
   if (element === undefined) {
     return;
   }
-  const text = data.getData('text/plain');
-  const html = data.getData('text/html');
-  const address = /^\S+$/.test(text.trim()) ? linkAddress(text) : undefined;
   const range = rangeIn(element);
+  const text = data.getData('text/plain');
+  // A bare domain over selected words links them too.
+  const address = /^\S+$/.test(text.trim()) ? linkAddress(text) : undefined;
   if (!plain && address !== undefined && range !== undefined && !range.collapsed) {
     applyLink(element, address);
-  } else if (!plain && html !== '' && html.length <= BOUNDARY_LIMITS.textLengthMax) {
-    document.execCommand('insertHTML', false, cleanPastedHTML(html, document));
   } else {
-    document.execCommand('insertText', false, text.slice(0, BOUNDARY_LIMITS.textLengthMax));
+    pasteRichText({ host: element, history: richHistoryOf(element), kind: 'rich', media: options.media }, { html: data.getData('text/html'), text, plain });
   }
   editor.emit();
 }
@@ -591,7 +607,7 @@ function restoreSelection(element: HTMLDivElement | undefined, range: Range | un
 }
 
 // What the field writes: valid HTML, and in rich text without the empty paragraph kept open at its end.
-function writtenHTML(host: HTMLElement, options: { readonly rich: boolean }): string {
+function writtenHTML(host: HTMLElement, options: { readonly rich: boolean; readonly opened: string }): string {
   const copy = host.ownerDocument.createElement('div');
   copy.innerHTML = host.innerHTML;
   Array.from(copy.children)
@@ -599,6 +615,9 @@ function writtenHTML(host: HTMLElement, options: { readonly rich: boolean }): st
     .forEach((line) => line.remove());
   copy.querySelectorAll('[data-avb-line]').forEach((line) => line.removeAttribute('data-avb-line'));
   tidyRichContent(copy);
+  if (options.rich) {
+    withoutTypingResidue(copy, options.opened);
+  }
   return options.rich ? withoutTrailingEmptyBlocks(copy.innerHTML) : copy.innerHTML;
 }
 
