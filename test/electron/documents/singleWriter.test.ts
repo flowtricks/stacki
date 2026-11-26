@@ -99,14 +99,16 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   // never the project (the fence refuses that: electron/lib/designMode/designWriteGuard.ts).
   'electron/handlers/designMode/designDrafts.ts': {
     renameSync: { count: 1, reason: 'a draft written whole to a temporary file, then put in place' },
-    writeFileSync: { count: 2, reason: "a frame's draft and its picture, in the app's data folder" },
+    writeFileSync: { count: 1, reason: "the frames' draft, in the app's data folder" },
   },
   'electron/handlers/designMode/designFrames.ts': {
-    writeFileSync: { count: 1, reason: "a frame's file put into the sandbox copy when the frame is shown" },
+    writeFile: { count: 1, reason: "a frame's file put into the sandbox copy when the frame is shown" },
   },
   'electron/handlers/designMode/designSandbox.ts': {
-    copyFileSync: { count: 1, reason: 'the project copied into the sandbox' },
-    symlinkSync: { count: 1, reason: 'a link inside the project kept as a link in the sandbox copy' },
+    copyFile: { count: 1, reason: 'the project copied into the sandbox' },
+  },
+  'electron/handlers/designMode/designSnapshots.ts': {
+    writeFile: { count: 1, reason: "a frame's snapshot written whole to a temporary file in the app's data folder" },
   },
   'electron/handlers/devServers.ts': {
     writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
