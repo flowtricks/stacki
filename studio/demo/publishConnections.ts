@@ -3,6 +3,7 @@
 // settings dialog shows them as connected. Signing in, connecting another repository
 // or creating one answer with a plain reason; nothing opens a sign-in window.
 import { parseAccountRequest } from '../vendor/stacki/shared/ipc/publishAccount';
+import { parseNetlifySiteRequest } from '../vendor/stacki/shared/properties/publishNetlify';
 import { parseRepositoryRequest } from '../vendor/stacki/shared/ipc/publishRepository';
 import { parseDiscoveryRequest } from '../vendor/stacki/shared/properties/publishDiscovery';
 import { sha256Hex } from './nodeCrypto';
@@ -27,6 +28,7 @@ export function publishDiscovery(body: unknown): unknown {
         ],
       };
     case 'vercel':
+    case 'netlify':
       // Not a connection fault: the reason only selects Refresh rather than a sign-in the demo lacks.
       return { kind: 'failed', reason: 'unknown', message: CONNECTIONS_REASON };
     default: {
@@ -55,6 +57,12 @@ export function publishRepositories(body: unknown): unknown {
       notice: 'This demo is connected to a sample repository.',
     },
   };
+}
+
+/** `/studio/api/publish/netlify-site`: no site is ever created. */
+export function publishNetlifySite(body: unknown): unknown {
+  parseNetlifySiteRequest(body);
+  return { kind: 'failed', message: CONNECTIONS_REASON };
 }
 
 /** `/studio/api/publish/account`: sign-in never starts. */

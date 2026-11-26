@@ -11,6 +11,7 @@ import { readProjectMetadata } from '../project/projectMetadata';
 import { publishedProjectSiteURL } from '../project/publishSite';
 import { translateMain } from '../lib/mainLocale';
 import { setUpWorkerHosting } from '../project/publishWorkerSetup';
+import { createNetlifySite } from '../project/publishNetlify';
 import { described } from '../../shared/properties/i18n/messageRef';
 
 export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
@@ -43,6 +44,11 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       return { kind: 'failed', ...described('publish.worker.setup.busy') };
     }
     return setUpWorkerHosting(project, input.worker);
+  });
+  host.ipcMain.handle('publish:netlifySite', async (_event, input) => {
+    const project = root(input.projectPath);
+    await ensureToolPath();
+    return createNetlifySite(project, input.site);
   });
   host.ipcMain.handle('publish:start', (_event, input) => publisher.start(root(input.projectPath), input.target, input.commitMessage));
   host.ipcMain.handle('publish:state', (_event, projectPath) => publisher.state(root(projectPath)));

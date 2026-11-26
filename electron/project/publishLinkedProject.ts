@@ -29,6 +29,9 @@ export async function linkedPublishProject(root: string, provider: DiscoveryProv
       },
     ];
   }
+  if (provider === 'netlify') {
+    return linkedNetlify(root);
+  }
   if (provider === 'cloudflare' || provider === 'cloudflare-workers' || provider === 'linked') {
     const value = await linkedWranglerConfig(root);
     if (value !== undefined) {
@@ -37,6 +40,21 @@ export async function linkedPublishProject(root: string, provider: DiscoveryProv
     }
   }
   return [];
+}
+
+// `netlify link` writes the site id here. A build or `netlify dev` can leave the file without one.
+async function linkedNetlify(root: string): Promise<readonly PublishProject[]> {
+  const source = await linkedSource(root, '.netlify/state.json');
+  if (source === undefined) {
+    return [];
+  }
+  const input: unknown = JSON.parse(source);
+  const siteId = record(input)['siteId'];
+  if (siteId === undefined) {
+    return [];
+  }
+  // i18n-ignore: a project name for a link that records no name, as for a linked Vercel project.
+  return [{ name: 'Linked Netlify site', hosting: { provider: 'netlify', siteId: discoveryIdentifier(siteId) } }];
 }
 
 // Explicit custom domains are usable without provider API credentials. Match the complete

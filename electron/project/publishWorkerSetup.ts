@@ -4,7 +4,7 @@
 // that check passes, so setup and Publish can never disagree. Persisting the chosen Worker in the publish settings is the
 // caller's step: it goes through each host's witnessed metadata transport, which this main-side module does not own.
 import { existsSync } from 'node:fs';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { record } from '../../shared/core/boundary';
@@ -16,11 +16,9 @@ import { detectPackageManager } from './packageManager';
 import { wranglerInstallArguments } from './publishAccount';
 import { runPublishCommand } from './publishCommands';
 import type { ExecutableCommand } from './publishExecutable';
+import { astroConfigSource, outputDirectory, siteFile } from './publishSiteBuild';
 import { WORKER_CONFIG_NAMES, WORKER_READINESS_SEAMS, checkWorkerReady, readWorkerConfig, type WorkerReadinessSeams } from './publishWorkerConfig';
 
-/** A package.json or Astro config larger than this is not one setup should read; both are a few KiB in practice. */
-const SITE_FILE_BYTES_MAX = 262_144;
-const ASTRO_CONFIG_NAMES = ['astro.config.mjs', 'astro.config.ts', 'astro.config.mts', 'astro.config.js', 'astro.config.cjs'] as const;
 /** Astro adapters that build the site for another host; a site using one cannot deploy as a Worker without changing it. */
 const OTHER_HOST_ADAPTERS = ['@astrojs/node', '@astrojs/vercel', '@astrojs/netlify', '@deno/astro-adapter'] as const;
 const CLOUDFLARE_ADAPTER = '@astrojs/cloudflare';
@@ -112,6 +110,8 @@ export type SiteBuild =
   | { readonly kind: 'static'; readonly directory: string }
   | { readonly kind: 'cloudflare-adapter'; readonly directory: string; readonly adapterMajor: number | undefined };
 
+export { outputDirectory };
+
 export async function inspectSite(root: string): Promise<Result<SiteBuild, Described>> {
   const manifest = await siteFile(path.join(root, 'package.json'));
   if (manifest === undefined) {
@@ -166,37 +166,6 @@ export function compatibilityDate(today: Date): string {
   return today.toISOString().slice(0, 10);
 }
 
-async function astroConfigSource(root: string): Promise<string | undefined> {
-  for (const name of ASTRO_CONFIG_NAMES) {
-    const source = await siteFile(path.join(root, name));
-    if (source !== undefined) {
-      return source;
-    }
-  }
-  return undefined;
-}
-
-/** The build folder, `./dist` unless the Astro config names a literal one inside the site; undefined when it names one setup cannot trust. */
-export function outputDirectory(config: string | undefined): string | undefined {
-  const named = /\boutDir\s*:\s*([^,\n}]+)/.exec(config ?? '');
-  if (named === null) {
-    return './dist';
-  }
-  const literal = /^['"`]([^'"`]+)['"`]\s*$/.exec(named[1]?.trim() ?? '');
-  const directory = literal?.[1];
-  if (directory === undefined) {
-    return undefined;
-  }
-  const normalized = path.posix.normalize(directory.replace(/^\.\//, ''));
-  if (path.posix.isAbsolute(normalized)) {
-    return undefined;
-  }
-  if (normalized === '.' || normalized.split('/').includes('..')) {
-    return undefined;
-  }
-  return `./${normalized.replace(/\/$/, '')}`;
-}
-
 function majorVersion(range: unknown): number | undefined {
   if (typeof range !== 'string') {
     return undefined;
@@ -207,21 +176,6 @@ function majorVersion(range: unknown): number | undefined {
 
 function optionalRecord(input: unknown): Readonly<Record<string, unknown>> {
   return input === undefined ? {} : record(input);
-}
-
-async function siteFile(filename: string): Promise<string | undefined> {
-  try {
-    const metadata = await stat(filename);
-    if (metadata.size > SITE_FILE_BYTES_MAX) {
-      return undefined;
-    }
-    return await readFile(filename, 'utf8');
-  } catch (failure: unknown) {
-    if (failure instanceof Error && 'code' in failure && failure.code === 'ENOENT') {
-      return undefined;
-    }
-    throw failure;
-  }
 }
 
 function failed(problem: Described): WorkerSetupResult {

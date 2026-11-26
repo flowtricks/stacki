@@ -18,8 +18,9 @@ import { STUDIO_TELEMETRY_DISABLED, withStudioTelemetryDisabled } from '../vendo
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
 const LAUNCH = 'spawn(tool, { env: withStudioTelemetryDisabled(process.env) });';
-const TELEMETRY_SOURCE = "ASTRO_TELEMETRY_DISABLED: '1', VERCEL_TELEMETRY_DISABLED: '1', WRANGLER_SEND_METRICS: 'false'";
-const DOCKERFILE = 'FROM node\nENV ASTRO_TELEMETRY_DISABLED=1\nENV VERCEL_TELEMETRY_DISABLED=1\nENV WRANGLER_SEND_METRICS=false\n';
+const TELEMETRY_SOURCE = "ASTRO_TELEMETRY_DISABLED: '1', VERCEL_TELEMETRY_DISABLED: '1', NETLIFY_TELEMETRY_DISABLED: '1', WRANGLER_SEND_METRICS: 'false'";
+const DOCKERFILE =
+  'FROM node\nENV ASTRO_TELEMETRY_DISABLED=1\nENV VERCEL_TELEMETRY_DISABLED=1\nENV NETLIFY_TELEMETRY_DISABLED=1\nENV WRANGLER_SEND_METRICS=false\n';
 const CLIENT = ['dist/index.html', 'dist/morph.js', 'dist/preview.js', 'dist/studio.css', 'dist/studio.js'].map((file) => ({ path: file, content: '' }));
 
 function fixture(): NoTrackingInput {
@@ -208,6 +209,7 @@ test('the opt-outs override inherited values and keep the rest of the environmen
   assert.equal(environment['WRANGLER_SEND_METRICS'], 'false');
   assert.equal(environment['ASTRO_TELEMETRY_DISABLED'], '1');
   assert.equal(environment['VERCEL_TELEMETRY_DISABLED'], '1');
+  assert.equal(environment['NETLIFY_TELEMETRY_DISABLED'], '1');
 });
 
 const RECORD_ENVIRONMENT = 'import { writeFileSync } from "node:fs";\nwriteFileSync(process.env.STUDIO_TEST_RECORD, JSON.stringify(process.env));\n';

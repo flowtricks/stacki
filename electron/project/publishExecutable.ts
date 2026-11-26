@@ -8,7 +8,7 @@ import type { PublishCommand } from '../../shared/properties/publishCommands';
 import type { PackageManager } from '../../shared/properties/packageManager';
 import { described } from '../../shared/properties/i18n/messageRef';
 import { DescribedError } from '../../shared/properties/describedError';
-import { appToolsDirectory, checkAppWrangler, wranglerToolRoot } from './publishToolInstall';
+import { appToolsDirectory, checkPinnedTool, pinnedToolRoot, NETLIFY_PIN, WRANGLER_PIN, type ToolPin } from './publishToolInstall';
 
 export function projectHasWrangler(root: string): boolean {
   const resolver = createRequire(path.join(root, 'package.json'));
@@ -25,11 +25,27 @@ export function projectHasWrangler(root: string): boolean {
   }
 }
 
+// Each publishing CLI's npm package (its command name is not always the package's), and the pinned copy Stacki can
+// install for itself. The package `netlify` is Netlify's API library, not its CLI.
+const PUBLISH_TOOLS: Readonly<Record<'wrangler' | 'vercel' | 'netlify', { readonly package: string; readonly pin?: ToolPin }>> = {
+  wrangler: { package: 'wrangler', pin: WRANGLER_PIN },
+  vercel: { package: 'vercel' },
+  netlify: { package: 'netlify-cli', pin: NETLIFY_PIN },
+};
+export type PublishTool = keyof typeof PUBLISH_TOOLS;
+
+function publishTool(executable: string): (typeof PUBLISH_TOOLS)[PublishTool] | undefined {
+  if (executable === 'wrangler' || executable === 'vercel' || executable === 'netlify') {
+    return PUBLISH_TOOLS[executable];
+  }
+  return undefined;
+}
+
 /**
  * Whether a publishing CLI can run for this site: in the site, beside Desktop or Studio, or on
  * PATH. Call after ensureToolPath(), so a GUI launch searches the person's shell PATH too.
  */
-export function publishToolInstalled(root: string, executable: 'wrangler' | 'vercel'): boolean {
+export function publishToolInstalled(root: string, executable: PublishTool): boolean {
   if (existsSync(path.join(root, 'node_modules', '.bin', executable))) {
     return true;
   }
@@ -48,6 +64,11 @@ export function wranglerAvailableWithoutPATH(root: string): boolean {
     return true;
   }
   return installedPublishTool(root, 'wrangler') !== undefined;
+}
+
+/** The same rule for the Netlify CLI: sign-in uses the site's own copy or the pinned one, never an unknown global one. */
+export function netlifyAvailableWithoutPATH(root: string): boolean {
+  return installedPublishTool(root, 'netlify') !== undefined;
 }
 
 /** Where a global install without sudo puts the Vercel CLI: npm's prefix under ~/.local. */
@@ -122,20 +143,18 @@ export function resolvePublishExecutable(
   if (directories.length > 256) {
     throw new Error('Tool search path exceeds 256 directories.');
   }
-  const candidates = [
-    path.join(root, 'node_modules', command.executable),
-    ...directories.map((directory) => path.join(directory, 'node_modules', command.executable)),
-  ];
+  const packageName = publishTool(command.executable)?.package ?? command.executable;
+  const candidates = [path.join(root, 'node_modules', packageName), ...directories.map((directory) => path.join(directory, 'node_modules', packageName))];
   for (const directory of candidates) {
     const manifest = path.join(directory, 'package.json');
     if (existsSync(manifest)) {
-      return { executable: 'node.exe', arguments: [publishEntry(directory), ...command.arguments] };
+      return { executable: 'node.exe', arguments: [publishEntry(directory, command.executable), ...command.arguments] };
     }
   }
   throw new DescribedError(described('publish.command.installTool', { executable: command.executable }));
 }
 
-function publishEntry(directory: string): string {
+function publishEntry(directory: string, executable: string): string {
   const source = readFileSync(path.join(directory, 'package.json'), 'utf8');
   if (source.length > 65_536) {
     throw new Error('CLI package metadata exceeds 64 KiB.');
@@ -143,7 +162,7 @@ function publishEntry(directory: string): string {
   const input: unknown = JSON.parse(source);
   const metadata = record(input);
   const bin = metadata['bin'];
-  const relative = text(typeof bin === 'string' ? bin : record(bin)[path.basename(directory)]);
+  const relative = text(typeof bin === 'string' ? bin : record(bin)[executable]);
   const canonical = realpathSync(directory);
   const entry = realpathSync(path.join(directory, relative));
   const within = path.relative(canonical, entry);
@@ -154,19 +173,21 @@ function publishEntry(directory: string): string {
 }
 
 function installedPublishTool(root: string, executable: string): string | undefined {
-  if (executable !== 'wrangler' && executable !== 'vercel') {
+  const tool = publishTool(executable);
+  if (tool === undefined) {
     return undefined;
   }
   // Desktop and Studio can share an installed CLI without downloading code during discovery.
   const resolver = createRequire(path.join(process.cwd(), 'package.json'));
   // The site's own copy wins, then the pinned copy Stacki installed for itself (publishToolInstall.ts), then a copy
   // shipped beside Desktop or Studio. Only a whole, pinned app copy counts; a damaged one is reinstalled instead.
-  const tools = executable === 'wrangler' && checkAppWrangler(appToolsDirectory()).kind === 'ready' ? [wranglerToolRoot(appToolsDirectory())] : [];
+  const pin = tool.pin;
+  const tools = pin !== undefined && checkPinnedTool(appToolsDirectory(), pin).kind === 'ready' ? [pinnedToolRoot(appToolsDirectory(), pin)] : [];
   const directories = [root, ...tools, process.cwd(), path.join(process.cwd(), 'studio'), path.dirname(process.argv[1] ?? process.cwd())];
   for (const directory of directories) {
     let manifest: string;
     try {
-      manifest = resolver.resolve(`${executable}/package.json`, { paths: [directory] });
+      manifest = resolver.resolve(`${tool.package}/package.json`, { paths: [directory] });
     } catch {
       continue;
     }
@@ -174,7 +195,7 @@ function installedPublishTool(root: string, executable: string): string | undefi
     if (!existsSync(manifest)) {
       continue;
     }
-    return publishEntry(path.dirname(manifest));
+    return publishEntry(path.dirname(manifest), executable);
   }
   return undefined;
 }

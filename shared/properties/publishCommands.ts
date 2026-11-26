@@ -2,7 +2,7 @@ import { assert } from '../core/assert';
 import type { Hosting } from './publishConfig';
 
 export interface PublishCommand {
-  readonly executable: 'npm' | 'wrangler' | 'vercel';
+  readonly executable: 'npm' | 'wrangler' | 'vercel' | 'netlify';
   readonly arguments: readonly string[];
   readonly environment: Readonly<Record<string, string>>;
 }
@@ -35,6 +35,13 @@ export function hostingCommand(hosting: Exclude<Hosting, { provider: 'none' }>):
           VERCEL_ORG_ID: hosting.organizationId,
           VERCEL_PROJECT_ID: hosting.projectId,
         },
+      };
+    case 'netlify':
+      return {
+        executable: 'netlify',
+        // Whether Netlify builds too, and which folder it uploads, depend on the site (publishNetlify.ts adds them).
+        arguments: ['deploy', '--prod', '--site', hosting.siteId, '--json'],
+        environment: {},
       };
     default: {
       const exhaustive: never = hosting;

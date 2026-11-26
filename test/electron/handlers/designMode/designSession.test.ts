@@ -178,6 +178,7 @@ test('the fence refuses unlisted channels, the project and climbing paths, and l
   try {
     assert.throws(() => checkDesignFence('git:commit', { projectPath: live }), { message: REFUSAL });
     assert.throws(() => checkDesignFence('publish:start', { projectPath: live }), { message: REFUSAL });
+    assert.throws(() => checkDesignFence('publish:netlifySite', { projectPath: live, site: { team: 'acme', name: 'x' } }), { message: REFUSAL });
     assert.throws(() => checkDesignFence('terminal:start', {}), { message: REFUSAL });
     assert.throws(() => checkDesignFence('ai:prompt', { projectPath: live }), { message: REFUSAL });
     assert.throws(() => checkDesignFence('a:channelAddedLater', {}), { message: REFUSAL });

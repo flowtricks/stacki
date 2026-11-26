@@ -1,12 +1,12 @@
-// The Cloudflare publishing tool (Wrangler), installed by Stacki into a folder Stacki owns, so a person who has never
-// opened a terminal can connect Cloudflare with one click. Why an app-owned folder rather than the site or a global
+// Publishing tools (Cloudflare's Wrangler and the Netlify CLI), installed by Stacki into a folder Stacki owns, so a
+// person who has never opened a terminal can connect Cloudflare or Netlify with one click. Why an app-owned folder rather than the site or a global
 // install: a global install can need sudo and differs on every machine; installing into the site edits the person's
 // package.json behind their back. One pinned version under the app's own data folder serves every site.
 //
 // How an install stays safe and whole:
 // - The version is pinned and the tarball's integrity is pinned beside it. npm checks every tarball against the
 //   registry's hash, and after the install the lockfile's hash for Wrangler must equal the pinned one, so a registry or
-//   mirror serving other bytes is refused.
+//   mirror serving other bytes is refused. (The tool's own dependencies are checked by npm against the registry only.)
 // - npm runs with `--ignore-scripts`: signing in, listing accounts and deploying need no install script, and skipping
 //   them means no package code runs while installing.
 // - npm writes into a fresh staging folder; only a verified install is renamed into place, so an interrupted, offline
@@ -27,6 +27,23 @@ export const WRANGLER_PIN = {
   version: '4.151.1',
   integrity: 'sha512-OAsa9UAHZshM6mq2PXcVoyxXgWThAanZMBc/IirtqEWd/BauRtmUKzAniOu/pU0pd3pxKuMZ2vsbF4eo6RiNDA==',
 } as const;
+
+/**
+ * The Netlify CLI Stacki installs (command `netlify`), pinned the same way. This version has `login --request` and
+ * `login --check`, the sign-in that works without a terminal. Like Wrangler it installs without install scripts: the
+ * CLI's own postinstall only sets up shell completion and prints a welcome. It needs Node.js 22.13 or newer.
+ */
+export const NETLIFY_PIN = {
+  name: 'netlify-cli',
+  version: '27.20.1',
+  integrity: 'sha512-z1CdFqJZqp41DJcYlJscJTQO9jg0wG/GsenfCgqvezhca1gIs6ni4KNWeq7pGFRWX3/J4eeSeJvgGkgFSnBlGQ==',
+} as const;
+
+export interface ToolPin {
+  readonly name: 'wrangler' | 'netlify-cli';
+  readonly version: string;
+  readonly integrity: string;
+}
 
 // Bounds beside the code that enforces them (shared/core/limits.ts changes only with a person's approval).
 const TOOL_INSTALL_LIMITS = {
@@ -74,18 +91,26 @@ function toolsBase(home: string, platform: NodeJS.Platform, environment: Readonl
   return config !== undefined && paths.isAbsolute(config) ? config : paths.join(home, '.config');
 }
 
-/** The folder one pinned Wrangler lives in; its node_modules holds the package. */
-export function wranglerToolRoot(tools: string): string {
+/** The folder one pinned tool lives in; its node_modules holds the package. */
+export function pinnedToolRoot(tools: string, pin: ToolPin): string {
   assert(path.isAbsolute(tools), 'The tools folder is absolute');
-  return path.join(tools, WRANGLER_PIN.name, WRANGLER_PIN.version);
+  return path.join(tools, pin.name, pin.version);
+}
+
+export function wranglerToolRoot(tools: string): string {
+  return pinnedToolRoot(tools, WRANGLER_PIN);
 }
 
 export type ToolCheck =
   { readonly kind: 'ready' } | { readonly kind: 'missing' } | { readonly kind: 'mismatch'; readonly version: string } | { readonly kind: 'corrupt' };
 
-/** Whether the app-owned Wrangler is there, whole, and the pinned version. */
 export function checkAppWrangler(tools: string): ToolCheck {
-  const manifest = path.join(wranglerToolRoot(tools), 'node_modules', WRANGLER_PIN.name, 'package.json');
+  return checkPinnedTool(tools, WRANGLER_PIN);
+}
+
+/** Whether an app-owned tool is there, whole, and the pinned version. */
+export function checkPinnedTool(tools: string, pin: ToolPin): ToolCheck {
+  const manifest = path.join(pinnedToolRoot(tools, pin), 'node_modules', pin.name, 'package.json');
   if (!existsSync(manifest)) {
     return { kind: 'missing' };
   }
@@ -97,14 +122,14 @@ export function checkAppWrangler(tools: string): ToolCheck {
   if (fields === undefined) {
     return { kind: 'corrupt' };
   }
-  if (fields['name'] !== WRANGLER_PIN.name) {
+  if (fields['name'] !== pin.name) {
     return { kind: 'corrupt' };
   }
   const version = fields['version'];
   if (typeof version !== 'string') {
     return { kind: 'corrupt' };
   }
-  if (version !== WRANGLER_PIN.version) {
+  if (version !== pin.version) {
     return { kind: 'mismatch', version: version.slice(0, 64) };
   }
   return { kind: 'ready' };
@@ -112,6 +137,7 @@ export function checkAppWrangler(tools: string): ToolCheck {
 
 /** One planned install: npm runs in `staging`, and a verified result is renamed to `target`. */
 export interface ToolInstallPlan {
+  readonly pin: ToolPin;
   readonly tools: string;
   readonly staging: string;
   readonly target: string;
@@ -120,17 +146,22 @@ export interface ToolInstallPlan {
 
 export type ToolInstallFailure = 'disk' | 'verify';
 
+export function wranglerInstallPlan(tools: string, nonce: string): ToolInstallPlan {
+  return toolInstallPlan(tools, WRANGLER_PIN, nonce);
+}
+
 /**
- * The plan for installing the pinned Wrangler: a staging folder beside the target (same disk, so the final rename is
+ * The plan for installing a pinned tool: a staging folder beside the target (same disk, so the final rename is
  * atomic), and npm's arguments. Every setting that matters is passed explicitly, so a person's own npm config (a global
  * prefix, no lockfile, install scripts) cannot change where or how the tool lands.
  */
-export function wranglerInstallPlan(tools: string, nonce: string): ToolInstallPlan {
+export function toolInstallPlan(tools: string, pin: ToolPin, nonce: string): ToolInstallPlan {
   assert(/^[a-zA-Z0-9-]{1,64}$/.test(nonce), 'A staging nonce is a plain token');
-  const target = wranglerToolRoot(tools);
+  const target = pinnedToolRoot(tools, pin);
   const staging = path.join(path.dirname(target), `${STAGING_PREFIX}${nonce}`);
   assert(path.dirname(staging) === path.dirname(target), 'Staging sits beside the target');
   return {
+    pin,
     tools,
     staging,
     target,
@@ -150,13 +181,17 @@ export function wranglerInstallPlan(tools: string, nonce: string): ToolInstallPl
   };
 }
 
-/** Sweeps what an earlier install left behind, then creates the staging folder npm installs into. */
 export function prepareWranglerInstall(tools: string, nonce: string = randomUUID()): Result<ToolInstallPlan, ToolInstallFailure> {
-  const plan = wranglerInstallPlan(tools, nonce);
+  return prepareToolInstall(tools, WRANGLER_PIN, nonce);
+}
+
+/** Sweeps what an earlier install left behind, then creates the staging folder npm installs into. */
+export function prepareToolInstall(tools: string, pin: ToolPin, nonce: string = randomUUID()): Result<ToolInstallPlan, ToolInstallFailure> {
+  const plan = toolInstallPlan(tools, pin, nonce);
   try {
     sweepToolFolder(path.dirname(plan.target), plan.target);
     mkdirSync(plan.staging, { recursive: true });
-    const manifest = { name: 'stacki-publish-tools', private: true, dependencies: { [WRANGLER_PIN.name]: WRANGLER_PIN.version } };
+    const manifest = { name: 'stacki-publish-tools', private: true, dependencies: { [pin.name]: pin.version } };
     writeFileSync(path.join(plan.staging, 'package.json'), `${JSON.stringify(manifest, undefined, 2)}\n`, { flag: 'wx' });
   } catch {
     discardWranglerInstall(plan);
@@ -170,9 +205,9 @@ export function prepareWranglerInstall(tools: string, nonce: string = randomUUID
  * Verifies a finished npm run and moves it into place. The lockfile must name the pinned version with the pinned hash,
  * and the installed manifest must agree; anything else is discarded and reported, never used.
  */
-export function finishWranglerInstall(plan: ToolInstallPlan): Result<void, ToolInstallFailure> {
+export function finishToolInstall(plan: ToolInstallPlan): Result<void, ToolInstallFailure> {
   assert(existsSync(plan.staging), 'A finished install has its staging folder');
-  if (!stagedWranglerVerified(plan.staging)) {
+  if (!stagedToolVerified(plan.staging, plan.pin)) {
     discardWranglerInstall(plan);
     return err('verify');
   }
@@ -185,9 +220,14 @@ export function finishWranglerInstall(plan: ToolInstallPlan): Result<void, ToolI
     return err('disk');
   }
   assert(!existsSync(plan.staging), 'The staging folder became the target');
-  const check = checkAppWrangler(plan.tools);
+  const check = checkPinnedTool(plan.tools, plan.pin);
   assert(check.kind === 'ready', 'A verified install is detected as ready');
   return ok(undefined);
+}
+
+export function finishWranglerInstall(plan: ToolInstallPlan): Result<void, ToolInstallFailure> {
+  assert(plan.pin.name === WRANGLER_PIN.name, 'This finishes a Wrangler install');
+  return finishToolInstall(plan);
 }
 
 /** Removes a staging folder that will not be used. Never touches the target. */
@@ -201,23 +241,23 @@ export function discardWranglerInstall(plan: Pick<ToolInstallPlan, 'staging' | '
   }
 }
 
-function stagedWranglerVerified(staging: string): boolean {
+function stagedToolVerified(staging: string, pin: ToolPin): boolean {
   const lockfile = toRecord(readBoundedJSON(path.join(staging, 'package-lock.json'), TOOL_INSTALL_LIMITS.lockfileBytesMax));
-  const locked = toRecord(toRecord(lockfile?.['packages'])?.[`node_modules/${WRANGLER_PIN.name}`]);
+  const locked = toRecord(toRecord(lockfile?.['packages'])?.[`node_modules/${pin.name}`]);
   if (locked === undefined) {
     return false;
   }
-  if (locked['version'] !== WRANGLER_PIN.version) {
+  if (locked['version'] !== pin.version) {
     return false;
   }
-  if (locked['integrity'] !== WRANGLER_PIN.integrity) {
+  if (locked['integrity'] !== pin.integrity) {
     return false;
   }
-  const manifest = toRecord(readBoundedJSON(path.join(staging, 'node_modules', WRANGLER_PIN.name, 'package.json'), TOOL_INSTALL_LIMITS.manifestBytesMax));
-  return manifest?.['version'] === WRANGLER_PIN.version;
+  const manifest = toRecord(readBoundedJSON(path.join(staging, 'node_modules', pin.name, 'package.json'), TOOL_INSTALL_LIMITS.manifestBytesMax));
+  return manifest?.['version'] === pin.version;
 }
 
-// Old staging folders and other Wrangler versions under the tool folder; the current target stays.
+// Old staging folders and other versions under one tool's folder; the current target stays.
 function sweepToolFolder(folder: string, target: string): void {
   let entries: readonly string[];
   try {

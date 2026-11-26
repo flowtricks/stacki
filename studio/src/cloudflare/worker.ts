@@ -151,6 +151,7 @@ export class PreviewContainer extends Container<Environment> {
     STUDIO_GITHUB_DEPLOY_ACCOUNT: this.env.GITHUB_DEPLOY_ACCOUNT ?? '',
     CLOUDFLARE_API_TOKEN: this.env.PUBLISH_CLOUDFLARE_API_TOKEN ?? '',
     VERCEL_TOKEN: this.env.PUBLISH_VERCEL_TOKEN ?? '',
+    NETLIFY_AUTH_TOKEN: this.env.PUBLISH_NETLIFY_TOKEN ?? '',
     PORT: '4350',
   };
 }

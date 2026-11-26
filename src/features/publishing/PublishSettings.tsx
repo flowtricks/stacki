@@ -328,6 +328,7 @@ function HostingFields({
               icon: <PublishProviderIcon provider="cloudflare" />,
             },
             { value: 'vercel', label: 'Vercel' /* i18n-ignore: product name. */, icon: <PublishProviderIcon provider="vercel" /> },
+            { value: 'netlify', label: 'Netlify' /* i18n-ignore: product name. */, icon: <PublishProviderIcon provider="netlify" /> },
           ]}
           menuClassName="publish-dropdown"
           livePreview={false}
@@ -453,6 +454,9 @@ function ManualHosting({ hosting, change }: { readonly hosting: Hosting; readonl
   return (
     <>
       {hosting.provider === 'cloudflare' && <CloudflareFields hosting={hosting} change={change} />}
+      {hosting.provider === 'netlify' && (
+        <TextField label={translate('publish.settings.advanced.netlifySite')} value={hosting.siteId} change={(siteId) => change({ ...hosting, siteId })} />
+      )}
       {hosting.provider === 'vercel' && (
         <>
           <TextField
@@ -507,6 +511,8 @@ function emptyHosting(provider: Hosting['provider']): Hosting {
       return { provider, accountId: '', project: '' };
     case 'vercel':
       return { provider, organizationId: '', projectId: '' };
+    case 'netlify':
+      return { provider, siteId: '' };
   }
 }
 

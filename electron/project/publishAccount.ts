@@ -18,13 +18,25 @@ import { ensureToolPath, toolPathHome } from '../lib/nodeTools';
 import { PNPM_TOLERATE_IGNORED_BUILDS } from './packageManager';
 import {
   addPublishToolDirectory,
+  netlifyAvailableWithoutPATH,
   publishToolInstalled,
   resolvePublishExecutable,
   vercelInstallPrefix,
   wranglerAvailableWithoutPATH,
 } from './publishExecutable';
 import { publishEnvironment, stopPublishProcess } from './publishCommands';
-import { appToolsDirectory, discardWranglerInstall, finishWranglerInstall, prepareWranglerInstall, type ToolInstallFailure } from './publishToolInstall';
+import { netlifyEnvironment } from './publishEnvironment';
+import { netlifySignInCheck, netlifySignInTicket, NETLIFY_SIGN_IN } from './publishNetlifySignIn';
+import {
+  appToolsDirectory,
+  discardWranglerInstall,
+  finishToolInstall,
+  prepareToolInstall,
+  NETLIFY_PIN,
+  WRANGLER_PIN,
+  type ToolPin,
+  type ToolInstallFailure,
+} from './publishToolInstall';
 
 /**
  * One installation of a provider's tool, run by npm before sign-in. Wrangler installs, pinned and verified, into a
@@ -38,15 +50,17 @@ export interface ToolInstall {
   readonly discard: () => void;
 }
 
-// What a launched process does: install the provider's tool, or sign in.
-export type LaunchStep = { readonly kind: 'installing'; readonly install: ToolInstall } | { readonly kind: 'starting' };
+// What a launched process does: install the provider's tool, sign in, or (Netlify only, whose sign-in does not wait
+// by itself) ask whether the sign-in page has been approved yet.
+export type LaunchStep =
+  { readonly kind: 'installing'; readonly install: ToolInstall } | { readonly kind: 'starting' } | { readonly kind: 'checking'; readonly ticket: string };
 
 interface Session {
   readonly id: string;
   readonly root: string;
   readonly provider: AccountProvider;
-  readonly process: ChildProcessWithoutNullStreams;
-  readonly step: LaunchStep;
+  process: ChildProcessWithoutNullStreams;
+  step: LaunchStep;
   state: AccountState;
   output: string;
   outputChars: number;
@@ -54,14 +68,25 @@ interface Session {
   // credentials); only this one fact is, so an offline failure can say so.
   offline: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
+  // Netlify's wait between approval checks, or the limit on the check running now.
+  checkTimer: ReturnType<typeof setTimeout> | undefined;
+  // Approval checks that failed in a row.
+  checkFailures: number;
 }
 const OUTPUT_CHARS_MAX = 8192;
 const INSTALL_OUTPUT_CHARS_MAX = 1_048_576;
+export interface NetlifySignInTiming {
+  readonly intervalMs: number;
+  readonly checkTimeoutMs: number;
+  readonly failuresMax: number;
+}
 type Launch = (root: string, provider: AccountProvider, step: LaunchStep) => ChildProcessWithoutNullStreams;
 
 // One login can own the CLI credential store at a time. Raw output never leaves this service.
 export class PublishingAccount {
   private session: Session | undefined;
+  // How often Netlify approval is asked for; a test shortens it.
+  netlifyTiming: NetlifySignInTiming = NETLIFY_SIGN_IN;
 
   constructor(
     private readonly launch: Launch = launchAccountSignIn,
@@ -118,22 +143,15 @@ export class PublishingAccount {
     return undefined;
   }
 
-  private start(root: string, id: string, provider: AccountProvider, step: LaunchStep): AccountState {
-    let child: ChildProcessWithoutNullStreams;
-    try {
-      child = this.launch(root, provider, step);
-    } catch {
+  private start(root: string, id: string, provider: AccountProvider, step: Exclude<LaunchStep, { readonly kind: 'checking' }>): AccountState {
+    const child = this.spawnStep(root, provider, step);
+    if (child === undefined) {
       // On Windows a missing tool is found while resolving it, before any process starts.
       if (step.kind === 'installing') {
         step.install.discard();
       }
       return { kind: 'failed', ...launchFailure(provider, step) };
     }
-    const stop = () => {
-      stopAccountSignIn(child, provider);
-    };
-    process.once('exit', stop);
-    child.once('close', () => process.removeListener('exit', stop));
     const session: Session = {
       id,
       root,
@@ -145,12 +163,30 @@ export class PublishingAccount {
       outputChars: 0,
       offline: false,
       timer: undefined,
+      checkTimer: undefined,
+      checkFailures: 0,
     };
     this.session = session;
     session.timer = setTimeout(() => this.expire(session), step.kind === 'installing' ? ACCOUNT_INSTALL_TIMEOUT_MS : ACCOUNT_SIGN_IN_TIMEOUT_MS);
     session.timer.unref();
     this.watch(session);
     return session.state;
+  }
+
+  // Starts one process, stopped with this one; undefined when it cannot even be resolved.
+  private spawnStep(root: string, provider: AccountProvider, step: LaunchStep): ChildProcessWithoutNullStreams | undefined {
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = this.launch(root, provider, step);
+    } catch {
+      return undefined;
+    }
+    const stop = () => {
+      stopAccountSignIn(child, provider);
+    };
+    process.once('exit', stop);
+    child.once('close', () => process.removeListener('exit', stop));
+    return child;
   }
 
   // A pending session fails at its timeout. A cancelled installation left to finish in
@@ -174,15 +210,20 @@ export class PublishingAccount {
     const child = session.process;
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: unknown) => this.read(session, chunk));
-    child.stderr.on('data', (chunk: unknown) => this.read(session, chunk));
+    child.stdout.on('data', (chunk: unknown) => this.read(session, chunk, 'stdout'));
+    child.stderr.on('data', (chunk: unknown) => this.read(session, chunk, 'stderr'));
     child.on('error', () =>
       this.finish(session, {
         kind: 'failed',
         ...launchFailure(session.provider, session.step),
       }),
     );
-    child.on('close', (code) => this.closed(session, code ?? undefined));
+    child.on('close', (code) => {
+      // A Netlify session runs several processes in turn; only the current one may decide anything.
+      if (session.process === child) {
+        this.closed(session, code ?? undefined);
+      }
+    });
     // Piped input keeps gh in its device-code flow without an interactive shell or prompts.
     // `vercel login` reads its input until it exits, so its pipe stays open while it waits.
     child.stdin.on('error', () => {});
@@ -202,6 +243,14 @@ export class PublishingAccount {
     if (!accountSignInPending(session.state)) {
       return;
     }
+    if (session.provider === 'netlify') {
+      if (session.step.kind === 'checking') {
+        this.netlifyChecked(session, session.step.ticket, code);
+      } else {
+        this.netlifyRequested(session, code);
+      }
+      return;
+    }
     this.finish(
       session,
       code === 0
@@ -211,6 +260,92 @@ export class PublishingAccount {
             ...described('publish.account.error.signInIncomplete', { provider: providerLabel(session.provider) }),
           },
     );
+  }
+
+  // The session an event belongs to, while it is still the one waiting.
+  private current(expected: Session): Session | undefined {
+    const session = this.session;
+    return session === expected && accountSignInPending(session.state) ? session : undefined;
+  }
+
+  // `netlify login --request` printed its ticket and exited: show its page, then ask until it is approved.
+  private netlifyRequested(expected: Session, code: number | undefined): void {
+    const session = this.current(expected);
+    if (session === undefined) {
+      return;
+    }
+    const request = code === 0 ? netlifySignInTicket(session.output) : undefined;
+    if (request === undefined) {
+      this.finish(session, { kind: 'failed', ...netlifySignInProblem(session.offline ? 'offline' : 'incomplete') });
+      return;
+    }
+    session.state = { kind: 'browser', url: request.url };
+    this.scheduleNetlifyCheck(session, request.ticket);
+  }
+
+  // One check at a time, started only after the last one ended; the session's own timeout bounds how many.
+  private scheduleNetlifyCheck(expected: Session, ticket: string): void {
+    const session = this.current(expected);
+    if (session === undefined) {
+      return;
+    }
+    session.output = '';
+    session.outputChars = 0;
+    session.checkTimer = setTimeout(() => this.checkNetlify(session, ticket), this.netlifyTiming.intervalMs);
+    session.checkTimer.unref();
+  }
+
+  private checkNetlify(expected: Session, ticket: string): void {
+    const session = this.current(expected);
+    if (session === undefined) {
+      return;
+    }
+    const step: LaunchStep = { kind: 'checking', ticket };
+    const child = this.spawnStep(session.root, session.provider, step);
+    if (child === undefined) {
+      this.finish(session, { kind: 'failed', ...launchFailure(session.provider, step) });
+      return;
+    }
+    session.process = child;
+    session.step = step;
+    session.offline = false;
+    session.checkTimer = setTimeout(() => stopAccountSignIn(child, session.provider), this.netlifyTiming.checkTimeoutMs);
+    session.checkTimer.unref();
+    this.watch(session);
+  }
+
+  private netlifyChecked(expected: Session, ticket: string, code: number | undefined): void {
+    const session = this.current(expected);
+    if (session === undefined) {
+      return;
+    }
+    clearTimeout(session.checkTimer);
+    const status = code === 0 ? netlifySignInCheck(session.output) : undefined;
+    switch (status) {
+      case 'authorized':
+        this.finish(session, { kind: 'complete' });
+        return;
+      case 'denied':
+        this.finish(session, { kind: 'failed', ...netlifySignInProblem('incomplete') });
+        return;
+      case 'pending':
+        session.checkFailures = 0;
+        this.scheduleNetlifyCheck(session, ticket);
+        return;
+      case undefined:
+        // A passing outage must not end a sign-in the person is in the middle of approving.
+        session.checkFailures += 1;
+        if (session.checkFailures < this.netlifyTiming.failuresMax) {
+          this.scheduleNetlifyCheck(session, ticket);
+        } else {
+          this.finish(session, { kind: 'failed', ...netlifySignInProblem(session.offline ? 'offline' : 'incomplete') });
+        }
+        return;
+      default: {
+        const exhaustive: never = status;
+        return exhaustive;
+      }
+    }
   }
 
   // An installer exited. A clean exit is verified and kept even after a cancel, so the next attempt starts at once;
@@ -240,7 +375,7 @@ export class PublishingAccount {
     this.finish(session, { kind: 'failed', ...installFailure(session.provider, outcome.error) });
   }
 
-  private read(expectedSession: Session, chunk: unknown): void {
+  private read(expectedSession: Session, chunk: unknown, stream: 'stdout' | 'stderr'): void {
     const session = this.session;
     if (session === undefined || session !== expectedSession) {
       return;
@@ -265,6 +400,15 @@ export class PublishingAccount {
     // Installation logs can contain registry credentials; count them without retaining them.
     if (installing) {
       if (INSTALL_OFFLINE_PATTERN.test(chunk)) {
+        session.offline = true;
+      }
+      return;
+    }
+    if (session.provider === 'netlify') {
+      // Netlify's answer is one JSON document on standard output, read when the command exits. Its errors are not kept.
+      if (stream === 'stdout') {
+        session.output += chunk;
+      } else if (INSTALL_OFFLINE_PATTERN.test(chunk)) {
         session.offline = true;
       }
       return;
@@ -311,6 +455,8 @@ export class PublishingAccount {
     }
     clearTimeout(session.timer);
     session.timer = undefined;
+    clearTimeout(session.checkTimer);
+    session.checkTimer = undefined;
     if (running(session.process)) {
       stopAccountSignIn(session.process, session.provider);
     }
@@ -354,6 +500,8 @@ function launchFailure(provider: AccountProvider, step: LaunchStep): Described {
       return described('publish.account.error.startCloudflare');
     case 'vercel':
       return described('publish.account.error.startVercel');
+    case 'netlify':
+      return described('publish.account.error.startNetlify');
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -372,6 +520,9 @@ function providerLabel(provider: AccountProvider): string {
     case 'vercel':
       // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'Vercel';
+    case 'netlify':
+      // i18n-ignore: a product name, shown as written in every language.
+      return 'Netlify';
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -391,6 +542,9 @@ function accountToolInstalled(root: string, provider: AccountProvider): boolean 
     case 'vercel':
       ensureToolPath();
       return publishToolInstalled(root, 'vercel');
+    case 'netlify':
+      // The same rule as Wrangler: this sign-in needs `login --request`, which an unknown global CLI may not have.
+      return netlifyAvailableWithoutPATH(root);
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -403,18 +557,10 @@ function prepareAccountTool(root: string, provider: AccountProvider): Result<Too
   switch (provider) {
     case 'github':
       return err(described('publish.account.error.startGitHub'));
-    case 'cloudflare': {
-      const plan = prepareWranglerInstall(appToolsDirectory());
-      if (!plan.ok) {
-        return err(installFailure(provider, plan.error));
-      }
-      return ok({
-        arguments: plan.value.arguments,
-        cwd: plan.value.staging,
-        finish: () => finishWranglerInstall(plan.value),
-        discard: () => discardWranglerInstall(plan.value),
-      });
-    }
+    case 'cloudflare':
+      return pinnedAccountTool(provider, WRANGLER_PIN);
+    case 'netlify':
+      return pinnedAccountTool(provider, NETLIFY_PIN);
     case 'vercel':
       return ok({
         arguments: vercelInstallArguments(toolPathHome ?? homedir(), process.platform),
@@ -431,6 +577,26 @@ function prepareAccountTool(root: string, provider: AccountProvider): Result<Too
       return exhaustive;
     }
   }
+}
+
+// A tool Stacki installs, pinned and verified, into its own folder (publishToolInstall.ts).
+function pinnedAccountTool(provider: AccountProvider, pin: ToolPin): Result<ToolInstall, Described> {
+  const plan = prepareToolInstall(appToolsDirectory(), pin);
+  if (!plan.ok) {
+    return err(installFailure(provider, plan.error));
+  }
+  return ok({
+    arguments: plan.value.arguments,
+    cwd: plan.value.staging,
+    finish: () => finishToolInstall(plan.value),
+    discard: () => discardWranglerInstall(plan.value),
+  });
+}
+
+// A sign-in that did not finish; an outage says so, with the same words the settings use for one.
+function netlifySignInProblem(why: 'offline' | 'incomplete'): Described {
+  const params = { provider: providerLabel('netlify') };
+  return why === 'offline' ? described('publish.connection.failure.network', params) : described('publish.account.error.signInIncomplete', params);
 }
 
 /**
@@ -483,6 +649,9 @@ function launchAccountSignIn(root: string, provider: AccountProvider, step: Laun
   }
   if (provider === 'vercel') {
     return launchVercelSignIn(root, step);
+  }
+  if (provider === 'netlify') {
+    return launchNetlifySignIn(root, step);
   }
   ensureToolPath();
   const environment: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', GH_PROMPT_DISABLED: '1' };
@@ -537,9 +706,45 @@ function launchVercelSignIn(root: string, step: LaunchStep): ChildProcessWithout
   });
 }
 
+function launchNetlifySignIn(root: string, step: LaunchStep): ChildProcessWithoutNullStreams {
+  ensureToolPath();
+  const command = resolvePublishExecutable(
+    root,
+    step.kind === 'installing'
+      ? { executable: 'npm', arguments: step.install.arguments, environment: {} }
+      : { executable: 'netlify', arguments: netlifySignInArguments(step), environment: {} },
+  );
+  const environment = netlifyEnvironment();
+  // A token or another web address inherited from the shell must not stand in for signing this computer in.
+  delete environment['NETLIFY_AUTH_TOKEN'];
+  delete environment['NETLIFY_WEB_UI'];
+  return spawn(command.executable, [...command.arguments], {
+    cwd: step.kind === 'installing' ? step.install.cwd : root,
+    env: environment,
+    detached: process.platform !== 'win32',
+    stdio: 'pipe',
+    shell: false,
+    windowsHide: true,
+  });
+}
+
+// The CLI's sign-in for programs without a terminal: ask for a ticket, then check it. The CLI stores the token itself.
+export function netlifySignInArguments(step: Exclude<LaunchStep, { readonly kind: 'installing' }>): readonly string[] {
+  switch (step.kind) {
+    case 'starting':
+      return ['login', '--request', 'Stacki', '--json'];
+    case 'checking':
+      return ['login', '--check', step.ticket, '--json'];
+    default: {
+      const exhaustive: never = step;
+      return exhaustive;
+    }
+  }
+}
+
 function stopAccountSignIn(child: ChildProcessWithoutNullStreams, provider: AccountProvider): void {
   if (provider !== 'github') {
-    // Wrangler's and Vercel's launchers start children; closing only the launcher leaves them waiting.
+    // Wrangler's, Vercel's and Netlify's launchers start children; closing only the launcher leaves them waiting.
     stopPublishProcess(child.pid);
   }
   child.kill('SIGKILL');

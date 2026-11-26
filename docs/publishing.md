@@ -2,7 +2,7 @@
 
 Desktop's hosting menu shows **Changes to deploy** until the current project matches its last
 successful deployment, and **Up to date** when it does. The separate arrow opens the detected
-published site, preferring a custom domain over a Workers, Pages, or Vercel domain. Discovery
+published site, preferring a custom domain over a Workers, Pages, Vercel or netlify.app domain. Discovery
 runs independently when the menu opens, so provider outages do not delay local change checks.
 The arrow is omitted when the URL cannot be detected, and remains usable when deployment is
 already current.
@@ -75,13 +75,53 @@ or on the publishing machine. Use `vercel login` locally or provide `VERCEL_TOKE
 Stacki supplies `VERCEL_PROJECT_ID` and `VERCEL_ORG_ID` for every production deployment.
 Vercel performs its own deployment build after Stacki's local validation build.
 
-Hosted Studio passes the optional Worker secrets `PUBLISH_CLOUDFLARE_API_TOKEN` and
-`PUBLISH_VERCEL_TOKEN` to its publishing container. Its image includes Wrangler; add Vercel
-to the site's development dependencies and rebuild the Studio image when selecting Vercel.
+Netlify needs one existing site (Netlify now calls it a project), saved as its site ID. Choose
+it from the list, press **Add site**, or paste the ID under Advanced. See [Netlify](#netlify).
+
+Hosted Studio passes the optional Worker secrets `PUBLISH_CLOUDFLARE_API_TOKEN`,
+`PUBLISH_VERCEL_TOKEN` and `PUBLISH_NETLIFY_TOKEN` to its publishing container. Its image includes
+Wrangler; add `vercel` or `netlify-cli` to the site's development dependencies and rebuild the
+Studio image when selecting Vercel or Netlify.
 Credentials must be provisioned independently on each machine. They do not belong in
 `.stacki/publish.json`. No CLI is silently downloaded during a publish.
 
-“GitHub only” skips Stacki's direct deploy command. If Cloudflare, Vercel, or GitHub Actions
+## Netlify
+
+**Connect Netlify** installs the Netlify CLI (`netlify-cli`, one pinned and verified version) into
+Stacki's own tools folder, without sudo and without touching the site, unless the site has its own
+copy. It needs Node.js 22.13 or newer. Sign-in uses the CLI's own browser flow for programs without
+a terminal (`netlify login --request`, then `netlify login --check` until you approve). The CLI
+stores the token; Stacki never reads it. Because this sign-in has no terminal, the CLI keeps the
+token in its own config file rather than the system keychain. Running `netlify login` in a terminal
+also works, and `NETLIFY_AUTH_TOKEN` in the environment takes precedence for deploys and lists.
+To sign out, run `netlify logout`.
+
+Discovery lists teams and their sites with `netlify api`, and imports an existing `netlify link`
+from `.netlify/state.json`. **Add site** creates the named site in the chosen team at once, because
+publishing needs its ID; nothing is uploaded until you publish. A name that is taken is refused,
+never swapped for another. Save the settings to keep the choice.
+
+Every deploy is a production deploy (`netlify deploy --prod --site <id> --json`). Stacki first
+confirms the site with `netlify api getSite`, because the CLI, run without a terminal, creates a new
+site when it cannot read the one it was given; it also checks the ID the deploy reports.
+
+- With no build command in `netlify.toml`, Stacki uploads its own build (`--no-build --dir …`):
+  `publish` from `netlify.toml`, else the Astro output folder. The project folder itself is never
+  uploaded. Netlify's build does not run, so its plugins and `.netlify/v1/config.json` (for
+  example the adapter's remote image patterns and cache headers) may not be applied.
+- With a build command in `netlify.toml` (`[build]` or `[context.production]`), the CLI also runs
+  Netlify's build in the publish snapshot with `--context production`. That command must build the
+  site: Netlify clears `.netlify/v1` first. `--dir` is passed only when no `publish` is set.
+
+Sites that render on demand need the `@astrojs/netlify` adapter (`npx astro add netlify`); Publish
+refuses another host's adapter before it builds. Stacki never creates or edits `netlify.toml`, and
+never adds the adapter for you. If Netlify already builds this repository on push, stop those builds
+or choose “GitHub only” to avoid deploying twice. Settings that name `netlify` need a Stacki or
+Studio version with Netlify support: older versions refuse the whole file with “Choose Cloudflare
+Pages, Cloudflare Workers, Vercel, or no hosting” and leave it unchanged, so update every editor of
+a shared project first.
+
+“GitHub only” skips Stacki's direct deploy command. If Cloudflare, Vercel, Netlify, or GitHub Actions
 already deploys on push, that automation still runs. Disable the provider's automatic builds
 when using direct publishing to avoid duplicate deployments. Leave the provider set to
 “GitHub only / existing automation” to retain an existing Git-triggered deployment.
@@ -156,7 +196,8 @@ use hosting-only when retrying a deployment. Publishing never force-pushes or ro
 
 Provider setup references: [GitHub account tokens](https://cli.github.com/manual/gh_auth_token),
 [Cloudflare direct upload](https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/),
-and [Vercel CLI project settings](https://vercel.com/docs/cli/global-options).
+[Vercel CLI project settings](https://vercel.com/docs/cli/global-options), and the Netlify CLI's
+[login](https://cli.netlify.com/commands/login/) and [deploy](https://cli.netlify.com/commands/deploy/) commands.
 
 ## Discovering connected accounts and projects
 

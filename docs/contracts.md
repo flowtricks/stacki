@@ -1721,7 +1721,8 @@ The Publish menu owns push status and its independent repository link; the Git p
 local branches and commits. Saves and refreshed Git state invalidate the menu's count.
 
 `publish:discover` accepts `{ projectPath, request: { provider, account } }`, where provider is
-Cloudflare, Vercel or GitHub and an empty account requests available connections/linked projects.
+Cloudflare, Vercel, Netlify or GitHub and an empty account requests available connections/linked projects.
+A Netlify project also names its `account` (team slug), which its saved destination, a site ID, does not.
 `shared/properties/publishDiscovery.ts` parses bounded account labels and hosting destinations.
 Failures carry a sanitized message, never provider credentials or command output. Studio exposes
 the same discovery service at `/studio/api/publish/discover`; both hosts preserve saved publish
@@ -1737,9 +1738,16 @@ Studio exposes the same contract at `/studio/api/publish/repository`; hosted dep
 their managed repository as read-only because deployment and synchronization share that binding.
 
 Cloudflare Workers have their own `cloudflare-workers` hosting variant. Discovery also accepts
-`linked` to inspect local Wrangler/Vercel destinations before settings exist. A discovered Worker
+`linked` to inspect local Wrangler, Vercel and Netlify destinations before settings exist. A discovered Worker
 may have an empty account ID when its local name is known but its account is unresolved; the saved
 publish-config parser rejects that incomplete value. This prevents assigning an unrelated account.
+
+`publish:netlifySite` accepts `{ projectPath, site: { team, name } }`, parsed by
+`shared/properties/publishNetlify.ts` (Netlify's subdomain rule, bounded team slug), creates that
+site with `netlify api createSiteInTeam`, and returns `ready` with its name and Netlify hosting or
+`failed` with a described sentence, never CLI output. The settings choose it; Save writes it. Design
+mode refuses the channel. Studio exposes it at `/studio/api/publish/netlify-site`; hosted
+deployments refuse it, as they refuse account sign-in.
 
 `publish:workerSetup` accepts `{ projectPath, worker: { accountId, project } }`, parsed by
 `shared/properties/publishWorkerSetup.ts` (Cloudflare's Worker name rule, bounded account), and returns

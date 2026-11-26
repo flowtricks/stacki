@@ -9,6 +9,7 @@ import {
   type ConnectionFailure,
   type ConnectionProblem,
   type DiscoveryProvider,
+  type PublishAccount,
   type DiscoveryRequest,
   type PublishDiscovery,
   type PublishProject,
@@ -16,6 +17,7 @@ import {
 import { discoveryCommand, DiscoveryCommandError } from './publishDiscoveryCommand';
 import { cloudflareAccounts, cloudflareProjects, cloudflareWorkers } from './publishDiscoveryCloudflare';
 import { vercelAccounts, vercelProjects } from './publishDiscoveryVercel';
+import { netlifyAccounts, netlifyProjects } from './publishNetlify';
 import { linkedPublishProject } from './publishLinkedProject';
 
 /** This boundary returns sanitized failures, never CLI output that could contain credentials. */
@@ -38,6 +40,8 @@ const PROVIDER_LABELS: Readonly<Record<DiscoveryProvider, string>> = {
   vercel: 'Vercel',
   // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
   github: 'GitHub',
+  // i18n-ignore: a product name, shown as written in every language.
+  netlify: 'Netlify',
 };
 
 export function connectionProblem(provider: DiscoveryProvider, reason: ConnectionFailure): ConnectionProblem {
@@ -68,7 +72,7 @@ function blocksPublishing(reason: ConnectionFailure): boolean {
 
 async function discoverProvider(root: string, request: DiscoveryRequest): Promise<PublishDiscovery> {
   if (request.provider === 'linked') {
-    const results = await Promise.allSettled((['linked', 'vercel'] as const).map((provider) => linkedPublishProject(root, provider)));
+    const results = await Promise.allSettled((['linked', 'vercel', 'netlify'] as const).map((provider) => linkedPublishProject(root, provider)));
     return {
       kind: 'ready',
       accounts: [],
@@ -91,22 +95,41 @@ async function discoverProvider(root: string, request: DiscoveryRequest): Promis
     return { kind: 'ready', accounts, projects: [] };
   }
   if (request.account) {
-    const projects =
-      request.provider === 'cloudflare'
-        ? await cloudflareProjects(root, request.account)
-        : request.provider === 'cloudflare-workers'
-          ? await cloudflareWorkers(root, request.account)
-          : await vercelProjects(root, request.account);
+    const lists = hostingLists(request.provider);
+    const projects = await lists.projects(root, request.account);
     return { kind: 'ready', accounts: [], projects };
   }
   return discoverHosting(root, request.provider);
 }
 
-async function discoverHosting(root: string, provider: 'cloudflare' | 'cloudflare-workers' | 'vercel'): Promise<PublishDiscovery> {
-  const [linked, connected] = await Promise.allSettled([
-    linkedPublishProject(root, provider),
-    provider === 'vercel' ? vercelAccounts(root) : cloudflareAccounts(root),
-  ]);
+type HostingProvider = 'cloudflare' | 'cloudflare-workers' | 'vercel' | 'netlify';
+interface HostingLists {
+  readonly accounts: (root: string) => Promise<readonly PublishAccount[]>;
+  // The reads that list one account's projects.
+  readonly reads: readonly ((root: string, account: string) => Promise<readonly PublishProject[]>)[];
+  readonly projects: (root: string, account: string) => Promise<readonly PublishProject[]>;
+}
+
+function hostingLists(provider: HostingProvider): HostingLists {
+  switch (provider) {
+    case 'cloudflare':
+      return { accounts: cloudflareAccounts, reads: [cloudflareProjects, cloudflareWorkers], projects: cloudflareProjects };
+    case 'cloudflare-workers':
+      return { accounts: cloudflareAccounts, reads: [cloudflareWorkers], projects: cloudflareWorkers };
+    case 'vercel':
+      return { accounts: vercelAccounts, reads: [vercelProjects], projects: vercelProjects };
+    case 'netlify':
+      return { accounts: netlifyAccounts, reads: [netlifyProjects], projects: netlifyProjects };
+    default: {
+      const exhaustive: never = provider;
+      return exhaustive;
+    }
+  }
+}
+
+async function discoverHosting(root: string, provider: HostingProvider): Promise<PublishDiscovery> {
+  const lists = hostingLists(provider);
+  const [linked, connected] = await Promise.allSettled([linkedPublishProject(root, provider), lists.accounts(root)]);
   const linkedProjects = linked.status === 'fulfilled' ? linked.value : [];
   if (connected.status === 'rejected' && linkedProjects.length === 0) {
     // Keep the classified reason: it decides whether the settings offer install, sign-in or refresh.
@@ -116,22 +139,18 @@ async function discoverHosting(root: string, provider: 'cloudflare' | 'cloudflar
   if (accounts.length > 20) {
     throw new Error('Discovery supports at most twenty accounts per provider.');
   }
-  const requests = accounts.flatMap((account) => {
-    switch (provider) {
-      case 'cloudflare':
-        return [cloudflareProjects(root, account.id), cloudflareWorkers(root, account.id)];
-      case 'cloudflare-workers':
-        return [cloudflareWorkers(root, account.id)];
-      case 'vercel':
-        return [vercelProjects(root, account.id)];
-    }
-  });
+  const requests = accounts.flatMap((account) => lists.reads.map((read) => read(root, account.id)));
   const results = await Promise.allSettled(requests);
   const projects = results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
   discoveryList(projects);
   const unique = new Map(projects.map((project) => [discoveryProjectKey(project), project]));
   for (const project of linkedProjects) {
-    unique.set(discoveryProjectKey(project), project);
+    const key = discoveryProjectKey(project);
+    const listed = unique.get(key);
+    // A Netlify link names only a site id; the listed entry also knows its name and team.
+    if (listed?.account === undefined) {
+      unique.set(key, project);
+    }
   }
   return {
     kind: 'ready',
@@ -169,5 +188,8 @@ function discoveryProjectKey(project: PublishProject): string {
     case 'vercel':
       // i18n-ignore: HTTP header value or request path, protocol text.
       return `vercel/${hosting.organizationId}/${hosting.projectId}`;
+    case 'netlify':
+      // i18n-ignore: an internal key, not text.
+      return `netlify/${hosting.siteId}`;
   }
 }

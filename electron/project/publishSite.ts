@@ -7,6 +7,7 @@ import { parsePublishedSiteURL } from '../../shared/properties/publishSite';
 import { cloudflareHeaders, cloudflareRequest } from './publishDiscoveryCloudflare';
 import { discoveryCommand } from './publishDiscoveryCommand';
 import { vercelPages } from './publishDiscoveryVercel';
+import { netlifySite, netlifySiteDomains } from './publishNetlify';
 
 export async function publishedProjectSiteURL(root: string, source: string | undefined): Promise<string | undefined> {
   const config = parsePublishSource(source);
@@ -38,6 +39,8 @@ export async function publishedSiteURL(root: string, hosting: Hosting): Promise<
       return undefined;
     case 'vercel':
       return vercelSiteURL(root, hosting);
+    case 'netlify':
+      return preferredSiteDomain(netlifySiteDomains(await netlifySite(root, hosting)));
     case 'cloudflare':
     case 'cloudflare-workers': {
       const credentials = record(await discoveryCommand(root, 'wrangler', ['auth', 'token', '--json']));
@@ -117,7 +120,7 @@ export function preferredSiteDomain(input: readonly unknown[]): string | undefin
     return parsePublishedSiteURL(`https://${domain}`);
   });
   const ordered = [...domains].sort((left, right) => {
-    const rank = (url: string) => Number(['.workers.dev', '.pages.dev', '.vercel.app'].some((suffix) => url.endsWith(suffix)));
+    const rank = (url: string) => Number(['.workers.dev', '.pages.dev', '.vercel.app', '.netlify.app'].some((suffix) => url.endsWith(suffix)));
     return rank(left) - rank(right) || left.localeCompare(right);
   });
   return ordered[0];

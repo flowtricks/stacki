@@ -137,7 +137,8 @@ test('the complete channel inventory matches real main and terminal registration
   // :watch, :guardClose and :allowClose; shared/ipc/fileExplorer.ts), 339 in all.
   // The AI panel's comment pins add two (ai:pinsRead and :pinsWrite, the board kept under userData), 341 in all.
   // Design mode adds one (design:session; docs/design-mode/REMOVE.md), 342 in all.
-  assert.equal(harness.handlers.size, 342); // Design mode (experimental): docs/design-mode/REMOVE.md
+  // Publish's Add site for Netlify adds one (publish:netlifySite), 343 in all.
+  assert.equal(harness.handlers.size, 343); // Design mode (experimental): docs/design-mode/REMOVE.md
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
