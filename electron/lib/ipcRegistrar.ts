@@ -4,6 +4,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import type { IpcChannel, IpcPayloads } from '../../shared/ipc/ipcPayloads';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
+import { checkDesignFence } from './designMode/designFence'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 export function createIpcRegistrar(ipcMain: Pick<Electron.IpcMain, 'handle'>) {
   return function handle<K extends IpcChannel>(
@@ -12,6 +13,7 @@ export function createIpcRegistrar(ipcMain: Pick<Electron.IpcMain, 'handle'>) {
   ): void {
     ipcMain.handle(channel, (event, input: unknown) => {
       const payload = parseIpcPayload(channel, input);
+      checkDesignFence(channel, payload); // Design mode (experimental): docs/design-mode/REMOVE.md
       return listener(event, payload);
     });
   };

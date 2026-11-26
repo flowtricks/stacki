@@ -25,14 +25,14 @@ test('every locale has every key, its placeholders and some text', () => {
       assert.deepEqual(placeholders(catalog[key]), placeholders(designModeEnglish[key]), `${locale} ${key}: same placeholders`);
     }
     if (locale !== 'en') {
-      assert.notEqual(catalog['mode.badgeTip'], designModeEnglish['mode.badgeTip'], `${locale}: translated`);
+      assert.notEqual(catalog['bar.tip'], designModeEnglish['bar.tip'], `${locale}: translated`);
     }
   }
 });
 
 test('words fill their placeholders; a missing value stays visible', () => {
-  assert.equal(designWord('en', 'inspector.selected', { count: 3 }), '3 selected');
-  assert.equal(designWord('en', 'inspector.selected'), '{count} selected');
-  assert.equal(designWord('en', 'inspector.selected', { other: 1 }), '{count} selected');
+  assert.equal(designWord('en', 'frame.changes', { count: 3 }), '3 changed files');
+  assert.equal(designWord('en', 'frame.changes'), '{count} changed files');
+  assert.equal(designWord('en', 'frame.changes', { other: 1 }), '{count} changed files');
   assert.notEqual(designWord('ja', 'mode.name'), 'Design mode');
 });

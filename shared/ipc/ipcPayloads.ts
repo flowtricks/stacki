@@ -1,4 +1,5 @@
 import { FILE_EXPLORER_PAYLOADS } from './fileExplorer';
+import { DESIGN_SESSION_PAYLOADS } from './designSession'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
@@ -313,6 +314,7 @@ export const IPC_PAYLOADS = {
   ...AGENT_PAYLOADS,
   // The Files panel (shared/ipc/fileExplorer.ts).
   ...FILE_EXPLORER_PAYLOADS,
+  ...DESIGN_SESSION_PAYLOADS, // Design mode (experimental): docs/design-mode/REMOVE.md
   'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
   'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
   'instructions:list': object({ ...project }),

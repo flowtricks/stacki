@@ -163,6 +163,7 @@ function projectBridge() {
     createAstroCopy: invoke('project:createAstroCopy'),
     inspectFolder: invoke('project:inspectFolder'),
     takeOpenedFolders: invoke('project:takeOpenedFolders'),
+    designSession: invoke('design:session'), // Design mode (experimental): docs/design-mode/REMOVE.md
     createStarter: invoke('project:createStarter'),
     scanProject: invoke('project:scan'),
     listProjectClasses: invoke('project:classes'),

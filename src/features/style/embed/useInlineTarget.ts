@@ -46,6 +46,7 @@ import { usePseudoTarget } from './editorModel';
 import type { LiveSetProp, SetProp } from './EditorBasics';
 import type { InlineBranchView } from './InlineBranchEditor';
 import type { StyleCardProps } from './QueryForms';
+import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 /** The chip as the well draws it. */
 export interface InlineChip {
@@ -99,9 +100,15 @@ export function chipStyleOf(inline: Pick<InlineState, 'ownStyle' | 'instance'>, 
 
 /** Whether the chip is in the well, and whether it is the edit target. */
 export function inlineTargetOf(inline: InlineState, style: InlineStyle): { readonly shown: boolean; readonly active: boolean } {
-  const shown = inlineChipShown(style, { writable: inline.writable, pseudo: inline.pseudo });
+  const shown = inlineChipShown(style, { writable: inline.writable, pseudo: inline.pseudo }) || startsInline(style, inline);
   const active = shown && inline.nodeId !== undefined && inline.pickedFor === inline.nodeId;
   return { shown, active };
+}
+
+// With inline as the default (model/inlineDefault.ts), the chip stands in the well even before the element has
+// a style attribute, so the first edit writes one.
+function startsInline(style: InlineStyle, inline: Pick<InlineState, 'writable' | 'pseudo'>): boolean {
+  return style.kind === 'none' && inline.writable && !inline.pseudo && inlineDefault() === 'inline';
 }
 
 /** What resolveStyle folds in: the attribute's declarations, or the edited branch's. */
@@ -146,6 +153,7 @@ export function useInlineCard(
   const { shown, active } = inlineTargetOf(inline, style);
   const heldRef = useRef<HeldInlineWrite | undefined>(undefined);
   useForgetHeldWrite(heldRef, nodeId);
+  useInlineByDefault({ nodeId, shown, deselect, setPickedFor });
   const refuse = (message: string): void => setSaveError(message);
 
   // A plain string: the whole attribute's next text.
@@ -431,4 +439,25 @@ function useSelectedHostNode(): HostNode | undefined {
 function readSelectedNode(): HostNode | undefined {
   const host = getHost();
   return host.selectedId === undefined ? undefined : findNode(host.nodes, host.selectedId);
+}
+
+// Each newly selected element starts on its chip while inline is the default (model/inlineDefault.ts); picking a
+// selector afterwards leaves it as usual. Keyed on the element alone, so a pick the person makes stays.
+function useInlineByDefault(input: {
+  readonly nodeId: string | undefined;
+  readonly shown: boolean;
+  readonly deselect: () => void;
+  readonly setPickedFor: (nodeId: string | undefined) => void;
+}): void {
+  const latest = useRef(input);
+  latest.current = input;
+  const { nodeId } = input;
+  useEffect(() => {
+    const { shown, deselect, setPickedFor } = latest.current;
+    if (nodeId === undefined || !shown || inlineDefault() !== 'inline') {
+      return;
+    }
+    deselect();
+    setPickedFor(nodeId);
+  }, [nodeId]);
 }
