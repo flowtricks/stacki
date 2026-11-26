@@ -441,6 +441,7 @@ export class DevServers {
         JSON.stringify(previewHelperPath),
         JSON.stringify(RUNTIME_PATHS.studioEntry),
         JSON.stringify(RUNTIME_PATHS.previewWarmup),
+        JSON.stringify(RUNTIME_PATHS.previewImageCache),
         JSON.stringify(projectDirectories),
         JSON.stringify(MORPH_CLIENT),
         JSON.stringify(MORPH_TAG_HTML),

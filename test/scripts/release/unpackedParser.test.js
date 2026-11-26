@@ -48,6 +48,7 @@ const ENTRIES = [
   'dist/electron/lib/componentSources.js',
   'dist/electron/previewServer/studioEntry.js',
   'dist/electron/previewServer/previewWarmup.js',
+  'dist/electron/previewServer/previewImageCache.js',
 ];
 
 // The parser uses TypeScript's syntax tree for arbitrary callback bodies. Its
@@ -181,6 +182,7 @@ function checkGeneratedConfig(directory) {
     local('dist/electron/previewServer/componentPreview.js'),
     local('dist/electron/previewServer/studioEntry.js'),
     local('dist/electron/previewServer/previewWarmup.js'),
+    local('dist/electron/previewServer/previewImageCache.js'),
     JSON.stringify([directory]),
     JSON.stringify(''),
     JSON.stringify(''),

@@ -75,7 +75,9 @@ async function ensureWorktree(git: Git, { projectPath, ref }: { readonly project
     await git(directory, ['checkout', '--detach', '--force', ref]);
     // A previous preview may have left build output behind; the checkout does
     // not remove untracked files and stale ones would be served.
-    await git(directory, ['clean', '-qfd']);
+    // node_modules stays whether or not that commit ignores it: the running server's config is in it
+    // (preview/imageCacheConfig.ts).
+    await git(directory, ['clean', '-qfd', '-e', 'node_modules']);
     return directory;
   }
 

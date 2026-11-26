@@ -4,6 +4,7 @@
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import * as fs from 'fs';
 import * as previewWorktree from '../preview/previewWorktree';
+import { imageCacheConfigArgs } from '../preview/imageCacheConfig';
 import { checkPreviewRender } from '../preview/previewCheck';
 import { findFreePort, git, spawnAstroServer } from '../lib/nodeTools';
 import { localAstroBin } from '../project/projectFiles';
@@ -39,7 +40,8 @@ function registerPreviewAtCommitHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>):
         throw new Error('Preview server limit');
       }
     }
-    const proc = spawnAstroServer(directory, localBin, ['dev', '--port', String(port), '--host', '127.0.0.1']);
+    // The same port and addresses serve every commit looked at, so images are asked for again each time.
+    const proc = spawnAstroServer(directory, localBin, ['dev', '--port', String(port), '--host', '127.0.0.1', ...imageCacheConfigArgs(directory)]);
 
     const url = `http://127.0.0.1:${port}`;
     let log = '';
