@@ -356,13 +356,21 @@ export function setPanelVisibility(visibility: PanelVisibility): void {
   }
 }
 
+/**
+ * Allows agents in the open project. A refusal is shown as the panel's error toast; so is a yes that did not hold (the
+ * project read again still not allowed), so pressing Allow never ends in nothing.
+ */
 export async function trustProject(): Promise<void> {
   const projectPath = requireProject();
   const reply = await aiTrust(projectPath);
   update((current) => ({ ...current, trusted: reply.ok ? true : current.trusted, ...failureFields(reply.ok ? undefined : reply.error) }));
-  if (reply.ok) {
-    // Trusted now: main may ask the agents for their real models and efforts.
-    await loadAiProject(projectPath);
+  if (!reply.ok) {
+    return;
+  }
+  // Trusted now: main may ask the agents for their real models and efforts.
+  await loadAiProject(projectPath);
+  if (!state.trusted && state.projectPath === projectPath) {
+    fail({ code: 'invalid', ...described('ai.trust.notSaved') });
   }
 }
 
@@ -411,6 +419,22 @@ export async function openChat(chat: ChatId | undefined): Promise<void> {
   if (!reply.ok) {
     fail(reply.error);
     return;
+  }
+  update((current) => ({ ...current, views: withView(current.views, chat, reduceChat(EMPTY_CHAT, reply.value.events)) }));
+}
+
+/**
+ * Reads chat `chat`'s transcript into memory without opening it: comment pins read how their pins stand from it
+ * (a pin whose work finished well is deleted). A chat already read, or not in this project's list, is left as it is.
+ */
+export async function loadChatView(chat: ChatId): Promise<void> {
+  const projectPath = state.projectPath;
+  if (projectPath === undefined || state.views.has(chat) || !state.chats.some((candidate) => candidate.id === chat)) {
+    return;
+  }
+  const reply = await aiChatRead({ projectPath, chat });
+  if (!reply.ok || state.projectPath !== projectPath || state.views.has(chat)) {
+    return; // Unread, or another project opened meanwhile: the pins wait as they are.
   }
   update((current) => ({ ...current, views: withView(current.views, chat, reduceChat(EMPTY_CHAT, reply.value.events)) }));
 }

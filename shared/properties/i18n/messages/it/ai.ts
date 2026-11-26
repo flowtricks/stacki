@@ -11,29 +11,25 @@ export const messages = {
     one: 'ha modificato {count} file',
     other: 'ha modificato {count} file',
   },
-  'ai.activity.fetched': {
-    one: 'ha recuperato {count} pagina',
-    other: 'ha recuperato {count} pagine',
-  },
-  'ai.activity.ran': {
-    one: 'ha eseguito {count} comando',
-    other: 'ha eseguito {count} comandi',
+  'ai.activity.other': {
+    one: 'ha eseguito {count} altro passaggio',
+    other: 'ha eseguito altri {count} passaggi',
   },
   'ai.activity.read': {
     one: 'ha letto {count} file',
     other: 'ha letto {count} file',
   },
   'ai.activity.searched': {
-    one: 'ha cercato {count} volta',
-    other: 'ha cercato {count} volte',
-  },
-  'ai.activity.used': {
-    one: 'ha usato {count} strumento',
-    other: 'ha usato {count} strumenti',
+    one: 'ha esaminato il progetto {count} volta',
+    other: 'ha esaminato il progetto {count} volte',
   },
   'ai.activity.usedTools': {
-    one: 'Usato {count} strumento',
-    other: 'Usati {count} strumenti',
+    one: 'Eseguito {count} passaggio',
+    other: 'Eseguiti {count} passaggi',
+  },
+  'ai.activity.web': {
+    one: 'ha cercato {count} cosa sul web',
+    other: 'ha cercato {count} cose sul web',
   },
   'ai.agent.badge.installing': 'Installazione',
   'ai.agent.badge.notInstalled': 'Non installato',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'Questa chat non ha ancora messaggi da copiare',
   'ai.export.truncated': 'Il resto della chat era troppo lungo da copiare.',
   'ai.export.you': 'Tu',
+  'ai.files.component': 'Componente {name}',
+  'ai.files.homePage': 'Home page', // same
+  'ai.files.layout': 'Layout {name}',
+  'ai.files.page': 'Pagina {name}',
   'ai.find.close': 'Chiudi ricerca',
   'ai.find.count': {
     one: '{count} risultato',
@@ -382,7 +382,7 @@ export const messages = {
   'ai.panel.setUpToStart': 'Configura {agent} per iniziare a chattare',
   'ai.panel.signInToKeep': 'Accedi a {agent} per continuare a chattare',
   'ai.panel.signInToStart': 'Accedi a {agent} per iniziare a chattare',
-  'ai.panel.trustFirst': 'Consenti prima gli agenti in questo progetto',
+  'ai.panel.trustFirst': 'Consenti gli agenti',
   'ai.permission.ask.command': 'Eseguire un comando',
   'ai.permission.ask.delete': 'Eliminare un file',
   'ai.permission.ask.edit': 'Modificare un file',
@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Interrotto prima della fine. Riapri il pin per inviarlo di nuovo.',
   'ai.pins.cancelMove': 'Annulla',
   'ai.pins.cancelRun': 'Interrompi l’invio',
-  'ai.pins.clearSent': {
-    one: 'Cancella {count} inviato',
-    other: 'Cancella {count} inviati',
-  },
   'ai.pins.close': 'Chiudi',
   'ai.pins.continue': 'Continua',
   'ai.pins.cropFailed': 'Impossibile acquisire l’area contrassegnata.',
@@ -427,7 +423,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Il suo elemento non è più in questa pagina. Apri il pin per spostarlo su un altro elemento.',
   'ai.pins.discard': 'Scarta pin',
   'ai.pins.discardedToast': 'Modifiche al pin {number} scartate',
-  'ai.pins.done': 'Fatto',
   'ai.pins.elementIn': 'Elemento in {file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Ancora nessun pin',
@@ -441,13 +436,22 @@ export const messages = {
     other: 'Un pin contiene al massimo {count} immagini.',
   },
   'ai.pins.imagesTooLarge': 'Le immagini dei pin sono troppo grandi nel complesso. Rimuovine prima alcune.',
-  'ai.pins.include': 'Includi il pin {number} in Invia tutto',
+  'ai.pins.include': 'Includi il pin {number} nel prossimo invio',
   'ai.pins.jump': 'Vai al pin {number}',
+  'ai.pins.leave': 'Esci dalla modalità commento',
   'ai.pins.list': {
     one: '{count} pin',
     other: '{count} pin',
   },
+  'ai.pins.listAttention': {
+    one: '{count} ti aspetta',
+    other: '{count} ti aspettano',
+  },
   'ai.pins.listLabel': 'Pin di commento',
+  'ai.pins.listWorking': {
+    one: '{count} in corso',
+    other: '{count} in corso',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     one: 'Messaggio con {count} pin di commento',
@@ -489,9 +493,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Invia tutti i pin inclusi in un solo messaggio; ognuno ha il proprio subagent nella chat.',
   'ai.pins.send.tooManyImages': 'Troppe immagini per un solo messaggio. Rimuovine alcune o escludi qualche pin.',
   'ai.pins.send.tooManyPins': 'Troppi pin per un solo messaggio. Escludine alcuni e invia prima gli altri.',
-  'ai.pins.sendAll': {
-    one: 'Invia tutto ({count})',
-    other: 'Invia tutto ({count})',
+  'ai.pins.sendCount': {
+    one: 'Invia',
+    other: 'Invia {count}',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {
@@ -708,10 +712,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Ragionamento',
   'ai.status.phase.waiting': 'In attesa di te',
   'ai.step.build': 'Ha compilato il progetto',
-  'ai.step.check': 'Ha controllato formattazione e lint',
+  'ai.step.check': 'Ha controllato se il codice contiene errori',
   'ai.step.commandMany': {
-    one: 'Ha eseguito {count} comando',
-    other: 'Ha eseguito {count} comandi',
+    one: 'Ha eseguito {count} attività nel progetto',
+    other: 'Ha eseguito {count} attività nel progetto',
   },
   'ai.step.commit': 'Ha eseguito il commit delle modifiche',
   'ai.step.commitMany': {
@@ -750,8 +754,8 @@ export const messages = {
   'ai.step.scriptNamed': 'Ha eseguito {name}',
   'ai.step.searchFor': 'Ha cercato «{query}» nel progetto',
   'ai.step.searchMany': {
-    one: 'Ha cercato nel progetto {count} volta',
-    other: 'Ha cercato nel progetto {count} volte',
+    one: 'Ha esaminato il progetto {count} volta',
+    other: 'Ha esaminato il progetto {count} volte',
   },
   'ai.step.test': 'Ha eseguito i test',
   'ai.step.web': 'Ha cercato qualcosa sul web',
@@ -763,7 +767,7 @@ export const messages = {
     one: '{count} passaggio precedente',
     other: '{count} passaggi precedenti',
   },
-  'ai.steps.hideCommands': 'Nascondi comandi',
+  'ai.steps.hideCommands': 'Nascondi dettagli tecnici',
   'ai.steps.label': 'Passaggi',
   'ai.steps.more': {
     one: '{count} in più non mostrati',
@@ -773,7 +777,7 @@ export const messages = {
     one: '{count} in corso',
     other: '{count} in corso',
   },
-  'ai.steps.showCommands': 'Mostra comandi',
+  'ai.steps.showCommands': 'Mostra dettagli tecnici',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} attività',
@@ -874,13 +878,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Messaggio di follow-up',
   'ai.subagents.label': 'Agenti',
-  'ai.subagents.model.inherited': '{model} (ereditato)',
-  'ai.subagents.model.session': 'Modello della sessione',
+  'ai.subagents.modelLine': 'Modello: {model}',
   'ai.subagents.more': {
     one: '{count} agente precedente non mostrato',
     other: '{count} agenti precedenti non mostrati',
   },
-  'ai.subagents.openTranscript': 'Apri trascrizione',
+  'ai.subagents.openTranscript': 'Vedi tutti i passaggi',
   'ai.subagents.result': 'Risultato',
   'ai.subagents.running': {
     one: '{count} agente al lavoro',
@@ -937,13 +940,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Ha cercato dei file',
   'ai.toolName.findTool': 'Ha cercato uno strumento',
   'ai.toolName.followUp': 'Ha inviato un messaggio di follow-up',
-  'ai.toolName.generic': 'Ha usato uno strumento',
+  'ai.toolName.generic': 'Ha eseguito un passaggio',
   'ai.toolName.helper': 'Ha avviato un assistente',
   'ai.toolName.plan': 'Ha proposto un piano',
   'ai.toolName.read': 'Ha letto un file',
   'ai.toolName.readWebPage': 'Ha letto una pagina web',
-  'ai.toolName.run': 'Ha eseguito un comando',
-  'ai.toolName.searchCode': 'Ha cercato nel progetto',
+  'ai.toolName.run': 'Ha eseguito un’attività nel progetto',
+  'ai.toolName.searchCode': 'Ha esaminato il progetto',
   'ai.toolName.searchWeb': 'Ha cercato sul web',
   'ai.toolName.session': 'Ha avviato una sessione',
   'ai.toolName.skill': 'Ha usato una competenza',
@@ -956,10 +959,13 @@ export const messages = {
   'ai.transcript.label': 'Conversazione',
   'ai.transcript.showEarlier': 'Mostra {count} precedenti',
   'ai.transcript.workedFor': 'Ha lavorato per {duration}',
-  'ai.trust.allow': 'Consenti in questo progetto',
-  'ai.trust.text':
-    'Claude e Codex possono leggere, modificare ed eseguire qualsiasi cosa in questo progetto. Le loro modifiche si applicano subito e poi mantieni o annulli ogni file.',
-  'ai.trust.title': 'Lasciare che gli agenti lavorino in questo progetto?',
+  'ai.trust.allow': 'Consenti agenti',
+  'ai.trust.allowing': 'Autorizzazione…',
+  'ai.trust.notSaved': 'Impossibile consentire gli agenti in questo progetto. Riprova.',
+  'ai.trust.pointAccess': 'Gli agenti possono leggere, modificare ed eseguire qualsiasi cosa in questo progetto.',
+  'ai.trust.pointLive': 'Le loro modifiche si applicano subito ai tuoi file.',
+  'ai.trust.pointReview': 'Poi mantieni o annulli ogni file modificato.',
+  'ai.trust.title': 'Consentire gli agenti in questo progetto?',
   'ai.turn.done': 'Fatto.',
   'ai.turn.error': 'Qualcosa è andato storto.',
   'ai.turn.maxRequests': 'L’agente ha raggiunto il limite di passaggi per un messaggio.',

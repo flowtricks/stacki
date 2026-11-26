@@ -1,6 +1,6 @@
 // Goal: a subagent's work reads as steps a designer understands, and the Running panel's model says truthfully what
 // runs and what finished. Each call is sorted into a kind of step by a table (the tool's name, its kind, and for a
-// command the programs people recognise), always with "Ran a command" as the safe fallback; consecutive calls of
+// command the programs people recognise), always with "Ran a task in the project" as the safe fallback; consecutive calls of
 // one kind merge into one step with a count, its files, a status (running while any call runs, else the newest
 // outcome) and a time from its first start to its last end. The negative space: an unknown tool or program, an
 // empty list, a stored call with no stamps or names, a huge run, a command line of megabytes, quotes that never
@@ -124,8 +124,8 @@ test('each kind of command is sorted into its step, with the subject a designer 
 
 test('tools are sorted by name, then by kind; an unknown tool is a tool step named by its name', () => {
   const table = [
-    [{ toolName: 'Read', toolKind: 'read', paths: ['/site/src/Hero.astro'] }, 'read', 'Hero.astro'],
-    [{ toolName: 'Edit', toolKind: 'edit', diffs: [{ path: '/site/src/Nav.astro', oldText: 'a', newText: 'b' }] }, 'edit', 'Nav.astro'],
+    [{ toolName: 'Read', toolKind: 'read', paths: ['/site/src/Hero.astro'] }, 'read', 'src/Hero.astro'],
+    [{ toolName: 'Edit', toolKind: 'edit', diffs: [{ path: '/site/src/Nav.astro', oldText: 'a', newText: 'b' }] }, 'edit', 'src/Nav.astro'],
     [{ toolName: 'Write', toolKind: 'edit', paths: ['/site/new.css'] }, 'edit', 'new.css'],
     [{ toolName: 'Grep', toolKind: 'search', title: 'grep -i -n --include="*.tsx" "arrow" src' }, 'search', 'arrow'],
     [{ toolName: 'Glob', toolKind: 'search', title: 'Find `**/*.astro`' }, 'search', undefined],
@@ -151,8 +151,8 @@ test('tools are sorted by name, then by kind; an unknown tool is a tool step nam
   assert.deepEqual(unknown, { kind: 'tool', subject: undefined, name: 'mcp__figma__get_page_layout' });
   assert.deepEqual(label([item({ toolName: 'mcp__figma__get_page_layout', title: 'mcp__figma__get_page_layout' })]), ['Used Get Page Layout']);
   // A stored call of an older version: no name, no kind of its own, its stored title.
-  assert.deepEqual(label([item({ title: 'Tool', toolName: undefined })]), ['Used a tool'], 'the reducer’s stand-in title names nothing');
-  assert.deepEqual(label([item({ title: '', toolName: undefined })]), ['Used a tool'], 'nothing to go on: the generic words');
+  assert.deepEqual(label([item({ title: 'Tool', toolName: undefined })]), ['Took a step'], 'the reducer’s stand-in title names nothing');
+  assert.deepEqual(label([item({ title: '', toolName: undefined })]), ['Took a step'], 'nothing to go on: the generic words');
   assert.ok(
     words.STEP_KINDS.every((kind) => typeof kind === 'string'),
     'the kinds are a closed list',
@@ -264,7 +264,7 @@ test('an empty list, a single call and a call of every kind each read as words',
   }
   assert.equal(
     steps.stepLabel({ kind: 'search', count: 1, files: [], fileCount: 0, subject: 'arrow', name: undefined }, translate),
-    'Searched the project for “arrow”',
+    'Looked for “arrow” in the project',
   );
   assert.equal(steps.stepLabel({ kind: 'script', count: 1, files: [], fileCount: 0, subject: 'build.mjs', name: undefined }, translate), 'Ran build.mjs');
   assert.equal(steps.stepLabel({ kind: 'read', count: 2, files: ['A.astro'], fileCount: 1, subject: 'A.astro', name: undefined }, translate), 'Read A.astro');
@@ -349,9 +349,9 @@ test('a long-running agent: 31 tasks, 1 running, in human steps, its title clean
   const labels = timeline.groups.map((group) => steps.stepLabel(group, translate));
   assert.deepEqual(labels, [
     'Read 5 files',
-    'Searched the project for “arrow”',
-    'Edited 3 files (Button.astro, Hero.astro, …)',
-    'Checked formatting and lint',
+    'Looked for “arrow” in the project',
+    'Edited 3 files (Button component, Hero component, …)',
+    'Checked the code for mistakes',
     'Ran the tests (2 times)',
     'Committed changes',
     'Pushed changes',
@@ -413,7 +413,7 @@ test('background commands: the dev server runs under its friendly name, the fini
     [['command', 'Tests', 'done']],
   );
   assert.equal(running.chipLabel(running.chipState(model), translate), '1 background command');
-  assert.ok(model.running[0].command.text.includes('npm run dev'), 'the exact command is kept for "Show commands"');
+  assert.ok(model.running[0].command.text.includes('npm run dev'), 'the exact command is kept for "Show technical details"');
   // Both kinds at once.
   assert.equal(running.chipLabel({ kind: 'working', agents: 2, commands: 1 }, translate), '2 agents working, 1 background command');
   assert.equal(running.chipLabel({ kind: 'finished', agents: 0, commands: 2, failed: 0 }, translate), '2 tasks finished');

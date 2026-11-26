@@ -11,29 +11,25 @@ export const messages = {
     one: 'editó {count} archivo',
     other: 'editó {count} archivos',
   },
-  'ai.activity.fetched': {
-    one: 'obtuvo {count} página',
-    other: 'obtuvo {count} páginas',
-  },
-  'ai.activity.ran': {
-    one: 'ejecutó {count} comando',
-    other: 'ejecutó {count} comandos',
+  'ai.activity.other': {
+    one: 'dio {count} paso más',
+    other: 'dio {count} pasos más',
   },
   'ai.activity.read': {
     one: 'leyó {count} archivo',
     other: 'leyó {count} archivos',
   },
   'ai.activity.searched': {
-    one: 'buscó {count} vez',
-    other: 'buscó {count} veces',
-  },
-  'ai.activity.used': {
-    one: 'usó {count} herramienta',
-    other: 'usó {count} herramientas',
+    one: 'revisó el proyecto {count} vez',
+    other: 'revisó el proyecto {count} veces',
   },
   'ai.activity.usedTools': {
-    one: 'Usó {count} herramienta',
-    other: 'Usó {count} herramientas',
+    one: 'Dio {count} paso',
+    other: 'Dio {count} pasos',
+  },
+  'ai.activity.web': {
+    one: 'buscó {count} cosa en la web',
+    other: 'buscó {count} cosas en la web',
   },
   'ai.agent.badge.installing': 'Instalando',
   'ai.agent.badge.notInstalled': 'No instalado',
@@ -276,6 +272,10 @@ export const messages = {
   'ai.export.empty': 'Este chat aún no tiene mensajes que copiar',
   'ai.export.truncated': 'El resto del chat era demasiado largo para copiarlo.',
   'ai.export.you': 'Tú',
+  'ai.files.component': 'Componente {name}',
+  'ai.files.homePage': 'Página de inicio',
+  'ai.files.layout': 'Diseño {name}',
+  'ai.files.page': 'Página {name}',
   'ai.find.close': 'Cerrar la búsqueda',
   'ai.find.count': {
     one: '{count} coincidencia',
@@ -383,7 +383,7 @@ export const messages = {
   'ai.panel.setUpToStart': 'Configura {agent} para empezar a chatear',
   'ai.panel.signInToKeep': 'Inicia sesión en {agent} para seguir chateando',
   'ai.panel.signInToStart': 'Inicia sesión en {agent} para empezar a chatear',
-  'ai.panel.trustFirst': 'Primero permite agentes en este proyecto',
+  'ai.panel.trustFirst': 'Permite los agentes',
   'ai.permission.ask.command': 'Ejecutar un comando',
   'ai.permission.ask.delete': 'Eliminar un archivo',
   'ai.permission.ask.edit': 'Editar un archivo',
@@ -412,10 +412,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Se detuvo antes de terminar. Reabre el pin para enviarlo de nuevo.',
   'ai.pins.cancelMove': 'Cancelar',
   'ai.pins.cancelRun': 'Dejar de enviar',
-  'ai.pins.clearSent': {
-    one: 'Borrar {count} enviado',
-    other: 'Borrar {count} enviados',
-  },
   'ai.pins.close': 'Cerrar',
   'ai.pins.continue': 'Continuar',
   'ai.pins.cropFailed': 'No se pudo capturar la zona marcada.',
@@ -428,7 +424,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Su elemento ya no está en esta página. Abre el pin para moverlo a otro elemento.',
   'ai.pins.discard': 'Descartar pin',
   'ai.pins.discardedToast': 'Cambios del pin {number} descartados',
-  'ai.pins.done': 'Listo',
   'ai.pins.elementIn': 'Elemento en {file}',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Aún no hay pines',
@@ -442,13 +437,22 @@ export const messages = {
     other: 'Un pin admite como máximo {count} imágenes.',
   },
   'ai.pins.imagesTooLarge': 'Las imágenes de los pines son demasiado grandes en conjunto. Quita algunas primero.',
-  'ai.pins.include': 'Incluir el pin {number} en Enviar todo',
+  'ai.pins.include': 'Incluir el pin {number} en el próximo envío',
   'ai.pins.jump': 'Ir al pin {number}',
+  'ai.pins.leave': 'Salir del modo de comentarios',
   'ai.pins.list': {
     one: '{count} pin',
     other: '{count} pines',
   },
+  'ai.pins.listAttention': {
+    one: '{count} te necesita',
+    other: '{count} te necesitan',
+  },
   'ai.pins.listLabel': 'Pines de comentario',
+  'ai.pins.listWorking': {
+    one: '{count} en curso',
+    other: '{count} en curso',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     one: 'Mensaje con {count} pin de comentario',
@@ -490,9 +494,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Envía todos los pines incluidos en un mensaje; cada uno tiene su propio subagente en el chat.',
   'ai.pins.send.tooManyImages': 'Demasiadas imágenes para un mensaje. Quita algunas o deja fuera algunos pines.',
   'ai.pins.send.tooManyPins': 'Demasiados pines para un mensaje. Deja algunos fuera y envía primero el resto.',
-  'ai.pins.sendAll': {
-    one: 'Enviar todo ({count})',
-    other: 'Enviar todo ({count})',
+  'ai.pins.sendCount': {
+    one: 'Enviar',
+    other: 'Enviar {count}',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {
@@ -709,10 +713,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Pensando',
   'ai.status.phase.waiting': 'Esperándote',
   'ai.step.build': 'Compiló el proyecto',
-  'ai.step.check': 'Revisó el formato y el lint',
+  'ai.step.check': 'Revisó el código en busca de errores',
   'ai.step.commandMany': {
-    one: 'Ejecutó {count} comando',
-    other: 'Ejecutó {count} comandos',
+    one: 'Ejecutó {count} tarea en el proyecto',
+    other: 'Ejecutó {count} tareas en el proyecto',
   },
   'ai.step.commit': 'Confirmó los cambios',
   'ai.step.commitMany': {
@@ -751,8 +755,8 @@ export const messages = {
   'ai.step.scriptNamed': 'Ejecutó {name}',
   'ai.step.searchFor': 'Buscó «{query}» en el proyecto',
   'ai.step.searchMany': {
-    one: 'Buscó en el proyecto {count} vez',
-    other: 'Buscó en el proyecto {count} veces',
+    one: 'Revisó el proyecto {count} vez',
+    other: 'Revisó el proyecto {count} veces',
   },
   'ai.step.test': 'Ejecutó las pruebas',
   'ai.step.web': 'Buscó algo en la web',
@@ -764,7 +768,7 @@ export const messages = {
     one: '{count} paso anterior',
     other: '{count} pasos anteriores',
   },
-  'ai.steps.hideCommands': 'Ocultar comandos',
+  'ai.steps.hideCommands': 'Ocultar detalles técnicos',
   'ai.steps.label': 'Pasos',
   'ai.steps.more': {
     one: '{count} más sin mostrar',
@@ -774,7 +778,7 @@ export const messages = {
     one: '{count} en ejecución',
     other: '{count} en ejecución',
   },
-  'ai.steps.showCommands': 'Mostrar comandos',
+  'ai.steps.showCommands': 'Mostrar detalles técnicos',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} tarea',
@@ -875,13 +879,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Mensaje de seguimiento',
   'ai.subagents.label': 'Agentes',
-  'ai.subagents.model.inherited': '{model} (heredado)',
-  'ai.subagents.model.session': 'Modelo de la sesión',
+  'ai.subagents.modelLine': 'Modelo: {model}',
   'ai.subagents.more': {
     one: '{count} agente anterior no se muestra',
     other: '{count} agentes anteriores no se muestran',
   },
-  'ai.subagents.openTranscript': 'Abrir transcripción',
+  'ai.subagents.openTranscript': 'Ver todos los pasos',
   'ai.subagents.result': 'Resultado',
   'ai.subagents.running': {
     one: '{count} agente trabajando',
@@ -938,13 +941,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Buscó archivos',
   'ai.toolName.findTool': 'Buscó una herramienta',
   'ai.toolName.followUp': 'Envió un mensaje de seguimiento',
-  'ai.toolName.generic': 'Usó una herramienta',
+  'ai.toolName.generic': 'Dio un paso',
   'ai.toolName.helper': 'Inició un ayudante',
   'ai.toolName.plan': 'Propuso un plan',
   'ai.toolName.read': 'Leyó un archivo',
   'ai.toolName.readWebPage': 'Leyó una página web',
-  'ai.toolName.run': 'Ejecutó un comando',
-  'ai.toolName.searchCode': 'Buscó en el proyecto',
+  'ai.toolName.run': 'Ejecutó una tarea en el proyecto',
+  'ai.toolName.searchCode': 'Revisó el proyecto',
   'ai.toolName.searchWeb': 'Buscó en la web',
   'ai.toolName.session': 'Inició una sesión',
   'ai.toolName.skill': 'Usó una habilidad',
@@ -957,10 +960,13 @@ export const messages = {
   'ai.transcript.label': 'Conversación',
   'ai.transcript.showEarlier': 'Mostrar {count} anteriores',
   'ai.transcript.workedFor': 'Trabajó durante {duration}',
-  'ai.trust.allow': 'Permitir en este proyecto',
-  'ai.trust.text':
-    'Claude y Codex pueden leer, cambiar y ejecutar cualquier cosa en este proyecto. Sus cambios se aplican al instante y después conservas o deshaces cada archivo.',
-  'ai.trust.title': '¿Permitir que los agentes trabajen en este proyecto?',
+  'ai.trust.allow': 'Permitir agentes',
+  'ai.trust.allowing': 'Permitiendo…',
+  'ai.trust.notSaved': 'No se pudieron permitir los agentes en este proyecto. Reintentar.',
+  'ai.trust.pointAccess': 'Los agentes pueden leer, cambiar y ejecutar cualquier cosa en este proyecto.',
+  'ai.trust.pointLive': 'Sus cambios se aplican a tus archivos al instante.',
+  'ai.trust.pointReview': 'Después conservas o deshaces cada archivo cambiado.',
+  'ai.trust.title': '¿Permitir agentes en este proyecto?',
   'ai.turn.done': 'Listo.',
   'ai.turn.error': 'Algo salió mal.',
   'ai.turn.maxRequests': 'El agente alcanzó su límite de pasos para un mensaje.',

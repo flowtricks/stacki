@@ -11,29 +11,25 @@ export const messages = {
     one: '{count} dosya düzenledi',
     other: '{count} dosya düzenledi',
   },
-  'ai.activity.fetched': {
-    one: '{count} sayfa getirdi',
-    other: '{count} sayfa getirdi',
-  },
-  'ai.activity.ran': {
-    one: '{count} komut çalıştırdı',
-    other: '{count} komut çalıştırdı',
+  'ai.activity.other': {
+    one: '{count} başka adım attı',
+    other: '{count} başka adım attı',
   },
   'ai.activity.read': {
     one: '{count} dosya okudu',
     other: '{count} dosya okudu',
   },
   'ai.activity.searched': {
-    one: '{count} kez aradı',
-    other: '{count} kez aradı',
-  },
-  'ai.activity.used': {
-    one: '{count} araç kullandı',
-    other: '{count} araç kullandı',
+    one: 'projeyi {count} kez inceledi',
+    other: 'projeyi {count} kez inceledi',
   },
   'ai.activity.usedTools': {
-    one: '{count} araç kullanıldı',
-    other: '{count} araç kullanıldı',
+    one: '{count} adım atıldı',
+    other: '{count} adım atıldı',
+  },
+  'ai.activity.web': {
+    one: 'web’de {count} şey aradı',
+    other: 'web’de {count} şey aradı',
   },
   'ai.agent.badge.installing': 'Yükleniyor',
   'ai.agent.badge.notInstalled': 'Yüklü değil',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'Bu sohbette henüz kopyalanacak mesaj yok',
   'ai.export.truncated': 'Sohbetin geri kalanı kopyalanamayacak kadar uzundu.',
   'ai.export.you': 'Siz',
+  'ai.files.component': '{name} bileşeni',
+  'ai.files.homePage': 'Ana sayfa',
+  'ai.files.layout': '{name} düzeni',
+  'ai.files.page': '{name} sayfası',
   'ai.find.close': 'Aramayı kapat',
   'ai.find.count': {
     one: '{count} eşleşme',
@@ -382,7 +382,7 @@ export const messages = {
   'ai.panel.setUpToStart': 'Sohbete başlamak için {agent} kurulumunu yapın',
   'ai.panel.signInToKeep': 'Sohbete devam etmek için {agent} oturumu açın',
   'ai.panel.signInToStart': 'Sohbete başlamak için {agent} oturumu açın',
-  'ai.panel.trustFirst': 'Önce bu projede ajanlara izin verin',
+  'ai.panel.trustFirst': 'Önce ajanlara izin',
   'ai.permission.ask.command': 'Komut çalıştır',
   'ai.permission.ask.delete': 'Dosya sil',
   'ai.permission.ask.edit': 'Dosya düzenle',
@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Bitmeden durduruldu. Yeniden göndermek için iğneyi yeniden açın.',
   'ai.pins.cancelMove': 'İptal',
   'ai.pins.cancelRun': 'Göndermeyi durdur',
-  'ai.pins.clearSent': {
-    one: 'Gönderilen {count} iğneyi temizle',
-    other: 'Gönderilen {count} iğneyi temizle',
-  },
   'ai.pins.close': 'Kapat',
   'ai.pins.continue': 'Devam',
   'ai.pins.cropFailed': 'İğnelenen alan yakalanamadı.',
@@ -427,7 +423,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Öğesi artık bu sayfada değil. İğneyi başka bir öğeye taşımak için açın.',
   'ai.pins.discard': 'İğneyi at',
   'ai.pins.discardedToast': '{number} numaralı iğnedeki değişiklikler atıldı',
-  'ai.pins.done': 'Bitti',
   'ai.pins.elementIn': '{file} içindeki öğe',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Henüz iğne yok',
@@ -441,13 +436,22 @@ export const messages = {
     other: 'Bir iğne en fazla {count} görsel içerebilir.',
   },
   'ai.pins.imagesTooLarge': 'İğnelerin görselleri toplamda çok büyük. Önce bazılarını kaldırın.',
-  'ai.pins.include': '{number} numaralı iğneyi Tümünü gönder’e dahil et',
+  'ai.pins.include': '{number} numaralı iğneyi sonraki gönderime dahil et',
   'ai.pins.jump': '{number} numaralı iğneye git',
+  'ai.pins.leave': 'Yorum modundan çık',
   'ai.pins.list': {
     one: '{count} iğne',
     other: '{count} iğne',
   },
+  'ai.pins.listAttention': {
+    one: '{count} sizi bekliyor',
+    other: '{count} sizi bekliyor',
+  },
   'ai.pins.listLabel': 'Yorum iğneleri',
+  'ai.pins.listWorking': {
+    one: '{count} işleniyor',
+    other: '{count} işleniyor',
+  },
   'ai.pins.marker': 'İğne {number}: {element}',
   'ai.pins.messageLabel': {
     one: '{count} yorum iğnesi içeren mesaj',
@@ -489,9 +493,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Dahil edilen tüm iğneleri tek mesajda gönderir; her biri sohbette kendi alt ajanını alır.',
   'ai.pins.send.tooManyImages': 'Tek mesaj için çok fazla görsel var. Bazı görselleri kaldırın veya bazı iğneleri dışarıda bırakın.',
   'ai.pins.send.tooManyPins': 'Tek mesaj için çok fazla iğne var. Bazılarını dışarıda bırakıp önce kalanları gönderin.',
-  'ai.pins.sendAll': {
-    one: 'Tümünü gönder ({count})',
-    other: 'Tümünü gönder ({count})',
+  'ai.pins.sendCount': {
+    one: 'Gönder',
+    other: 'Gönder ({count})',
   },
   'ai.pins.summaryLine': 'İğne {number}: {comment}',
   'ai.pins.summaryTitle': {
@@ -708,10 +712,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Düşünüyor',
   'ai.status.phase.waiting': 'Sizi bekliyor',
   'ai.step.build': 'Projeyi derledi',
-  'ai.step.check': 'Biçimlendirmeyi ve lint’i kontrol etti',
+  'ai.step.check': 'Kodu hatalara karşı kontrol etti',
   'ai.step.commandMany': {
-    one: '{count} komut çalıştırdı',
-    other: '{count} komut çalıştırdı',
+    one: 'Projede {count} görev çalıştırdı',
+    other: 'Projede {count} görev çalıştırdı',
   },
   'ai.step.commit': 'Değişiklikleri kaydetti',
   'ai.step.commitMany': {
@@ -750,8 +754,8 @@ export const messages = {
   'ai.step.scriptNamed': '{name} çalıştırdı',
   'ai.step.searchFor': 'Projede “{query}” aradı',
   'ai.step.searchMany': {
-    one: 'Projede {count} kez arama yaptı',
-    other: 'Projede {count} kez arama yaptı',
+    one: 'Projeyi {count} kez inceledi',
+    other: 'Projeyi {count} kez inceledi',
   },
   'ai.step.test': 'Testleri çalıştırdı',
   'ai.step.web': 'Web’de bir şey aradı',
@@ -763,7 +767,7 @@ export const messages = {
     one: '{count} önceki adım',
     other: '{count} önceki adım',
   },
-  'ai.steps.hideCommands': 'Komutları gizle',
+  'ai.steps.hideCommands': 'Teknik ayrıntıları gizle',
   'ai.steps.label': 'Adımlar',
   'ai.steps.more': {
     one: '{count} tane daha gösterilmiyor',
@@ -773,7 +777,7 @@ export const messages = {
     one: '{count} çalışıyor',
     other: '{count} çalışıyor',
   },
-  'ai.steps.showCommands': 'Komutları göster',
+  'ai.steps.showCommands': 'Teknik ayrıntıları göster',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} görev',
@@ -874,13 +878,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Takip mesajı',
   'ai.subagents.label': 'Ajanlar',
-  'ai.subagents.model.inherited': '{model} (devralındı)',
-  'ai.subagents.model.session': 'Oturum modeli',
+  'ai.subagents.modelLine': 'Model: {model}', // same
   'ai.subagents.more': {
     one: 'Önceki {count} ajan gösterilmiyor',
     other: 'Önceki {count} ajan gösterilmiyor',
   },
-  'ai.subagents.openTranscript': 'Dökümü aç',
+  'ai.subagents.openTranscript': 'Tüm adımları gör',
   'ai.subagents.result': 'Sonuç',
   'ai.subagents.running': {
     one: '{count} ajan çalışıyor',
@@ -937,13 +940,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Dosya aradı',
   'ai.toolName.findTool': 'Bir araç aradı',
   'ai.toolName.followUp': 'Bir takip mesajı gönderdi',
-  'ai.toolName.generic': 'Bir araç kullandı',
+  'ai.toolName.generic': 'Bir adım attı',
   'ai.toolName.helper': 'Bir yardımcı başlattı',
   'ai.toolName.plan': 'Bir plan önerdi',
   'ai.toolName.read': 'Bir dosyayı okudu',
   'ai.toolName.readWebPage': 'Bir web sayfasını okudu',
-  'ai.toolName.run': 'Bir komut çalıştırdı',
-  'ai.toolName.searchCode': 'Projede arama yaptı',
+  'ai.toolName.run': 'Projede bir görev çalıştırdı',
+  'ai.toolName.searchCode': 'Projeyi inceledi',
   'ai.toolName.searchWeb': "Web'de arama yaptı",
   'ai.toolName.session': 'Bir oturum başlattı',
   'ai.toolName.skill': 'Bir beceri kullandı',
@@ -956,10 +959,13 @@ export const messages = {
   'ai.transcript.label': 'Konuşma',
   'ai.transcript.showEarlier': '{count} önceki öğeyi göster',
   'ai.transcript.workedFor': '{duration} çalıştı',
-  'ai.trust.allow': 'Bu projede izin ver',
-  'ai.trust.text':
-    'Claude ve Codex bu projedeki her şeyi okuyabilir, değiştirebilir ve çalıştırabilir. Düzenlemeleri hemen uygulanır ve sonra her dosyayı korur veya geri alırsınız.',
-  'ai.trust.title': 'Ajanların bu projede çalışmasına izin verilsin mi?',
+  'ai.trust.allow': 'Ajanlara izin ver',
+  'ai.trust.allowing': 'İzin veriliyor…',
+  'ai.trust.notSaved': 'Bu projede ajanlara izin verilemedi. Yeniden dene.',
+  'ai.trust.pointAccess': 'Ajanlar bu projedeki her şeyi okuyabilir, değiştirebilir ve çalıştırabilir.',
+  'ai.trust.pointLive': 'Düzenlemeleri dosyalarınıza hemen uygulanır.',
+  'ai.trust.pointReview': 'Sonra değişen her dosyayı korur veya geri alırsınız.',
+  'ai.trust.title': 'Bu projede ajanlara izin verilsin mi?',
   'ai.turn.done': 'Bitti.',
   'ai.turn.error': 'Bir şeyler ters gitti.',
   'ai.turn.maxRequests': 'Ajan, tek bir mesaj için adım sınırına ulaştı.',

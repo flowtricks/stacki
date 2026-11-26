@@ -79,9 +79,10 @@ export function aiInstallAgent(input: IpcPayloads['ai:installAgent']): Promise<A
   return callResult(() => window.avb.aiInstallAgent(payload), parseAgentAvailability);
 }
 
+/** Allows agents in the project. The reply is a Result: a refusal is a failure to show, never taken for a yes. */
 export async function aiTrust(projectPath: string): Promise<AiReply<true>> {
   const payload = parseIpcPayload('ai:trust', { projectPath });
-  return call(
+  return callResult(
     () => window.avb.aiTrust(payload),
     () => true as const,
   );

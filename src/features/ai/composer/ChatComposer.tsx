@@ -227,6 +227,8 @@ export function ChatComposer({
       <QueuedPrompts chat={chat} queued={queued} paused={state.queuePaused.has(chat)} />
       <form
         className={`ai-composer${dragging ? ' is-dragging' : ''}${disabled === undefined ? '' : ' is-blocked'}`}
+        // Why the box takes nothing, whole on hover: a long language can cut the placeholder at the narrowest panel.
+        title={disabled}
         onSubmit={(event) => {
           event.preventDefault();
           send('send');

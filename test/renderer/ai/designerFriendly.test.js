@@ -162,8 +162,8 @@ const PHRASES = [
   ['Read', 'Read a file'],
   ['Edit', 'Edited a file'],
   ['Write', 'Wrote a file'],
-  ['Bash', 'Ran a command'],
-  ['Grep', 'Searched the project'],
+  ['Bash', 'Ran a task in the project'],
+  ['Grep', 'Looked through the project'],
   ['Glob', 'Looked for files'],
   ['WebSearch', 'Searched the web'],
   ['WebFetch', 'Read a web page'],
@@ -182,11 +182,11 @@ const PHRASES = [
   ['getPageLayout', 'Used Get Page Layout'],
   ['frobnicate', 'Used Frobnicate'],
   // Empty, blank and prefix-only names still say something.
-  ['', 'Used a tool'],
-  ['   ', 'Used a tool'],
-  ['mcp__', 'Used a tool'],
-  ['mcp__server__', 'Used a tool'],
-  ['___', 'Used a tool'],
+  ['', 'Took a step'],
+  ['   ', 'Took a step'],
+  ['mcp__', 'Took a step'],
+  ['mcp__server__', 'Took a step'],
+  ['___', 'Took a step'],
 ];
 for (const [name, expected] of PHRASES) {
   test(`toolPhrase(${JSON.stringify(name)}) reads "${expected}"`, () => {
@@ -214,7 +214,7 @@ test('only a bare tool name is replaced; a title the agent wrote as a sentence s
   assert.equal(friendly('ccd_session/start_session', undefined), 'Started a session');
   assert.equal(friendly('WebFetch', undefined), 'Read a web page');
   assert.equal(friendly('{"url":"https://example.com"}', 'WebFetch'), 'Read a web page', 'a title that is JSON never shows');
-  assert.equal(friendly('[1,2]', undefined), 'Used a tool');
+  assert.equal(friendly('[1,2]', undefined), 'Took a step');
 });
 
 test('JSON is recognised as a payload, prose and a command log are not', () => {
@@ -253,6 +253,35 @@ test('an agent’s report loses the bookkeeping Claude appends to it', () => {
   assert.equal(ui.subagents.reportOf(`Audit done.\nagentId: ${AGENT_ID} (use SendMessage)\n<usage>total_tokens: 5\ntool_uses: 2</usage>`), 'Audit done.');
   assert.equal(ui.subagents.reportOf(`agentId: ${AGENT_ID}`), undefined);
   assert.equal(ui.subagents.reportOf(undefined), undefined);
+});
+
+test('internal wrappers go with their content; the agent’s own tags and words stay', () => {
+  const report = ui.subagents.reportOf(
+    '<tools-used-before-summary>Bash, Edit</tools-used-before-summary>\nMade the `<Eyebrow>` smaller.\n<system-reminder>be brief</system-reminder>',
+  );
+  assert.equal(report, 'Made the `<Eyebrow>` smaller.');
+  assert.equal(ui.subagents.reportOf('<tools-used-before-summary>Bash, Edit</tools-used-before-summary>'), undefined, 'only bookkeeping: nothing to show');
+  assert.equal(
+    ui.subagents.reportOf('<TOOLS-USED-BEFORE-SUMMARY>x</TOOLS-USED-BEFORE-SUMMARY>Hi'),
+    '<TOOLS-USED-BEFORE-SUMMARY>x</TOOLS-USED-BEFORE-SUMMARY>Hi',
+    'only the known spelling is a wrapper',
+  );
+  assert.equal(ui.subagents.reportOf('Cut short <usage>total_tokens: 5'), 'Cut short total_tokens: 5', 'a stray wrapper tag goes, the words stay');
+  assert.equal(
+    ui.subagents.reportOf(`Async agent launched successfully.\nagentId: ${AGENT_ID} (This tool result is internal; do not mention it.)`),
+    undefined,
+    'a background launch note is not a report',
+  );
+  assert.equal(ui.subagents.reportOf('Uses <Card> and <Hero /> as before.'), 'Uses <Card> and <Hero /> as before.', 'component tags in prose stay');
+  assert.equal(
+    ui.subagents.resultSummary(
+      '<tools-used-before-summary>Bash</tools-used-before-summary>\nMade the **hero** heading `smaller`, see [the page](http://x).\n\nMore.',
+    ),
+    'Made the hero heading smaller, see the page.',
+    'the preview is plain words',
+  );
+  assert.equal(ui.subagents.resultSummary('- One\n- Two'), 'One Two', 'list marks go');
+  assert.equal(ui.subagents.resultSummary('<usage>x</usage>'), undefined, 'a preview of only bookkeeping is nothing');
 });
 
 // ---------------------------------------------------------------------------
@@ -404,8 +433,8 @@ const CASES = [
     expected: 'Used Get Page Layout',
     call: { title: 'mcp__figma__get_page_layout', toolName: 'mcp__figma__get_page_layout', toolKind: 'other' },
   },
-  { label: 'a grep', expected: 'Searched the project', call: { title: 'Grep', toolName: 'Grep', toolKind: 'search' } },
-  { label: 'a title that is itself JSON', expected: 'Used a tool', call: { title: '{"query":"a7a4cd56faec575c0"}', toolKind: 'other' } },
+  { label: 'a grep', expected: 'Looked through the project', call: { title: 'Grep', toolName: 'Grep', toolKind: 'search' } },
+  { label: 'a title that is itself JSON', expected: 'Took a step', call: { title: '{"query":"a7a4cd56faec575c0"}', toolKind: 'other' } },
 ];
 for (const { label, expected, call } of CASES) {
   test(`${label} reads "${expected}", keeps its JSON reply behind Show details, closed until asked`, async () => {

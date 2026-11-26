@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '编辑了 {count} 个文件',
   },
-  'ai.activity.fetched': {
-    other: '获取了 {count} 个页面',
-  },
-  'ai.activity.ran': {
-    other: '运行了 {count} 条命令',
+  'ai.activity.other': {
+    other: '执行了 {count} 个其他步骤',
   },
   'ai.activity.read': {
     other: '读取了 {count} 个文件',
   },
   'ai.activity.searched': {
-    other: '搜索了 {count} 次',
-  },
-  'ai.activity.used': {
-    other: '使用了 {count} 个工具',
+    other: '浏览了项目 {count} 次',
   },
   'ai.activity.usedTools': {
-    other: '使用了 {count} 个工具',
+    other: '执行了 {count} 个步骤',
+  },
+  'ai.activity.web': {
+    other: '在网上查了 {count} 项内容',
   },
   'ai.agent.badge.installing': '正在安装',
   'ai.agent.badge.notInstalled': '未安装',
@@ -259,6 +256,10 @@ export const messages = {
   'ai.export.empty': '此聊天还没有可复制的消息',
   'ai.export.truncated': '聊天的其余部分太长，无法复制。',
   'ai.export.you': '你',
+  'ai.files.component': '{name} 组件',
+  'ai.files.homePage': '首页',
+  'ai.files.layout': '{name} 布局',
+  'ai.files.page': '{name} 页面',
   'ai.find.close': '关闭查找',
   'ai.find.count': {
     other: '找到 {count} 个匹配项',
@@ -364,7 +365,7 @@ export const messages = {
   'ai.panel.setUpToStart': '设置 {agent} 以开始聊天',
   'ai.panel.signInToKeep': '登录 {agent} 以继续聊天',
   'ai.panel.signInToStart': '登录 {agent} 以开始聊天',
-  'ai.panel.trustFirst': '请先在此项目中允许代理',
+  'ai.panel.trustFirst': '请先允许代理',
   'ai.permission.ask.command': '运行命令',
   'ai.permission.ask.delete': '删除文件',
   'ai.permission.ask.edit': '编辑文件',
@@ -392,9 +393,6 @@ export const messages = {
   'ai.pins.attention.stopped': '未完成即已停止。请重新打开图钉再次发送。',
   'ai.pins.cancelMove': '取消',
   'ai.pins.cancelRun': '停止发送',
-  'ai.pins.clearSent': {
-    other: '清除 {count} 个已发送',
-  },
   'ai.pins.close': '关闭',
   'ai.pins.continue': '继续',
   'ai.pins.cropFailed': '无法截取图钉标记的区域。',
@@ -407,7 +405,6 @@ export const messages = {
   'ai.pins.detachedTip': '它对应的元素已不在此页面上。打开图钉，将其移到其他元素。',
   'ai.pins.discard': '放弃图钉',
   'ai.pins.discardedToast': '已放弃对图钉 {number} 的更改',
-  'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': '还没有图钉',
@@ -419,12 +416,19 @@ export const messages = {
     other: '每个图钉最多包含 {count} 张图片。',
   },
   'ai.pins.imagesTooLarge': '图钉中的图片合计过大。请先移除一些。',
-  'ai.pins.include': '将图钉 {number} 纳入“全部发送”',
+  'ai.pins.include': '下次发送时包含图钉 {number}',
   'ai.pins.jump': '转到图钉 {number}',
+  'ai.pins.leave': '退出评论模式',
   'ai.pins.list': {
     other: '{count} 个图钉',
   },
+  'ai.pins.listAttention': {
+    other: '{count} 个需要处理',
+  },
   'ai.pins.listLabel': '评论图钉',
+  'ai.pins.listWorking': {
+    other: '{count} 个处理中',
+  },
   'ai.pins.marker': '图钉 {number}：{element}',
   'ai.pins.messageLabel': {
     other: '包含 {count} 个评论图钉的消息',
@@ -465,8 +469,8 @@ export const messages = {
   'ai.pins.send.subagents': '将所有纳入的图钉合并为一条消息发送；聊天中每个图钉各有一个子代理。',
   'ai.pins.send.tooManyImages': '一条消息中的图片过多。请移除一些图片，或排除部分图钉。',
   'ai.pins.send.tooManyPins': '一条消息中的图钉过多。请先排除一部分，发送其余的。',
-  'ai.pins.sendAll': {
-    other: '全部发送 ({count})',
+  'ai.pins.sendCount': {
+    other: '发送 {count} 个',
   },
   'ai.pins.summaryLine': '图钉 {number}：{comment}',
   'ai.pins.summaryTitle': {
@@ -670,9 +674,9 @@ export const messages = {
   'ai.status.phase.thinking': '正在思考',
   'ai.status.phase.waiting': '正在等待你',
   'ai.step.build': '构建了项目',
-  'ai.step.check': '检查了格式和 lint',
+  'ai.step.check': '检查了代码是否有错误',
   'ai.step.commandMany': {
-    other: '运行了 {count} 条命令',
+    other: '在项目中运行了 {count} 项任务',
   },
   'ai.step.commit': '提交了更改',
   'ai.step.commitMany': {
@@ -703,9 +707,9 @@ export const messages = {
     other: '运行了 {count} 个脚本',
   },
   'ai.step.scriptNamed': '运行了 {name}',
-  'ai.step.searchFor': '在项目中搜索了“{query}”',
+  'ai.step.searchFor': '在项目中查找了“{query}”',
   'ai.step.searchMany': {
-    other: '搜索了项目 {count} 次',
+    other: '浏览了项目 {count} 次',
   },
   'ai.step.test': '运行了测试',
   'ai.step.web': '在网上查了点东西',
@@ -715,7 +719,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '{count} 个更早的步骤',
   },
-  'ai.steps.hideCommands': '隐藏命令',
+  'ai.steps.hideCommands': '隐藏技术细节',
   'ai.steps.label': '步骤',
   'ai.steps.more': {
     other: '另有 {count} 项未显示',
@@ -723,7 +727,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 个运行中',
   },
-  'ai.steps.showCommands': '显示命令',
+  'ai.steps.showCommands': '显示技术细节',
   'ai.steps.summary': '{tasks}，{running}',
   'ai.steps.tasks': {
     other: '{count} 个任务',
@@ -817,12 +821,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '后续消息',
   'ai.subagents.label': '代理',
-  'ai.subagents.model.inherited': '{model}（继承）',
-  'ai.subagents.model.session': '会话模型',
+  'ai.subagents.modelLine': '模型：{model}',
   'ai.subagents.more': {
     other: '另有 {count} 个较早的代理未显示',
   },
-  'ai.subagents.openTranscript': '打开对话记录',
+  'ai.subagents.openTranscript': '查看所有步骤',
   'ai.subagents.result': '结果',
   'ai.subagents.running': {
     other: '{count} 个代理正在工作',
@@ -873,13 +876,13 @@ export const messages = {
   'ai.toolName.findFiles': '查找了文件',
   'ai.toolName.findTool': '查找了一个工具',
   'ai.toolName.followUp': '发送了一条跟进消息',
-  'ai.toolName.generic': '使用了一个工具',
+  'ai.toolName.generic': '执行了一个步骤',
   'ai.toolName.helper': '启动了一个助手',
   'ai.toolName.plan': '提出了一个方案',
   'ai.toolName.read': '读取了一个文件',
   'ai.toolName.readWebPage': '读取了一个网页',
-  'ai.toolName.run': '运行了一条命令',
-  'ai.toolName.searchCode': '搜索了项目',
+  'ai.toolName.run': '在项目中运行了一项任务',
+  'ai.toolName.searchCode': '浏览了项目',
   'ai.toolName.searchWeb': '搜索了网络',
   'ai.toolName.session': '启动了一个会话',
   'ai.toolName.skill': '使用了一项技能',
@@ -892,8 +895,12 @@ export const messages = {
   'ai.transcript.label': '对话',
   'ai.transcript.showEarlier': '显示更早的 {count} 条',
   'ai.transcript.workedFor': '工作了 {duration}',
-  'ai.trust.allow': '在此项目中允许',
-  'ai.trust.text': 'Claude 和 Codex 可以读取、更改和运行此项目中的任何内容。它们的编辑会立即生效，之后你可以逐个文件选择保留或撤销。',
+  'ai.trust.allow': '允许代理',
+  'ai.trust.allowing': '正在允许…',
+  'ai.trust.notSaved': '无法允许代理在此项目中工作。请重试。',
+  'ai.trust.pointAccess': '代理可以读取、更改和运行此项目中的任何内容。',
+  'ai.trust.pointLive': '它们的编辑会立即应用到你的文件。',
+  'ai.trust.pointReview': '之后，你可以保留或撤销每个已更改的文件。',
   'ai.trust.title': '允许代理在此项目中工作？',
   'ai.turn.done': '完成。',
   'ai.turn.error': '出了点问题。',

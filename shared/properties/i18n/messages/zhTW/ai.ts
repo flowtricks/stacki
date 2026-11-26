@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '編輯了 {count} 個檔案',
   },
-  'ai.activity.fetched': {
-    other: '擷取了 {count} 個頁面',
-  },
-  'ai.activity.ran': {
-    other: '執行了 {count} 個指令',
+  'ai.activity.other': {
+    other: '執行了 {count} 個其他步驟',
   },
   'ai.activity.read': {
     other: '讀取了 {count} 個檔案',
   },
   'ai.activity.searched': {
-    other: '搜尋了 {count} 次',
-  },
-  'ai.activity.used': {
-    other: '使用了 {count} 個工具',
+    other: '瀏覽了專案 {count} 次',
   },
   'ai.activity.usedTools': {
-    other: '使用了 {count} 個工具',
+    other: '執行了 {count} 個步驟',
+  },
+  'ai.activity.web': {
+    other: '在網路上查了 {count} 項內容',
   },
   'ai.agent.badge.installing': '安裝中',
   'ai.agent.badge.notInstalled': '未安裝',
@@ -259,6 +256,10 @@ export const messages = {
   'ai.export.empty': '此對話還沒有可複製的訊息',
   'ai.export.truncated': '對話的其餘部分太長，無法複製。',
   'ai.export.you': '你',
+  'ai.files.component': '{name} 元件',
+  'ai.files.homePage': '首頁',
+  'ai.files.layout': '{name} 版面配置',
+  'ai.files.page': '{name} 頁面',
   'ai.find.close': '關閉尋找',
   'ai.find.count': {
     other: '找到 {count} 個符合項目',
@@ -364,7 +365,7 @@ export const messages = {
   'ai.panel.setUpToStart': '設定 {agent} 以開始對話',
   'ai.panel.signInToKeep': '登入 {agent} 以繼續對話',
   'ai.panel.signInToStart': '登入 {agent} 以開始對話',
-  'ai.panel.trustFirst': '請先允許代理程式在此專案中工作',
+  'ai.panel.trustFirst': '請先允許代理程式',
   'ai.permission.ask.command': '執行指令',
   'ai.permission.ask.delete': '刪除檔案',
   'ai.permission.ask.edit': '編輯檔案',
@@ -392,9 +393,6 @@ export const messages = {
   'ai.pins.attention.stopped': '尚未完成就已停止。請重新開啟圖釘並再次傳送。',
   'ai.pins.cancelMove': '取消',
   'ai.pins.cancelRun': '停止傳送',
-  'ai.pins.clearSent': {
-    other: '清除 {count} 個已傳送',
-  },
   'ai.pins.close': '關閉',
   'ai.pins.continue': '繼續',
   'ai.pins.cropFailed': '無法擷取圖釘標記的區域。',
@@ -407,7 +405,6 @@ export const messages = {
   'ai.pins.detachedTip': '其元素已不在此頁面上。開啟圖釘，將它移到其他元素。',
   'ai.pins.discard': '捨棄圖釘',
   'ai.pins.discardedToast': '已捨棄對圖釘 {number} 的變更',
-  'ai.pins.done': '完成',
   'ai.pins.elementIn': '{file} 中的元素',
   'ai.pins.elementWithText': '{element}「{text}」',
   'ai.pins.empty': '尚無圖釘',
@@ -419,12 +416,19 @@ export const messages = {
     other: '每個圖釘最多可有 {count} 張圖片。',
   },
   'ai.pins.imagesTooLarge': '圖釘中的圖片合計太大。請先移除部分圖片。',
-  'ai.pins.include': '將圖釘 {number} 納入「全部傳送」',
+  'ai.pins.include': '下次傳送時納入圖釘 {number}',
   'ai.pins.jump': '前往圖釘 {number}',
+  'ai.pins.leave': '離開註解模式',
   'ai.pins.list': {
     other: '{count} 個圖釘',
   },
+  'ai.pins.listAttention': {
+    other: '{count} 個需要處理',
+  },
   'ai.pins.listLabel': '註解圖釘',
+  'ai.pins.listWorking': {
+    other: '{count} 個處理中',
+  },
   'ai.pins.marker': '圖釘 {number}：{element}',
   'ai.pins.messageLabel': {
     other: '包含 {count} 個註解圖釘的訊息',
@@ -465,8 +469,8 @@ export const messages = {
   'ai.pins.send.subagents': '將所有納入的圖釘以一則訊息傳送；對話中每個圖釘各有一個子代理程式。',
   'ai.pins.send.tooManyImages': '一則訊息中的圖片太多。請移除部分圖片，或排除部分圖釘。',
   'ai.pins.send.tooManyPins': '一則訊息中的圖釘太多。請先排除一部分，傳送其餘圖釘。',
-  'ai.pins.sendAll': {
-    other: '全部傳送 ({count})',
+  'ai.pins.sendCount': {
+    other: '傳送 {count} 個',
   },
   'ai.pins.summaryLine': '圖釘 {number}：{comment}',
   'ai.pins.summaryTitle': {
@@ -669,9 +673,9 @@ export const messages = {
   'ai.status.phase.thinking': '思考中',
   'ai.status.phase.waiting': '等候你的回應',
   'ai.step.build': '建置了專案',
-  'ai.step.check': '檢查了格式與 lint',
+  'ai.step.check': '檢查了程式碼是否有錯誤',
   'ai.step.commandMany': {
-    other: '執行了 {count} 個指令',
+    other: '在專案中執行了 {count} 項工作',
   },
   'ai.step.commit': '提交了變更',
   'ai.step.commitMany': {
@@ -702,9 +706,9 @@ export const messages = {
     other: '執行了 {count} 個指令碼',
   },
   'ai.step.scriptNamed': '執行了 {name}',
-  'ai.step.searchFor': '在專案中搜尋了「{query}」',
+  'ai.step.searchFor': '在專案中尋找了「{query}」',
   'ai.step.searchMany': {
-    other: '搜尋了專案 {count} 次',
+    other: '瀏覽了專案 {count} 次',
   },
   'ai.step.test': '執行了測試',
   'ai.step.web': '在網路上查了點東西',
@@ -714,7 +718,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '{count} 個較早的步驟',
   },
-  'ai.steps.hideCommands': '隱藏指令',
+  'ai.steps.hideCommands': '隱藏技術細節',
   'ai.steps.label': '步驟',
   'ai.steps.more': {
     other: '另有 {count} 項未顯示',
@@ -722,7 +726,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 個執行中',
   },
-  'ai.steps.showCommands': '顯示指令',
+  'ai.steps.showCommands': '顯示技術細節',
   'ai.steps.summary': '{tasks}，{running}',
   'ai.steps.tasks': {
     other: '{count} 個任務',
@@ -816,12 +820,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '後續訊息',
   'ai.subagents.label': '代理程式',
-  'ai.subagents.model.inherited': '{model}（繼承）',
-  'ai.subagents.model.session': '工作階段模型',
+  'ai.subagents.modelLine': '模型：{model}',
   'ai.subagents.more': {
     other: '另有 {count} 個較早的代理程式未顯示',
   },
-  'ai.subagents.openTranscript': '開啟對話紀錄',
+  'ai.subagents.openTranscript': '查看所有步驟',
   'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 個代理程式正在工作',
@@ -872,13 +875,13 @@ export const messages = {
   'ai.toolName.findFiles': '尋找了檔案',
   'ai.toolName.findTool': '尋找了一個工具',
   'ai.toolName.followUp': '傳送了一則後續訊息',
-  'ai.toolName.generic': '使用了一個工具',
+  'ai.toolName.generic': '執行了一個步驟',
   'ai.toolName.helper': '啟動了一個助手',
   'ai.toolName.plan': '提出了一個方案',
   'ai.toolName.read': '讀取了一個檔案',
   'ai.toolName.readWebPage': '讀取了一個網頁',
-  'ai.toolName.run': '執行了一個指令',
-  'ai.toolName.searchCode': '搜尋了專案',
+  'ai.toolName.run': '在專案中執行了一項工作',
+  'ai.toolName.searchCode': '瀏覽了專案',
   'ai.toolName.searchWeb': '搜尋了網路',
   'ai.toolName.session': '啟動了一個工作階段',
   'ai.toolName.skill': '使用了一項技能',
@@ -891,9 +894,13 @@ export const messages = {
   'ai.transcript.label': '對話',
   'ai.transcript.showEarlier': '顯示較早的 {count} 項',
   'ai.transcript.workedFor': '工作了 {duration}',
-  'ai.trust.allow': '在此專案中允許',
-  'ai.trust.text': 'Claude 和 Codex 可以讀取、變更並執行此專案中的任何內容。它們的編輯會立即套用，之後你可以逐一保留或復原每個檔案。',
-  'ai.trust.title': '要讓代理程式在此專案中工作嗎？',
+  'ai.trust.allow': '允許代理程式',
+  'ai.trust.allowing': '正在允許…',
+  'ai.trust.notSaved': '無法允許代理程式在此專案中工作。請再試一次。',
+  'ai.trust.pointAccess': '代理程式可以讀取、變更及執行此專案中的任何內容。',
+  'ai.trust.pointLive': '它們的編輯會立即套用到你的檔案。',
+  'ai.trust.pointReview': '之後，你可以保留或復原每個已變更的檔案。',
+  'ai.trust.title': '要允許代理程式在此專案中工作嗎？',
   'ai.turn.done': '完成。',
   'ai.turn.error': '發生錯誤。',
   'ai.turn.maxRequests': '代理程式已達到單則訊息的步驟上限。',

@@ -142,6 +142,128 @@ export function callLabel(call: StepCall, translate: Translator): string {
   );
 }
 
+/**
+ * One line for a run of calls, in the same words its steps use, so the line above a list of steps never disagrees
+ * with the steps under it: "Looked through the project 2 times, edited 1 file". Files are counted once each; every
+ * kind that is neither a file read or edit, a look through the project nor a look on the web is "other steps". Empty
+ * when there were no calls.
+ */
+export function callsHeadline(calls: readonly ToolItem[], translate: Translator): string {
+  const edited = new Set<string>();
+  const read = new Set<string>();
+  let edits = 0;
+  let reads = 0;
+  let searches = 0;
+  let web = 0;
+  let other = 0;
+  for (const call of calls) {
+    if (call.toolKind === 'think' && !isSubagentCall(call)) {
+      continue; // A thought is not work done to the site.
+    }
+    const facts = stepOf(call);
+    switch (facts.kind) {
+      case 'edit':
+        // A file counts once; a call that names none counts as one file of its own.
+        edits += countFiles(call, edited);
+        break;
+      case 'read':
+        reads += countFiles(call, read);
+        break;
+      case 'search':
+      case 'files':
+        searches += 1;
+        break;
+      case 'web':
+        web += 1;
+        break;
+      case 'command':
+      case 'tool':
+      case 'script':
+      case 'test':
+      case 'check':
+      case 'build':
+      case 'install':
+      case 'devServer':
+      case 'commit':
+      case 'push':
+      case 'history':
+      case 'git':
+      case 'ask':
+      case 'plan':
+      case 'todo':
+      case 'helper':
+      case 'message':
+        other += 1;
+        break;
+      default: {
+        const exhaustive: never = facts.kind;
+        return exhaustive;
+      }
+    }
+  }
+  const editedFiles = edited.size + edits;
+  const readFiles = read.size + reads;
+  assert(searches + web + other <= calls.length, 'callsHeadline: no call is counted twice');
+  const phrases = [
+    searches === 0 ? '' : translate('ai.activity.searched', { count: searches }),
+    readFiles === 0 ? '' : translate('ai.activity.read', { count: readFiles }),
+    editedFiles === 0 ? '' : translate('ai.activity.edited', { count: editedFiles }),
+    web === 0 ? '' : translate('ai.activity.web', { count: web }),
+    other === 0 ? '' : translate('ai.activity.other', { count: other }),
+  ].filter((phrase) => phrase !== '');
+  if (phrases.length === 1 && other > 0) {
+    return translate('ai.activity.usedTools', { count: other }); // Nothing else to be "other" than: "Took 2 steps".
+  }
+  const line = phrases.join(', ');
+  return line === '' ? '' : `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
+}
+
+// Adds the files a call names to `seen` (bounded); 1 when it names none, so it still counts as a file, else 0.
+function countFiles(call: ToolItem, seen: Set<string>): number {
+  const named = [...call.diffs.map((diff) => diff.path), ...call.paths];
+  for (const path of named) {
+    if (seen.size < STEP_LIMITS.filesCountedMax) {
+      seen.add(path);
+    }
+  }
+  return named.length === 0 ? 1 : 0;
+}
+
+/** The headline of a subagent's steps (`callsHeadline` of every call they hold). */
+export function stepsHeadline(timeline: StepTimeline, translate: Translator): string {
+  return callsHeadline(
+    timeline.groups.flatMap((group) => group.calls.map((call) => call.item)),
+    translate,
+  );
+}
+
+/**
+ * A file as a designer knows it: a page by its name ("Home page", "About page"), a component or layout by its name
+ * ("Card component"), anything else by its file name. The path stays in the step's technical rows.
+ */
+export function friendlyFile(file: string, translate: Translator): string {
+  const page = /(?:^|\/)pages\/(.+)\.(?:astro|md|mdx|html)$/u.exec(file)?.[1];
+  if (page !== undefined) {
+    const route = page.replace(/(?:^|\/)index$/u, '');
+    const last = route.split('/').at(-1) ?? '';
+    return last === '' ? translate('ai.files.homePage') : translate('ai.files.page', { name: wordsOf(last) });
+  }
+  const part = /(?:^|\/)(components|layouts)\/(?:.*\/)?([^/]+)\.(?:astro|tsx|jsx|svelte|vue)$/u.exec(file);
+  if (part?.[2] !== undefined) {
+    return translate(part[1] === 'layouts' ? 'ai.files.layout' : 'ai.files.component', { name: part[2] });
+  }
+  return file.split('/').at(-1) ?? file;
+}
+
+// "blog-post" and "[slug]" as words: "Blog post", "Slug".
+function wordsOf(segment: string): string {
+  const words = segment
+    .replace(/[[\]().]/gu, '')
+    .replace(/[-_]+/gu, ' ')
+    .trim();
+  return words === '' ? segment : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
 /** "31 tasks, 1 running", or "31 tasks" once nothing runs. */
 export function timelineSummary(timeline: Pick<StepTimeline, 'tasks' | 'running'>, translate: Translator): string {
   const tasks = translate('ai.steps.tasks', { count: timeline.tasks });
@@ -283,17 +405,17 @@ function labelOf(group: Pick<StepGroup, 'kind' | 'count' | 'files' | 'fileCount'
   switch (group.kind) {
     case 'read': {
       if (group.fileCount === 1 && group.files[0] !== undefined) {
-        return translate('ai.step.readFile', { file: group.files[0] });
+        return translate('ai.step.readFile', { file: friendlyFile(group.files[0], translate) });
       }
       const files = group.fileCount > 0 ? group.fileCount : count;
       return files === 1 ? translate('ai.toolName.read') : translate('ai.step.readMany', { count: files });
     }
     case 'edit': {
       if (group.fileCount === 1 && group.files[0] !== undefined) {
-        return translate('ai.step.editFile', { file: group.files[0] });
+        return translate('ai.step.editFile', { file: friendlyFile(group.files[0], translate) });
       }
       if (group.fileCount > 1) {
-        return translate('ai.step.editMany', { count: group.fileCount, files: fileList(group) });
+        return translate('ai.step.editMany', { count: group.fileCount, files: fileList(group, translate) });
       }
       return count === 1 ? translate('ai.toolName.edit') : translate('ai.step.editCount', { count });
     }
@@ -344,8 +466,8 @@ function repeated(phrase: string, count: number, translate: Translator): string 
   return count === 1 ? phrase : translate('ai.step.repeated', { step: phrase, count });
 }
 
-/** "Button.astro, Hero.astro, …": the first names, and an ellipsis when there are more. */
-function fileList(group: Pick<StepGroup, 'files' | 'fileCount'>): string {
-  const named = group.files.slice(0, STEP_LIMITS.filesNamedMax);
+/** "Card component, Home page, …": the first names, and an ellipsis when there are more. */
+function fileList(group: Pick<StepGroup, 'files' | 'fileCount'>, translate: Translator): string {
+  const named = group.files.slice(0, STEP_LIMITS.filesNamedMax).map((file) => friendlyFile(file, translate));
   return group.fileCount > named.length ? `${named.join(', ')}, …` : named.join(', ');
 }

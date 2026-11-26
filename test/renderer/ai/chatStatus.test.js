@@ -146,10 +146,13 @@ test('a group of tool calls reads as one line', () => {
     }),
     ...[1, 2, 3, 4, 5, 6].map((index) => tool({ call: `r${index}`, toolKind: 'read', status: 'completed', paths: [`f${index}.ts`] })),
   ];
-  assert.equal(activityHeadline(items(calls)), 'Ran 4 commands, edited 2 files, read 6 files');
-  assert.equal(activityHeadline(items([tool({ toolKind: 'execute' })])), 'Ran 1 command');
-  assert.equal(activityHeadline(items([tool({ toolKind: 'search' }), tool({ call: 'x', toolKind: 'fetch' })])), 'Searched 1 time, fetched 1 page');
-  assert.equal(activityHeadline(items([tool({ toolKind: 'other' })])), 'Used 1 tool');
+  assert.equal(activityHeadline(items(calls)), 'Read 6 files, edited 2 files, took 4 other steps');
+  assert.equal(activityHeadline(items([tool({ toolKind: 'execute' })])), 'Took 1 step');
+  assert.equal(
+    activityHeadline(items([tool({ toolKind: 'search' }), tool({ call: 'x', toolKind: 'fetch' })])),
+    'Looked through the project 1 time, looked up 1 thing on the web',
+  );
+  assert.equal(activityHeadline(items([tool({ toolKind: 'other' })])), 'Took 1 step');
   assert.equal(
     activityHeadline(items([tool({ toolKind: 'edit' }), tool({ call: 'y', toolKind: 'edit' })])),
     'Edited 2 files',

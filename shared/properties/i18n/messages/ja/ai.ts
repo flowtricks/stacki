@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '{count} 件のファイルを編集',
   },
-  'ai.activity.fetched': {
-    other: '{count} ページを取得',
-  },
-  'ai.activity.ran': {
-    other: '{count} 件のコマンドを実行',
+  'ai.activity.other': {
+    other: 'その他の手順を {count} 件実行',
   },
   'ai.activity.read': {
     other: '{count} 件のファイルを読み取り',
   },
   'ai.activity.searched': {
-    other: '{count} 回検索',
-  },
-  'ai.activity.used': {
-    other: '{count} 個のツールを使用',
+    other: 'プロジェクトを {count} 回調査',
   },
   'ai.activity.usedTools': {
-    other: '{count} 個のツールを使用',
+    other: '{count} 件の手順を実行',
+  },
+  'ai.activity.web': {
+    other: 'Webで {count} 件を調査',
   },
   'ai.agent.badge.installing': 'インストール中',
   'ai.agent.badge.notInstalled': '未インストール',
@@ -262,6 +259,10 @@ export const messages = {
   'ai.export.empty': 'このチャットにはまだコピーできるメッセージがありません',
   'ai.export.truncated': 'チャットの残りは長すぎてコピーできませんでした。',
   'ai.export.you': 'あなた',
+  'ai.files.component': '{name}コンポーネント',
+  'ai.files.homePage': 'ホームページ',
+  'ai.files.layout': '{name}レイアウト',
+  'ai.files.page': '{name}ページ',
   'ai.find.close': '検索を閉じる',
   'ai.find.count': {
     other: '{count} 件の一致',
@@ -367,7 +368,7 @@ export const messages = {
   'ai.panel.setUpToStart': 'チャットを始めるには {agent} を設定してください',
   'ai.panel.signInToKeep': 'チャットを続けるには {agent} にサインインしてください',
   'ai.panel.signInToStart': 'チャットを始めるには {agent} にサインインしてください',
-  'ai.panel.trustFirst': '先にこのプロジェクトでエージェントを許可してください',
+  'ai.panel.trustFirst': '先にエージェントを許可',
   'ai.permission.ask.command': 'コマンドを実行',
   'ai.permission.ask.delete': 'ファイルを削除',
   'ai.permission.ask.edit': 'ファイルを編集',
@@ -395,9 +396,6 @@ export const messages = {
   'ai.pins.attention.stopped': '完了前に停止しました。ピンを再開して送り直してください。',
   'ai.pins.cancelMove': 'キャンセル',
   'ai.pins.cancelRun': '送信を停止',
-  'ai.pins.clearSent': {
-    other: '送信済みの {count} 件を消去',
-  },
   'ai.pins.close': '閉じる',
   'ai.pins.continue': '続行',
   'ai.pins.cropFailed': 'ピン留めした領域をキャプチャできませんでした。',
@@ -410,7 +408,6 @@ export const messages = {
   'ai.pins.detachedTip': 'このピンの要素はこのページにもうありません。ピンを開いて別の要素に移動してください。',
   'ai.pins.discard': 'ピンを破棄',
   'ai.pins.discardedToast': 'ピン {number} の変更を破棄しました',
-  'ai.pins.done': '完了',
   'ai.pins.elementIn': '{file} 内の要素',
   'ai.pins.elementWithText': '{element}「{text}」',
   'ai.pins.empty': 'ピンはまだありません',
@@ -422,12 +419,19 @@ export const messages = {
     other: '1つのピンに追加できる画像は最大 {count} 件です。',
   },
   'ai.pins.imagesTooLarge': 'ピンの画像の合計が大きすぎます。先にいくつか削除してください。',
-  'ai.pins.include': 'ピン {number} を「すべて送信」に含める',
+  'ai.pins.include': 'ピン {number} を次の送信に含める',
   'ai.pins.jump': 'ピン {number} に移動',
+  'ai.pins.leave': 'コメントモードを終了',
   'ai.pins.list': {
     other: 'ピン {count} 件',
   },
+  'ai.pins.listAttention': {
+    other: '要対応 {count} 件',
+  },
   'ai.pins.listLabel': 'コメントピン',
+  'ai.pins.listWorking': {
+    other: '作業中 {count} 件',
+  },
   'ai.pins.marker': 'ピン {number}：{element}',
   'ai.pins.messageLabel': {
     other: 'コメントピン {count} 件を含むメッセージ',
@@ -468,8 +472,8 @@ export const messages = {
   'ai.pins.send.subagents': '対象のピンをすべて1つのメッセージで送信します。チャットではピンごとに専用のサブエージェントが担当します。',
   'ai.pins.send.tooManyImages': '1つのメッセージに含める画像が多すぎます。画像をいくつか削除するか、一部のピンを除外してください。',
   'ai.pins.send.tooManyPins': '1つのメッセージに含めるピンが多すぎます。一部を除外して、残りを先に送信してください。',
-  'ai.pins.sendAll': {
-    other: 'すべて送信 ({count})',
+  'ai.pins.sendCount': {
+    other: '{count} 件を送信',
   },
   'ai.pins.summaryLine': 'ピン {number}：{comment}',
   'ai.pins.summaryTitle': {
@@ -675,9 +679,9 @@ export const messages = {
   'ai.status.phase.thinking': '思考中',
   'ai.status.phase.waiting': 'あなたの操作を待っています',
   'ai.step.build': 'プロジェクトをビルドしました',
-  'ai.step.check': 'フォーマットとlintを確認しました',
+  'ai.step.check': 'コードに間違いがないか確認しました',
   'ai.step.commandMany': {
-    other: '{count} 件のコマンドを実行しました',
+    other: 'プロジェクトで {count} 件の作業を実行しました',
   },
   'ai.step.commit': '変更をコミットしました',
   'ai.step.commitMany': {
@@ -708,9 +712,9 @@ export const messages = {
     other: '{count} 件のスクリプトを実行しました',
   },
   'ai.step.scriptNamed': '{name} を実行しました',
-  'ai.step.searchFor': 'プロジェクトで「{query}」を検索しました',
+  'ai.step.searchFor': 'プロジェクトで「{query}」を探しました',
   'ai.step.searchMany': {
-    other: 'プロジェクトを {count} 回検索しました',
+    other: 'プロジェクトを {count} 回調べました',
   },
   'ai.step.test': 'テストを実行しました',
   'ai.step.web': 'Webで調べものをしました',
@@ -720,7 +724,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '以前の {count} ステップ',
   },
-  'ai.steps.hideCommands': 'コマンドを隠す',
+  'ai.steps.hideCommands': '技術的な詳細を隠す',
   'ai.steps.label': 'ステップ',
   'ai.steps.more': {
     other: '他 {count} 件は非表示',
@@ -728,7 +732,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count} 件実行中',
   },
-  'ai.steps.showCommands': 'コマンドを表示',
+  'ai.steps.showCommands': '技術的な詳細を表示',
   'ai.steps.summary': '{tasks}、{running}',
   'ai.steps.tasks': {
     other: '{count} 件のタスク',
@@ -822,12 +826,11 @@ export const messages = {
   },
   'ai.subagents.followUp': 'フォローアップメッセージ',
   'ai.subagents.label': 'エージェント',
-  'ai.subagents.model.inherited': '{model}（継承）',
-  'ai.subagents.model.session': 'セッションのモデル',
+  'ai.subagents.modelLine': 'モデル: {model}',
   'ai.subagents.more': {
     other: '以前の {count} 件のエージェントは非表示',
   },
-  'ai.subagents.openTranscript': 'トランスクリプトを開く',
+  'ai.subagents.openTranscript': 'すべての手順を見る',
   'ai.subagents.result': '結果',
   'ai.subagents.running': {
     other: '{count} 件のエージェントが作業中',
@@ -878,13 +881,13 @@ export const messages = {
   'ai.toolName.findFiles': 'ファイルを探しました',
   'ai.toolName.findTool': 'ツールを探しました',
   'ai.toolName.followUp': 'フォローアップメッセージを送りました',
-  'ai.toolName.generic': 'ツールを使いました',
+  'ai.toolName.generic': '1つの手順を実行しました',
   'ai.toolName.helper': 'ヘルパーを起動しました',
   'ai.toolName.plan': 'プランを提案しました',
   'ai.toolName.read': 'ファイルを読みました',
   'ai.toolName.readWebPage': 'Webページを読みました',
-  'ai.toolName.run': 'コマンドを実行しました',
-  'ai.toolName.searchCode': 'プロジェクトを検索しました',
+  'ai.toolName.run': 'プロジェクトで作業を実行しました',
+  'ai.toolName.searchCode': 'プロジェクトを調べました',
   'ai.toolName.searchWeb': 'Webを検索しました',
   'ai.toolName.session': 'セッションを開始しました',
   'ai.toolName.skill': 'スキルを使いました',
@@ -897,10 +900,13 @@ export const messages = {
   'ai.transcript.label': '会話',
   'ai.transcript.showEarlier': '以前の {count} 件を表示',
   'ai.transcript.workedFor': '{duration}作業しました',
-  'ai.trust.allow': 'このプロジェクトで許可',
-  'ai.trust.text':
-    'Claude と Codex はこのプロジェクト内のあらゆるものを読み取り、変更し、実行できます。編集はすぐに適用され、後からファイルごとに確定または元に戻せます。',
-  'ai.trust.title': 'このプロジェクトでエージェントの作業を許可しますか？',
+  'ai.trust.allow': 'エージェントを許可',
+  'ai.trust.allowing': '許可しています…',
+  'ai.trust.notSaved': 'このプロジェクトでエージェントを許可できませんでした。再試行してください。',
+  'ai.trust.pointAccess': 'エージェントはこのプロジェクト内のあらゆるものを読み取り、変更し、実行できます。',
+  'ai.trust.pointLive': '編集はすぐにファイルに適用されます。',
+  'ai.trust.pointReview': '後から、変更されたファイルごとに確定するか元に戻せます。',
+  'ai.trust.title': 'このプロジェクトでエージェントを許可しますか？',
   'ai.turn.done': '完了しました。',
   'ai.turn.error': '問題が発生しました。',
   'ai.turn.maxRequests': 'エージェントが1つのメッセージあたりのステップ上限に達しました。',

@@ -136,6 +136,37 @@ test('one message, a subagent per pin: each pin reads its own subagent, the rest
   assert.deepEqual(model.pinProgress({ number: 1, delivery: { kind: 'draft' } }, view, 'running'), { kind: 'draft' });
 });
 
+test('finished: only a pin whose work is confirmed done, and never past a turn that ended badly', () => {
+  const start = [{ kind: 'turn-start', turn: TURN, at: 1 }, userPins];
+  const running = reduceChat(EMPTY_CHAT, [
+    ...start,
+    agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
+    agentCall('a2', 'Pin 2: Fix spacing', 'in_progress'),
+  ]);
+  assert.equal(model.pinFinished(sent(1), running), true, 'a subagent that finished while the turn runs: its pin is finished on its own');
+  assert.equal(model.pinFinished(sent(2), running), false, 'one still at work is not');
+  assert.equal(model.pinFinished(sent(3), running), false, 'one not started is not');
+  assert.equal(model.pinFinished(sent(1), undefined), false, 'with its chat not read here, nothing is known');
+  assert.equal(model.pinFinished({ number: 1, delivery: { kind: 'draft' } }, running), false, 'a draft is never finished');
+  const failed = reduceChat(EMPTY_CHAT, [
+    ...start,
+    agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
+    { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 9 },
+  ]);
+  assert.equal(model.pinFinished(sent(1), failed), false, 'a turn that ended in an error vouches for none of its pins');
+  assert.equal(model.pinFinished(sent(3), failed), false);
+  const well = reduceChat(EMPTY_CHAT, [
+    ...start,
+    agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
+    { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
+  ]);
+  assert.equal(model.pinFinished(sent(3), well), true, 'a pin the coordinator handled itself is finished when the turn ended well');
+  const single = (stop) => reduceChat(EMPTY_CHAT, [...start, { kind: 'turn-end', turn: TURN, stop, message: undefined, at: 9 }]);
+  assert.equal(model.pinFinished(sent(1, 'single'), single('end_turn')), true);
+  assert.equal(model.pinFinished(sent(1, 'single'), single('cancelled')), false);
+  assert.equal(model.pinFinished(sent(1, 'single'), reduceChat(EMPTY_CHAT, start)), false, 'its own turn still running');
+});
+
 test('one message per pin: queued until its turn, then its turn decides, and a held run needs the person', () => {
   const waiting = { number: 2, delivery: { kind: 'sent', chat: CHAT, turn: undefined, mode: 'single', at: 1 } };
   assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'running'), { kind: 'queued' });

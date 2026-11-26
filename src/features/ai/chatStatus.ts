@@ -11,6 +11,7 @@ import type { ToolKindName } from '../../../shared/properties/ai/chatModel';
 import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from './chatReducer';
+import { callsHeadline } from './transcript/agentSteps';
 
 export type ContextTone = 'unknown' | 'neutral' | 'amber' | 'red';
 
@@ -178,40 +179,13 @@ export function buildTurnStatus(view: ChatView, now: number, translate: Translat
   return { kind: 'idle' };
 }
 
-/** Distinct files a call touched, else one per call (a call that names no file still counts once). */
-function fileCount(calls: readonly ToolItem[]): number {
-  const paths = new Set<string>();
-  let unnamed = 0;
-  for (const call of calls) {
-    const named = [...call.paths, ...call.diffs.map((diff) => diff.path)];
-    if (named.length === 0) {
-      unnamed += 1;
-    }
-    for (const path of named) {
-      paths.add(path);
-    }
-  }
-  return paths.size + unnamed;
-}
-
-/** "Ran 4 commands, edited 2 files, read 6 files": a group of tool calls in one line. Empty when there is nothing to say. */
+/**
+ * "Looked through the project 2 times, edited 2 files": a group of tool calls in one line, in the words their steps
+ * use (transcript/agentSteps.ts callsHeadline). Empty when there is nothing to say.
+ */
 export function activityHeadline(items: readonly TranscriptItem[], translate: Translator): string {
-  const byKind = (...kinds: readonly ToolKindName[]): readonly ToolItem[] =>
-    items.filter((item): item is ToolItem => item.kind === 'tool' && kinds.includes(item.toolKind));
-  const commands = byKind('execute');
-  const edits = byKind('edit', 'delete', 'move');
-  const reads = byKind('read');
-  const searches = byKind('search');
-  const fetches = byKind('fetch');
-  const others = byKind('other');
-  const phrases = [
-    commands.length === 0 ? '' : translate('ai.activity.ran', { count: commands.length }),
-    edits.length === 0 ? '' : translate('ai.activity.edited', { count: fileCount(edits) }),
-    reads.length === 0 ? '' : translate('ai.activity.read', { count: fileCount(reads) }),
-    searches.length === 0 ? '' : translate('ai.activity.searched', { count: searches.length }),
-    fetches.length === 0 ? '' : translate('ai.activity.fetched', { count: fetches.length }),
-    others.length === 0 ? '' : translate('ai.activity.used', { count: others.length }),
-  ].filter((phrase) => phrase !== '');
-  const line = phrases.join(', ');
-  return line === '' ? '' : `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
+  return callsHeadline(
+    items.filter((item): item is ToolItem => item.kind === 'tool'),
+    translate,
+  );
 }

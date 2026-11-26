@@ -92,6 +92,23 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 .ai-pin-marker.is-excluded:not(:hover):not(.is-open) {
   opacity: 0.55;
 }
+/* A pin that left the board fades where it was, with the popups' exit motion, and takes no press meanwhile. */
+.ai-pin-marker.is-leaving {
+  pointer-events: none;
+  animation: ai-pin-leave var(--popup-duration, 160ms) ease forwards;
+}
+@keyframes ai-pin-leave {
+  to {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-pin-marker.is-leaving {
+    animation: none;
+    opacity: 0;
+  }
+}
 .ai-pin-layer.is-moving .ai-pin-marker {
   opacity: 0.4;
 }
@@ -108,16 +125,25 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   }
 }
 
-/* The mode's bar, over the canvas under its toolbar. */
-.ai-pin-bar {
+/* The mode's bar, over the canvas under its toolbar: a slot as wide as the canvas centres it and is the container the
+   bar's narrow layout asks about, so the pill keeps its centre as its contents change. */
+.ai-pin-bar-slot {
   position: absolute;
   top: 56px;
-  left: 50%; /* physical: centred over the canvas */
-  transform: translateX(-50%);
+  inset-inline: 12px;
   z-index: 20;
   display: flex;
+  justify-content: center;
+  pointer-events: none;
+  container-type: inline-size;
+  container-name: pin-bar;
+}
+.ai-pin-bar {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  height: 36px;
+  box-sizing: border-box;
   padding: 4px;
   border-radius: 10px;
   background: var(--bg-panel);
@@ -125,27 +151,29 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   font-size: 12px;
   color: var(--text);
   white-space: nowrap;
-  /* Never wider than the canvas: on a narrow canvas the mode's name gives way first. */
-  max-width: calc(100% - 24px);
+  pointer-events: auto;
+  max-width: 100%;
 }
 .ai-pin-bar > * {
   flex: none;
-}
-.ai-pin-bar > .ai-pin-bar-mode {
-  flex: 0 1 auto;
-  min-width: 16px;
-}
-.ai-pin-bar-mode-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .ai-pin-bar-mode {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
-  font-weight: 600;
-  color: var(--accent);
+  height: 28px;
+  padding: 0 6px;
+  color: var(--text-dim);
+}
+.ai-pin-bar.is-empty .ai-pin-bar-mode {
+  padding-inline-end: 4px;
+  color: var(--text);
+}
+/* Too narrow for the name: it drops, and the icon's tooltip still names the mode. */
+@container pin-bar (max-width: 220px) {
+  .ai-pin-bar-mode-name.is-droppable {
+    display: none;
+  }
 }
 .ai-pin-bar-button {
   display: inline-flex;
@@ -164,14 +192,21 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 .ai-pin-bar-button.is-on {
   background: var(--bg-hover);
 }
-.ai-pin-bar-button:disabled {
-  color: var(--text-faint);
+/* Send waiting for the agent: a quiet button, its tooltip says why. */
+.ai-pin-send-waiting[aria-disabled='true'] {
+  color: var(--text-dim);
   cursor: default;
-  background: transparent;
 }
-/* Send all is the one primary action: blue, and blue it stays on hover and press. */
+.ai-pin-bar .ai-pin-bar-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-dim);
+}
+/* Send is the one primary action: blue, and blue it stays on hover and press. */
 .ai-pin-send {
   height: 28px;
+  margin-inline-start: 2px;
   padding: 0 12px;
   border: 0;
   border-radius: 7px;
@@ -186,11 +221,6 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 }
 .ai-pin-send:active:not(:disabled):not([aria-disabled='true']) {
   background: var(--accent-pressed);
-}
-.ai-pin-send[aria-disabled='true'] {
-  opacity: 0.5;
-  cursor: default;
-  background: var(--accent);
 }
 
 /* The list of every pin. */
@@ -271,7 +301,7 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   align-items: center;
   gap: 4px;
   padding: 6px;
-  border-top: 1px solid var(--border);
+  background: var(--bg-hover);
 }
 
 /* A pin's number, in the list, the popover and a message. */
@@ -458,21 +488,34 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 .ai-pins-message-pin {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
-.ai-pins-message-open {
-  flex: none;
+/* A pin's words and where it is: one column starting at the card's text edge, the same for every row. */
+.ai-pins-message-words {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.ai-pins-message-open {
   cursor: pointer;
 }
-.ai-pins-message-open:disabled {
-  cursor: default;
+button.ai-pins-message-open:hover:not(:disabled) .ai-pins-message-comment {
+  text-decoration: underline;
+  text-decoration-color: var(--text-faint);
+}
+/* The crop at the row's end (the start in a right-to-left interface), one size for every row, level with the words. */
+.ai-pins-message-thumb {
+  width: 48px;
+  height: 34px;
+  margin-top: 1px;
 }
 .ai-pins-message-text {
   flex: 1;
@@ -525,8 +568,7 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 }
 
 /* A pin's number in a row or a message darkens with the row it opens, as the canvas pin does. */
-button.ai-pin-row-open:hover:not(:disabled) .ai-pin-number.is-draft,
-button.ai-pins-message-open:hover:not(:disabled) .ai-pin-number {
+button.ai-pin-row-open:hover:not(:disabled) .ai-pin-number.is-draft {
   background: var(--accent-pressed);
 }
 button.ai-pins-message-open:hover:not(:disabled) {

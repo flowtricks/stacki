@@ -654,6 +654,8 @@
   background: var(--bg-input);
   border-radius: 6px;
   min-width: 0;
+  /* Its rows lay themselves out for the strip's own width (the narrow rule below). */
+  container-type: inline-size;
 }
 .ai-agents-head {
   display: flex;
@@ -764,9 +766,6 @@ button.ai-agents-head:hover {
   color: var(--text-faint);
   white-space: nowrap;
 }
-.ai-agent-model-inherited {
-  font-style: italic;
-}
 .ai-agent-time-cell {
   display: flex;
   justify-content: flex-end;
@@ -810,6 +809,36 @@ button.ai-agents-head:hover {
   margin-inline: -6px;
   border-radius: 6px;
   background: transparent;
+  /* Its head lays itself out for the unit's own width (the narrow rule below). */
+  container-type: inline-size;
+}
+/* The model, in full, at the top of an opened unit: shown only where the head has no room for it (below). */
+.ai-subagent-model-line {
+  display: none;
+  padding: 2px 6px 4px calc(6px + 12px + 6px + 7px + 6px);
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+/* A narrow panel gives the task the model's column: the model leaves the head (and the strip's rows) and is shown
+   in the opened unit, so a title such as "Smaller hero heading" is not cut for "Sonnet 5.5". The same width as the
+   Running panel's rule (running.css). */
+@container (max-width: 26rem) {
+  .ai-subagent > .ai-subagent-head {
+    grid-template-columns: 12px 7px minmax(0, 1fr) var(--ai-agent-time-width);
+  }
+  .ai-subagent-head > .ai-agent-model {
+    display: none;
+  }
+  .ai-subagent-body > .ai-subagent-model-line {
+    display: block;
+  }
+  .ai-agents .ai-agent {
+    grid-template-columns: 7px minmax(0, 1fr) var(--ai-agent-time-width);
+  }
+  .ai-agent > .ai-agent-model {
+    display: none;
+  }
 }
 .ai-subagent:has(> .ai-subagent-body) {
   background: var(--bg-hover);
@@ -879,18 +908,12 @@ button.ai-agents-head:hover {
   border-radius: 4px;
   overflow-wrap: anywhere;
 }
+/* "See all steps": a secondary action, the app's ghost button (controls.css), quiet until hovered. */
 .ai-subagent-open {
   align-self: flex-start;
   margin: 4px 6px 0;
-  background: var(--bg-active);
-  border-radius: 5px;
   padding: 2px 8px;
   font-size: 11px;
-  color: var(--text-dim);
-}
-.ai-subagent-open:hover {
-  background: var(--bg-pressed);
-  color: var(--text);
 }
 .ai-agent-back {
   flex: none;

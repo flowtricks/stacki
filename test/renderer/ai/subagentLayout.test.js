@@ -4,7 +4,8 @@
 // model column, never pushing it; the dot sits centred on the task's line. In the transcript a unit's chevron starts
 // where the prose starts and its time ends where the prose ends, as a group's do, and the steps inside an opened unit
 // sit flush under it (their chevron under the unit's, their time ending where the unit's ends), with no indent; the
-// unit's columns are the strip's.
+// unit's columns are the strip's. In a narrow panel (under 26rem) the model leaves the rows and the unit's head, so
+// the task keeps the room, and the opened unit shows it in full instead. A finished step shows no time of its own.
 // Method: bundle the real strip, unit card, message and stylesheets into one page, load it in Electron's Chromium at
 // 340 and 600 px, open the strip's summary and the unit with real clicks, and read the layout back.
 const test = require('node:test');
@@ -169,6 +170,8 @@ app.whenReady().then(async () => {
           nameCut: name.scrollWidth > name.clientWidth,
           nameEllipsis: getComputedStyle(name).textOverflow,
           modelLeft: round(model.left),
+          modelWidth: round(model.width),
+          timeLeft: round(box(time).left),
           timeRight: round(box(time).right),
           timeText: time.textContent,
           figures: getComputedStyle(time).fontVariantNumeric,
@@ -191,7 +194,8 @@ app.whenReady().then(async () => {
         unitModelWidth: round(unitModel.width),
         stripModelWidth: round(box(document.querySelector('.ai-agent .ai-agent-model')).width),
         childChevronLefts: childHeads.map((head) => round(box(head.querySelector('svg')).left)),
-        childTimeRights: childHeads.map((head) => round(box(head.querySelector('.ai-agent-time')).right)),
+        childTimes: childHeads.filter((head) => head.querySelector('.ai-agent-time') !== null).length,
+        modelLine: (() => { const line = document.querySelector('.ai-subagent-model-line'); return line === null ? null : { shown: getComputedStyle(line).display !== 'none', text: line.textContent }; })(),
         childLabels: childHeads.map((head) => head.querySelector('.ai-step-label').textContent),
         childNested: document.querySelectorAll('.ai-subagent-body .ai-tool-nested, .ai-subagent-body .ai-tool-head').length,
         pageWidth: document.documentElement.scrollWidth,
@@ -220,13 +224,19 @@ app.whenReady().then(async () => {
       'times of different widths, so the alignment is really tested',
     );
     const [first] = result.rows;
+    const narrow = result.width < 26 * 16;
     for (const row of result.rows) {
       near(row.dotLeft, first.dotLeft, 'the dots share one left edge');
       near(row.nameLeft, first.nameLeft, 'the tasks share one left edge');
-      near(row.modelLeft, first.modelLeft, 'the models share one left edge');
       near(row.timeRight, first.timeRight, 'the times end on one right edge');
       near(row.dotCentre, row.nameCentre, 'the dot sits centred on the task’s line');
-      assert.ok(row.nameRight <= row.modelLeft + 0.5, `the task ends before the model column at ${result.width}px: ${detail}`);
+      if (narrow) {
+        assert.equal(row.modelWidth, 0, `a narrow strip shows no model column at ${result.width}px: ${detail}`);
+        assert.ok(row.nameRight <= row.timeLeft + 0.5, `the task ends before the time at ${result.width}px: ${detail}`);
+      } else {
+        near(row.modelLeft, first.modelLeft, 'the models share one left edge');
+        assert.ok(row.nameRight <= row.modelLeft + 0.5, `the task ends before the model column at ${result.width}px: ${detail}`);
+      }
       assert.match(row.figures, /tabular-nums/, 'the times are tabular figures');
       assert.equal(row.nameEllipsis, 'ellipsis', 'a long task is cut with an ellipsis');
     }
@@ -235,13 +245,13 @@ app.whenReady().then(async () => {
     near(result.unitChevronLeft, result.proseLeft, 'a unit’s chevron starts where the prose starts');
     near(result.unitTimeRight, result.proseRight, 'a unit’s time ends where the prose ends');
     near(result.unitModelWidth, result.stripModelWidth, 'a unit’s model column is the strip’s');
+    assert.equal(result.modelLine?.text, 'Model: Sonnet', 'the opened unit names its model in full');
+    assert.equal(result.modelLine?.shown, narrow, `the opened unit shows the model only where its head has no room for it, at ${result.width}px`);
     assert.deepEqual(result.childLabels, ['Ran the tests (2 times)'], 'the opened unit shows its calls as one step in words');
     for (const left of result.childChevronLefts) {
       near(left, result.unitChevronLeft, 'a step inside the unit sits flush under the unit’s chevron');
     }
-    for (const right of result.childTimeRights) {
-      near(right, result.unitTimeRight, 'a step’s time ends where the unit’s time ends');
-    }
+    assert.equal(result.childTimes, 0, 'a finished step shows no time of its own; the unit’s total stays');
     assert.equal(result.childNested, 0, 'no raw call cards and no indent');
     assert.ok(result.pageWidth <= result.width + 40, `nothing scrolls sideways at ${result.width}px`);
   }

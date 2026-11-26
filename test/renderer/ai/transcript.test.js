@@ -1,7 +1,7 @@
 // Goal: the transcript shows what the agent is doing and has done, truthfully and compactly. A
 // running turn shows the four-dot loader, what it is doing now and a live timer driven by ONE shared
 // ticker that stops when the turn ends; a finished turn folds its work into a one-line group
-// ("Ran 1 command, read 3 files") that opens to tool cards, each one line that opens to its command
+// ("Read 3 files, took 1 other step") that opens to tool cards, each one line that opens to its command
 // and bounded, highlighted output; thoughts read "Thought for 12s"; the plan, the background-task tray
 // ("Stop agent" is its only control) and the compaction row draw from the chat's state; long replies
 // clamp behind "Show more"; the view follows the newest line, stops when the person scrolls up and
@@ -301,9 +301,9 @@ test('durations come from stamps; a missing or backwards stamp gives none, never
 
 test('the group line, the thought label and the running label say what is true', () => {
   const items = fold(finishedTurn()).items.filter((item) => item.kind === 'tool');
-  assert.equal(model.summarizeGroup(items).text, 'Ran 1 command, read 3 files');
+  assert.equal(model.summarizeGroup(items).text, 'Read 3 files, took 1 other step');
   const failed = fold(tool(TURN, 'f', { toolKind: 'execute', status: 'failed' })).items;
-  assert.deepEqual(model.summarizeGroup(failed), { text: 'Ran 1 command', failed: 1, open: 0 });
+  assert.deepEqual(model.summarizeGroup(failed), { text: 'Took 1 step', failed: 1, open: 0 });
   const thoughtOnly = fold(thought(TURN, 'x', 0, 12_000)).items;
   assert.equal(model.summarizeGroup(thoughtOnly).text, 'Thought for 12s');
   assert.equal(model.summarizeGroup(fold(thought(TURN, 'x', undefined, undefined)).items).text, 'Thought');
@@ -502,7 +502,7 @@ test('the loader stops moving for people who ask for reduced motion', () => {
 test('a finished turn folds its work into one line that opens to one-line cards that open to their output', async () => {
   const { container } = await mount(fold(finishedTurn()));
   const head = container.querySelector('.ai-group-head');
-  assert.equal(text(container, '.ai-group-title'), 'Ran 1 command, read 3 files');
+  assert.equal(text(container, '.ai-group-title'), 'Read 3 files, took 1 other step');
   assert.equal(text(container, '.ai-group-time'), '3.0s');
   assert.equal(head.getAttribute('aria-expanded'), 'false');
   assert.equal(container.querySelectorAll('.ai-tool').length, 0, 'collapsed once finished');
@@ -588,7 +588,7 @@ test('an unknown kind of call degrades to a generic card; a call with nothing to
     turnEnd(TURN, 3),
   );
   const { container } = await mount(view);
-  assert.match(text(container, '.ai-group-title'), /Used 2 tools/);
+  assert.match(text(container, '.ai-group-title'), /Took 2 steps/);
   assert.equal(text(container, '.ai-group-failed'), '1 failed');
   await click(container.querySelector('.ai-group-head'));
   const heads = [...container.querySelectorAll('.ai-tool-head')];
@@ -614,7 +614,7 @@ test('a subagent is one unit holding its own calls as steps; a nested subagent i
   );
   const { container } = await mount(view);
   assert.equal(container.querySelectorAll('.ai-subagent').length, 1, 'one unit; the nested subagent is its work, not a unit');
-  assert.match(text(container, '.ai-subagent-progress'), /Read 2 files, used 1 tool/);
+  assert.match(text(container, '.ai-subagent-progress'), /Read 2 files, took 1 other step/);
   assert.equal(container.querySelector('.ai-subagent-body') ?? undefined, undefined, 'closed by default');
   assert.match(text(container, '.ai-group-title'), /Read 1 file/, 'the coordinator’s own call stays in its group');
   await click(container.querySelector('.ai-subagent-head'));

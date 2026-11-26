@@ -195,7 +195,7 @@ test('changes are saved after a pause, each image once; nothing is sent by itsel
   assert.equal(fake.named('aiPrompt').length, 0, 'no pin is ever sent without Send all');
 });
 
-test('include, delete and clear sent do only what they say', async () => {
+test('include and delete do only what they say', async () => {
   await start();
   const first = pinned('First');
   const second = pinned('Second', 'src/pages/about.astro');
@@ -206,8 +206,138 @@ test('include, delete and clear sent do only what they say', async () => {
     pins.pinState().board.pins.map((pin) => pin.id),
     [second],
   );
-  pins.clearSent();
-  assert.equal(pins.pinState().board.pins.length, 1, 'a draft is not cleared with the sent pins');
+});
+
+// A Claude run as main reports it: the turn, then one Agent call per pin, each finishing on its own.
+const agentEvent = (turn, call, number, status) => ({
+  kind: 'tool',
+  turn,
+  call,
+  title: `Pin ${number}: Change`,
+  toolKind: 'think',
+  status,
+  paths: undefined,
+  diffs: undefined,
+  output: undefined,
+  exitCode: undefined,
+  parent: undefined,
+  toolName: 'Agent',
+  at: 2,
+});
+const push = (events) => ai.receiveEvents({ projectPath: PROJECT, chat: CHAT, events });
+const opened = (turn) => [
+  { kind: 'turn-start', turn, at: 1 },
+  { kind: 'user', turn, text: 'Pins', attachments: [], at: 1 },
+];
+
+test('Claude: each pin is deleted as its own subagent finishes well; the others stay with their status', async () => {
+  await start({ agent: 'claude' });
+  const stop = pins.followChats();
+  const one = pinned('One', 'src/pages/index.astro', '0.1');
+  const two = pinned('Two', 'src/pages/index.astro', '0.2');
+  const three = pinned('Three', 'src/pages/index.astro', '0.3');
+  pins.setPinListOpen('open');
+  assert.equal(await pins.sendAllPins(translate), true);
+  const turn = turnId(1);
+  push([...opened(turn), agentEvent(turn, 'a1', 1, 'in_progress'), agentEvent(turn, 'a2', 2, 'in_progress'), agentEvent(turn, 'a3', 3, 'in_progress')]);
+  assert.equal(pins.pinState().board.pins.length, 3, 'nothing goes while every subagent works');
+  push([agentEvent(turn, 'a2', 2, 'completed')]);
+  assert.equal(pinOf(two), undefined, 'pin 2 goes the moment its subagent finishes, mid-run');
+  assert.ok(pinOf(one) !== undefined && pinOf(three) !== undefined, 'the others stay');
+  assert.equal(pins.pinState().listOpen, true, 'the list stays open while pins remain');
+  push([agentEvent(turn, 'a1', 1, 'failed')]);
+  push([agentEvent(turn, 'a3', 3, 'completed'), { kind: 'turn-end', turn, stop: 'end_turn', message: undefined, at: 9 }]);
+  assert.equal(pinOf(three), undefined);
+  assert.equal(pins.progressOf(pinOf(one)).kind, 'attention', 'a failed pin stays with its status');
+  pins.deletePin(one);
+  assert.equal(pins.pinState().listOpen, false, 'the list closes once no pin is left');
+  stop();
+});
+
+test('a turn that ends in an error deletes no pin; one finished but holding unsaved words becomes a draft with them', async () => {
+  await start({ agent: 'claude' });
+  const stop = pins.followChats();
+  const one = pinned('One', 'src/pages/index.astro', '0.1');
+  const two = pinned('Two', 'src/pages/index.astro', '0.2');
+  assert.equal(await pins.sendAllPins(translate), true);
+  // Dictation that lands after the send writes into the sent pin's box: words not saved.
+  pins.setPinComment(two, 'Also make it blue');
+  const turn = turnId(1);
+  push([...opened(turn), { kind: 'turn-end', turn, stop: 'error', message: undefined, at: 9 }]);
+  assert.equal(pins.pinState().board.pins.length, 2, 'an unclean end keeps every pin');
+  await start({ agent: 'claude' });
+  const again = pins.followChats();
+  pinned('One');
+  const typed = pinned('Two', 'src/pages/index.astro', '0.2');
+  assert.equal(await pins.sendAllPins(translate), true);
+  pins.setPinComment(typed, 'Also make it blue');
+  push([...opened(turn), { kind: 'turn-end', turn, stop: 'end_turn', message: undefined, at: 9 }]);
+  assert.equal(pins.pinState().board.pins.length, 1, 'the finished pin without typed words is deleted');
+  assert.equal(pinOf(typed)?.delivery.kind, 'draft', 'the one holding typed words is kept as a draft');
+  assert.equal(pinOf(typed)?.edit?.comment, 'Also make it blue', 'with its words');
+  stop();
+  again();
+  assert.ok(one.length > 0);
+});
+
+test('Codex: each pin is deleted when its own turn ends well, and the run goes on', async () => {
+  const fake = await start({ agent: 'codex' });
+  const stop = pins.followChats();
+  pinned('One', 'src/pages/index.astro', '0.1');
+  pinned('Two', 'src/pages/index.astro', '0.2');
+  assert.equal(await pins.sendAllPins(translate), true);
+  push([...opened(turnId(1)), { kind: 'turn-end', turn: turnId(1), stop: 'end_turn', message: undefined, at: 9 }]);
+  await settle();
+  assert.deepEqual(
+    pins.pinState().board.pins.map((pin) => pin.number),
+    [2],
+    'pin 1 went with its turn',
+  );
+  assert.equal(fake.named('aiPrompt').length, 2, 'and pin 2 was sent');
+  push([...opened(turnId(2)), { kind: 'turn-end', turn: turnId(2), stop: 'end_turn', message: undefined, at: 9 }]);
+  await settle();
+  assert.equal(pins.pinState().board.pins.length, 0);
+  assert.equal(pins.pinState().run, undefined, 'the run ended with its last pin');
+  stop();
+});
+
+test('after a restart, pins whose work finished while the app was closed are deleted once their chat is read', async () => {
+  const turn = turnId(1);
+  const sentPin = (number, path) => ({
+    id: `p${String(number).repeat(16)}`,
+    number,
+    createdAt: 1,
+    updatedAt: 1,
+    comment: `Pin ${number}`,
+    images: [],
+    savedAt: 1,
+    edit: undefined,
+    anchor: anchor(path),
+    place: place('src/pages/index.astro'),
+    included: true,
+    delivery: { kind: 'sent', chat: CHAT, turn, mode: 'subagents', at: 1 },
+  });
+  const board = { version: 1, pins: [sentPin(1, '0.1'), sentPin(2, '0.2')] };
+  const events = [
+    ...opened(turn),
+    agentEvent(turn, 'a1', 1, 'completed'),
+    agentEvent(turn, 'a2', 2, 'failed'),
+    { kind: 'turn-end', turn, stop: 'end_turn', message: undefined, at: 9 },
+  ];
+  ai.resetAiStore();
+  pins.resetPinStore();
+  install({ agent: 'claude', board });
+  global.window.avb.aiChatRead = async () => ({ ok: true, value: { summary: summary('claude'), events, full: true } });
+  await ai.loadAiProject(PROJECT);
+  const stop = pins.followChats();
+  await pins.loadPins(PROJECT);
+  await settle();
+  assert.deepEqual(
+    pins.pinState().board.pins.map((pin) => pin.number),
+    [2],
+    'the finished pin was deleted on load; the failed one stays',
+  );
+  stop();
 });
 
 test('Send all to Claude: one message, the brief naming every included pin, then marked sent with the turn', async () => {

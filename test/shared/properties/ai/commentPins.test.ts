@@ -16,6 +16,7 @@ import {
   pinNumberOfTitle,
   pinWaves,
   sentPinsOf,
+  withoutPinNumber,
 } from '#dist/shared/properties/ai/commentPinBrief.js';
 import { parsePinBoard, parsePinBoardRead, parsePinBoardStrict, parsePinImages } from '#dist/shared/properties/ai/commentPins.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
@@ -201,6 +202,16 @@ test('a subagent title names its pin: "Pin 3: …", in any case, and nothing els
   assert.equal(pinNumberOfTitle('**Pin #4** spacing'), 4);
   for (const title of ['Spin 3', 'Pinned 3', 'Fix pin 3', 'Pin three', 'Pin 0', 'Pin 99999']) {
     assert.equal(pinNumberOfTitle(title), undefined, title);
+  }
+});
+
+test('the panel shows a subagent title without its pin number; a title that is only the number stays', () => {
+  assert.equal(withoutPinNumber('Pin 3: Bigger heading'), 'Bigger heading');
+  assert.equal(withoutPinNumber('pin 12 - hero'), 'hero');
+  assert.equal(withoutPinNumber('**Pin #4**: spacing'), 'spacing');
+  assert.equal(withoutPinNumber('Pin 3:'), 'Pin 3:', 'nothing left to show: kept');
+  for (const title of ['Fix pin 3: header', 'Pinned 3: x', 'Bigger heading']) {
+    assert.equal(withoutPinNumber(title), title, title);
   }
 });
 

@@ -1,11 +1,14 @@
 // One subagent in the transcript, as one unit instead of its commands and reads interleaved with the
 // coordinator's: a head with its status dot, the task it was given, the model it runs on and its time
-// (its role, which seldom fits beside them, is in the head's tooltip);
-// a line of progress (what it is doing now, and what it has done so far: "Ran 12 commands, read 3
-// files"); once it finishes, the first line of its report. Opened (closed by default, the person's
-// choice remembered), it shows its work as steps a designer reads ("Read 5 files", "Ran the tests"), the
-// commands behind each one revealed only on request (StepGroups.tsx, the same list the Running panel draws),
-// its whole report, and its full transcript (its words, thoughts and every call as a card, SubagentPane.tsx).
+// (its role, which seldom fits beside them, is in the head's tooltip, with the whole task);
+// a line of progress (what it is doing now, and what it has done so far, in the same words its steps use:
+// "Looked through the project 2 times, edited 1 file"); once it finishes, the first line of its report as plain
+// words. Opened (closed by default, the person's choice remembered), it shows its work as steps a designer reads
+// ("Read 5 files", "Ran the tests"), the commands behind each one revealed only on request (StepGroups.tsx, the
+// same list the Running panel draws), its whole report, and "See all steps" (SubagentPane.tsx).
+//
+// In a narrow panel (a container query on the unit) the model leaves the head, so the task keeps the room, and is
+// shown in full at the top of the opened unit instead.
 //
 // The strip above the transcript asks for a unit by call (`reveal`, a count that grows with each ask):
 // the unit opens and scrolls itself into view.
@@ -15,7 +18,7 @@ import type { ChatOption } from '../../../../shared/properties/ai/chatModel';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../ui/Icons';
 import { ChatText } from '../ChatText';
-import { activityHeadline } from '../chatStatus';
+import { stepsHeadline } from './agentSteps';
 import { isWorking, resultSummary, type SubagentUnit } from '../subagents';
 import { groupSteps } from './agentSteps';
 import { PayloadDetails } from './PayloadDetails';
@@ -50,9 +53,10 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
   }, [reveal, change]);
   const working = isWorking(agent.status);
   const name = displayName(agent, projectPath, translate);
-  const model = agentModelLabel(agent, options, translate);
+  const model = agentModelLabel(agent, options);
   const followUp = agent.kind === 'follow-up';
-  const done = children.length === 0 ? '' : activityHeadline(children, translate);
+  const timeline = groupSteps(children, { working });
+  const done = children.length === 0 ? '' : stepsHeadline(timeline, translate);
   const line = followUp
     ? followUpWord(agent.status, { calls: children.length }, translate)
     : working
@@ -70,7 +74,6 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
       reportFailedFollowUp(`${chatId}:${agent.call}`, translate('ai.followUp.failed'));
     }
   }, [agent.delivery, agent.call, chatId, translate]);
-  const timeline = groupSteps(children, { working });
   return (
     <div ref={element} className={`ai-subagent ai-subagent-${agent.status.kind}`} data-subagent={agent.call}>
       <button
@@ -83,7 +86,7 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
         <span className="ai-subagent-chevron">{open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}</span>
         <SubagentDot status={agent.status} />
         <span className="ai-subagent-title">{name}</span>
-        <span className={`ai-agent-model${agent.model.kind === 'inherited' ? ' ai-agent-model-inherited' : ''}`}>{model}</span>
+        <span className="ai-agent-model">{model}</span>
         <span className="ai-agent-time-cell">
           <SubagentTime status={agent.status} />
         </span>
@@ -92,6 +95,7 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
       </button>
       {open && (
         <div className="ai-subagent-body" id={bodyId}>
+          {model !== '' && <span className="ai-subagent-model-line">{translate('ai.subagents.modelLine', { model })}</span>}
           <StepList timeline={timeline} chatId={chatId} scope={`card:${agent.call}`} projectPath={projectPath} working={working} />
           {followUp && agent.message !== undefined && (
             <div className="ai-subagent-result" role="group" aria-label={translate('ai.followUp.message')}>
@@ -105,7 +109,7 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
           )}
           {agent.result !== undefined && report === undefined && <PayloadDetails text={agent.result} />}
           {onOpenTranscript !== undefined && (!followUp || children.length > 0) && (
-            <button className="ai-subagent-open" onClick={() => onOpenTranscript(agent.call)}>
+            <button className="ghost ai-subagent-open" onClick={() => onOpenTranscript(agent.call)}>
               {translate('ai.subagents.openTranscript')}
             </button>
           )}

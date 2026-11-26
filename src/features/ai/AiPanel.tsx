@@ -44,7 +44,6 @@ import {
   reviewChange,
   sendPrompt,
   setPanelVisibility,
-  trustProject,
   useAiState,
   type AiState,
 } from './aiStore';
@@ -53,6 +52,7 @@ import { ChatComposer } from './composer/ChatComposer';
 import { usePrewarm } from './prewarm';
 import { agentBadge, type AgentBadge } from './agentSwitch';
 import { SetupCard } from './SetupCard';
+import { TrustCard } from './TrustCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
 import { PlanCard } from './transcript/PlanCard';
@@ -319,19 +319,6 @@ function composerBlock({
     return started ? translate('ai.panel.signInToKeep', { agent: label }) : translate('ai.panel.signInToStart', { agent: label });
   }
   return availability?.state === 'ready' ? undefined : translate('ai.panel.setUpToStart', { agent: label });
-}
-
-function TrustCard() {
-  const translate = useTranslate();
-  return (
-    <div className="ai-gate">
-      <strong>{translate('ai.trust.title')}</strong>
-      <p>{translate('ai.trust.text')}</p>
-      <button className="ai-primary" onClick={() => void trustProject()}>
-        {translate('ai.trust.allow')}
-      </button>
-    </div>
-  );
 }
 
 function AgentGate(

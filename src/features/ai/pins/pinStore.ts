@@ -36,12 +36,11 @@ import type { ChatId, TurnId } from '../../../../shared/properties/ai/chatModel'
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { aiPinsRead, aiPinsWrite, aiScreenshot } from '../aiBridge';
-import { aiState, newChat, openChat, preferredAgent, sendPinMessage, subscribeAiState } from '../aiStore';
+import { aiState, loadChatView, newChat, openChat, preferredAgent, sendPinMessage, subscribeAiState } from '../aiStore';
 import {
   addPin,
   addPinImages,
   changePin,
-  clearSentPins,
   closeOutcome,
   commentLine,
   discardPinEdit,
@@ -51,6 +50,7 @@ import {
   nextPinNumber,
   savePinEdit,
   workingCopy,
+  pinFinished,
   pinMessage,
   pinProgress,
   pinsToSend,
@@ -169,8 +169,12 @@ export async function loadPins(projectPath: string): Promise<void> {
   const images = new Map(reply.value.images.map((image) => [image.id, image.data]));
   // Set without a save: what was read is what is stored.
   state = { ...state, loaded: true, board: { version: 1, pins }, images };
+  chatsAsked = new Set();
   for (const listener of [...listeners]) {
     listener();
+  }
+  if (following !== undefined) {
+    followChatsChange(); // Pins whose work finished while the app was closed are deleted once their chats are read.
   }
 }
 
@@ -420,18 +424,18 @@ export function setPinIncluded(id: PinId, choice: 'include' | 'exclude'): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, included: choice === 'include' })) }));
 }
 
+/** Deletes pin `id`. The list stays open while a saved pin remains, and closes with the last. */
 export function deletePin(id: PinId): void {
-  update((current) => ({
-    ...current,
-    board: removePin(current.board, id),
-    open: current.open === id ? undefined : current.open,
-    moving: current.moving === id ? undefined : current.moving,
-  }));
-}
-
-/** "Clear sent": every sent pin leaves the board (their message stays in the chat). */
-export function clearSent(): void {
-  update((current) => ({ ...current, board: clearSentPins(current.board), run: undefined }));
+  update((current) => {
+    const board = removePin(current.board, id);
+    return {
+      ...current,
+      board,
+      open: current.open === id ? undefined : current.open,
+      moving: current.moving === id ? undefined : current.moving,
+      listOpen: board.pins.some((pin) => pin.savedAt !== undefined) ? current.listOpen : false,
+    };
+  });
 }
 
 /** A sent pin back to a draft, to change and send again. */
@@ -754,6 +758,62 @@ async function sendNextInRunNow(translate: Translator): Promise<boolean> {
   return true;
 }
 
+// Every change of the chats: a run moves on, then pins whose work finished well are deleted.
+function followChatsChange(): void {
+  followRun();
+  readSentChats();
+  deleteFinishedPins();
+}
+
+/**
+ * Deletes every pin whose work is confirmed finished well (pinModel.ts pinFinished): its marker, its box, its row and,
+ * with the save, its images. The chat's message keeps its own copy (words and thumbnail), so the transcript is whole.
+ * A sent pin holding words typed and not saved (dictation that landed after the send) is not deleted: it becomes a
+ * draft with them, so nothing typed is lost. When no pin is left the list closes; comment mode stays on.
+ */
+function deleteFinishedPins(): void {
+  const finished = state.board.pins.filter((pin) => pin.delivery.kind === 'sent' && pinFinished(pin, aiState().views.get(pin.delivery.chat)));
+  if (finished.length === 0) {
+    return;
+  }
+  const kept = new Set(finished.filter((pin) => hasUnsavedChanges(pin) && pin.edit !== undefined && hasPersonContent(pin.edit)).map((pin) => pin.id));
+  const gone = new Set(finished.filter((pin) => !kept.has(pin.id)).map((pin) => pin.id));
+  update((current) => {
+    const pins = current.board.pins.flatMap((pin) => (gone.has(pin.id) ? [] : [kept.has(pin.id) ? reopenPin(pin) : pin]));
+    assert(pins.length === current.board.pins.length - gone.size, 'deleteFinishedPins: only finished pins go');
+    const empty = !pins.some((pin) => pin.savedAt !== undefined);
+    return {
+      ...current,
+      board: { ...current.board, pins },
+      open: current.open !== undefined && gone.has(current.open) ? undefined : current.open,
+      moving: current.moving !== undefined && gone.has(current.moving) ? undefined : current.moving,
+      listOpen: empty ? false : current.listOpen,
+    };
+  });
+}
+
+/** Chats whose transcripts were asked for, so a chat that cannot be read is not asked again on every change. */
+let chatsAsked = new Set<ChatId>();
+
+// The transcripts of the chats sent pins went to, read once each (a pin's progress is read from its chat's
+// transcript, and a chat not open here would otherwise leave a finished pin on the board after a restart).
+function readSentChats(): void {
+  if (aiState().projectPath !== state.projectPath || !state.loaded) {
+    return;
+  }
+  if (chatsAsked.size >= PIN_LIMITS.pinsMax) {
+    chatsAsked = new Set(); // Bounded: a board's pins name at most `pinsMax` chats, so a full set is old asks.
+  }
+  for (const pin of state.board.pins) {
+    const delivery = pin.delivery;
+    if (delivery.kind === 'sent' && delivery.turn !== undefined && !chatsAsked.has(delivery.chat) && !aiState().views.has(delivery.chat)) {
+      chatsAsked.add(delivery.chat);
+      void loadChatView(delivery.chat);
+    }
+  }
+  assert(chatsAsked.size <= PIN_LIMITS.pinsMax * 2, 'readSentChats: one read per chat a pin went to');
+}
+
 // A run follows its chat: when the turn of the pin it sent last ends well, the next pin goes; when it ends any
 // other way, the run is held until the person continues it.
 function followRun(): void {
@@ -789,8 +849,9 @@ let following: (() => void) | undefined;
 /** Starts following the chats for runs; returns the stop. Called by the host while it is mounted. */
 export function followChats(): () => void {
   following?.();
-  const stop = subscribeAiState(followRun);
+  const stop = subscribeAiState(followChatsChange);
   following = stop;
+  followChatsChange();
   return () => {
     stop();
     if (following === stop) {
@@ -842,6 +903,7 @@ export function resetPinStore(): void {
   following = undefined;
   runTranslate = undefined;
   runSending = false;
+  chatsAsked = new Set();
   navigator = undefined;
   mover = undefined;
   state = INITIAL;

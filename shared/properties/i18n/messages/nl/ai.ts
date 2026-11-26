@@ -11,29 +11,25 @@ export const messages = {
     one: '{count} bestand bewerkt',
     other: '{count} bestanden bewerkt',
   },
-  'ai.activity.fetched': {
-    one: '{count} pagina opgehaald',
-    other: '{count} pagina’s opgehaald',
-  },
-  'ai.activity.ran': {
-    one: '{count} opdracht uitgevoerd',
-    other: '{count} opdrachten uitgevoerd',
+  'ai.activity.other': {
+    one: '{count} andere stap gezet',
+    other: '{count} andere stappen gezet',
   },
   'ai.activity.read': {
     one: '{count} bestand gelezen',
     other: '{count} bestanden gelezen',
   },
   'ai.activity.searched': {
-    one: '{count} keer gezocht',
-    other: '{count} keer gezocht',
-  },
-  'ai.activity.used': {
-    one: '{count} tool gebruikt',
-    other: '{count} tools gebruikt',
+    one: '{count} keer het project doorgekeken',
+    other: '{count} keer het project doorgekeken',
   },
   'ai.activity.usedTools': {
-    one: '{count} tool gebruikt',
-    other: '{count} tools gebruikt',
+    one: '{count} stap gezet',
+    other: '{count} stappen gezet',
+  },
+  'ai.activity.web': {
+    one: '{count} ding op het web opgezocht',
+    other: '{count} dingen op het web opgezocht',
   },
   'ai.agent.badge.installing': 'Installeren',
   'ai.agent.badge.notInstalled': 'Niet geïnstalleerd',
@@ -275,6 +271,10 @@ export const messages = {
   'ai.export.empty': 'Deze chat heeft nog geen berichten om te kopiëren',
   'ai.export.truncated': 'De rest van de chat was te lang om te kopiëren.',
   'ai.export.you': 'Jij',
+  'ai.files.component': 'Component {name}',
+  'ai.files.homePage': 'Startpagina',
+  'ai.files.layout': 'Lay-out {name}',
+  'ai.files.page': 'Pagina {name}',
   'ai.find.close': 'Zoeken sluiten',
   'ai.find.count': {
     one: '{count} resultaat',
@@ -383,7 +383,7 @@ export const messages = {
   'ai.panel.setUpToStart': 'Stel {agent} in om te chatten',
   'ai.panel.signInToKeep': 'Meld je aan bij {agent} om te blijven chatten',
   'ai.panel.signInToStart': 'Meld je aan bij {agent} om te chatten',
-  'ai.panel.trustFirst': 'Sta eerst agents toe in dit project',
+  'ai.panel.trustFirst': 'Sta eerst agents toe',
   'ai.permission.ask.command': 'Een opdracht uitvoeren',
   'ai.permission.ask.delete': 'Een bestand verwijderen',
   'ai.permission.ask.edit': 'Een bestand bewerken',
@@ -412,10 +412,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Gestopt voordat het klaar was. Heropen de pin om hem opnieuw te versturen.',
   'ai.pins.cancelMove': 'Annuleren',
   'ai.pins.cancelRun': 'Versturen stoppen',
-  'ai.pins.clearSent': {
-    one: '{count} verzonden wissen',
-    other: '{count} verzonden wissen',
-  },
   'ai.pins.close': 'Sluiten',
   'ai.pins.continue': 'Doorgaan',
   'ai.pins.cropFailed': 'Kan het vastgepinde gebied niet vastleggen.',
@@ -428,7 +424,6 @@ export const messages = {
   'ai.pins.detachedTip': 'Het element staat niet meer op deze pagina. Open de pin om hem naar een ander element te verplaatsen.',
   'ai.pins.discard': 'Pin weggooien',
   'ai.pins.discardedToast': 'Wijzigingen aan pin {number} verworpen',
-  'ai.pins.done': 'Klaar',
   'ai.pins.elementIn': 'Element in {file}', // same
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': 'Nog geen pins',
@@ -442,13 +437,22 @@ export const messages = {
     other: 'Een pin bevat maximaal {count} afbeeldingen.',
   },
   'ai.pins.imagesTooLarge': 'De afbeeldingen van de pins zijn samen te groot. Verwijder er eerst een paar.',
-  'ai.pins.include': 'Pin {number} meenemen bij Alles versturen',
+  'ai.pins.include': 'Pin {number} meenemen bij de volgende verzending',
   'ai.pins.jump': 'Naar pin {number}',
+  'ai.pins.leave': 'Opmerkingsmodus verlaten',
   'ai.pins.list': {
     one: '{count} pin',
     other: '{count} pins',
   },
+  'ai.pins.listAttention': {
+    one: '{count} wacht op jou',
+    other: '{count} wachten op jou',
+  },
   'ai.pins.listLabel': 'Opmerkingspins',
+  'ai.pins.listWorking': {
+    one: '{count} bezig',
+    other: '{count} bezig',
+  },
   'ai.pins.marker': 'Pin {number}: {element}', // same
   'ai.pins.messageLabel': {
     one: 'Bericht met {count} opmerkingspin',
@@ -490,9 +494,9 @@ export const messages = {
   'ai.pins.send.subagents': 'Verstuurt alle geselecteerde pins in één bericht; elke pin krijgt een eigen subagent in de chat.',
   'ai.pins.send.tooManyImages': 'Te veel afbeeldingen voor één bericht. Verwijder enkele afbeeldingen of laat een paar pins weg.',
   'ai.pins.send.tooManyPins': 'Te veel pins voor één bericht. Laat er een paar weg en verstuur eerst de rest.',
-  'ai.pins.sendAll': {
-    one: 'Alles versturen ({count})',
-    other: 'Alles versturen ({count})',
+  'ai.pins.sendCount': {
+    one: 'Versturen',
+    other: '{count} versturen',
   },
   'ai.pins.summaryLine': 'Pin {number}: {comment}', // same
   'ai.pins.summaryTitle': {
@@ -710,10 +714,10 @@ export const messages = {
   'ai.status.phase.thinking': 'Nadenken',
   'ai.status.phase.waiting': 'Wachten op jou',
   'ai.step.build': 'Het project gebouwd',
-  'ai.step.check': 'Opmaak en lint gecontroleerd',
+  'ai.step.check': 'De code op fouten gecontroleerd',
   'ai.step.commandMany': {
-    one: '{count} opdracht uitgevoerd',
-    other: '{count} opdrachten uitgevoerd',
+    one: '{count} taak in het project uitgevoerd',
+    other: '{count} taken in het project uitgevoerd',
   },
   'ai.step.commit': 'Wijzigingen gecommit',
   'ai.step.commitMany': {
@@ -750,10 +754,10 @@ export const messages = {
     other: '{count} scripts uitgevoerd',
   },
   'ai.step.scriptNamed': '{name} uitgevoerd',
-  'ai.step.searchFor': 'Het project doorzocht op „{query}”',
+  'ai.step.searchFor': 'In het project gezocht naar „{query}”',
   'ai.step.searchMany': {
-    one: 'Het project {count} keer doorzocht',
-    other: 'Het project {count} keer doorzocht',
+    one: 'Het project {count} keer doorgekeken',
+    other: 'Het project {count} keer doorgekeken',
   },
   'ai.step.test': 'De tests uitgevoerd',
   'ai.step.web': 'Iets op het web opgezocht',
@@ -765,7 +769,7 @@ export const messages = {
     one: '{count} eerdere stap',
     other: '{count} eerdere stappen',
   },
-  'ai.steps.hideCommands': 'Opdrachten verbergen',
+  'ai.steps.hideCommands': 'Technische details verbergen',
   'ai.steps.label': 'Stappen',
   'ai.steps.more': {
     one: '{count} meer niet getoond',
@@ -775,7 +779,7 @@ export const messages = {
     one: '{count} bezig',
     other: '{count} bezig',
   },
-  'ai.steps.showCommands': 'Opdrachten tonen',
+  'ai.steps.showCommands': 'Technische details tonen',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     one: '{count} taak',
@@ -876,13 +880,12 @@ export const messages = {
   },
   'ai.subagents.followUp': 'Vervolgbericht',
   'ai.subagents.label': 'Agents', // same
-  'ai.subagents.model.inherited': '{model} (overgenomen)',
-  'ai.subagents.model.session': 'Sessiemodel',
+  'ai.subagents.modelLine': 'Model: {model}', // same
   'ai.subagents.more': {
     one: '{count} eerdere agent niet getoond',
     other: '{count} eerdere agents niet getoond',
   },
-  'ai.subagents.openTranscript': 'Transcript openen',
+  'ai.subagents.openTranscript': 'Alle stappen bekijken',
   'ai.subagents.result': 'Resultaat',
   'ai.subagents.running': {
     one: '{count} agent aan het werk',
@@ -939,13 +942,13 @@ export const messages = {
   'ai.toolName.findFiles': 'Naar bestanden gezocht',
   'ai.toolName.findTool': 'Naar een tool gezocht',
   'ai.toolName.followUp': 'Een vervolgbericht verzonden',
-  'ai.toolName.generic': 'Een tool gebruikt',
+  'ai.toolName.generic': 'Een stap gezet',
   'ai.toolName.helper': 'Een helper gestart',
   'ai.toolName.plan': 'Een plan voorgesteld',
   'ai.toolName.read': 'Een bestand gelezen',
   'ai.toolName.readWebPage': 'Een webpagina gelezen',
-  'ai.toolName.run': 'Een opdracht uitgevoerd',
-  'ai.toolName.searchCode': 'Het project doorzocht',
+  'ai.toolName.run': 'Een taak in het project uitgevoerd',
+  'ai.toolName.searchCode': 'Het project doorgekeken',
   'ai.toolName.searchWeb': 'Het web doorzocht',
   'ai.toolName.session': 'Een sessie gestart',
   'ai.toolName.skill': 'Een vaardigheid gebruikt',
@@ -958,10 +961,13 @@ export const messages = {
   'ai.transcript.label': 'Gesprek',
   'ai.transcript.showEarlier': '{count} eerdere tonen',
   'ai.transcript.workedFor': '{duration} gewerkt',
-  'ai.trust.allow': 'Toestaan in dit project',
-  'ai.trust.text':
-    'Claude en Codex kunnen alles in dit project lezen, wijzigen en uitvoeren. Hun bewerkingen worden direct toegepast en je behoudt of maakt daarna elk bestand ongedaan.',
-  'ai.trust.title': 'Agents in dit project laten werken?',
+  'ai.trust.allow': 'Agents toestaan',
+  'ai.trust.allowing': 'Toestaan…',
+  'ai.trust.notSaved': 'Agents konden niet worden toegestaan in dit project. Opnieuw proberen.',
+  'ai.trust.pointAccess': 'Agents kunnen alles in dit project lezen, wijzigen en uitvoeren.',
+  'ai.trust.pointLive': 'Hun bewerkingen worden direct op je bestanden toegepast.',
+  'ai.trust.pointReview': 'Daarna behoud je elk gewijzigd bestand of maak je het ongedaan.',
+  'ai.trust.title': 'Agents toestaan in dit project?',
   'ai.turn.done': 'Klaar.',
   'ai.turn.error': 'Er is iets misgegaan.',
   'ai.turn.maxRequests': 'De agent heeft zijn stappenlimiet voor één bericht bereikt.',

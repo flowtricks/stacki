@@ -10,23 +10,20 @@ export const messages = {
   'ai.activity.edited': {
     other: '파일 {count}개 편집함',
   },
-  'ai.activity.fetched': {
-    other: '페이지 {count}개 가져옴',
-  },
-  'ai.activity.ran': {
-    other: '명령 {count}개 실행함',
+  'ai.activity.other': {
+    other: '기타 단계 {count}개 진행함',
   },
   'ai.activity.read': {
     other: '파일 {count}개 읽음',
   },
   'ai.activity.searched': {
-    other: '{count}번 검색함',
-  },
-  'ai.activity.used': {
-    other: '도구 {count}개 사용함',
+    other: '프로젝트를 {count}번 살펴봄',
   },
   'ai.activity.usedTools': {
-    other: '도구 {count}개 사용함',
+    other: '단계 {count}개 진행함',
+  },
+  'ai.activity.web': {
+    other: '웹에서 {count}건 찾아봄',
   },
   'ai.agent.badge.installing': '설치 중',
   'ai.agent.badge.notInstalled': '설치되지 않음',
@@ -261,6 +258,10 @@ export const messages = {
   'ai.export.empty': '아직 복사할 메시지가 이 채팅에 없습니다',
   'ai.export.truncated': '채팅의 나머지는 너무 길어 복사하지 못했습니다.',
   'ai.export.you': '나',
+  'ai.files.component': '{name} 컴포넌트',
+  'ai.files.homePage': '홈 페이지',
+  'ai.files.layout': '{name} 레이아웃',
+  'ai.files.page': '{name} 페이지',
   'ai.find.close': '찾기 닫기',
   'ai.find.count': {
     other: '일치 항목 {count}개',
@@ -366,7 +367,7 @@ export const messages = {
   'ai.panel.setUpToStart': '채팅을 시작하려면 {agent}을(를) 설정하세요',
   'ai.panel.signInToKeep': '채팅을 계속하려면 {agent}에 로그인하세요',
   'ai.panel.signInToStart': '채팅을 시작하려면 {agent}에 로그인하세요',
-  'ai.panel.trustFirst': '먼저 이 프로젝트에서 에이전트를 허용하세요',
+  'ai.panel.trustFirst': '먼저 에이전트 허용',
   'ai.permission.ask.command': '명령 실행',
   'ai.permission.ask.delete': '파일 삭제',
   'ai.permission.ask.edit': '파일 편집',
@@ -394,9 +395,6 @@ export const messages = {
   'ai.pins.attention.stopped': '완료되기 전에 중지되었습니다. 핀을 다시 열어 다시 보내세요.',
   'ai.pins.cancelMove': '취소',
   'ai.pins.cancelRun': '보내기 중지',
-  'ai.pins.clearSent': {
-    other: '보낸 핀 {count}개 지우기',
-  },
   'ai.pins.close': '닫기',
   'ai.pins.continue': '계속',
   'ai.pins.cropFailed': '고정한 영역을 캡처할 수 없습니다.',
@@ -409,7 +407,6 @@ export const messages = {
   'ai.pins.detachedTip': '이 핀의 요소가 더 이상 이 페이지에 없습니다. 핀을 열어 다른 요소로 옮기세요.',
   'ai.pins.discard': '핀 버리기',
   'ai.pins.discardedToast': '핀 {number}의 변경 사항을 버렸습니다',
-  'ai.pins.done': '완료',
   'ai.pins.elementIn': '{file}의 요소',
   'ai.pins.elementWithText': '{element} “{text}”', // same
   'ai.pins.empty': '아직 핀이 없습니다',
@@ -421,12 +418,19 @@ export const messages = {
     other: '핀 하나에는 이미지를 최대 {count}개까지 넣을 수 있습니다.',
   },
   'ai.pins.imagesTooLarge': '핀 이미지의 전체 크기가 너무 큽니다. 일부를 먼저 제거하세요.',
-  'ai.pins.include': '핀 {number}을(를) 모두 보내기에 포함',
+  'ai.pins.include': '다음 보내기에 핀 {number} 포함',
   'ai.pins.jump': '핀 {number}(으)로 이동',
+  'ai.pins.leave': '댓글 모드 종료',
   'ai.pins.list': {
     other: '핀 {count}개',
   },
+  'ai.pins.listAttention': {
+    other: '확인 필요 {count}개',
+  },
   'ai.pins.listLabel': '댓글 핀',
+  'ai.pins.listWorking': {
+    other: '작업 중 {count}개',
+  },
   'ai.pins.marker': '핀 {number}: {element}',
   'ai.pins.messageLabel': {
     other: '댓글 핀 {count}개가 포함된 메시지',
@@ -467,8 +471,8 @@ export const messages = {
   'ai.pins.send.subagents': '포함된 모든 핀을 메시지 하나로 보냅니다. 채팅에서 핀마다 전용 하위 에이전트가 배정됩니다.',
   'ai.pins.send.tooManyImages': '메시지 하나에 담기에는 이미지가 너무 많습니다. 이미지를 일부 제거하거나 핀 몇 개를 제외하세요.',
   'ai.pins.send.tooManyPins': '메시지 하나에 담기에는 핀이 너무 많습니다. 일부를 제외하고 나머지를 먼저 보내세요.',
-  'ai.pins.sendAll': {
-    other: '모두 보내기 ({count})',
+  'ai.pins.sendCount': {
+    other: '{count}개 보내기',
   },
   'ai.pins.summaryLine': '핀 {number}: {comment}',
   'ai.pins.summaryTitle': {
@@ -674,9 +678,9 @@ export const messages = {
   'ai.status.phase.thinking': '생각 중',
   'ai.status.phase.waiting': '응답 대기 중',
   'ai.step.build': '프로젝트를 빌드했습니다',
-  'ai.step.check': '서식과 린트를 확인했습니다',
+  'ai.step.check': '코드에 실수가 없는지 확인했습니다',
   'ai.step.commandMany': {
-    other: '명령 {count}개를 실행했습니다',
+    other: '프로젝트에서 작업 {count}개를 실행했습니다',
   },
   'ai.step.commit': '변경 사항을 커밋했습니다',
   'ai.step.commitMany': {
@@ -707,9 +711,9 @@ export const messages = {
     other: '스크립트 {count}개를 실행했습니다',
   },
   'ai.step.scriptNamed': '{name}을(를) 실행했습니다',
-  'ai.step.searchFor': '프로젝트에서 “{query}”을(를) 검색했습니다',
+  'ai.step.searchFor': '프로젝트에서 “{query}”을(를) 찾아봤습니다',
   'ai.step.searchMany': {
-    other: '프로젝트를 {count}번 검색했습니다',
+    other: '프로젝트를 {count}번 살펴봤습니다',
   },
   'ai.step.test': '테스트를 실행했습니다',
   'ai.step.web': '웹에서 무언가를 찾아봤습니다',
@@ -719,7 +723,7 @@ export const messages = {
   'ai.steps.earlier': {
     other: '이전 단계 {count}개',
   },
-  'ai.steps.hideCommands': '명령 숨기기',
+  'ai.steps.hideCommands': '기술 세부 정보 숨기기',
   'ai.steps.label': '단계',
   'ai.steps.more': {
     other: '{count}개는 표시되지 않음',
@@ -727,7 +731,7 @@ export const messages = {
   'ai.steps.running': {
     other: '{count}개 실행 중',
   },
-  'ai.steps.showCommands': '명령 표시',
+  'ai.steps.showCommands': '기술 세부 정보 표시',
   'ai.steps.summary': '{tasks}, {running}', // same
   'ai.steps.tasks': {
     other: '작업 {count}개',
@@ -821,12 +825,11 @@ export const messages = {
   },
   'ai.subagents.followUp': '후속 메시지',
   'ai.subagents.label': '에이전트',
-  'ai.subagents.model.inherited': '{model} (상속됨)',
-  'ai.subagents.model.session': '세션 모델',
+  'ai.subagents.modelLine': '모델: {model}',
   'ai.subagents.more': {
     other: '이전 에이전트 {count}개 숨김',
   },
-  'ai.subagents.openTranscript': '대화 기록 열기',
+  'ai.subagents.openTranscript': '모든 단계 보기',
   'ai.subagents.result': '결과',
   'ai.subagents.running': {
     other: '에이전트 {count}개 작업 중',
@@ -877,13 +880,13 @@ export const messages = {
   'ai.toolName.findFiles': '파일을 찾았습니다',
   'ai.toolName.findTool': '도구를 찾았습니다',
   'ai.toolName.followUp': '후속 메시지를 보냈습니다',
-  'ai.toolName.generic': '도구를 사용했습니다',
+  'ai.toolName.generic': '한 단계를 진행했습니다',
   'ai.toolName.helper': '도우미를 시작했습니다',
   'ai.toolName.plan': '계획을 제안했습니다',
   'ai.toolName.read': '파일을 읽었습니다',
   'ai.toolName.readWebPage': '웹페이지를 읽었습니다',
-  'ai.toolName.run': '명령을 실행했습니다',
-  'ai.toolName.searchCode': '프로젝트를 검색했습니다',
+  'ai.toolName.run': '프로젝트에서 작업을 실행했습니다',
+  'ai.toolName.searchCode': '프로젝트를 살펴봤습니다',
   'ai.toolName.searchWeb': '웹을 검색했습니다',
   'ai.toolName.session': '세션을 시작했습니다',
   'ai.toolName.skill': '스킬을 사용했습니다',
@@ -896,10 +899,13 @@ export const messages = {
   'ai.transcript.label': '대화',
   'ai.transcript.showEarlier': '이전 항목 {count}개 보기',
   'ai.transcript.workedFor': '{duration} 동안 작업함',
-  'ai.trust.allow': '이 프로젝트에서 허용',
-  'ai.trust.text':
-    'Claude와 Codex는 이 프로젝트의 모든 것을 읽고, 변경하고, 실행할 수 있습니다. 편집 내용은 즉시 적용되며, 이후 파일마다 유지하거나 실행 취소할 수 있습니다.',
-  'ai.trust.title': '이 프로젝트에서 에이전트가 작업하도록 허용할까요?',
+  'ai.trust.allow': '에이전트 허용',
+  'ai.trust.allowing': '허용 중…',
+  'ai.trust.notSaved': '이 프로젝트에서 에이전트를 허용할 수 없습니다. 다시 시도해 주세요.',
+  'ai.trust.pointAccess': '에이전트는 이 프로젝트의 모든 것을 읽고, 변경하고, 실행할 수 있습니다.',
+  'ai.trust.pointLive': '편집 내용은 파일에 즉시 적용됩니다.',
+  'ai.trust.pointReview': '이후 변경된 파일마다 유지하거나 실행 취소할 수 있습니다.',
+  'ai.trust.title': '이 프로젝트에서 에이전트를 허용할까요?',
   'ai.turn.done': '완료.',
   'ai.turn.error': '문제가 발생했습니다.',
   'ai.turn.maxRequests': '에이전트가 메시지 하나에 대한 단계 한도에 도달했습니다.',
