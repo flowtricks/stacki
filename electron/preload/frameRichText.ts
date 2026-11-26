@@ -9,12 +9,18 @@
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
 import { ownClasses } from './frameMeasure';
+import { pasteRichText } from '../../shared/page/richPaste';
 import { holdTextEditing, styleTextEditor } from './frameTextEditing';
 import { installRichPointer, openingCaret } from './frameRichCaret';
 import {
   createRichHistory,
+  deleteBesideRichMedia,
+  keepTypingInBlocks,
+  selectRichMedia,
   insertRichBlocks,
   isSpareRichLine,
+  leaveQuoteOnEnter,
+  withoutTypingResidue,
   richCaret,
   richElement,
   tidyRichContent,
@@ -29,8 +35,22 @@ export interface RichTextCallbacks {
   /** The content as HTML and where the caret's block is (element positions: a block, then a list item), said when
    *  either changes, for whoever shows the node being typed. Nothing is saved by it. */
   readonly draft: (html: string, caret: readonly number[]) => void;
+  /** Names this edit: the host's answers about its save carry it. */
+  readonly edit: string;
   /** The instance's content as HTML, posted once when an edit is kept; undefined when nothing changed or it was cancelled. */
-  readonly done: (html: string | undefined) => void;
+  readonly done: (html: string | undefined, base: string) => void;
+  /** A kept edit did not reach the page: the editor is to open again on what was typed, which is still on screen. */
+  readonly unsaved: (kept: RichTextKept) => void;
+  /** No rendering and no answer came for a kept edit. */
+  readonly unconfirmed: () => void;
+}
+
+/** What an editor opened again after an unsaved edit starts from: what the first one opened on. */
+export interface RichTextKept {
+  readonly original: readonly ChildNode[];
+  readonly snapshot: readonly Node[];
+  readonly startHTML: string;
+  readonly opened: string;
 }
 
 /** Elements a session reads back, and the depth it walks a block for, both bounded. */
@@ -39,6 +59,79 @@ const RICH_LIMITS = { childrenMax: 2_000, depthMax: 64 } as const;
 const SHOWN_SAVE_MS_MAX = 20_000;
 /** How long a blur waits for the host to say the press was on its `+`: one message across frames, well inside a frame. */
 const HOLD_WAIT_MS = 120;
+
+// Boxes still showing a saved edit as it was typed, until its rendering arrives and takes them back.
+const awaiting = new Map<Element, () => void>();
+
+/** Whether `element` is in (or holds) words still waiting for their rendering: an edit opened there now would be
+ *  swept away when it lands, with what was typed into it. */
+export function awaitingRichRender(element: Element): boolean {
+  return Array.from(awaiting.keys()).some((box) => box.isConnected && (box.contains(element) || element.contains(box)));
+}
+
+// A kept edit on screen until the page answers: its rendering (the rendered nodes go back first, so the patch finds
+// them) or the host's word that nothing changed; or its refusal, or silence past the bound, after which the editor is
+// opened again on what was typed.
+function showUntilRendered(entry: {
+  readonly container: Element;
+  readonly edit: string;
+  readonly putBack: () => void;
+  readonly unsaved: () => void;
+  readonly unconfirmed: () => void;
+}): void {
+  const { container, putBack, unsaved, unconfirmed } = entry;
+  const shown = new AbortController();
+  const end = () => {
+    clearTimeout(timer);
+    shown.abort();
+    awaiting.delete(container);
+  };
+  const settle = () => {
+    end();
+    putBack();
+  };
+  const keep = () => {
+    end();
+    unsaved();
+  };
+  const timer = setTimeout(() => {
+    unconfirmed();
+    keep();
+  }, SHOWN_SAVE_MS_MAX);
+  awaiting.set(container, settle);
+  document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
+  window.addEventListener(
+    'message',
+    (event) => {
+      const data: unknown = event.data;
+      const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
+      const mine = typeof data === 'object' && data !== null && 'edit' in data && data.edit === entry.edit;
+      if (type === 'avb:rich-settled' && mine) {
+        settle();
+      } else if ((type === 'avb:rich-refused' && mine) || type === 'avb:insert-revert' || type === 'avb:move-revert') {
+        keep();
+      }
+    },
+    { signal: shown.signal },
+  );
+}
+
+/** Gives up on a rendering that has not come: the boxes holding `element` show the page's own nodes again. */
+export function settleRichRender(element: Element): void {
+  for (const [box, settle] of Array.from(awaiting)) {
+    if (box.contains(element) || element.contains(box)) {
+      settle();
+    }
+  }
+}
+
+// HTML as a reader compares it: no spacing at a tag's edges, runs of whitespace as one space.
+function withoutSpacing(html: string): string {
+  return html
+    .replaceAll('&nbsp;', ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/ ?(<[^<>]*>) ?/g, '$1');
+}
 
 /**
  * Where the editor works: `rich`, the element holding a component instance's blocks (found from the block double
@@ -57,7 +150,7 @@ export function holdsInlineWords(element: Element): boolean {
   return all.length <= RICH_LIMITS.childrenMax && all.every((child) => INLINE_ELEMENTS.has(child.tagName));
 }
 
-export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, callbacks: RichTextCallbacks) {
+export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, callbacks: RichTextCallbacks, kept?: RichTextKept) {
   const container = place.kind === 'line' ? place.container : instanceBlock(place.block, place.richRoot)?.parentElement;
   if (!(container instanceof HTMLElement) || container.childNodes.length > RICH_LIMITS.childrenMax) {
     return undefined;
@@ -65,11 +158,12 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   if (place.kind === 'line' && !holdsInlineWords(container)) {
     return undefined;
   }
-  const original = Array.from(container.childNodes);
-  const snapshot = original.map((node) => node.cloneNode(true));
+  const original = kept?.original ?? Array.from(container.childNodes);
+  const snapshot = kept?.snapshot ?? original.map((node) => node.cloneNode(true));
   const read = () => withoutTrailingCaretBreak(place.kind === 'line' ? readWholeHTML(container) : readInstanceHTML(container, original, place.richRoot));
-  const kept = () => (place.kind === 'rich' ? withoutTrailingEmptyBlocks(read()) : read());
-  const startHTML = kept();
+  const opened = kept?.opened ?? read();
+  const written = () => (place.kind === 'rich' ? savedRich(read(), opened) : savedLine(read(), opened));
+  const startHTML = kept?.startHTML ?? written();
   const history = createRichHistory(container);
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
@@ -82,6 +176,15 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   const controller = new AbortController();
   const listen = { capture: true, signal: controller.signal };
   let closed = false;
+  // A rendering that arrived while this editor was open: the nodes it opened on are not the page's latest.
+  let rendered = false;
+  document.addEventListener(
+    'avb:before-morph',
+    () => {
+      rendered = true;
+    },
+    { signal: controller.signal },
+  );
   const finish = (action: 'apply' | 'cancel') => {
     if (closed) {
       return;
@@ -90,34 +193,24 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     controller.abort();
     release();
     callbacks.plus(undefined);
-    const html = action === 'apply' ? kept() : undefined;
-    const saved = html !== undefined && html !== startHTML;
+    const html = action === 'apply' ? written() : undefined;
+    // Whitespace alone is no change: the host writes nothing for it, so no rendering would ever take it back.
+    const saved = html !== undefined && withoutSpacing(html) !== withoutSpacing(startHTML);
     // The rendered nodes go back before the preview patches (its patch knows its own nodes, and one made here would stay
     // beside the rendered one), but not before: a save keeps showing what was typed until its rendering arrives, so a
     // break or a paragraph shows at once. Bounded, as the canvas's other shown edits are.
     const putBack = () => container.replaceChildren(...snapshot);
     if (saved) {
-      // Put back at the rendering, or at once when the host refuses the save (its take-back messages, as for the
-      // canvas's other shown edits), so the page never keeps showing an edit the file did not get.
-      const shown = new AbortController();
-      const settle = () => {
-        clearTimeout(timer);
-        shown.abort();
-        putBack();
-      };
-      const timer = setTimeout(settle, SHOWN_SAVE_MS_MAX);
-      document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
-      window.addEventListener(
-        'message',
-        (event) => {
-          const data: unknown = event.data;
-          const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
-          if (type === 'avb:insert-revert' || type === 'avb:move-revert') {
-            settle();
-          }
-        },
-        { signal: shown.signal },
-      );
+      // The rendered nodes go back at the rendering, or when the host says nothing changed, so a break or a paragraph
+      // shows at once. When the host refuses the save, or nothing comes at all, what was typed stays on screen and the
+      // editor opens on it again: typed words are never taken away unsaved.
+      showUntilRendered({
+        container,
+        edit: callbacks.edit,
+        putBack,
+        unsaved: () => callbacks.unsaved({ original, snapshot, startHTML, opened }),
+        unconfirmed: callbacks.unconfirmed,
+      });
     } else {
       putBack();
     }
@@ -129,7 +222,12 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     container.removeAttribute('data-avb-text-editor');
     container.removeAttribute('data-avb-text-blocks');
     container.blur();
-    callbacks.done(saved ? html : undefined);
+    callbacks.done(saved ? html : undefined, startHTML);
+    if (!saved && rendered && kept !== undefined) {
+      // Unsaved words were left behind after the page had moved on: what went back is older than the page, and only
+      // loading it again is sure to show it.
+      window.location.reload();
+    }
   };
   // Whether the latest press began in the editor: a drag is decided by where it began.
   let pressed = false;
@@ -147,15 +245,31 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
         return;
       }
       event.stopImmediatePropagation();
+      plainPaste = (event.metaKey || event.ctrlKey) && event.shiftKey && event.code === 'KeyV';
       // Escape leaves without saving, a click elsewhere saves (the session's dismiss). Enter: in rich text a new block (the
       // browser's own, a paragraph after a heading or quote, an item in a list, out of an empty one); in a line of words
       // a line break. ⌘/Ctrl Enter, and Shift Enter, a line break inside the block in both.
+      if (place.kind === 'rich' && (event.key === 'Backspace' || event.key === 'Delete') && deleteBesideRichMedia(container, history, event.key)) {
+        event.preventDefault();
+        report();
+        return;
+      }
       if (undoneBlocks(history, event)) {
         event.preventDefault();
         report();
       } else if (event.key === 'Escape') {
         event.preventDefault();
         finish('cancel');
+      } else if (
+        event.key === 'Enter' &&
+        place.kind === 'rich' &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        leaveQuoteOnEnter(container, history)
+      ) {
+        event.preventDefault();
+        report();
       } else if (event.key === 'Enter' && (place.kind === 'line' || event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         document.execCommand('insertLineBreak');
@@ -164,6 +278,61 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     },
     listen,
   );
+  // A paste keeps its structure and none of its styles, blocks beside the caret's block, never inside it. Nothing is
+  // dropped in: the browser would write what it is given, styles and all, wherever the pointer is.
+  let plainPaste = false;
+  window.addEventListener(
+    'paste',
+    (event) => {
+      if (!(event.target instanceof Node) || !container.contains(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const data = event.clipboardData ?? undefined;
+      if (data !== undefined) {
+        pasteRichText(
+          { host: container, history, kind: place.kind, media: place.kind === 'rich' },
+          { html: data.getData('text/html'), text: data.getData('text/plain'), plain: plainPaste },
+        );
+        report();
+      }
+      plainPaste = false;
+    },
+    listen,
+  );
+  window.addEventListener(
+    'drop',
+    (event) => {
+      if (event.target instanceof Node && container.contains(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    listen,
+  );
+  if (place.kind === 'rich') {
+    // A press on an image selects it, so the next Backspace takes it; words never go in loose between the blocks.
+    window.addEventListener(
+      'mouseup',
+      (event) => {
+        const pressed = event.target;
+        if (event.button === 0 && pressed instanceof Element && container.contains(pressed) && pressed.matches('img, video, hr')) {
+          selectRichMedia(pressed);
+        }
+      },
+      listen,
+    );
+    container.addEventListener(
+      'beforeinput',
+      (event) => {
+        if (event.inputType === 'insertText') {
+          keepTypingInBlocks(container, history);
+        }
+      },
+      { signal: controller.signal },
+    );
+  }
   // What is typed, said once the browser has finished the change that raised it, and only when it differs.
   let said = '';
   let saying: ReturnType<typeof setTimeout> | undefined;
@@ -206,7 +375,10 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
   installRichPointer(container, ownsContent, controller.signal);
   container.focus({ preventScroll: true });
   // The caret where the double click was: focusing an editable element would otherwise put it at the element's start.
-  openingCaret(container, ownsContent, at);
+  // Opened again on unsaved words, it stays where the browser left it.
+  if (kept === undefined) {
+    openingCaret(container, ownsContent, at);
+  }
   report();
   return {
     finish,
@@ -221,6 +393,14 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     },
     hold: () => {
       held = true;
+    },
+    /** The `+`'s menu or address field closed with nothing chosen: typing goes on where the caret was. */
+    resume: () => {
+      held = false;
+      if (!closed) {
+        focusKeepingCaret(container);
+        report();
+      }
     },
     choose: (choice: RichBlockChoice) => {
       held = false;
@@ -285,6 +465,20 @@ export function readInstanceHTML(container: Element, original: readonly Node[], 
   }
   assert(parts.length <= RICH_LIMITS.childrenMax, 'Rich text reads a bounded number of blocks');
   return parts.join('');
+}
+
+// What a rich text edit writes: the blocks without what typing leaves behind.
+function savedRich(html: string, opened: string): string {
+  return withoutTrailingEmptyBlocks(savedLine(html, opened));
+}
+
+function savedLine(html: string, opened: string): string {
+  const holder = document.createElement('template');
+  holder.innerHTML = html;
+  const root = document.createElement('div');
+  root.append(holder.content);
+  withoutTypingResidue(root, opened);
+  return root.innerHTML;
 }
 
 // One block's copy as valid HTML: it may become several (a list the browser left inside a paragraph moves out).
@@ -399,14 +593,7 @@ function undoneBlocks(history: RichHistory, event: KeyboardEvent): boolean {
  * paragraph the caret is in.
  */
 export function applyRichChoice(container: HTMLElement, history: RichHistory, choice: RichBlockChoice): void {
-  // Focus comes back from the host's menu; the caret it left in the empty block is put back, not reset by the focus.
-  const selection = window.getSelection();
-  const kept = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : undefined;
-  container.focus({ preventScroll: true });
-  if (kept !== undefined && container.contains(kept.startContainer)) {
-    selection?.removeAllRanges();
-    selection?.addRange(kept);
-  }
+  focusKeepingCaret(container);
   const place = (element: Element) => history.record(() => insertRichBlocks(container, richCaret(container), [element]));
   switch (choice.kind) {
     case 'block':
@@ -430,6 +617,17 @@ export function applyRichChoice(container: HTMLElement, history: RichHistory, ch
       const exhaustive: never = choice;
       return exhaustive;
     }
+  }
+}
+
+// Focus comes back from the host's menu; the caret it left in the empty block is put back, not reset by the focus.
+function focusKeepingCaret(container: HTMLElement): void {
+  const selection = window.getSelection();
+  const kept = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : undefined;
+  container.focus({ preventScroll: true });
+  if (kept !== undefined && container.contains(kept.startContainer)) {
+    selection?.removeAllRanges();
+    selection?.addRange(kept);
   }
 }
 

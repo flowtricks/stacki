@@ -67,6 +67,8 @@ export interface PropsPanelProps {
   readonly onSetContentSource?: ((source: string) => void) | undefined;
   /** The selected node's content as the file holds it (the bytes between its tags); undefined when it cannot be read. */
   readonly contentSource?: string | undefined;
+  /** `contentSource` with each imported image and video shown as its path, for the rich text editor. */
+  readonly contentShown?: string | undefined;
   /** Restates the selected text or expression node as these pieces (TextConnectField.tsx); absent where the host cannot. */
   readonly onSetTextPieces?: ((pieces: readonly TextPiece[]) => void) | undefined;
   readonly onOpenCode?: () => void;

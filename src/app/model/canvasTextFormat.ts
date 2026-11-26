@@ -12,7 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { CanvasTextBreaks } from '../../../shared/properties/canvasText';
 import type { EditingSettings } from '../../../shared/properties/componentDefaults';
-import { plainChildrenHTML, richTextNodes, richTextView, sameRichContent } from '../../features/props/richTextContent';
+import { plainChildrenHTML, richTextNodes, richTextView, sameRichContent, withoutLayoutSpace } from '../../features/props/richTextContent';
 import { LIMITS } from '../../../shared/core/limits';
 import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineCandidate, type InlineNode } from '../../features/props/richContentModel';
 import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
@@ -27,7 +27,8 @@ import type { CanvasTextFormatter } from '../../features/preview/useCanvasText';
  */
 export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & InlineCandidate>(
   nodes: readonly Node[],
-  setInline: (rootId: string, children: readonly InlineNode[]) => void,
+  /** False: nothing was written now (the editor is saving something else, or the node is gone). */
+  setInline: (rootId: string, children: readonly InlineNode[]) => boolean,
 ): CanvasTextFormatter {
   const contentOf = (textId: string) => {
     const found = inlineRootOf(nodes, textId);
@@ -73,25 +74,33 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       return splitIntoParagraphs(nodes, { rootId: content.rootId, children: typed, trail: content.trail }, setInline);
     },
     contentOwner: (textId, breaks) => contentOwnerOf(nodes, textId, breaks)?.id,
-    richText: (textId, html, breaks) => {
-      const instance = contentOwnerOf(nodes, textId, breaks);
+    content: (ownerId) => {
+      const instance = nodeById(nodes, ownerId);
+      return instance === undefined ? undefined : plainChildrenHTML(instance.children);
+    },
+    richText: (ownerId, html, bases) => {
+      const instance = nodeById(nodes, ownerId);
       if (instance?.id === undefined || richTextView(html, document).view !== 'rich') {
-        return false;
+        return 'refused';
       }
       const before = plainChildrenHTML(instance.children);
       if (before === undefined) {
-        return false; // The content holds more than rich text since the editor opened: never write over it.
+        return 'conflict'; // The content holds more than rich text since the editor opened: never write over it.
       }
       if (sameRichContent(before, html, document)) {
-        return true; // Nothing a reader would see changed: the file keeps its bytes.
+        return 'unchanged'; // Nothing a reader would see changed: the file keeps its bytes.
       }
-      const next = richTextNodes(html, document);
+      if (!bases.some((base) => sameRichContent(before, base, document))) {
+        return 'conflict';
+      }
+      // The blocks the page already held keep the file's own line breaks around them in the frame; the printer lays the
+      // content out itself, and would write those as blank lines.
+      const next = withoutLayoutSpace(richTextNodes(html, document));
       // A line of words stays one: blocks typed into content the component may draw inside a <p> are refused.
       if (isInlineOnly(instance.children ?? []) && next.length > 0 && !isInlineOnly(next)) {
-        return false;
+        return 'refused';
       }
-      setInline(instance.id, next);
-      return true;
+      return setInline(instance.id, next) ? 'written' : 'busy';
     },
   };
 }
@@ -273,6 +282,18 @@ function attributesOf(props: InlineCandidate['props']): Record<string, Attr> {
     }
   }
   return out;
+}
+
+function nodeById<Node extends CanvasFormatTree<Node>>(nodes: readonly Node[], id: string): Node | undefined {
+  const stack: Node[] = [...nodes];
+  for (let visited = 0; visited < LIMITS.treeNodesMax; visited += 1) {
+    const node = stack.pop();
+    if (node === undefined || node.id === id) {
+      return node;
+    }
+    stack.push(...(node.children ?? []));
+  }
+  return undefined;
 }
 
 function parentOf<Node extends CanvasFormatTree<Node>>(nodes: readonly Node[], id: string): Node | undefined {
@@ -526,13 +547,10 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
       continue;
     }
     const settings = settingsOf(node);
-    // Read from the instance's children, not from a source the parser may leave out: anything but plain markup
-    // (a component, an expression) keeps Enter as it was.
-    const html = settings.richText === true ? plainChildrenHTML(node.children) : undefined;
-    const rich = html !== undefined && richTextView(html, document).view === 'rich';
+    const rich = holdsRichText(node, settings);
     // Content that is one line of words (a Paragraph's) has no block to start a paragraph after, and the component may
     // draw it inside a <p>, where a paragraph is invalid HTML: with rich text on it takes line breaks, as with breaks on.
-    const words = (node.children ?? []).length === 0 || isInlineOnly(node.children);
+    const words = isLineOfWords(node);
     const richRoot = rich && !words && node.id !== undefined ? pathFor(node.id) : undefined;
     for (const child of node.children ?? []) {
       if (richRoot !== undefined) {
@@ -543,6 +561,39 @@ export function canvasTextBreaksOf<Node extends CanvasFormatTree<Node> & InlineC
     }
   }
   return breaks;
+}
+
+// Read from the instance's children, not from a source the parser may leave out: anything but plain markup (a
+// component, an expression) keeps Enter as it was.
+function holdsRichText<Node extends CanvasFormatTree<Node> & InlineCandidate>(node: Node, settings: EditingSettings): boolean {
+  const html = settings.richText === true ? plainChildrenHTML(node.children) : undefined;
+  return html !== undefined && richTextView(html, document).view === 'rich';
+}
+
+function isLineOfWords<Node extends CanvasFormatTree<Node> & InlineCandidate>(node: Node): boolean {
+  return (node.children ?? []).length === 0 || isInlineOnly(node.children);
+}
+
+/** The page paths of the instances whose blocks are typed in as rich text, those with no words among them. */
+export function canvasRichRootsOf<Node extends CanvasFormatTree<Node> & InlineCandidate>(
+  nodes: readonly Node[],
+  pathFor: (id: string) => string | undefined,
+  settingsOf: (component: Node) => EditingSettings,
+): readonly string[] {
+  const roots: string[] = [];
+  const pending: Node[] = [...nodes];
+  for (let visited = 0; visited < LIMITS.treeNodesMax && pending.length > 0; visited += 1) {
+    const node = pending.pop();
+    assert(node !== undefined, 'The stack held a node');
+    pending.push(...(node.children ?? []));
+    if (node.kind === 'component' && node.id !== undefined && !isLineOfWords(node) && holdsRichText(node, settingsOf(node))) {
+      const root = pathFor(node.id);
+      if (root !== undefined) {
+        roots.push(root);
+      }
+    }
+  }
+  return roots;
 }
 
 // A block's words, and a list's items' words.

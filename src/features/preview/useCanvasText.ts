@@ -11,12 +11,15 @@ import {
   CANVAS_BLOCKED_LIMIT,
   canvasTextUnfolded,
   parseCanvasTextEvent,
+  type CanvasRichEditName,
   type CanvasTextCatalog,
   type CanvasTextRunValue,
 } from '../../../shared/properties/canvasText';
 import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import { onCanvasTextRefresh } from './canvasTextRefresh';
+import { createCanvasRichSaver, richOwnerOf, type CanvasRichEdit, type CanvasRichSave, type CanvasRichSaveHost, type RichWritten } from './canvasRichSave';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { canvasSourceCue, clearCanvasSourceCue } from '../../ui/canvasTextSourceCue';
 import {
   CANVAS_FOCUS_PATHS_MAX,
@@ -52,6 +55,8 @@ export interface CanvasTextDocument {
   readonly format?: CanvasTextFormatter | undefined;
   /** What Enter types in the text at a page path, from its component's editing settings. Absent: Enter finishes, as before. */
   readonly breaks?: ((textPath: string) => { readonly breaks: CanvasTextBreaks; readonly richRoot?: string } | undefined) | undefined;
+  /** The page paths of the instances whose blocks are edited as rich text, with words or without. */
+  readonly richBoxes?: (() => readonly string[]) | undefined;
   /** What `breaks` is read from (the editing settings); a new value rebuilds the catalog, as `components` does. */
   readonly settings?: unknown;
 }
@@ -67,8 +72,13 @@ export interface CanvasTextFormatter {
   readonly breaks?: (textId: string, breaks: CanvasTextBreaks, value: string) => boolean;
   /** The node whose children a canvas edit of this text writes (what `richText` writes over). */
   readonly contentOwner?: (textId: string, breaks: CanvasTextBreaks | undefined) => string | undefined;
-  /** Rich text the canvas left in the instance that holds this text, written as its content. False: refused, nothing written. */
-  readonly richText?: (textId: string, html: string, breaks: CanvasTextBreaks | undefined) => boolean;
+  /** A node's content as rich text, or undefined when it holds more than that. */
+  readonly content?: (ownerId: string) => string | undefined;
+  /**
+   * Rich text the canvas left, written as the content of `ownerId`. `bases` is what the editor started from: content
+   * that matches none of them changed meanwhile and is not written over (`conflict`).
+   */
+  readonly richText?: (ownerId: string, html: string, bases: readonly string[]) => RichWritten;
 }
 interface Options {
   readonly document: CanvasTextDocument | undefined;
@@ -84,12 +94,16 @@ export function useCanvasText(options: Options): void {
   const translate = useTranslate();
   const current = useRef(options);
   current.current = { ...options, translate };
+  // One for as long as the canvas lives: a save outlives the catalog it was typed under.
+  const richRef = useRef<ReturnType<typeof createCanvasRichSaver>>();
+  richRef.current ??= createCanvasRichSaver();
+  const richSaver = richRef.current;
   const document = options.document;
   const file = document?.file;
   const source = document?.source;
   const components = document?.components;
   const settings = document?.settings;
-  useEffect(() => startCanvasText(current), [file, source, components, settings]);
+  useEffect(() => startCanvasText(current, richSaver), [file, source, components, settings, richSaver]);
   const focus = (document?.focus ?? []).join('\n');
   useEffect(() => startCanvasFocus(current, focus), [focus]);
 }
@@ -104,7 +118,7 @@ function startCanvasFocus(current: RefObject<Options>, focus: string) {
   return current.current?.subscribeLoad(send);
 }
 
-function startCanvasText(current: RefObject<Options>) {
+function startCanvasText(current: RefObject<Options>, richSaver: ReturnType<typeof createCanvasRichSaver>) {
   const initial = current.current?.document;
   if (!initial) {
     return;
@@ -140,6 +154,7 @@ function startCanvasText(current: RefObject<Options>) {
     initial,
     session,
     overlay,
+    richSaver,
     plans: () => plans,
   });
   window.addEventListener('message', receive);
@@ -167,6 +182,7 @@ interface CanvasTextReceiverOptions {
   readonly initial: CanvasTextDocument;
   readonly session: string;
   readonly overlay: ReturnType<typeof createCanvasTextOverlay>;
+  readonly richSaver: ReturnType<typeof createCanvasRichSaver>;
   readonly plans: () => readonly CanvasTextEdit[];
 }
 
@@ -209,20 +225,18 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
       receiveCanvasSelection(message, { ...options, nodes, takeover });
       return;
     }
+    if (message.type === 'avb:rich-draft') {
+      // By the edit's own name, so rich text opened with no words to name it is followed too.
+      options.richSaver.opened(richEditOf(message.edit), options.current.current?.document);
+      publishLiveContent(richEditOf(message.edit), message, options);
+      return;
+    }
     const plan = options.plans().find((entry) => entry.target.key === message.key);
     if (!plan) {
       return;
     }
     if (message.type === 'avb:text-draft') {
       publishCanvasDraft(plan, nodes.get(plan.target.path), message.value, options);
-      return;
-    }
-    if (message.type === 'avb:rich-draft') {
-      publishLiveContent(plan, message, { ...options, nodes });
-      return;
-    }
-    if (message.type === 'avb:rich-save') {
-      saveRichText(plan, message.html, { ...options, nodes });
       return;
     }
     if (savedWithBreaks(plan, message, { ...options, nodes })) {
@@ -243,30 +257,50 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
 
 // The block editor's content as it is typed, for whoever shows the node it will be written to (ui/liveContent.ts).
 // Nothing is written to the file until the editor saves.
-function publishLiveContent(
-  plan: CanvasTextEdit,
-  message: { readonly html: string; readonly caret: readonly number[] },
-  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
-) {
-  const node = options.nodes.get(plan.target.path);
-  const nodeID = node?.kind === 'text' && node.id !== undefined ? options.initial.format?.contentOwner?.(node.id, plan.target.breaks) : undefined;
+function publishLiveContent(edit: CanvasRichEdit, message: { readonly html: string; readonly caret: readonly number[] }, options: CanvasTextReceiverOptions) {
+  const document = options.current.current?.document;
+  const nodeID = document === undefined ? undefined : richOwnerOf(edit, document);
   if (nodeID !== undefined) {
     setLiveContent({ owner: options.session, nodeID, html: message.html, caret: message.caret });
   }
 }
 
+function wordsOf(html: string): string {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  return Array.from(template.content.childNodes, (node) => node.textContent ?? '').join('\n');
+}
+
+function richEditOf(name: CanvasRichEditName) {
+  return { edit: name.id, file: name.file, root: name.root, breaks: name.breaks };
+}
+
 // Rich text typed in a component instance on the canvas: written as the instance's content, the way the rich text
 // dialog writes it, after the host has checked it is plain rich text. One edit, so one undo step.
-function saveRichText(
-  plan: CanvasTextEdit,
-  html: string,
-  options: CanvasTextReceiverOptions & { readonly nodes: ReadonlyMap<string | undefined, CanvasSourceNode> },
-) {
-  const node = options.nodes.get(plan.target.path);
-  const written = node?.kind === 'text' && node.id !== undefined && options.initial.format?.richText?.(node.id, html, plan.target.breaks);
-  if (written !== true) {
-    options.initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.cannotFormat'));
-  }
+function saveRichText(save: CanvasRichSave, options: CanvasTextReceiverOptions) {
+  const answer = (type: 'avb:rich-refused' | 'avb:rich-settled', edit: string) => options.current.current?.post({ type, edit });
+  const host: CanvasRichSaveHost = {
+    document: () => options.current.current?.document,
+    unchanged: (saved) => answer('avb:rich-settled', saved.edit),
+    refused: (why, saved) => {
+      const translate = options.current.current?.translate ?? ENGLISH_TRANSLATE;
+      const message = translate(why === 'conflict' ? 'preview.text.sourceChanged' : 'preview.text.cannotFormat');
+      const report = (options.current.current?.document ?? options.initial).report;
+      if (why === 'conflict') {
+        // The page's newer content is what the canvas shows now, so the typed words are offered here.
+        reportErrorToast(message, [{ label: translate('structure.menu.copy'), run: () => navigator.clipboard.writeText(wordsOf(saved.html)) }]);
+      } else {
+        report(message);
+      }
+      answer('avb:rich-refused', saved.edit);
+    },
+    wait: (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+  };
+  void options.richSaver.save(save, host).catch((error: unknown) => {
+    // A save that threw is as unsaved as a refused one: said, and the typed words kept.
+    options.initial.report(String(error));
+    answer('avb:rich-refused', save.edit);
+  });
 }
 
 // The `+` beside an empty block, placed over the frame in the window's pixels; its choice goes back to the frame.
@@ -287,6 +321,10 @@ function showRichPlus(message: { readonly session: string; readonly rect?: Canva
     box: { x: origin.left + message.rect.x * scale, y: origin.top + message.rect.y * scale, w: message.rect.w * scale, h: message.rect.h * scale },
     // The menu took focus out of the frame; it goes back to the frame first, since a page's script may not take it.
     hold: () => options.current.current?.post({ type: 'avb:rich-hold', session: options.session }),
+    resume: () => {
+      options.current.current?.frame.current?.focus();
+      options.current.current?.post({ type: 'avb:rich-resume', session: options.session });
+    },
     choose: (choice) => {
       options.current.current?.frame.current?.focus();
       options.current.current?.post({ type: 'avb:rich-block', session: options.session, choice });
@@ -374,10 +412,18 @@ function canvasTextSessionMessage(event: MessageEvent<unknown>, options: CanvasT
     options.initial.report(blockedRefusal(message, options.plans(), options.initial.file, translate) ?? refusalText(message, translate));
     return undefined;
   }
-  if (message.session !== options.session) {
+  if (message.type === 'avb:rich-save') {
+    // Never dropped for the catalog it was typed under: it says itself what it is of.
+    saveRichText({ ...richEditOf(message.edit), html: message.html, base: message.base }, options);
     return undefined;
   }
-  if (host.document?.source !== options.initial.source || host.document.file !== options.initial.file) {
+  const stale = message.session !== options.session || host.document?.source !== options.initial.source || host.document.file !== options.initial.file;
+  if (stale) {
+    if (message.type === 'avb:text-save') {
+      // Typed words that cannot be saved are said to be unsaved.
+      const translate = host.translate ?? ENGLISH_TRANSLATE;
+      options.initial.report(translate('preview.text.sourceChanged'));
+    }
     return undefined;
   }
   return message;
@@ -413,12 +459,14 @@ async function publishCanvasTextSession(
       },
     })),
   ];
+  const boxes = document.richBoxes?.().slice(0, CANVAS_BLOCKED_LIMIT) ?? [];
   const catalog: CanvasTextCatalog = {
     type: 'avb:text-catalog',
     session,
     file: document.file,
     checksum,
     targets: plans.map((plan) => plan.target).slice(0, 2_000),
+    ...(boxes.length === 0 ? {} : { boxes }),
   };
   publish({ plans, catalog });
   const content = await document.loadContent(document);

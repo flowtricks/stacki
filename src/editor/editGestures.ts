@@ -341,6 +341,7 @@ export function sequence(first: EditGesture, second: EditGesture): EditGesture {
     coalesceKey: first.coalesceKey,
     urgency: first.urgency,
     stream: undefined,
+    ...(second.restates === undefined ? {} : { restates: second.restates }),
     request: (refOf, origin) => {
       const before = first.request(refOf, origin);
       const after = second.request(refOf, origin);
@@ -456,6 +457,7 @@ export function nodeGesture(nodeId: string, next: EditorNode, options: { readonl
     coalesceKey: options.coalesceKey,
     urgency: options.urgency,
     stream: `node:${nodeId}`,
+    restates: nodeId,
     request: (refOf) => {
       const target = refOf(nodeId);
       if (target === undefined) {

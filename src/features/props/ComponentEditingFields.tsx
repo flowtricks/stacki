@@ -17,6 +17,9 @@ import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export { sameRichContent } from './richTextContent';
 
+// How many of the dialog's own writes it knows as its own when the page answers.
+const RECENT_WRITES_MAX = 32;
+
 // Long lines wrap, as in the panel's other code fields.
 const WRAPPED = [EditorView.lineWrapping];
 
@@ -31,6 +34,8 @@ export function RichTextContentField(props: {
   readonly label: string;
   /** The content as written between the instance's tags; undefined when there is none. */
   readonly source: string | undefined;
+  /** The same content as the editor reads it, when that differs: an imported image shown as its path. */
+  readonly shown?: string | undefined;
   /** Writes the editor's content as the instance's children; or, for HTML a prop holds, `onSetHTML` writes it as text. */
   readonly onSetNodes?: ((nodes: readonly InlineNode[]) => void) | undefined;
   readonly onSetHTML?: ((html: string) => void) | undefined;
@@ -38,7 +43,7 @@ export function RichTextContentField(props: {
   readonly onSetSource: ((source: string) => void) | undefined;
 }) {
   const translate = useTranslate();
-  const decision = richTextView(props.source, document);
+  const decision = richTextView(props.shown ?? props.source, document);
   const [chosen, setChosen] = useState<'rich' | 'code'>('rich');
   const [open, setOpen] = useState(false);
   const view = decision.view === 'code' ? 'code' : chosen;
@@ -98,10 +103,11 @@ export function RichTextContentField(props: {
 function RichTextDialog(props: { readonly label: string; readonly html: string; readonly onWrite: (html: string) => void; readonly onClose: () => void }) {
   const translate = useTranslate();
   const [draft, setDraft] = useState(props.html);
-  const written = useRef(props.html);
+  // What was written lately, newest last: the page may answer an earlier write after a later one was made.
+  const written = useRef<readonly string[]>([props.html]);
   useEffect(() => {
-    if (!sameRichContent(props.html, written.current, document)) {
-      written.current = props.html;
+    if (!written.current.some((html) => sameRichContent(props.html, html, document))) {
+      written.current = [props.html];
       setDraft(props.html);
     }
   }, [props.html]);
@@ -116,7 +122,7 @@ function RichTextDialog(props: { readonly label: string; readonly html: string; 
               label={props.label}
               blocks="insert"
               onChange={(html) => {
-                written.current = html;
+                written.current = [...written.current.slice(1 - RECENT_WRITES_MAX), html];
                 setDraft(html);
                 props.onWrite(html);
               }}

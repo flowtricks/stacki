@@ -123,6 +123,11 @@ export interface CanvasTextCatalog {
   readonly file: string;
   readonly checksum: string;
   readonly targets: readonly CanvasTextTarget[];
+  /**
+   * The rich text instances whose blocks may be typed in, by page path: one with no words (only an image, an empty
+   * paragraph) has no target to find it by.
+   */
+  readonly boxes?: readonly string[];
   /** Data-bound texts a double click cannot edit in place (computed, joined, a call): the frame names them instead of staying silent. */
   readonly blocked?: readonly CanvasTextBlocked[];
 }
@@ -144,6 +149,24 @@ export interface CanvasTextBlocked {
 export interface CanvasTextRunValue {
   readonly key: string;
   readonly value: string;
+}
+
+/**
+ * Which content a canvas rich text edit is of, said with each of its messages, so the host can apply it to the page as
+ * it is then, whatever catalog it holds by that time.
+ */
+export interface CanvasRichEditName {
+  /** Names the edit from its first draft to its save. */
+  readonly id: string;
+  readonly file: string;
+  /** The page path of the instance (rich), or of the edited words (a line of words). */
+  readonly root: string;
+  readonly breaks: CanvasTextBreaks;
+}
+
+function parseRichEditName(input: unknown): CanvasRichEditName {
+  const data = record(input);
+  return { id: pathText(data['id']), file: pathText(data['file']), root: pathText(data['root']), breaks: parseBreaks(data['breaks']) };
 }
 
 export type CanvasTextEvent =
@@ -168,9 +191,18 @@ export type CanvasTextEvent =
       readonly key: string;
       readonly html: string;
       readonly caret: readonly number[];
+      readonly edit: CanvasRichEditName;
     }
   /** The rich text a canvas edit left in a component instance, as HTML the host checks before writing it. */
-  | { readonly type: 'avb:rich-save'; readonly session: string; readonly key: string; readonly html: string }
+  | {
+      readonly type: 'avb:rich-save';
+      readonly session: string;
+      readonly key: string;
+      readonly html: string;
+      readonly edit: CanvasRichEditName;
+      /** The content as the editor opened on it: a save never writes over content that changed since. */
+      readonly base: string;
+    }
   /** Where the `+` of an empty block goes, in the frame's pixels; absent when the caret is not in one. */
   | {
       readonly type: 'avb:rich-plus';
@@ -227,8 +259,17 @@ export function parseCanvasTextCatalog(input: unknown): CanvasTextCatalog {
     file: pathText(data['file']),
     checksum: digest(data['checksum']),
     targets,
+    ...(data['boxes'] === undefined ? {} : { boxes: parseBoxes(data['boxes']) }),
     ...(data['blocked'] === undefined ? {} : { blocked: parseBlocked(data['blocked']) }),
   };
+}
+
+function parseBoxes(input: unknown): readonly string[] {
+  const boxes = list(pathText)(input);
+  if (boxes.length > CANVAS_BLOCKED_LIMIT) {
+    throw new Error('Too many canvas rich text boxes');
+  }
+  return boxes;
 }
 
 function parseBlocked(input: unknown): readonly CanvasTextBlocked[] {
@@ -325,7 +366,14 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         value: canvasTextValue(data['value']),
       };
     case 'avb:rich-save':
-      return { type: 'avb:rich-save', session: pathText(data['session']), key: pathText(data['key']), html: richHTML(data['html']) };
+      return {
+        type: 'avb:rich-save',
+        session: pathText(data['session']),
+        key: pathText(data['key']),
+        html: richHTML(data['html']),
+        edit: parseRichEditName(data['edit']),
+        base: richHTML(data['base']),
+      };
     case 'avb:rich-draft':
       return {
         type: 'avb:rich-draft',
@@ -333,6 +381,7 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         key: pathText(data['key']),
         html: richHTML(data['html']),
         caret: richCaret(data['caret']),
+        edit: parseRichEditName(data['edit']),
       };
     case 'avb:rich-plus':
       return {

@@ -9,6 +9,7 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { Attr } from '../../../shared/page/pageNode';
+import { renderedAssetPath } from '../../editor/richAssetImports';
 import { editableHTML } from '../../ui/htmlFieldModel';
 import type { InlineNode } from './richContentModel';
 
@@ -143,13 +144,14 @@ export function richTextNodes(html: string, document: Document): InlineNode[] {
         continue;
       }
       const element = child;
-      const props = Object.fromEntries(
-        Array.from(element.attributes).map((attribute): [string, Attr] => [
-          attribute.name,
-          attribute.value === '' ? { type: 'bare' } : { type: 'string', value: attribute.value },
-        ]),
-      );
       const name = element.localName;
+      const props = Object.fromEntries(
+        Array.from(element.attributes).map((attribute): [string, Attr] => {
+          // The preview renders a project file with the development server's own query: the address is the file's.
+          const value = attribute.name === 'src' ? renderedAssetPath(attribute.value) : attribute.value;
+          return [attribute.name, value === '' ? { type: 'bare' } : { type: 'string', value }];
+        }),
+      );
       out.push({ kind: 'element', name, props, children: VOID_TAGS.has(name) ? undefined : read(element, depth + 1) });
     }
     return out;

@@ -8,12 +8,23 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
 import { chooseAsset } from './assetPick';
 import { assetValueFor } from './assetPath';
-import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
 import { HtmlToolbar, MOD } from './HtmlToolbar';
 import { containsHTML, editableHTML } from './htmlFieldModel';
-import { isSpareRichLine, richElement, richHistoryOf, tidyRichContent, withoutTrailingEmptyBlocks } from '../../shared/page/richBlockDom';
+import { pasteRichText } from '../../shared/page/richPaste';
+import {
+  deleteBesideRichMedia,
+  keepTypingInBlocks,
+  selectRichMedia,
+  isSpareRichLine,
+  leaveQuoteOnEnter,
+  richElement,
+  richHistoryOf,
+  withoutTypingResidue,
+  tidyRichContent,
+  withoutTrailingEmptyBlocks,
+} from '../../shared/page/richBlockDom';
 import {
   applyBlockShortcut,
   applyInlineShortcut,
@@ -31,7 +42,7 @@ import {
   type FormatState,
   type RichTextAction,
 } from './richTextCommands';
-import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
+import { blockShortcut, inlineShortcut, linkAddress, textCounts, type Block } from './richTextModel';
 import Menu, { type MenuEntry } from './Menu';
 import { PlusIcon } from './Icons';
 import './contentInputs.css';
@@ -124,6 +135,8 @@ function useHtmlEditor(options: {
   const saved = useRef<Range>();
   const plainPaste = useRef(false);
   const emitted = useRef<string>();
+  // The content as it came from outside: what typing leaves behind is told from the author's own by it.
+  const opened = useRef(value);
   const [format, setFormat] = useState<FormatState>(EMPTY_FORMAT);
   const [bubble, setBubble] = useState<LinkBubble>();
   const [counts, setCounts] = useState(textCounts(''));
@@ -137,6 +150,7 @@ function useHtmlEditor(options: {
     if (host.current && value !== emitted.current) {
       host.current.innerHTML = projection.html;
       emitted.current = value;
+      opened.current = value;
       refresh();
     }
   });
@@ -147,7 +161,7 @@ function useHtmlEditor(options: {
     emit: () => {
       if (host.current !== undefined) {
         // Always leave a paragraph when emptied so the HTML field keeps its editor.
-        const html = editableHTML(writtenHTML(host.current, { rich: media }), document, { media }).html;
+        const html = editableHTML(writtenHTML(host.current, { rich: media, opened: opened.current }), document, { media }).html;
         emitted.current = containsHTML(html) ? html : `<p>${html}</p>`;
         refresh();
         onChange(emitted.current);
@@ -223,6 +237,20 @@ function HtmlBody(props: BodyProps) {
           editor.emit();
         }}
         onKeyDown={(event) => {
+          if (props.blocks === 'insert' && (event.key === 'Backspace' || event.key === 'Delete')) {
+            if (deleteBesideRichMedia(event.currentTarget, richHistoryOf(event.currentTarget), event.key)) {
+              event.preventDefault();
+              editor.emit();
+              return;
+            }
+          }
+          if (props.blocks === 'insert' && event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            if (leaveQuoteOnEnter(event.currentTarget, richHistoryOf(event.currentTarget))) {
+              event.preventDefault();
+              editor.emit();
+              return;
+            }
+          }
           // Rich text a component holds: Enter starts a new block (the browser's own), ⌘/Ctrl Enter breaks the line
           // inside the block, as typing on the canvas does.
           if (props.blocks === 'insert' && event.key === 'Enter' && (MOD === '⌘' ? event.metaKey : event.ctrlKey)) {
@@ -233,10 +261,20 @@ function HtmlBody(props: BodyProps) {
           }
           keyDown(editor, event, props.onAction);
         }}
-        onClick={(event) => followLink(event, { open: event.metaKey || event.ctrlKey })}
+        onClick={(event) => {
+          if (props.blocks === 'insert' && event.target instanceof Element && event.target.matches('img, video, hr')) {
+            selectRichMedia(event.target);
+          }
+          followLink(event, { open: event.metaKey || event.ctrlKey });
+        }}
+        onBeforeInput={(event) => {
+          if (props.blocks === 'insert') {
+            keepTypingInBlocks(event.currentTarget, richHistoryOf(event.currentTarget));
+          }
+        }}
         onPaste={(event) => {
           event.preventDefault();
-          paste(editor, event.clipboardData);
+          paste(editor, event.clipboardData, { media: props.blocks === 'insert' });
         }}
         onDrop={(event) => event.preventDefault()}
       />
@@ -305,10 +343,32 @@ export const BLOCK_PLUS_PX = 24;
 
 // The `+` and the menu it opens, in the order a writer reaches for them: the headings, then paragraph, quote, image,
 // link and video, then the other common rich text blocks. Shared by the rich text dialog and the canvas.
-export function BlockInsertButton(props: { readonly style?: CSSProperties; readonly onChoose: (choice: BlockInsertChoice) => void }) {
+export function BlockInsertButton(props: {
+  readonly style?: CSSProperties;
+  readonly onChoose: (choice: BlockInsertChoice) => void;
+  /** The menu closed with nothing chosen. */
+  readonly onDismiss?: () => void;
+}) {
+  const chose = useRef(false);
   const translate = useTranslate();
   const [anchor, setAnchor] = useState<HTMLElement>();
-  const item = (id: string, label: string, choice: BlockInsertChoice): MenuEntry => ({ kind: 'item', id, label, onSelect: () => props.onChoose(choice) });
+  const item = (id: string, label: string, choice: BlockInsertChoice): MenuEntry => {
+    const onSelect = () => {
+      chose.current = true;
+      props.onChoose(choice);
+    };
+    return { kind: 'item', id, label, onSelect };
+  };
+  const close = () => {
+    setAnchor(undefined);
+    // After the choice, which the menu may report in either order.
+    queueMicrotask(() => {
+      if (!chose.current) {
+        props.onDismiss?.();
+      }
+      chose.current = false;
+    });
+  };
   const entries: readonly MenuEntry[] = [
     ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag, index) =>
       item(tag, translate('ui.htmlToolbar.heading', { level: index + 1 }), { kind: 'block', block: tag }),
@@ -342,7 +402,7 @@ export function BlockInsertButton(props: { readonly style?: CSSProperties; reado
           <PlusIcon size={16} />
         </button>
       </TipAnchor>
-      <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={() => setAnchor(undefined)} />
+      <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={close} />
     </>
   );
 }
@@ -378,8 +438,16 @@ function BlockInsert(props: { readonly editor: Editor; readonly place: BlockPlac
         setMedia({ kind: choice.media, place: { top: (place?.top ?? 0) + (place?.height ?? 0) + 6, left: 12 } });
         pickMedia(choice.media, (address) => insertMedia(choice.media, address));
         return;
+      case 'list': {
+        // A list of its own, beside the line it replaces: the browser's command would nest it in that paragraph.
+        const element = editor.restore();
+        if (element !== undefined) {
+          insertBlock(element, richElement(element.ownerDocument, choice.list));
+          editor.emit();
+        }
+        return;
+      }
       case 'block':
-      case 'list':
       case 'rule':
       case 'link':
         onAction(choice);
@@ -501,9 +569,9 @@ function typedShortcut(editor: Editor, event: Event): void {
   }
 }
 
-// A paste: a link over selected text links it; HTML keeps its structure, cleaned;
-// anything else, or a ⇧⌘V paste, comes in as plain text.
-function paste(editor: Editor, data: DataTransfer): void {
+// A paste: a link over selected text links it; HTML keeps its structure, cleaned; anything else, or a ⇧⌘V paste,
+// comes in as plain text. Blocks are placed beside the caret's block (richPaste.ts).
+function paste(editor: Editor, data: DataTransfer, options: { readonly media: boolean }): void {
   const element = editor.host.current;
   const { plainPaste } = editor;
   const plain = plainPaste.current;
@@ -511,16 +579,14 @@ function paste(editor: Editor, data: DataTransfer): void {
   if (element === undefined) {
     return;
   }
-  const text = data.getData('text/plain');
-  const html = data.getData('text/html');
-  const address = /^\S+$/.test(text.trim()) ? linkAddress(text) : undefined;
   const range = rangeIn(element);
+  const text = data.getData('text/plain');
+  // A bare domain over selected words links them too.
+  const address = /^\S+$/.test(text.trim()) ? linkAddress(text) : undefined;
   if (!plain && address !== undefined && range !== undefined && !range.collapsed) {
     applyLink(element, address);
-  } else if (!plain && html !== '' && html.length <= BOUNDARY_LIMITS.textLengthMax) {
-    document.execCommand('insertHTML', false, cleanPastedHTML(html, document));
   } else {
-    document.execCommand('insertText', false, text.slice(0, BOUNDARY_LIMITS.textLengthMax));
+    pasteRichText({ host: element, history: richHistoryOf(element), kind: 'rich', media: options.media }, { html: data.getData('text/html'), text, plain });
   }
   editor.emit();
 }
@@ -591,7 +657,7 @@ function restoreSelection(element: HTMLDivElement | undefined, range: Range | un
 }
 
 // What the field writes: valid HTML, and in rich text without the empty paragraph kept open at its end.
-function writtenHTML(host: HTMLElement, options: { readonly rich: boolean }): string {
+function writtenHTML(host: HTMLElement, options: { readonly rich: boolean; readonly opened: string }): string {
   const copy = host.ownerDocument.createElement('div');
   copy.innerHTML = host.innerHTML;
   Array.from(copy.children)
@@ -599,6 +665,9 @@ function writtenHTML(host: HTMLElement, options: { readonly rich: boolean }): st
     .forEach((line) => line.remove());
   copy.querySelectorAll('[data-avb-line]').forEach((line) => line.removeAttribute('data-avb-line'));
   tidyRichContent(copy);
+  if (options.rich) {
+    withoutTypingResidue(copy, options.opened);
+  }
   return options.rich ? withoutTrailingEmptyBlocks(copy.innerHTML) : copy.innerHTML;
 }
 

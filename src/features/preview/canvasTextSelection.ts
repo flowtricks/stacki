@@ -49,6 +49,8 @@ export interface CanvasRichPlusState {
   readonly choose: (choice: RichBlockChoice) => void;
   /** Tells the frame a press is on the `+` or its menu, so the blur it causes does not end the editing. */
   readonly hold: () => void;
+  /** The menu or its address field closed with nothing chosen: typing goes on in the frame. */
+  readonly resume: () => void;
 }
 
 export const canvasRichPlus = createLiveValue<CanvasRichPlusState | undefined>(undefined);

@@ -1,6 +1,9 @@
 // Editing a node's properties: its comment, classes, asset props, renames,
 // kind and tag, text, branches and content (App.tsx).
 
+import { projectRelativePath } from '../../lib/projectPath';
+import { namesInScope } from '../../editor/dataScope';
+import { assetScopeOf, authoredSourcePaths, withAssetImports } from '../../editor/richAssetImports';
 import { canAddComponent } from '../../features/palette/componentVisibility';
 import { currentRole } from '../../lib/currentRole';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -15,8 +18,9 @@ import { assert } from '../../../shared/core/assert';
 import { ASTRO_ASSETS } from '../../features/palette/astroAssets';
 import { droppedForComponent, droppedForElement, toggledElseBranch, withComponentImport } from '../model/pageModelGestures';
 import {
-  attributeRenameGesture,
+  sequence,
   frontmatterGesture,
+  attributeRenameGesture,
   inlineStyleGesture,
   insertGesture,
   loopRenameGesture,
@@ -24,7 +28,6 @@ import {
   nodeGesture,
   propsGesture,
   removalGesture,
-  sequence,
   withChildren,
 } from '../../editor/editGestures';
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
@@ -744,7 +747,7 @@ export function useBranchEdits(coreState: ReturnType<typeof useCoreState>, histo
 
 // A node’s text content and inline children.
 export function useContentEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
-  const { pageStateRef } = coreState;
+  const { pageStateRef, projectRef } = coreState;
   const { commitEdit } = history;
 
   // Sets the text content of a component (single text child convenience).
@@ -797,21 +800,42 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
   // Replaces a node's inline children wholesale (rich Content field edits).
   // Nodes arrive from the editor without ids — assign fresh ones.
   const setNodeInline = useCallback(
-    (nodeId: string, kids: readonly InlineNode[]) => {
+    (nodeId: string, kids: readonly InlineNode[]): boolean => {
       // Step 9: the node restated with its new inline children.
       const state = pageStateRef.current.pageState;
       const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
       if (!node || node.kind === 'text') {
-        return;
+        return false;
       }
-      const next = withChildren(node, inlineWithIds(kids, 0));
+      // An image or video picked from src/ is written as its import (richAssetImports.ts): at its own path it would
+      // not exist in the built site.
+      const project = projectRef.current?.path;
+      const file = pageStateRef.current.currentPage?.path;
+      const model = state?.editable ? state.model : undefined;
+      const imported =
+        model === undefined || project === undefined || file === undefined || !('imports' in model)
+          ? undefined
+          : withAssetImports(kids, assetScopeOf(projectRelativePath(project, file, window.avb.platform), model.imports), {
+              taken: namesInScope(model.extraFrontmatter, model.imports),
+              authored: authoredSourcePaths(node.children ?? []),
+            });
+      const next = withChildren(node, inlineWithIds(imported?.content ?? kids, 0));
       // Content was explicitly edited. The printer's layout-preservation comparison
       // ignores whitespace, so keeping the old inner source could restore a deleted
       // space on save and send a different value back to the focused field.
       Reflect.deleteProperty(next, 'source');
-      commitEdit(nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false }));
+      const restated = nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false });
+      const added = imported?.added ?? [];
+      if (model === undefined || added.length === 0) {
+        return commitEdit(restated);
+      }
+      const importing = frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (current) => ({
+        ...current,
+        imports: [...current.imports, ...added.filter((entry) => !current.imports.some((known) => known.name === entry.name))],
+      }));
+      return commitEdit(sequence(importing, restated));
     },
-    [commitEdit, pageStateRef],
+    [commitEdit, pageStateRef, projectRef],
   );
   // A text connected to data or back to words (TextConnectField.tsx): the node
   // restated as its pieces, the nodes beside it left as they are (textPieces.ts).

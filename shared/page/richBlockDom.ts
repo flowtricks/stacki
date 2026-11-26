@@ -63,7 +63,7 @@ export interface RichHistory {
 interface Snapshot {
   readonly nodes: readonly ChildNode[];
   readonly html: string;
-  readonly caret: Range | undefined;
+  readonly caret: readonly [Node, number, Node, number] | undefined;
 }
 
 export function createRichHistory(host: HTMLElement): RichHistory {
@@ -71,16 +71,19 @@ export function createRichHistory(host: HTMLElement): RichHistory {
   const undone: { readonly before: Snapshot; readonly after: Snapshot }[] = [];
   const take = (): Snapshot => {
     const selection = host.ownerDocument.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
-    const inside = range !== undefined && host.contains(range.commonAncestorContainer);
-    return { nodes: Array.from(host.childNodes), html: host.innerHTML, caret: inside ? range.cloneRange() : undefined };
+    // The caret as positions, not a Range: a range moves when the nodes it is in are taken out and put back.
+    const anchor = selection?.anchorNode ?? undefined;
+    const focus = selection?.focusNode ?? undefined;
+    const caret =
+      selection !== null && anchor !== undefined && focus !== undefined && host.contains(anchor)
+        ? ([anchor, selection.anchorOffset, focus, selection.focusOffset] as const)
+        : undefined;
+    return { nodes: Array.from(host.childNodes), html: host.innerHTML, caret };
   };
   const restore = (snapshot: Snapshot): void => {
     host.replaceChildren(...snapshot.nodes);
     if (snapshot.caret !== undefined) {
-      const selection = host.ownerDocument.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(snapshot.caret.cloneRange());
+      host.ownerDocument.getSelection()?.setBaseAndExtent(...snapshot.caret);
     }
   };
   return {
@@ -115,6 +118,128 @@ export function createRichHistory(host: HTMLElement): RichHistory {
       return true;
     },
   };
+}
+
+// The host's own child that is an image, a video or a rule.
+function isMediaChild(host: HTMLElement, node: Node | undefined): node is Element {
+  return node instanceof Element && node.parentNode === host && MEDIA_TAGS.has(node.tagName);
+}
+
+// The one image, video or rule the selection holds, and nothing else.
+function selectedMedia(host: HTMLElement, range: Range): Element | undefined {
+  if (range.startContainer !== host || range.endContainer !== host || range.endOffset !== range.startOffset + 1) {
+    return undefined;
+  }
+  const node = host.childNodes[range.startOffset];
+  return isMediaChild(host, node) ? node : undefined;
+}
+
+/**
+ * Backspace and Delete beside an image, a video or a rule that is a block of its own, which the browser's keys get
+ * wrong: Backspace after one unwraps the paragraph into loose words, Delete before one does nothing. An empty line goes
+ * and the block stays; otherwise the key takes the block, as it does one that is selected. True when the key is spent.
+ */
+export function deleteBesideRichMedia(host: HTMLElement, history: RichHistory, key: 'Backspace' | 'Delete'): boolean {
+  const selection = host.ownerDocument.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  if (range === undefined || !host.contains(range.commonAncestorContainer)) {
+    return false;
+  }
+  const back = key === 'Backspace';
+  const selected = selectedMedia(host, range);
+  if (selected !== undefined) {
+    history.record(() => {
+      const next = selected.nextElementSibling ?? undefined;
+      const previous = selected.previousElementSibling ?? undefined;
+      selected.remove();
+      caretBeside(host, previous, next);
+    });
+    return true;
+  }
+  if (!range.collapsed) {
+    return false;
+  }
+  const position = topPosition(host, range.startContainer, range.startOffset);
+  const block = position.top;
+  if (block === undefined || MEDIA_TAGS.has(block.tagName)) {
+    return false;
+  }
+  const rest = host.ownerDocument.createRange();
+  rest.selectNodeContents(block);
+  if (back) {
+    rest.setEnd(range.startContainer, range.startOffset);
+  } else {
+    rest.setStart(range.startContainer, range.startOffset);
+  }
+  const neighbour = (back ? block.previousElementSibling : block.nextElementSibling) ?? undefined;
+  const atEdge = rest.toString().trim() === '' && rest.cloneContents().querySelector(`${CONTENT_SELECTOR}, li ~ li`) === null;
+  if (!atEdge || !isMediaChild(host, neighbour)) {
+    return false;
+  }
+  history.record(() => {
+    if (isBlank(block)) {
+      const beyond = (back ? neighbour.previousElementSibling : neighbour.nextElementSibling) ?? undefined;
+      block.remove();
+      caretBeside(host, back ? beyond : undefined, back ? undefined : beyond);
+      if (beyond === undefined || MEDIA_TAGS.has(beyond.tagName)) {
+        selectRichMedia(neighbour);
+      }
+    } else {
+      neighbour.remove();
+    }
+  });
+  return true;
+}
+
+// After a block went: the end of the block before, else the start of the one after.
+function caretBeside(host: HTMLElement, previous: Element | undefined, next: Element | undefined): void {
+  if (previous !== undefined && TYPING_BLOCKS.has(previous.tagName)) {
+    const items = previous.querySelectorAll('li');
+    const end = items[items.length - 1] ?? previous;
+    collapseAt(end, end.childNodes.length);
+  } else if (next !== undefined && TYPING_BLOCKS.has(next.tagName)) {
+    collapseAt(next.querySelector('li') ?? next, 0);
+  } else {
+    collapseAt(host, 0);
+  }
+}
+
+/** Selects an image, a video or a rule whole, as a press on it does. */
+export function selectRichMedia(media: Element): void {
+  const document = media.ownerDocument;
+  const range = document.createRange();
+  range.selectNode(media);
+  const selection = document.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+/**
+ * Before words go in: a caret between two blocks (beside an image, or with one selected) gets a paragraph of its own
+ * first, so nothing is ever typed loose among the blocks.
+ */
+export function keepTypingInBlocks(host: HTMLElement, history: RichHistory): void {
+  const range = richCaret(host);
+  if (range.startContainer !== host || host.children.length === 0) {
+    return;
+  }
+  const media = selectedMedia(host, range);
+  if (!range.collapsed && media === undefined) {
+    return;
+  }
+  const index = media === undefined ? range.startOffset : range.startOffset + 1;
+  const paragraph = host.ownerDocument.createElement('p');
+  paragraph.setAttribute(SPARE_LINE, '');
+  paragraph.append(host.ownerDocument.createElement('br'));
+  history.record(() => {
+    const next = host.childNodes[index];
+    if (next === undefined) {
+      host.append(paragraph);
+    } else {
+      next.before(paragraph);
+    }
+    collapseAt(paragraph, 0);
+  });
 }
 
 const histories = new WeakMap<HTMLElement, RichHistory>();
@@ -302,6 +427,119 @@ function collapseAt(node: Node, offset: number): void {
   const selection = document.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
+}
+
+/**
+ * Enter at the end of a quote goes on as a paragraph, as after a heading; the browser would start a second quote.
+ * True when it did that, and the key is spent. A quote holding paragraphs or a list keeps the browser's own Enter.
+ */
+export function leaveQuoteOnEnter(host: HTMLElement, history: RichHistory): boolean {
+  const selection = host.ownerDocument.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+  if (range === undefined || !range.collapsed || !host.contains(range.startContainer)) {
+    return false;
+  }
+  const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+  const quote = start?.closest('blockquote') ?? undefined;
+  if (quote === undefined || quote.parentElement !== host || quote.querySelector('p, ul, ol, div') !== null) {
+    return false;
+  }
+  const rest = host.ownerDocument.createRange();
+  rest.setStart(range.startContainer, range.startOffset);
+  rest.setEnd(quote, quote.childNodes.length);
+  if (rest.toString().trim() !== '') {
+    return false;
+  }
+  const paragraph = host.ownerDocument.createElement('p');
+  paragraph.append(host.ownerDocument.createElement('br'));
+  history.record(() => {
+    quote.after(paragraph);
+    collapseAt(paragraph, 0);
+  });
+  return true;
+}
+
+// What the browser leaves behind while typing that nobody asked for. Each is cleared only when the content as it opened
+// had none of its kind, so the author's own (an empty paragraph, a non-breaking space, a <b>) is never rewritten.
+const TYPED_EMPTY = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre';
+const NON_BREAKING = /\u00a0|&nbsp;|&#160;|&#xa0;/i;
+const RENAMED: readonly (readonly [string, string])[] = [
+  ['b', 'strong'],
+  ['i', 'em'],
+];
+
+/**
+ * The content as it is saved after typing in it: no empty block an Enter left behind, no non-breaking space the browser
+ * typed where a space shows the same, and bold and italic as <strong> and <em>.
+ */
+export function withoutTypingResidue(root: Element, opened: string): void {
+  // A break at the end of a block shows nothing after it, and the browser keeps one in every line it opens.
+  for (const element of [root, ...Array.from(root.querySelectorAll(TYPED_EMPTY))]) {
+    for (let end = element.lastChild; element !== root && end instanceof Element && end.tagName === 'BR'; end = element.lastChild) {
+      end.remove();
+    }
+  }
+  for (const [from, to] of RENAMED) {
+    if (!new RegExp(`<${from}[\\s>]`, 'i').test(opened)) {
+      for (const element of Array.from(root.querySelectorAll(from))) {
+        const renamed = root.ownerDocument.createElement(to);
+        for (const attribute of Array.from(element.attributes)) {
+          renamed.setAttribute(attribute.name, attribute.value);
+        }
+        renamed.append(...Array.from(element.childNodes));
+        element.replaceWith(renamed);
+      }
+    }
+  }
+  if (!NON_BREAKING.test(opened)) {
+    const blocks = Array.from(root.querySelectorAll(TYPED_EMPTY));
+    (blocks.length === 0 ? [root] : blocks).forEach(plainSpaces);
+  }
+  if (!/<(p|h[1-6]|li|blockquote|pre)(\s[^<>]*)?>\s*<\/\1>/i.test(opened)) {
+    for (const block of Array.from(root.querySelectorAll(TYPED_EMPTY)).reverse()) {
+      if (isBlank(block) && block.querySelector('br') === null) {
+        const list = block.parentElement;
+        block.remove();
+        if (list !== null && (list.tagName === 'UL' || list.tagName === 'OL') && list.children.length === 0) {
+          list.remove();
+        }
+      }
+    }
+  }
+}
+
+// In one block's words: a lone non-breaking space between two characters is a space, and one that ends the block shows
+// nothing. A run of spaces keeps the ones that make it show.
+function plainSpaces(block: Element): void {
+  if (block.tagName === 'PRE') {
+    return;
+  }
+  const walker = block.ownerDocument.createTreeWalker(block, 4);
+  const texts: Text[] = [];
+  for (let node = walker.nextNode(); node && texts.length < RICH_DOM_LIMITS.nodesMax; node = walker.nextNode()) {
+    if (node instanceof Text) {
+      texts.push(node);
+    }
+  }
+  const whole = texts.map((node) => node.data).join('');
+  const trimmed = whole.replace(/\u00a0+$/, '').length;
+  let at = 0;
+  for (const node of texts) {
+    const next = Array.from(node.data, (character, index) => {
+      const position = at + index;
+      if (character !== '\u00a0') {
+        return character;
+      }
+      if (position >= trimmed) {
+        return '';
+      }
+      return /\S/.test(whole.charAt(position - 1)) && /\S/.test(whole.charAt(position + 1)) ? ' ' : character;
+    }).join('');
+    at += node.data.length;
+    if (next !== node.data) {
+      node.data = next;
+    }
+  }
 }
 
 /**

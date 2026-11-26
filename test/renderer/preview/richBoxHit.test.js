@@ -50,3 +50,33 @@ test('a click on the box itself takes the nearest words; outside it takes none',
     window.close();
   }
 });
+
+test('rich text with no words is found by its box, and the space level with a narrow box types in it', () => {
+  const dom = new JSDOM(
+    '<!doctype html><body><section id="wrap" data-avb-p="9"><div id="box" data-avb-p="x|0.0"><img data-avb-p="0.0.0"></div></section></body>',
+    { pretendToBeVisual: true },
+  );
+  const { window } = dom;
+  for (const name of ['HTMLElement', 'Node', 'Element', 'Text', 'Comment', 'NodeFilter', 'getComputedStyle']) {
+    global[name] = window[name];
+  }
+  global.window = window;
+  global.document = window.document;
+  global.location = window.location;
+  const { findWordlessHit, findBesideHit } = loadRenderer('electron/preload/frameText.ts');
+  const { collectRegions } = loadRenderer('electron/preload/frameRegions.ts');
+  const catalog = { targets: [], boxes: ['0.0'] };
+  const box = window.document.getElementById('box');
+  const wrap = window.document.getElementById('wrap');
+  box.getBoundingClientRect = () => ({ left: 0, right: 100, top: 0, bottom: 50 });
+  try {
+    collectRegions();
+    assert.equal(findWordlessHit(catalog, { target: box })?.target.richRoot, '0.0');
+    assert.equal(findWordlessHit(catalog, { target: wrap }), undefined);
+    const beside = findBesideHit(catalog, { target: wrap, clientX: 400, clientY: 20 });
+    assert.ok(beside === undefined || beside.target.richRoot === '0.0');
+    assert.equal(findBesideHit(catalog, { target: wrap, clientX: 400, clientY: 200 }), undefined, 'below stays the wrapper’s');
+  } finally {
+    window.close();
+  }
+});

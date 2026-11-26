@@ -65,6 +65,7 @@ export default function RichContent({ nodes, onChange, bindContext, insertRef }:
       <div
         ref={hostRef}
         className="rich-content"
+        data-app-undo=""
         contentEditable
         suppressContentEditableWarning
         spellCheck={false}
@@ -216,10 +217,11 @@ function useRichSync(nodes: readonly InlineNode[], state: RichState) {
     }
     // A real change while typing (an undo, the file changed): the words are replaced and the caret kept where it was in them.
     const caret = focused ? caretOffset(element) : undefined;
+    const before = element.textContent ?? '';
     element.innerHTML = html;
     lastEmittedRef.current = html;
     if (caret !== undefined) {
-      placeCaret(element, caret);
+      placeCaret(element, caretAfterChange(before, element.textContent ?? '', caret));
     }
   }, [html, hostRef, lastEmittedRef]);
 }
@@ -234,6 +236,27 @@ export function sameWords(left: string, right: string): boolean {
       .replace(/\s+/g, ' ')
       .trim();
   return words(left) === words(right);
+}
+
+/**
+ * Where the caret goes when the field's words are replaced: it stays where it was in the words, and one that was where
+ * the words changed (an undo, a redo) goes to the end of what changed, where typing goes on.
+ */
+export function caretAfterChange(before: string, after: string, caret: number): number {
+  const shorter = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < shorter && before[prefix] === after[prefix]) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (suffix < shorter - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) {
+    suffix += 1;
+  }
+  if (caret < prefix || before === after) {
+    return caret;
+  }
+  const behind = before.length - caret;
+  return behind < suffix ? after.length - behind : after.length - suffix;
 }
 
 // The caret as a count of characters before it, and back: the same place in the words after they are written again.

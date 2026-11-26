@@ -6,10 +6,11 @@ import { readPage, readText, resolvePath, writeText } from '../../ipc/bridge';
 import { boundPropReader, canvasBoundEdits, type BoundTextHost, type BoundTextWords } from '../model/canvasBoundText';
 import type { ShellView } from '../App';
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
-import { canvasTextBreaksOf, canvasTextFormatter, type CanvasTextBreaking } from '../model/canvasTextFormat';
+import { canvasRichRootsOf, canvasTextBreaksOf, canvasTextFormatter, type CanvasTextBreaking } from '../model/canvasTextFormat';
 import { componentReference } from '../model/componentReference';
 import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
 import { projectRelativePath } from '../../lib/projectPath';
+import { assetScopeOf, shownAssetNodes } from '../../editor/richAssetImports';
 
 export function desktopCanvasText(app: ShellView, translate: Translator): CanvasTextDocument | undefined {
   const state = app.pageState;
@@ -26,6 +27,9 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
     return undefined;
   }
   const host = boundTextHost(app);
+  // Imported images read as their paths wherever the content is read as rich text (richAssetImports.ts).
+  const relative = projectRelativePath(app.project.path, file, window.avb.platform);
+  const shown = shownAssetNodes(state.model.nodes, assetScopeOf(relative, 'imports' in state.model ? state.model.imports : []));
   const words: BoundTextWords = {
     saved: (path, saved) => translate('preview.text.source.saved', { path, file: saved }),
     undo: translate('preview.text.source.undo'),
@@ -56,8 +60,8 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
     apply: app.changeCodeSource,
     report: app.showToast,
     // The canvas bar's presses, saved as the Content field saves them.
-    format: canvasTextFormatter(state.model.nodes, app.setNodeInline),
-    breaks: desktopTextBreaks(app, state.model),
+    format: canvasTextFormatter(shown, app.setNodeInline),
+    ...desktopTextBreaks(app, state.model, shown),
     settings: app.componentEditing,
     focus: canvasFocus(app.selectedId, app.pathFor),
     components: app.insertables,
@@ -65,18 +69,22 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
 }
 
 // What Enter types in each text, from the editing settings of the component it sits in.
-function desktopTextBreaks(app: ShellView, model: NonNullable<ShellView['model']>): (path: string) => CanvasTextBreaking | undefined {
+function desktopTextBreaks(
+  app: ShellView,
+  model: NonNullable<ShellView['model']>,
+  shown: NonNullable<ShellView['model']>['nodes'],
+): { readonly breaks: (path: string) => CanvasTextBreaking | undefined; readonly richBoxes: () => readonly string[] } {
   const imports = 'imports' in model ? model.imports : [];
   // Read when a catalog is published, not on every render of the shell.
   let breaks: ReadonlyMap<string, CanvasTextBreaking> | undefined;
-  return (path) => {
-    breaks ??= canvasTextBreaksOf(model.nodes, app.pathFor, (node) =>
-      app.componentEditing(
-        componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
-        DEFAULT_SLOT_FIELD,
-      ),
+  const settingsOf = (node: (typeof shown)[number]) =>
+    app.componentEditing(
+      componentReference({ name: node.name ?? '', project: app.project.path, file: app.currentPage?.path, imports, components: app.insertables })?.path,
+      DEFAULT_SLOT_FIELD,
     );
-    return breaks.get(path);
+  return {
+    breaks: (path) => (breaks ??= canvasTextBreaksOf(shown, app.pathFor, settingsOf)).get(path),
+    richBoxes: () => canvasRichRootsOf(shown, app.pathFor, settingsOf),
   };
 }
 

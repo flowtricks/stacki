@@ -1,6 +1,8 @@
+import { projectRelativePath } from '../../lib/projectPath';
 import { DEFAULT_SLOT_FIELD } from '../../../shared/properties/componentDefaults';
 import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import { InspectorTabButton } from './InspectorTabButton';
+import { assetScopeOf, shownAssetSource } from '../../editor/richAssetImports';
 import { innerSourceOf } from '../../features/props/richTextContent';
 import { sourceRangeForSelection } from '../../features/code/codePanelModel';
 import { FilesCover } from './DesktopFiles';
@@ -728,6 +730,17 @@ function selectedContentSource(app: ShellView): string | undefined {
   return source === undefined || range === undefined ? undefined : innerSourceOf(source.slice(range.from, range.to));
 }
 
+// The same content as the rich text editor reads it: imported images and videos as their paths.
+function shownContentSource(app: ShellView): string | undefined {
+  const source = selectedContentSource(app);
+  const model = app.pageState?.editable ? app.pageState.model : undefined;
+  const file = app.currentPage?.path;
+  if (source === undefined || model === undefined || file === undefined || !('imports' in model)) {
+    return source;
+  }
+  return shownAssetSource(source, assetScopeOf(projectRelativePath(app.project.path, file, window.avb.platform), model.imports));
+}
+
 // The Settings tab's values and handlers. A component canvas frame's instance keeps its props only: what it is given is
 // that frame's preview values (canvasFrameSettings.tsx), and its content, tag, attributes and comment are the generated
 // canvas page's, which is never edited, so they are not offered.
@@ -902,6 +915,7 @@ export function settingsTextHandlers(app: ShellView) {
     richTextContent: app.selectedNode?.kind === 'component' && app.componentEditing(app.selectedComponent?.path, DEFAULT_SLOT_FIELD).richText === true,
     richTextProps: (app.selectedComponent?.htmlProps ?? []).filter((prop) => app.componentEditing(app.selectedComponent?.path, prop).richText === true),
     contentSource: selectedContentSource(app),
+    contentShown: shownContentSource(app),
     onSetContentSource: (source: string) => {
       const shown = selectedContentSource(app);
       if (selectedId && shown !== undefined) {

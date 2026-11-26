@@ -128,3 +128,71 @@ test('empty paragraphs at the end are not saved; one between blocks is', () => {
     assert.equal(rich.withoutTrailingEmptyBlocks('<hr><p>&nbsp;</p>'), '<hr>');
   });
 });
+
+test('typing leaves no empty block, stray non-breaking space or <b>; the author’s own are kept', () => {
+  editor('', ({ rich }) => {
+    const saved = (markup, opened) => {
+      const root = window.document.createElement('div');
+      root.innerHTML = markup;
+      rich.withoutTypingResidue(root, opened);
+      return root.innerHTML;
+    };
+    assert.equal(saved('<p>a&nbsp;<b>b</b>&nbsp;</p><p></p><ul><li></li></ul>', '<p>a</p>'), '<p>a <strong>b</strong></p>');
+    assert.equal(saved('<p>a&nbsp; b</p>', '<p>a</p>'), '<p>a&nbsp; b</p>', 'two spaces stay two');
+    const own = '<p>10&nbsp;km <b>x</b></p><p></p>';
+    assert.equal(saved(own, own), own);
+  });
+});
+
+test('a pasted image comes with its address and alt text; one carried as data does not', () => {
+  editor('', () => {
+    const { cleanPastedHTML } = loadRenderer('shared/page/richPaste.ts');
+    const clean = (html) => cleanPastedHTML(html, window.document, { media: true });
+    assert.equal(clean('<img src="https://x.test/a.png" alt="A" style="x" width="3">'), '<img src="https://x.test/a.png" alt="A">');
+    assert.equal(clean('<img src="data:image/png;base64,AA">'), '');
+    assert.equal(cleanPastedHTML('<img src="/a.png">', window.document), '', 'fields of words take none');
+  });
+});
+
+test('Enter at the end of a quote goes on as a paragraph; inside it the browser splits it', () => {
+  editor('<blockquote>quote</blockquote>', ({ host, caret, rich }) => {
+    caret(host.firstChild.firstChild, 2);
+    assert.equal(rich.leaveQuoteOnEnter(host, rich.createRichHistory(host)), false);
+    caret(host.firstChild.firstChild, 5);
+    assert.equal(rich.leaveQuoteOnEnter(host, rich.createRichHistory(host)), true);
+    assert.equal(host.innerHTML, '<blockquote>quote</blockquote><p><br></p>');
+  });
+});
+
+test('Backspace and Delete beside an image take it, or the empty line; never leaving loose words', () => {
+  const run = (markup, at, offset, key) => {
+    let result;
+    editor(markup, ({ host, caret, rich }) => {
+      caret(at(host), offset);
+      assert.equal(rich.deleteBesideRichMedia(host, rich.createRichHistory(host), key), true);
+      result = host.innerHTML;
+    });
+    return result;
+  };
+  assert.equal(
+    run('<img src="/a.png"><p>after</p>', (host) => host.children[1].firstChild, 0, 'Backspace'),
+    '<p>after</p>',
+  );
+  assert.equal(
+    run('<p>before</p><hr>', (host) => host.firstChild.firstChild, 6, 'Delete'),
+    '<p>before</p>',
+  );
+  assert.equal(
+    run('<p>a</p><hr><p><br></p>', (host) => host.children[2], 0, 'Backspace'),
+    '<p>a</p><hr>',
+  );
+});
+
+test('words typed with the caret between blocks, whitespace and all, get a paragraph of their own', () => {
+  editor('\n  <img src="/a.png">\n  ', ({ host, caret, rich }) => {
+    caret(host, host.childNodes.length);
+    rich.keepTypingInBlocks(host, rich.createRichHistory(host));
+    assert.equal(window.getSelection().focusNode.tagName, 'P');
+    assert.equal(host.lastChild.tagName, 'P');
+  });
+});

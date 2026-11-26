@@ -85,6 +85,8 @@ export interface EditGesture {
    * same stream and undo step is replaced by this one. Undefined for a gesture
    * that must go out on its own. */
   readonly stream: string | undefined;
+  /** The node a restatement rewrites whole (nodeGesture): it must be in the page the gesture is sent against. */
+  readonly restates?: string;
 }
 
 /** The bytes a code save is a patch of (step 8). */
@@ -435,6 +437,12 @@ interface GestureSendInput {
 export async function sendGesture(input: GestureSendInput): Promise<GestureSent> {
   const { origin } = input;
   const refOf = (nodeId: string): NodeRef | undefined => nodeRefIn(origin, nodeId);
+  // A restated node that is not in this reading of the page leaves the page as it is, which reads as nothing left to
+  // write: the edit would be lost without a word. It is refused, and said.
+  const restated = input.gesture.restates;
+  if (restated !== undefined && !nodesById(origin.model.nodes).has(restated)) {
+    return { tag: 'refused', reason: 'anchor-moved', diskChecksum: origin.checksum, replies: [] };
+  }
   const requested = input.gesture.request(refOf, origin);
   if (requested === undefined || requested.length === 0) {
     return sendReplacement(input, refOf);

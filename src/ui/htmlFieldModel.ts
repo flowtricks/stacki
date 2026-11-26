@@ -1,5 +1,8 @@
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
+import { safeHTMLLink } from '../../shared/page/richPaste';
+
+export { safeHTMLLink };
 
 const TAGS = new Set(
   (
@@ -20,14 +23,6 @@ const ELEMENT_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
 export function containsHTML(value: string): boolean {
   assert(value.length <= BOUNDARY_LIMITS.textLengthMax, 'HTML field: text limit exceeded');
   return /<\/?[a-z][a-z0-9-]*(?:\s[^<>]*|\s*\/?)>/i.test(value);
-}
-
-export function safeHTMLLink(value: string): boolean {
-  const text = value.trim();
-  if (/[\u0000-\u0020\u007f]/.test(text)) {
-    return false;
-  }
-  return /^(?:https?:\/\/|mailto:|tel:|#|\/|\.\.?\/)/i.test(text);
 }
 
 // Video, for rich text a component's slot holds (HtmlField's `media`): its own attributes only, its address a project

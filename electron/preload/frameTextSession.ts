@@ -6,12 +6,13 @@ import {
   type CanvasTextCatalog,
   type CanvasTextTarget,
   parseRichBlockRequest,
+  type CanvasRichEditName,
 } from '../../shared/properties/canvasText';
 import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches, pathsOf } from './frameRegions';
 import { matchCanvasText, textRunsAround, type TextMatch, type TextRun } from './frameTextMatch';
 import { openNativeText, type NativeTextResult } from './frameTextNative';
-import { holdsInlineWords, openRichText, type RichTextPlace } from './frameRichText';
+import { holdsInlineWords, openRichText, type RichTextKept, type RichTextPlace } from './frameRichText';
 import { textEditorRoot, textSelection, type TextOffsets } from './frameTextSelection';
 
 interface ActiveText {
@@ -62,8 +63,12 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
     receive: (input: unknown) => {
-      if (isRichHold(input)) {
+      if (isRichMessage(input, 'avb:rich-hold')) {
         rich?.hold();
+        return;
+      }
+      if (isRichMessage(input, 'avb:rich-resume')) {
+        rich?.resume();
         return;
       }
       const choice = readRichBlockRequest(input);
@@ -108,9 +113,36 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       // Backspace over a <br>, undo all behave as in any editor, and the whole content is saved as one edit.
       const place = canvasEditingPlace(target, match);
       if (place !== undefined) {
-        rich = openCanvasRich({ session: () => catalog?.session ?? current.session, target, place, at: event }, post, () => {
-          rich = undefined;
-        });
+        const name = {
+          id: crypto.randomUUID(),
+          file: current.file,
+          root: place.kind === 'rich' ? place.richRoot : target.path,
+          breaks: place.kind,
+        };
+        // Set once the opening is defined: a later refusal opens it again, from the host's message, not from within itself.
+        let reopen: ((kept: RichTextKept) => void) | undefined;
+        const start = (kept?: RichTextKept): boolean => {
+          const context = {
+            session: () => catalog?.session ?? current.session,
+            target,
+            place,
+            at: event,
+            name,
+            // Only while nothing else is being typed: the unsaved words stay on screen either way.
+            again: (unsaved: RichTextKept) => {
+              if (rich === undefined && !active) {
+                reopen?.(unsaved);
+              }
+            },
+            ...(kept === undefined ? {} : { kept }),
+          };
+          rich = openCanvasRich(context, post, () => {
+            rich = undefined;
+          });
+          return rich !== undefined;
+        };
+        reopen = start;
+        start();
         if (rich) {
           openedAtMs = performance.now();
           return;
@@ -155,28 +187,40 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
   };
 }
 
+interface CanvasRichContext {
+  readonly session: () => string;
+  readonly target: CanvasTextTarget;
+  readonly place: RichTextPlace;
+  readonly at: MouseEvent;
+  readonly name: CanvasRichEditName;
+  /** Opens the editor again on words that did not reach the page. */
+  readonly again: (kept: RichTextKept) => void;
+  readonly kept?: RichTextKept;
+}
+
 // The rich text editor over a component instance's blocks (frameRichText.ts): its `+` and its one save.
-function openCanvasRich(
-  context: {
-    readonly session: () => string;
-    readonly target: CanvasTextTarget;
-    readonly place: RichTextPlace;
-    readonly at: MouseEvent;
-  },
-  post: (message: unknown) => void,
-  closed: () => void,
-) {
-  const editor = openRichText(context.place, context.at, {
-    plus: (rect) => post({ type: 'avb:rich-plus', session: context.session(), ...(rect ? { rect } : {}) }),
-    draft: (html, caret) => post({ type: 'avb:rich-draft', session: context.session(), key: context.target.key, html, caret }),
-    done: (html) => {
-      closed();
-      if (html !== undefined) {
-        post({ type: 'avb:rich-save', session: context.session(), key: context.target.key, html });
-      }
-      post({ type: 'avb:text-inactive', session: context.session() });
+function openCanvasRich(context: CanvasRichContext, post: (message: unknown) => void, closed: () => void) {
+  const editor = openRichText(
+    context.place,
+    context.at,
+    {
+      edit: context.name.id,
+      plus: (rect) => post({ type: 'avb:rich-plus', session: context.session(), ...(rect ? { rect } : {}) }),
+      draft: (html, caret) => post({ type: 'avb:rich-draft', session: context.session(), key: context.target.key, html, caret, edit: context.name }),
+      done: (html, base) => {
+        closed();
+        if (html !== undefined) {
+          post({ type: 'avb:rich-save', session: context.session(), key: context.target.key, html, base, edit: context.name });
+        }
+        post({ type: 'avb:text-inactive', session: context.session() });
+      },
+      unsaved: context.again,
+      unconfirmed: () =>
+        // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
+        post({ type: 'avb:text-refused', message: 'The page changed while editing. The text was not saved; select it again.', reason: 'page-changed' }),
     },
-  });
+    context.kept,
+  );
   if (!editor) {
     return undefined;
   }
@@ -192,9 +236,10 @@ function openCanvasRich(
   return { ...editor, announce };
 }
 
-// The host's `+` or its menu was pressed: the blur that press caused is not the person leaving.
-function isRichHold(input: unknown): boolean {
-  return typeof input === 'object' && input !== null && 'type' in input && input.type === 'avb:rich-hold';
+// What the host says about its `+`: pressed (the blur that press caused is not the person leaving), or closed with
+// nothing chosen.
+function isRichMessage(input: unknown, type: 'avb:rich-hold' | 'avb:rich-resume'): boolean {
+  return typeof input === 'object' && input !== null && 'type' in input && input.type === type;
 }
 
 function readRichBlockRequest(input: unknown) {
