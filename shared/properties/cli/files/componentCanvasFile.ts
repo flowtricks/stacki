@@ -91,16 +91,7 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
           ),
           arrange: field(
             text(6, { pattern: '^(?:row|column|wrap)$' }),
-            'Older files: one layout for every level. Read as what each level shows; the app writes layouts in its place on the next layout edit.',
-          ),
-          layouts: field(
-            mapOf(
-              text(6, { pattern: '^(?:row|column|wrap)$' }),
-              CANVAS_LIMITS.entriesMax,
-              'a level: *canvas is the canvas (its html), else a group, as sorted name=value pairs joined by &',
-              LEVEL_KEY,
-            ),
-            'How the direct children of each level are laid out: row (side by side), column (stacked) or wrap (rows that wrap at the Desktop width). Absent: a group is a row; the canvas is a column when it has groups, else a row. No level inherits another.',
+            'Older files: one layout for every level, read as what each level shows while the component has no levelLayouts entry. Versions before levelLayouts draw it.',
           ),
           split: field(
             arrayOf(text(CANVAS_LIMITS.propNameCharsMax, { pattern: PROP_NAME }), CANVAS_LIMITS.splitPropsMax, { unique: true }),
@@ -117,6 +108,21 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
       ),
       'Canvas settings by component file. Renaming, moving or deleting a component updates its key.',
       { required: true, commands: COMMANDS },
+    ),
+    levelLayouts: field(
+      mapOf(
+        mapOf(
+          text(6, { pattern: '^(?:row|column|wrap)$' }),
+          CANVAS_LIMITS.entriesMax,
+          'a level: *canvas is the canvas (its html), else a group, as sorted name=value pairs joined by &',
+          LEVEL_KEY,
+        ),
+        CANVAS_LIMITS.componentsMax,
+        'a project-relative component path (src/...)',
+        COMPONENT_PATH,
+      ),
+      "By component file, how the direct children of each level are laid out: row (side by side), column (stacked) or wrap (rows that wrap at the Desktop width). Absent: a group is a row; the canvas is a column when it has groups, else a row. No level inherits another. An entry replaces the component's arrange. Versions before this key keep it as they find it.",
+      { commands: COMMANDS },
     ),
   },
   empty: { version: 1, components: {} },

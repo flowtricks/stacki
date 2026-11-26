@@ -123,11 +123,16 @@ export interface ComponentCanvas {
   /** This component's canvas root, over the project's. */
   readonly root?: CanvasRoot;
   /**
-   * How every level was laid out, as saved before each level had its own choice: read as what each of them shows, and
-   * turned into `layouts` by the first layout edit (withLevelArrangement).
+   * How every level was laid out, as saved before each level had its own choice: read as what each of them shows until
+   * the component has `layouts`. The first layout edit adds those and leaves this as it was, which is what versions
+   * before `layouts` go on drawing.
    */
   readonly arrange?: Exclude<CanvasArrangement, typeof DEFAULT_ARRANGEMENT>;
-  /** Each level's own layout, by level key (CANVAS_LEVEL or a group's); absent: the level's default. */
+  /**
+   * Each level's own layout, by level key (CANVAS_LEVEL or a group's); absent: the level's default. In the file this is
+   * the top-level `levelLayouts` entry of the component, not a key of the component's own (parseComponentCanvasFile).
+   * Empty only beside `arrange`: every level is then at its default, whatever `arrange` says.
+   */
   readonly layouts?: Readonly<Record<string, CanvasArrangement>>;
 }
 
@@ -146,7 +151,9 @@ export interface ComponentCanvasFile {
   readonly later?: Readonly<Record<string, unknown>>;
 }
 
-const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components']);
+// `levelLayouts` is a top-level key so that a version without it keeps the file: 1.4.20 refuses a whole file over an
+// unknown key of a component's, and keeps an unknown top-level key as read (ComponentCanvasFile.later).
+const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components', 'levelLayouts']);
 
 export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: {} };
 
@@ -155,7 +162,7 @@ export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: 
 const PROP_NAME = /^[A-Za-z_$][\w$-]*$/;
 const COMPONENT_FILE = /^(?:src\/|node_modules\/)[^\0]*\.astro$/;
 const ENTRY_FIELDS = new Set(['props', 'unset', 'assets', 'literals', 'content', 'width', 'height', 'background']);
-const COMPONENT_FIELDS = new Set(['split', 'frames', 'root', 'arrange', 'layouts']);
+const COMPONENT_FIELDS = new Set(['split', 'frames', 'root', 'arrange']);
 const ROOT_FIELDS = new Set(['background', 'classes']);
 // A class name as a selector can name it without escapes; `stacki-` is the canvas's own (`stacki-designer`).
 const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
@@ -186,11 +193,12 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
     components[canvasComponentFile(file)] = parseComponentSettings(settings, file);
   }
   assert(Object.keys(components).length === entries.length, 'Component canvas: every component is kept');
+  const laidOut = withLevelLayouts(components, value['levelLayouts']);
   const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
   assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
   const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
   const later = Object.entries(value).filter(([key]) => !FILE_FIELDS.has(key));
-  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, components);
+  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, laidOut);
 }
 
 // The file with its project-level settings, each written only when it is set.
@@ -274,14 +282,33 @@ function parseComponentSettings(input: unknown, file: string): ComponentCanvas {
   }
   const root = value['root'] === undefined ? undefined : parseCanvasRoot(value['root'], file);
   const arrange = value['arrange'] === undefined ? undefined : parseArrangement(value['arrange'], file);
-  const layouts = value['layouts'] === undefined ? undefined : parseLayouts(value['layouts'], file);
   return {
     ...(split === undefined ? {} : { split }),
     ...(framesInput === undefined ? {} : { frames }),
     ...(root === undefined ? {} : { root }),
     ...(arrange === undefined ? {} : { arrange }),
-    ...(layouts === undefined ? {} : { layouts }),
   };
+}
+
+// Each component's `layouts`, from the top-level key. An entry may name a component with no other settings; one whose
+// component an older version has renamed or deleted since stays under its old name, drawn nowhere.
+function withLevelLayouts(components: Readonly<Record<string, ComponentCanvas>>, input: unknown): Readonly<Record<string, ComponentCanvas>> {
+  if (input === undefined) {
+    return components;
+  }
+  const entries = Object.entries(record(input));
+  if (entries.length > CANVAS_LIMITS.componentsMax) {
+    throw new Error(`Component canvas: more than ${CANVAS_LIMITS.componentsMax} components have layouts`);
+  }
+  const laidOut = entries.map(([name, layouts]): readonly [string, ComponentCanvas] => {
+    const file = canvasComponentFile(name);
+    return [file, { ...components[file], layouts: parseLayouts(layouts, file) }];
+  });
+  const merged = { ...components, ...Object.fromEntries(laidOut) };
+  if (Object.keys(merged).length > CANVAS_LIMITS.componentsMax) {
+    throw new Error(`Component canvas: more than ${CANVAS_LIMITS.componentsMax} components`);
+  }
+  return merged;
 }
 
 function parseLayouts(input: unknown, file: string): Readonly<Record<string, CanvasArrangement>> {
@@ -496,19 +523,27 @@ function decodeKeyValue(text: string): string {
 
 export function serializeComponentCanvas(file: ComponentCanvasFile): string {
   // Sorted, so the same settings are always the same bytes and nothing churns in git.
-  const components = Object.fromEntries(
-    Object.keys(file.components)
-      .sort()
-      .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
-  );
+  const names = Object.keys(file.components).sort();
+  const components: Record<string, ComponentCanvas> = {};
+  const levelLayouts: Record<string, Readonly<Record<string, CanvasArrangement>>> = {};
+  for (const name of names) {
+    const { layouts, ...settings } = file.components[name] ?? {};
+    if (layouts !== undefined) {
+      levelLayouts[name] = Object.fromEntries(Object.entries(layouts).sort(([left], [right]) => (left < right ? -1 : 1)));
+    }
+    // A component whose only settings are its layouts is named there alone.
+    if (layouts === undefined || Object.keys(settings).length > 0) {
+      components[name] = sortedSettings(settings);
+    }
+  }
   const { later, ...known } = canvasFileOf({ background: file.background, classes: file.classes, later: file.later }, components);
-  const text = JSON.stringify({ ...known, ...later }, undefined, 2) + '\n';
+  const layoutsKey = Object.keys(levelLayouts).length === 0 ? {} : { levelLayouts };
+  const text = JSON.stringify({ ...known, ...layoutsKey, ...later }, undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
 
 function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
-  const layouts = settings.layouts;
   const frames = settings.frames;
   return {
     ...(settings.split === undefined ? {} : { split: settings.split }),
@@ -524,7 +559,6 @@ function sortedSettings(settings: ComponentCanvas): ComponentCanvas {
     // Classes keep their order: a later class wins a tie in the cascade, as on <html> itself.
     ...(settings.root === undefined ? {} : { root: settings.root }),
     ...(settings.arrange === undefined ? {} : { arrange: settings.arrange }),
-    ...(layouts === undefined ? {} : { layouts: Object.fromEntries(Object.entries(layouts).sort(([left], [right]) => (left < right ? -1 : 1))) }),
   };
 }
 
@@ -1095,12 +1129,12 @@ export function defaultArrangement(level: string, levels: CanvasLevels): CanvasA
  */
 export function chosenLayouts(settings: ComponentCanvas | undefined, levels: CanvasLevels): Readonly<Record<string, CanvasArrangement>> {
   const before = settings?.arrange;
-  if (before === undefined) {
+  if (settings?.layouts !== undefined || before === undefined) {
     return settings?.layouts ?? {};
   }
   assert(levels.groups.length <= CANVAS_LIMITS.entriesMax, 'A canvas has a bounded number of levels');
   const top = before === 'wrap' && levels.stacked ? [] : [CANVAS_LEVEL];
-  return { ...Object.fromEntries([...top, ...levels.groups].map((level) => [level, before])), ...settings?.layouts };
+  return Object.fromEntries([...top, ...levels.groups].map((level) => [level, before]));
 }
 
 /** How one level is laid out, and whether that is a choice saved for it (else the level's default). */
@@ -1134,7 +1168,9 @@ export function withLevelArrangement(
     layouts[level] = arrangement;
   }
   assert(Object.keys(layouts).length <= CANVAS_LIMITS.entriesMax, 'A canvas lays out a bounded number of levels');
-  const next = withComponentSettings(file, component, { ...settings, arrange: undefined, layouts });
+  // Beside an `arrange`, even no choice at all is kept: it says every level is at its default.
+  const kept = Object.keys(layouts).length === 0 && settings?.arrange === undefined ? undefined : layouts;
+  const next = withComponentSettings(file, component, { ...settings, layouts: kept });
   const shown = levelArrangement(next.components[component], level, levels).value;
   assert(shown === (arrangement ?? defaultArrangement(level, levels)), 'The arrangement written is the one read back');
   return next;
@@ -1165,8 +1201,9 @@ function keepsSetting(key: string, value: unknown): boolean {
   if (value === undefined) {
     return false;
   }
-  // A chosen split of no props is a choice (one frame), as is an arrangement; empty frames, layouts or root say nothing.
-  if (key === 'split' || key === 'arrange') {
+  // A chosen split of no props is a choice (one frame), as is an arrangement, and layouts of no level beside one
+  // (withLevelArrangement writes none otherwise); empty frames or an empty root say nothing.
+  if (key === 'split' || key === 'arrange' || key === 'layouts') {
     return true;
   }
   return Object.values(value as object).some((held) => held !== undefined);

@@ -554,6 +554,11 @@ test('each level has its own layout: none reaches another, the default is no set
   const top = withLevelArrangement(EMPTY_CANVAS_FILE, button, CANVAS_LEVEL, 'row', levels);
   assert.deepEqual(shown(top), ['row', 'row', 'row', 'row']);
   assert.deepEqual(top.components[button], { layouts: { [CANVAS_LEVEL]: 'row' } }, 'across is a choice for a canvas that goes down');
+  assert.deepEqual(JSON.parse(serializeComponentCanvas(top)), {
+    version: 1,
+    components: {},
+    levelLayouts: { [button]: { [CANVAS_LEVEL]: 'row' } },
+  });
   const one = withLevelArrangement(top, button, 'variant=arrow', 'column', levels);
   assert.deepEqual(shown(one), ['row', 'row', 'column', 'row'], 'one group changes alone, its own groups too');
   const text = serializeComponentCanvas(one);
@@ -569,12 +574,12 @@ test('each level has its own layout: none reaches another, the default is no set
   const back = withLevelArrangement(one, button, CANVAS_LEVEL, undefined, levels);
   assert.deepEqual(back.components[button], { layouts: { 'variant=arrow': 'column' } });
   assert.deepEqual(withLevelArrangement(back, button, 'variant=arrow', 'row', levels).components, {});
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: { [CANVAS_LEVEL]: 'grid' } } } }), /row, column or wrap/);
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: [] } } }));
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: {}, levelLayouts: { [button]: { [CANVAS_LEVEL]: 'grid' } } }), /row, column or wrap/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: {}, levelLayouts: { [button]: [] } }));
   assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 'grid' } } }), /row, column or wrap/);
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: { '': 'row' } } } }), /keyed/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: {}, levelLayouts: { [button]: { '': 'row' } } }), /keyed/);
   const many = Object.fromEntries(Array.from({ length: CANVAS_LIMITS.entriesMax + 1 }, (_, index) => [`a=${String(index)}`, 'row']));
-  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { layouts: many } } }), /levels/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: {}, levelLayouts: { [button]: many } }), /levels/);
 });
 
 test('a canvas arranged before levels had their own looks the same, and its first layout edit keeps every level', () => {
@@ -591,11 +596,17 @@ test('a canvas arranged before levels had their own looks the same, and its firs
   assert.equal(levelArrangement(old('wrap').components[button], 'variant=main', levels).chosen, true, 'a saved choice reads as set');
   const edited = withLevelArrangement(old('wrap'), button, 'variant=arrow', 'column', levels);
   assert.deepEqual(shown(edited), ['column', 'wrap', 'column']);
-  assert.equal(edited.components[button]?.arrange, undefined, 'the single value is gone');
+  assert.equal(edited.components[button]?.arrange, 'wrap', 'the single value stays, for versions that read only it');
   // Reset is never a silent no-op over the old value: the level goes to its default and stays there.
   const reset = withLevelArrangement(old('column'), button, 'variant=main', undefined, levels);
   assert.deepEqual(shown(reset), ['column', 'row', 'column']);
   assert.deepEqual(chosenLayouts(reset.components[button], levels), { [CANVAS_LEVEL]: 'column', 'variant=arrow': 'column' });
+  // Every level reset: the old value stays in the file and must not come back.
+  const all = ['variant=arrow', CANVAS_LEVEL].reduce((file, level) => withLevelArrangement(file, button, level, undefined, levels), reset);
+  const reread = parseComponentCanvasSource(serializeComponentCanvas(all));
+  assert.ok(reread.ok);
+  assert.deepEqual(reread.value.components[button], { arrange: 'column', layouts: {} });
+  assert.deepEqual(shown(reread.value), ['column', 'row', 'row']);
 });
 
 test('frames that differ are told apart from frames that agree, a frame’s own value among them', () => {
