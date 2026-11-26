@@ -112,6 +112,7 @@ export const messages = {
   'workspace.files.undo.rename': '重新命名 {name}',
   'workspace.notifications.copied': '已複製',
   'workspace.notifications.copy': '複製',
+  'workspace.notifications.copyFailed': '複製失敗',
   'workspace.notifications.dismiss': '關閉通知',
   'workspace.notifications.label': '通知',
   'workspace.notifications.loadMore': '載入更多（{count}）',

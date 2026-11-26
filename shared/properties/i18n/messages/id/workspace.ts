@@ -113,6 +113,7 @@ export const messages = {
   'workspace.files.undo.rename': 'Ganti nama {name}',
   'workspace.notifications.copied': 'Disalin',
   'workspace.notifications.copy': 'Salin',
+  'workspace.notifications.copyFailed': 'Gagal menyalin',
   'workspace.notifications.dismiss': 'Tutup notifikasi',
   'workspace.notifications.label': 'Notifikasi',
   'workspace.notifications.loadMore': 'Muat lebih banyak ({count})',

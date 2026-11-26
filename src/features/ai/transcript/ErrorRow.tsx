@@ -1,7 +1,7 @@
 // A reply that failed for a reason other than signing in.
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { WarningTriangleIcon } from '../../../ui/Icons';
-import { useCopy } from './copyText';
+import { useCopy } from '../../../ui/copyText';
 import './chrome.css';
 
 /**

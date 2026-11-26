@@ -117,6 +117,7 @@ export const messages = {
   'workspace.files.undo.rename': '{name} öğesini yeniden adlandır',
   'workspace.notifications.copied': 'Kopyalandı',
   'workspace.notifications.copy': 'Kopyala',
+  'workspace.notifications.copyFailed': 'Kopyalanamadı',
   'workspace.notifications.dismiss': 'Bildirimi kapat',
   'workspace.notifications.label': 'Bildirimler',
   'workspace.notifications.loadMore': 'Daha fazla yükle ({count})',

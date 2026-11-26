@@ -2319,6 +2319,7 @@
     "src/ui/contentInputs.css",
     "src/ui/cssFieldChips.ts",
     "src/ui/controls.css",
+    "src/ui/copyText.ts",
     "src/ui/dateFieldModel.ts",
     "src/ui/dateTimePicker.css",
     "src/ui/dateTimePickerModel.ts",

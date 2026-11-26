@@ -104,6 +104,7 @@ export const messages = {
   'workspace.files.undo.rename': 'Rename {name}',
   'workspace.notifications.copied': 'Copied',
   'workspace.notifications.copy': 'Copy',
+  'workspace.notifications.copyFailed': 'Copy failed',
   'workspace.notifications.dismiss': 'Dismiss notification',
   'workspace.notifications.label': 'Notifications',
   'workspace.notifications.loadMore': 'Load more ({count})',

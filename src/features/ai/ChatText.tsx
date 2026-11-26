@@ -23,7 +23,7 @@ import {
   type ListItem,
   type QuickReply,
 } from './markdown/chatMarkdown';
-import { useCopy } from './transcript/copyText';
+import { useCopy } from '../../ui/copyText';
 import './markdown/markdown.css';
 
 export function ChatText({ text, onQuickReply }: { readonly text: string; readonly onQuickReply?: ((reply: string) => void) | undefined }) {

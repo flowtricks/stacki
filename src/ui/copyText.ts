@@ -1,4 +1,4 @@
-// Copying text for the transcript's "Copy" actions. Clipboard access can be refused (no permission,
+// Copying text for "Copy" buttons (the AI transcript, error toasts). Clipboard access can be refused (no permission,
 // an insecure context, a test window), so the result is a value the button shows, never a throw.
 import { useEffect, useRef, useState } from 'react';
 
@@ -24,14 +24,20 @@ export async function copyText(text: string): Promise<'copied' | 'failed'> {
 export function useCopy(): { readonly state: CopyState; readonly copy: (text: string) => void } {
   const [state, setState] = useState<CopyState>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(
-    () => () => {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       clearTimeout(timer.current);
-    },
-    [],
-  );
+    };
+  }, []);
   const copy = (text: string): void => {
     void copyText(text).then((result) => {
+      // The write can finish after the button has gone; no timer is started for it then.
+      if (!mounted.current) {
+        return;
+      }
       setState(result);
       clearTimeout(timer.current);
       timer.current = setTimeout(() => setState('idle'), COPY_LIMITS.confirmMs);

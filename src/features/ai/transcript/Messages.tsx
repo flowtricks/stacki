@@ -10,7 +10,7 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { CheckIcon, CopyIcon, PencilIcon, RefreshIcon } from '../../../ui/Icons';
 import { ChatText } from '../ChatText';
-import { useCopy, type CopyState } from './copyText';
+import { useCopy, type CopyState } from '../../../ui/copyText';
 import { SentAttachments } from './SentAttachments';
 import { exceedsClamp, fullTimeLabel, timeLabel } from './messageModel';
 import './chrome.css';
