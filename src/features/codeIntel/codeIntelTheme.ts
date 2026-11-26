@@ -67,7 +67,7 @@ export const codeIntelTheme = Prec.highest(
         overflowY: 'auto',
         scrollbarGutter: 'stable',
       },
-      '.code-intel-signature': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textAlign: 'left' },
+      '.code-intel-signature': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textAlign: 'left' }, // physical: code reads left to right
       '.code-intel-prose': {
         fontFamily: 'var(--font, system-ui, sans-serif)',
         fontSize: '12px',
