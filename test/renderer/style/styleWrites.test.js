@@ -50,7 +50,7 @@ const PAGE = [
 
 const CARD = ['<div class="card"><h2 class="title">T</h2><slot /></div>', '<style>', '  .card {', '    padding: 1px;', '  }', '</style>', ''].join('\n');
 
-const refusals = () => [...document.querySelectorAll('.toast.error')].map((toast) => toast.textContent);
+const refusals = () => [...document.querySelectorAll('.toast.error .toast-message')].map((message) => message.textContent);
 
 // A project with the page and the Card component, the app open on the page.
 async function openProject(context) {
