@@ -15,17 +15,11 @@ const path = require('node:path');
 const { repoPath } = require('../helpers/sources.js');
 const { waitFor, waitForSteady } = require('../helpers/waitFor.js');
 // Playwright is Studio's dev dependency (its browser tests); Desktop reuses it here rather than adding its own copy.
-const { _electron: electron } = require(
-  fs.existsSync(repoPath('studio/node_modules/playwright'))
-    ? repoPath('studio/node_modules/playwright')
-    : '/Users/timothyricks/Documents/Projects/stacki/studio/node_modules/playwright',
-);
+const { _electron: electron } = require(repoPath('studio/node_modules/playwright'));
 
 const SHOTS = path.resolve(process.argv[2] ?? path.join(os.tmpdir(), 'stacki-rich-text-shots'));
-// A worktree may not have installed the fixture site's packages: the main checkout's are read, never written.
-const SITE = fs.existsSync(repoPath('studio/test/fixtures/site/node_modules'))
-  ? repoPath('studio/test/fixtures/site')
-  : '/Users/timothyricks/Documents/Projects/stacki/studio/test/fixtures/site';
+// The fixture site needs its installed packages: `npm --prefix studio/test/fixtures/site ci`.
+const SITE = repoPath('studio/test/fixtures/site');
 const WAIT_MS = 60_000;
 const STEADY_POLL_MS = 100;
 
@@ -52,8 +46,9 @@ function writeFixture(project) {
   );
   // Lumos' own Paragraph (src/components/typography/Paragraph.astro), copied from the framework with its two helpers,
   // the `@/` alias written as a relative path: its tag comes from a prop and its slot is printed through set:html.
-  const lumos = '/Users/timothyricks/Documents/Projects/lumos-framework/src';
-  if (fs.existsSync(lumos)) {
+  // Optional: STACKI_LUMOS_SOURCE names a checkout's `src` folder of the Lumos framework, read only.
+  const lumos = process.env['STACKI_LUMOS_SOURCE'];
+  if (lumos !== undefined && fs.existsSync(lumos)) {
     for (const file of ['utils/slots.ts', 'utils/style.ts']) {
       write(`src/${file}`, fs.readFileSync(path.join(lumos, file), 'utf8'));
     }
