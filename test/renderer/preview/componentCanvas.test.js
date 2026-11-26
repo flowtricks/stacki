@@ -106,7 +106,7 @@ test('the canvas page parses, imports the component once, and writes each frame'
   assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
   assert.match(
     source,
-    /data-fixed-width data-fixed-height style="grid-row: 2; grid-column: 2; width: 320px; height: 200px; contain-intrinsic-size: 320px 200px; background: var\(--swatch-light\)"/,
+    /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; contain-intrinsic-size: 320px 200px !important; background: var\(--swatch-light\) !important"/,
     'the frame sits in its row and column, at its size and background',
   );
   assert.match(source, /label="Back &quot;&lt;there&gt;&quot;"/, 'prop text is escaped');
@@ -222,22 +222,31 @@ test('every frame renders the component defaults: props, text and nested childre
   assert.equal(parsePage(source).editable, true);
 });
 
-test('the project background is the canvas surface, frames without their own are transparent over it, and a gone variable falls back', () => {
-  const grey = chrome.chromeStyles('dark');
-  assert.match(grey, /html\[data-stacki-ready\] \{ background: #1e1e1e !important; \}/);
-  assert.match(grey, /stacki-frame\[data-transparent\] \{ background: #fff; \}/, 'the page background is painted over this by the script');
+test('the surface is the canvas setting, else the site page’s own; frames are transparent and the scaffolding resists the project’s CSS', () => {
+  const plain = chrome.chromeStyles('dark');
+  assert.doesNotMatch(plain, /data-stacki-surface\] \{ background/, 'no setting: the script paints the site page’s background, or the grey');
+  assert.match(chrome.chromeScript(ID), /getComputedStyle\(root\)\.backgroundColor/, 'the root’s own background first, as a browser paints a page');
+  assert.match(chrome.chromeScript(ID), /"#1e1e1e"/, 'the app’s grey where the site paints none');
+  assert.match(
+    plain,
+    /html\[data-stacki-ready\] > body > stacki-frame\[data-frame\] \{[^}]*background: transparent !important;/,
+    'a frame is transparent, whatever the project paints on elements',
+  );
+  for (const property of ['margin: 0 !important', 'padding: 0 !important', 'border: 0 !important', 'opacity: 1 !important', 'visibility: visible !important']) {
+    assert.ok(plain.includes(property), `the scaffolding pins ${property}`);
+  }
   assert.doesNotMatch(chrome.chromeScript(ID), /setProperty\('--/, 'the chrome sets no custom property a variable picker would list');
   const layout = model.buildCanvasLayout(button, undefined);
   assert.match(
     pageOf(layout, { surface: 'var(--background)' }),
     /'stacki-designer'\]\.filter\(Boolean\)\.join\(' '\)\} data-stacki-surface>/,
-    'a project background marks the root',
+    'a canvas background setting marks the root',
   );
   assert.doesNotMatch(pageOf(layout), /\} data-stacki-surface>/);
   const themed = chrome.chromeStyles('dark', 'var(--background)');
-  assert.match(themed, /html\[data-stacki-ready\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
-  assert.match(themed, /stacki-frame\[data-transparent\] \{ background: transparent; \}/);
+  assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
+  assert.match(plain, /stacki-frame\[data-frame\]::after \{[^}]*visibility: hidden !important;/, 'a hidden copy of the caption makes the frame as wide as it');
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');

@@ -13,6 +13,7 @@ import { pureBindingPath } from '../../editor/bindingPath';
 import { dataPickerPosition } from './dataPickerPosition';
 import { FieldDataPicker, type FieldPosition } from './propBindings';
 import type { RichContext } from './RichContent';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export interface ExprBindingFieldProps {
   readonly nodeId: string;
@@ -31,7 +32,7 @@ export default function ExprBindingField({ nodeId, value, bindContext, onSetText
   const showChip = !raw && path !== undefined;
   return (
     <div className="props-field" style={{ marginTop: 8 }}>
-      <label onClick={(event) => event.preventDefault()}>
+      <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
         <span className="prop-label">{translate('props.sources.binding')}</span>
         <button
           type="button"

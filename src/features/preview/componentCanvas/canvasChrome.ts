@@ -19,6 +19,9 @@ export const CHROME_LIMITS = {
   zoomMax: 4,
 } as const satisfies Record<string, number>;
 
+/** The cascade layer the canvas's own rules are in (chromeStyles). */
+const CHROME_LAYER = 'stacki-canvas';
+
 /** The message the page and the editor exchange; `canvas` names the page, so a stale page's messages are ignored. */
 export const CANVAS_MESSAGE = 'stacki:component-canvas';
 
@@ -28,34 +31,48 @@ export const CANVAS_MESSAGE = 'stacki:component-canvas';
  * grey and such a frame shows the page's background, as the component sits on in the site.
  */
 export function chromeStyles(theme: 'light' | 'dark', surface?: string): string {
-  const grey = theme === 'dark' ? '#1e1e1e' : '#e9e9e9';
-  // A variable the project no longer defines falls back to the grey rather than to nothing.
-  const canvas = surface === undefined ? grey : withFallback(surface, grey);
+  const grey = canvasGrey(theme);
   const label = theme === 'dark' ? '#a3a3a3' : '#6b6b6b';
   // The page is the canvas: its <html> (the canvas root, which the person selects and gives classes) is the surface, its
-  // <body> the pannable, zoomable world, and each frame one element holding its instance, its label a caption drawn by
-  // the frame itself (::before), so nothing but the root and the instances is an element anyone can point at. The
-  // surface and the frames' page background apply once the script has read the site's own (data-stacki-ready).
-  const css = `
-html { height: 100% !important; overflow: hidden !important; touch-action: none; }
-html[data-stacki-ready] { background: ${canvas} !important; }
-html[data-stacki-ready] body { background: transparent !important; }
-body { position: absolute !important; left: 0; top: 0; margin: 0 !important; padding: 64px !important; box-sizing: content-box; display: grid !important; grid-auto-flow: row; gap: 96px 64px; align-items: start; justify-items: start; transform-origin: 0 0; width: max-content; min-height: 0 !important; }
+  // <body> the pannable, zoomable world, and each frame one element holding its instance, its caption drawn by the frame
+  // itself (::before), so nothing but the root and the instances is an element anyone can point at.
+  //
+  // The surface is the canvas Background setting when one is set (a variable the project drops falls back to the grey);
+  // otherwise the script paints it with the background the site's own page shows (canvasScript sitePage). The world and
+  // the frames are scaffolding, immune to the project's CSS: every property that could move, paint or hide them is set
+  // here !important, under selectors more specific than any element, universal, :where or attribute rule. A frame is
+  // transparent unless a canvas Background setting paints it (inline, !important).
+  //
+  // In a cascade layer of its own, declared before any of the project's: for !important declarations the first layer
+  // wins, over every later layer and over unlayered rules, so a project that imports its CSS into layers (Lumos does)
+  // and marks a rule !important still cannot reach the scaffolding.
+  const scaffold = 'html[data-stacki-ready] > body > stacki-frame[data-frame]';
+  const css = `@layer ${CHROME_LAYER} {
+html[data-stacki-ready] { height: 100% !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; border: 0 !important; touch-action: none; }
+${surface === undefined ? '' : `html[data-stacki-ready][data-stacki-surface] { background: ${withFallback(surface, grey)} !important; }`}
+html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 88px 64px 64px !important; border: 0 !important; box-sizing: content-box !important; display: grid !important; grid-auto-flow: row !important; gap: 96px 64px !important; align-items: start !important; justify-items: start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
 html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
-stacki-frame { display: block; position: relative; transform: translate(0); box-sizing: border-box; width: max-content; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px; min-width: 24px; min-height: 24px; }
-stacki-frame::before { content: attr(data-label); position: absolute; left: 0; bottom: 100%; margin-bottom: 8px; max-width: max(100%, 320px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; letter-spacing: 0; text-transform: none; color: ${label}; user-select: none; cursor: default; }
-html[data-stacki-light] stacki-frame::before { color: #5c5c5c; }
-html[data-stacki-dark] stacki-frame::before { color: #a3a3a3; }
-stacki-frame[data-selected]::before { color: #2f80ff !important; }
-stacki-frame[data-transparent] { background: ${surface === undefined ? '#fff' : 'transparent'}; }
-stacki-frame[data-fixed-width] { max-width: none; overflow-x: clip; }
-stacki-frame[data-fixed-height] { overflow-y: clip; }
-stacki-frame[data-fixed-width][data-fixed-height] { content-visibility: auto; }
-stacki-frame[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px; }
-stacki-frame[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px; }
+${scaffold} { display: block !important; position: relative !important; inset: auto !important; transform: translate(0) !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; min-height: 24px !important; margin: 0 !important; padding: 0 !important; border: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
+${scaffold}::before, ${scaffold}::after { content: attr(data-label) !important; display: block !important; box-sizing: content-box !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; letter-spacing: 0 !important; word-spacing: 0 !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important; text-align: left !important; white-space: nowrap !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; min-width: 0 !important; max-width: none !important; float: none !important; }
+${scaffold}::before { position: absolute !important; left: 0 !important; bottom: 100% !important; top: auto !important; right: auto !important; height: 16px !important; margin-bottom: 8px !important; visibility: visible !important; color: ${label} !important; user-select: none !important; cursor: default !important; overflow: visible !important; }
+${scaffold}::after { position: static !important; height: 0 !important; visibility: hidden !important; overflow: hidden !important; }
+html[data-stacki-light] > body > stacki-frame[data-frame]::before { color: #5c5c5c !important; }
+html[data-stacki-dark] > body > stacki-frame[data-frame]::before { color: #a3a3a3 !important; }
+html[data-stacki-ready] > body > stacki-frame[data-frame][data-selected]::before { color: #2f80ff !important; }
+${scaffold}[data-fixed-width] { max-width: none !important; overflow-x: clip !important; }
+${scaffold}[data-fixed-height] { overflow-y: clip !important; }
+${scaffold}[data-fixed-width][data-fixed-height] { content-visibility: auto !important; }
+${scaffold}[data-fallback]:not([data-fixed-width]) { width: ${String(CHROME_LIMITS.fallbackWidthPx)}px !important; }
+${scaffold}[data-fallback]:not([data-fixed-height]) { height: ${String(CHROME_LIMITS.fallbackHeightPx)}px !important; }
+}
 `;
   assert(!css.includes('</'), 'The chrome styles never close their element');
   return css;
+}
+
+/** The app's own canvas grey: the surface where neither a canvas Background setting nor the site's page paints one. */
+export function canvasGrey(theme: 'light' | 'dark'): string {
+  return theme === 'dark' ? '#1e1e1e' : '#e9e9e9';
 }
 
 // `var(--name)` with a fallback, so a variable that is gone draws the fallback; any other value unchanged.
@@ -65,8 +82,9 @@ export function withFallback(value: string, fallback: string): string {
 }
 
 /** The page's script. `id` is the canvas page's own name, checked by both ends of every message. */
-export function chromeScript(id: string): string {
+export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): string {
   assert(/^[a-f0-9-]{36}$/.test(id), 'A canvas page is named by a UUID');
+  const grey = canvasGrey(theme);
   const script = `(function () {
   var ID = ${JSON.stringify(id)};
   var TYPE = ${JSON.stringify(CANVAS_MESSAGE)};
@@ -90,7 +108,7 @@ export function chromeScript(id: string): string {
   function apply() {
     if (!view) return;
     var transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.scale + ')';
-    if (world.style.transform !== transform) world.style.transform = transform;
+    if (world.style.getPropertyValue('transform') !== transform) world.style.setProperty('transform', transform, 'important');
   }
   function remember() { try { sessionStorage.setItem(KEY, JSON.stringify({ x: view.x, y: view.y, scale: view.scale, moved: moved })); } catch (e) {} post({ event: 'view', scale: view.scale }); }
   function set(next) { view = next; apply(); remember(); }
@@ -127,22 +145,24 @@ export function chromeScript(id: string): string {
     }
   }
   var clear = function (color) { return !color || color === 'transparent' || /rgba\\(.*,\\s*0\\)$/.test(color); };
-  // The site's own page background, read with the canvas's surface lifted for the moment it takes (the site's styles
-  // arrive after this script, and a theme class on the root changes it): without a project canvas background, a frame
-  // without a background of its own shows it, as the component sits on in the site (its text colours are chosen for
-  // it). Written on the frames themselves, never as a custom property the editor's variable picker would list.
+  // The surface where no canvas Background setting paints it: the background the site's own page shows, as a browser
+  // paints a page's canvas (the root's background, else the body's), read with the canvas's own rules lifted for the
+  // moment it takes; the app's grey where the site paints none. The site's styles arrive after this script and a theme
+  // class on the root changes them, so it is read again as they settle. Written as a rule of the canvas's own, never as
+  // a custom property the editor's variable picker would list, nor on the root's own style.
+  var paint = document.createElement('style');
+  paint.setAttribute('data-stacki-chrome', '');
+  (document.head || root).appendChild(paint);
   function sitePage() {
     root.removeAttribute('data-stacki-ready');
-    var body = getComputedStyle(world).backgroundColor, html = getComputedStyle(root).backgroundColor;
+    var html = getComputedStyle(root).backgroundColor, body = getComputedStyle(world).backgroundColor;
     root.setAttribute('data-stacki-ready', '');
-    return !clear(body) ? body : !clear(html) ? html : '#fff';
+    return !clear(html) ? html : !clear(body) ? body : ${JSON.stringify(grey)};
   }
   root.setAttribute('data-stacki-ready', '');
   function pageBackground() {
-    if (root.hasAttribute('data-stacki-surface')) return;
-    var page = sitePage();
-    var all = document.querySelectorAll('stacki-frame[data-transparent]');
-    for (var i = 0; i < all.length; i++) { if (all[i].style.getPropertyValue('background') !== page) all[i].style.setProperty('background', page); }
+    var rule = root.hasAttribute('data-stacki-surface') ? '' : '@layer ${CHROME_LAYER} { html[data-stacki-ready] { background: ' + sitePage() + ' !important; } }';
+    if (paint.textContent !== rule) paint.textContent = rule;
   }
   // Captions stay legible on any canvas colour: dark on a light canvas, light on a dark one.
   function labelColor() {

@@ -22,6 +22,7 @@ import { arrayItems } from './arrayValue';
 import { itemShapeOf } from './listItemShape';
 import { ConditionalEditor, useConditionCatalog } from './ConditionalValue';
 import { startingConditional, valueLanguageOf } from './conditionalModel';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
@@ -86,7 +87,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
   const pill = <PropFieldPill state={state} />;
   const menu = <PropFieldMenu state={state} />;
   return (
-    <label onClick={noLabelActivation}>
+    <label htmlFor={CAPTION_LABEL_FOR} onClick={noLabelActivation}>
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}

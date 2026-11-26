@@ -1,6 +1,6 @@
 import Popup from '../../ui/Popup';
 import InfoHint from '../../ui/InfoHint';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import type { Collection, CmsField, FieldType } from './cmsSchema';
 import type { DeclaredTypes } from './cmsTypes';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
@@ -364,6 +364,8 @@ interface NewFieldNameProps extends NewFieldProps {
   readonly setName: (name: string) => void;
 }
 function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps) {
+  // The caption names the field below it, never the (i) inside it (src/ui/captionLabel.ts).
+  const nameId = useId();
   const translate = useTranslate();
   const info = typeInfo(type);
   const submit = () => {
@@ -376,11 +378,12 @@ function NewFieldName({ type, name, setName, onAdd, onClose }: NewFieldNameProps
     <>
       <div className="modal-body">
         <div>
-          <label>
+          <label htmlFor={nameId}>
             {translate('cms.settings.nameLabel')}
             {keyFor(name) && <InfoHint text={translate('cms.settings.codeKey', { key: keyFor(name) })} />}
           </label>
           <input
+            id={nameId}
             autoFocus
             value={name}
             maxLength={BOUNDARY_LIMITS.pathLengthMax}

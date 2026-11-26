@@ -148,7 +148,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
         onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
-        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath } : {})}
+        {...(atCanvasPage(app) ? { canvasPathOf: canvasPageNodePath, canvasWholePath: canvasRootPath() } : {})}
         onSelectedClasses={app.receiveClasses}
         onRenderedPaths={app.setRenderedPaths}
         onNodeStates={app.setNodeStates}

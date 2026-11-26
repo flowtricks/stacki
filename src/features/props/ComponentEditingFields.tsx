@@ -13,6 +13,7 @@ import CodeEditor from '../../ui/CodeEditor';
 import { BracesIcon } from '../../ui/Icons';
 import type { InlineNode } from './richContentModel';
 import { richTextNodes, richTextView, sameRichContent, withoutLayoutSpace, type RichTextCodeReason } from './richTextContent';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export { sameRichContent } from './richTextContent';
 
@@ -50,7 +51,7 @@ export function RichTextContentField(props: {
   return (
     <div className="props-field props-rich-text" key="content">
       {/* The label row every prop field has: the name, then the `{}` that switches the field to its code. */}
-      <label onClick={(event) => event.preventDefault()}>
+      <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
         <span className="prop-label">{props.label}</span>
         <TipAnchor text={tip}>
           <button

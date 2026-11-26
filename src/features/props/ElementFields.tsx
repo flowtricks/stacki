@@ -26,6 +26,7 @@ import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
 import { RichTextContentField } from './ComponentEditingFields';
 import { plainChildrenHTML } from './richTextContent';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const translate = useTranslate();
@@ -46,7 +47,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
     <>
       {showContentField && (
         <div className="props-field" key="content">
-          <label onClick={noLabelActivation}>
+          <label htmlFor={CAPTION_LABEL_FOR} onClick={noLabelActivation}>
             <ContentLabel
               active={contentSet}
               name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}

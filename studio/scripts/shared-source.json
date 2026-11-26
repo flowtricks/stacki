@@ -2302,6 +2302,7 @@
     "src/ui/canvasPointQuery.ts",
     "src/ui/canvasTextDraft.ts",
     "src/ui/canvasTextSourceCue.ts",
+    "src/ui/captionLabel.ts",
     "src/ui/central/CentralIcon.tsx",
     "src/ui/central/centralGeometry.tsx",
     "src/ui/chipEditor/ChipPicker.tsx",
