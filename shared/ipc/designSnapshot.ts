@@ -3,7 +3,9 @@
 // A frame on Design mode's canvas is a snapshot of the page the one live canvas draws. The renderer cannot read
 // that page (it is the dev server's origin), so it asks the frame's preload, over postMessage:
 // `stacki:design-snapshot` answers with a copy of the document as drawn now, each element that stands for a node
-// of the open file marked with that node's path; `stacki:design-watch` makes the frame say when its styles change.
+// of the open file marked with that node's path; `stacki:design-watch` makes the frame say when its styles change;
+// `stacki:design-page-html` answers with the page as the dev server renders it now, markers and all, which is what
+// unlinking a component reads (src/app/designMode/designUnlink.ts).
 // Both ends parse what they receive: the page on the canvas is the person's own site, and may post anything.
 import { assert } from '../core/assert';
 import { count, record, text } from '../core/boundary';
@@ -86,7 +88,10 @@ export function deepestDesignNode(attribute: string): DesignNodeAt | undefined {
   return best;
 }
 
-export type DesignSnapshotRequest = { readonly type: 'stacki:design-snapshot'; readonly nonce: string } | { readonly type: 'stacki:design-watch' };
+export type DesignSnapshotRequest =
+  | { readonly type: 'stacki:design-snapshot'; readonly nonce: string }
+  | { readonly type: 'stacki:design-page-html'; readonly nonce: string }
+  | { readonly type: 'stacki:design-watch' };
 
 export interface DesignSnapshot {
   /** A whole document: scripts removed, stylesheets and fonts inlined, nodes marked. */
@@ -99,6 +104,10 @@ export interface DesignSnapshot {
 }
 
 export const DESIGN_SNAPSHOT_FAILURES = ['no-document', 'too-many-elements', 'too-large', 'failed'] as const;
+
+/** Why the page's rendered text could not be read: the dev server's answer was not a page, too long, or failed. */
+export const DESIGN_PAGE_HTML_FAILURES = ['not-a-page', 'too-large', 'failed'] as const;
+export type DesignPageHtmlFailure = (typeof DESIGN_PAGE_HTML_FAILURES)[number];
 export type DesignSnapshotFailure = (typeof DESIGN_SNAPSHOT_FAILURES)[number];
 
 export type DesignCanvasMessage =
@@ -117,6 +126,9 @@ export type DesignCanvasMessage =
       readonly elements: readonly DesignLiveElement[];
       readonly variables: string;
     }
+  /** The page as the dev server renders it now: its text, unchanged, markers and all. */
+  | { readonly type: 'stacki:design-page-html-reply'; readonly nonce: string; readonly ok: true; readonly html: string }
+  | { readonly type: 'stacki:design-page-html-reply'; readonly nonce: string; readonly ok: false; readonly failure: DesignPageHtmlFailure }
   /** The page's styles changed under the watch (a stylesheet replaced by the dev server, a live rule). */
   | { readonly type: 'stacki:design-changed' };
 
@@ -159,7 +171,7 @@ export function parseDesignSnapshotRequest(input: unknown): DesignSnapshotReques
   if (input.type === 'stacki:design-watch') {
     return { type: input.type };
   }
-  if (input.type !== 'stacki:design-snapshot' || !('nonce' in input)) {
+  if ((input.type !== 'stacki:design-snapshot' && input.type !== 'stacki:design-page-html') || !('nonce' in input)) {
     return undefined;
   }
   const { nonce } = input;
@@ -208,6 +220,9 @@ export function parseDesignCanvasMessage(input: unknown): DesignCanvasMessage | 
       return undefined;
     }
   }
+  if (input.type === 'stacki:design-page-html-reply') {
+    return parsePageHtmlReply(input);
+  }
   if (input.type !== 'stacki:design-snapshot-reply') {
     return undefined;
   }
@@ -220,6 +235,21 @@ export function parseDesignCanvasMessage(input: unknown): DesignCanvasMessage | 
     const failure = DESIGN_SNAPSHOT_FAILURES.find((entry) => entry === value['failure']) ?? 'failed';
     const detail = bounded(value['detail'], DESIGN_SNAPSHOT_LIMITS.detailCharsMax, 'Design detail');
     return { type: input.type, nonce, ok: false, failure, detail };
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePageHtmlReply(input: object): DesignCanvasMessage | undefined {
+  try {
+    const value = record(input);
+    const nonce = bounded(value['nonce'], DESIGN_SNAPSHOT_LIMITS.nonceCharsMax, 'Design nonce');
+    if (value['ok'] === true) {
+      const html = bounded(value['html'], DESIGN_SNAPSHOT_LIMITS.htmlCharsMax, 'Design page text');
+      return { type: 'stacki:design-page-html-reply', nonce, ok: true, html };
+    }
+    const failure = DESIGN_PAGE_HTML_FAILURES.find((entry) => entry === value['failure']) ?? 'failed';
+    return { type: 'stacki:design-page-html-reply', nonce, ok: false, failure };
   } catch {
     return undefined;
   }

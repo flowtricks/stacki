@@ -1,12 +1,14 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useDefaultsMenu } from './defaultsMenu';
+import { useUnlinkMenu } from './unlinkMenu';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useShortcutTip } from '../../ui/shortcutTip';
 
-export type ContextAction = 'defaults' | 'open' | 'canvas' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
+export type ContextAction =
+  'defaults' | 'open' | 'canvas' | 'unlink' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
 export interface ContextPosition {
   readonly left: number;
   readonly top: number;
@@ -88,14 +90,16 @@ export function ContextMenu(props: MenuProps) {
   );
 }
 
-function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | 'onAction'>) {
+function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | 'canChange' | 'onAction'>) {
   const translate = useTranslate();
+  const unlink = useUnlinkMenu();
   return (
     <>
       <MenuItem label={translate('structure.menu.openComponent')} disabled={!props.canOpen} onSelect={() => props.onAction('open')} />
       {props.openCanvas !== 'absent' && (
         <MenuItem label={translate('componentCanvas.menu.open')} disabled={props.openCanvas === 'disabled'} onSelect={() => props.onAction('canvas')} />
       )}
+      {unlink !== undefined && <MenuItem label={unlink.label} disabled={!props.canChange} onSelect={() => props.onAction('unlink')} />}
       <div className="ctx-divider" role="separator" />
     </>
   );

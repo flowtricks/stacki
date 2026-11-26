@@ -2,6 +2,7 @@ import { ContextMenu, type ContextAction, type ContextPosition } from './Structu
 import { findNavigatorNode, type NavigatorNode } from './structureModel';
 import { canConvertText, canWrapNode, type TextTag, type WrapperTag } from '../../editor/wrapRules';
 import { isFragmentNode } from '../../editor/liveClasses';
+import { currentUnlinkMenu } from './unlinkMenu';
 
 /** Shared by navigator and canvas so action availability cannot drift between them. */
 export interface ElementActionProps {
@@ -74,6 +75,13 @@ function runContextAction(action: ContextAction, props: ElementActionProps, menu
       }
       if (capabilities.canOpen && node?.kind === 'component') {
         props.onOpenComponent?.(node.name, node.id);
+      }
+      return;
+    }
+    case 'unlink': {
+      const offer = currentUnlinkMenu();
+      if (capabilities.component && capabilities.canChange && offer !== undefined) {
+        offer.unlink(menu.nodeId);
       }
       return;
     }

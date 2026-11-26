@@ -24,6 +24,7 @@ const FEATURE_PATHS = [
   'shared/ipc/designSession.ts',
   'shared/ipc/designSnapshot.ts',
   'src/features/structure/defaultsMenu.ts',
+  'src/features/structure/unlinkMenu.ts',
 ];
 const SCANNED = ['src', 'electron', 'shared', 'scripts', 'studio/src', 'studio/scripts'];
 const FILES_MAX = 20_000;

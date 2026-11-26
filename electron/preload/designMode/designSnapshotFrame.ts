@@ -15,6 +15,7 @@ import {
   DESIGN_SNAPSHOT_LIMITS,
   parseDesignSnapshotRequest,
   type DesignCanvasMessage,
+  type DesignPageHtmlFailure,
   type DesignSnapshotFailure,
   designNodeMark,
 } from '../../../shared/ipc/designSnapshot';
@@ -54,6 +55,10 @@ export function listenForDesignSnapshots(): void {
     }
     if (request.type === 'stacki:design-watch') {
       watchStyles();
+      return;
+    }
+    if (request.type === 'stacki:design-page-html') {
+      void pageHtmlMessage(request.nonce).then(post);
       return;
     }
     void snapshotMessage(request.nonce).then(post);
@@ -116,6 +121,61 @@ async function snapshotMessage(nonce: string): Promise<DesignCanvasMessage> {
   } catch (error: unknown) {
     return refused('failed', String(error));
   }
+}
+
+/** What one answer of the dev server may hold, in bytes: a page past the snapshot's character bound is refused anyway. */
+const PAGE_BYTES_MAX = DESIGN_SNAPSHOT_LIMITS.htmlCharsMax * 4;
+/** Bounds the read of one answer: a stream yields far fewer pieces than this for a page within PAGE_BYTES_MAX. */
+const PAGE_CHUNKS_MAX = 100_000;
+
+/**
+ * The page as the dev server renders it now, read again from this frame's own address: its text as served, with the
+ * editor's markers (`<!--avb-s:…-->`, `data-avb-p`) and before any script has run, which is what unlinking a
+ * component needs. Same origin, so the dev server answers; nothing on the page changes.
+ */
+async function pageHtmlMessage(nonce: string): Promise<DesignCanvasMessage> {
+  const refused = (failure: DesignPageHtmlFailure): DesignCanvasMessage => ({ type: 'stacki:design-page-html-reply', nonce, ok: false, failure });
+  try {
+    const address = location.href.split('#')[0] ?? '';
+    const response = await fetch(address, { cache: 'no-store', credentials: 'same-origin', redirect: 'error' });
+    const kind = response.headers.get('content-type') ?? '';
+    if (!response.ok || !kind.includes('text/html') || response.body === null) {
+      return refused('not-a-page');
+    }
+    const reader = response.body.getReader();
+    const pieces: Uint8Array[] = [];
+    let bytes = 0;
+    for (let chunk = 0; chunk < PAGE_CHUNKS_MAX; chunk += 1) {
+      const next = await reader.read();
+      if (next.done) {
+        const html = new TextDecoder().decode(joined(pieces, bytes));
+        return html.length > DESIGN_SNAPSHOT_LIMITS.htmlCharsMax ? refused('too-large') : { type: 'stacki:design-page-html-reply', nonce, ok: true, html };
+      }
+      bytes += next.value.byteLength;
+      if (bytes > PAGE_BYTES_MAX) {
+        await reader.cancel();
+        return refused('too-large');
+      }
+      pieces.push(next.value);
+    }
+    await reader.cancel();
+    return refused('too-large');
+  } catch {
+    return refused('failed');
+  }
+}
+
+function joined(pieces: readonly Uint8Array[], bytes: number): Uint8Array {
+  const whole = new Uint8Array(bytes);
+  let at = 0;
+  for (const piece of pieces) {
+    whole.set(piece, at);
+    at += piece.byteLength;
+  }
+  if (at !== bytes) {
+    throw new Error('Assertion failed: joined: the pieces fill the page exactly');
+  }
+  return whole;
 }
 
 /**

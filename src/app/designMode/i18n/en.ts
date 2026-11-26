@@ -48,6 +48,19 @@ export const designModeEnglish = {
   'toast.chatFailed': 'The AI panel could not open a chat for your frames.',
   'toast.failed': 'Design mode: {detail}',
   'toast.frameLimit': 'A session holds up to {count} frames.',
+  'menu.unlink': 'Unlink component',
+  'unlink.busy': 'The page is still updating. Try unlinking again in a moment.',
+  'unlink.notInstance': 'Only a component placed on this page can be unlinked.',
+  'unlink.inList': 'This component is repeated by a list, so it can’t be unlinked on its own.',
+  'unlink.unreadable': 'Stacki couldn’t read this component’s file, so it wasn’t unlinked.',
+  'unlink.notSame': 'Unlinking would change how this component looks, so it was left as it was.',
+  'unlink.notRendered': 'This component shows nothing on this page, so there is nothing to unlink.',
+  'unlink.script': 'This component runs its own script, which plain elements would lose, so it can’t be unlinked.',
+  'unlink.inlineStyle': 'This component writes its own styles into the page, so it can’t be unlinked without changing them.',
+  'unlink.island': 'This component runs in the browser, so it can’t be turned into plain elements.',
+  'unlink.picture': 'This component shows a picture that only exists while it renders, so it can’t be unlinked.',
+  'unlink.slotTwice': 'This component shows the content you gave it more than once, so it can’t be unlinked.',
+  'unlink.unsupported': 'This component’s output can’t be written as plain elements, so it wasn’t unlinked.',
 } as const;
 
 export type DesignWordKey = keyof typeof designModeEnglish;
