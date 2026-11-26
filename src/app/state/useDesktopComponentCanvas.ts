@@ -14,7 +14,6 @@ import {
   EMPTY_CANVAS_FILE,
   parseComponentCanvasSource,
   canvasAssetUses,
-  serializeComponentCanvas,
   withFrameEdit,
   canvasRoot,
   PROJECT_ROOT,
@@ -55,6 +54,7 @@ import {
   type ComponentCanvasControl,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { cleanError } from '../../lib/cleanError';
+import { canvasSettingsStore, type CanvasChange, type CanvasSettingsIo, type CanvasSettingsStore } from '../model/canvasSettingsStore';
 import { nodeAtPath } from '../../editor/editorTree';
 import { trailOf } from '../model/pageGestures';
 import { resolveProjectImport } from '../../ipc/appBridge';
@@ -79,8 +79,10 @@ interface Origin {
 }
 
 interface Writes {
-  /** The settings file as last read or written: the base the next write is checked against. */
-  base: string | undefined;
+  /** The open canvas's settings and their one writer (canvasSettingsStore.ts). */
+  store: CanvasSettingsStore | undefined;
+  /** The canvas page's writes, one at a time, so an older page never lands over a newer one. */
+  pageQueue: Promise<void>;
   /** The page text last written, so an unchanged page is never rewritten. */
   page: string;
   /** The canvas whose page may be written: cleared as it closes, so a write already under way never revives a retired page. */
@@ -95,39 +97,34 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   const stateRef = useRef(state);
   stateRef.current = state;
   const origin = useRef<Origin>({ stack: [], selectionPath: undefined, device: 'desktop', customWidth: undefined });
-  const writes = useRef<Writes>({ base: undefined, page: '', active: undefined, settingsTimer: undefined, pageTimer: undefined });
+  const writes = useRef<Writes>({
+    store: undefined,
+    pageQueue: Promise.resolve(),
+    page: '',
+    active: undefined,
+    settingsTimer: undefined,
+    pageTimer: undefined,
+  });
   const project = app.project.path;
   // The shell's latest view, for the control's actions: the control itself stays the same object between renders.
   const shell = useRef(app);
   shell.current = app;
   noteComponentCanvas(state);
 
-  const saveSettings = useCallback(
-    async (closing?: CanvasOpen): Promise<void> => {
-      const current = closing ?? stateRef.current;
-      const held = writes.current;
-      clearTimeout(held.settingsTimer);
-      held.settingsTimer = undefined;
-      if (current.kind !== 'open') {
-        return;
-      }
-      const source = serializeComponentCanvas(current.settings);
-      // No file yet and nothing to put in one: nothing is written. A project-level setting (the canvas root's classes or
-      // background) is something, though no component has settings yet.
-      if (source === held.base || (held.base === undefined && source === serializeComponentCanvas(EMPTY_CANVAS_FILE))) {
-        return;
-      }
-      try {
-        const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(held.base === undefined ? {} : { base: held.base }) });
-        held.base = saved.source;
-      } catch (error: unknown) {
-        app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
-        // Someone else changed the file: carry on from what is on disk now.
-        held.base = (await readMetadata(project, 'componentCanvas')).source;
-      }
-    },
-    [app, project, translate],
-  );
+  const saveSettings = useCallback(async (): Promise<void> => {
+    const held = writes.current;
+    clearTimeout(held.settingsTimer);
+    held.settingsTimer = undefined;
+    const store = held.store;
+    if (store === undefined) {
+      return;
+    }
+    try {
+      await store.save();
+    } catch (error: unknown) {
+      app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
+    }
+  }, [app, translate]);
 
   // Ends one canvas without navigating: its settings are written and its page retired (projectMetadataHandlers.ts).
   const retire = useCallback(
@@ -135,7 +132,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       if (closing.kind !== 'open') {
         return;
       }
-      await saveSettings(closing);
+      await saveSettings();
       clearTimeout(writes.current.pageTimer);
       writes.current.active = undefined;
       await removeDefaultsCanvas(project, pageFileOf(closing.id)).catch((error: unknown) => console.warn('Could not retire the component canvas page:', error));
@@ -180,7 +177,14 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
         .then(
           (opened) => {
             origin.current = kept ?? opened.origin;
-            writes.current = { base: opened.base, page: opened.page, active: opened.state.id, settingsTimer: undefined, pageTimer: undefined };
+            writes.current = {
+              store: canvasSettingsStore(settingsIo(app.project.path), opened.base),
+              pageQueue: writes.current.pageQueue,
+              page: opened.page,
+              active: opened.state.id,
+              settingsTimer: undefined,
+              pageTimer: undefined,
+            };
             setState(opened.state);
           },
           (error: unknown) => {
@@ -193,22 +197,25 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   );
 
   const update = useCallback(
-    (change: (current: CanvasOpen) => ComponentCanvasFile): void => {
+    (change: (current: CanvasOpen) => CanvasChange | undefined): void => {
       const current = stateRef.current;
-      if (current.kind !== 'open') {
+      const store = writes.current.store;
+      if (current.kind !== 'open' || store === undefined) {
+        return;
+      }
+      // What the edit is (its scope, its component) is read now; what it applies to is the file as it is when applied.
+      const edit = change(current);
+      if (edit === undefined) {
         return;
       }
       let settings: ComponentCanvasFile;
       try {
-        settings = change(current);
+        settings = store.change(edit);
       } catch (error: unknown) {
         app.showToast(translate('componentCanvas.error.save', { message: cleanError(error) }), 'error');
         return;
       }
-      const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
-      const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-      const scope = scopeStillFits(current.scope, frame, layout) ? current.scope : frame;
-      const next = { ...current, settings, layout, frame, scope };
+      const next = withSettings(current, settings);
       // Two writes of one gesture can arrive before the next render: each builds on the one before.
       stateRef.current = next;
       setState(next);
@@ -232,7 +239,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
   useCanvasPageWrites(state, writes, catalog, { project, translate, shell, setState });
   useCanvasMessages(state, setState, cover);
   useLiveSchema(state, app.scan, setState);
-  useRelinkedSettings(state, project, writes, setState);
+  useRelinkedSettings(state, writes, setState);
   useLeaveWhenAway(state, app, finish);
   useFrameFollowsEditor(state, app, setState);
   useNoDeviceKeys(state);
@@ -267,17 +274,24 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       edit: (edit: FrameEdit) =>
         update((current) => {
           const target = rootTarget(current);
+          const { scope } = current;
+          const component = current.component.file;
           if (target === undefined) {
-            return withFrameEdit(current.settings, current.component.file, current.scope, edit);
+            return (file) => withFrameEdit(file, component, scope, edit);
           }
           // A root scope holds the canvas root's background (and its classes, editRootClasses); a frame's size is not set there.
-          return edit.kind === 'background' ? withRootEdit(current.settings, target, { kind: 'background', value: edit.value }) : current.settings;
+          return edit.kind === 'background' ? (file) => withRootEdit(file, target, { kind: 'background', value: edit.value }) : undefined;
         }),
       editRootClasses: (classes) =>
-        update((current) =>
-          withRootEdit(current.settings, rootTarget(current) ?? { kind: 'component', file: current.component.file }, { kind: 'classes', value: classes }),
-        ),
-      setSplit: (split) => update((current) => withSplit(current.settings, current.component.file, split)),
+        update((current) => {
+          const target = rootTarget(current) ?? { kind: 'component' as const, file: current.component.file };
+          return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
+        }),
+      setSplit: (split) =>
+        update((current) => {
+          const component = current.component.file;
+          return (file) => withSplit(file, component, split);
+        }),
       coverRight,
       showFramePanel: () => {
         const current = stateRef.current;
@@ -289,7 +303,10 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       editValues: (scope, edits) => {
         assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
         if (edits.length > 0) {
-          update((current) => edits.reduce((file, edit) => withFrameEdit(file, current.component.file, scope, edit), current.settings));
+          update((current) => {
+            const component = current.component.file;
+            return (file) => edits.reduce((next, edit) => withFrameEdit(next, component, scope, edit), file);
+          });
         }
       },
       hideFramePanel: () => {
@@ -309,6 +326,23 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
     }),
     [app.project.path, coverRight, finish, open, state, update],
   );
+}
+
+function settingsIo(project: string): CanvasSettingsIo {
+  return {
+    read: async () => (await readMetadata(project, 'componentCanvas')).source,
+    write: async (source, base) => {
+      const saved = await writeMetadata(project, { kind: 'componentCanvas', source, ...(base === undefined ? {} : { base }) });
+      return saved.source ?? source;
+    },
+  };
+}
+
+// The open canvas over new settings: its frames rebuilt, the selection and scope kept where they still fit.
+function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
+  const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
+  const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
+  return { ...current, settings, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
 }
 
 // Where a canvas root setting goes at the current scope: the project's default or this component's; undefined at a
@@ -570,7 +604,7 @@ function useCanvasPageWrites(
     const held = writes.current;
     clearTimeout(held.pageTimer);
     held.pageTimer = setTimeout(() => {
-      void (async () => {
+      const rewrite = async (): Promise<void> => {
         const components = await readMetadata(project, 'components');
         const snapshot = await withMissingAssets(project, defaultsSnapshot(components.source, catalog.current), open.settings);
         const defaults = frameDefaults(snapshot, open.component.file, prettyComponentName(open.component.name));
@@ -591,7 +625,8 @@ function useCanvasPageWrites(
           await writeText(project, pageFileOf(open.id), page);
           await reloadCanvasPage(shell.current, pagePath, { before: open.instances, after: instances, root });
         }
-      })().catch((error: unknown) => console.warn('Could not update the component canvas page:', error));
+      };
+      held.pageQueue = held.pageQueue.then(rewrite).catch((error: unknown) => console.warn('Could not update the component canvas page:', error));
     }, CANVAS_TIMING.pageDelayMs);
     return () => clearTimeout(held.pageTimer);
   }, [catalog, defaultsVersion, open, project, setState, shell, translate, writes]);
@@ -721,41 +756,27 @@ function useLiveSchema(state: CanvasState, scan: ScanResult, setState: React.Dis
   }, [file, scan.components, setState]);
 }
 
-// A file moved in the project rewrites the canvas settings that named it (electron/project/componentDefaultRelink.ts).
-// While nothing here is waiting to be written, the canvas takes what is on disk, so its next save builds on it.
-function useRelinkedSettings(
-  state: CanvasState,
-  project: string,
-  writes: React.MutableRefObject<Writes>,
-  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
-): void {
+// A file moved in the project rewrites the canvas settings that named it (electron/project/componentDefaultRelink.ts):
+// the canvas reads them again, keeping what it has not written yet.
+function useRelinkedSettings(state: CanvasState, writes: React.MutableRefObject<Writes>, setState: React.Dispatch<React.SetStateAction<CanvasState>>): void {
   const id = state.kind === 'open' ? state.id : undefined;
   useEffect(() => {
     if (id === undefined) {
       return undefined;
     }
-    const adopt = async (): Promise<void> => {
-      const held = writes.current;
-      const stored = await readMetadata(project, 'componentCanvas');
-      if (held.settingsTimer !== undefined || stored.source === undefined || stored.source === held.base) {
-        return;
-      }
-      const parsed = parseComponentCanvasSource(stored.source);
-      if (!parsed.ok) {
-        return;
-      }
-      held.base = stored.source;
-      setState((current) => {
-        if (current.kind !== 'open' || current.id !== id) {
-          return current;
-        }
-        const layout = buildCanvasLayout(current.component, parsed.value.components[current.component.file]);
-        const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-        return { ...current, settings: parsed.value, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
-      });
-    };
-    return onAssetEntriesChanged(() => void adopt().catch((error: unknown) => console.warn('Could not re-read the component canvas settings:', error)));
-  }, [id, project, setState, writes]);
+    return onAssetEntriesChanged(() => {
+      void writes.current.store
+        ?.reread()
+        .then((settings) =>
+          setState((current) =>
+            current.kind === 'open' && current.id === id && JSON.stringify(current.settings) !== JSON.stringify(settings)
+              ? withSettings(current, settings)
+              : current,
+          ),
+        )
+        .catch((error: unknown) => console.warn('Could not re-read the component canvas settings:', error));
+    });
+  }, [id, setState, writes]);
 }
 
 // Opening anything that is not the canvas page or inside it ends the canvas (it stays the root of the edit stack while

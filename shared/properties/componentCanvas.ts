@@ -116,7 +116,11 @@ export interface ComponentCanvasFile {
   /** The project's canvas root classes (CanvasRoot.classes); versions before this key ignore it. */
   readonly classes?: readonly string[];
   readonly components: Readonly<Record<string, ComponentCanvas>>;
+  /** Top-level keys a later version wrote: kept as read, so saving from this one never drops them. */
+  readonly later?: Readonly<Record<string, unknown>>;
 }
+
+const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components']);
 
 export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: {} };
 
@@ -159,12 +163,17 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
   const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
   assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
   const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
-  return canvasFileOf({ background, classes }, components);
+  const later = Object.entries(value).filter(([key]) => !FILE_FIELDS.has(key));
+  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, components);
 }
 
 // The file with its project-level settings, each written only when it is set.
 function canvasFileOf(
-  project: { readonly background: string | undefined; readonly classes: readonly string[] | undefined },
+  project: {
+    readonly background: string | undefined;
+    readonly classes: readonly string[] | undefined;
+    readonly later?: Readonly<Record<string, unknown>> | undefined;
+  },
   components: Readonly<Record<string, ComponentCanvas>>,
 ): ComponentCanvasFile {
   assert(Object.keys(components).length <= CANVAS_LIMITS.componentsMax, 'The canvas file keeps settings for a bounded number of components');
@@ -173,6 +182,7 @@ function canvasFileOf(
     ...(project.background === undefined ? {} : { background: project.background }),
     ...(project.classes === undefined ? {} : { classes: project.classes }),
     components,
+    ...(project.later === undefined ? {} : { later: project.later }),
   };
 }
 
@@ -419,7 +429,8 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
       .sort()
       .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
   );
-  const text = JSON.stringify(canvasFileOf({ background: file.background, classes: file.classes }, components), undefined, 2) + '\n';
+  const { later, ...known } = canvasFileOf({ background: file.background, classes: file.classes, later: file.later }, components);
+  const text = JSON.stringify({ ...known, ...later }, undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
@@ -829,7 +840,7 @@ export function withFrameEdit(file: ComponentCanvasFile, component: string, scop
   if (Object.keys(frames).length > CANVAS_LIMITS.entriesMax) {
     throw new Error(`A component keeps at most ${CANVAS_LIMITS.entriesMax} frame settings`);
   }
-  const result = withComponentSettings(file, component, { ...(settings.split === undefined ? {} : { split: settings.split }), frames });
+  const result = withComponentSettings(file, component, { ...settings, frames });
   assert(parseComponentCanvasSource(serializeComponentCanvas(result)).ok, 'An edited canvas file parses');
   return result;
 }
@@ -904,32 +915,36 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
   if (split !== undefined) {
     parseSplit(split, component);
   }
-  const settings = file.components[component] ?? {};
-  return withComponentSettings(file, component, {
-    ...(split === undefined ? {} : { split }),
-    ...(settings.frames === undefined ? {} : { frames: settings.frames }),
-    ...(settings.root === undefined ? {} : { root: settings.root }),
-  });
+  return withComponentSettings(file, component, { ...file.components[component], split });
 }
 
-function withComponentSettings(file: ComponentCanvasFile, component: string, settings: ComponentCanvas): ComponentCanvasFile {
+// The file with one component's settings replaced. `settings` is everything the component keeps: a writer starts from
+// what is stored and changes only its own key. Only an empty `frames` or `root` is left out.
+function withComponentSettings(
+  file: ComponentCanvasFile,
+  component: string,
+  settings: { readonly [K in keyof ComponentCanvas]: ComponentCanvas[K] | undefined },
+): ComponentCanvasFile {
   const components: Record<string, ComponentCanvas> = { ...file.components };
-  const frames = settings.frames !== undefined && Object.keys(settings.frames).length > 0 ? settings.frames : undefined;
-  const root = settings.root !== undefined && (settings.root.background !== undefined || settings.root.classes !== undefined) ? settings.root : undefined;
-  if (settings.split === undefined && frames === undefined && root === undefined) {
+  const kept: ComponentCanvas = Object.fromEntries(Object.entries(settings).filter(([key, value]) => keepsSetting(key, value)));
+  if (Object.keys(kept).length === 0) {
     // Nothing chosen and nothing set: the component leaves the file rather than sitting in it empty.
     delete components[component];
   } else {
-    components[component] = {
-      ...(settings.split === undefined ? {} : { split: settings.split }),
-      ...(frames === undefined ? {} : { frames }),
-      ...(root === undefined ? {} : { root }),
-    };
+    components[component] = kept;
   }
   if (Object.keys(components).length > CANVAS_LIMITS.componentsMax) {
     throw new Error(`The canvas keeps settings for at most ${CANVAS_LIMITS.componentsMax} components`);
   }
   return { ...file, components };
+}
+
+function keepsSetting(key: string, value: unknown): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  // A chosen split of no props is a choice (one frame); empty frames or an empty root say nothing.
+  return key === 'split' || Object.values(value as object).some((held) => held !== undefined);
 }
 
 /** The file with the project's canvas background set, or cleared with `undefined` (the app's own grey again). */
@@ -960,7 +975,7 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
       ...(file.background === undefined ? {} : { background: file.background }),
       ...(file.classes === undefined ? {} : { classes: file.classes }),
     });
-    const next = canvasFileOf({ background: root.background, classes: root.classes }, file.components);
+    const next = canvasFileOf({ background: root.background, classes: root.classes, later: file.later }, file.components);
     assert(edit.kind !== 'background' || next.background === background, 'The project background is what was set');
     return next;
   }
@@ -1049,7 +1064,8 @@ export function renameCanvasVariables(file: ComponentCanvasFile, rename: (name: 
   if (!changed) {
     return file;
   }
-  const result = canvasFileOf({ background: background === undefined ? undefined : canvasBackground(background), classes: file.classes }, components);
+  const project = { background: background === undefined ? undefined : canvasBackground(background), classes: file.classes, later: file.later };
+  const result = canvasFileOf(project, components);
   assert(Object.keys(result.components).length === Object.keys(file.components).length, 'A rename keeps every component');
   assert((result.background === undefined) === (file.background === undefined), 'A rename neither adds nor drops the project background');
   return result;
