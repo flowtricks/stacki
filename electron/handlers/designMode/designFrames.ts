@@ -2,10 +2,10 @@
 // compares.
 //
 // A frame is the set of files it changes against `base/` (the project as copied). One frame is shown at a time:
-// `live/` holds base plus the active frame's changes, and that is what the window, its panels and the dev server
-// work on. Switching frames records what `live/` now differs by (`captureChanges`), then rewrites only the files
+// the live copy holds base plus the active frame's changes, and that is what the window, its panels and the dev server
+// work on. Switching frames records what the live copy now differs by (`captureChanges`), then rewrites only the files
 // either frame touches (`applyFrame`); the editor and the dev server pick the change up the way they pick up any
-// edit made outside the app. Every write here lands in `live/`, inside the sandbox.
+// edit made outside the app. Every write here lands in the live copy, inside the sandbox.
 import fs from 'node:fs';
 import path from 'node:path';
 import { isSkippedPath } from './designSandbox';

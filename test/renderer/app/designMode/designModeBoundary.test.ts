@@ -85,7 +85,7 @@ const NEVER = [
   /^terminal:/,
   /^apps:/,
   /^secrets:/,
-  /^preview:/,
+  /^preview:(atCommit|stop)$/,
   /^studio:(?!status$)/,
   /^emdash:install/,
   /^ai:(prompt|steer|setup|prewarm|compact|installAgent|trust|remember|review|permission|diff)$/,

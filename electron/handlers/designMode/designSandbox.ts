@@ -6,7 +6,7 @@
 // project's `.env` it holds is no more exposed than the project itself.
 //
 // What: two copies of the project's files. `base/` is the project as it was when the mode began and never changes;
-// `live/` is what the window has open, and every panel writes there. node_modules is cloned into `live/` only:
+// `site/<project name>/` (the live copy) is what the window has open, and every panel writes there. node_modules is cloned into the live copy only:
 // Astro resolves its packages by walking up from the project, so the copy needs a real node_modules beside it, and
 // a symlinked one would let the dev server write its caches into the project's own (and breaks Astro, see
 // electron/preview/previewWorktree.ts). On macOS the clone is copy-on-write (`cp -c`): seconds, and no disk until
@@ -100,7 +100,8 @@ export async function createSandbox(input: { readonly appDataRoot: string; reado
   if (isPathWithin(realRoot, fs.realpathSync(root))) {
     throw new Error('Assertion failed: createSandbox: the sandbox is outside the project');
   }
-  const sandbox = { root, base: path.join(root, 'base'), live: path.join(root, 'live') };
+  // The copy keeps the project's folder name, so the window's title and project menu name the person's site.
+  const sandbox = { root, base: path.join(root, 'base'), live: path.join(root, 'site', path.basename(realRoot)) };
   try {
     const plan = planCopy(realRoot);
     if (!plan.ok) {
@@ -108,6 +109,7 @@ export async function createSandbox(input: { readonly appDataRoot: string; reado
       return plan;
     }
     copyPlanned(realRoot, sandbox.base, plan.entries);
+    fs.mkdirSync(path.dirname(sandbox.live), { mode: PRIVATE_MODE });
     copyPlanned(realRoot, sandbox.live, plan.entries);
     await cloneModules(path.join(realRoot, 'node_modules'), path.join(sandbox.live, 'node_modules'));
     if (!modulesSealed(path.join(sandbox.live, 'node_modules'), sandbox.live)) {

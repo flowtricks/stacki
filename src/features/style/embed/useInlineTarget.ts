@@ -442,7 +442,8 @@ function readSelectedNode(): HostNode | undefined {
 }
 
 // Each newly selected element starts on its chip while inline is the default (model/inlineDefault.ts); picking a
-// selector afterwards leaves it as usual. Keyed on the element alone, so a pick the person makes stays.
+// selector afterwards leaves it as usual. Once per element: the chip can appear a render after the selection (the
+// host's attribute arrives later), so the pick waits for it, and a pick the person makes afterwards stays.
 function useInlineByDefault(input: {
   readonly nodeId: string | undefined;
   readonly shown: boolean;
@@ -451,13 +452,15 @@ function useInlineByDefault(input: {
 }): void {
   const latest = useRef(input);
   latest.current = input;
-  const { nodeId } = input;
+  const applied = useRef<string | undefined>(undefined);
+  const { nodeId, shown } = input;
   useEffect(() => {
-    const { shown, deselect, setPickedFor } = latest.current;
-    if (nodeId === undefined || !shown || inlineDefault() !== 'inline') {
+    if (nodeId === undefined || !shown || applied.current === nodeId || inlineDefault() !== 'inline') {
       return;
     }
+    applied.current = nodeId;
+    const { deselect, setPickedFor } = latest.current;
     deselect();
     setPickedFor(nodeId);
-  }, [nodeId]);
+  }, [nodeId, shown]);
 }

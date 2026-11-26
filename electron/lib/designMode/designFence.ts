@@ -61,6 +61,8 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   'dev:diagnose',
   'dev:inspect',
   'dev:network',
+  // The canvas's check that what it shows is what the copy's files say (read only).
+  'preview:check',
   'audit:measure',
   'audit:render',
   // Pages, the navigator, settings and props: the page write path, on the copy's files.
@@ -183,8 +185,11 @@ export function checkDesignFence(channel: string, payload: unknown): void {
     }
     return;
   }
-  if (typeof payload === 'string') {
+  if (channel === 'watch:start' && typeof payload === 'string') {
+    // The folder the window opens: while the fence is up, only the copy.
     requireInside(current, payload);
+  } else if (typeof payload === 'string') {
+    requireNotProject(current, payload);
   } else {
     visitPayload(current, payload, SOURCE_KEYS.get(channel));
   }
@@ -232,12 +237,30 @@ function checkString(current: Exclude<DesignFenceState, { kind: 'off' }>, key: s
     return;
   }
   if (path.isAbsolute(value)) {
-    requireInside(current, value);
+    // Also a route (`/blog`) in some requests: what is refused is a path into the project or another folder of
+    // the person's, never the copy, Stacki's own data or a page address.
+    requireNotProject(current, value);
     return;
   }
   // A relative path that climbs is refused outright: the request names files inside the copy, and nothing in it
   // needs to step out of a folder to say so.
   if (value.split(/[\\/]/).includes('..')) {
+    throw refusalError(current.refusal);
+  }
+}
+
+function requireNotProject(current: Exclude<DesignFenceState, { kind: 'off' }>, candidate: string): void {
+  if (!path.isAbsolute(candidate)) {
+    return;
+  }
+  const real = realTarget(path.resolve(candidate));
+  if (isPathWithin(current.realRoot, real)) {
+    throw refusalError(current.refusal);
+  }
+  if (isPathWithin(current.sandboxRoot, real) || isPathWithin(current.appDataRoot, real)) {
+    return;
+  }
+  if (isPathWithin(realTarget(os.homedir()), real)) {
     throw refusalError(current.refusal);
   }
 }

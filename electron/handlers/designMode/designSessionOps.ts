@@ -2,7 +2,7 @@
 //
 // A session is a value: every operation takes one and returns the next, and the only state is the one variable
 // designModeHandlers.ts keeps. The file system writes they make (switching frames) all land in the sandbox's
-// `live/` copy (designFrames.ts).
+// the live copy copy (designFrames.ts).
 import path from 'node:path';
 import {
   DESIGN_SESSION_LIMITS,

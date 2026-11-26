@@ -1,67 +1,72 @@
-# Design mode (experimental): how it fits in, and how to take it out
+# Design mode (experimental): how it works, why it cannot write, and how to take it out
 
-Design mode turns the open page into frames on a pan and zoom canvas: sandboxed copies of the rendered page
-that can be dragged, restyled, re-propped, unlinked, duplicated and handed to the AI. It never writes to the
-project.
+Design mode is the normal editor working on a sandbox: a private copy of the project in Stacki's own data folder.
+Turning it on (the AI panel's Modes menu) copies the project and opens the copy through the app's own project
+switch, so the Navigator, the Style and Settings panels, Add elements, Components, Assets and the canvas all work
+on it for real. Frames are versions of that copy: duplicate one, change it, switch between them, compare them side
+by side, and send them to the AI. Nothing is saved to the project.
 
 ## Switching it off without removing it
 
-Set `DESIGN_MODE_ENABLED` to `false` in `shared/designMode/designModeContract.ts`. The AI panel header's
-Modes menu then has no Design mode row (comment pins stay; with no mode registered the button is not drawn),
-the canvas frame installs no listener, and the dev server plugin has no hooks.
+Set `DESIGN_MODE_ENABLED` to `false` in `shared/ipc/designSession.ts`. The Modes menu then has no Design mode row,
+and main refuses to begin a session.
 
-## The Modes menu
+## Why it cannot write to the project
 
-Design mode shares the header's one Modes menu with comment pins. It registers its row from its own host
-(`src/app/designMode/DesignModeHost.tsx`, with `registerPanelMode` from `src/features/ai/panelModes.ts`), and
-the menu, its registry and comment pins know nothing of it (the boundary test holds that). The registry keeps
-one mode on at a time: turning Design mode on ends comment mode (an open pin is kept, saved when it has
-content), and turning comment pins on leaves Design mode (its frames are saved as a draft first).
+- **The copy is elsewhere.** `electron/handlers/designMode/designSandbox.ts` copies the project to
+  `<user data>/design-sandboxes/<id>/` (on macOS `~/Library/Application Support/Stacki/`), folders mode 0700, with
+  node_modules cloned copy-on-write. A project that links outside itself is refused, because a write through such a
+  link would leave the copy.
+- **Requests are fenced.** Every invoke channel passes the IPC registrar, which calls `checkDesignFence`
+  (`electron/lib/designMode/designFence.ts`). While the mode is on only the channels in `DESIGN_CHANNELS` run;
+  everything else (git, publishing, the terminal, the AI agent, Stacki apps, secrets, MCP writes, remote content
+  writes, app settings, recents, and any channel added later) is refused. A request that runs must name the copy
+  as its project, may not name a path in the project, and may not climb out with `..`.
+- **Writes are fenced.** `electron/lib/designMode/designWriteGuard.ts` wraps every Node file system call that
+  creates, changes or removes a file. While the mode is on, a write outside the copy, Stacki's data folder and the
+  temporary folder fails with EACCES before it runs, whatever code path made it.
+- **The window shows what can work.** Features a copy cannot give (history and git, publishing, apps, project
+  secrets and MCP settings, roles, the command line) are hidden through the app's own "View as" preview
+  (`src/app/designMode/designRole.ts`). The AI panel stays, for the Modes menu; sending a prompt is refused.
+- **The copy does not outlive the session.** It is deleted, with its `.env`, when the window leaves it, when the app
+  quits, and, for a copy a crash left behind, the next time the app starts.
+- **Undo history from before is cleared**, on the way in and on the way out: the window reloads, as it does for any
+  project switch. A toast says so each time.
+- **Drafts** (each frame's changed files and its picture) are kept in `<user data>/design-drafts/<hash>/`, mode
+  0700, never in the project. Secrets (`.env*`, key files) are never kept in a draft.
 
-## Why it cannot write
-
-- Its frames are copies of the page the canvas hands over (`electron/preload/designMode/designModeFrame.ts`),
-  loaded into `sandbox="allow-same-origin"` iframes that run no script. Every gesture edits those documents
-  only (`model/designDom.ts`).
-- The app hands it a read-only view (`DesignHostSource` in `DesignModeHost.tsx`); it never receives the
-  editor's edit queue, gestures, saves or write IPC. `test/renderer/app/designMode/designModeBoundary.test.ts`
-  holds its imports to a sandbox-safe list and allows no preload call but the menu listener.
-- Prop changes render through `POST /__avb/design-render` (`electron/previewServer/designMode/designRender.ts`),
-  Astro's container API inside the running dev server: nothing is written, not even a temporary file.
-- While it is on, the window is held (`src/ui/busyLock.ts`), so the menu's Undo, Redo, Paste, Insert and
-  Reload do nothing to the project, and the editor's selection is cleared, so its shortcuts have no target.
-- The editor's chords that need no selection are taken before it hears them (`model/designCoveredKeys.ts`):
-  the insert palette (⌘F, ⌘E, ⌘K, outside code editors), the left rail's ⌥ chords except the AI panel's, and
-  the preview chord (⌥⇧P). Not covered: a Stacki app's own ⌘⌥⇧ number command, which stays the app's.
-- It does not start over the component defaults editor or an open component (there is no page to copy).
-- Comment pins cannot be on at the same time (above), and write only to Stacki's own data folder either way.
-  The Files panel's reader (`FilesKeeper`) only reads.
-- Drafts are kept in the app's own IndexedDB (database `stacki-design-mode`, in Stacki's user data folder,
-  on macOS `~/Library/Application Support/Stacki/IndexedDB/`), never in the project.
+`test/electron/handlers/designMode/designSession.test.ts` holds each of these properties with real folders;
+`test/renderer/app/designMode/designModeSoak.test.js` runs them in the real app and checks the project folder is
+byte-identical afterwards.
 
 ## Removing it
 
-1. Delete these folders:
+1. Delete these folders and files:
    - `src/app/designMode/`
-   - `electron/preload/designMode/`
-   - `electron/previewServer/designMode/`
-   - `shared/designMode/`
+   - `electron/handlers/designMode/`
+   - `electron/lib/designMode/`
+   - `shared/ipc/designSession.ts`
+   - `src/features/style/model/inlineDefault.ts`
    - `test/renderer/app/designMode/`
-   - `test/electron/preload/designMode/`
-   - `test/electron/previewServer/designMode/`
-   - `test/shared/designMode/`
+   - `test/electron/handlers/designMode/`
 2. Revert these lines, each marked `Design mode (experimental)`:
    - `src/app/shell/AppShell.tsx`: the `import { DesignModeHost } …` line and the `<DesignModeHost app={app} />` line.
-   - `electron/preload/preload.ts`: the `import { isDesignModeSandbox, listenForDesignModeRequests } …` line,
-     the `} else if (isDesignModeSandbox()) {` branch with its comment line, and the `listenForDesignModeRequests();` line.
-   - `electron/preview/markerConfig.ts`: the comment and `const { designModeRenderPlugin } = require(…)` lines,
-     and the `designModeRenderPlugin(PROJECT_DIRS),` entry of the plugin list.
-   - `test/scripts/release/unpackedParser.test.js`: the `designMode/designRender.js` entry of `ENTRIES`.
-   - `test/shared/properties/appShortcuts.test.ts`: `'src/app/designMode/DesignModeHost.tsx'` in the digit-shortcut list,
-     and the comment line above it.
-3. Run `npm run build:runtime` (the dev server's generated config is written again at its next start).
+   - `electron/main.ts`: the two imports (`registerDesignModeHandlers`, `designFenceState`), the
+     `registerDesignModeHandlers(…)` line, and in `relaunchApp` the two `fence` lines, back to
+     `fs.writeFileSync(reopenFile(), JSON.stringify({ path: openProjectRoot }), 'utf8');`.
+   - `electron/lib/ipcRegistrar.ts`: the `checkDesignFence` import and its call.
+   - `electron/preload/preloadBridge.ts`: `designSession: invoke('design:session'),`.
+   - `shared/ipc/ipcPayloads.ts`: the `DESIGN_SESSION_PAYLOADS` import and its spread.
+   - `shared/ipc/ipcResults.ts`: the `DesignSessionResults` import, the comment line above `IpcResults`, and
+     `, DesignSessionResults` in its `extends` list.
+   - `shared/ipc/preloadApi.ts`: `readonly designSession: 'design:session';`.
+   - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
+     `inlineTargetOf`, the `startsInline` function, the `useInlineByDefault(…)` call in `useInlineCard`, and the
+     `useInlineByDefault` function at the end of the file.
+   - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts` and
+     `src/features/style/model/inlineDefault.ts` entries.
+3. Optionally delete `design-drafts/` (and `design-sandboxes/`, which is empty unless the app crashed during a
+   session) from Stacki's user data folder: once the feature is gone nothing reads or sweeps them.
 
-Kept: the Modes menu and its registry (`src/features/ai/panelModes.ts`, `sessions/ModesMenu.tsx`), which
-belong to comment pins too. Nothing outside the list above changes.
-
-Drafts already saved stay in the app's IndexedDB until its data is cleared; nothing reads them.
+Kept on purpose: the Modes menu and its registry (`src/features/ai/panelModes.ts`, `sessions/ModesMenu.tsx`), which
+belong to comment pins too. Nothing outside the lists above changes.
