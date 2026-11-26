@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Nie można zapisać ustawień kanwy: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'nie ustawiono',
-  'componentCanvas.framePanel.hide': 'Ukryj ustawienia ramki',
-  'componentCanvas.framePanel.show': 'Pokaż ustawienia ramki',
   'componentCanvas.level.all': 'Ustawione dla wszystkich ramek',
   'componentCanvas.level.frame': 'Ta ramka ma własną wartość',
   'componentCanvas.level.part': 'Ustawione dla każdej ramki {part}',
@@ -44,7 +42,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Wszystkie komponenty',
   'componentCanvas.panel.transparent': 'Przezroczyste',
   'componentCanvas.panel.width': 'Szerokość',
-  'componentCanvas.popup.close': 'Zamknij ustawienia ramki',
+  'componentCanvas.popup.expand': 'Rozwiń ustawienia ramki',
+  'componentCanvas.popup.minimize': 'Zminimalizuj ustawienia ramki',
   'componentCanvas.popup.title': 'Ustawienia ramki',
   'componentCanvas.split.full': 'Maksymalna liczba właściwości z własnymi ramkami to {max}. Najpierw wyłącz jedną z nich.',
   'componentCanvas.split.locked': 'Każda wartość {name} ma własną ramkę.',

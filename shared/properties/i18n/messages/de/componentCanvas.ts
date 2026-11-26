@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Die Canvas-Einstellungen konnten nicht gespeichert werden: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'nicht gesetzt',
-  'componentCanvas.framePanel.hide': 'Frame-Einstellungen ausblenden',
-  'componentCanvas.framePanel.show': 'Frame-Einstellungen einblenden',
   'componentCanvas.level.all': 'Für alle Frames festgelegt',
   'componentCanvas.level.frame': 'Dieser Frame hat einen eigenen Wert',
   'componentCanvas.level.part': 'Für jeden Frame mit {part} festgelegt',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Alle Komponenten',
   'componentCanvas.panel.transparent': 'Transparent', // same
   'componentCanvas.panel.width': 'Breite',
-  'componentCanvas.popup.close': 'Frame-Einstellungen schließen',
+  'componentCanvas.popup.expand': 'Frame-Einstellungen ausklappen',
+  'componentCanvas.popup.minimize': 'Frame-Einstellungen minimieren',
   'componentCanvas.popup.title': 'Frame-Einstellungen',
   'componentCanvas.split.full': 'Bis zu {max} Props können eigene Frames haben. Schalte zuerst eine davon aus.',
   'componentCanvas.split.locked': 'Jeder Wert von {name} hat einen eigenen Frame.',

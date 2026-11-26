@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'कैनवास सेटिंग सहेजी नहीं जा सकीं: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'सेट नहीं है',
-  'componentCanvas.framePanel.hide': 'फ़्रेम सेटिंग्स छिपाएँ',
-  'componentCanvas.framePanel.show': 'फ़्रेम सेटिंग्स दिखाएँ',
   'componentCanvas.level.all': 'सभी फ़्रेम के लिए सेट',
   'componentCanvas.level.frame': 'इस फ़्रेम का अपना मान है',
   'componentCanvas.level.part': 'हर {part} फ़्रेम के लिए सेट',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'सभी कंपोनेंट',
   'componentCanvas.panel.transparent': 'पारदर्शी',
   'componentCanvas.panel.width': 'चौड़ाई',
-  'componentCanvas.popup.close': 'फ़्रेम सेटिंग्स बंद करें',
+  'componentCanvas.popup.expand': 'फ़्रेम सेटिंग्स विस्तृत करें',
+  'componentCanvas.popup.minimize': 'फ़्रेम सेटिंग्स छोटी करें',
   'componentCanvas.popup.title': 'फ़्रेम सेटिंग्स',
   'componentCanvas.split.full': 'ज़्यादा से ज़्यादा {max} प्रॉप्स के अलग फ़्रेम हो सकते हैं। पहले किसी एक को बंद करें।',
   'componentCanvas.split.locked': '{name} के हर मान का अपना फ़्रेम है।',

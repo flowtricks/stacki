@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Pengaturan kanvas tidak dapat disimpan: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'belum diatur',
-  'componentCanvas.framePanel.hide': 'Sembunyikan pengaturan frame',
-  'componentCanvas.framePanel.show': 'Tampilkan pengaturan frame',
   'componentCanvas.level.all': 'Diatur untuk semua frame',
   'componentCanvas.level.frame': 'Frame ini punya nilainya sendiri',
   'componentCanvas.level.part': 'Diatur untuk setiap frame {part}',
@@ -41,7 +39,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Semua komponen',
   'componentCanvas.panel.transparent': 'Transparan',
   'componentCanvas.panel.width': 'Lebar',
-  'componentCanvas.popup.close': 'Tutup pengaturan frame',
+  'componentCanvas.popup.expand': 'Perluas pengaturan frame',
+  'componentCanvas.popup.minimize': 'Ciutkan pengaturan frame',
   'componentCanvas.popup.title': 'Pengaturan frame',
   'componentCanvas.split.full': 'Maksimal {max} prop dapat memiliki frame sendiri. Nonaktifkan salah satunya terlebih dahulu.',
   'componentCanvas.split.locked': 'Setiap nilai {name} memiliki frame sendiri.',

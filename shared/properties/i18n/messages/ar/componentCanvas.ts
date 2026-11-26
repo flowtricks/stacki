@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'تعذّر حفظ إعدادات اللوحة: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'غير معيّن',
-  'componentCanvas.framePanel.hide': 'إخفاء إعدادات الإطار',
-  'componentCanvas.framePanel.show': 'إظهار إعدادات الإطار',
   'componentCanvas.level.all': 'مضبوط لكل الإطارات',
   'componentCanvas.level.frame': 'لهذا الإطار قيمة خاصة به',
   'componentCanvas.level.part': 'مضبوط لكل إطار {part}',
@@ -46,7 +44,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'كل المكوّنات',
   'componentCanvas.panel.transparent': 'شفاف',
   'componentCanvas.panel.width': 'العرض',
-  'componentCanvas.popup.close': 'إغلاق إعدادات الإطار',
+  'componentCanvas.popup.expand': 'توسيع إعدادات الإطار',
+  'componentCanvas.popup.minimize': 'تصغير إعدادات الإطار',
   'componentCanvas.popup.title': 'إعدادات الإطار',
   'componentCanvas.split.full': 'الحد الأقصى لعدد الخصائص التي يمكن أن تكون لها إطارات خاصة بها هو {max}. أوقف هذا الخيار لإحداها أولًا.',
   'componentCanvas.split.locked': 'لكل قيمة من قيم {name} إطار خاص بها.',

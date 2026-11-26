@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'לא ניתן היה לשמור את הגדרות הקנבס: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'לא הוגדר',
-  'componentCanvas.framePanel.hide': 'הסתרת הגדרות המסגרת',
-  'componentCanvas.framePanel.show': 'הצגת הגדרות המסגרת',
   'componentCanvas.level.all': 'מוגדר לכל המסגרות',
   'componentCanvas.level.frame': 'למסגרת הזו יש ערך משלה',
   'componentCanvas.level.part': 'מוגדר לכל מסגרת {part}',
@@ -43,7 +41,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'כל הרכיבים',
   'componentCanvas.panel.transparent': 'שקוף',
   'componentCanvas.panel.width': 'רוחב',
-  'componentCanvas.popup.close': 'סגירת הגדרות המסגרת',
+  'componentCanvas.popup.expand': 'הרחבת הגדרות המסגרת',
+  'componentCanvas.popup.minimize': 'מזעור הגדרות המסגרת',
   'componentCanvas.popup.title': 'הגדרות מסגרת',
   'componentCanvas.split.full': 'המספר המרבי של props שיכולים לקבל מסגרות נפרדות הוא {max}. יש לכבות קודם אחד מהם.',
   'componentCanvas.split.locked': 'לכל ערך של {name} יש מסגרת משלו.',

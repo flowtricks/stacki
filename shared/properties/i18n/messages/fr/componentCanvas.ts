@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Impossible d’enregistrer les réglages du canevas : {message}',
   'componentCanvas.frame.part': '{prop} : {value}',
   'componentCanvas.frame.unset': 'non défini',
-  'componentCanvas.framePanel.hide': 'Masquer les réglages du cadre',
-  'componentCanvas.framePanel.show': 'Afficher les réglages du cadre',
   'componentCanvas.level.all': 'Défini pour tous les cadres',
   'componentCanvas.level.frame': 'Ce cadre a sa propre valeur',
   'componentCanvas.level.part': 'Défini pour chaque cadre {part}',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Tous les composants',
   'componentCanvas.panel.transparent': 'Transparent', // same
   'componentCanvas.panel.width': 'Largeur',
-  'componentCanvas.popup.close': 'Fermer les réglages du cadre',
+  'componentCanvas.popup.expand': 'Développer les réglages du cadre',
+  'componentCanvas.popup.minimize': 'Réduire les réglages du cadre',
   'componentCanvas.popup.title': 'Réglages du cadre',
   'componentCanvas.split.full': 'Jusqu’à {max} props peuvent avoir leurs propres cadres. Désactivez-en d’abord une.',
   'componentCanvas.split.locked': 'Chaque valeur de {name} a son propre cadre.',

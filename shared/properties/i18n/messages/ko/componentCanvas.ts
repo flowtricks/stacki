@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': '캔버스 설정을 저장할 수 없습니다: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '설정 안 됨',
-  'componentCanvas.framePanel.hide': '프레임 설정 숨기기',
-  'componentCanvas.framePanel.show': '프레임 설정 표시',
   'componentCanvas.level.all': '모든 프레임에 설정됨',
   'componentCanvas.level.frame': '이 프레임에는 자체 값이 있습니다',
   'componentCanvas.level.part': '모든 {part} 프레임에 설정됨',
@@ -41,7 +39,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': '모든 컴포넌트',
   'componentCanvas.panel.transparent': '투명',
   'componentCanvas.panel.width': '너비',
-  'componentCanvas.popup.close': '프레임 설정 닫기',
+  'componentCanvas.popup.expand': '프레임 설정 펼치기',
+  'componentCanvas.popup.minimize': '프레임 설정 최소화',
   'componentCanvas.popup.title': '프레임 설정',
   'componentCanvas.split.full': '개별 프레임을 가질 수 있는 속성은 최대 {max}개입니다. 먼저 하나를 끄세요.',
   'componentCanvas.split.locked': '{name}의 각 값마다 개별 프레임이 있습니다.',

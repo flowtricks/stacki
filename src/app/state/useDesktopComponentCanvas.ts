@@ -864,10 +864,22 @@ function useLeaveWhenAway(state: CanvasState, app: ShellView, finish: (restore: 
 }
 
 // The selected frame follows the editor: the box, group or instance selected on the canvas page, or the instance opened
-// to edit inside. So the Settings panel, Frame settings and the frame's caption always speak of the same frame. A
-// selection inside an instance (an action that selects a child) is moved to the instance, which is closed here; one on
-// the page's own scaffolding (its <body>, its styles) is the canvas root.
-function useFrameFollowsEditor(state: CanvasState, app: ShellView, setState: React.Dispatch<React.SetStateAction<CanvasState>>): void {
+// to edit inside. So the Settings panel, Frame settings and the frame's caption always speak of the same frame.
+//
+// It follows during render, not after it: a selection change and the canvas state it implies reach the screen in one
+// paint. Followed in an effect, the outline and the Settings panel moved a frame before Frame settings and the scope
+// did, and the panel's fields (keyed by frame and scope) were mounted twice; recorded in the app, that was the flicker.
+// React re-renders this component at once when its own state is set during its render, before any child sees it.
+//
+// A selection inside an instance (an action that selects a child) is moved to the instance, which is closed here; one
+// on the page's own scaffolding (its <body>, its styles) is the canvas root. Those move the editor's selection, which
+// belongs to another component, so they wait for the effect.
+/** Exported for its regression test (componentCanvasFollow.test.js); the canvas host is its one caller. */
+export function useFrameFollowsEditor(
+  state: CanvasState,
+  app: Pick<ShellView, 'editStack' | 'pathFor' | 'selectedId' | 'model' | 'setSelectedId'>,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+): void {
   const open = state.kind === 'open';
   const inside = app.editStack.length > 1 ? app.editStack[1]?.focusPath : undefined;
   const selected = app.editStack.length === 1 ? app.pathFor(app.selectedId) : undefined;
@@ -875,56 +887,58 @@ function useFrameFollowsEditor(state: CanvasState, app: ShellView, setState: Rea
   const instances = state.kind === 'open' ? state.instances : undefined;
   const boxes = state.kind === 'open' ? state.boxes : undefined;
   const { model, setSelectedId } = app;
-  // What was last followed: the effect runs again whenever the tree is rebuilt, and acts only when the selection moved.
+  // What was last followed: only a moved selection (or a rewritten page) is followed again.
   const done = useRef<{ readonly selection: string; readonly instances: unknown; readonly boxes: unknown } | undefined>(undefined);
-  useEffect(() => {
-    if (!open || followed === undefined) {
-      done.current = undefined;
-      return;
-    }
-    const selection = `${inside === undefined ? 'page' : 'inside'}|${followed}`;
-    if (done.current?.selection === selection && done.current.instances === instances && done.current.boxes === boxes) {
-      return;
-    }
+  const selection = `${inside === undefined ? 'page' : 'inside'}|${followed ?? ''}`;
+  if (!open || followed === undefined) {
+    done.current = undefined;
+  } else if (done.current?.selection !== selection || done.current.instances !== instances || done.current.boxes !== boxes) {
     done.current = { selection, instances, boxes };
-    const select = (path: string | undefined): void => {
-      const node = path === undefined ? undefined : nodeAtPath(model?.nodes ?? [], trailOf(path));
-      if (node !== undefined) {
-        setSelectedId(node.id);
-      }
-    };
-    if (inside !== undefined) {
-      const instance = canvasInstanceOf(followed);
-      if (instance !== undefined) {
-        setState((current) => withFramePicked(current, instance.key, { kind: 'component' }));
-      }
-      return;
+    const next = followedState(state, followed, inside === undefined ? 'page' : 'inside');
+    if (next !== state) {
+      setState(next);
     }
-    if (isCanvasRoot(followed)) {
-      // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
-      setState((current) => (current.kind === 'open' && current.subject !== 'root' ? { ...current, subject: 'root', scope: rootScopeFor(current) } : current));
-      return;
-    }
-    const box = canvasBoxOf(followed);
-    if (box?.kind === 'frame') {
-      setState((current) => withFramePicked(current, box.key, { kind: 'box' }));
-      return;
-    }
-    if (box?.kind === 'group') {
-      setState((current) => withGroupPicked(current, box.key));
+  }
+  useEffect(() => {
+    if (!open || followed === undefined || inside !== undefined || isCanvasRoot(followed) || canvasBoxOf(followed) !== undefined) {
       return;
     }
     const instance = canvasInstanceAt(followed);
-    if (instance === undefined || !(followed === instance.path || followed.startsWith(instance.path + '.'))) {
-      // The page's own scaffolding: the canvas root stands for it.
-      select(canvasRootPath());
+    const within = instance !== undefined && (followed === instance.path || followed.startsWith(instance.path + '.'));
+    // Inside an instance: the instance; on the page's scaffolding: the canvas root.
+    const path = within ? instance.path : canvasRootPath();
+    if (path === followed || path === undefined) {
       return;
     }
-    if (instance.path !== followed) {
-      select(instance.path);
+    const node = nodeAtPath(model?.nodes ?? [], trailOf(path));
+    if (node !== undefined) {
+      setSelectedId(node.id);
     }
-    setState((current) => withFramePicked(current, instance.key, { kind: 'component' }));
-  }, [boxes, followed, inside, instances, model, open, setSelectedId, setState]);
+  }, [followed, inside, model, open, setSelectedId]);
+}
+
+// The canvas state a selection on its page implies; `current` itself when it already says so.
+function followedState(current: CanvasState, followed: string, where: 'page' | 'inside'): CanvasState {
+  if (current.kind !== 'open') {
+    return current;
+  }
+  if (where === 'inside') {
+    const instance = canvasInstanceOf(followed);
+    return instance === undefined ? current : withFramePicked(current, instance.key, { kind: 'component' });
+  }
+  if (isCanvasRoot(followed)) {
+    // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
+    return current.subject === 'root' ? current : { ...current, subject: 'root', scope: rootScopeFor(current) };
+  }
+  const box = canvasBoxOf(followed);
+  if (box !== undefined) {
+    return box.kind === 'frame' ? withFramePicked(current, box.key, { kind: 'box' }) : withGroupPicked(current, box.key);
+  }
+  const instance = canvasInstanceAt(followed);
+  if (instance === undefined || !(followed === instance.path || followed.startsWith(instance.path + '.'))) {
+    return current; // The scaffolding: the effect selects the root, which is followed then.
+  }
+  return withFramePicked(current, instance.key, { kind: 'component' });
 }
 
 // The canvas with a frame selected, through its component or its box. Another frame starts at its own scope; the same

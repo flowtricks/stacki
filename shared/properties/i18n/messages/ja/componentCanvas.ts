@@ -13,8 +13,6 @@ export const messages = {
   'componentCanvas.error.save': 'キャンバスの設定を保存できませんでした: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '未設定',
-  'componentCanvas.framePanel.hide': 'フレーム設定を非表示',
-  'componentCanvas.framePanel.show': 'フレーム設定を表示',
   'componentCanvas.level.all': 'すべてのフレームに設定',
   'componentCanvas.level.frame': 'このフレームには独自の値があります',
   'componentCanvas.level.part': 'すべての {part} フレームに設定',
@@ -43,7 +41,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'すべてのコンポーネント',
   'componentCanvas.panel.transparent': '透明',
   'componentCanvas.panel.width': '幅',
-  'componentCanvas.popup.close': 'フレーム設定を閉じる',
+  'componentCanvas.popup.expand': 'フレーム設定を展開',
+  'componentCanvas.popup.minimize': 'フレーム設定を最小化',
   'componentCanvas.popup.title': 'フレーム設定',
   'componentCanvas.split.full': '個別のフレームを持てるプロパティは {max} 個までです。先にいずれかをオフにしてください。',
   'componentCanvas.split.locked': '{name} の値ごとに個別のフレームがあります。',

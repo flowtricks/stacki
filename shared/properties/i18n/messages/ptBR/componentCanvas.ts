@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Não foi possível salvar as configurações do canvas: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'não definido',
-  'componentCanvas.framePanel.hide': 'Ocultar configurações do quadro',
-  'componentCanvas.framePanel.show': 'Mostrar configurações do quadro',
   'componentCanvas.level.all': 'Definido para todos os quadros',
   'componentCanvas.level.frame': 'Este quadro tem seu próprio valor',
   'componentCanvas.level.part': 'Definido para cada quadro {part}',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Todos os componentes',
   'componentCanvas.panel.transparent': 'Transparente',
   'componentCanvas.panel.width': 'Largura',
-  'componentCanvas.popup.close': 'Fechar configurações do quadro',
+  'componentCanvas.popup.expand': 'Expandir configurações do quadro',
+  'componentCanvas.popup.minimize': 'Minimizar configurações do quadro',
   'componentCanvas.popup.title': 'Configurações do quadro',
   'componentCanvas.split.full': 'Até {max} props podem ter quadros próprios. Desative uma primeiro.',
   'componentCanvas.split.locked': 'Cada valor de {name} tem seu próprio quadro.',

@@ -199,8 +199,8 @@ export function AppShell({ app }: { readonly app: ShellView }) {
 function CanvasFramePopup({ canvas }: { readonly canvas: ComponentCanvasControl }) {
   const state = canvas.state;
   // Frame settings speak of the selected frame (the instance selected on the canvas page, or the one opened inside), so
-  // they show at any depth until closed; the zoom bar's toggle and a frame's label open them again.
-  if (state.kind !== 'open' || state.framePanel === 'hidden') {
+  // they show at any depth; minimized, their header stays, and expands them again.
+  if (state.kind !== 'open') {
     return undefined;
   }
   return <CanvasSwatches>{<ComponentCanvasFramePopup canvas={canvas} state={state} />}</CanvasSwatches>;

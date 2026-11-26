@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'No se pudieron guardar los ajustes del lienzo: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'sin definir',
-  'componentCanvas.framePanel.hide': 'Ocultar ajustes del marco',
-  'componentCanvas.framePanel.show': 'Mostrar ajustes del marco',
   'componentCanvas.level.all': 'Definido para todos los marcos',
   'componentCanvas.level.frame': 'Este marco tiene su propio valor',
   'componentCanvas.level.part': 'Definido para cada marco {part}',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Todos los componentes',
   'componentCanvas.panel.transparent': 'Transparente',
   'componentCanvas.panel.width': 'Ancho',
-  'componentCanvas.popup.close': 'Cerrar ajustes del marco',
+  'componentCanvas.popup.expand': 'Expandir ajustes del marco',
+  'componentCanvas.popup.minimize': 'Minimizar ajustes del marco',
   'componentCanvas.popup.title': 'Ajustes del marco',
   'componentCanvas.split.full': 'Hasta {max} props pueden tener marcos propios. Desactiva primero una.',
   'componentCanvas.split.locked': 'Cada valor de {name} tiene su propio marco.',

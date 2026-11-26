@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Не удалось сохранить настройки холста: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'не задано',
-  'componentCanvas.framePanel.hide': 'Скрыть настройки фрейма',
-  'componentCanvas.framePanel.show': 'Показать настройки фрейма',
   'componentCanvas.level.all': 'Задано для всех фреймов',
   'componentCanvas.level.frame': 'У этого фрейма своё значение',
   'componentCanvas.level.part': 'Задано для каждого фрейма {part}',
@@ -44,7 +42,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Все компоненты',
   'componentCanvas.panel.transparent': 'Прозрачный',
   'componentCanvas.panel.width': 'Ширина',
-  'componentCanvas.popup.close': 'Закрыть настройки фрейма',
+  'componentCanvas.popup.expand': 'Развернуть настройки фрейма',
+  'componentCanvas.popup.minimize': 'Свернуть настройки фрейма',
   'componentCanvas.popup.title': 'Настройки фрейма',
   'componentCanvas.split.full': 'Максимальное число свойств с отдельными фреймами: {max}. Сначала отключите одно из них.',
   'componentCanvas.split.locked': 'У каждого значения {name} есть отдельный фрейм.',

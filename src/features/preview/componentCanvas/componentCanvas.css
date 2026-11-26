@@ -44,8 +44,15 @@
   font-weight: 600;
   color: var(--text);
 }
-.component-canvas-popup-close {
+.component-canvas-popup-toggle {
   cursor: pointer;
+}
+/* Expanded, the chevron points up: pressing it folds the popover to its header. */
+.component-canvas-popup:not(.is-minimized) .component-canvas-popup-toggle svg {
+  transform: rotate(180deg);
+}
+.component-canvas-popup.is-minimized .component-canvas-popup-head {
+  padding-block-end: 8px;
 }
 .component-canvas-popup .props-title {
   padding-top: 4px;
@@ -137,16 +144,6 @@
 }
 .component-canvas-zoom {
   z-index: 6;
-}
-/* Frame settings' toggle in the zoom bar: the bar's own button, filled while the popover is open. */
-.component-canvas-panel-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.component-canvas-panel-toggle.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 /* An inherited background's label: the Style panel's orange, in the popover's own label type and pill, so every field
    title in Frame settings is one size and sits the same distance above its control. */

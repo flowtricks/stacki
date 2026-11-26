@@ -12,8 +12,6 @@ export const messages = {
   'componentCanvas.error.save': 'Tuval ayarları kaydedilemedi: {message}',
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'ayarlanmamış',
-  'componentCanvas.framePanel.hide': 'Çerçeve ayarlarını gizle',
-  'componentCanvas.framePanel.show': 'Çerçeve ayarlarını göster',
   'componentCanvas.level.all': 'Tüm çerçeveler için ayarlandı',
   'componentCanvas.level.frame': 'Bu çerçevenin kendi değeri var',
   'componentCanvas.level.part': 'Her {part} çerçevesi için ayarlandı',
@@ -42,7 +40,8 @@ export const messages = {
   'componentCanvas.panel.scope.project': 'Tüm bileşenler',
   'componentCanvas.panel.transparent': 'Saydam',
   'componentCanvas.panel.width': 'Genişlik',
-  'componentCanvas.popup.close': 'Çerçeve ayarlarını kapat',
+  'componentCanvas.popup.expand': 'Çerçeve ayarlarını genişlet',
+  'componentCanvas.popup.minimize': 'Çerçeve ayarlarını küçült',
   'componentCanvas.popup.title': 'Çerçeve ayarları',
   'componentCanvas.split.full': 'En fazla {max} prop’un ayrı çerçeveleri olabilir. Önce birini kapatın.',
   'componentCanvas.split.locked': '{name} için her değerin ayrı bir çerçevesi var.',
