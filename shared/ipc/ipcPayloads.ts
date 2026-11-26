@@ -1,3 +1,4 @@
+import { parseCodeIntelRequest } from './codeIntel';
 import { FILE_EXPLORER_PAYLOADS } from './fileExplorer';
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
@@ -313,6 +314,8 @@ export const IPC_PAYLOADS = {
   ...AGENT_PAYLOADS,
   // The Files panel (shared/ipc/fileExplorer.ts).
   ...FILE_EXPLORER_PAYLOADS,
+  // The code editor's suggestions, hover and squiggles (shared/ipc/codeIntel.ts).
+  'codeIntel:request': parseCodeIntelRequest,
   'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
   'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
   'instructions:list': object({ ...project }),

@@ -334,6 +334,7 @@ interface InvokeChannels {
   readonly nativePaste: 'native:paste';
   readonly nativeUndo: 'native:undo';
   readonly nativeRedo: 'native:redo';
+  readonly codeIntel: 'codeIntel:request';
   readonly listFiles: 'files:list';
   readonly readFile: 'files:read';
   readonly writeFile: 'files:write';
