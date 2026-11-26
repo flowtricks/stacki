@@ -17,6 +17,7 @@ import type { ModelFrame } from './canvasModel';
 import { frameLabel, partLabel, prettyComponentName } from './frameLabel';
 import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
+import { CAPTION_LABEL_FOR } from '../../../ui/captionLabel';
 
 // The width a frame takes when it stops hugging and nothing wider sets one.
 const FIXED_WIDTH_PX = 400;
@@ -74,7 +75,7 @@ function FrameSection({
       <Heading title={translate('componentCanvas.panel.frame.title')} hint={translate('componentCanvas.panel.frame.about')} />
       {state.layout.frames.length > 1 && (
         <div className="props-field">
-          <label>{translate('componentCanvas.panel.frame.pick')}</label>
+          <label htmlFor={CAPTION_LABEL_FOR}>{translate('componentCanvas.panel.frame.pick')}</label>
           <Dropdown
             ariaLabel={translate('componentCanvas.panel.frame.pick')}
             value={frame.key}
@@ -84,7 +85,7 @@ function FrameSection({
         </div>
       )}
       <div className="props-field">
-        <label>
+        <label htmlFor={CAPTION_LABEL_FOR}>
           {translate('componentCanvas.panel.scope.label')}
           <InfoHint text={translate('componentCanvas.panel.scope.hint')} />
         </label>
@@ -109,7 +110,7 @@ function RootSection({ canvas, state, frame }: { readonly canvas: ComponentCanva
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.root.title')}>
       <Heading title={translate('componentCanvas.panel.root.title')} hint={translate('componentCanvas.panel.root.about')} />
       <div className="props-field">
-        <label>
+        <label htmlFor={CAPTION_LABEL_FOR}>
           {translate('componentCanvas.panel.scope.label')}
           <InfoHint text={translate('componentCanvas.panel.scope.hint')} />
         </label>
@@ -290,7 +291,11 @@ function BackgroundInput({
 // control for every field, whether the title is plain text or a label that resets its value. A press on it activates
 // nothing, as the props panel's labels do not (PropFieldLabel.tsx).
 function FieldTitle({ children }: { readonly children: ReactNode }) {
-  return <label onClick={(event) => event.preventDefault()}>{children}</label>;
+  return (
+    <label htmlFor={CAPTION_LABEL_FOR} onClick={(event) => event.preventDefault()}>
+      {children}
+    </label>
+  );
 }
 
 // A text box that changes nothing while typed: Enter or leaving the field commits, Escape puts the value back.

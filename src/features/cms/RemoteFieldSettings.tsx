@@ -31,6 +31,7 @@ import { checkLabel, choicesFor, typedValue, withCheck } from './fieldCheckInput
 import { resolvedMembers } from './settingsDraft';
 import { KIND_ICONS, KindIcon, kindOptions } from './settingsKindIcons';
 import { KIND_LABELS } from './settingsKindLabels';
+import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
 
 type Draft = (draft: SettingsField) => void;
 
@@ -304,7 +305,7 @@ const TYPED_DEFAULTS: readonly SettingsField['kind'][] = ['text', 'richText', 'l
 
 function Labelled(props: { readonly label: string; readonly wide?: boolean; readonly hint?: string | undefined; readonly children: React.ReactNode }) {
   return (
-    <label className={`field-settings-field ${props.wide === true ? 'is-wide' : ''}`}>
+    <label htmlFor={CAPTION_LABEL_FOR} className={`field-settings-field ${props.wide === true ? 'is-wide' : ''}`}>
       <span className="field-settings-label">
         {props.label}
         {props.hint !== undefined && <InfoHint text={props.hint} />}
