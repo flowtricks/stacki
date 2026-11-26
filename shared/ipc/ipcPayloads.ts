@@ -1,3 +1,4 @@
+import { parseCodeIntelRequest } from './codeIntel';
 import { FILE_EXPLORER_PAYLOADS } from './fileExplorer';
 import { DESIGN_SESSION_PAYLOADS } from './designSession'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import { parseLocaleSet } from './localeChannel';
@@ -316,6 +317,8 @@ export const IPC_PAYLOADS = {
   // The Files panel (shared/ipc/fileExplorer.ts).
   ...FILE_EXPLORER_PAYLOADS,
   ...DESIGN_SESSION_PAYLOADS, // Design mode (experimental): docs/design-mode/REMOVE.md
+  // The code editor's suggestions, hover and squiggles (shared/ipc/codeIntel.ts).
+  'codeIntel:request': parseCodeIntelRequest,
   'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
   'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
   'instructions:list': object({ ...project }),

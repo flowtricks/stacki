@@ -297,6 +297,7 @@
     "shared/ipc/aiChat.ts",
     "shared/ipc/astroCopy.ts",
     "shared/ipc/assetConversion.ts",
+    "shared/ipc/codeIntel.ts",
     "shared/ipc/commitAvatars.ts",
     "shared/ipc/designSession.ts",
     "shared/ipc/devNetwork.ts",

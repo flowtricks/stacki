@@ -13,7 +13,8 @@ Each entry answers three questions: **Does** (what it does for Stacki), **Why no
 
 ### `@astrojs/compiler`
 
-**Does:** parses `.astro` files into the AST the page tree is built from (`electron/parse/astroParser.ts`).
+**Does:** parses `.astro` files into the AST the page tree is built from (`electron/parse/astroParser.ts`),
+and prints one as TSX with a source map for the code editor's type checker (`electron/lib/codeIntel/`).
 **Why not the platform:** Astro's grammar (frontmatter, expressions, components) has no platform
 parser; this is the reference implementation. **Cost:** WASM payload; its AST shape is a contract we
 pin with round-trip tests.
@@ -49,7 +50,9 @@ parser in Node. **Cost:** small, dependency-free.
 ### `typescript`
 
 **Does:** at runtime, the compiler API reads component property types
-(`electron/property*.ts`); at build time, it compiles the project. **Why not the platform:** no
+(`electron/property*.ts`) and its language service answers the code editor's suggestions, hover and
+errors in a process of its own (`electron/lib/codeIntel/`; always this copy, never a project's, so
+opening a project runs none of its code); at build time, it compiles the project. **Why not the platform:** no
 TypeScript type-checker exists outside it. **Cost:** large install; required at runtime, so it
 stays in `dependencies`.
 
@@ -66,11 +69,13 @@ them at run time, so they are `devDependencies`: electron-builder copies only `d
 into the packaged app, and a copy there would be about 30 MB that nothing reads. A package
 the main process starts to import belongs back under Runtime.
 
-### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
+### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/lint`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
 
 **Does:** the code editor panels (source, CSS, frontmatter). **Why not the platform:** a
 `<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
-renderer dependency family; split per language so only what is used ships.
+renderer dependency family; split per language so only what is used ships. `@codemirror/lint` draws
+the code editor's error underlines and their tooltips; `codemirror`'s basic setup already ships it,
+so declaring it adds nothing to the app.
 
 ### `@huggingface/transformers`
 

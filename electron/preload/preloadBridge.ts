@@ -603,6 +603,7 @@ function eventBridge() {
     nativeUndo: invoke('native:undo'),
     nativeRedo: invoke('native:redo'),
     // The Files panel (shared/ipc/fileExplorer.ts).
+    codeIntel: invoke('codeIntel:request'),
     listFiles: invoke('files:list'),
     readFile: invoke('files:read'),
     writeFile: invoke('files:write'),

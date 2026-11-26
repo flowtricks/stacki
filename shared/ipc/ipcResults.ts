@@ -6,6 +6,7 @@ import type { ClassUsageReply } from '../properties/classUsage';
 import type { PendingStyleMove, StyleMoveResolution } from '../properties/styleMoveJournal';
 import type { AiResults } from './aiChat';
 import type { AgentResults } from './projectAgentChannels';
+import type { CodeIntelReply } from './codeIntel';
 import type { FileExplorerResults } from './fileExplorer';
 import type { DesignSessionResults } from './designSession'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import type { AppFileAnswer } from '../properties/appFiles';
@@ -166,6 +167,7 @@ export type WirePageEdit =
 
 // DesignSessionResults: Design mode (experimental), docs/design-mode/REMOVE.md.
 export interface IpcResults extends AiResults, AgentResults, FileExplorerResults, DesignSessionResults {
+  readonly 'codeIntel:request': CodeIntelReply;
   readonly 'project:createDefaultsCanvas': { readonly file: string };
   readonly 'project:removeDefaultsCanvas': undefined;
   readonly 'instructions:create': InstructionWriteResult;

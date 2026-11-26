@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import { PREVIEW_SHORTCUT, railShortcutLabel } from '../railShortcuts';
 import { FilesTab } from './DesktopFiles';
 import { FilesKeeper } from '../../features/files/FilesKeeper';
@@ -751,6 +752,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
 
 export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
+  const intelligence = useCodeIntel(app.project.path, app.openRel);
   const componentCanvas = useComponentCanvas();
   const page = app.currentPage;
   const selectNavigatorNode = (id: string | undefined): void => selectFromPanel(app, id);
@@ -774,6 +776,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
     <PanelBoundary name="The Navigator" label={translate('shell.navigator.panelName')} resetKey={page?.path}>
       <StructurePanel
         key={page?.path}
+        codeExtensions={intelligence}
         pageState={canvasView?.pageState ?? app.pageState}
         {...(canvasView === undefined ? {} : { rowLabels: canvasView.rowLabels })}
         currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
@@ -952,6 +955,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
   const state = app.pageState;
   // The page's `<style>` blocks draw CSS chips; the markup around them is left as it is.
   const codeChips = useCodeChips('markup');
+  const intelligence = useCodeIntel(app.project.path, app.openRel);
   if (!page || page.kind === 'route' || !state) {
     return undefined;
   }
@@ -967,7 +971,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       onOpenComponent={(name, id) => {
         void app.openComponent(name, app.pathFor(id)).catch(app.reportFailure);
       }}
-      extensions={codeChips.extension}
+      extensions={[codeChips.extension ?? [], intelligence]}
       overlay={codeChips.overlay}
     />
   );

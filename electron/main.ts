@@ -20,6 +20,8 @@ import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { registerDictationHandlers } from './handlers/dictationHandlers';
 import { registerFileExplorerHandlers } from './handlers/fileExplorerHandlers';
+import { registerCodeIntelHandlers } from './handlers/codeIntelHandlers';
+import { intelligenceProcess } from './lib/codeIntel/utilityChild';
 import { MODEL_SCHEME, MODEL_SCHEME_PRIVILEGES, serveModelRequest } from './app/dictationProtocol';
 import { whisperRoot } from './app/dictationStore';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
@@ -51,6 +53,7 @@ import {
   session,
   safeStorage,
   systemPreferences,
+  utilityProcess,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -493,6 +496,7 @@ function createWindow() {
     folderQueue.hold();
     stopWatchingProject();
     fileExplorer.stopWatching();
+    codeIntel.stop();
     devServers.stop();
     stopAllServices();
     stopAllPreviews();
@@ -883,6 +887,7 @@ app.whenReady().then(
 // it, and the dev server outlives everything.
 ipcMain.handle('project:close', async (_event, next) => {
   pendingProject = typeof next === 'string' && next ? next : undefined;
+  codeIntel.stop();
   devServers.stop();
   stopAllServices();
   stopAllPreviews();
@@ -931,6 +936,7 @@ app.on('before-quit', (event) => {
   cleanupTerminals();
   aiServices.stopAll();
   fileExplorer.stopWatching();
+  codeIntel.stop();
 });
 
 // ---------------------------------------------------------------------------
@@ -1491,4 +1497,6 @@ const fileExplorer = registerFileExplorerHandlers(host, {
     quitAfterSettle = false;
   },
 });
+// The code editor's intelligence: a separate process, started by the first question about a code file.
+const codeIntel = registerCodeIntelHandlers(host, { spawn: () => intelligenceProcess(utilityProcess) });
 registerDictationHandlers(host, { root: () => whisperRoot(app.getPath('userData')), fetch: (url, init) => fetch(url, init) });

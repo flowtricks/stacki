@@ -21,6 +21,23 @@ const files = [
   'resources/icon.png',
 ] as const;
 
+// TypeScript's `lib.*.d.ts`, for the code editor's type checker. The packager leaves every `.d.ts` out of the app, so
+// they are copied with another ending (electron/lib/codeIntel/typeFiles.ts reads them back).
+const TYPESCRIPT_LIBRARIES_MAX = 400;
+
+async function stageTypeScriptLibraries(): Promise<void> {
+  const source = path.resolve(root, 'node_modules/typescript/lib');
+  const target = path.resolve(root, 'dist/electron/typescript-lib');
+  const libraries = (await fileSystemPromises.readdir(source)).filter((name) => /^lib(\..+)?\.d\.ts$/.test(name));
+  if (libraries.length === 0 || libraries.length > TYPESCRIPT_LIBRARIES_MAX) {
+    throw new Error(`Expected TypeScript's library files in ${source}; found ${libraries.length}.`);
+  }
+  await fileSystemPromises.mkdir(target, { recursive: true });
+  for (const name of libraries) {
+    await fileSystemPromises.copyFile(path.join(source, name), path.join(target, `${name}.txt`));
+  }
+}
+
 async function main(): Promise<void> {
   for (const file of files) {
     const target = path.resolve(root, 'dist', file);
@@ -28,6 +45,7 @@ async function main(): Promise<void> {
     await fileSystemPromises.copyFile(path.resolve(root, file), target);
   }
   writeLinuxInstaller(root);
+  await stageTypeScriptLibraries();
 }
 
 void main().catch((error: unknown) => {

@@ -458,6 +458,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'dev:setNetwork': { projectPath: '/site', mode: 'network' },
   // The Files panel (shared/ipc/fileExplorer.ts; its bad shapes are in fileExplorer.test.ts).
   'files:list': { projectPath: '/site', path: 'src' },
+  'codeIntel:request': { projectPath: '/site', path: 'src/pages/index.astro', text: '<p></p>', query: { kind: 'hover', position: 1 } },
   'files:read': { projectPath: '/site', path: '.env' },
   'files:write': { projectPath: '/site', path: 'notes.txt', text: 'hello', byteOrderMark: false, base: 'c'.repeat(64) },
   'files:create': { projectPath: '/site', parent: '', name: 'notes.txt', kind: 'file' },
