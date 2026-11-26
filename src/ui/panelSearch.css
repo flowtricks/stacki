@@ -4,6 +4,11 @@
 .panel-search {
   position: relative;
 }
+/* The hint's wrapper has no box here, so the input keeps the panel's width: styles.css gives every .tip-anchor
+   `inline-flex` for header buttons, which would shrink the input to its own size. */
+.panel-search > .tip-anchor {
+  display: contents;
+}
 .panel-search.clearable input {
   padding-inline-end: 28px;
 }
