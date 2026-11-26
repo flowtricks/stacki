@@ -13,9 +13,21 @@ import { noteCanvasChange, reportCaptureRefusals } from './designCaptureQueue';
 import { exitDesignMode } from './designActions';
 import { watchLiveCanvas, watchLivePreviews } from './designLiveCanvas';
 import { applyLiveReport } from './designLiveApply';
-import { duplicateFrame, mayDuplicate, placeBeside, removeFrame, renameFrame, selectFrame, type DesignOpsContext, type OnSession } from './designFrameOps';
+import {
+  duplicateFrame,
+  mayDuplicate,
+  placeBeside,
+  removeFrame,
+  renameFrame,
+  selectElement,
+  selectFrame,
+  type DesignOpsContext,
+  type OnSession,
+} from './designFrameOps';
+import { offersUnlink, unlinkPicked } from './designUnlink';
+import type { MenuEntry } from '../../ui/Menu';
 import { designView, framePicture, updateDesignView, useDesignView, type DesignView } from './designStore';
-import { tileAt, useDesignGestures, type DesignDrag, type DesignHover } from './useDesignGestures';
+import { nodeUnder, tileAt, useDesignGestures, type DesignDrag, type DesignHover } from './useDesignGestures';
 import { useDesignKeys } from './useDesignKeys';
 import { useCanvasColumn } from './useCanvasColumn';
 import { useDesignWords } from './i18n/designWords';
@@ -24,6 +36,8 @@ interface ContextTarget {
   readonly frame: DesignFrameId;
   readonly x: number;
   readonly y: number;
+  /** A component instance right-clicked in the shown frame, which the menu offers to unlink. */
+  readonly instance: DesignNodeAt | undefined;
 }
 
 /** A wheel step with ⌘ or Ctrl (a pinch is one) zooms by this much per pixel. */
@@ -68,10 +82,20 @@ export function DesignCanvas({ context, session }: { readonly context: DesignOps
   const openMenu = (event: MouseEvent<HTMLDivElement>): void => {
     event.preventDefault();
     const tile = tileAt(event.target);
-    if (tile !== undefined) {
-      selectFrame(context, tile.frame);
-      setMenu({ frame: tile.frame, x: event.clientX, y: event.clientY });
+    if (tile === undefined) {
+      return;
     }
+    // A component in the shown frame is picked, as a click would, and its menu offers to unlink it. Anywhere else
+    // (another frame, whose page the panels have not read, or an element that is no instance) picks the frame.
+    const node =
+      tile.part === 'body' && tile.frame === session.active && designView().switching === undefined ? nodeUnder(tile, event.clientX, event.clientY) : undefined;
+    const instance = node !== undefined && offersUnlink(context.app(), node.path) ? node : undefined;
+    if (instance === undefined) {
+      selectFrame(context, tile.frame);
+    } else {
+      selectElement(context, tile.frame, instance.path, instance.copy);
+    }
+    setMenu({ frame: tile.frame, x: event.clientX, y: event.clientY, instance });
   };
   const camera = view.camera ?? { x: 0, y: 0, zoom: 1 };
   return (
@@ -286,6 +310,7 @@ function FrameMenu({
         onClose={onClose}
         placement="below-start"
         entries={[
+          ...unlinkEntries(context, target),
           {
             kind: 'item',
             id: 'duplicate',
@@ -312,4 +337,16 @@ function FrameMenu({
       />
     </>
   );
+}
+
+/** "Unlink component" first, for a right-clicked instance, set off from the frame's own rows. */
+function unlinkEntries(context: DesignOpsContext, target: ContextTarget): readonly MenuEntry[] {
+  const instance = target.instance;
+  if (instance === undefined) {
+    return [];
+  }
+  return [
+    { kind: 'item', id: 'unlink', label: context.words()('menu.unlink'), onSelect: () => void unlinkPicked(context, target.frame, instance) },
+    { kind: 'divider', id: 'unlink-divider' },
+  ];
 }

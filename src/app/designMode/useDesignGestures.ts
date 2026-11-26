@@ -85,7 +85,7 @@ function shownDocument(body: Element): Document | undefined {
 }
 
 /** The element under a screen point of a frame's page. */
-function nodeUnder(pressed: PressedTile, clientX: number, clientY: number): DesignNodeAt | undefined {
+export function nodeUnder(pressed: PressedTile, clientX: number, clientY: number): DesignNodeAt | undefined {
   const document = shownDocument(pressed.element);
   const camera = designView().camera;
   if (document === undefined || camera === undefined) {

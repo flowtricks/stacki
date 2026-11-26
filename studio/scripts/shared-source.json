@@ -294,6 +294,7 @@
     "shared/ipc/commitAvatars.ts",
     "shared/ipc/designSession.ts",
     "src/features/structure/defaultsMenu.ts",
+    "src/features/structure/unlinkMenu.ts",
     "shared/ipc/designSnapshot.ts",
     "shared/ipc/devNetwork.ts",
     "shared/ipc/fileExplorer.ts",

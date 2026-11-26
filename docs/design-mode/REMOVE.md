@@ -44,7 +44,21 @@ project.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
   its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
   inline style through the editor's own write (so ⌘Z takes them back), in rem.
-- **Not yet:** unlinking a component and editing text inside a frame; opening a component from a frame; undo for a
+- **Unlinking a component** (right-click an instance in the shown frame, or its Navigator row: "Unlink component")
+  replaces the instance, in the copy's page only, with the plain elements it renders (`designUnlink.ts`). It reads
+  the page as the dev server renders it, markers and all (`stacki:design-page-html`, answered by the canvas frame's
+  preload), and writes: the component's own elements with their classes and `data-astro-cid-*` scope attributes;
+  conditions and loops as they rendered; a component the component places kept as that component when every prop
+  and child it is given can be written in the page (`designUnlinkMarkup.ts`); the page's own slot content as its own
+  source, without its `slot` attribute. The component's import stays while anything else names it, else becomes a
+  bare `import "…";` (Astro gives a page the styles of what it imports, and drops an import nothing renders), and is
+  removed only when the component can bring no style (`designUnlinkSource.ts`). The component file and every CSS
+  rule are untouched. The write is one step of the editor's history (⌘Z, ⌘⇧Z). The page is then rendered again and
+  compared with the rendering before, elements, attributes, text and stylesheets (`designUnlinkCheck.ts`); anything
+  else is undone and dropped from redo. Refused with a toast, nothing written: a component that runs a script,
+  writes a `<style>` or a framework island into the page, shows a picture at an address only the dev server answers
+  (`/_image`, `/@fs/`, `/src/`), draws slot content twice, renders nothing, or is repeated by a page loop.
+- **Not yet:** editing text inside a frame; opening a component from a frame; undo for a
   removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
 
 ## Switching it off without removing it
@@ -99,6 +113,7 @@ byte-identical afterwards.
    - `src/features/style/model/inlineDefault.ts`
    - `src/features/ai/aiHold.ts`
    - `src/features/structure/defaultsMenu.ts`
+   - `src/features/structure/unlinkMenu.ts`
    - `test/renderer/app/designMode/`
    - `test/electron/handlers/designMode/`
 2. Revert these lines, each marked `Design mode (experimental)`:
@@ -119,12 +134,14 @@ byte-identical afterwards.
      `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
      `useInlineByDefault` function at the end of the file.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
-     `&& defaultsMenu === 'offered'` on the "Set component defaults" rows.
+     `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in
+     `ContextAction`, `'canChange'` in `ComponentMenuHeader`'s props, its `useUnlinkMenu()` call and the row it shows.
+   - `src/features/structure/ElementContextMenu.tsx`: the `currentUnlinkMenu` import and the `case 'unlink'` block.
    - `src/features/preview/PreviewToolbar.tsx`: the `is-interaction` class on the pointer button's group.
    - `src/features/ai/AiPanel.tsx`: the `useAiHold` import, the `const hold = useAiHold();` line, and `hold` in
      `blocked`, the prewarm's `eligible`, the setup detection effect and the trust card's condition.
-   - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts`, `shared/ipc/designSnapshot.ts` and
-     `src/features/style/model/inlineDefault.ts` entries.
+   - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts`, `shared/ipc/designSnapshot.ts`,
+     `src/features/structure/unlinkMenu.ts` and `src/features/style/model/inlineDefault.ts` entries.
    - `test/shared/ipc/ipcPayloads.test.ts`: the `'design:session'` sample.
    - `test/electron/app/mainBoundaries.test.ts`: the Design mode comment line, and the channel count back to 341.
    - `test/electron/documents/singleWriter.test.ts`: the comment and the four `electron/handlers/designMode/` entries.

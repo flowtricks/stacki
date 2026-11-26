@@ -23,6 +23,8 @@ import { installState, type DesignOpsContext } from './designFrameOps';
 import { useReturnToPage } from './designReturn';
 import { setAiHold } from '../../features/ai/aiHold';
 import { setDefaultsMenu } from '../../features/structure/defaultsMenu';
+import { setUnlinkMenu } from '../../features/structure/unlinkMenu';
+import { unlinkComponent } from './designUnlink';
 import { draftHandoff } from './designHandoff';
 import { applyDesignRole, clearDesignRole } from './designRole';
 import { designView, isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
@@ -86,6 +88,7 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
   const on = view.session.kind === 'on';
   const role = useCurrentRole();
   const holdReason = words('ai.hold');
+  const unlinkLabel = words('menu.unlink');
   useEffect(() => {
     if (!on) {
       return undefined;
@@ -93,11 +96,14 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
     // The agent cannot work on the copy (main refuses it): the AI panel offers nothing it would refuse.
     setAiHold(holdReason);
     setDefaultsMenu('withheld');
+    // A component's menu offers to unlink it, here only: it rewrites the copy's page (designUnlink.ts).
+    setUnlinkMenu({ label: unlinkLabel, unlink: (nodeId) => void unlinkComponent(context, nodeId) });
     return () => {
       setAiHold(undefined);
       setDefaultsMenu('offered');
+      setUnlinkMenu(undefined);
     };
-  }, [on, holdReason]);
+  }, [on, holdReason, unlinkLabel, context]);
   // The mode's look holds for as long as the mode does: whatever ends the preview while the window is on the copy
   // (publishing and pulling would come back with it) is answered by showing it again.
   useEffect(() => {

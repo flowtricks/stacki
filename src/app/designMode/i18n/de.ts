@@ -48,4 +48,18 @@ export const designModeDe: DesignCatalog = {
   'toast.chatFailed': 'Der KI-Bereich konnte keinen Chat für deine Frames öffnen.',
   'toast.failed': 'Design-Modus: {detail}',
   'toast.frameLimit': 'Eine Sitzung kann bis zu {count} Frames enthalten.',
+  'menu.unlink': 'Komponentenverknüpfung aufheben',
+  'unlink.busy': 'Die Seite wird noch aktualisiert. Versuche gleich noch einmal, die Verknüpfung aufzuheben.',
+  'unlink.notInstance': 'Nur bei einer Komponente, die auf dieser Seite platziert ist, lässt sich die Verknüpfung aufheben.',
+  'unlink.inList': 'Diese Komponente wird von einer Liste wiederholt, daher lässt sich ihre Verknüpfung nicht einzeln aufheben.',
+  'unlink.unreadable': 'Stacki konnte die Datei dieser Komponente nicht lesen, daher bleibt sie verknüpft.',
+  'unlink.notSame': 'Ohne Verknüpfung würde diese Komponente anders aussehen, daher wurde sie so belassen.',
+  'unlink.notRendered': 'Diese Komponente zeigt auf dieser Seite nichts an, daher gibt es keine Verknüpfung aufzuheben.',
+  'unlink.script':
+    'Diese Komponente führt ein eigenes Skript aus, das bei einfachen Elementen verloren ginge. Daher lässt sich die Verknüpfung nicht aufheben.',
+  'unlink.inlineStyle': 'Diese Komponente schreibt eigene Stile in die Seite, daher lässt sich die Verknüpfung nicht aufheben, ohne sie zu ändern.',
+  'unlink.island': 'Diese Komponente läuft im Browser, daher kann sie nicht in einfache Elemente umgewandelt werden.',
+  'unlink.picture': 'Diese Komponente zeigt ein Bild, das nur beim Rendern existiert, daher lässt sich die Verknüpfung nicht aufheben.',
+  'unlink.slotTwice': 'Diese Komponente zeigt deinen eingefügten Inhalt mehrmals an, daher lässt sich die Verknüpfung nicht aufheben.',
+  'unlink.unsupported': 'Die Ausgabe dieser Komponente lässt sich nicht als einfache Elemente schreiben, daher bleibt sie verknüpft.',
 };
