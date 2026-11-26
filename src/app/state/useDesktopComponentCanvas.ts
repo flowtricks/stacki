@@ -833,10 +833,19 @@ function useFrameFollowsEditor(state: CanvasState, app: ShellView, setState: Rea
   const followed = inside ?? selected;
   const instances = state.kind === 'open' ? state.instances : undefined;
   const { model, setSelectedId } = app;
+  // What was last followed. The effect runs again whenever the tree is rebuilt, and a press on the canvas names its
+  // frame before the editor's own selection has moved: following the old selection again would take the press back.
+  const done = useRef<{ readonly selection: string; readonly instances: unknown } | undefined>(undefined);
   useEffect(() => {
     if (!open || followed === undefined) {
+      done.current = undefined;
       return;
     }
+    const selection = `${inside === undefined ? 'page' : 'inside'}|${followed}`;
+    if (done.current?.selection === selection && done.current.instances === instances) {
+      return;
+    }
+    done.current = { selection, instances };
     if (inside === undefined && isCanvasRoot(followed)) {
       // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
       setState((current) => (current.kind === 'open' && current.subject !== 'root' ? { ...current, subject: 'root', scope: rootScopeFor(current) } : current));

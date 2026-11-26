@@ -1,4 +1,5 @@
 import { assert } from '../../shared/core/assert';
+import { canvasPressStaysClick, pressedCanvasBox } from './frameCanvasPress';
 import { isCanvasSitePage, type CanvasInteraction, type CanvasSitePages } from '../../shared/properties/canvasInteraction';
 
 // The canvas pointer in two modes. Both select: hover outlines, click to select,
@@ -8,7 +9,7 @@ import { isCanvasSitePage, type CanvasInteraction, type CanvasSitePages } from '
 
 let canvas = location.hash.includes('avb-design');
 let mode: CanvasInteraction = 'select';
-let gesture: { readonly x: number; readonly y: number; dragged: boolean } | undefined;
+let gesture: { readonly x: number; readonly y: number; readonly onBox: boolean; dragged: boolean } | undefined;
 const DRAG_DISTANCE_PX = 6;
 // A link click waits this long for a second click before it navigates, so a
 // double-click on the link's words still opens them for editing instead of
@@ -529,14 +530,14 @@ export function trackCanvasGesture(): void {
   window.addEventListener(
     'pointerdown',
     (event) => {
-      gesture = event.button === 0 ? { x: event.clientX, y: event.clientY, dragged: false } : undefined;
+      gesture = event.button === 0 ? { x: event.clientX, y: event.clientY, onBox: pressedCanvasBox(event.target), dragged: false } : undefined;
     },
     true,
   );
   window.addEventListener(
     'pointermove',
     (event) => {
-      if (gesture) {
+      if (gesture && !canvasPressStaysClick(gesture, document.documentElement)) {
         if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= DRAG_DISTANCE_PX) {
           gesture.dragged = true;
         }

@@ -109,6 +109,7 @@
     "electron/preload/frameAppScroll.ts",
     "electron/preload/frameAuthoredStyles.ts",
     "electron/preload/frameBasics.ts",
+    "electron/preload/frameCanvasPress.ts",
     "electron/preload/frameDoubleTap.ts",
     "electron/preload/frameGuide.ts",
     "electron/preload/frameInteraction.ts",

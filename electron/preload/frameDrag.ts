@@ -25,6 +25,7 @@ import { activeScope, elementsWithPath, inScope, pathsOf, PATH_ATTR, regions, ru
 import { rectsForPath } from './frameMeasure';
 import { scrollPageBy } from './frameScrollbar';
 import { isCanvasTextEditing } from './frameTextEditing';
+import { pressedCanvasBox } from './frameCanvasPress';
 
 export const FRAME_DRAG_LIMITS = {
   /** Pixels the pointer travels before a press becomes a drag (the click guard's own distance, frameInteraction.ts). */
@@ -131,6 +132,9 @@ function onPointerDown(event: PointerEvent): void {
   }
   if (isCanvasTextEditing(event.target)) {
     return;
+  }
+  if (pressedCanvasBox(event.target)) {
+    return; // Nothing on the component canvas can be moved (frameCanvasPress.ts).
   }
   const hit = locate?.(event.clientX, event.clientY);
   if (hit === undefined) {
