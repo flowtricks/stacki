@@ -24,6 +24,7 @@ import { parsePageDiskRead, parsePageEditResult, type PageDiskRead } from '#dist
 import { parsePageNode, type PageNode } from '#dist/shared/page/pageNode.js';
 import { toByteSpan, toUtf16Span } from '#dist/shared/core/span.js';
 import { wrappedTextHunk } from '#dist/shared/engine/planText.js';
+import { waitForSteady } from '../../helpers/waitFor.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -295,13 +296,16 @@ test('an edit that sets a value the source already holds writes nothing at all',
   watcher.on('change', (kind, name) => heard.push(`${kind} ${String(name)}`));
   context.after(() => watcher.close());
   // macOS delivers file events late, and a watcher opened after the seeding write can still hear it
-  // (the rename of index.astro that the fixture's own writeFileSync made). Let the watcher go quiet,
-  // within a bound, and forget those events: only what the edits themselves cause is judged below.
-  let heardBeforeTurn = -1;
-  for (let turn = 0; turn < 40 && heardBeforeTurn !== heard.length; turn += 1) {
-    heardBeforeTurn = heard.length;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+  // (the rename of index.astro that the fixture's own writeFileSync made). A marker written now is
+  // delivered after what came before it: once it is heard and the watcher holds still, those events
+  // are forgotten, and only what the edits themselves cause is judged below.
+  const marker = 'watch-marker.txt';
+  fs.writeFileSync(path.join(path.dirname(file), marker), 'x');
+  await waitForSteady({
+    what: 'the watcher heard the marker and went quiet',
+    read: () => [...heard],
+    until: (events: readonly string[]) => events.some((event) => event.endsWith(marker)),
+  });
   heard.length = 0;
   // The default export is the module object the main process's CommonJS code calls into; the
   // namespace imported above is a frozen view of it and cannot be patched.
