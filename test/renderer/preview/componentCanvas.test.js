@@ -109,9 +109,10 @@ test('the canvas page parses, imports the component once, and writes each frame'
   assert.ok(source.includes('<stacki-frame data-frame={"direction=back&variant=arrow"} data-label="direction=back&amp;variant=arrow"'));
   assert.match(
     source,
-    /data-fixed-width data-fixed-height style="grid-row: 2 !important; grid-column: 2 !important; width: 320px !important; height: 200px !important; background: var\(--swatch-light\) !important"/,
-    'the frame sits in its row and column, at its size and background',
+    /data-fixed-width data-fixed-height style="width: 320px !important; height: 200px !important; background: var\(--swatch-light\) !important"/,
+    'the frame is at its size and background',
   );
+  assert.match(source, /<body [^>]*data-flow="column">/, 'one row for each of the first prop’s values');
   assert.ok(source.includes('label={"Back \\"\\u003cthere\\u003e\\""}'), 'text that markup would escape is a string expression');
   assert.match(source, /<Button variant="main"[^>]*>Button Text<\/Button>/, 'without a project recipe, the starter defaults fill the slot');
   const chip = { ...snapshot, catalog: [{ ...snapshot.catalog[0], name: 'Chip', slotText: false }] };
@@ -232,7 +233,7 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   assert.match(chrome.chromeScript(ID), /"#1e1e1e"/, 'the app’s grey where the site paints none');
   assert.match(
     plain,
-    /html\[data-stacki-ready\] > body > stacki-frame\[data-frame\] \{[^}]*background: transparent !important;/,
+    /html\[data-stacki-ready\] > body stacki-frame\[data-frame\] \{[^}]*background: transparent !important;/,
     'a frame is transparent, whatever the project paints on elements',
   );
   for (const property of ['margin: 0 !important', 'padding: 0 !important', 'border: 0 !important', 'opacity: 1 !important', 'visibility: visible !important']) {
@@ -407,4 +408,84 @@ test('a frame’s own content and files reach its instance, as text the page nev
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
   assert.equal(page.canvasTreeOf(parsed.model.nodes).instances.length, 1);
+});
+
+// The Lumos button split by variant, emphasis and direction: eleven frames.
+const { CANVAS_LIMITS: LIMITS } = require('#dist/shared/properties/componentCanvas.js');
+const SPLIT_UNIONS = [
+  {
+    names: ['variant', 'emphasis', 'direction'],
+    branches: [
+      { forbids: ['direction'], pins: { variant: ['main'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: ['direction', 'emphasis'], pins: { variant: ['link'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: ['direction'], pins: { variant: ['play', 'close'] }, defaults: {}, rules: {}, docs: {} },
+      { forbids: [], pins: { variant: ['arrow'] }, defaults: {}, rules: {}, docs: {} },
+    ],
+  },
+];
+const choice = (name, options) => ({ name, type: 'enum', optional: true, options, default: options[0], unions: SPLIT_UNIONS });
+const splitButton = {
+  file: BUTTON,
+  name: 'Button',
+  schema: [
+    choice('variant', ['main', 'link', 'play', 'close', 'arrow']),
+    choice('emphasis', ['primary', 'secondary']),
+    choice('direction', ['forward', 'back']),
+  ],
+};
+
+test('frames that share a value sit in one box that says it once; a lone value gets no box and a lone inner box no level', () => {
+  const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
+  const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
+  assert.equal(layout.frames.length, 11);
+  const words = (parts) => parts.map((part) => `${part.prop}: ${String(part.value.value)}`).join(' · ');
+  const drawn = (items, depth = 0) => {
+    assert.ok(depth <= LIMITS.splitPropsMax, 'bounded by the split');
+    return items.map((item) => (item.kind === 'frame' ? words(item.caption) : [words(item.header), drawn(item.children, depth + 1)]));
+  };
+  const both = ['emphasis: primary', 'emphasis: secondary'];
+  const arrows = ['direction: forward', 'direction: back'];
+  assert.deepEqual(drawn(groups.groupFrames(layout.frames)), [
+    ['variant: main', both],
+    'variant: link',
+    ['variant: play', both],
+    ['variant: close', both],
+    [
+      'variant: arrow',
+      [
+        ['emphasis: primary', arrows],
+        ['emphasis: secondary', arrows],
+      ],
+    ],
+  ]);
+  // A box that would hold nothing but one box takes its header into its own.
+  const narrow = layout.frames.filter((frame) => frame.key.includes('emphasis=primary&variant=arrow') || frame.key === 'variant=link');
+  assert.deepEqual(drawn(groups.groupFrames(narrow)), ['variant: link', ['variant: arrow · emphasis: primary', arrows]]);
+  // One split prop makes no boxes.
+  const single = groups.groupFrames(model.buildCanvasLayout(splitButton, { split: ['variant'] }).frames);
+  assert.ok(single.every((item) => item.kind === 'frame'));
+});
+
+test('the page draws boxes that are not elements anyone can point at, and still finds every frame’s instance', () => {
+  const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
+  const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
+  const items = (list, depth = 0) => {
+    assert.ok(depth <= LIMITS.splitPropsMax, 'bounded by the split');
+    return list.map((item) =>
+      item.kind === 'frame'
+        ? { kind: 'frame', key: item.key, caption: 'caption' }
+        : { kind: 'group', key: item.key, header: 'A "box" <1>', children: items(item.children, depth + 1) },
+    );
+  };
+  const source = pageOf(layout, { groups: items(groups.groupFrames(layout.frames)) });
+  assert.equal(source.split('<stacki-group data-stacki-unmarked').length - 1, 6);
+  assert.ok(source.includes('data-label="A &quot;box&quot; &lt;1&gt;"'));
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
+  const tree = page.canvasTreeOf(parsed.model.nodes);
+  assert.deepEqual(
+    tree.instances.map((instance) => instance.key),
+    layout.frames.map((frame) => frame.key),
+    'instances are found in frame order, however deep their boxes',
+  );
 });

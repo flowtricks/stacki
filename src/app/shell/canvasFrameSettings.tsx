@@ -26,6 +26,7 @@ import {
 } from '../../../shared/properties/componentCanvas';
 import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { nodeAtPath } from '../../editor/editorTree';
+import type { EditorNode } from '../../editor/pageView';
 import { trailOf } from '../model/pageGestures';
 import {
   canvasInstanceOf,
@@ -41,6 +42,7 @@ import { contentFieldNodes, contentHTML, frameEditOf, framePickEdit, framePanelV
 import type { PropValues } from '../../features/props/propRules';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { richTextNodes, richTextView } from '../../features/props/richTextContent';
+import { groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
 import { frameLabel, partLabel } from '../../features/preview/componentCanvas/frameLabel';
 import type { PropFieldAction, PropFieldExtras, PropFieldProvenance } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
@@ -50,10 +52,15 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import type { ShellView } from '../App';
 import type { StructurePageState } from '../../features/structure/structureModel';
 
-/** The Navigator on the canvas page: the canvas root (the page's <html>), and under it one row per frame, its instance, named as the frame is. */
+/**
+ * The Navigator on the canvas page: the canvas root (the page's <html>), and under it the canvas as it is grouped, one
+ * row per box and one per frame (its instance), each named with what the rows above it do not say. A box row folds;
+ * it is not an element, so it selects nothing (`groups`).
+ */
 export interface CanvasNavigatorView {
   readonly pageState: StructurePageState;
   readonly rowLabels: ReadonlyMap<string, string>;
+  readonly groups: ReadonlySet<string>;
 }
 
 export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasControl | undefined, translate: Translator): CanvasNavigatorView | undefined {
@@ -63,22 +70,34 @@ export function canvasNavigatorView(app: ShellView, canvas: ComponentCanvasContr
     return undefined;
   }
   const labels = new Map<string, string>();
-  const nodes = state.instances.flatMap((instance) => {
-    const node = nodeAtPath(pageState.model.nodes, trailOf(instance.path));
-    const frame = state.layout.frames.find((candidate) => candidate.key === instance.key);
-    if (node?.kind !== 'component' || frame === undefined) {
-      return [];
-    }
-    labels.set(node.id, frameLabel(frame, state.component, translate));
-    // Closed, as an instance on a page is: what is inside it is opened from the row, not edited in the canvas page.
-    return [{ ...node, children: undefined }];
-  });
-  assert(nodes.length <= CANVAS_LIMITS.framesMax, 'The canvas Navigator lists a bounded number of frames');
+  const groups = new Set<string>();
+  const paths = new Map(state.instances.map((instance) => [instance.key, instance.path]));
+  const rows = (items: readonly CanvasTreeItem[], depth: number): EditorNode[] => {
+    assert(depth <= CANVAS_LIMITS.splitPropsMax, 'The canvas Navigator nests no deeper than the split');
+    return items.flatMap((item): EditorNode[] => {
+      if (item.kind === 'group') {
+        const children = rows(item.children, depth + 1);
+        const id = panelNodeId(`${state.component.file}|group|${item.key}`);
+        labels.set(id, frameLabel({ parts: item.header }, state.component, translate));
+        groups.add(id);
+        return [{ kind: 'element', id, name: 'div', props: {}, children }];
+      }
+      const path = paths.get(item.key);
+      const node = path === undefined ? undefined : nodeAtPath(pageState.model.nodes, trailOf(path));
+      if (node?.kind !== 'component') {
+        return [];
+      }
+      labels.set(node.id, frameLabel({ parts: item.caption }, state.component, translate));
+      // Closed, as an instance on a page is: what is inside it is opened from the row, not edited in the canvas page.
+      return [{ ...node, children: undefined }];
+    });
+  };
+  const nodes = rows(groupFrames(state.layout.frames), 0);
   const root = nodeAtPath(pageState.model.nodes, trailOf(state.root));
   assert(root?.kind === 'element', 'The canvas root is the page’s <html> element');
-  // The root's own children are the canvas's chrome; in the Navigator they are the frames.
+  // The root's own children are the canvas's chrome; in the Navigator they are the boxes and frames.
   labels.set(root.id, 'html'); // i18n-ignore: the element's own tag name, as every element row is named.
-  return { pageState: { ...pageState, model: { ...pageState.model, nodes: [{ ...root, children: nodes }] } }, rowLabels: labels };
+  return { pageState: { ...pageState, model: { ...pageState.model, nodes: [{ ...root, children: nodes }] } }, rowLabels: labels, groups };
 }
 
 /**

@@ -34,7 +34,8 @@ import { createDefaultsCanvas, onMetadataWrite, readMetadata, removeDefaultsCanv
 import { assetFileExists, defaultsSnapshot, missingAssetFiles, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { onAssetEntriesChanged } from '../../ipc/assetBridge';
 import { buildCanvasLayout, type CanvasComponent } from '../../features/preview/componentCanvas/canvasModel';
-import { canvasPageSource, canvasTreeOf, frameDefaults, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
+import { groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
+import { canvasPageSource, canvasTreeOf, frameDefaults, type CanvasPageItem, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
 import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentCanvas/canvasChrome';
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
 import {
@@ -489,6 +490,7 @@ function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | '
     surface: root.background,
     rootClasses: root.classes,
     snapshot,
+    groups: pageItems(groupFrames(layout.frames), component, translate),
     frames: layout.frames.map((frame) => ({
       key: frame.key,
       label: frameLabel(frame, component, translate),
@@ -512,6 +514,21 @@ async function withMissingAssets(project: string, snapshot: DefaultsSnapshot, se
   const found = await Promise.all(named.map((file) => assetFileExists(project, file)));
   const missing = [...(await missingAssetFiles(project, snapshot.config)), ...named.filter((_, index) => found[index] !== true)];
   return { ...snapshot, missingAssets: [...new Set(missing)] };
+}
+
+// The frames' boxes with their headers and captions in words.
+function pageItems(items: readonly CanvasTreeItem[], component: CanvasComponent, translate: Translator, depth = 0): readonly CanvasPageItem[] {
+  assert(depth <= CANVAS_LIMITS.splitPropsMax, 'Boxes nest no deeper than the split');
+  return items.map((item) =>
+    item.kind === 'frame'
+      ? { kind: 'frame', key: item.key, caption: frameLabel({ parts: item.caption }, component, translate) }
+      : {
+          kind: 'group',
+          key: item.key,
+          header: frameLabel({ parts: item.header }, component, translate),
+          children: pageItems(item.children, component, translate, depth + 1),
+        },
+  );
 }
 
 // The insertion catalog from the scan the app already holds, the way the defaults host builds it from a fresh one.

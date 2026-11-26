@@ -778,7 +778,12 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         onSelectPseudo={selectPseudo}
         liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
         revealTick={app.revealTick}
-        onSelect={selectNavigatorNode}
+        onSelect={(id) => {
+          // A box on the component canvas is not an element: its row only folds.
+          if (canvasView?.groups.has(id) !== true) {
+            selectNavigatorNode(id);
+          }
+        }}
         onHoverNode={(id) => {
           app.hoverPseudo.set(undefined);
           app.setHoverNodeId(id);

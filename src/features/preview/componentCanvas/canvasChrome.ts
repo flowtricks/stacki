@@ -21,6 +21,11 @@ export const CHROME_LIMITS = {
   tagRoomScreenPx: 28,
   captionGapPxMin: 8,
   captionGapPxMax: 48,
+  captionHeightPx: 16,
+  /** A group box: its padding, the room its header takes at the top, and the space between what it holds. */
+  groupPaddingPx: 24,
+  groupHeaderPx: 44,
+  groupGapPx: 40,
   zoomMin: 0.05,
   zoomMax: 4,
 } as const satisfies Record<string, number>;
@@ -30,6 +35,9 @@ export const CHROME_LIMITS = {
 const CLIP_SIDES = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 100000px, 0 100000px)';
 const CLIP_BOTTOM = 'polygon(-100000px -100px, 100000px -100px, 100000px 100%, -100000px 100%)';
 const CLIP_BOTH = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 100%, 0 100%)';
+
+// A box header's text against a caption's, measured: 13px semibold to 12px medium.
+const GROUP_FONT_SCALE = 1.12;
 
 /** The cascade layer the canvas's own rules are in (chromeStyles). */
 const CHROME_LAYER = 'stacki-canvas';
@@ -58,7 +66,9 @@ export function chromeStyles(theme: 'light' | 'dark', surface?: string): string 
   // In a cascade layer of its own, declared before any of the project's: for !important declarations the first layer
   // wins, over every later layer and over unlayered rules, so a project that imports its CSS into layers (Lumos does)
   // and marks a rule !important still cannot reach the scaffolding.
-  const scaffold = 'html[data-stacki-ready] > body > stacki-frame[data-frame]';
+  const scaffold = 'html[data-stacki-ready] > body stacki-frame[data-frame]';
+  // A box around the frames that share a split value (canvasGroups.ts): a quiet fill, its header at the top left.
+  const group = 'html[data-stacki-ready] > body stacki-group';
   // A frame is a box with room around its component and a blue outline: faint at rest, stronger under the pointer on its
   // own padding, full when the box itself is selected. Pressing the component selects that, and the editor outlines it;
   // the box then stays faint, so there is never a second strong outline. The widths here are for 100%; the page's script
@@ -66,17 +76,23 @@ export function chromeStyles(theme: 'light' | 'dark', surface?: string): string 
   const css = `@layer ${CHROME_LAYER} {
 html[data-stacki-ready] { height: 100% !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; border: 0 !important; touch-action: none; }
 ${surface === undefined ? '' : `html[data-stacki-ready][data-stacki-surface] { background: ${withFallback(surface, grey)} !important; }`}
-html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 88px 64px 64px !important; border: 0 !important; box-sizing: content-box !important; display: grid !important; grid-auto-flow: row !important; gap: 96px 64px !important; align-items: start !important; justify-items: start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
+html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 88px 64px 64px !important; border: 0 !important; box-sizing: content-box !important; display: flex !important; flex-flow: row nowrap !important; gap: 96px 64px !important; align-items: flex-start !important; justify-content: flex-start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
+html[data-stacki-ready] > body[data-flow="column"] { flex-direction: column !important; }
 html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
-${scaffold} { display: block !important; position: relative !important; inset: auto !important; transform: translate(0) !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; min-height: 24px !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.framePaddingPx)}px !important; border: 0 !important; border-radius: 0 !important; outline: 1px solid rgba(47, 128, 255, 0.5) !important; outline-offset: -1px !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
+${group} { display: flex !important; flex-flow: row nowrap !important; align-items: flex-start !important; justify-content: flex-start !important; gap: ${String(CHROME_LIMITS.groupGapPx)}px !important; flex: 0 0 auto !important; position: relative !important; inset: auto !important; transform: none !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: none !important; max-height: none !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.groupHeaderPx)}px ${String(CHROME_LIMITS.groupPaddingPx)}px ${String(CHROME_LIMITS.groupPaddingPx)}px !important; border: 0 !important; border-radius: 12px !important; outline: 0 !important; background: rgba(128, 128, 128, 0.09) !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
+${group}::before { content: attr(data-label) !important; display: block !important; position: absolute !important; left: ${String(CHROME_LIMITS.groupPaddingPx)}px !important; top: 12px !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 600 13px/18px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; letter-spacing: 0 !important; text-transform: none !important; text-shadow: none !important; white-space: nowrap !important; color: ${label} !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; height: 18px !important; user-select: none !important; visibility: visible !important; }
+${group}::after { content: none !important; }
+html[data-stacki-light] > body stacki-group::before { color: #3f3f3f !important; }
+html[data-stacki-dark] > body stacki-group::before { color: #c9c9c9 !important; }
+${scaffold} { flex: 0 0 auto !important; display: block !important; position: relative !important; inset: auto !important; transform: translate(0) !important; box-sizing: border-box !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; min-height: 24px !important; margin: 0 !important; padding: ${String(CHROME_LIMITS.framePaddingPx)}px !important; border: 0 !important; border-radius: 0 !important; outline: 1px solid rgba(47, 128, 255, 0.5) !important; outline-offset: -1px !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; visibility: visible !important; float: none !important; overflow: visible !important; }
 ${scaffold}:hover:not(:has(> :hover)) { outline-color: rgba(47, 128, 255, 0.85) !important; }
 ${scaffold}[data-box-selected] { outline: 2px solid #2f80ff !important; outline-offset: -2px !important; }
 ${scaffold}::before { content: attr(data-label) !important; display: block !important; box-sizing: content-box !important; margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font: 500 12px/16px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important; letter-spacing: 0 !important; word-spacing: 0 !important; text-transform: none !important; text-decoration: none !important; text-shadow: none !important; text-align: left !important; white-space: nowrap !important; opacity: 1 !important; transform: none !important; filter: none !important; width: auto !important; min-width: 0 !important; max-width: none !important; float: none !important; }
 ${scaffold}::before { position: absolute !important; left: 0 !important; bottom: 100% !important; top: auto !important; right: auto !important; height: 16px !important; margin-bottom: 8px !important; visibility: visible !important; color: ${label} !important; user-select: none !important; cursor: default !important; overflow: visible !important; }
 ${scaffold}::after { content: none !important; }
-html[data-stacki-light] > body > stacki-frame[data-frame]::before { color: #5c5c5c !important; }
-html[data-stacki-dark] > body > stacki-frame[data-frame]::before { color: #a3a3a3 !important; }
-html[data-stacki-ready] > body > stacki-frame[data-frame][data-selected]::before, ${scaffold}[data-box-selected]::before { color: #2f80ff !important; }
+html[data-stacki-light] > body stacki-frame[data-frame]::before { color: #5c5c5c !important; }
+html[data-stacki-dark] > body stacki-frame[data-frame]::before { color: #a3a3a3 !important; }
+html[data-stacki-ready] > body stacki-frame[data-frame][data-selected]::before, ${scaffold}[data-box-selected]::before { color: #2f80ff !important; }
 ${scaffold}[data-fixed-width] { max-width: none !important; clip-path: ${CLIP_SIDES} !important; }
 ${scaffold}[data-fixed-height] { clip-path: ${CLIP_BOTTOM} !important; }
 ${scaffold}[data-fixed-width][data-fixed-height] { clip-path: ${CLIP_BOTH} !important; }
@@ -140,6 +156,8 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     var gap = Math.round(clamp(${String(CHROME_LIMITS.tagRoomScreenPx)} / scale - ${String(CHROME_LIMITS.framePaddingPx)}, ${String(CHROME_LIMITS.captionGapPxMin)}, ${String(CHROME_LIMITS.captionGapPxMax)}));
     var scaffold = 'html[data-stacki-ready] > body stacki-frame[data-frame]';
     var rule = '@layer ${CHROME_LAYER} { ' + scaffold + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; } ' + scaffold + '[data-box-selected] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; } ' + scaffold + '::before { margin-bottom: ' + gap + 'px !important; } }';
+    // A frame in a box keeps its caption inside the box: the room above it grows as the caption moves up.
+    rule = rule.slice(0, -1) + 'html[data-stacki-ready] > body stacki-group > stacki-frame[data-frame] { margin-top: ' + (gap + ${String(CHROME_LIMITS.captionHeightPx)}) + 'px !important; } }';
     if (sizes.textContent !== rule) sizes.textContent = rule;
   }
   function remember() { try { sessionStorage.setItem(KEY, JSON.stringify({ x: view.x, y: view.y, scale: view.scale, moved: moved })); } catch (e) {} post({ event: 'view', scale: view.scale }); }
@@ -159,6 +177,7 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   }
   function frameOf(node) { return node && node.closest ? node.closest('stacki-frame') : null; }
   function frames() { return document.querySelectorAll('stacki-frame'); }
+  function groups() { return document.querySelectorAll('stacki-group'); }
   // A caption longer than its frame must not run into the next one: the room it needs is added beside the frame, as
   // margin, so the frame's outline still hugs its component.
   var room = document.createElement('style');
@@ -172,6 +191,11 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     for (var i = 0; i < all.length; i++) {
       var more = Math.ceil(measure.measureText(all[i].getAttribute('data-label') || '').width - all[i].offsetWidth);
       if (more > 0) rules += 'html[data-stacki-ready] > body stacki-frame[data-frame="' + all[i].getAttribute('data-frame') + '"] { margin-inline-end: ' + more + 'px !important; } ';
+    }
+    var boxes = groups();
+    for (var g = 0; g < boxes.length; g++) {
+      var header = Math.ceil(measure.measureText(boxes[g].getAttribute('data-label') || '').width * ${String(GROUP_FONT_SCALE)}) + ${String(CHROME_LIMITS.groupPaddingPx * 2)};
+      rules += 'html[data-stacki-ready] > body stacki-group[data-group="' + boxes[g].getAttribute('data-group') + '"] { min-width: ' + header + 'px !important; } ';
     }
     var rule = '@layer ${CHROME_LAYER} { ' + rules + '}';
     if (room.textContent !== rule) room.textContent = rule;
