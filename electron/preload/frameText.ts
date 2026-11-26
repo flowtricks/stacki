@@ -4,9 +4,14 @@ import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect, elementsAt } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
+import { awaitingRichRender } from './frameRichText';
 import { installTextMarks } from './frameTextMarks';
 import { inlineTextRuns } from './inlineText';
 import { isTouchDoubleTap, type TapPoint } from './frameDoubleTap';
+
+// A double click on words still shown as just typed waits for their rendering: a bounded number of short looks.
+const RENDER_TRY_MS = 50;
+const RENDER_TRIES_MAX = 100;
 
 export function installCanvasText(
   post: (message: unknown) => void,
@@ -49,6 +54,16 @@ export function installCanvasText(
     if (!doubled) {
       return;
     }
+    if (event.target instanceof Element && selects() && !canvasDragged() && awaitingRichRender(event.target)) {
+      // The words just saved are still shown as typed: they open once their rendering is on the page.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openAfterRender(event);
+      return;
+    }
+    open(event);
+  };
+  const open = (event: MouseEvent) => {
     const catalog = session.catalog();
     if (!selects() || canvasDragged() || !catalog || !(event.target instanceof Element)) {
       return;
@@ -74,6 +89,33 @@ export function installCanvasText(
     select(hit.target, hit.match.element);
     session.open(hit.target, hit.match, event);
     redrawMarks();
+  };
+  // The same double click, tried again once the rendering has landed and the editor has said what its words are; given
+  // up after a bound, or when anything else is pressed first.
+  let waiting: AbortController | undefined;
+  const openAfterRender = (event: MouseEvent) => {
+    waiting?.abort();
+    const wait = new AbortController();
+    waiting = wait;
+    const { clientX, clientY } = event;
+    let tries = 0;
+    const attempt = () => {
+      const target = document.elementFromPoint(clientX, clientY) ?? undefined;
+      const catalog = session.catalog();
+      const ready = target !== undefined && !awaitingRichRender(target) && catalog && canvasTextSourceMatches(catalog.file, catalog.checksum);
+      if (wait.signal.aborted) {
+        return;
+      }
+      if (ready) {
+        wait.abort();
+        // Said again as the browser says it, to the element now under the pointer.
+        target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true, clientX, clientY }));
+      } else if (tries++ < RENDER_TRIES_MAX) {
+        setTimeout(attempt, RENDER_TRY_MS);
+      }
+    };
+    window.addEventListener('mousedown', () => wait.abort(), { capture: true, signal: wait.signal });
+    setTimeout(attempt, RENDER_TRY_MS);
   };
   // Safari on iPhone and iPad may answer a double tap with two clicks and no
   // dblclick (it keeps the gesture for zooming), so two touch clicks close

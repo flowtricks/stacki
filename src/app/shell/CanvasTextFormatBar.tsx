@@ -47,6 +47,7 @@ function CanvasRichPlus({ plus }: { readonly plus: CanvasRichPlusState }) {
   return (
     <div className="canvas-rich-plus" style={{ position: 'fixed', left: place.left, top: place.top, zIndex: 40 }} onPointerDownCapture={plus.hold}>
       <BlockInsertButton
+        onDismiss={plus.resume}
         onChoose={(choice) => {
           if (choice.kind === 'media') {
             setAddress(choice.media);
@@ -63,8 +64,14 @@ function CanvasRichPlus({ plus }: { readonly plus: CanvasRichPlusState }) {
           bubble={{ kind: 'edit', href: '', place: { top: 26, left: 0 } }}
           onEdit={() => {}}
           onApply={(value) => insert(address, value)}
-          onRemove={() => setAddress(undefined)}
-          onClose={() => setAddress(undefined)}
+          onRemove={() => {
+            setAddress(undefined);
+            plus.resume();
+          }}
+          onClose={() => {
+            setAddress(undefined);
+            plus.resume();
+          }}
         />
       )}
     </div>

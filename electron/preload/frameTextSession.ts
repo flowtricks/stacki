@@ -62,8 +62,12 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
     },
     receive: (input: unknown) => {
-      if (isRichHold(input)) {
+      if (isRichMessage(input, 'avb:rich-hold')) {
         rich?.hold();
+        return;
+      }
+      if (isRichMessage(input, 'avb:rich-resume')) {
+        rich?.resume();
         return;
       }
       const choice = readRichBlockRequest(input);
@@ -192,9 +196,10 @@ function openCanvasRich(
   return { ...editor, announce };
 }
 
-// The host's `+` or its menu was pressed: the blur that press caused is not the person leaving.
-function isRichHold(input: unknown): boolean {
-  return typeof input === 'object' && input !== null && 'type' in input && input.type === 'avb:rich-hold';
+// What the host says about its `+`: pressed (the blur that press caused is not the person leaving), or closed with
+// nothing chosen.
+function isRichMessage(input: unknown, type: 'avb:rich-hold' | 'avb:rich-resume'): boolean {
+  return typeof input === 'object' && input !== null && 'type' in input && input.type === type;
 }
 
 function readRichBlockRequest(input: unknown) {

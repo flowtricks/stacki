@@ -323,10 +323,32 @@ export const BLOCK_PLUS_PX = 24;
 
 // The `+` and the menu it opens, in the order a writer reaches for them: the headings, then paragraph, quote, image,
 // link and video, then the other common rich text blocks. Shared by the rich text dialog and the canvas.
-export function BlockInsertButton(props: { readonly style?: CSSProperties; readonly onChoose: (choice: BlockInsertChoice) => void }) {
+export function BlockInsertButton(props: {
+  readonly style?: CSSProperties;
+  readonly onChoose: (choice: BlockInsertChoice) => void;
+  /** The menu closed with nothing chosen. */
+  readonly onDismiss?: () => void;
+}) {
+  const chose = useRef(false);
   const translate = useTranslate();
   const [anchor, setAnchor] = useState<HTMLElement>();
-  const item = (id: string, label: string, choice: BlockInsertChoice): MenuEntry => ({ kind: 'item', id, label, onSelect: () => props.onChoose(choice) });
+  const item = (id: string, label: string, choice: BlockInsertChoice): MenuEntry => {
+    const onSelect = () => {
+      chose.current = true;
+      props.onChoose(choice);
+    };
+    return { kind: 'item', id, label, onSelect };
+  };
+  const close = () => {
+    setAnchor(undefined);
+    // After the choice, which the menu may report in either order.
+    queueMicrotask(() => {
+      if (!chose.current) {
+        props.onDismiss?.();
+      }
+      chose.current = false;
+    });
+  };
   const entries: readonly MenuEntry[] = [
     ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((tag, index) =>
       item(tag, translate('ui.htmlToolbar.heading', { level: index + 1 }), { kind: 'block', block: tag }),
@@ -360,7 +382,7 @@ export function BlockInsertButton(props: { readonly style?: CSSProperties; reado
           <PlusIcon size={16} />
         </button>
       </TipAnchor>
-      <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={() => setAnchor(undefined)} />
+      <Menu open={anchor !== undefined} anchor={anchor} entries={entries} label={translate('ui.htmlField.insertBlock')} onClose={close} />
     </>
   );
 }

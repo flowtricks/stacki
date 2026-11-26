@@ -43,6 +43,15 @@ const SHOWN_SAVE_MS_MAX = 20_000;
 /** How long a blur waits for the host to say the press was on its `+`: one message across frames, well inside a frame. */
 const HOLD_WAIT_MS = 120;
 
+// Boxes still showing a saved edit as it was typed, until its rendering arrives and takes them back.
+const awaiting = new Set<Element>();
+
+/** Whether `element` is in (or holds) words still waiting for their rendering: an edit opened there now would be
+ *  swept away when it lands, with what was typed into it. */
+export function awaitingRichRender(element: Element): boolean {
+  return Array.from(awaiting).some((box) => box.isConnected && (box.contains(element) || element.contains(box)));
+}
+
 /**
  * Where the editor works: `rich`, the element holding a component instance's blocks (found from the block double
  * clicked); `line`, the element holding a run of inline words (text, `<br>` and inline markup only), all of it the
@@ -104,9 +113,11 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
       // Put back at the rendering, or at once when the host refuses the save (its take-back messages, as for the
       // canvas's other shown edits), so the page never keeps showing an edit the file did not get.
       const shown = new AbortController();
+      awaiting.add(container);
       const settle = () => {
         clearTimeout(timer);
         shown.abort();
+        awaiting.delete(container);
         putBack();
       };
       const timer = setTimeout(settle, SHOWN_SAVE_MS_MAX);
@@ -269,6 +280,14 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     },
     hold: () => {
       held = true;
+    },
+    /** The `+`'s menu or address field closed with nothing chosen: typing goes on where the caret was. */
+    resume: () => {
+      held = false;
+      if (!closed) {
+        focusKeepingCaret(container);
+        report();
+      }
     },
     choose: (choice: RichBlockChoice) => {
       held = false;
@@ -461,14 +480,7 @@ function undoneBlocks(history: RichHistory, event: KeyboardEvent): boolean {
  * paragraph the caret is in.
  */
 export function applyRichChoice(container: HTMLElement, history: RichHistory, choice: RichBlockChoice): void {
-  // Focus comes back from the host's menu; the caret it left in the empty block is put back, not reset by the focus.
-  const selection = window.getSelection();
-  const kept = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : undefined;
-  container.focus({ preventScroll: true });
-  if (kept !== undefined && container.contains(kept.startContainer)) {
-    selection?.removeAllRanges();
-    selection?.addRange(kept);
-  }
+  focusKeepingCaret(container);
   const place = (element: Element) => history.record(() => insertRichBlocks(container, richCaret(container), [element]));
   switch (choice.kind) {
     case 'block':
@@ -492,6 +504,17 @@ export function applyRichChoice(container: HTMLElement, history: RichHistory, ch
       const exhaustive: never = choice;
       return exhaustive;
     }
+  }
+}
+
+// Focus comes back from the host's menu; the caret it left in the empty block is put back, not reset by the focus.
+function focusKeepingCaret(container: HTMLElement): void {
+  const selection = window.getSelection();
+  const kept = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : undefined;
+  container.focus({ preventScroll: true });
+  if (kept !== undefined && container.contains(kept.startContainer)) {
+    selection?.removeAllRanges();
+    selection?.addRange(kept);
   }
 }
 
