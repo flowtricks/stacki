@@ -3,7 +3,7 @@
 // panel is ⌥ (Alt) plus a letter, matched on the physical key, because Option rewrites the typed letter ("ç" for C)
 // and several letters are macOS dead keys; a field keeps them, so they still type there. Properties alone is a plain
 // letter. Taken elsewhere: ⌥⇧P is the interactive preview, Alt+arrows reorder rail buttons, ⌘⌥⇧ digits are app
-// commands. The canvas frames write the letters out (electron/preload/frameDesign.ts), held to this table by test.
+// commands, and ⌥⇧G pulls from GitHub. The canvas frames write the letters out (electron/preload/frameDesign.ts), held to this table by test.
 import type { SettingsViewId } from '../lib/settingsSections';
 
 /** What a chord does: toggles a panel, opens Settings at a view, or toggles the AI chat. */
@@ -60,6 +60,20 @@ export const RAIL_SHORTCUTS: readonly RailShortcut[] = [
 
 /** The interactive preview's toggle: not a rail action, but written here so the table's test holds it apart. */
 export const PREVIEW_SHORTCUT = { letter: 'p', alt: true, shift: true } as const satisfies Omit<RailShortcut, 'action'>;
+
+/** Pull from GitHub, from anywhere outside a field (src/app/shell/DesktopGitPull.tsx). Desktop only. */
+export const PULL_SHORTCUT = { letter: 'g', alt: true, shift: true } as const satisfies Omit<RailShortcut, 'action'>;
+
+/** Whether a press is the pull chord, matched on the physical key; ⌘ and Ctrl presses (AltGr among them) never are. */
+export function isPullChord(event: Pick<KeyboardEvent, 'altKey' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'code'>): boolean {
+  if (event.metaKey || event.ctrlKey) {
+    return false;
+  }
+  if (!event.altKey || !event.shiftKey) {
+    return false;
+  }
+  return event.code === `Key${PULL_SHORTCUT.letter.toUpperCase()}`;
+}
 
 /** The chord as the rail writes it: `K`, `⌥P`, `⌥⇧P`. */
 export function railShortcutLabel(shortcut: Omit<RailShortcut, 'action'>): string {

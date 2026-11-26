@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import GitChip from '../../../vendor/stacki/src/features/git/GitChip';
+import GitPanelControls from '../../../vendor/stacki/src/features/git/GitPanelControls';
 import { readGitInfo } from '../../../vendor/stacki/src/features/git/gitChipBridge';
 import { useGitIncoming } from '../../../vendor/stacki/src/features/git/useGitIncoming';
 import HistoryTimeline from '../../../vendor/stacki/src/features/history/HistoryTimeline';
@@ -48,12 +48,13 @@ export function GitPanel({
       <div className="panel-body history-body">
         <PanelReadStatus state={state} label={translate('history.timeline.label')} layout="history" retry={refresh} />
         {info && (
-          <GitChip
+          <GitPanelControls
             info={info}
             refresh={refresh}
             busy={undefined}
             project={{ path: 'studio', name: project.name }}
-            incoming={incoming}
+            incoming={incoming.state}
+            onPulled={() => incoming.record(0)}
             flushSave={flushSave}
             onWorktreeChanged={refreshProject}
             showToast={(message, kind) => (kind === 'error' ? report(message) : setNotice(message))}

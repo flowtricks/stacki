@@ -18,7 +18,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
   await esbuild.build({
     stdin: {
       contents: [
-        `export {default as Controls} from ${sourceSpecifier('src/features/git/GitChip.tsx')};`,
+        `export {default as Controls} from ${sourceSpecifier('src/features/git/GitPanelControls.tsx')};`,
         `export {default as Panel} from ` + `${sourceSpecifier('src/features/history/HistoryPanel.tsx')};`,
         `export {ConfirmHost} from ${sourceSpecifier('src/ui/ConfirmDialog.tsx')};`,
       ].join('\n'),

@@ -60,7 +60,7 @@ function fixture(context) {
   const root = createRoot(document.getElementById('root'));
   let latest;
   function Harness({ projectPath, info }) {
-    latest = useGitIncoming(projectPath, info);
+    latest = useGitIncoming(projectPath, info).state;
     return undefined;
   }
   context.after(async () => {

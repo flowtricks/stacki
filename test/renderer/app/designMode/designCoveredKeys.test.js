@@ -39,6 +39,12 @@ test("every panel chord but the AI panel's is kept from the editor, and a field 
   }
 });
 
+test('the pull chord is kept from the editor, and a field keeps it', () => {
+  const chord = press('g', { altKey: true, shiftKey: true });
+  assert.equal(reachesCoveredEditor(chord, idle), true);
+  assert.equal(reachesCoveredEditor(chord, { typing: true, inCodeEditor: false }), false);
+});
+
 test('the preview chord is kept from the editor', () => {
   assert.equal(reachesCoveredEditor(press('p', { altKey: true, shiftKey: true }), idle), true);
 });

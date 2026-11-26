@@ -3,7 +3,7 @@ import Popup from '../../ui/Popup';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { parsePublishSource } from '../../../shared/properties/publishConfig';
 import { PublishStatus } from '../../features/publishing/PublishStatus';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
@@ -39,13 +39,16 @@ interface Props {
   /** The app's wrapper around a branch change, and what to reload after one (used when Publish offers to switch first). */
   readonly withBranchChange?: (<Value>(work: () => Promise<Value>) => Promise<Value>) | undefined;
   readonly onBranchSwitched?: (() => Promise<unknown>) | undefined;
+  /** Drawn just before the branch chip (the pull button), so Publish and the chip hold still as it comes and goes. */
+  readonly beforeBranch?: ReactNode;
 }
 
 export function DesktopPublishButton(props: Props) {
   return <DesktopPublishSession key={props.projectPath} {...props} />;
 }
 
-function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, repository, onOpenBranches, withBranchChange, onBranchSwitched }: Props) {
+function DesktopPublishSession(props: Props) {
+  const { projectPath, flushSave, refresh, saveState, repository, onOpenBranches, withBranchChange, onBranchSwitched } = props;
   const [state, setState] = useState<DesktopPublishState>({ kind: 'idle' });
   const [settingsRevision, setSettingsRevision] = useState(0);
   const action = useDesktopPublishAction({ projectPath, flushSave, refresh }, state, setState);
@@ -77,6 +80,7 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
   }
   return (
     <div className="stacki-publish-control stacki-publish-cluster">
+      {props.beforeBranch}
       <BranchIndicator projectPath={projectPath} info={repository} onOpen={onOpenBranches} />
       <RefreshGitWhenAiTurnEnds refresh={refresh} />
       <PublishControl

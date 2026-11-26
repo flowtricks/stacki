@@ -21,7 +21,7 @@ esbuild.buildSync({
     contents: [
       "export { default as LeftRail } from './src/app/LeftRail';",
       "export { setActualRole } from './src/lib/currentRole';",
-      "export { RAIL_SHORTCUTS, PREVIEW_SHORTCUT, railActionOf, railShortcutLabel } from './src/app/railShortcuts';",
+      "export { RAIL_SHORTCUTS, PREVIEW_SHORTCUT, PULL_SHORTCUT, isPullChord, railActionOf, railShortcutLabel } from './src/app/railShortcuts';",
       "export { publishSettingsView } from './src/lib/settingsSections';",
       "export { ADMIN_VIEW, roleViewOf, DEFAULT_PROJECT_ROLES, parseProjectRoles } from './shared/properties/projectRoles';",
     ].join('\n'),
@@ -176,9 +176,10 @@ const CHORDS = {
 };
 
 test('no two chords are the same, the preview toggle among them', () => {
-  const chords = [...chordsOf(), rail.railShortcutLabel(rail.PREVIEW_SHORTCUT)];
+  const chords = [...chordsOf(), rail.railShortcutLabel(rail.PREVIEW_SHORTCUT), rail.railShortcutLabel(rail.PULL_SHORTCUT)];
   assert.equal(new Set(chords).size, chords.length, `no chord twice: ${chords.join(' ')}`);
   assert.equal(rail.railShortcutLabel(rail.PREVIEW_SHORTCUT), '⌥⇧P');
+  assert.equal(rail.railShortcutLabel(rail.PULL_SHORTCUT), '⌥⇧G');
   const by = Object.fromEntries(rail.RAIL_SHORTCUTS.map((shortcut) => [shortcut.action, rail.railShortcutLabel(shortcut)]));
   assert.deepEqual(by, CHORDS);
 });
@@ -200,6 +201,15 @@ test('each chord is matched on the physical key, and the old and modified presse
   }
   assert.equal(press('KeyA', { altKey: false, shiftKey: true, key: 'A' }), undefined, '⇧A');
   assert.equal(press('KeyK', { altKey: false, key: 'k' }), 'properties');
+});
+
+test('the pull chord is its own: the rail does not take it, and it takes no other press', () => {
+  const press = { altKey: true, shiftKey: true, metaKey: false, ctrlKey: false, key: '˝', code: 'KeyG' };
+  assert.equal(rail.isPullChord(press), true);
+  assert.equal(rail.railActionOf(press), undefined);
+  for (const other of [{ shiftKey: false }, { altKey: false }, { metaKey: true }, { ctrlKey: true }, { code: 'KeyP' }]) {
+    assert.equal(rail.isPullChord({ ...press, ...other }), false, JSON.stringify(other));
+  }
 });
 
 test('the canvas frames forward exactly the table’s ⌥ letters', () => {

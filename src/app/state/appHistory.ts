@@ -56,7 +56,8 @@ export function useNavigation(coreState: ReturnType<typeof useCoreState>, lifecy
     ...openComponentScope,
     ...commitPreview,
     ...gitInfoScope,
-    gitIncoming,
+    gitIncoming: gitIncoming.state,
+    recordGitIncoming: gitIncoming.record,
   };
 }
 

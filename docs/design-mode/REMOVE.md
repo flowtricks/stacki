@@ -32,7 +32,7 @@ content), and turning comment pins on leaves Design mode (its frames are saved a
   Reload do nothing to the project, and the editor's selection is cleared, so its shortcuts have no target.
 - The editor's chords that need no selection are taken before it hears them (`model/designCoveredKeys.ts`):
   the insert palette (⌘F, ⌘E, ⌘K, outside code editors), the left rail's ⌥ chords except the AI panel's, and
-  the preview chord (⌥⇧P). Not covered: a Stacki app's own ⌘⌥⇧ number command, which stays the app's.
+  the preview chord (⌥⇧P) and the pull chord (⌥⇧G). Not covered: a Stacki app's own ⌘⌥⇧ number command, which stays the app's.
 - It does not start over the component defaults editor or an open component (there is no page to copy).
 - Comment pins cannot be on at the same time (above), and write only to Stacki's own data folder either way.
   The Files panel's reader (`FilesKeeper`) only reads.

@@ -1,6 +1,7 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { GitPullControl } from './GitPullControl';
 import type { GitIncomingState } from './useGitIncoming';
+import type { GitHost } from './useGitSession';
 import React from 'react';
 import { gitBranchColors, gitBranchColor } from '../../lib/gitBranchColors';
 import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
@@ -39,6 +40,8 @@ interface GitChipViewProps {
   readonly onCommit: () => void;
   readonly onPull: () => void;
   readonly incoming: GitIncomingState;
+  readonly pullAccess: GitHost['pullAccess'];
+  readonly pullShortcut: string | undefined;
 }
 
 interface BranchesProps {
@@ -218,7 +221,16 @@ export default function GitChipView(props: GitChipViewProps) {
   const colors = gitBranchColors(props.info.branches, props.info.trunk ?? 'main');
   return (
     <div className="git-panel-controls" aria-label={translate('git.chip.controls')} aria-busy={working}>
-      {props.info.remote && <GitPullControl incoming={props.incoming} busy={props.busy} info={props.info} onPull={props.onPull} />}
+      {props.info.remote && (
+        <GitPullControl
+          incoming={props.incoming}
+          busy={props.busy}
+          info={props.info}
+          onPull={props.onPull}
+          pullAccess={props.pullAccess}
+          shortcut={props.pullShortcut}
+        />
+      )}
       <Branches
         colors={colors}
         info={props.info}

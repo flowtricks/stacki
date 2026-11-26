@@ -2,13 +2,13 @@
 // refuses the application menu's edits, and the cleared selection leaves the selection's keys nothing to act on,
 // but these reach the editor through the page itself: the insert palette's chords (⌘F, ⌘E, ⌘K), which insert into
 // the open page; the left rail's panel chords (⌥ and a letter), which open a panel hidden under the cover, where
-// keys typed next could change files; and the preview chord, which swaps the covered canvas. Design mode takes them
+// keys typed next could change files; the preview chord, which swaps the covered canvas, and the pull chord, which rewrites the project's files. Design mode takes them
 // before the editor hears them. The AI panel's own chord stays, so the chat can still be shown and hidden.
 //
 // The chords come from the rail's table, so a changed shortcut is followed. The palette's letters are written out
 // here (their home also holds the editor's writes, which Design mode may not import); the boundary test holds the
 // two lists equal.
-import { PREVIEW_SHORTCUT, railActionOf } from '../../railShortcuts';
+import { isPullChord, PREVIEW_SHORTCUT, railActionOf } from '../../railShortcuts';
 
 export const DESIGN_PALETTE_LETTERS: readonly string[] = ['f', 'e', 'k'];
 
@@ -25,7 +25,7 @@ export function reachesCoveredEditor(event: CoveredKeyEvent, where: { readonly t
   if (where.typing) {
     return false;
   }
-  if (isPreviewChord(event)) {
+  if (isPreviewChord(event) || isPullChord(event)) {
     return true;
   }
   const shortcut = railActionOf(event);
