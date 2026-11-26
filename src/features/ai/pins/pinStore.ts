@@ -4,7 +4,7 @@
 //
 // The canvas side (where a click lands, where an element is, what a crop photographs) is the Desktop shell's
 // (src/app/shell/DesktopPins.tsx): it installs a navigator here to show a pin's element, and calls `dropPin` and
-// `capturePinCrop` with what the canvas measured. Comment mode registers itself in the AI panel's Modes menu
+// `capturePinCrop` with what the canvas measured. Comment mode registers its button in the AI panel's header
 // (panelModes.ts) only while that host is mounted, so a surface without it (Studio) never offers the mode.
 //
 // "Send all" goes to the chat open in the panel (a new one when none is). For an agent whose subagents the panel can

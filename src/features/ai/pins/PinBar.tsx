@@ -38,7 +38,7 @@ export function PinBar() {
   const ai = useAiState();
   const listButton = useRef<HTMLButtonElement>(null);
   const sendTip = useDelayedTooltip();
-  // What the mode does, told on the mode's own name in the bar (the Modes menu's rows carry no tooltip).
+  // What the mode does, told on the mode's own name in the bar (its header button's tooltip is its name).
   const modeTip = useDelayedTooltip();
   const [sending, setSending] = useState(false);
   if (pins.mode !== 'on') {

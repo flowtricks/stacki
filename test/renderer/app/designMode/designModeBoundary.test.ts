@@ -3,7 +3,7 @@
 // only what a sandbox needs: shared contracts, the UI kit, the canvas's read-only request channel, the AI panel's
 // draft and screenshot, and nothing of the editor's edit queue, gestures, saves or IPC writes. (3) It calls no preload
 // method but the menu listener and no `fetch`; the frame's relay fetches only the two read-only routes. (4) What the
-// app hands it is the read-only view REMOVE.md names. (5) The AI panel's Modes menu, which Design mode shares with
+// app hands it is the read-only view REMOVE.md names. (5) The AI panel's mode buttons, which Design mode shares with
 // comment pins, and comment pins themselves know nothing of Design mode, so taking it out leaves them as they are.
 // (6) The insert palette's letters Design mode keeps from the editor are the editor's own.
 //
@@ -190,10 +190,10 @@ test('the app hands Design mode a read-only view', () => {
   ]);
 });
 
-/** The Modes menu and comment pins: what Design mode shares a menu with, and must be able to leave behind. */
-const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/ModesMenu.tsx', 'src/app/shell/DesktopPins.tsx'];
+/** The mode buttons and comment pins: what Design mode shares the header with, and must be able to leave behind. */
+const SHARED_WITH = ['src/features/ai/panelModes.ts', 'src/features/ai/sessions/ModeButtons.tsx', 'src/app/shell/DesktopPins.tsx'];
 
-test('the Modes menu and comment pins know nothing of Design mode', () => {
+test('the mode buttons and comment pins know nothing of Design mode', () => {
   const names = /design ?mode|designMode/i;
   assert.ok(names.test('registerPanelMode(DESIGN_MODE)') === false && names.test('Design mode'), 'the pattern sees the name');
   const files = [...SHARED_WITH, ...sourceFiles().filter((file) => file.startsWith('src/features/ai/pins/'))];

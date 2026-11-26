@@ -6,7 +6,7 @@
 // those elements (`extraTrackPaths`) so markers follow scrolling, zoom and resizing. Going to a pin opens its page,
 // sets the canvas to the width it was pinned at and selects its element, as the Audits panel's go-to does.
 //
-// The host registers comment mode in the AI panel's Modes menu while it is mounted and the role may use the panel.
+// The host registers comment mode's header button in the AI panel while it is mounted and the role may use the panel.
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { PIN_LIMITS } from '../../../shared/properties/ai/commentPinBrief';

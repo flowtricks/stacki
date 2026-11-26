@@ -349,8 +349,6 @@ export const messages = {
   'ai.message.retryTitle': '再问一次',
   'ai.message.showLess': '收起',
   'ai.message.showMore': '展开',
-  'ai.modes.active': '{mode}已开启',
-  'ai.modes.menu': '模式',
   'ai.notice.cannotContinue': '{agent} 无法继续之前的对话，因此此聊天将开始新的对话。',
   'ai.notice.cannotFork': '{agent} 无法将之前的对话带入分支，因此此聊天将开始新的对话。',
   'ai.notice.chatFull': '此聊天已满；新消息将不再保存。请开始新聊天。',

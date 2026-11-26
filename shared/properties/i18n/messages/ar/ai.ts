@@ -430,8 +430,6 @@ export const messages = {
   'ai.message.retryTitle': 'اسأل مرة أخرى',
   'ai.message.showLess': 'عرض أقل',
   'ai.message.showMore': 'عرض المزيد',
-  'ai.modes.active': '{mode} قيد التشغيل',
-  'ai.modes.menu': 'الأوضاع',
   'ai.notice.cannotContinue': 'تعذّر على {agent} متابعة المحادثة السابقة، لذا تبدأ هذه الدردشة محادثة جديدة.',
   'ai.notice.cannotFork': 'لا يستطيع {agent} نقل المحادثة السابقة إلى نسخة متفرعة، لذا تبدأ هذه الدردشة محادثة جديدة.',
   'ai.notice.chatFull': 'هذه الدردشة ممتلئة؛ ولم تعد الرسائل الجديدة تُحفظ. ابدأ دردشة جديدة.',

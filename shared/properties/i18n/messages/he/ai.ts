@@ -381,8 +381,6 @@ export const messages = {
   'ai.message.retryTitle': 'לשאול שוב',
   'ai.message.showLess': 'הצגת פחות',
   'ai.message.showMore': 'הצגת עוד',
-  'ai.modes.active': '{mode} פעיל',
-  'ai.modes.menu': 'מצבים',
   'ai.notice.cannotContinue': '{agent} לא יכול היה להמשיך את השיחה הקודמת, ולכן הצ׳אט הזה מתחיל חדשה.',
   'ai.notice.cannotFork': '{agent} לא יכול להעביר את השיחה הקודמת לפיצול, ולכן הצ׳אט הזה מתחיל חדשה.',
   'ai.notice.chatFull': 'הצ׳אט הזה מלא; הודעות חדשות כבר לא נשמרות. יש להתחיל צ׳אט חדש.',

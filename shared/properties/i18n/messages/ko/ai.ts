@@ -351,8 +351,6 @@ export const messages = {
   'ai.message.retryTitle': '다시 요청',
   'ai.message.showLess': '간략히 보기',
   'ai.message.showMore': '더 보기',
-  'ai.modes.active': '{mode} 켜짐',
-  'ai.modes.menu': '모드',
   'ai.notice.cannotContinue': '{agent}이(가) 이전 대화를 이어갈 수 없어 이 채팅은 새 대화로 시작합니다.',
   'ai.notice.cannotFork': '{agent}이(가) 이전 대화를 포크로 가져갈 수 없어 이 채팅은 새 대화로 시작합니다.',
   'ai.notice.chatFull': '이 채팅이 가득 차서 새 메시지가 더 이상 저장되지 않습니다. 새 채팅을 시작하세요.',
