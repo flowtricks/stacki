@@ -16,7 +16,14 @@ import { DESIGN_CHANNELS } from '#dist/electron/lib/designMode/designFence.js';
 
 // Tests run from the repository root (scripts/gate/runTests.ts).
 const ROOT = process.cwd();
-const FEATURE_PATHS = ['src/app/designMode/', 'electron/handlers/designMode/', 'electron/lib/designMode/', 'shared/ipc/designSession.ts'];
+const FEATURE_PATHS = [
+  'src/app/designMode/',
+  'electron/handlers/designMode/',
+  'electron/lib/designMode/',
+  'electron/preload/designMode/',
+  'shared/ipc/designSession.ts',
+  'shared/ipc/designSnapshot.ts',
+];
 const SCANNED = ['src', 'electron', 'shared', 'scripts', 'studio/src', 'studio/scripts'];
 const FILES_MAX = 20_000;
 
@@ -24,6 +31,7 @@ const FILES_MAX = 20_000;
 const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'src/app/shell/AppShell.tsx': 2,
   'electron/main.ts': 5,
+  'electron/preload/preload.ts': 3,
   'electron/lib/ipcRegistrar.ts': 3,
   'electron/preload/preloadBridge.ts': 1,
   'shared/ipc/ipcPayloads.ts': 2,
