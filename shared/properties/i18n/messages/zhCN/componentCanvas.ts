@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': '背景',
   'componentCanvas.panel.backgroundVariable': '连接到变量',
   'componentCanvas.panel.fixed': '固定',
-  'componentCanvas.panel.frame.about': '单击框架可选择其组件，双击可编辑框架内的组件。',
-  'componentCanvas.panel.frame.pick': '框架',
-  'componentCanvas.panel.frame.title': '框架',
   'componentCanvas.panel.frames': {
     other: '{count} 个框架',
   },

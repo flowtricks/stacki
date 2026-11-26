@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Plano de fundo',
   'componentCanvas.panel.backgroundVariable': 'Conectar a uma variável',
   'componentCanvas.panel.fixed': 'Fixo',
-  'componentCanvas.panel.frame.about': 'Clique em um quadro para selecionar o componente dele e clique duas vezes para editar o componente dentro dele.',
-  'componentCanvas.panel.frame.pick': 'Quadro',
-  'componentCanvas.panel.frame.title': 'Quadro',
   'componentCanvas.panel.frames': {
     one: '{count} quadro',
     other: '{count} quadros',

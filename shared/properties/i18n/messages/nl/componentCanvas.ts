@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Achtergrond',
   'componentCanvas.panel.backgroundVariable': 'Aan variabele koppelen',
   'componentCanvas.panel.fixed': 'Vast',
-  'componentCanvas.panel.frame.about': 'Klik op een frame om het component ervan te selecteren en dubbelklik erop om het component erin te bewerken.',
-  'componentCanvas.panel.frame.pick': 'Frame', // same
-  'componentCanvas.panel.frame.title': 'Frame', // same
   'componentCanvas.panel.frames': {
     one: '{count} frame',
     other: '{count} frames',

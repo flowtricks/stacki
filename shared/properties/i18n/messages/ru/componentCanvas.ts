@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Фон',
   'componentCanvas.panel.backgroundVariable': 'Связать с переменной',
   'componentCanvas.panel.fixed': 'Фиксированный',
-  'componentCanvas.panel.frame.about': 'Щёлкните фрейм, чтобы выбрать его компонент, и дважды щёлкните, чтобы редактировать компонент внутри.',
-  'componentCanvas.panel.frame.pick': 'Фрейм',
-  'componentCanvas.panel.frame.title': 'Фрейм',
   'componentCanvas.panel.frames': {
     one: '{count} фрейм',
     few: '{count} фрейма',

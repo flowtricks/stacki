@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Tło',
   'componentCanvas.panel.backgroundVariable': 'Połącz ze zmienną',
   'componentCanvas.panel.fixed': 'Stały',
-  'componentCanvas.panel.frame.about': 'Kliknij ramkę, aby zaznaczyć jej komponent, a kliknij ją dwukrotnie, aby edytować komponent w środku.',
-  'componentCanvas.panel.frame.pick': 'Ramka',
-  'componentCanvas.panel.frame.title': 'Ramka',
   'componentCanvas.panel.frames': {
     one: '{count} ramka',
     few: '{count} ramki',

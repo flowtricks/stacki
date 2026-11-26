@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Fondo',
   'componentCanvas.panel.backgroundVariable': 'Conectar a una variable',
   'componentCanvas.panel.fixed': 'Fijo',
-  'componentCanvas.panel.frame.about': 'Haz clic en un marco para seleccionar su componente y doble clic para editar el componente que contiene.',
-  'componentCanvas.panel.frame.pick': 'Marco',
-  'componentCanvas.panel.frame.title': 'Marco',
   'componentCanvas.panel.frames': {
     one: '{count} marco',
     other: '{count} marcos',

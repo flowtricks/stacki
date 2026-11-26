@@ -253,19 +253,6 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       canOpen: (component) => component.origin?.kind !== 'package' && component.isLayout !== true && app.project.path.length > 0,
       open,
       exit: () => void finish(origin.current),
-      selectFrame: (key) => {
-        const current = stateRef.current;
-        if (current.kind === 'open' && current.layout.frames.some((frame) => frame.key === key)) {
-          setState({ ...current, frame: key, scope: scopeAfterSelect(current, key), subject: 'frame', picked: 'component' });
-          // On the canvas page the frame's instance is what is selected; inside an instance the selection stays.
-          const instance = current.instances.find((candidate) => candidate.key === key);
-          const view = shell.current;
-          const node = instance === undefined || view.editStackRef.current.length > 1 ? undefined : nodeAtPath(view.model?.nodes ?? [], trailOf(instance.path));
-          if (node !== undefined) {
-            view.setSelectedId(node.id);
-          }
-        }
-      },
       setScope: (scope) => {
         const current = stateRef.current;
         if (current.kind === 'open' && scopeStillFits(scope, current.frame, current.layout)) {

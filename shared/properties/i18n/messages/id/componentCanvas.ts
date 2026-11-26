@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Latar belakang',
   'componentCanvas.panel.backgroundVariable': 'Hubungkan ke variabel',
   'componentCanvas.panel.fixed': 'Tetap',
-  'componentCanvas.panel.frame.about': 'Klik sebuah frame untuk memilih komponennya, dan klik dua kali untuk mengedit komponen di dalamnya.',
-  'componentCanvas.panel.frame.pick': 'Frame', // same
-  'componentCanvas.panel.frame.title': 'Frame', // same
   'componentCanvas.panel.frames': {
     other: '{count} frame',
   },

@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Arka plan',
   'componentCanvas.panel.backgroundVariable': 'Değişkene bağla',
   'componentCanvas.panel.fixed': 'Sabit',
-  'componentCanvas.panel.frame.about': 'Bileşenini seçmek için bir çerçeveye tıklayın, içindeki bileşeni düzenlemek için çift tıklayın.',
-  'componentCanvas.panel.frame.pick': 'Çerçeve',
-  'componentCanvas.panel.frame.title': 'Çerçeve',
   'componentCanvas.panel.frames': {
     one: '{count} çerçeve',
     other: '{count} çerçeve',

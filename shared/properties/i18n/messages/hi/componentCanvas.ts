@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'पृष्ठभूमि',
   'componentCanvas.panel.backgroundVariable': 'वेरिएबल से जोड़ें',
   'componentCanvas.panel.fixed': 'स्थिर',
-  'componentCanvas.panel.frame.about': 'किसी फ़्रेम का कंपोनेंट चुनने के लिए उस पर क्लिक करें, और अंदर का कंपोनेंट एडिट करने के लिए डबल-क्लिक करें।',
-  'componentCanvas.panel.frame.pick': 'फ़्रेम',
-  'componentCanvas.panel.frame.title': 'फ़्रेम',
   'componentCanvas.panel.frames': {
     one: '{count} फ़्रेम',
     other: '{count} फ़्रेम',

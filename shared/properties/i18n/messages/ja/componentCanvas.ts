@@ -25,9 +25,6 @@ export const messages = {
   'componentCanvas.panel.background': '背景',
   'componentCanvas.panel.backgroundVariable': '変数に接続',
   'componentCanvas.panel.fixed': '固定',
-  'componentCanvas.panel.frame.about': 'フレームをクリックするとそのコンポーネントが選択され、ダブルクリックすると中のコンポーネントを編集できます。',
-  'componentCanvas.panel.frame.pick': 'フレーム',
-  'componentCanvas.panel.frame.title': 'フレーム',
   'componentCanvas.panel.frames': {
     other: '{count} フレーム',
   },

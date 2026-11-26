@@ -65,7 +65,6 @@ export interface ComponentCanvasControl {
   readonly canOpen: (component: ScanComponent) => boolean;
   readonly open: (component: ScanComponent) => void;
   readonly exit: () => void;
-  readonly selectFrame: (key: string) => void;
   readonly setScope: (scope: string) => void;
   readonly edit: (edit: FrameEdit) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */

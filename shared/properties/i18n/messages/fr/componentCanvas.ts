@@ -23,10 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Arrière-plan',
   'componentCanvas.panel.backgroundVariable': 'Connecter à une variable',
   'componentCanvas.panel.fixed': 'Fixe',
-  'componentCanvas.panel.frame.about':
-    'Cliquez sur un cadre pour sélectionner son composant, et double-cliquez dessus pour modifier le composant à l’intérieur.',
-  'componentCanvas.panel.frame.pick': 'Cadre',
-  'componentCanvas.panel.frame.title': 'Cadre',
   'componentCanvas.panel.frames': {
     one: '{count} cadre',
     other: '{count} cadres',

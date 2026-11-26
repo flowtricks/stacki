@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'Background',
   'componentCanvas.panel.backgroundVariable': 'Connect a variable',
   'componentCanvas.panel.fixed': 'Fixed',
-  'componentCanvas.panel.frame.about': 'Click a frame to select its component, and double-click it to edit the component inside.',
-  'componentCanvas.panel.frame.pick': 'Frame',
-  'componentCanvas.panel.frame.title': 'Frame',
   'componentCanvas.panel.frames': {
     one: '{count} frame',
     other: '{count} frames',

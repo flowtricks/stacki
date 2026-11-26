@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'الخلفية',
   'componentCanvas.panel.backgroundVariable': 'ربط بمتغير',
   'componentCanvas.panel.fixed': 'ثابت',
-  'componentCanvas.panel.frame.about': 'انقر على إطار لتحديد مكوّنه، وانقر عليه نقرًا مزدوجًا لتحرير المكوّن الذي بداخله.',
-  'componentCanvas.panel.frame.pick': 'الإطار',
-  'componentCanvas.panel.frame.title': 'الإطار',
   'componentCanvas.panel.frames': {
     zero: 'لا إطارات',
     one: 'إطار واحد',

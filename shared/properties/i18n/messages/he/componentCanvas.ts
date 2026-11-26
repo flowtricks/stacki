@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': 'רקע',
   'componentCanvas.panel.backgroundVariable': 'חיבור למשתנה',
   'componentCanvas.panel.fixed': 'קבוע',
-  'componentCanvas.panel.frame.about': 'לחיצה על מסגרת בוחרת את הרכיב שלה, ולחיצה כפולה עליה מאפשרת לערוך את הרכיב שבתוכה.',
-  'componentCanvas.panel.frame.pick': 'מסגרת',
-  'componentCanvas.panel.frame.title': 'מסגרת',
   'componentCanvas.panel.frames': {
     one: 'מסגרת {count}',
     two: '{count} מסגרות',

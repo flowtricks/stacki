@@ -23,9 +23,6 @@ export const messages = {
   'componentCanvas.panel.background': '배경',
   'componentCanvas.panel.backgroundVariable': '변수에 연결',
   'componentCanvas.panel.fixed': '고정',
-  'componentCanvas.panel.frame.about': '프레임을 클릭하면 해당 컴포넌트가 선택되고, 두 번 클릭하면 안의 컴포넌트를 편집할 수 있습니다.',
-  'componentCanvas.panel.frame.pick': '프레임',
-  'componentCanvas.panel.frame.title': '프레임',
   'componentCanvas.panel.frames': {
     other: '프레임 {count}개',
   },

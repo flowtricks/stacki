@@ -1,5 +1,5 @@
-// Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the selected frame's size
-// and background. Every edit goes to the scope "Apply to" names (this frame, every frame of one split value, every
+// Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the size and background of
+// the frame selected on the canvas or in the Navigator. Every edit goes to the scope "Apply to" names (this frame, every frame of one split value, every
 // frame, or the canvas background of every component); a frame's own setting wins over a wider one. Which props get
 // their own frames and the frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode } from 'react';
@@ -67,19 +67,9 @@ function FrameSection({
 }) {
   const translate = useTranslate();
   return (
-    <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.frame.title')}>
-      <Heading title={translate('componentCanvas.panel.frame.title')} hint={translate('componentCanvas.panel.frame.about')} />
-      {state.layout.frames.length > 1 && (
-        <div className="props-field">
-          <label htmlFor={CAPTION_LABEL_FOR}>{translate('componentCanvas.panel.frame.pick')}</label>
-          <Dropdown
-            ariaLabel={translate('componentCanvas.panel.frame.pick')}
-            value={frame.key}
-            options={state.layout.frames.map((candidate) => ({ value: candidate.key, label: frameLabel(candidate, state.component, translate) }))}
-            onChange={canvas.selectFrame}
-          />
-        </div>
-      )}
+    <section className="component-canvas-section" aria-label={frameLabel(frame, state.component, translate)}>
+      {/* Which frame is selected on the canvas; a component with one frame is named by the title above. */}
+      {frame.parts.length > 0 && <div className="component-canvas-frame-name">{frameLabel(frame, state.component, translate)}</div>}
       <CanvasScopeControl canvas={canvas} state={state} />
       <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
       <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
