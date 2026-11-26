@@ -22,7 +22,9 @@ import {
   withSplit,
   CANVAS_LIMITS,
   keyPairs,
+  resolveFrame,
   scopeHolds,
+  type FrameLength,
   withoutOverrides,
   type ComponentCanvasFile,
   type FrameEdit,
@@ -244,7 +246,14 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
     }
   }, []);
   useCanvasPageWrites(state, writes, catalog, { project, translate, shell, setState });
-  useCanvasMessages(state, setState, cover);
+  // The frames' drawn sizes, as the page last told them: read when a size turns Fixed, never drawn from.
+  const drawn = useRef<ReadonlyMap<string, { readonly width: number; readonly height: number }>>(new Map());
+  const commitResize = useCallback(
+    (resize: { readonly frame: string; readonly width: FrameLength | undefined; readonly height: FrameLength | undefined }) =>
+      update((current) => (file) => resizeEdit(file, current, resize)),
+    [update],
+  );
+  useCanvasMessages(state, setState, { cover, drawn, commitResize });
   useLiveSchema(state, app.scan, setState);
   useRelinkedSettings(state, writes, setState);
   useLeaveWhenAway(state, app, finish);
@@ -284,6 +293,18 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           const component = current.component.file;
           return rootTarget(scope, current) === undefined ? (file) => withoutOverrides(file, component, scope, setting) : undefined;
         }),
+      drawnSize: (frame) => drawn.current.get(frame),
+      paintBackground: (color, end) => {
+        const current = stateRef.current;
+        if (current.kind !== 'open') {
+          return;
+        }
+        const scope = current.scopes.background;
+        const root = scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE;
+        const frames = root ? [] : current.layout.frames.filter((frame) => scopeHolds(scope, frame.key)).map((frame) => frame.key);
+        assert(frames.length <= CANVAS_LIMITS.framesMax, 'A paint reaches a bounded number of frames');
+        postToCanvas(current.id, { command: 'paint', frames, root, value: color, restore: end === 'restore' });
+      },
       showTargets: (frames) => {
         const current = stateRef.current;
         if (current.kind === 'open') {
@@ -359,6 +380,35 @@ function keptScopes(current: CanvasOpen, frame: string, layout: CanvasOpen['layo
   const next = { ...current, frame, layout };
   const keep = (section: CanvasSection, fallback: string): string => (scopeFits(section, current.scopes[section], next) ? current.scopes[section] : fallback);
   return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? PROJECT_SCOPE : frame) };
+}
+
+// A resize let go of, as one change: each side it changed is written where a typed size goes (the size target), or,
+// where the dragged frame keeps its own value for that side at a narrower level, to that level, so the frame keeps
+// the size it was dragged to. Hug at all frames is no setting.
+function resizeEdit(
+  file: ComponentCanvasFile,
+  current: CanvasOpen,
+  resize: { readonly frame: string; readonly width: FrameLength | undefined; readonly height: FrameLength | undefined },
+): ComponentCanvasFile {
+  const component = current.component.file;
+  const settings = file.components[component];
+  const sides = [
+    ['width', resize.width],
+    ['height', resize.height],
+  ] as const;
+  assert(
+    current.layout.frames.some((frame) => frame.key === resize.frame),
+    'A resized frame is a frame of this canvas',
+  );
+  return sides.reduce((next, [side, value]) => {
+    if (value === undefined) {
+      return next;
+    }
+    const scope = current.scopes.size;
+    const origin = resolveFrame(settings, resize.frame).origins.get(side);
+    const target = origin !== undefined && origin !== scope && scopeHolds(scope, origin) ? origin : scopeHolds(scope, resize.frame) ? scope : resize.frame;
+    return withFrameEdit(next, component, target, { kind: 'field', field: side, value: value === 'hug' && target === '' ? undefined : value });
+  }, file);
 }
 
 // Where a canvas root setting goes at a scope: the project's default or this component's; undefined at a frame scope.
@@ -482,6 +532,7 @@ async function openCanvas(
         root,
         subject: 'frame',
         picked: { kind: 'component' },
+        resizing: undefined,
       },
       origin,
       base: stored.source,
@@ -744,7 +795,17 @@ function narrowerFrame(instances: readonly CanvasInstance[], key: string): Canva
 // Messages from the canvas page: the zoom, and that it is ready for the selection. The selection itself is the editor's
 // (a press on a box or an instance selects it as on any page); the page is told what is selected, so it can mark the
 // frame's caption and keep captions clear of the editor's tag.
-function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.SetStateAction<CanvasState>>, cover: React.MutableRefObject<number>): void {
+function useCanvasMessages(
+  state: CanvasState,
+  setState: React.Dispatch<React.SetStateAction<CanvasState>>,
+  refs: {
+    /** Saves a resize let go of on the canvas, once (useDesktopComponentCanvas resizeEdit). */
+    readonly commitResize: (resize: { readonly frame: string; readonly width: FrameLength | undefined; readonly height: FrameLength | undefined }) => void;
+    readonly cover: React.MutableRefObject<number>;
+    readonly drawn: React.MutableRefObject<ReadonlyMap<string, { readonly width: number; readonly height: number }>>;
+  },
+): void {
+  const { cover, drawn, commitResize } = refs;
   const id = state.kind === 'open' ? state.id : undefined;
   const selection = state.kind === 'open' ? JSON.stringify(selectionOf(state)) : undefined;
   useEffect(() => {
@@ -756,7 +817,19 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
       if (message === undefined || !fromPreview(event.source)) {
         return;
       }
-      if (message.event === 'view' && message.scale !== undefined) {
+      if (message.event === 'resize' && message.resize !== undefined) {
+        const resize = message.resize;
+        if (resize.phase === 'end') {
+          commitResize(resize);
+        }
+        setState((current) =>
+          current.kind !== 'open'
+            ? current
+            : { ...current, resizing: resize.phase === 'live' ? { frame: resize.frame, width: resize.width, height: resize.height } : undefined },
+        );
+      } else if (message.event === 'sizes') {
+        drawn.current = message.sizes;
+      } else if (message.event === 'view' && message.scale !== undefined) {
         // The zoom on screen: the canvas's own times the preview frame's (a fixed-width Desktop is drawn smaller).
         const scale = message.scale * previewScale();
         setState((current) => (current.kind === 'open' && current.scale !== scale ? { ...current, scale } : current));
@@ -773,7 +846,22 @@ function useCanvasMessages(state: CanvasState, setState: React.Dispatch<React.Se
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [cover, id, setState]);
+  }, [commitResize, cover, drawn, id, setState]);
+  // Escape while a frame is being resized puts it back, wherever the keyboard is.
+  const resizing = state.kind === 'open' && state.resizing !== undefined;
+  useEffect(() => {
+    if (id === undefined || !resizing) {
+      return undefined;
+    }
+    const cancel = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        postToCanvas(id, { command: 'cancelResize' });
+      }
+    };
+    window.addEventListener('keydown', cancel, true);
+    return () => window.removeEventListener('keydown', cancel, true);
+  }, [id, resizing]);
   useEffect(() => {
     if (id === undefined || selection === undefined) {
       return undefined;

@@ -4,7 +4,7 @@
 import { createContext, useContext } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
-import type { ComponentCanvasFile, FrameEdit, FrameSetting } from '../../../../shared/properties/componentCanvas';
+import type { ComponentCanvasFile, FrameEdit, FrameLength, FrameSetting } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
 import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
@@ -42,6 +42,14 @@ export interface CanvasOpen {
    * group box around it (then the scope is that group's). The panels show the frame in every case.
    */
   readonly picked: CanvasPick;
+  /** A frame being resized on the canvas: its sides as the pointer has them, shown in Frame settings until let go. */
+  readonly resizing: CanvasResizing | undefined;
+}
+
+export interface CanvasResizing {
+  readonly frame: string;
+  readonly width: FrameLength | undefined;
+  readonly height: FrameLength | undefined;
 }
 
 /** The scope of each section of edits (CanvasOpen.scopes). */
@@ -98,6 +106,13 @@ export interface ComponentCanvasControl {
   readonly edit: (edit: FrameEdit) => void;
   /** Drops what scopes narrower than the section's own say about `setting`, so every frame it reaches shows its value. */
   readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
+  /** A frame's size as the canvas draws it now, in its own pixels; undefined before the page has said. */
+  readonly drawnSize: (frame: string) => { readonly width: number; readonly height: number } | undefined;
+  /**
+   * A background colour being dragged in a picker, painted at once on what the background's scope reaches, nothing
+   * saved; undefined ends it: `restore` takes the paint back (a cancel), `keep` leaves it for the saved value to replace.
+   */
+  readonly paintBackground: (color: string | undefined, end?: 'restore' | 'keep') => void;
   /** The frames a scope choice would change, outlined on the canvas while it is pointed at; undefined clears them. */
   readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */

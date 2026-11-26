@@ -15,7 +15,6 @@ import { can } from '../../../shared/properties/projectRoles';
 import {
   CANVAS_LIMITS,
   canvasContent,
-  canvasRoot,
   frameKey,
   keyPairs,
   resolveFrame,
@@ -114,7 +113,14 @@ export type CanvasInstanceSettings =
       readonly extras: PropFieldExtras;
       readonly panel: CanvasFramePanel;
     }
-  | { readonly kind: 'root'; readonly classes: readonly string[]; readonly onSetProp: (name: string, value: Attr | undefined) => void };
+  | {
+      readonly kind: 'root';
+      /** The classes the root draws with at its "Apply to" choice: that choice's own, or every component's under it. */
+      readonly classes: readonly string[];
+      /** Where they come from: the choice itself (a blue label), every component's (orange), or nowhere (none shown). */
+      readonly extras: PropFieldExtras;
+      readonly onSetProp: (name: string, value: Attr | undefined) => void;
+    };
 
 /** The settings panel's values and writers for a frame, in the panel's own props (propsPanelTypes.ts). */
 export type CanvasFramePanel = Pick<
@@ -138,7 +144,7 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
     return undefined;
   }
   if (isCanvasRoot(path)) {
-    return rootSettings(canvas, state);
+    return rootSettings(canvas, state, translate);
   }
   const frame = selectedFrame(state, path);
   const instance = frame === undefined ? undefined : state.instances.find((candidate) => candidate.key === frame.key);
@@ -215,6 +221,11 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
     const edit = frameEditOf(name, value, values.bindings);
     if (edit !== undefined) {
       drafts.drop();
+      // Emptied while typing in it: the field stays empty under the caret (the value the frame is given comes back when
+      // the field is left); emptied any other way (Reset), the given value shows at once.
+      if (edit.kind === 'inherit' && typingInPanel()) {
+        drafts.empty({ id, name });
+      }
       write([edit]);
     } else if (value !== undefined) {
       // Code on its way to being a value (a quote not yet closed) is held in its field, not refused at each key.
@@ -235,7 +246,7 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
   };
   return {
     id,
-    props: drafts.held?.id === id ? { ...values.props, [drafts.held.name]: drafts.held.value } : values.props,
+    props: withDrafts(values.props, drafts, id),
     schema: values.schema,
     frontmatterSource: values.imports,
     offersStyle: state.component.rest === true,
@@ -324,6 +335,22 @@ interface UnfinishedCode {
   readonly held: Unfinished | undefined;
   readonly hold: (draft: Unfinished, when: 'now' | 'later') => void;
   readonly drop: () => void;
+  /** A field emptied while it is typed in, shown empty until focus leaves it. */
+  readonly emptied: { readonly id: string; readonly name: string } | undefined;
+  readonly empty: (field: { readonly id: string; readonly name: string }) => void;
+}
+
+// The panel's values with what is being typed: unfinished code in its field, an emptied field empty.
+function withDrafts(props: Readonly<Record<string, Attr>>, drafts: UnfinishedCode, id: string): Readonly<Record<string, Attr>> {
+  const held = drafts.held?.id === id ? { ...props, [drafts.held.name]: drafts.held.value } : props;
+  const emptied = drafts.emptied?.id === id ? drafts.emptied.name : undefined;
+  return emptied === undefined ? held : Object.fromEntries(Object.entries(held).filter(([name]) => name !== emptied));
+}
+
+// Whether a text field of the Settings panel has the keyboard: an emptying write then comes from typing.
+function typingInPanel(): boolean {
+  const active = document.activeElement;
+  return active instanceof HTMLElement && active.closest('.props-field') !== null && (active.matches('input, textarea') || active.isContentEditable);
 }
 
 // How long typed code may stay unfinished before the field is told it has no preview value.
@@ -333,10 +360,22 @@ const UNFINISHED_CODE_MS = 2_500;
 // once when typing stops there.
 function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
   const [held, setHeld] = useState<Unfinished | undefined>(undefined);
+  const [emptied, setEmptied] = useState<{ readonly id: string; readonly name: string } | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
+  // Leaving the emptied field shows what the frame is given again.
+  useEffect(() => {
+    if (emptied === undefined) {
+      return undefined;
+    }
+    const leave = (): void => setEmptied(undefined);
+    window.addEventListener('focusout', leave, true);
+    return () => window.removeEventListener('focusout', leave, true);
+  }, [emptied]);
   return {
     held,
+    emptied,
+    empty: (field) => setEmptied((current) => (current?.id === field.id && current.name === field.name ? current : field)),
     hold: (draft, when) => {
       clearTimeout(timer.current);
       setHeld(draft);
@@ -349,18 +388,25 @@ function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
     drop: () => {
       clearTimeout(timer.current);
       setHeld(undefined);
+      setEmptied(undefined);
     },
   };
 }
 
 // The canvas root's class field: the classes the root draws with, written to the root's "Apply to" scope (Frame
 // settings). Cleared, the scope's own list goes and a wider one shows; names a class cannot have are refused there.
-function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen): CanvasInstanceSettings {
-  const classes = canvasRoot(state.settings, state.component.file).classes;
+function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, translate: Translator): CanvasInstanceSettings {
+  const project = state.settings.classes ?? [];
+  const own = state.scopes.background === PROJECT_SCOPE ? project : (state.settings.components[state.component.file]?.root?.classes ?? []);
+  // At this component's choice with none of its own, every component's classes show, inherited.
+  const inherited = own.length === 0 && state.scopes.background === COMPONENT_SCOPE && project.length > 0;
+  const classes = inherited ? project : own;
   assert(classes.length <= CANVAS_LIMITS.rootClassesMax, 'The canvas root carries a bounded number of classes');
   return {
     kind: 'root',
     classes,
+    extras: (name) =>
+      name === 'class' && inherited ? { provenance: { tone: 'inherited', tip: translate('componentCanvas.panel.scope.project') } } : undefined,
     onSetProp: (name, value) => {
       if (name !== 'class') {
         return; // The root's only field: anything else is the generated page's and is never written.

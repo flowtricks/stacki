@@ -155,7 +155,18 @@ test('the chrome refuses what could break out of its elements, and the page name
 
 test('only well-formed messages from this canvas are heard', () => {
   const type = chrome.CANVAS_MESSAGE;
-  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined });
+  assert.deepEqual(chrome.canvasMessage({ type, canvas: ID, event: 'ready' }, ID), { event: 'ready', scale: undefined, sizes: new Map() });
+  // The frames' drawn sizes: whole, bounded lengths by key; anything else is left out.
+  const sizes = chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: { a: [120, 40], b: [1.5, 2], c: [-1, 3], d: 'x', e: [9e9, 1] } }, ID).sizes;
+  assert.deepEqual([...sizes], [['a', { width: 120, height: 40 }]]);
+  assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'sizes', frames: 'none' }, ID).sizes.size, 0);
+  // A resize on the canvas: its frame, its phase, and whole bounded sizes or hug per side; anything else is not heard.
+  const resize = (extra) => chrome.canvasMessage({ type, canvas: ID, event: 'resize', frame: 'variant=main', phase: 'end', ...extra }, ID)?.resize;
+  assert.deepEqual(resize({ width: 320, height: 'hug' }), { frame: 'variant=main', phase: 'end', width: 320, height: 'hug' });
+  assert.deepEqual(resize({ width: 0.5 }), { frame: 'variant=main', phase: 'end', width: undefined, height: undefined }, 'not a whole size');
+  assert.equal(resize({ width: 99999 })?.width, undefined, 'past the bound');
+  assert.equal(resize({ phase: 'drag' }), undefined, 'an unknown phase');
+  assert.match(chrome.chromeScript(ID), /data\.command === 'cancelResize'/, 'the editor can cancel a resize (Escape)');
   // The selection is the editor's: the page no longer names a pressed frame, and such a message is not heard.
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'select', frame: 'variant=main', chrome: true }, ID), undefined);
   assert.equal(chrome.canvasMessage({ type, canvas: ID, event: 'view', scale: 0.5 }, ID).scale, 0.5);
@@ -271,6 +282,16 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
     /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before \{ visibility: hidden !important; \}/,
   );
   assert.match(chrome.chromeScript(ID), /data\.command === 'tag'/);
+  // A lazy image waits for a viewport test a panned, zoomed canvas never answers: every image on the canvas loads now.
+  assert.match(
+    chrome.chromeScript(ID),
+    /img\[loading="lazy"\][^;]*;\s*for \(var i = 0; i < lazy\.length; i\+\+\) lazy\[i\]\.setAttribute\('loading', 'eager'\)/,
+  );
+  assert.match(chrome.chromeScript(ID), /attributeFilter: \[[^\]]*'loading'/, 'an image patched back to lazy is made eager again');
+  // A colour dragged in a picker is painted at once and taken back on a cancel; a value that could end a declaration is never painted.
+  assert.match(chrome.chromeScript(ID), /data\.command === 'paint'/);
+  assert.match(chrome.chromeScript(ID), /!\/\[;\{\}<>\]\/\.test\(data\.value\)/);
+  assert.match(chrome.chromeScript(ID), /data\.restore === true/);
   assert.equal(chrome.withFallback('var(--a, red)', '#000'), 'var(--a, red)', 'a fallback of its own is kept');
   assert.equal(chrome.withFallback(' var( --a ) ', '#000'), 'var(--a, #000)');
   assert.equal(chrome.withFallback('transparent', '#000'), 'transparent');
@@ -359,7 +380,7 @@ test('the canvas root is the page’s <html>: its path is found, and its classes
   assert.ok(!marked.includes(`<!--avb-s:${bodyPath}-->`), 'the body has no marker pair');
 });
 
-test('the panel shows a frame’s own values as set and everything else as what the field rests on, and stores each write', () => {
+test('the panel shows every value a frame is given as set, the code’s own fallback as resting, and stores each write', () => {
   const panel = loadRenderer('src/app/model/canvasPanelValues.ts');
   const settings = {
     frames: {
@@ -374,13 +395,17 @@ test('the panel shows a frame’s own values as set and everything else as what 
   const shown = panel.framePanelValues(input);
   assert.deepEqual(shown.props.label, { type: 'expr', value: 'frameAsset0.src' });
   assert.deepEqual(shown.props.variant, { type: 'string', value: 'main' }, 'a split value is the frame’s own');
-  assert.equal(shown.props.heading, undefined, 'a wider value is not set here');
-  assert.equal(shown.schema.find((field) => field.name === 'heading').default, 'Everywhere');
-  assert.equal(shown.schema.find((field) => field.name === 'id').default, 'from-defaults');
+  // A value the frame is given from a wider scope or the component defaults shows as real text, marked; the label's
+  // colour says where it comes from (canvasFrameSettings.tsx), and showing it writes nothing.
+  assert.deepEqual(shown.props.heading, { type: 'string', value: 'Everywhere' }, 'a wider value shows as the field’s text');
+  assert.deepEqual(shown.props.id, { type: 'string', value: 'from-defaults' }, 'a component default shows as the field’s text');
+  assert.equal(shown.schema.find((field) => field.name === 'heading').default, undefined, 'the field keeps only the code’s own fallback');
+  assert.equal(shown.props.size, undefined, 'a prop nothing gives stays unset: its code fallback rests in the field');
   assert.equal(shown.schema.filter((field) => field.name === 'class').length, 1, 'a ...rest component takes a class');
   assert.equal(shown.imports, `import frameAsset0 from "${'../'.repeat(2)}src/assets/a.png";`);
   assert.deepEqual(shown.content, { html: 'Words', own: true });
-  assert.deepEqual(panel.framePanelValues({ ...input, scope: '' }).content, { html: 'A &lt;b&gt;', own: false });
+  assert.deepEqual(panel.framePanelValues({ ...input, scope: '' }).content, { html: 'A &lt;b&gt;', own: true }, 'default words shown are set');
+  assert.deepEqual(panel.framePanelValues({ ...input, scope: '', defaults: {} }).content, { html: '', own: false }, 'no words: nothing set');
   const stored = (value) => panel.frameEditOf('label', value, shown.bindings);
   assert.deepEqual(stored({ type: 'expr', value: 'frameAsset0.src' }), {
     kind: 'asset',
@@ -394,6 +419,9 @@ test('the panel shows a frame’s own values as set and everything else as what 
   });
   assert.deepEqual(stored({ type: 'expr', value: '["a"]' }), { kind: 'literal', name: 'label', literal: '["a"]' });
   assert.deepEqual(stored(undefined), { kind: 'inherit', name: 'label' });
+  assert.deepEqual(stored({ type: 'string', value: '' }), { kind: 'inherit', name: 'label' }, 'an emptied field stores nothing');
+  const emptied = panel.framePanelValues({ ...input, settings: { frames: { ...settings.frames, 'variant=main': { props: { heading: '' } } } } });
+  assert.deepEqual(emptied.props.heading, { type: 'string', value: 'Everywhere' }, 'an empty text saved before is no value: the given one shows');
   assert.equal(stored({ type: 'expr', value: 'Astro.props.title' }), undefined, 'code has no preview value');
   assert.deepEqual(panel.framePickEdit('image', { rel: 'public/images/a.png', root: 'public' }, 'module'), {
     kind: 'prop',

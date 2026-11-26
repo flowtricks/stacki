@@ -7,6 +7,7 @@
 // instead of one preview per frame. Panning and zooming transform the world, which the canvas measures through, so
 // the outlines stay on what they outline at every zoom.
 import { assert } from '../../../../shared/core/assert';
+import { CANVAS_LIMITS } from '../../../../shared/properties/componentCanvas';
 
 export const CHROME_LIMITS = {
   /** The widest a frame grows while it hugs its component: the Desktop frame width of the all-breakpoints canvas. */
@@ -29,6 +30,10 @@ export const CHROME_LIMITS = {
   groupGapPx: 32,
   zoomMin: 0.05,
   zoomMax: 4,
+  /** On screen, how near the selected frame's right or bottom edge a press resizes it, either side of the edge. */
+  resizeEdgeScreenPx: 6,
+  /** On screen, how near the size a hugging frame had a drag may end and leave it hugging. */
+  resizeSnapScreenPx: 6,
 } as const satisfies Record<string, number>;
 
 // A fixed side cuts off what runs past it, while the caption above the frame stays: `overflow` would cut that too. Each
@@ -96,6 +101,9 @@ ${surface === undefined ? '' : `html[data-stacki-ready][data-stacki-surface] { b
 html[data-stacki-ready] > body { position: absolute !important; left: 0 !important; top: 0 !important; right: auto !important; bottom: auto !important; margin: 0 !important; padding: 64px !important; border: 0 !important; box-sizing: content-box !important; display: flex !important; flex-flow: row nowrap !important; gap: ${String(CHROME_LIMITS.frameGapPx)}px !important; align-items: flex-start !important; justify-content: flex-start !important; transform-origin: 0 0 !important; width: max-content !important; height: auto !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; box-shadow: none !important; filter: none !important; opacity: 1 !important; float: none !important; }
 html[data-stacki-ready] > body[data-flow="column"] { flex-direction: column !important; gap: ${String(CHROME_LIMITS.groupGapPx)}px !important; }
 html[data-stacki-panning], html[data-stacki-panning] * { cursor: grabbing !important; }
+html[data-stacki-resize="x"], html[data-stacki-resize="x"] * { cursor: ew-resize !important; }
+html[data-stacki-resize="y"], html[data-stacki-resize="y"] * { cursor: ns-resize !important; }
+html[data-stacki-resize="xy"], html[data-stacki-resize="xy"] * { cursor: nwse-resize !important; }
 ${group} { display: flex !important; flex-flow: row nowrap !important; align-items: flex-start !important; justify-content: flex-start !important; gap: ${String(CHROME_LIMITS.frameGapPx)}px !important; flex: 0 0 auto !important; position: relative !important; width: max-content !important; height: auto !important; max-width: none !important; min-width: 0 !important; padding: ${String(GROUP_PADDING_TOP_PX)}px ${String(CHROME_LIMITS.groupPaddingPx)}px ${String(CHROME_LIMITS.groupPaddingPx)}px !important; ${reset} }
 ${group}:has(> stacki-group) { gap: ${String(CHROME_LIMITS.subgroupGapPx)}px !important; }
 ${group}::before { content: attr(data-label) !important; ${type} top: ${String(CHROME_LIMITS.groupPaddingPx)}px !important; left: ${String(CHROME_LIMITS.groupPaddingPx)}px !important; bottom: auto !important; margin: 0 !important; max-width: calc(100% - ${String(CHROME_LIMITS.groupPaddingPx * 2)}px) !important; height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; font: ${HEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].heading} !important; }
@@ -333,11 +341,27 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     flag(root, 'data-stacki-light', light);
     flag(root, 'data-stacki-dark', !light);
   }
+  // Every image on the canvas loads now. A component's lazy image (Lumos's Img is lazy unless told otherwise) waits
+  // for the browser to judge it near the viewport, and the canvas is a panned, zoomed world inside a root that never
+  // scrolls: a frame's image could stay unloaded, its box showing only the image's placeholder fill. On a canvas every
+  // frame is there to be seen, so none waits. Only the attribute on the rendered page changes, never the component.
+  function eager() {
+    var lazy = world.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]');
+    for (var i = 0; i < lazy.length; i++) lazy[i].setAttribute('loading', 'eager');
+  }
+  // Each frame's size as drawn, told to the editor when it changes: a size turned Fixed starts at what the frame shows.
+  var told = '';
+  function tellSizes() {
+    var all = frames(), sizes = {};
+    for (var i = 0; i < all.length; i++) sizes[all[i].getAttribute('data-frame')] = [all[i].offsetWidth, all[i].offsetHeight];
+    var text = JSON.stringify(sizes);
+    if (text !== told) { told = text; post({ event: 'sizes', frames: sizes }); }
+  }
   var queued = false;
-  function settle() { queued = false; apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); }
+  function settle() { queued = false; eager(); apply(); mark(); fallbacks(); captionRoom(); pageBackground(); labelColor(); tellSizes(); }
   function queue() { if (!queued) { queued = true; requestAnimationFrame(settle); } }
   // The editor patches the page in place after each edit, which can put the server's attributes back: reapply ours.
-  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class'] });
+  new MutationObserver(queue).observe(world, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'data-selected', 'class', 'loading'] });
   // The site's styles arrive in <head> after this script runs (the dev server injects them): settle again as they do.
   if (document.head) new MutationObserver(queue).observe(document.head, { childList: true });
   window.addEventListener('load', queue);
@@ -355,7 +379,93 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   window.addEventListener('keyup', function (event) { if (event.code === 'Space') space = false; }, true);
   // Clicks belong to the editor (it selects a box, an instance, or the root between boxes). A press on the space
   // between boxes, a middle press or one with Space held pans.
+  // Resizing the selected frame from its right edge (width), bottom edge (height) or corner (both), at any zoom: the
+  // frame follows the pointer at once and the editor is told each new size, once a frame; letting go tells it the size
+  // to save, once; Escape puts the frame back. A side that hugged and is let go of within a few pixels of its own size
+  // keeps hugging. Nothing is saved here: the editor writes the size where a typed one would go.
+  var resizing = null;
+  var EDGE = ${String(CHROME_LIMITS.resizeEdgeScreenPx)}, SNAP = ${String(CHROME_LIMITS.resizeSnapScreenPx)};
+  function selectedFrame() {
+    if (target !== 'component' && target !== 'box') return null;
+    var all = frames();
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute('data-frame') === selected) return all[i];
+    return null;
+  }
+  function edgeAt(x, y) {
+    var frame = selectedFrame();
+    if (!frame || space) return null;
+    var r = frame.getBoundingClientRect();
+    var right = Math.abs(x - r.right) <= EDGE && y >= r.top && y <= r.bottom + EDGE;
+    var bottom = Math.abs(y - r.bottom) <= EDGE && x >= r.left && x <= r.right + EDGE;
+    var side = right && bottom ? 'xy' : right ? 'x' : bottom ? 'y' : null;
+    return side ? { frame: frame, side: side } : null;
+  }
+  function sizeOf(frame) { return { width: frame.offsetWidth, height: frame.offsetHeight }; }
+  function tellResize(phase) {
+    if (!resizing) return;
+    var size = sizeOf(resizing.frame), message = { event: 'resize', frame: resizing.key, phase: phase };
+    // A side let go of near the size it hugged at goes back to hugging.
+    var hug = function (axis) { return phase === 'end' && resizing.hugged[axis] && Math.abs(size[axis] - resizing.start[axis]) * view.scale <= SNAP; };
+    if (resizing.side !== 'y') message.width = hug('width') ? 'hug' : size.width;
+    if (resizing.side !== 'x') message.height = hug('height') ? 'hug' : size.height;
+    post(message);
+  }
+  function endResize(phase) {
+    if (!resizing) return;
+    var done = resizing;
+    if (phase === 'cancel') {
+      done.frame.setAttribute('style', done.style);
+      if (!done.fixed.width) done.frame.removeAttribute('data-fixed-width');
+      if (!done.fixed.height) done.frame.removeAttribute('data-fixed-height');
+      post({ event: 'resize', frame: done.key, phase: 'cancel' });
+    } else {
+      tellResize('end');
+    }
+    resizing = null;
+    root.removeAttribute('data-stacki-resize');
+    window.removeEventListener('pointermove', onResizeMove, true);
+    window.removeEventListener('pointerup', onResizeUp, true);
+    window.removeEventListener('pointercancel', onResizeCancel, true);
+  }
+  var resizeQueued = false;
+  function onResizeMove(event) {
+    if (!resizing || !view) return;
+    var r = resizing, scale = view.scale;
+    if (r.side !== 'y') {
+      var width = clamp(Math.round(r.start.width + (event.clientX - r.x) / scale), ${String(CANVAS_LIMITS.sizePxMin)}, ${String(CANVAS_LIMITS.sizePxMax)});
+      r.frame.style.setProperty('width', width + 'px', 'important');
+      r.frame.setAttribute('data-fixed-width', '');
+    }
+    if (r.side !== 'x') {
+      var height = clamp(Math.round(r.start.height + (event.clientY - r.y) / scale), ${String(CANVAS_LIMITS.sizePxMin)}, ${String(CANVAS_LIMITS.sizePxMax)});
+      r.frame.style.setProperty('height', height + 'px', 'important');
+      r.frame.setAttribute('data-fixed-height', '');
+    }
+    if (!resizeQueued) { resizeQueued = true; requestAnimationFrame(function () { resizeQueued = false; tellResize('live'); }); }
+  }
+  function onResizeUp() { endResize('end'); }
+  function onResizeCancel() { endResize('cancel'); }
+  window.addEventListener('pointermove', function (event) {
+    if (resizing || event.buttons !== 0) return;
+    var edge = edgeAt(event.clientX, event.clientY);
+    if (edge) root.setAttribute('data-stacki-resize', edge.side); else if (root.hasAttribute('data-stacki-resize')) root.removeAttribute('data-stacki-resize');
+  }, true);
+  window.addEventListener('keydown', function (event) { if (event.key === 'Escape' && resizing) { event.preventDefault(); endResize('cancel'); } }, true);
   window.addEventListener('pointerdown', function (event) {
+    var edge = event.button === 0 ? edgeAt(event.clientX, event.clientY) : null;
+    if (edge && view) {
+      event.preventDefault();
+      var frame = edge.frame;
+      resizing = { frame: frame, key: frame.getAttribute('data-frame'), side: edge.side, x: event.clientX, y: event.clientY, start: sizeOf(frame), style: frame.getAttribute('style') || '',
+        fixed: { width: frame.hasAttribute('data-fixed-width'), height: frame.hasAttribute('data-fixed-height') },
+        hugged: { width: !frame.hasAttribute('data-fixed-width'), height: !frame.hasAttribute('data-fixed-height') } };
+      root.setAttribute('data-stacki-resize', edge.side);
+      try { frame.setPointerCapture(event.pointerId); } catch (e) {}
+      window.addEventListener('pointermove', onResizeMove, true);
+      window.addEventListener('pointerup', onResizeUp, true);
+      window.addEventListener('pointercancel', onResizeCancel, true);
+      return;
+    }
     var background = !boxOf(event.target);
     if (!view || !(event.button === 1 || (event.button === 0 && (space || background)))) return;
     event.preventDefault();
@@ -381,6 +491,26 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
       tag = null;
       mark();
     }
+    // A colour being dragged in a picker, painted at once on the frames it will change (or the canvas root), before it
+    // is saved: the page's own rewrite brings the saved value. Without a value, what was painted is taken back.
+    if (data.command === 'paint' && Array.isArray(data.frames)) {
+      var color = typeof data.value === 'string' && data.value.length <= 512 && !/[;{}<>]/.test(data.value) ? data.value : undefined;
+      var painted = data.root === true ? [root] : [].filter.call(frames(), function (frame) { return data.frames.indexOf(frame.getAttribute('data-frame')) >= 0; });
+      for (var p = 0; p < painted.length; p++) {
+        var element = painted[p];
+        if (!element.hasAttribute('data-stacki-paint')) element.setAttribute('data-stacki-paint', element.style.getPropertyValue('background'));
+        if (color === undefined) {
+          var before = element.getAttribute('data-stacki-paint');
+          if (data.restore === true) {
+            if (before) element.style.setProperty('background', before, 'important'); else element.style.removeProperty('background');
+          }
+          element.removeAttribute('data-stacki-paint');
+        } else {
+          element.style.setProperty('background', color, 'important');
+        }
+      }
+    }
+    if (data.command === 'cancelResize') endResize('cancel');
     if (data.command === 'targets' && Array.isArray(data.frames)) {
       var all = frames();
       for (var t = 0; t < all.length; t++) flag(all[t], 'data-target', data.frames.indexOf(all[t].getAttribute('data-frame')) >= 0);
@@ -395,10 +525,11 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     }
   });
   if (typeof ResizeObserver === 'function') {
-    var refit = new ResizeObserver(function () { captionRoom(); if (!moved) fit(); });
+    var refit = new ResizeObserver(function () { captionRoom(); tellSizes(); if (!moved) fit(); });
     refit.observe(world);
     refit.observe(root);
   }
+  eager();
   fallbacks();
   captionRoom();
   pageBackground();
@@ -411,9 +542,21 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   return script;
 }
 
+/** A side's size a resize reports: pixels, or back to hugging. */
+export type ResizeLength = number | 'hug';
+
 interface CanvasMessage {
-  readonly event: 'view' | 'ready';
+  readonly event: 'view' | 'ready' | 'sizes' | 'resize';
+  /** A resize on the canvas (`resize`): the frame, how far along, and the sides it changes. */
+  readonly resize?: {
+    readonly frame: string;
+    readonly phase: 'live' | 'end' | 'cancel';
+    readonly width: ResizeLength | undefined;
+    readonly height: ResizeLength | undefined;
+  };
   readonly scale: number | undefined;
+  /** Each frame's drawn width and height in the canvas's own pixels, by key (`sizes`). */
+  readonly sizes: ReadonlyMap<string, { readonly width: number; readonly height: number }>;
 }
 
 // What the page posts is untrusted until read here: the site's own scripts share its window.
@@ -426,11 +569,53 @@ export function canvasMessage(input: unknown, id: string): CanvasMessage | undef
     return undefined;
   }
   const event = read('event');
-  if (event !== 'view' && event !== 'ready') {
+  if (event === 'resize') {
+    return resizeMessage(read);
+  }
+  if (event !== 'view' && event !== 'ready' && event !== 'sizes') {
     return undefined;
   }
   const scaleValue = read('scale');
   const scale = typeof scaleValue === 'number' && Number.isFinite(scaleValue) && scaleValue > 0 ? scaleValue : undefined;
   assert(id.length > 0, 'A canvas message is read for one canvas');
-  return { event, scale };
+  return { event, scale, sizes: event === 'sizes' ? frameSizesOf(read('frames')) : new Map() };
+}
+
+const RESIZE_PHASES = ['live', 'end', 'cancel'] as const;
+
+// A `resize` message: a frame key, a phase, and for each side it changes whole bounded pixels or `hug`.
+function resizeMessage(read: (key: string) => unknown): CanvasMessage | undefined {
+  const frame = read('frame');
+  const phase = RESIZE_PHASES.find((candidate) => candidate === read('phase'));
+  if (typeof frame !== 'string' || frame.length > CANVAS_LIMITS.keyCharsMax || phase === undefined) {
+    return undefined;
+  }
+  const length = (value: unknown): ResizeLength | undefined =>
+    value === 'hug'
+      ? 'hug'
+      : typeof value === 'number' && Number.isSafeInteger(value) && value >= CANVAS_LIMITS.sizePxMin && value <= CANVAS_LIMITS.sizePxMax
+        ? value
+        : undefined;
+  const resize = { frame, phase, width: length(read('width')), height: length(read('height')) };
+  assert(resize.phase === phase, 'A resize keeps its phase');
+  return { event: 'resize', scale: undefined, sizes: new Map(), resize };
+}
+
+// The frames' sizes a `sizes` message holds: string keys to two whole, bounded pixel lengths; anything else is left out.
+function frameSizesOf(input: unknown): ReadonlyMap<string, { readonly width: number; readonly height: number }> {
+  const sizes = new Map<string, { readonly width: number; readonly height: number }>();
+  if (typeof input !== 'object' || input === null) {
+    return sizes;
+  }
+  const length = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= CANVAS_LIMITS.sizePxMax ? value : undefined;
+  for (const [key, value] of Object.entries(input).slice(0, CANVAS_LIMITS.framesMax)) {
+    const width = Array.isArray(value) ? length(value[0]) : undefined;
+    const height = Array.isArray(value) ? length(value[1]) : undefined;
+    if (key.length <= CANVAS_LIMITS.keyCharsMax && width !== undefined && height !== undefined) {
+      sizes.set(key, { width, height });
+    }
+  }
+  assert(sizes.size <= CANVAS_LIMITS.framesMax, 'A canvas reports a bounded number of frames');
+  return sizes;
 }

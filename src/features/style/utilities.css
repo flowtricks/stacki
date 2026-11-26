@@ -1651,6 +1651,11 @@ body.is-scrubbing * {
   cursor: pointer;
   overflow: hidden;
 }
+/* The keyboard's ring sits outside the swatch: the fill never changes with focus, hover or a press. */
+.u-color-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .u-color-swatch:disabled {
   cursor: not-allowed;
   opacity: 0.6;

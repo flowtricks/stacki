@@ -767,7 +767,9 @@ function layEntry(values: HeldMaps, entry: FrameEntry): readonly string[] {
       into.set(name, value);
       return name;
     });
-  const names = [...lay(entry.props, values.props), ...lay(entry.assets, values.assets), ...lay(entry.literals, values.literals)];
+  // An empty text is no value (an emptied field stores nothing now; an older version stored ''): wider ones show through.
+  const props = entry.props === undefined ? undefined : Object.fromEntries(Object.entries(entry.props).filter(([, value]) => value !== ''));
+  const names = [...lay(props, values.props), ...lay(entry.assets, values.assets), ...lay(entry.literals, values.literals)];
   for (const name of entry.unset ?? []) {
     drop(name);
     values.unset.add(name);

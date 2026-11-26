@@ -30,9 +30,16 @@ import './componentCanvas.css';
 import { CAPTION_LABEL_FOR } from '../../../ui/captionLabel';
 import { stepSizeKey } from '../../style/SizeKit';
 
-// The width a frame takes when it stops hugging and nothing wider sets one.
+// The size a frame takes when it stops hugging before the canvas has said how large the selected frame is drawn.
 const FIXED_WIDTH_PX = 400;
 const FIXED_HEIGHT_PX = 300;
+
+// Turned Fixed, a side starts at what the selected frame shows now, so nothing jumps; bounded as every size is.
+function fixedStart(canvas: ComponentCanvasControl, state: CanvasOpen, side: 'width' | 'height'): number {
+  const drawn = canvas.drawnSize(state.frame)?.[side];
+  const pixels = drawn === undefined || drawn === 0 ? (side === 'width' ? FIXED_WIDTH_PX : FIXED_HEIGHT_PX) : Math.round(drawn);
+  return Math.min(Math.max(pixels, CANVAS_LIMITS.sizePxMin), CANVAS_LIMITS.sizePxMax);
+}
 
 export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
@@ -94,7 +101,12 @@ function overridden(state: CanvasOpen, section: CanvasSection, setting: FrameSet
   }
   const frames = state.layout.frames.map((candidate) => candidate.key);
   const found = overridesIn(state.settings.components[state.component.file], frames, scope, setting);
-  return found.length === 0 ? undefined : translate('componentCanvas.level.overrides', { count: found.length });
+  if (found.length === 0) {
+    return undefined;
+  }
+  const count = translate('componentCanvas.level.overrides', { count: found.length });
+  // The selected frame among them is why it does not change: said first.
+  return found.some((entry) => entry.frame === state.frame) ? `${translate('componentCanvas.level.frame')}. ${count}` : count;
 }
 
 function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height'; readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
@@ -102,8 +114,10 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
   const label = translate(side === 'width' ? 'componentCanvas.panel.width' : 'componentCanvas.panel.height');
   const scope = state.scopes.size;
   const settings = state.settings.components[state.component.file];
-  // What the scope itself gives: its own value, else a wider one's, else hug.
-  const value = resolveFrame(settings, scope)[side];
+  // What the scope itself gives: its own value, else a wider one's, else hug; while the selected frame is being resized
+  // on the canvas, the size the pointer gives it.
+  const dragged = state.resizing?.frame === state.frame ? state.resizing[side] : undefined;
+  const value = dragged ?? resolveFrame(settings, scope)[side];
   const own = settings?.frames?.[scope]?.[side] !== undefined;
   const tip = overridden(state, 'size', side, translate);
   // Hug over all frames is what no setting says, so it is written as no setting rather than as "hug".
@@ -127,7 +141,7 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
             { value: 'hug', label: translate('componentCanvas.panel.hug') },
             { value: 'fixed', label: translate('componentCanvas.panel.fixed') },
           ]}
-          onChange={(mode) => set(mode === 'hug' ? 'hug' : side === 'width' ? FIXED_WIDTH_PX : FIXED_HEIGHT_PX)}
+          onChange={(mode) => set(mode === 'hug' ? 'hug' : fixedStart(canvas, state, side))}
         />
         {value !== 'hug' && (
           <CommitInput
@@ -195,7 +209,12 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
           value={value ?? 'transparent'}
           ariaLabel={label}
           onChange={(color, live) => {
-            if (!live) {
+            // Dragging paints the frames at once and saves nothing; letting go saves once. A value let go of that is
+            // what was there (a cancel) takes the paint back; any other stays until the saved one replaces it.
+            if (live) {
+              canvas.paintBackground(color);
+            } else {
+              canvas.paintBackground(undefined, color.trim() === (value ?? 'transparent').trim() ? 'restore' : 'keep');
               commit(color);
             }
           }}
