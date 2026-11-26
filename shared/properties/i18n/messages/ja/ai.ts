@@ -395,9 +395,6 @@ export const messages = {
   'ai.pins.attention.stopped': '完了前に停止しました。ピンを再開して送り直してください。',
   'ai.pins.cancelMove': 'キャンセル',
   'ai.pins.cancelRun': '送信を停止',
-  'ai.pins.clearSent': {
-    other: '送信済みの {count} 件を消去',
-  },
   'ai.pins.close': '閉じる',
   'ai.pins.continue': '続行',
   'ai.pins.cropFailed': 'ピン留めした領域をキャプチャできませんでした。',

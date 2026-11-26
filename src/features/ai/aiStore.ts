@@ -415,6 +415,22 @@ export async function openChat(chat: ChatId | undefined): Promise<void> {
   update((current) => ({ ...current, views: withView(current.views, chat, reduceChat(EMPTY_CHAT, reply.value.events)) }));
 }
 
+/**
+ * Reads chat `chat`'s transcript into memory without opening it: comment pins read how their pins stand from it
+ * (a pin whose work finished well is deleted). A chat already read, or not in this project's list, is left as it is.
+ */
+export async function loadChatView(chat: ChatId): Promise<void> {
+  const projectPath = state.projectPath;
+  if (projectPath === undefined || state.views.has(chat) || !state.chats.some((candidate) => candidate.id === chat)) {
+    return;
+  }
+  const reply = await aiChatRead({ projectPath, chat });
+  if (!reply.ok || state.projectPath !== projectPath || state.views.has(chat)) {
+    return; // Unread, or another project opened meanwhile: the pins wait as they are.
+  }
+  update((current) => ({ ...current, views: withView(current.views, chat, reduceChat(EMPTY_CHAT, reply.value.events)) }));
+}
+
 export async function renameChat(chat: ChatId, title: string): Promise<void> {
   await changeChat(chat, { title }, { reorders: 'no' });
 }

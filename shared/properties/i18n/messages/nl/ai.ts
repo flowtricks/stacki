@@ -412,10 +412,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Gestopt voordat het klaar was. Heropen de pin om hem opnieuw te versturen.',
   'ai.pins.cancelMove': 'Annuleren',
   'ai.pins.cancelRun': 'Versturen stoppen',
-  'ai.pins.clearSent': {
-    one: '{count} verzonden wissen',
-    other: '{count} verzonden wissen',
-  },
   'ai.pins.close': 'Sluiten',
   'ai.pins.continue': 'Doorgaan',
   'ai.pins.cropFailed': 'Kan het vastgepinde gebied niet vastleggen.',

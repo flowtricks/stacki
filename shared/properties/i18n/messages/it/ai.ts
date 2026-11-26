@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Interrotto prima della fine. Riapri il pin per inviarlo di nuovo.',
   'ai.pins.cancelMove': 'Annulla',
   'ai.pins.cancelRun': 'Interrompi l’invio',
-  'ai.pins.clearSent': {
-    one: 'Cancella {count} inviato',
-    other: 'Cancella {count} inviati',
-  },
   'ai.pins.close': 'Chiudi',
   'ai.pins.continue': 'Continua',
   'ai.pins.cropFailed': 'Impossibile acquisire l’area contrassegnata.',

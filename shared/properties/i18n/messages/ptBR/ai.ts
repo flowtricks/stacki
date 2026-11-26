@@ -412,10 +412,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Interrompido antes de terminar. Reabra o pin para enviá-lo de novo.',
   'ai.pins.cancelMove': 'Cancelar',
   'ai.pins.cancelRun': 'Parar o envio',
-  'ai.pins.clearSent': {
-    one: 'Limpar {count} enviado',
-    other: 'Limpar {count} enviados',
-  },
   'ai.pins.close': 'Fechar',
   'ai.pins.continue': 'Continuar',
   'ai.pins.cropFailed': 'Não foi possível capturar a área marcada.',

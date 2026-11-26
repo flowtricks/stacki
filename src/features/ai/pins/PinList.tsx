@@ -1,18 +1,21 @@
 // Every pin on the board, on every page: its number and crop, its words (or that it has none yet), where it is,
 // and how it stands. A row takes the person to the pin (its page, its width, its element, its popover open); a
 // draft's switch includes it in or leaves it out of the next "Send all"; the end of each row deletes it (asking
-// first only when it holds words or added images). The foot clears the sent pins and continues a held run.
+// first only when it holds words or added images). A pin whose work finished well is deleted by itself (pinStore.ts),
+// so the list holds only pins still to send or still at work. Deleting a row keeps the list open while a pin remains,
+// with the keyboard on the next row's delete; the foot appears only to continue or end a held run.
 import type { CSSProperties } from 'react';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { trashCanSimple as centralTrash } from '../../../ui/central/centralGeometry';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import Popup from '../../../ui/Popup';
+import { POPUP_MOTION_MS } from '../../../ui/popupLifecycle';
 import { Switch } from '../../../ui/Switch';
 import { TipButton } from '../sessions/TipButton';
 import { commentLine, hasContentToLose, workingCopy } from './pinModel';
 import { DetachedPill, PinProgressPill, UnsavedPill } from './PinProgressPill';
-import { cancelRun, clearSent, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
+import { cancelRun, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
 import type { CommentPin } from '../../../../shared/properties/ai/commentPins';
 import type { Translator } from '../../../lib/i18n/localeContext';
 
@@ -25,7 +28,6 @@ export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }
   const translate = useTranslate();
   const pins = usePinState();
   const ordered = [...pins.board.pins].sort((left, right) => left.number - right.number);
-  const sent = ordered.filter((pin) => pin.delivery.kind === 'sent').length;
   const box = anchor?.getBoundingClientRect();
   return (
     <Popup
@@ -42,28 +44,25 @@ export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }
       ) : (
         <ul className="ai-pin-rows">
           {ordered.map((pin) => (
-            <PinRow key={pin.id} pin={pin} image={firstImage(pin, pins.images)} detached={pins.detached.has(pin.id)} translate={translate} />
+            <PinRow
+              key={pin.id}
+              pin={pin}
+              index={ordered.indexOf(pin)}
+              image={firstImage(pin, pins.images)}
+              detached={pins.detached.has(pin.id)}
+              translate={translate}
+            />
           ))}
         </ul>
       )}
-      {(pins.run?.held === 'paused' || sent > 0) && (
+      {pins.run?.held === 'paused' && (
         <div className="ai-pin-list-foot">
-          {pins.run?.held === 'paused' && (
-            <>
-              <button type="button" className="ai-pin-bar-button" onClick={() => void continueRun(translate)}>
-                {translate('ai.pins.continue')}
-              </button>
-              <button type="button" className="ai-pin-bar-button" onClick={cancelRun}>
-                {translate('ai.pins.cancelRun')}
-              </button>
-            </>
-          )}
-          <span className="ai-pin-tools-gap" />
-          {sent > 0 && (
-            <button type="button" className="ai-pin-bar-button" onClick={clearSent}>
-              {translate('ai.pins.clearSent', { count: sent })}
-            </button>
-          )}
+          <button type="button" className="ai-pin-bar-button" onClick={() => void continueRun(translate)}>
+            {translate('ai.pins.continue')}
+          </button>
+          <button type="button" className="ai-pin-bar-button" onClick={cancelRun}>
+            {translate('ai.pins.cancelRun')}
+          </button>
         </div>
       )}
     </Popup>
@@ -72,11 +71,14 @@ export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }
 
 function PinRow({
   pin,
+  index,
   image,
   detached,
   translate,
 }: {
   readonly pin: CommentPin;
+  /** The row's place in the list, so the keyboard moves to the row that takes it once this one is deleted. */
+  readonly index: number;
   readonly image: string | undefined;
   readonly detached: boolean;
   readonly translate: Translator;
@@ -98,6 +100,12 @@ function PinRow({
       }
     }
     deletePin(pin.id);
+    // The row that takes this one's place (or the one before, for the last) keeps the keyboard in the list: after the
+    // confirm dialog's exit, which hands focus back to the button that is gone.
+    window.setTimeout(() => {
+      const deletes = document.querySelectorAll<HTMLElement>('.ai-pin-list .ai-pin-row-delete');
+      deletes[Math.min(index, deletes.length - 1)]?.focus();
+    }, POPUP_MOTION_MS);
   };
   return (
     <li className={`ai-pin-row${pin.included || pin.delivery.kind === 'sent' ? '' : ' is-excluded'}`}>
@@ -120,7 +128,7 @@ function PinRow({
           onToggle={() => setPinIncluded(pin.id, pin.included ? 'exclude' : 'include')}
         />
       )}
-      <TipButton label={translate('ai.pins.delete')} onClick={() => void remove()}>
+      <TipButton className="ai-pin-row-delete" label={translate('ai.pins.delete')} onClick={() => void remove()}>
         <TrashGlyph size={16} />
       </TipButton>
     </li>

@@ -4,7 +4,7 @@
 // subagents the panel cannot follow, that the pins go one message at a time), never a line of text.
 //
 // The list (PinList.tsx) reviews every pin on every page: jump to one, include or leave it out of the next send,
-// delete it, and clear the sent ones.
+// and delete it; a pin whose work finished well is deleted by itself.
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MessageKey } from '../../../lib/i18n/localeContext';

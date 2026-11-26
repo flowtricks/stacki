@@ -2790,6 +2790,14 @@ a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the p
 share one turn's changes card; Codex's get one card each. Stop is the chat's own Stop, and permission requests reach
 the person as in any turn.
 
+**Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin whose work
+is confirmed finished well leaves the board by itself (marker, open box, list row, and its images with the save): a
+Claude pin when its own subagent completes (mid-run, each on its own) or, done by the coordinator, when the turn ended
+`end_turn`; never past a turn that ended any other way; a Codex pin when its own turn ended `end_turn`. Failed,
+stopped, waiting and running pins stay with their status. A finished pin holding words typed after the send and not
+saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts` `loadChatView`),
+so pins that finished while the app was closed go too. The chat's message keeps its own words and thumbnail.
+
 **Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's number, thumbnail, words
 and names, and its status (opening its subagent when it has one); a pin still on the board opens on the canvas. No
 Edit or Resend. Proofs: `test/shared/properties/ai/commentPins.test.ts`, `test/electron/handlers/ai/pinBoardStore.test.ts`,

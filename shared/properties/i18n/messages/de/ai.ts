@@ -414,10 +414,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Vor dem Abschluss gestoppt. Öffne den Pin wieder, um ihn erneut zu senden.',
   'ai.pins.cancelMove': 'Abbrechen',
   'ai.pins.cancelRun': 'Senden stoppen',
-  'ai.pins.clearSent': {
-    one: '{count} gesendeten entfernen',
-    other: '{count} gesendete entfernen',
-  },
   'ai.pins.close': 'Schließen',
   'ai.pins.continue': 'Fortfahren',
   'ai.pins.cropFailed': 'Der markierte Bereich konnte nicht erfasst werden.',

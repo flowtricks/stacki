@@ -426,11 +426,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'נעצר לפני שהסתיים. יש לפתוח מחדש את הנעץ כדי לשלוח אותו שוב.',
   'ai.pins.cancelMove': 'ביטול',
   'ai.pins.cancelRun': 'עצירת השליחה',
-  'ai.pins.clearSent': {
-    one: 'ניקוי נעץ אחד שנשלח',
-    two: 'ניקוי שני נעצים שנשלחו',
-    other: 'ניקוי {count} נעצים שנשלחו',
-  },
   'ai.pins.close': 'סגירה',
   'ai.pins.continue': 'המשך',
   'ai.pins.cropFailed': 'לא ניתן היה לצלם את האזור שננעץ.',

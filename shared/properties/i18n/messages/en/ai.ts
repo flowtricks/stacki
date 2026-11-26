@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Stopped before it finished. Reopen the pin to send it again.',
   'ai.pins.cancelMove': 'Cancel',
   'ai.pins.cancelRun': 'Stop sending',
-  'ai.pins.clearSent': {
-    one: 'Clear {count} sent',
-    other: 'Clear {count} sent',
-  },
   'ai.pins.close': 'Close',
   'ai.pins.continue': 'Continue',
   'ai.pins.cropFailed': 'Could not capture the pinned area.',

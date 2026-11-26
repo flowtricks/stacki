@@ -93,11 +93,6 @@ export function removePin(board: PinBoard, id: PinId): PinBoard {
   return { ...board, pins };
 }
 
-/** The board without its sent pins: "Clear sent". */
-export function clearSentPins(board: PinBoard): PinBoard {
-  return { ...board, pins: board.pins.filter((pin) => pin.delivery.kind === 'draft') };
-}
-
 /** What the pin's box shows: its unsaved changes when it has some, else what was saved. */
 export function workingCopy(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): PinEdit {
   return pin.edit ?? { comment: pin.comment, images: pin.images };
@@ -289,6 +284,25 @@ export function pinProgress(pin: Pick<CommentPin, 'number' | 'delivery'>, view: 
   }
   assert(ended !== undefined, 'pinProgress: a turn still running was answered above');
   return progressOfEnd(ended);
+}
+
+/**
+ * Whether a sent pin's work is confirmed finished well, so the pin can be deleted: it reads done, and, for a subagent
+ * pin, its turn has not ended any other way (a subagent sent to the background reads done once its turn is over,
+ * whatever became of it; a turn that ended well vouches for it). Nothing else is finished: a draft, a pin not yet
+ * sent, a chat not open here, a pin at work, waiting, failed or stopped.
+ */
+export function pinFinished(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView | undefined): boolean {
+  const delivery = pin.delivery;
+  if (delivery.kind !== 'sent' || delivery.turn === undefined || view === undefined) {
+    return false;
+  }
+  if (pinProgress(pin, view, 'running').kind !== 'done') {
+    return false;
+  }
+  const ended = turnEnd(view, delivery.turn);
+  assert(delivery.mode === 'subagents' || ended === 'end_turn', 'pinFinished: a pin of its own turn is done only when that turn ended well');
+  return ended === undefined || ended === 'end_turn';
 }
 
 /** The newest subagent of `turn` titled for pin `number`, as it stands. */

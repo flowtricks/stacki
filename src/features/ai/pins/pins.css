@@ -92,6 +92,23 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
 .ai-pin-marker.is-excluded:not(:hover):not(.is-open) {
   opacity: 0.55;
 }
+/* A pin that left the board fades where it was, with the popups' exit motion, and takes no press meanwhile. */
+.ai-pin-marker.is-leaving {
+  pointer-events: none;
+  animation: ai-pin-leave var(--popup-duration, 160ms) ease forwards;
+}
+@keyframes ai-pin-leave {
+  to {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-pin-marker.is-leaving {
+    animation: none;
+    opacity: 0;
+  }
+}
 .ai-pin-layer.is-moving .ai-pin-marker {
   opacity: 0.4;
 }
@@ -271,7 +288,7 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   align-items: center;
   gap: 4px;
   padding: 6px;
-  border-top: 1px solid var(--border);
+  background: var(--bg-hover);
 }
 
 /* A pin's number, in the list, the popover and a message. */

@@ -446,12 +446,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Zatrzymano przed ukończeniem. Otwórz pinezkę ponownie, aby wysłać ją jeszcze raz.',
   'ai.pins.cancelMove': 'Anuluj',
   'ai.pins.cancelRun': 'Zatrzymaj wysyłanie',
-  'ai.pins.clearSent': {
-    one: 'Wyczyść {count} wysłaną',
-    few: 'Wyczyść {count} wysłane',
-    many: 'Wyczyść {count} wysłanych',
-    other: 'Wyczyść {count} wysłanej',
-  },
   'ai.pins.close': 'Zamknij',
   'ai.pins.continue': 'Kontynuuj',
   'ai.pins.cropFailed': 'Nie udało się przechwycić przypiętego obszaru.',

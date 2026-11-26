@@ -446,12 +446,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Остановлено до завершения. Откройте метку заново, чтобы отправить её ещё раз.',
   'ai.pins.cancelMove': 'Отмена',
   'ai.pins.cancelRun': 'Остановить отправку',
-  'ai.pins.clearSent': {
-    one: 'Убрать {count} отправленную',
-    few: 'Убрать {count} отправленные',
-    many: 'Убрать {count} отправленных',
-    other: 'Убрать {count} отправленной',
-  },
   'ai.pins.close': 'Закрыть',
   'ai.pins.continue': 'Продолжить',
   'ai.pins.cropFailed': 'Не удалось сделать снимок отмеченной области.',

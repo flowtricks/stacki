@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'पूरा होने से पहले रुक गया। इसे दोबारा भेजने के लिए पिन को फिर से खोलें।',
   'ai.pins.cancelMove': 'रद्द करें',
   'ai.pins.cancelRun': 'भेजना रोकें',
-  'ai.pins.clearSent': {
-    one: '{count} भेजा गया पिन साफ़ करें',
-    other: '{count} भेजे गए पिन साफ़ करें',
-  },
   'ai.pins.close': 'बंद करें',
   'ai.pins.continue': 'जारी रखें',
   'ai.pins.cropFailed': 'पिन किया गया हिस्सा कैप्चर नहीं हो सका।',

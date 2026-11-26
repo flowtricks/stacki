@@ -411,10 +411,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Bitmeden durduruldu. Yeniden göndermek için iğneyi yeniden açın.',
   'ai.pins.cancelMove': 'İptal',
   'ai.pins.cancelRun': 'Göndermeyi durdur',
-  'ai.pins.clearSent': {
-    one: 'Gönderilen {count} iğneyi temizle',
-    other: 'Gönderilen {count} iğneyi temizle',
-  },
   'ai.pins.close': 'Kapat',
   'ai.pins.continue': 'Devam',
   'ai.pins.cropFailed': 'İğnelenen alan yakalanamadı.',

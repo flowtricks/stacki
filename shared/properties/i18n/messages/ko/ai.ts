@@ -394,9 +394,6 @@ export const messages = {
   'ai.pins.attention.stopped': '완료되기 전에 중지되었습니다. 핀을 다시 열어 다시 보내세요.',
   'ai.pins.cancelMove': '취소',
   'ai.pins.cancelRun': '보내기 중지',
-  'ai.pins.clearSent': {
-    other: '보낸 핀 {count}개 지우기',
-  },
   'ai.pins.close': '닫기',
   'ai.pins.continue': '계속',
   'ai.pins.cropFailed': '고정한 영역을 캡처할 수 없습니다.',

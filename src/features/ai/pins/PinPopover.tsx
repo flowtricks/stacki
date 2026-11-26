@@ -50,9 +50,11 @@ export interface PinPopoverProps {
   readonly onRecapture: (() => void) | undefined;
   /** A version that changes whenever the canvas measured again, so the popover follows its pin. */
   readonly layout: number;
+  /** The pin left the board (its work finished, or it was deleted): the box closes with the popups' exit motion. */
+  readonly closing?: boolean;
 }
 
-export function PinPopover({ pin, progress, anchor, detached, onRecapture, layout }: PinPopoverProps) {
+export function PinPopover({ pin, progress, anchor, detached, onRecapture, layout, closing = false }: PinPopoverProps) {
   const translate = useTranslate();
   const pins = usePinState();
   const ai = useAiState();
@@ -150,6 +152,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
     <Popup
       ref={surface}
       mode="popover"
+      open={!closing}
       keepOnScroll
       anchor={anchor}
       // A press on its own marker (a click to close it, or a drag to move it) is not a press elsewhere.

@@ -14,11 +14,15 @@
 // back. On release the shell asks the canvas what is under the point (setPinMover): an element there takes the pin,
 // with its words, images and unsaved changes; nothing there (off the page) leaves it where it was. The pointer is the
 // marker's own while it is held (pointer capture), so nothing on the page is selected or dragged underneath.
-import { useEffect, useRef, useState } from 'react';
+//
+// A pin that leaves the board (its work finished, or the person deleted it) does not blink out: its marker stays where
+// it was for the popups' exit motion, fading, and its box, when open, closes with the same motion.
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import type { CommentPin, PinId } from '../../../../shared/properties/ai/commentPins';
 import { tellCanvas } from '../../../editor/canvasQuery';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { POPUP_MOTION_MS } from '../../../ui/popupLifecycle';
 import { markerPosition, type CanvasBox, type PinProgress } from './pinModel';
 import { closePinBox, movePinTo, openPin, setDraggingPin, usePinState } from './pinStore';
 import { PinPopover } from './PinPopover';
@@ -44,7 +48,7 @@ export interface PinOverlayProps {
 export function PinOverlay({ rects, scale, placed, detached, progressOf, recapture }: PinOverlayProps) {
   const translate = useTranslate();
   const pins = usePinState();
-  const markers = useRef(new Map<PinId, HTMLButtonElement>());
+  const markers = useRef(new Map<PinId, HTMLElement>());
   const root = useRef<HTMLDivElement>(null);
   const latestScale = useRef(scale);
   latestScale.current = scale;
@@ -87,10 +91,37 @@ export function PinOverlay({ rects, scale, placed, detached, progressOf, recaptu
   useEffect(() => {
     setLayout((count) => (count + 1) % Number.MAX_SAFE_INTEGER);
   }, [rects, scale]);
+  // Markers drawn last time, and those leaving now: a pin gone from the board is drawn where it was until its exit ends.
+  const drawn = useRef(new Map<PinId, LeavingPin>());
+  const [leaving, setLeaving] = useState<readonly LeavingPin[]>([]);
+  const onBoard = new Set(pins.board.pins.map((pin) => pin.id));
+  const departed = [...drawn.current.values()].filter((entry) => !onBoard.has(entry.pin.id) && !leaving.some((held) => held.pin.id === entry.pin.id));
+  const exiting = [...leaving, ...departed].filter((entry) => !onBoard.has(entry.pin.id));
+  // Held from this render to its layout effect, which runs only when another pin departs (keyed by their ids).
+  const departing = useRef(departed);
+  departing.current = departed;
+  const departedKey = departed.map((entry) => entry.pin.id).join(',');
+  useLayoutEffect(() => {
+    const gone = departing.current;
+    if (gone.length === 0) {
+      return;
+    }
+    setLeaving((current) => [...current, ...gone]);
+    const ids = new Set(gone.map((entry) => entry.pin.id));
+    window.setTimeout(() => setLeaving((current) => current.filter((entry) => !ids.has(entry.pin.id))), POPUP_MOTION_MS);
+  }, [departedKey]);
+  const shown = new Map<PinId, LeavingPin>();
+  useLayoutEffect(() => {
+    drawn.current = shown;
+  });
   if (pins.mode !== 'on') {
+    drawn.current = new Map();
     return undefined;
   }
-  const open = pins.open === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.open);
+  const boxOpen = pins.open === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.open);
+  // A box open on a pin that left the board closes with the popups' exit motion, beside its fading marker.
+  const boxLeaving = boxOpen === undefined ? exiting.find((entry) => entry.open) : undefined;
+  const open = boxOpen ?? boxLeaving?.pin;
   return (
     <div ref={root} className={`ai-pin-layer${pins.moving === undefined ? '' : ' is-moving'}`}>
       {placed.map(({ pin, path }) => {
@@ -101,6 +132,7 @@ export function PinOverlay({ rects, scale, placed, detached, progressOf, recaptu
         const resting = markerPosition(box, pin.anchor.at, scale);
         const point = dragPoint?.id === pin.id ? dragPoint : resting;
         const progress = progressOf(pin);
+        shown.set(pin.id, { pin, left: resting.left, top: resting.top, kind: progress.kind, open: pins.open === pin.id });
         const movable = pin.delivery.kind === 'draft';
         return (
           <button
@@ -175,6 +207,23 @@ export function PinOverlay({ rects, scale, placed, detached, progressOf, recaptu
           </button>
         );
       })}
+      {exiting.map((entry) => (
+        <span
+          key={entry.pin.id}
+          ref={(element) => {
+            if (element === null) {
+              markers.current.delete(entry.pin.id);
+            } else {
+              markers.current.set(entry.pin.id, element);
+            }
+          }}
+          className={`ai-pin-marker is-${entry.kind} is-leaving`}
+          style={{ left: entry.left, top: entry.top }}
+          aria-hidden="true"
+        >
+          {entry.pin.number}
+        </span>
+      ))}
       {open !== undefined && (
         <PinPopover
           key={open.id}
@@ -182,12 +231,22 @@ export function PinOverlay({ rects, scale, placed, detached, progressOf, recaptu
           progress={progressOf(open)}
           anchor={markers.current.get(open.id) ?? document.querySelector<HTMLElement>('.ai-pin-bar') ?? undefined}
           detached={detached.has(open.id)}
-          onRecapture={recapture(open.id)}
+          onRecapture={boxLeaving === undefined ? recapture(open.id) : undefined}
           layout={layout}
+          closing={boxLeaving !== undefined}
         />
       )}
     </div>
   );
+}
+
+/** A marker as it was last drawn: where, how it stood, and whether its box was open, so it can leave from there. */
+interface LeavingPin {
+  readonly pin: CommentPin;
+  readonly left: number;
+  readonly top: number;
+  readonly kind: PinProgress['kind'];
+  readonly open: boolean;
 }
 
 /** How far a press travels before it is a drag rather than a click, in pixels. */

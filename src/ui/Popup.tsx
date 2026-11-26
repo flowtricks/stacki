@@ -51,6 +51,7 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
   const dismissing = lifecycle.phase === 'opening' || lifecycle.phase === 'open';
   usePopupDismiss(surface, { ...props, active: dismissing, mode }, lifecycle);
   useStackAboveAnchor(surface, { active, anchor: props.anchor });
+  const container = useOpenedContainer(mode, { active });
   const content = typeof props.children === 'function' ? props.children(lifecycle) : props.children;
   if (!active) {
     return undefined;
@@ -108,10 +109,31 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
     ) : (
       body
     ),
-    popupContainer(mode),
+    container,
   );
 });
 export default Popup;
+
+/**
+ * Where the popup is drawn, chosen when it opens and kept while it is open. Why: the choice depends on which modal is
+ * open, and a popover that rendered again while an unrelated modal was open (the pin list re-rendering under the
+ * confirm dialog its delete asked) moved into that modal and went with it when the modal closed, its owner still
+ * thinking it open, so its button took two clicks to open it again. A container that left the document is chosen again.
+ */
+function useOpenedContainer(mode: 'modal' | 'popover', { active }: { readonly active: boolean }): HTMLElement {
+  const chosen = useRef<HTMLElement | undefined>(undefined);
+  if (!active) {
+    chosen.current = undefined;
+    return popupLayer();
+  }
+  const held = chosen.current;
+  if (held !== undefined && held.isConnected) {
+    return held;
+  }
+  const container = popupContainer(mode);
+  chosen.current = container;
+  return container;
+}
 
 // The most ancestors a popup's anchor is searched through for the layer it sits in.
 const ANCHOR_DEPTH_MAX = 64;

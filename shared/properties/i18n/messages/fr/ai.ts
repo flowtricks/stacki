@@ -413,10 +413,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Arrêtée avant la fin. Rouvrez l’épingle pour la renvoyer.',
   'ai.pins.cancelMove': 'Annuler',
   'ai.pins.cancelRun': 'Arrêter l’envoi',
-  'ai.pins.clearSent': {
-    one: 'Effacer {count} envoyée',
-    other: 'Effacer {count} envoyées',
-  },
   'ai.pins.close': 'Fermer',
   'ai.pins.continue': 'Continuer',
   'ai.pins.cropFailed': 'Impossible de capturer la zone épinglée.',

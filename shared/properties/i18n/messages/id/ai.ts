@@ -395,9 +395,6 @@ export const messages = {
   'ai.pins.attention.stopped': 'Dihentikan sebelum selesai. Buka kembali pin untuk mengirimnya lagi.',
   'ai.pins.cancelMove': 'Batal',
   'ai.pins.cancelRun': 'Hentikan pengiriman',
-  'ai.pins.clearSent': {
-    other: 'Bersihkan {count} yang terkirim',
-  },
   'ai.pins.close': 'Tutup',
   'ai.pins.continue': 'Lanjutkan',
   'ai.pins.cropFailed': 'Tidak dapat menangkap area yang dipin.',

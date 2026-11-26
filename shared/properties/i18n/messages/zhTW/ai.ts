@@ -392,9 +392,6 @@ export const messages = {
   'ai.pins.attention.stopped': '尚未完成就已停止。請重新開啟圖釘並再次傳送。',
   'ai.pins.cancelMove': '取消',
   'ai.pins.cancelRun': '停止傳送',
-  'ai.pins.clearSent': {
-    other: '清除 {count} 個已傳送',
-  },
   'ai.pins.close': '關閉',
   'ai.pins.continue': '繼續',
   'ai.pins.cropFailed': '無法擷取圖釘標記的區域。',
