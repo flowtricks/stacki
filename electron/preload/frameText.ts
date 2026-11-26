@@ -4,14 +4,14 @@ import { pathsOf, canvasTextSourceMatches, runsOf } from './frameRegions';
 import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect, elementsAt } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
-import { awaitingRichRender } from './frameRichText';
+import { awaitingRichRender, settleRichRender } from './frameRichText';
 import { installTextMarks } from './frameTextMarks';
 import { inlineTextRuns } from './inlineText';
 import { isTouchDoubleTap, type TapPoint } from './frameDoubleTap';
 
 // A double click on words still shown as just typed waits for their rendering: a bounded number of short looks.
 const RENDER_TRY_MS = 50;
-const RENDER_TRIES_MAX = 100;
+const RENDER_TRIES_MAX = 60;
 
 export function installCanvasText(
   post: (message: unknown) => void,
@@ -112,6 +112,13 @@ export function installCanvasText(
         target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true, clientX, clientY }));
       } else if (tries++ < RENDER_TRIES_MAX) {
         setTimeout(attempt, RENDER_TRY_MS);
+      } else if (target !== undefined) {
+        // No rendering is coming (the host wrote nothing): the press is not left unanswered.
+        wait.abort();
+        settleRichRender(target);
+        document
+          .elementFromPoint(clientX, clientY)
+          ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true, clientX, clientY }));
       }
     };
     window.addEventListener('mousedown', () => wait.abort(), { capture: true, signal: wait.signal });

@@ -12,7 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { CanvasTextBreaks } from '../../../shared/properties/canvasText';
 import type { EditingSettings } from '../../../shared/properties/componentDefaults';
-import { plainChildrenHTML, richTextNodes, richTextView, sameRichContent } from '../../features/props/richTextContent';
+import { plainChildrenHTML, richTextNodes, richTextView, sameRichContent, withoutLayoutSpace } from '../../features/props/richTextContent';
 import { LIMITS } from '../../../shared/core/limits';
 import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineCandidate, type InlineNode } from '../../features/props/richContentModel';
 import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
@@ -85,7 +85,9 @@ export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & Inline
       if (sameRichContent(before, html, document)) {
         return true; // Nothing a reader would see changed: the file keeps its bytes.
       }
-      const next = richTextNodes(html, document);
+      // The blocks the page already held keep the file's own line breaks around them in the frame; the printer lays the
+      // content out itself, and would write those as blank lines.
+      const next = withoutLayoutSpace(richTextNodes(html, document));
       // A line of words stays one: blocks typed into content the component may draw inside a <p> are refused.
       if (isInlineOnly(instance.children ?? []) && next.length > 0 && !isInlineOnly(next)) {
         return false;

@@ -47,12 +47,29 @@ const SHOWN_SAVE_MS_MAX = 20_000;
 const HOLD_WAIT_MS = 120;
 
 // Boxes still showing a saved edit as it was typed, until its rendering arrives and takes them back.
-const awaiting = new Set<Element>();
+const awaiting = new Map<Element, () => void>();
 
 /** Whether `element` is in (or holds) words still waiting for their rendering: an edit opened there now would be
  *  swept away when it lands, with what was typed into it. */
 export function awaitingRichRender(element: Element): boolean {
-  return Array.from(awaiting).some((box) => box.isConnected && (box.contains(element) || element.contains(box)));
+  return Array.from(awaiting.keys()).some((box) => box.isConnected && (box.contains(element) || element.contains(box)));
+}
+
+/** Gives up on a rendering that has not come: the boxes holding `element` show the page's own nodes again. */
+export function settleRichRender(element: Element): void {
+  for (const [box, settle] of Array.from(awaiting)) {
+    if (box.contains(element) || element.contains(box)) {
+      settle();
+    }
+  }
+}
+
+// HTML as a reader compares it: no spacing at a tag's edges, runs of whitespace as one space.
+function withoutSpacing(html: string): string {
+  return html
+    .replaceAll('&nbsp;', ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/ ?(<[^<>]*>) ?/g, '$1');
 }
 
 /**
@@ -107,7 +124,8 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
     release();
     callbacks.plus(undefined);
     const html = action === 'apply' ? kept() : undefined;
-    const saved = html !== undefined && html !== startHTML;
+    // Whitespace alone is no change: the host writes nothing for it, so no rendering would ever take it back.
+    const saved = html !== undefined && withoutSpacing(html) !== withoutSpacing(startHTML);
     // The rendered nodes go back before the preview patches (its patch knows its own nodes, and one made here would stay
     // beside the rendered one), but not before: a save keeps showing what was typed until its rendering arrives, so a
     // break or a paragraph shows at once. Bounded, as the canvas's other shown edits are.
@@ -116,7 +134,6 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
       // Put back at the rendering, or at once when the host refuses the save (its take-back messages, as for the
       // canvas's other shown edits), so the page never keeps showing an edit the file did not get.
       const shown = new AbortController();
-      awaiting.add(container);
       const settle = () => {
         clearTimeout(timer);
         shown.abort();
@@ -124,6 +141,7 @@ export function openRichText(place: RichTextPlace, at: Pick<MouseEvent, 'clientX
         putBack();
       };
       const timer = setTimeout(settle, SHOWN_SAVE_MS_MAX);
+      awaiting.set(container, settle);
       document.addEventListener('avb:before-morph', settle, { signal: shown.signal });
       window.addEventListener(
         'message',
