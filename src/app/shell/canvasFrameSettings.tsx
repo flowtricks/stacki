@@ -17,8 +17,11 @@ import {
   canvasContent,
   frameKey,
   keyPairs,
+  overridesIn,
   resolveFrame,
+  scopeHolds,
   settingLevel,
+  settingMixed,
   type ComponentCanvas,
   type FrameEdit,
   type FrameSetting,
@@ -34,17 +37,27 @@ import {
   isCanvasRoot,
   isComponentCanvasPage,
   PROJECT_SCOPE,
+  type CanvasEditPace,
   type CanvasOpen,
   type ComponentCanvasControl,
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { splitPartOf, type ModelFrame } from '../../features/preview/componentCanvas/canvasModel';
-import { contentFieldNodes, contentHTML, frameEditOf, framePickEdit, framePanelValues } from '../model/canvasPanelValues';
-import type { PropValues } from '../../features/props/propRules';
+import {
+  contentFieldNodes,
+  contentHTML,
+  frameEditOf,
+  framePickEdit,
+  framePanelValues,
+  type FramePanelValues,
+  type GivenSource,
+} from '../model/canvasPanelValues';
+import type { FieldDefinition, PropValues } from '../../features/props/propRules';
+import { isColorField } from '../../features/props/propFieldModel';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { richTextNodes, richTextView } from '../../features/props/richTextContent';
 import { CANVAS_FRAME_TAG, CANVAS_GROUP_TAG, canvasBoxLabel } from '../../features/preview/componentCanvas/canvasPage';
 import { partLabel } from '../../features/preview/componentCanvas/frameLabel';
-import type { PropFieldAction, PropFieldExtras, PropFieldProvenance } from '../../features/props/propFieldExtras';
+import type { PropFieldAction, PropFieldExtra, PropFieldExtras, PropFieldProvenance } from '../../features/props/propFieldExtras';
 import { CanvasIcon } from '../../ui/Icons';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -154,22 +167,83 @@ export function useCanvasInstanceSettings(app: ShellView, canvas: ComponentCanva
   }
   // Splitting changes the canvas settings everyone shares, which only a role that may edit components does.
   const mayEdit = can(role, 'component:edit');
+  const values = panelValuesOf(app, state, frame);
   return {
     kind: 'instance',
     node,
     extras: (name) => {
       const candidate = state.layout.candidates.find((entry) => entry.name === name);
       const split = splitPartOf(frame, name) !== undefined;
-      return {
-        ...(candidate === undefined || !mayEdit
+      const action =
+        candidate === undefined || !mayEdit
           ? {}
           : {
               action: splitAction(state, { name, count: candidate.values.length }, { canvas, translate, onRefused: (text) => app.showToast(text, 'info') }),
-            }),
-        ...(split ? { lockedReason: translate('componentCanvas.split.locked', { name }) } : provenanceExtra(state, frame, `prop:${name}`, translate)),
+            };
+      if (!split && values.mixed.has(name)) {
+        return { ...action, ...mixedExtra(canvas, state, name, translate) };
+      }
+      return {
+        ...action,
+        ...(split
+          ? { lockedReason: translate('componentCanvas.split.locked', { name }) }
+          : provenanceExtra(state, frame, `prop:${name}`, translate, values.givenBy.get(name))),
       };
     },
-    panel: framePanel({ app, canvas, state, frame, drafts, translate }),
+    panel: framePanel({ app, canvas, state, frame, drafts, translate, values }),
+  };
+}
+
+// What the Settings panel shows for the frame at the props scope: the component's own fields, whether its instance, its
+// box or a group around it is selected. A prop the frames in scope hold different values for shows no value (Mixed):
+// one frame's would say the others have it too.
+function panelValuesOf(app: ShellView, state: CanvasOpen, frame: ModelFrame): FramePanelValues & { readonly mixed: ReadonlySet<string> } {
+  const scope = state.scopes.props;
+  assert(scope !== PROJECT_SCOPE, 'Props are never previewed at the project’s scope');
+  assert(scope !== COMPONENT_SCOPE, 'Props are never previewed at the canvas root’s scope');
+  const settings = state.settings.components[state.component.file];
+  const values = framePanelValues({
+    schema: schemaFor(app.scan.components.find((entry) => entry.path.replaceAll('\\', '/').endsWith('/' + state.component.file))),
+    rest: state.component.rest === true,
+    settings,
+    frame,
+    scope,
+    defaults: state.defaults,
+  });
+  const frames = state.layout.frames.map((candidate) => candidate.key);
+  const mixed = new Set(
+    values.schema.map((field) => field.name).filter((name) => splitPartOf(frame, name) === undefined && settingMixed(settings, frames, scope, `prop:${name}`)),
+  );
+  assert(mixed.size <= values.schema.length, 'Only the panel’s own fields are mixed');
+  // A value the scope holds itself is shown (what is being typed stays under the caret); the label still says the frames
+  // differ. Only where the scope holds nothing does the field say Mixed in place of one frame's value.
+  const props = Object.fromEntries(Object.entries(values.props).filter(([name]) => !mixed.has(name) || entryAt(settings, scope, `prop:${name}`)));
+  return { ...values, props, mixed };
+}
+
+// A prop whose frames in scope differ: the field says Mixed, and its label how many frames there are and which keep a
+// value of their own (an edit here leaves those as they are). Where frames keep their own, Reset gives them the scope's
+// value (resetOverrides); a scope that holds a value of its own resets it as any field does.
+function mixedExtra(
+  canvas: ComponentCanvasControl,
+  state: CanvasOpen,
+  name: string,
+  translate: Translator,
+): Pick<PropFieldExtra, 'mixed' | 'provenance' | 'reset'> {
+  const scope = state.scopes.props;
+  const keys = state.layout.frames.map((candidate) => candidate.key);
+  const count = keys.filter((key) => scopeHolds(scope, key)).length;
+  assert(count > 1, 'Only several frames can hold different values');
+  const settings = state.settings.components[state.component.file];
+  const setting: FrameSetting = `prop:${name}`;
+  const kept = overridesIn(settings, keys, scope, setting).length;
+  const differ = translate('componentCanvas.level.mixed', { count });
+  const tip = kept === 0 ? differ : `${differ} ${translate('componentCanvas.level.overrides', { count: kept })}`;
+  const own = entryAt(settings, scope, setting);
+  return {
+    ...(own ? {} : { mixed: translate('componentCanvas.panel.mixed') }),
+    provenance: { tone: own ? 'noted' : 'inherited', tip },
+    ...(kept === 0 ? {} : { reset: () => canvas.resetOverrides('props', setting) }),
   };
 }
 
@@ -180,27 +254,17 @@ interface FrameWriting {
   readonly frame: ModelFrame;
   readonly drafts: UnfinishedCode;
   readonly translate: Translator;
+  readonly values: FramePanelValues & { readonly mixed: ReadonlySet<string> };
 }
 
 function framePanel(writing: FrameWriting): CanvasFramePanel {
-  const { app, canvas, state, frame, drafts, translate } = writing;
+  const { app, canvas, state, frame, drafts, translate, values } = writing;
   const scope = state.scopes.props;
-  assert(scope !== PROJECT_SCOPE, 'Props are never previewed at the project’s scope');
-  assert(scope !== COMPONENT_SCOPE, 'Props are never previewed at the canvas root’s scope');
   const id = panelNodeId(`${state.id}|${frame.key}|${scope}`);
-  const values = framePanelValues({
-    // The component's own fields, whether its instance, its box or a group around it is selected.
-    schema: schemaFor(app.scan.components.find((entry) => entry.path.replaceAll('\\', '/').endsWith('/' + state.component.file))),
-    rest: state.component.rest === true,
-    settings: state.settings.components[state.component.file],
-    frame,
-    scope,
-    defaults: state.defaults,
-  });
   const refuse = (name: string): void => {
     app.showToast(translate('componentCanvas.error.previewValue', { name }), 'info');
   };
-  const write = (edits: readonly FrameEdit[]): void => canvas.editValues(scope, edits);
+  const write = (edits: readonly FrameEdit[], pace?: CanvasEditPace): void => canvas.editValues(scope, edits, pace);
   // A split prop is the frame's own: greyed out, and refused here as well.
   const editsOf = (patch: PropValues): readonly FrameEdit[] =>
     Object.entries(patch).flatMap(([name, value]) => {
@@ -226,7 +290,9 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
       if (edit.kind === 'inherit' && typingInPanel()) {
         drafts.empty({ id, name });
       }
-      write([edit]);
+      // A colour dragged through the picker is drawn on the frames as it moves and saved once, when the picker lets
+      // go of it (the field's commit, `immediate`).
+      write([edit], immediate !== true && draggingColor(values.schema.find((field) => field.name === name)) ? 'live' : 'settled');
     } else if (value !== undefined) {
       // Code on its way to being a value (a quote not yet closed) is held in its field, not refused at each key.
       drafts.hold({ id, name, value }, immediate === true ? 'now' : 'later');
@@ -275,7 +341,7 @@ function framePanel(writing: FrameWriting): CanvasFramePanel {
     contentValue: {
       nodes: contentFieldNodes(richTextNodes(values.content.html, document)),
       own: values.content.own,
-      ...provenanceExtra(state, frame, 'content', translate),
+      ...provenanceExtra(state, frame, 'content', translate, values.content.given),
       onReset: () => write([{ kind: 'content', value: undefined }]),
     },
   };
@@ -295,13 +361,26 @@ function panelNodeId(words: string): NodeId {
 }
 
 // Where a setting shown at the current scope comes from, when that is not the scope itself: a wider level that gives
-// it, or a narrower one the selected frame has, which wins on that frame whatever is set here.
-function provenanceExtra(state: CanvasOpen, frame: ModelFrame, setting: FrameSetting, translate: Translator): { readonly provenance?: PropFieldProvenance } {
+// it, or a narrower one the selected frame has, which wins on that frame whatever is set here. Where no level sets it,
+// the component defaults or the canvas's sample (`given`): the label stays marked, with no Reset, since nothing on the
+// canvas holds it, and its tip says where it is set.
+function provenanceExtra(
+  state: CanvasOpen,
+  frame: ModelFrame,
+  setting: FrameSetting,
+  translate: Translator,
+  given: GivenSource | undefined,
+): { readonly provenance?: PropFieldProvenance } {
   const scope = state.scopes.props;
   const settings = state.settings.components[state.component.file];
   const level = settingLevel(settings, frame.key, scope, setting);
-  if (level.kind === 'own' || level.kind === 'none') {
+  if (level.kind === 'own') {
     return {};
+  }
+  if (level.kind === 'none') {
+    return given === undefined
+      ? {}
+      : { provenance: { tone: 'given', tip: translate(given === 'defaults' ? 'componentCanvas.level.defaults' : 'componentCanvas.level.sample') } };
   }
   const source = level.kind === 'inherited' ? level.from : level.by;
   const tone = level.kind === 'overridden' && entryAt(settings, scope, setting) ? 'noted' : 'inherited';
@@ -345,6 +424,13 @@ function withDrafts(props: Readonly<Record<string, Attr>>, drafts: UnfinishedCod
   const held = drafts.held?.id === id ? { ...props, [drafts.held.name]: drafts.held.value } : props;
   const emptied = drafts.emptied?.id === id ? drafts.emptied.name : undefined;
   return emptied === undefined ? held : Object.fromEntries(Object.entries(held).filter(([name]) => name !== emptied));
+}
+
+// Whether a colour field's picker is what is writing: its swatch (the platform's colour input) has the focus while its
+// picker is open, and it sends each colour it passes through before the one it settles on.
+function draggingColor(field: FieldDefinition | undefined): boolean {
+  const active = document.activeElement;
+  return field !== undefined && isColorField(field) && active instanceof HTMLInputElement && active.type === 'color' && active.closest('.props-field') !== null;
 }
 
 // Whether a text field of the Settings panel has the keyboard: an emptying write then comes from typing.

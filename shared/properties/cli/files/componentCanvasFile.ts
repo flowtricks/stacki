@@ -87,6 +87,10 @@ export const COMPONENT_CANVAS_FILE_SCHEMA: FileSchema = {
             }),
             "This component's canvas root (its page's <html>): each setting here replaces the project's.",
           ),
+          arrange: field(
+            text(6, { pattern: '^(?:row|column|wrap)$' }),
+            'How the frames that sit together are laid out: column (stacked) or wrap (rows that wrap at the Desktop width); absent or row: side by side.',
+          ),
           split: field(
             arrayOf(text(CANVAS_LIMITS.propNameCharsMax, { pattern: PROP_NAME }), CANVAS_LIMITS.splitPropsMax, { unique: true }),
             'The props whose values each get a frame, in layout order (the first is the rows); [] is one frame; absent: the variant prop.',

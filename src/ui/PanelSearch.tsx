@@ -5,13 +5,17 @@
 // person working with the pointer, who has no Escape key in hand.
 import React from 'react';
 import { CloseIcon } from './Icons';
+import TipAnchor from './TipAnchor';
 import './panelSearch.css';
 
 export interface PanelSearchProps {
   readonly value: string;
   readonly placeholder: string;
   readonly onChange: (value: string) => void;
-  /** A line shown as the box's tooltip, for a panel whose search reads more than plain words. */
+  /**
+   * A line shown as the box's tooltip, for a panel whose search reads more than plain words: the app's own tip
+   * (TipAnchor), never the browser's title box, which drew over the app's tips beside it (the Navigator's).
+   */
   readonly hint?: string;
   /** Names the clear button; without it the box has none, as before. */
   readonly clearLabel?: string;
@@ -21,22 +25,23 @@ export function PanelSearch({ value, placeholder, onChange, hint, clearLabel }: 
   const clearable = clearLabel !== undefined && value.length > 0;
   return (
     <div className={clearable ? 'panel-search clearable' : 'panel-search'} style={{ padding: '0 12px 8px' }}>
-      <input
-        type="text"
-        value={value}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        {...(hint === undefined ? {} : { title: hint })}
-        spellCheck={false}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          // Only a box with text takes the key, so Escape on an empty one still reaches the panel.
-          if (event.key === 'Escape' && value.length > 0) {
-            event.stopPropagation();
-            onChange('');
-          }
-        }}
-      />
+      <TipAnchor text={hint}>
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          spellCheck={false}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            // Only a box with text takes the key, so Escape on an empty one still reaches the panel.
+            if (event.key === 'Escape' && value.length > 0) {
+              event.stopPropagation();
+              onChange('');
+            }
+          }}
+        />
+      </TipAnchor>
       {clearable && (
         <button
           type="button"

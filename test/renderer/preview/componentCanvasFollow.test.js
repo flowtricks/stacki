@@ -28,7 +28,7 @@ const output = path.join(directory, 'component-canvas-follow.cjs');
 buildSync({
   stdin: {
     contents: [
-      "export { useFrameFollowsEditor } from './src/app/state/useDesktopComponentCanvas';",
+      "export { useFrameFollowsEditor, frameSettingChange, valuesChange } from './src/app/state/useDesktopComponentCanvas';",
       "export { ComponentCanvasPanel } from './src/features/preview/componentCanvas/ComponentCanvasPanel';",
       "export { noteComponentCanvas } from './src/features/preview/componentCanvas/componentCanvasSession';",
       "export { buildCanvasLayout } from './src/features/preview/componentCanvas/canvasModel';",
@@ -141,6 +141,7 @@ const control = {
   coverRight: noop,
   zoom: noop,
   setSplit: noop,
+  setArrangement: noop,
   editValues: noop,
   editRootClasses: noop,
 };
@@ -233,9 +234,10 @@ test('a selection change reaches Frame settings in the same commit, with no elem
 
 // The owner's report: with All frames chosen, pressing Fixed did nothing. The field showed the selected frame's own
 // value (a Hug an older This-frame default had stored), which wins on that frame, so the all-frames write never showed.
-// The size fields now show the target's own value, start Fixed at the frame's drawn size, and say quietly (orange,
-// with Reset) that a frame keeps its own; the canvas shows the change on every other frame.
-test('Fixed at All frames shows Fixed at once, from the drawn size, and says which frame keeps its own', async (context) => {
+// The size fields now start Fixed at the frame's drawn size and write it at the scope only: the frame's own Hug survives
+// and still wins there (frameSettingChange). Frames in scope that differ (one Hug, the others fixed) are said as they
+// are: neither choice marked, the label orange, saying the frame keeps its own value, with a Reset that gives it this one.
+test('Fixed at All frames writes from the drawn size, and frames that differ are said to be Mixed', async (context) => {
   const { state: opened } = openCanvas();
   const link = opened.layout.frames[1].key;
   const settings = { version: 1, components: { [BUTTON]: { split: ['variant', 'emphasis'], frames: { [link]: { width: 'hug' } } } } };
@@ -261,10 +263,57 @@ test('Fixed at All frames shows Fixed at once, from the drawn size, and says whi
     settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 'hug' } } } } },
   };
   await draw(after);
-  assert.equal(pressed(), 'Fixed', 'the field shows what All frames is now, not the selected frame’s own Hug');
-  assert.equal(width().querySelector('input')?.value, '183');
+  assert.equal(pressed(), undefined, 'one frame hugs and the others are fixed: neither is marked');
+  assert.equal(width().querySelector('input') ?? undefined, undefined, 'no one size to show');
   const label = width().querySelector('.prop-label');
-  assert.match(label.className, /embed-editor_prop-orange/, 'a frame keeping its own value is said in orange');
-  assert.match(label.title, /^This frame has its own value\. 1 frame here keeps its own value/, 'and why the selected frame did not change');
+  assert.match(label.className, /embed-editor_prop-orange/, 'frames that differ are said in orange');
+  assert.match(label.title, /frames here show different values\. A value set here leaves each frame’s own value as it is\./, 'and that own values stay');
+  assert.match(label.title, /This frame has its own value\. 1 frame here keeps its own value\. Reset to give it this one\./, 'and which, with Reset');
+  // Every frame fixed, at different sizes: Fixed, with the pixels left empty and saying Mixed.
+  const sized = {
+    ...base,
+    settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 240 } } } } },
+  };
+  await draw(sized);
+  assert.equal(pressed(), 'Fixed');
+  assert.equal(width().querySelector('input')?.value, '');
+  assert.equal(width().querySelector('input')?.placeholder, 'Mixed');
+  // Every frame the same: the value itself.
+  const same = { ...base, settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 } } } } } };
+  await draw(same);
+  assert.equal(pressed(), 'Fixed');
+  assert.equal(width().querySelector('input')?.value, '183');
   canvas.noteComponentCanvas({ kind: 'idle' });
+});
+
+// The owner's rule (f788a3be): a size set for all frames applies across the variants, and a frame or variant can still
+// override it. A wider edit writes only its own scope's value; every narrower value, size, background or prop, survives
+// it and still wins on its frames. cc65d733 dropped them on a wider edit; this pins that it never does again.
+test('a wider edit writes its own scope only: frames and variants keep their own size, background and props', () => {
+  const { state: opened } = openCanvas();
+  const [first, second] = opened.layout.frames.map((frame) => frame.key);
+  const variant = first.split('&').find((pair) => pair.startsWith('variant='));
+  const stored = {
+    version: 1,
+    components: {
+      [BUTTON]: {
+        split: ['variant', 'emphasis'],
+        frames: { [first]: { width: 200, background: 'red', props: { label: 'Own' } }, [variant]: { height: 90 } },
+      },
+    },
+  };
+  const at = (scope) => ({ ...opened, settings: stored, frame: first, scopes: { props: scope, size: scope, background: scope } });
+  const wide = canvas.frameSettingChange(at(''), { kind: 'field', field: 'width', value: 400 })(stored);
+  assert.equal(wide.components[BUTTON].frames[first].width, 200, 'the frame’s own width survives an all-frames width');
+  assert.equal(wide.components[BUTTON].frames[''].width, 400, 'and the all-frames width is written');
+  const tall = canvas.frameSettingChange(at(''), { kind: 'field', field: 'height', value: 50 })(stored);
+  assert.equal(tall.components[BUTTON].frames[variant].height, 90, 'a variant’s own height survives too');
+  const painted = canvas.frameSettingChange(at(variant), { kind: 'background', value: 'blue' })(stored);
+  assert.equal(painted.components[BUTTON].frames[first].background, 'red', 'the frame’s own background survives a variant’s');
+  assert.equal(painted.components[BUTTON].frames[variant].background, 'blue');
+  const labelled = canvas.valuesChange(at(''), '', [{ kind: 'prop', name: 'label', value: 'All' }])(stored);
+  assert.deepEqual(labelled.components[BUTTON].frames[first].props, { label: 'Own' }, 'the frame’s own prop survives an all-frames value');
+  assert.equal(labelled.components[BUTTON].frames[''].props.label, 'All');
+  // The negative space: a frame without values of its own takes the wider value.
+  assert.equal(wide.components[BUTTON].frames[second], undefined, 'nothing is written for a frame that had nothing');
 });

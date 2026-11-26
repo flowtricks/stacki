@@ -13,7 +13,15 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'не задано',
   'componentCanvas.level.all': 'Задано для всех фреймов',
+  'componentCanvas.level.defaults':
+    'Задано в значениях компонента по умолчанию (Задать значения компонента по умолчанию). Задайте значение здесь, чтобы заменить его.',
   'componentCanvas.level.frame': 'У этого фрейма своё значение',
+  'componentCanvas.level.mixed': {
+    one: '{count} фрейм здесь показывает другое значение. Значение, заданное здесь, не изменяет собственное значение фрейма.',
+    few: '{count} фрейма здесь показывают разные значения. Значение, заданное здесь, не изменяет собственные значения фреймов.',
+    many: '{count} фреймов здесь показывают разные значения. Значение, заданное здесь, не изменяет собственные значения фреймов.',
+    other: '{count} фрейма здесь показывают разные значения. Значение, заданное здесь, не изменяет собственные значения фреймов.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} фрейм здесь сохраняет своё значение. Сбросьте, чтобы задать ему это значение.',
     few: '{count} фрейма здесь сохраняют своё значение. Сбросьте, чтобы задать им это значение.',
@@ -21,6 +29,7 @@ export const messages = {
     other: '{count} фрейма здесь сохраняют своё значение. Сбросьте, чтобы задать им это значение.',
   },
   'componentCanvas.level.part': 'Задано для каждого фрейма {part}',
+  'componentCanvas.level.sample': 'Пример, который холст подставляет в этот обязательный проп. Задайте значение здесь, чтобы заменить его.',
   'componentCanvas.menu.open': 'Открыть на холсте',
   'componentCanvas.notice.truncated': 'Показаны первые фреймы: {shown} из {total}. Чтобы увидеть остальные, выделите отдельные фреймы меньшему числу свойств.',
   'componentCanvas.pageName': 'Холст {name}',
@@ -35,6 +44,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Высота',
   'componentCanvas.panel.hug': 'По содержимому',
+  'componentCanvas.panel.layout': 'Макет',
+  'componentCanvas.panel.layout.column': 'Друг под другом',
+  'componentCanvas.panel.layout.row': 'В ряд',
+  'componentCanvas.panel.layout.wrap': 'С переносом',
+  'componentCanvas.panel.mixed': 'Разные',
   'componentCanvas.panel.pixels': '{side} в пикселях',
   'componentCanvas.panel.root.about': 'Холст позади всех фреймов: элемент html страницы. Его классы находятся на панели настроек.',
   'componentCanvas.panel.root.title': 'Холст',

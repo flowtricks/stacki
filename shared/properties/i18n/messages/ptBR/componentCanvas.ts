@@ -13,12 +13,18 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'não definido',
   'componentCanvas.level.all': 'Definido para todos os quadros',
+  'componentCanvas.level.defaults': 'Definido nos padrões do componente (Definir padrões do componente). Defina um valor aqui para substituí-lo.',
   'componentCanvas.level.frame': 'Este quadro tem seu próprio valor',
+  'componentCanvas.level.mixed': {
+    one: 'O {count} quadro aqui mostra um valor diferente. Um valor definido aqui mantém inalterado o valor próprio de um quadro.',
+    other: 'Os {count} quadros aqui mostram valores diferentes. Um valor definido aqui mantém inalterado o valor próprio de cada quadro.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} quadro aqui mantém o próprio valor. Redefina para dar a ele este valor.',
     other: '{count} quadros aqui mantêm o próprio valor. Redefina para dar a eles este valor.',
   },
   'componentCanvas.level.part': 'Definido para cada quadro {part}',
+  'componentCanvas.level.sample': 'Um exemplo que o canvas dá a esta prop obrigatória. Defina um valor aqui para substituí-lo.',
   'componentCanvas.menu.open': 'Abrir no canvas',
   'componentCanvas.notice.truncated': 'Mostrando os primeiros {shown} de {total} quadros. Dê quadros próprios a menos props para ver o restante.',
   'componentCanvas.pageName': 'Canvas de {name}',
@@ -31,6 +37,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Altura',
   'componentCanvas.panel.hug': 'Ao conteúdo',
+  'componentCanvas.panel.layout': 'Layout', // same
+  'componentCanvas.panel.layout.column': 'Empilhados',
+  'componentCanvas.panel.layout.row': 'Lado a lado',
+  'componentCanvas.panel.layout.wrap': 'Quebrar linha',
+  'componentCanvas.panel.mixed': 'Misto',
   'componentCanvas.panel.pixels': '{side} em pixels',
   'componentCanvas.panel.root.about': 'O canvas atrás de todos os quadros: o elemento html da página. As classes dele ficam no painel de configurações.',
   'componentCanvas.panel.root.title': 'Canvas', // same

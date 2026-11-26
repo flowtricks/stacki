@@ -5,7 +5,9 @@
 // edits at the all-frames, per-variant and per-frame scopes and resolve frames through them, build the frames of a
 // Lumos-style button (a variant union with an arrow direction only the arrow variant takes) and check the pruning, the
 // layout and the frame bound, and keep settings across a rename, a deletion and a change of split. The canvas root's
-// classes and surface resolve from the component, then the project, and the parser bounds and refuses bad names.
+// classes and surface resolve from the component, then the project, and the parser bounds and refuses bad names. A
+// component's arrangement round-trips and its default is never stored; an edit to a scope reaches every frame in it,
+// those with values of their own too, and frames that differ are told apart from frames that agree.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -38,6 +40,9 @@ import {
   canvasRoot,
   withRootEdit,
   PROJECT_ROOT,
+  arrangementOf,
+  settingMixed,
+  withArrangement,
 } from '#dist/shared/properties/componentCanvas.js';
 import { COMPONENT_CANVAS_FILE_SCHEMA } from '#dist/shared/properties/cli/files/componentCanvasFile.js';
 import { checkValue } from '#dist/shared/properties/cli/stackiSchema.js';
@@ -518,4 +523,40 @@ test('an empty text stored by an older version is no value: the wider one shows 
   assert.equal(resolved.props['label'], 'Go');
   assert.equal(resolved.origins.get('prop:label'), '');
   assert.equal(resolved.props['size'], 2);
+});
+
+test('a component’s arrangement: stored only when not side by side, read back, refused when unknown', () => {
+  const button = 'src/components/Button.astro';
+  assert.equal(arrangementOf(undefined), 'row', 'a canvas nobody arranged is side by side');
+  const wrapped = withArrangement(EMPTY_CANVAS_FILE, button, 'wrap');
+  assert.deepEqual(wrapped.components[button], { arrange: 'wrap' });
+  const text = serializeComponentCanvas(wrapped);
+  assert.ok(parseComponentCanvasSource(text).ok);
+  assert.equal(arrangementOf(parseComponentCanvasFile(JSON.parse(text)).components[button]), 'wrap');
+  assert.equal(
+    checkValue({ kind: 'object', fields: COMPONENT_CANVAS_FILE_SCHEMA.fields }, JSON.parse(text), 'componentCanvas'),
+    undefined,
+    'the CLI accepts it',
+  );
+  // Back to the default: the key goes, and with nothing else the component leaves the file.
+  assert.deepEqual(withArrangement(wrapped, button, 'row').components, {});
+  const stacked = withArrangement(withSplit(EMPTY_CANVAS_FILE, button, ['variant']), button, 'column');
+  assert.deepEqual(stacked.components[button], { split: ['variant'], arrange: 'column' }, 'other settings stay');
+  // A hand-written default reads as none; anything else is refused.
+  assert.deepEqual(parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 'row' } } }).components[button], {});
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 'grid' } } }), /row, column or wrap/);
+  assert.throws(() => parseComponentCanvasFile({ version: 1, components: { [button]: { arrange: 2 } } }), /row, column or wrap/);
+});
+
+test('frames that differ are told apart from frames that agree, a frame’s own value among them', () => {
+  const button = 'src/components/Button.astro';
+  const frames = ['emphasis=primary&variant=main', 'emphasis=secondary&variant=main', 'variant=link'];
+  const file = withFrameEdit(EMPTY_CANVAS_FILE, button, frames[0] ?? '', { kind: 'field', field: 'width', value: 200 });
+  const settings = file.components[button];
+  assert.equal(settingMixed(settings, frames, '', 'width'), true, 'one frame’s own width differs from the others’ hug');
+  assert.equal(settingMixed(settings, frames, 'variant=link', 'width'), false, 'one frame never differs from itself');
+  assert.equal(settingMixed(settings, frames, '', 'height'), false, 'all hug');
+  const labelled = withFrameEdit(EMPTY_CANVAS_FILE, button, 'variant=link', { kind: 'prop', name: 'label', value: 'Own' });
+  assert.equal(settingMixed(labelled.components[button], frames, '', 'prop:label'), true);
+  assert.equal(settingMixed(labelled.components[button], frames, 'variant=main', 'prop:label'), false, 'outside the scope it does not count');
 });

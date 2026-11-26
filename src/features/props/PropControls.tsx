@@ -5,7 +5,7 @@ import { PropPreviewContext } from './propPreviewContext';
 // attribute, class, slot, an option, a boolean, a number, a link, media, an
 // imported asset, an object, a list, an expression or text (PropField.tsx).
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
 import { assert } from '../../../shared/core/assert';
 import { definedFields } from '../../../shared/core/boundary';
@@ -207,12 +207,14 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
   // boolean — an either/or with a known resting state — so it reads as one.
   // Only when what's set is one of the two; an out-of-schema value has to
   // stay visible, and the dropdown is the only field that can show it.
+  // Over values that differ nothing is marked, and the default is a choice like any other: picking it reaches them all.
+  const mixed = state.mixed !== undefined && raw === undefined;
   if (
     field.options.length === 2 &&
     (policy === 'defaults' || (defaultText !== undefined && field.options.includes(defaultText))) &&
     (raw === undefined || field.options.includes(raw))
   ) {
-    const current = raw ?? defaultText;
+    const current = mixed ? undefined : (raw ?? defaultText);
     return (
       <div className="props-field">
         {label}
@@ -220,17 +222,17 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
           options={field.options.map((option) => ({ value: option, label: option }))}
           current={current}
           onPick={(next) =>
-            // Defaults recipes retain every explicit choice.
-            policy === 'instance' && next === defaultText ? onChange(undefined, true) : onChange(optionAttr(field, next), true)
+            // Defaults recipes retain every explicit choice, as a pick over values that differ does.
+            policy === 'instance' && next === defaultText && !mixed ? onChange(undefined, true) : onChange(optionAttr(field, next), true)
           }
         />
       </div>
     );
   }
-  // Only ordinary instances encode the default as an omitted prop.
-  const omittedDefault = policy === 'instance' ? defaultText : undefined;
-  // An unset recipe uses the placeholder so choosing its fallback still commits.
-  const selected = raw ?? (policy === 'defaults' ? '' : (defaultText ?? ''));
+  // Only ordinary instances encode the default as an omitted prop; over values that differ it is written like any other.
+  const omittedDefault = policy === 'instance' && !mixed ? defaultText : undefined;
+  // An unset recipe uses the placeholder so choosing its fallback still commits; so does a field over values that differ.
+  const selected = raw ?? (policy === 'defaults' || mixed ? '' : (defaultText ?? ''));
   const selectedOption = selected === omittedDefault ? '' : selected;
   // Keep an out-of-schema current value selectable rather than losing it.
   const choices = raw === undefined || field.options.includes(raw) ? field.options : [raw, ...field.options];
@@ -293,7 +295,9 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
   // remain visible as set and survive future changes to the Astro fallback.
   // Show the effective boolean while the label tracks only an explicit override.
   const fallback = !!field.default;
-  const current = value ? value.type !== 'expr' || value.value === 'true' : fallback;
+  // Over values that differ neither is marked, and either choice is written so it reaches them all.
+  const mixed = state.mixed !== undefined && value === undefined;
+  const current = mixed ? undefined : value ? value.type !== 'expr' || value.value === 'true' : fallback;
   return (
     <div className="props-field">
       {label}
@@ -304,7 +308,7 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
         ]}
         current={current}
         onPick={(next) =>
-          policy === 'instance' && next === fallback ? onChange(undefined, true) : onChange({ type: 'expr', value: next ? 'true' : 'false' }, true)
+          policy === 'instance' && next === fallback && !mixed ? onChange(undefined, true) : onChange({ type: 'expr', value: next ? 'true' : 'false' }, true)
         }
       />
     </div>
@@ -620,6 +624,7 @@ export function ColorControl({ state }: { readonly state: PropControlState }) {
   // A variable names a colour of the page, not of this panel: painting it here
   // would paint Stacki's own token, so the swatch shows it as unknown.
   const paint = isColorText(shown) && !shown.trim().startsWith('var(') ? shown.trim() : undefined;
+  const committed = useColorCommit((color) => onChange({ type: 'string', value: color }, true));
   return (
     <div className="props-field">
       {label}
@@ -627,6 +632,7 @@ export function ColorControl({ state }: { readonly state: PropControlState }) {
         <span className={`prop-color-swatch${paint === undefined ? ' is-unknown' : ''}`}>
           <span className="prop-color-fill" style={paint === undefined ? undefined : { background: paint }} />
           <input
+            ref={committed}
             type="color"
             aria-label={translate('props.field.chooseColor', { name })}
             value={hexOfColor(shown) ?? '#000000'}
@@ -644,6 +650,25 @@ export function ColorControl({ state }: { readonly state: PropControlState }) {
       </div>
     </div>
   );
+}
+
+// The colour the platform's picker settles on: its input's `change`, which React does not tell apart from each colour
+// the picker passes through (`input`). Sent as an immediate write, so a host that holds a drag's stream (the component
+// canvas) saves it then; a page has already written the same colour with the stream.
+function useColorCommit(commit: (color: string) => void): React.RefObject<HTMLInputElement> {
+  const input = useRef<HTMLInputElement>(null);
+  const latest = useRef(commit);
+  latest.current = commit;
+  useEffect(() => {
+    const element = input.current;
+    if (element === null) {
+      return undefined;
+    }
+    const settle = (): void => latest.current(element.value);
+    element.addEventListener('change', settle);
+    return () => element.removeEventListener('change', settle);
+  }, []);
+  return input;
 }
 
 export function TextControl({ state }: { readonly state: PropControlState }) {

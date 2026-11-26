@@ -13,11 +13,16 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': '설정 안 됨',
   'componentCanvas.level.all': '모든 프레임에 설정됨',
+  'componentCanvas.level.defaults': '컴포넌트 기본값(컴포넌트 기본값 설정)에 설정되어 있습니다. 바꾸려면 여기에서 값을 설정하세요.',
   'componentCanvas.level.frame': '이 프레임에는 자체 값이 있습니다',
+  'componentCanvas.level.mixed': {
+    other: '여기의 프레임 {count}개에 서로 다른 값이 표시됩니다. 여기에서 값을 설정해도 각 프레임의 자체 값은 그대로 유지됩니다.',
+  },
   'componentCanvas.level.overrides': {
     other: '여기에서 프레임 {count}개가 자체 값을 유지합니다. 재설정하면 이 값이 적용됩니다.',
   },
   'componentCanvas.level.part': '모든 {part} 프레임에 설정됨',
+  'componentCanvas.level.sample': '캔버스가 이 필수 prop에 제공하는 샘플입니다. 바꾸려면 여기에서 값을 설정하세요.',
   'componentCanvas.menu.open': '캔버스에서 열기',
   'componentCanvas.notice.truncated': '전체 {total}개 중 처음 {shown}개의 프레임을 표시합니다. 나머지를 보려면 개별 프레임을 갖는 속성을 줄이세요.',
   'componentCanvas.pageName': '{name} 캔버스',
@@ -29,6 +34,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': '높이',
   'componentCanvas.panel.hug': '콘텐츠에 맞춤',
+  'componentCanvas.panel.layout': '레이아웃',
+  'componentCanvas.panel.layout.column': '세로로 쌓기',
+  'componentCanvas.panel.layout.row': '나란히',
+  'componentCanvas.panel.layout.wrap': '줄바꿈',
+  'componentCanvas.panel.mixed': '혼합',
   'componentCanvas.panel.pixels': '{side}(픽셀)',
   'componentCanvas.panel.root.about': '모든 프레임 뒤에 있는 캔버스로, 페이지의 html 요소입니다. 캔버스의 클래스는 설정 패널에 있습니다.',
   'componentCanvas.panel.root.title': '캔버스',

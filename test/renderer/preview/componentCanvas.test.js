@@ -5,6 +5,8 @@
 // under the frame's own values; and only well-formed messages from the canvas page are heard. The page's instances are
 // found where the editor's parser puts them, a click anywhere in a frame names its instance and only the open canvas's
 // page counts as one, and a prop value from the Settings panel becomes a preview value only when the canvas can replay it.
+// The page is laid out as the component's arrangement says (nothing written for side by side), and its captions are
+// sized for the zoom. The panel says where a value nobody set on the canvas comes from.
 // Method: build layouts from hand-written schemas and stored settings, generate pages from them, parse each page with the
 // app's Astro parser, and feed the message reader known-good and known-bad shapes.
 const test = require('node:test');
@@ -259,8 +261,8 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
   // Every box (a frame's, a group's at any depth) is square, paints nothing and has a quiet blue outline with room inside
   // it; hover and selection are the editor's own outlines, as on any element, so the page draws neither.
-  const framed = /> body stacki-frame\[data-frame\] \{[^}]*\}/.exec(plain)?.[0] ?? '';
-  const grouped = /> body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  const framed = /html\[data-stacki-ready\] > body stacki-frame\[data-frame\] \{[^}]*\}/.exec(plain)?.[0] ?? '';
+  const grouped = /html\[data-stacki-ready\] > body stacki-group \{[^}]*\}/.exec(plain)?.[0] ?? '';
   for (const box of [framed, grouped]) {
     for (const bare of ['background: transparent !important', 'border: 0 !important', 'border-radius: 0 !important', 'box-shadow: none !important']) {
       assert.ok(box.includes(bare), `a box is ${bare}`);
@@ -279,7 +281,7 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
   // A caption or heading the editor's tag would cover is hidden while it does, never drawn under it.
   assert.match(
     plain,
-    /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before \{ visibility: hidden !important; \}/,
+    /stacki-frame\[data-frame\]\[data-under-tag\]::before, [^{]*stacki-group\[data-group\]\[data-under-tag\]::before[^{]*\{ visibility: hidden !important; \}/,
   );
   assert.match(chrome.chromeScript(ID), /data\.command === 'tag'/);
   // A lazy image waits for a viewport test a panned, zoomed canvas never answers: every image on the canvas loads now.
@@ -404,7 +406,15 @@ test('the panel shows every value a frame is given as set, the code’s own fall
   assert.equal(shown.schema.filter((field) => field.name === 'class').length, 1, 'a ...rest component takes a class');
   assert.equal(shown.imports, `import frameAsset0 from "${'../'.repeat(2)}src/assets/a.png";`);
   assert.deepEqual(shown.content, { html: 'Words', own: true });
-  assert.deepEqual(panel.framePanelValues({ ...input, scope: '' }).content, { html: 'A &lt;b&gt;', own: true }, 'default words shown are set');
+  assert.deepEqual(
+    panel.framePanelValues({ ...input, scope: '' }).content,
+    { html: 'A &lt;b&gt;', own: true, given: 'defaults' },
+    'default words shown are set, and said to be the defaults’',
+  );
+  // Where a value nobody set on the canvas comes from: the label then offers no Reset (canvasFrameSettings.tsx).
+  assert.equal(shown.givenBy.get('id'), 'defaults', 'a component default');
+  assert.equal(shown.givenBy.has('heading'), false, 'a wider scope’s value says so itself');
+  assert.equal(shown.givenBy.has('label'), false, 'the scope’s own value is not given');
   assert.deepEqual(panel.framePanelValues({ ...input, scope: '', defaults: {} }).content, { html: '', own: false }, 'no words: nothing set');
   const stored = (value) => panel.frameEditOf('label', value, shown.bindings);
   assert.deepEqual(stored({ type: 'expr', value: 'frameAsset0.src' }), {
@@ -557,4 +567,28 @@ test('the page draws its boxes as real elements the editor selects, names each b
   assert.equal(session.canvasBoxOf(tree.instances[0].path), undefined, 'an instance is not a box');
   assert.equal(session.canvasBoxOf(tree.root), undefined, 'nor is the root');
   session.noteComponentCanvas({ kind: 'idle' });
+});
+
+test('the page is laid out as the component’s arrangement says, and nothing is written for side by side', () => {
+  const layout = model.buildCanvasLayout(button, { split: ['variant'] });
+  // On the root, whose attributes the editor's in-place update carries over (it leaves the <body>'s).
+  assert.doesNotMatch(pageOf(layout), /<html [^>]*data-stacki-arrange/, 'a canvas nobody arranged is drawn as before');
+  assert.doesNotMatch(pageOf(layout, { arrange: 'row' }), /<html [^>]*data-stacki-arrange/);
+  assert.match(pageOf(layout, { arrange: 'column' }), /<html [^>]*data-stacki-arrange="column">/);
+  assert.match(pageOf(layout, { arrange: 'wrap' }), /<html [^>]*data-stacki-arrange="wrap">/);
+  assert.equal(parsePage(pageOf(layout, { arrange: 'wrap' })).editable, true, 'the page still parses');
+  assert.throws(() => pageOf(layout, { arrange: 'grid' }), /Assertion failed/);
+  const css = chrome.chromeStyles('dark');
+  assert.match(css, /\[data-stacki-arrange="column"\] > body stacki-group \{ flex-direction: column !important; \}/);
+  assert.match(
+    css,
+    new RegExp(
+      `\\[data-stacki-arrange="wrap"\\] > body:not\\(\\[data-flow="column"\\]\\) \\{ flex-wrap: wrap !important; max-width: ${chrome.CHROME_LIMITS.wrapWidthPx}px`,
+    ),
+  );
+  // Captions keep their size on screen: the script writes their type for the zoom, and hides those that crowd.
+  const script = chrome.chromeScript(ID);
+  assert.match(script, /function crowd\(scale\)/);
+  assert.match(script, /data-crowded/);
+  assert.match(css, /\[data-crowded\]::before/);
 });

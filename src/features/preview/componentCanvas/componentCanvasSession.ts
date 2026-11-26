@@ -4,7 +4,7 @@
 import { createContext, useContext } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
-import type { ComponentCanvasFile, FrameEdit, FrameLength, FrameSetting } from '../../../../shared/properties/componentCanvas';
+import type { CanvasArrangement, ComponentCanvasFile, FrameEdit, FrameLength, FrameSetting } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
 import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
@@ -95,6 +95,13 @@ export const COMPONENT_SCOPE = '*component';
 
 export type CanvasZoom = 'in' | 'out' | 'reset' | 'fit';
 
+/**
+ * How an edit is saved: `settled` a moment after the last change, as every edit is; `live`, one of a stream a drag
+ * makes (a colour picker), drawn on the canvas at once and saved only once the stream ends (the settled edit that
+ * closes it), or long after its last change if none does.
+ */
+export type CanvasEditPace = 'settled' | 'live';
+
 export interface ComponentCanvasControl {
   readonly state: CanvasState;
   /** Whether this host can open a canvas for the component (a project component the role may edit). */
@@ -117,6 +124,8 @@ export interface ComponentCanvasControl {
   readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
+  /** How this component's frames are laid out on its canvas (side by side, stacked or wrapping). */
+  readonly setArrangement: (arrange: CanvasArrangement) => void;
   readonly zoom: (action: CanvasZoom) => void;
   readonly hideFramePanel: () => void;
   /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */
@@ -126,7 +135,7 @@ export interface ComponentCanvasControl {
    * `` for every frame): the scope the field showed, even when a pick answers after the selection moved. Never to the
    * component or its instances.
    */
-  readonly editValues: (scope: string, edits: readonly FrameEdit[]) => void;
+  readonly editValues: (scope: string, edits: readonly FrameEdit[], pace?: CanvasEditPace) => void;
   /** The canvas root's classes at the root's "Apply to" scope (this component or the project); undefined clears them there. */
   readonly editRootClasses: (classes: readonly string[] | undefined) => void;
   /** How much of the canvas, in screen pixels from its right edge, the popover covers: the frames fit beside it. */

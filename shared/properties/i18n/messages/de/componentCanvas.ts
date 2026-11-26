@@ -13,12 +13,19 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'nicht gesetzt',
   'componentCanvas.level.all': 'Für alle Frames festgelegt',
+  'componentCanvas.level.defaults':
+    'In den Komponenten-Standardwerten festgelegt (Komponenten-Standardwerte festlegen). Lege hier einen Wert fest, um ihn zu ersetzen.',
   'componentCanvas.level.frame': 'Dieser Frame hat einen eigenen Wert',
+  'componentCanvas.level.mixed': {
+    one: 'Der {count} Frame hier zeigt einen anderen Wert. Ein hier festgelegter Wert lässt den eigenen Wert eines Frames unverändert.',
+    other: 'Die {count} Frames hier zeigen unterschiedliche Werte. Ein hier festgelegter Wert lässt den eigenen Wert jedes Frames unverändert.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} Frame hier behält seinen eigenen Wert. Setze zurück, um ihm diesen zu geben.',
     other: '{count} Frames hier behalten ihren eigenen Wert. Setze zurück, um ihnen diesen zu geben.',
   },
   'componentCanvas.level.part': 'Für jeden Frame mit {part} festgelegt',
+  'componentCanvas.level.sample': 'Ein Beispielwert, den die Canvas dieser erforderlichen Prop gibt. Lege hier einen Wert fest, um ihn zu ersetzen.',
   'componentCanvas.menu.open': 'In der Canvas öffnen',
   'componentCanvas.notice.truncated': 'Die ersten {shown} von {total} Frames werden angezeigt. Gib weniger Props eigene Frames, um den Rest zu sehen.',
   'componentCanvas.pageName': '{name}-Canvas',
@@ -31,6 +38,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Höhe',
   'componentCanvas.panel.hug': 'An Inhalt',
+  'componentCanvas.panel.layout': 'Layout', // same
+  'componentCanvas.panel.layout.column': 'Untereinander',
+  'componentCanvas.panel.layout.row': 'Nebeneinander',
+  'componentCanvas.panel.layout.wrap': 'Umbrechen',
+  'componentCanvas.panel.mixed': 'Gemischt',
   'componentCanvas.panel.pixels': '{side} in Pixeln',
   'componentCanvas.panel.root.about': 'Die Canvas hinter allen Frames: das html-Element der Seite. Ihre Klassen findest du im Einstellungen-Panel.',
   'componentCanvas.panel.root.title': 'Canvas', // same

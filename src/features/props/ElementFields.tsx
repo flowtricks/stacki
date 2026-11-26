@@ -27,7 +27,7 @@ import type { FieldFocus } from './fieldFocus';
 import { RichTextContentField } from './ComponentEditingFields';
 import { plainChildrenHTML } from './richTextContent';
 import { CAPTION_LABEL_FOR } from '../../ui/captionLabel';
-import type { PropFieldProvenance } from './propFieldExtras';
+import { provenanceResets, type PropFieldProvenance } from './propFieldExtras';
 import './propFieldExtras.css';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
@@ -126,7 +126,8 @@ function ContentLabel(props: {
         title={props.provenance?.tip ?? (props.active ? translate('props.element.resetHint') : undefined)}
         onClick={(event) => {
           event.preventDefault();
-          if (!props.active) {
+          // Words given from elsewhere (a canvas frame's component defaults) have nothing here to reset.
+          if (!props.active || !provenanceResets(props.provenance)) {
             return;
           }
           if (event.altKey) {

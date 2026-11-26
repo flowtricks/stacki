@@ -13,12 +13,18 @@ export const messages = {
   'componentCanvas.frame.part': '{prop}: {value}', // same
   'componentCanvas.frame.unset': 'niet ingesteld',
   'componentCanvas.level.all': 'Ingesteld voor alle frames',
+  'componentCanvas.level.defaults': 'Ingesteld in de componentstandaarden (Componentstandaarden instellen). Stel hier een waarde in om die te vervangen.',
   'componentCanvas.level.frame': 'Dit frame heeft een eigen waarde',
+  'componentCanvas.level.mixed': {
+    one: 'Het {count} frame hier toont een andere waarde. Een waarde die je hier instelt, laat de eigen waarde van een frame ongewijzigd.',
+    other: 'De {count} frames hier tonen verschillende waarden. Een waarde die je hier instelt, laat de eigen waarde van elk frame ongewijzigd.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} frame hier houdt een eigen waarde. Reset om het deze waarde te geven.',
     other: '{count} frames hier houden een eigen waarde. Reset om ze deze waarde te geven.',
   },
   'componentCanvas.level.part': 'Ingesteld voor elk {part}-frame',
+  'componentCanvas.level.sample': 'Een voorbeeld dat het canvas aan deze verplichte prop geeft. Stel hier een waarde in om het te vervangen.',
   'componentCanvas.menu.open': 'Op canvas openen',
   'componentCanvas.notice.truncated': 'De eerste {shown} van {total} frames worden getoond. Geef minder props eigen frames om de rest te zien.',
   'componentCanvas.pageName': 'Canvas van {name}',
@@ -31,6 +37,11 @@ export const messages = {
   },
   'componentCanvas.panel.height': 'Hoogte',
   'componentCanvas.panel.hug': 'Naar inhoud',
+  'componentCanvas.panel.layout': 'Layout', // same
+  'componentCanvas.panel.layout.column': 'Onder elkaar',
+  'componentCanvas.panel.layout.row': 'Naast elkaar',
+  'componentCanvas.panel.layout.wrap': 'Omslaan',
+  'componentCanvas.panel.mixed': 'Gemengd',
   'componentCanvas.panel.pixels': '{side} in pixels', // same
   'componentCanvas.panel.root.about': 'Het canvas achter alle frames: het html-element van de pagina. De klassen ervan staan in het paneel Instellingen.',
   'componentCanvas.panel.root.title': 'Canvas', // same
