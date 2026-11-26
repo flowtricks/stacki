@@ -45,6 +45,11 @@ const STYLE = '<style>body{margin:0;font:20px/1.5 Georgia,serif}.lead{width:420p
     console.log('canvas-line-break: skipped  [needs a Chromium]');
     return;
   }
+  // The probe drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
+  if (process.platform !== 'darwin') {
+    console.log('canvas-line-break: skipped  [macOS only]');
+    return;
+  }
   const preload = repoPath('dist/electron/preload/preload.js');
   const parsed = parsePage(SOURCE, { locs: true });
   const plans = canvasTextPlans(SOURCE, parsed.model.nodes, (id) => id.replace(/^n/, ''));

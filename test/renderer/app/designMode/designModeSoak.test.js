@@ -37,7 +37,8 @@ const CHECKS_MIN = 30;
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
-  const unavailable = soakUnavailableReason();
+  // It drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'a pointer probe, macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModeSoak: ${unavailable}`);
     return;
