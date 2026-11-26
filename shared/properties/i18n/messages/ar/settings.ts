@@ -78,8 +78,7 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'كبير جدًا',
   'settings.breakpoints.defaultName.up2': 'فائق',
   'settings.breakpoints.desktop': 'سطح المكتب',
-  'settings.breakpoints.desktopNote':
-    'يُستخدم عندما تكون النافذة أضيق من تخطيط سطح المكتب: يُعرض هذا العرض مصغَّرًا ليلائمها. لا يُستخدم أبدًا كاستعلام وسائط.',
+  'settings.breakpoints.desktopNote': 'يُستخدم عندما تختار سطح المكتب في نافذة أضيق منه: يُعرض هذا العرض مصغَّرًا ليلائمها. لا يُستخدم أبدًا كاستعلام وسائط.',
   'settings.breakpoints.error.desktopFlips': 'سيصبح {name} ({limit}) على الجانب الآخر من سطح المكتب.',
   'settings.breakpoints.error.file': 'تعذّر استخدام ملف نقاط التوقف، لذلك تظهر القيم الافتراضية ويُترك الملف كما هو. {message}',
   'settings.breakpoints.error.name': 'يتكون الاسم من 1 إلى {maximum} من الأحرف، ويجب أن يكون كل اسم مختلفًا.',

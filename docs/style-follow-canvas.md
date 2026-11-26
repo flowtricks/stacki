@@ -34,22 +34,26 @@ the target and the canvas move together. Only a row with no canvas width to go t
 
 ## The Desktop device and the pane
 
-"Desktop" is a range of widths: everything above the widest `down` breakpoint, up to the first `up`
-one. A pane whose own width (before any gutter) is in or past that range is filled at scale 1, edge to
-edge, with no frame (`previewFrameWidth` and `previewFillBounds` in `usePreviewSizing.ts`, the one rule
-for the toolbar button, the device key, Fit, the style panel's Base, apps' `canvas.setDevice` and the
-preview mode, in Desktop and Studio). The page is as wide as the pane less the scrollbar's gutters,
-held within the range:
+The ordinary editing canvas is the pane's own width at 100%, and it **reflows**: shrinking the window
+or widening a panel lays the page out as a browser window that size would, the toolbar presses the
+device that width belongs to (`activeDeviceFor`) and following moves the style target with it. This
+is what a project opens on, a page switch, a reload, component canvas, and any view code restores.
+A resize or a layout change never scales the page.
 
-- where the gutters would push it below the range, they give way first (at the very edge the page takes
-  the whole pane, and the canvas scrollbar has no room beside it);
-- where the pane reaches an `up` breakpoint, the page stops one pixel short of it, centred.
+Only a **pick** of Desktop can do otherwise (`DesktopPick` in `usePreviewSizing.ts`): its button, its
+device key, Fit, the style panel's Base, and an app's `canvas.setDevice`. What the pick finds decides:
 
-Only a pane narrower than the range draws the project's Desktop width (Settings, 90rem unless set),
-exactly as the same number typed into the width box: framed and scaled to fit. Resizing the window
-moves between the two. The canvas reports the width it draws, so the toolbar (`activeDeviceFor`)
-presses Desktop and following lands where that width does: Base in a desktop-first component. An
-unmeasured pane fills until its first measure.
+| The pane | The pick |
+|---|---|
+| has the desktop range (from one pixel past the widest `down` canvas, up to the first `up` one) | nothing to hold: the ordinary canvas |
+| is narrower | `narrow`: the project's Desktop width, framed and scaled to fit, as typing it would |
+| reaches an `up` breakpoint | `wide`: the page stops one pixel short of it, centred and unscaled |
+
+A held pick lasts while the pane stays outside the range on that side. As soon as the pane has the
+range it is over and does not come back, so shrinking afterwards reflows. Another device, another
+page and a reload end it too. It is not saved across restarts. The preview mode reads the pick and
+draws it in its own stage; only the canvas, which listens for the device keys, changes it. In the
+range, where the scrollbar's gutters would push the page below it, they give way first.
 
 ## Where a picked row puts the canvas
 

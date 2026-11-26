@@ -57,12 +57,13 @@ const DESKTOP_EXPECTED = {
   desktopFirst: { key: '', icon: undefined },
   mobileFirst: { key: '@media (width >= 64rem)', icon: 'desktop' },
 };
-const room = (paneWidthPx, desktopFramePx = DESKTOP_WIDTH_PX) => ({ desktopFramePx, paneWidthPx });
+// A canvas where Desktop has just been chosen, unless the test says what is left of a choice.
+const room = (paneWidthPx, desktopFramePx = DESKTOP_WIDTH_PX, pick = 'asked') => ({ desktopFramePx, paneWidthPx, pick });
 
 // The chain the canvas, the toolbar and the style panel run for one device in one pane.
 function canvasAt(device, panePx, contexts) {
   const width = previewFrameWidth(device, undefined, BREAKPOINT_DEFAULTS, room(panePx));
-  const fill = previewFillBounds(device, BREAKPOINT_DEFAULTS);
+  const fill = previewFillBounds(device, BREAKPOINT_DEFAULTS, room(panePx));
   const viewport = previewViewport(width, { width: panePx, height: PANE_HEIGHT_PX }, undefined, fill);
   const key = followedContextKey(contexts, viewport.width, ROOT_FONT_SIZE_PX);
   const icon = canvasTriggerIcon(key, { device, widthPx: viewport.width }, BREAKPOINT_DEFAULTS);
@@ -117,6 +118,16 @@ test('every pane draws a desktop width: its own inside the range, the Desktop wi
   }
 });
 
+test('unchosen, every pane is drawn at its own width: nothing a resize does can scale the page', () => {
+  for (let panePx = 300; panePx <= 2000; panePx += 10) {
+    const own = room(panePx, DESKTOP_WIDTH_PX, 'none');
+    assert.equal(previewFrameWidth('desktop', undefined, BREAKPOINT_DEFAULTS, own), undefined, `${panePx}px`);
+    const drawn = previewViewport(undefined, { width: panePx, height: PANE_HEIGHT_PX }, undefined, previewFillBounds('desktop', BREAKPOINT_DEFAULTS, own));
+    assert.equal(drawn.scale, 1);
+    assert.equal(drawn.width, panePx >= RANGE_MIN_PX ? Math.max(RANGE_MIN_PX, panePx - FLUID_GUTTER_PX.side) : panePx - FLUID_GUTTER_PX.side, `${panePx}px`);
+  }
+});
+
 test('the edge, pixel by pixel: the pane is judged before its gutters', () => {
   const at = (panePx) => canvasAt('desktop', panePx, FIXTURES.desktopFirst);
   assert.equal(at(1023).width, DESKTOP_WIDTH_PX, '1023px is the Laptop canvas: framed');
@@ -141,7 +152,7 @@ for (const [setting, firstFillPx] of [
     const resolved = resolveBreakpoints([{ id: 'bp-1', name: 'Small', direction: 'down', setting }]);
     assert.equal(previewFrameWidth('desktop', undefined, resolved, room(firstFillPx - 1)), DESKTOP_WIDTH_PX);
     assert.equal(previewFrameWidth('desktop', undefined, resolved, room(firstFillPx)), undefined);
-    assert.equal(fluidFrameWidthPx(firstFillPx, previewFillBounds('desktop', resolved)), firstFillPx);
+    assert.equal(fluidFrameWidthPx(firstFillPx, previewFillBounds('desktop', resolved, room(firstFillPx))), firstFillPx);
   });
 }
 
@@ -155,11 +166,12 @@ test('the project’s own Desktop width is the one a narrow pane draws; with no 
 });
 
 test('the frame’s CSS holds the same bounds, and only Desktop has any', () => {
-  assert.deepEqual(fluidFrameStyle(previewFillBounds('desktop', BREAKPOINT_DEFAULTS)), {
+  assert.deepEqual(fluidFrameStyle(previewFillBounds('desktop', BREAKPOINT_DEFAULTS, room(1100))), {
     width: 'calc(100% - 18px)',
     minWidth: 'min(100%, 1024px)',
   });
-  assert.deepEqual(previewFillBounds('canvas', BREAKPOINT_DEFAULTS), FILL_UNBOUNDED);
+  assert.deepEqual(previewFillBounds('canvas', BREAKPOINT_DEFAULTS, room(1100)), FILL_UNBOUNDED);
+  assert.deepEqual(fluidFrameStyle(previewFillBounds('desktop', BREAKPOINT_DEFAULTS, room(900, 1440, 'none'))), { width: 'calc(100% - 18px)' });
   assert.deepEqual(fluidFrameStyle(FILL_UNBOUNDED), { width: 'calc(100% - 18px)' });
   assert.throws(() => fluidFrameStyle({ widthPxMin: 100, widthPxMax: 99 }), { message: 'Assertion failed: fluidFrameStyle: the bounds are ordered' });
 });
@@ -215,8 +227,9 @@ test('negative space: an unmeasured pane, the all-breakpoints canvas and a bad w
 test('a pane that reaches a wider (`up`) breakpoint stays Desktop, flush, one pixel short of it', () => {
   const wide = { id: 'bp-1', name: 'Wide', direction: 'up', setting: { value: 100, unit: 'rem' } };
   const resolved = resolveBreakpoints([wide, ...BREAKPOINT_DEFAULTS]);
-  const bounds = previewFillBounds('desktop', resolved);
+  const bounds = previewFillBounds('desktop', resolved, room(2000));
   assert.deepEqual(bounds, { widthPxMin: 1024, widthPxMax: 1599 });
+  assert.deepEqual(previewFillBounds('desktop', resolved, room(2000, 1440, 'none')), { widthPxMin: 1024, widthPxMax: undefined }, 'unchosen, the real width');
   for (const [panePx, drawnPx] of [
     [1500, 1482],
     [1617, 1599],
@@ -224,7 +237,7 @@ test('a pane that reaches a wider (`up`) breakpoint stays Desktop, flush, one pi
     [2400, 1599],
   ]) {
     assert.equal(previewFrameWidth('desktop', undefined, resolved, room(panePx)), undefined, `${panePx}px is never framed`);
-    assert.equal(fluidFrameWidthPx(panePx, bounds), drawnPx, `${panePx}px`);
+    assert.equal(fluidFrameWidthPx(panePx, previewFillBounds('desktop', resolved, room(panePx))), drawnPx, `${panePx}px`);
     assert.equal(activeDeviceFor('desktop', drawnPx, resolved), 'desktop');
   }
   assert.equal(fluidFrameStyle(bounds).maxWidth, '1599px');

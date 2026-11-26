@@ -89,7 +89,7 @@ export function desktopAppHost(
     outcome.tag === 'applied' ? APPLIED : { applied: false, reason: outcome.message };
   return {
     viewport: () => desktopViewport(app()),
-    setDevice: (device) => app().setDevice(device),
+    setDevice: (device) => app().pickDevice(device),
     setWidth: able((widthPx) => app().requestCanvasWidth(widthPx)),
     scrollTo: able((target) => {
       const frame = canvasFrame();
