@@ -17,6 +17,8 @@ export const DESIGN_FRAME_LIMITS = {
   /** Files compared in one capture. */
   comparedFilesMax: 40_000,
   walkDepthMax: 64,
+  /** Files read or written at once. */
+  filesInFlightMax: 16,
   /** One file's described change, in characters, and how many lines of it are shown. */
   fileChangeCharsMax: 6_000,
   hunkLinesMax: 80,
@@ -26,118 +28,154 @@ export type FileChange = { readonly kind: 'write'; readonly bytes: Buffer } | { 
 /** Project-relative path, forward slashes, to its change. */
 export type FrameFiles = ReadonlyMap<string, FileChange>;
 
-/** What `live` differs from `base` by. Files untouched since `copiedAtMs` are taken as unchanged without reading them. */
-export function captureChanges(base: string, live: string, copiedAtMs: number): FrameFiles {
+/**
+ * What `live` differs from `base` (the project, read only) by. Files untouched since `copiedAtMs` are taken as
+ * unchanged without reading them. Asynchronous, a bounded number of files at once, so the main process keeps answering.
+ */
+export async function captureChanges(base: string, live: string, copiedAtMs: number): Promise<FrameFiles> {
   const changes = new Map<string, FileChange>();
-  const liveFiles = listFiles(live);
+  const liveFiles = await listFiles(live);
   let bytes = 0;
-  for (const rel of liveFiles) {
-    const change = compareFile(path.join(base, rel), path.join(live, rel), copiedAtMs);
+  await inBatches(liveFiles, async (rel) => {
+    const change = await compareFile(path.join(base, rel), path.join(live, rel), copiedAtMs);
     if (change === undefined) {
-      continue;
+      return;
     }
     changes.set(rel, change);
     bytes += change.kind === 'write' ? change.bytes.length : 0;
-    if (changes.size > DESIGN_FRAME_LIMITS.changedFilesMax) {
-      throw new Error('Design frame: more files changed than a frame holds');
-    }
-    if (bytes > DESIGN_FRAME_LIMITS.changedBytesMax) {
-      throw new Error('Design frame: the changed files are larger than a frame holds');
-    }
+  });
+  if (changes.size > DESIGN_FRAME_LIMITS.changedFilesMax) {
+    throw new Error('Design frame: more files changed than a frame holds');
+  }
+  if (bytes > DESIGN_FRAME_LIMITS.changedBytesMax) {
+    throw new Error('Design frame: the changed files are larger than a frame holds');
   }
   const present = new Set(liveFiles);
-  for (const rel of listFiles(base)) {
+  for (const rel of await listFiles(base)) {
     if (!present.has(rel)) {
       changes.set(rel, { kind: 'delete' });
     }
   }
-  return changes;
+  return new Map([...changes].sort(([left], [right]) => left.localeCompare(right, 'en')));
 }
 
-function compareFile(baseFile: string, liveFile: string, copiedAtMs: number): FileChange | undefined {
-  const liveStat = fs.statSync(liveFile);
-  if (!fs.existsSync(baseFile)) {
-    return { kind: 'write', bytes: fs.readFileSync(liveFile) };
+async function compareFile(baseFile: string, liveFile: string, copiedAtMs: number): Promise<FileChange | undefined> {
+  const liveStat = await fs.promises.stat(liveFile);
+  const baseStat = await statOrMissing(baseFile);
+  if (baseStat === undefined) {
+    return { kind: 'write', bytes: await fs.promises.readFile(liveFile) };
   }
-  const baseStat = fs.statSync(baseFile);
   if (liveStat.size === baseStat.size && liveStat.mtimeMs <= copiedAtMs) {
     return undefined;
   }
-  const liveBytes = fs.readFileSync(liveFile);
-  if (liveBytes.equals(fs.readFileSync(baseFile))) {
+  const liveBytes = await fs.promises.readFile(liveFile);
+  if (liveBytes.equals(await fs.promises.readFile(baseFile))) {
     return undefined;
   }
   return { kind: 'write', bytes: liveBytes };
 }
 
-/** Every file under `root` a frame compares, project-relative with forward slashes. Links are not followed. */
-export function listFiles(root: string): readonly string[] {
-  const files: string[] = [];
-  const pending: { readonly rel: string; readonly depth: number }[] = [{ rel: '', depth: 0 }];
-  while (pending.length > 0) {
-    const next = pending.pop();
-    if (next === undefined) {
-      break;
+async function statOrMissing(file: string): Promise<fs.Stats | undefined> {
+  try {
+    return await fs.promises.stat(file);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Runs `work` on every item, with at most filesInFlightMax at once. */
+async function inBatches<T>(items: readonly T[], work: (item: T) => Promise<void>): Promise<void> {
+  let index = 0;
+  const lanes = Array.from({ length: Math.min(DESIGN_FRAME_LIMITS.filesInFlightMax, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index];
+      index += 1;
+      if (item !== undefined) {
+        await work(item);
+      }
     }
-    if (next.depth > DESIGN_FRAME_LIMITS.walkDepthMax) {
+  });
+  await Promise.all(lanes);
+}
+
+/** Every file under `root` a frame compares, project-relative with forward slashes. Links are not followed. */
+export async function listFiles(root: string): Promise<readonly string[]> {
+  const files: string[] = [];
+  let level: readonly string[] = [''];
+  for (let depth = 0; level.length > 0; depth += 1) {
+    if (depth > DESIGN_FRAME_LIMITS.walkDepthMax) {
       throw new Error('Design frame: folders deeper than a frame compares');
     }
-    for (const dirent of fs.readdirSync(path.join(root, next.rel), { withFileTypes: true })) {
-      const rel = next.rel === '' ? dirent.name : `${next.rel}/${dirent.name}`;
-      if (isSkippedPath(rel)) {
-        continue;
+    const next: string[] = [];
+    await inBatches(level, async (folder) => {
+      for (const dirent of await fs.promises.readdir(path.join(root, folder), { withFileTypes: true })) {
+        const rel = folder === '' ? dirent.name : `${folder}/${dirent.name}`;
+        if (isSkippedPath(rel)) {
+          continue;
+        }
+        if (dirent.isDirectory()) {
+          next.push(rel);
+        } else if (dirent.isFile()) {
+          files.push(rel);
+        }
       }
-      if (dirent.isDirectory()) {
-        pending.push({ rel, depth: next.depth + 1 });
-      } else if (dirent.isFile()) {
-        files.push(rel);
-      }
-    }
+    });
     if (files.length > DESIGN_FRAME_LIMITS.comparedFilesMax) {
       throw new Error('Design frame: more files than a frame compares');
     }
+    level = next;
   }
   return files.sort();
 }
 
 /** Turns `live` from showing `from` into showing `to`, writing only the files either of them changes. */
-export function applyFrame(input: { readonly base: string; readonly live: string; readonly from: FrameFiles; readonly to: FrameFiles }): void {
+export async function applyFrame(input: { readonly base: string; readonly live: string; readonly from: FrameFiles; readonly to: FrameFiles }): Promise<void> {
   const { base, live, from, to } = input;
-  const touched = new Set([...from.keys(), ...to.keys()]);
-  if (touched.size > DESIGN_FRAME_LIMITS.changedFilesMax * 2) {
+  const touched = [...new Set([...from.keys(), ...to.keys()])];
+  if (touched.length > DESIGN_FRAME_LIMITS.changedFilesMax * 2) {
     throw new Error('Assertion failed: applyFrame: two frames change at most twice a frame’s files');
   }
-  for (const rel of touched) {
+  await inBatches(touched, async (rel) => {
     const target = path.join(live, rel);
     if (!isInside(live, target)) {
       throw new Error(`Assertion failed: applyFrame: ${rel} is inside the copy`);
     }
     const change = to.get(rel);
     if (change === undefined) {
-      restoreBase(path.join(base, rel), target);
+      await restoreBase(path.join(base, rel), target);
     } else if (change.kind === 'write') {
-      writeIfDifferent(target, change.bytes);
+      await writeIfDifferent(target, change.bytes);
     } else {
-      fs.rmSync(target, { force: true });
+      await fs.promises.rm(target, { force: true });
     }
+  });
+}
+
+async function restoreBase(baseFile: string, target: string): Promise<void> {
+  const original = await readOrMissing(baseFile);
+  if (original === undefined) {
+    await fs.promises.rm(target, { force: true });
+  } else {
+    await writeIfDifferent(target, original);
   }
 }
 
-function restoreBase(baseFile: string, target: string): void {
-  if (fs.existsSync(baseFile)) {
-    writeIfDifferent(target, fs.readFileSync(baseFile));
-  } else {
-    fs.rmSync(target, { force: true });
+async function readOrMissing(file: string): Promise<Buffer | undefined> {
+  try {
+    return await fs.promises.readFile(file);
+  } catch {
+    return undefined;
   }
 }
 
 // An unchanged file is not written, so the editor and the dev server are not told of a change that is none.
-function writeIfDifferent(target: string, bytes: Buffer): void {
-  if (fs.existsSync(target) && fs.readFileSync(target).equals(bytes)) {
+async function writeIfDifferent(target: string, bytes: Buffer): Promise<void> {
+  const current = await readOrMissing(target);
+  if (current !== undefined && current.equals(bytes)) {
     return;
   }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, bytes);
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+  await fs.promises.writeFile(target, bytes);
 }
 
 function isInside(root: string, candidate: string): boolean {

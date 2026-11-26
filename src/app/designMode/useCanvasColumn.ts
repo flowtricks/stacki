@@ -9,14 +9,17 @@ interface ColumnBox {
   readonly height: number;
 }
 
-const NO_COLUMN: ColumnBox = { left: 0, top: 0, width: 0, height: 0 };
+/** A column narrower or shorter than this cannot hold the bar: the window is used instead. */
+const COLUMN_PX_MIN = 320;
 
 function measure(): ColumnBox {
   const center = document.querySelector('.main > .center');
-  if (center === null) {
-    return NO_COLUMN;
+  const box = center === null ? undefined : center.getBoundingClientRect();
+  // No canvas column on screen (a panel covers it, or the layout has none): the whole window, so the bar and its
+  // Exit are never out of sight.
+  if (box === undefined || box.width < COLUMN_PX_MIN || box.height < COLUMN_PX_MIN) {
+    return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
   }
-  const box = center.getBoundingClientRect();
   return { left: Math.round(box.left), top: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
 }
 

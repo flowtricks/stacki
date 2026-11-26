@@ -15,7 +15,10 @@ and main refuses to begin a session.
 
 - **The copy is elsewhere.** `electron/handlers/designMode/designSandbox.ts` copies the project to
   `<user data>/design-sandboxes/<id>/` (on macOS `~/Library/Application Support/Stacki/`), folders mode 0700, with
-  node_modules cloned copy-on-write. A project that links outside itself is refused, because a write through such a
+  the top-level node_modules cloned copy-on-write in one call. Dependency, build, cache and worktree folders are skipped
+  at every depth; a preflight with hard bounds refuses a project too large, naming its largest folder, before
+  anything is copied; the walk and the copy are asynchronous and can be cancelled. The project itself is the
+  original the frames are compared with (read only), so nothing is copied twice. A project that links outside itself is refused, because a write through such a
   link would leave the copy.
 - **Requests are fenced.** Every invoke channel passes the IPC registrar, which calls `checkDesignFence`
   (`electron/lib/designMode/designFence.ts`). While the mode is on only the channels in `DESIGN_CHANNELS` run;
@@ -50,6 +53,7 @@ byte-identical afterwards.
    - `electron/lib/designMode/`
    - `shared/ipc/designSession.ts`
    - `src/features/style/model/inlineDefault.ts`
+   - `src/features/ai/aiHold.ts`
    - `test/renderer/app/designMode/`
    - `test/electron/handlers/designMode/`
 2. Revert these lines, each marked `Design mode (experimental)`:
@@ -67,6 +71,8 @@ byte-identical afterwards.
    - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
      `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
      `useInlineByDefault` function at the end of the file.
+   - `src/features/ai/AiPanel.tsx`: the `useAiHold` import, the `const hold = useAiHold();` line, and `hold` in
+     `blocked`, the prewarm's `eligible`, the setup detection effect and the trust card's condition.
    - `studio/scripts/shared-source.json`: the `shared/ipc/designSession.ts` and
      `src/features/style/model/inlineDefault.ts` entries.
    - `test/shared/ipc/ipcPayloads.test.ts`: the `'design:session'` sample.

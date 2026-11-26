@@ -34,13 +34,13 @@ export interface Session {
 const NO_FILES: FrameFiles = new Map();
 
 /** A new session on `sandbox`, with last time's frames laid over the copy when a draft was kept. */
-export function beginSession(input: {
+export async function beginSession(input: {
   readonly appDataRoot: string;
   readonly realRoot: string;
   readonly sandbox: DesignSandbox;
   readonly page: string | undefined;
   readonly frameName: string;
-}): Session {
+}): Promise<Session> {
   const { appDataRoot, realRoot, sandbox, page } = input;
   const kept = readDraft({ appDataRoot, realRoot, base: sandbox.base });
   if (kept.kind === 'none') {
@@ -50,7 +50,7 @@ export function beginSession(input: {
   if (active === undefined) {
     throw new Error('Assertion failed: beginSession: a kept draft names one of its frames');
   }
-  applyFrame({ base: sandbox.base, live: sandbox.live, from: NO_FILES, to: active.files });
+  await applyFrame({ base: sandbox.base, live: sandbox.live, from: NO_FILES, to: active.files });
   const images = new Map<DesignFrameId, string>();
   for (const frame of kept.draft.frames) {
     const image = readDraftImage({ appDataRoot, realRoot, frame: frame.id });
@@ -83,8 +83,8 @@ function withFrame(session: Session, id: DesignFrameId, change: (frame: Frame) =
 }
 
 /** The session with the active frame's files read again from the copy. */
-export function capture(session: Session): Session {
-  const files = captureChanges(session.sandbox.base, session.sandbox.live, session.sandbox.copiedAtMs);
+export async function capture(session: Session): Promise<Session> {
+  const files = await captureChanges(session.sandbox.base, session.sandbox.live, session.sandbox.copiedAtMs);
   return withFrame(session, session.active, (frame) => ({ ...frame, files }));
 }
 
@@ -124,12 +124,12 @@ export function duplicateFrame(session: Session, name: string): Session {
 }
 
 /** Shows frame `id`: the copy is rewritten from the active frame's files to its own. Expects a captured session. */
-export function switchFrame(session: Session, id: DesignFrameId): Session {
+export async function switchFrame(session: Session, id: DesignFrameId): Promise<Session> {
   const target = frameById(session, id);
   if (target.id === session.active) {
     return session;
   }
-  applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: target.files });
+  await applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: target.files });
   return { ...session, active: target.id };
 }
 
@@ -138,7 +138,7 @@ export function renameFrame(session: Session, id: DesignFrameId, name: string): 
 }
 
 /** Removes frame `id`, showing another first when it is the one shown. The last frame stays. */
-export function deleteFrame(appDataRoot: string, session: Session, id: DesignFrameId): Session {
+export async function deleteFrame(appDataRoot: string, session: Session, id: DesignFrameId): Promise<Session> {
   frameById(session, id);
   if (session.frames.length <= 1) {
     throw new Error('Design mode: the last frame stays');
@@ -147,7 +147,7 @@ export function deleteFrame(appDataRoot: string, session: Session, id: DesignFra
   if (neighbour === undefined) {
     throw new Error('Assertion failed: deleteFrame: a second frame exists');
   }
-  const shown = session.active === id ? switchFrame(session, neighbour.id) : session;
+  const shown = session.active === id ? await switchFrame(session, neighbour.id) : session;
   const images = new Map(shown.images);
   images.delete(id);
   removeDraftImage({ appDataRoot, realRoot: session.realRoot, frame: id });
@@ -157,14 +157,25 @@ export function deleteFrame(appDataRoot: string, session: Session, id: DesignFra
 export function setFrameImage(appDataRoot: string, session: Session, id: DesignFrameId, image: string): Session {
   frameById(session, id);
   saveDraftImage({ appDataRoot, realRoot: session.realRoot, frame: id, image });
-  return { ...session, images: new Map([...session.images, [id, image]]) };
+  return { ...session, images: boundedImages(new Map([...session.images].filter(([frame]) => frame !== id).concat([[id, image]]))) };
 }
 
 /** Back to one frame showing the project as copied; the kept draft is forgotten. Expects a captured session. */
-export function startOver(appDataRoot: string, session: Session, frameName: string): Session {
-  applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: NO_FILES });
+export async function startOver(appDataRoot: string, session: Session, frameName: string): Promise<Session> {
+  await applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: NO_FILES });
   removeDraft(appDataRoot, session.realRoot);
   return { ...session, frames: [{ id: 'f1', name: frameName, files: NO_FILES }], active: 'f1', stale: false, images: new Map() };
+}
+
+/** The pictures kept in memory, within imagesCharsMax: past it the oldest go first (the newest is kept). */
+function boundedImages(images: ReadonlyMap<DesignFrameId, string>): ReadonlyMap<DesignFrameId, string> {
+  const kept = [...images];
+  let chars = kept.reduce((total, [, image]) => total + image.length, 0);
+  while (chars > DESIGN_SESSION_LIMITS.imagesCharsMax && kept.length > 1) {
+    const dropped = kept.shift();
+    chars -= dropped === undefined ? 0 : dropped[1].length;
+  }
+  return new Map(kept);
 }
 
 export function imagesOf(session: Session): readonly { readonly frame: DesignFrameId; readonly image: string }[] {
