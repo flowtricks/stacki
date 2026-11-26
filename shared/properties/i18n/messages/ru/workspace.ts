@@ -123,6 +123,8 @@ export const messages = {
     other: 'Перемещение {count} элемента',
   },
   'workspace.files.undo.rename': 'Переименование {name}',
+  'workspace.notifications.copied': 'Скопировано',
+  'workspace.notifications.copy': 'Копировать',
   'workspace.notifications.dismiss': 'Скрыть уведомление',
   'workspace.notifications.label': 'Уведомления',
   'workspace.notifications.loadMore': 'Показать ещё ({count})',

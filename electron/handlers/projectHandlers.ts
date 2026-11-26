@@ -13,7 +13,7 @@ import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
 import { detectPackageManager, installArguments } from '../project/packageManager';
-import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
+import { packageManagerLabel, packageManagerProgram, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
 import { translateMain } from '../lib/mainLocale';
 import { folderOpenChoice, siteFolderChoice } from '../project/folderOpen';
@@ -115,6 +115,7 @@ function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 
       starter,
       parentPath,
       name,
+      manager: packageManager,
       onLog: (text) => send('create:log', text),
     });
     const label = STARTERS[starter]?.label ?? starter;
@@ -195,10 +196,10 @@ function normalizedRequest<Request extends { readonly sourcePath: string; readon
 }
 
 export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string, pm: PackageManager = detectPackageManager(directory)) {
-  ensureToolPath(); // npm/pnpm/yarn are Node shims — same PATH problem as astro
+  ensureToolPath(); // npm/pnpm/yarn are Node shims, and bun lives in ~/.bun/bin — same PATH problem as astro
   send('progress', { message: `Installing dependencies (${pm} install)…` });
   try {
-    await run(isWin ? `${pm}.cmd` : pm, [...installArguments(pm)], directory, {
+    await run(packageManagerProgram(pm, { windows: isWin }), [...installArguments(pm)], directory, {
       timeout: 10 * 60 * 1000,
       shell: isWin,
     });
@@ -214,7 +215,7 @@ export async function installDependencies({ send }: Pick<MainHost, 'send'>, dire
 // any folder exists. On Windows a missing command fails without ENOENT, so any failure counts.
 async function requirePackageManager(manager: PackageManager): Promise<void> {
   try {
-    await run(isWin ? `${manager}.cmd` : manager, ['--version'], os.homedir());
+    await run(packageManagerProgram(manager, { windows: isWin }), ['--version'], os.homedir());
   } catch {
     throw new Error(`${packageManagerLabel(manager)} is not installed. Install it or choose npm.`);
   }

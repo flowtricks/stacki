@@ -110,6 +110,8 @@ export const messages = {
     other: '{count}件の項目を移動',
   },
   'workspace.files.undo.rename': '{name}の名前を変更',
+  'workspace.notifications.copied': 'コピーしました',
+  'workspace.notifications.copy': 'コピー',
   'workspace.notifications.dismiss': '通知を閉じる',
   'workspace.notifications.label': '通知',
   'workspace.notifications.loadMore': 'さらに読み込む（{count}）',

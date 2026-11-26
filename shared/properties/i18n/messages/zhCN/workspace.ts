@@ -110,6 +110,8 @@ export const messages = {
     other: '移动 {count} 个项目',
   },
   'workspace.files.undo.rename': '重命名 {name}',
+  'workspace.notifications.copied': '已复制',
+  'workspace.notifications.copy': '复制',
   'workspace.notifications.dismiss': '关闭通知',
   'workspace.notifications.label': '通知',
   'workspace.notifications.loadMore': '加载更多（{count}）',
