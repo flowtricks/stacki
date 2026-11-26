@@ -29,6 +29,7 @@ buildSync({
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;
+global.NodeFilter = dom.window.NodeFilter;
 global.IS_REACT_ACT_ENVIRONMENT = true;
 const React = require('react');
 const { act } = React;

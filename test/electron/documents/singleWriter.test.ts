@@ -32,6 +32,7 @@ const WRITE_APIS = [
   'renameSync',
   'linkSync',
   'symlinkSync',
+  'symlink',
   'truncateSync',
   'ftruncateSync',
   'replaceFileAtomic',
@@ -102,11 +103,11 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 2, reason: "a frame's draft and its picture, in the app's data folder" },
   },
   'electron/handlers/designMode/designFrames.ts': {
-    writeFileSync: { count: 1, reason: "a frame's file put into the sandbox copy when the frame is shown" },
+    writeFile: { count: 1, reason: "a frame's file put into the sandbox copy when the frame is shown" },
   },
   'electron/handlers/designMode/designSandbox.ts': {
-    copyFileSync: { count: 1, reason: 'the project copied into the sandbox' },
-    symlinkSync: { count: 1, reason: 'a link inside the project kept as a link in the sandbox copy' },
+    copyFile: { count: 1, reason: 'the project copied into the sandbox' },
+    symlink: { count: 1, reason: 'a link inside the project kept as a link in the sandbox copy' },
   },
   'electron/handlers/devServers.ts': {
     writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
@@ -247,6 +248,9 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/appStorageStore.ts': {
     writeFileSync: { count: 1, reason: "the temporary copy of an app's stored values (.stacki/app-data/<id>.json or the local folder)" },
     renameSync: { count: 1, reason: 'puts that storage file in place whole (atomic save)' },
+  },
+  'electron/project/publishSnapshot.ts': {
+    symlink: { count: 1, reason: "the publish snapshot's node_modules link, in a temporary checkout, never in the project" },
   },
   'electron/project/starter.ts': {
     writeFileSync: { count: 1, reason: 'package.json of a new project from a starter' },
