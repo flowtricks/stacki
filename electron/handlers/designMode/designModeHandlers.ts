@@ -17,13 +17,16 @@ import { isPathWithin } from '../../lib/platform';
 import type { MainHost } from '../mainHost';
 import { createSandbox, removeSandboxAsync, removeSandboxAtQuit, stopServersIn, sweepSandboxes } from './designSandbox';
 import {
+  announceShown,
   beginSession,
   capture,
   changesOf,
   deleteFrame,
   duplicateFrame,
+  filesBetween,
   keepDraft,
   keepSnapshot,
+  keptFrames,
   moveFrame,
   pageSourceOf,
   renameFrame,
@@ -41,7 +44,7 @@ export interface DesignModeOptions {
   readonly onQuit: (listener: () => void) => void;
 }
 
-export function registerDesignModeHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject'>, options: DesignModeOptions): void {
+export function registerDesignModeHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject' | 'send'>, options: DesignModeOptions): void {
   // A sandbox still here at startup was left by a crash or a forced quit: its dev server is stopped and its copy of
   // `.env` deleted first, in the background, so the app starts at once.
   void sweepSandboxes(options.appDataRoot).catch(() => undefined);
@@ -55,7 +58,7 @@ export function registerDesignModeHandlers(host: Pick<MainHost, 'ipcMain' | 'ope
 type EnterRequest = Extract<DesignSessionRequest, { op: 'enter' }>;
 
 /** The one session, and every request on it; apart from registration so a test can drive it without Electron. */
-export function createDesignSessions(host: Pick<MainHost, 'openProject'>, options: Pick<DesignModeOptions, 'appDataRoot'>) {
+export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'>, options: Pick<DesignModeOptions, 'appDataRoot'>) {
   const appDataRoot = options.appDataRoot;
   let session: Session | undefined = undefined;
   let entering: { readonly cancelled: () => boolean; readonly cancel: () => void } | undefined = undefined;
@@ -146,6 +149,8 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
     // A snapshot arrives after every change the canvas shows, and a move changes no file: neither reads the copy.
     const captured = CAPTURE_FREE.has(request.op) ? current : await capture(current);
     const { next, reply } = await operate(appDataRoot, captured, request);
+    // A frame removed is gone from `next`, so what was rewritten is read from the session as it was.
+    announceShown(captured.sandbox.live, filesBetween(captured, next), host.send);
     // A session that ended while this ran is not brought back.
     session = session === current ? next : session;
     if (request.op === 'exit') {
@@ -158,6 +163,11 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
     switch (request.op) {
       case 'enter':
         return enter(request);
+      case 'preview': {
+        const open = host.openProject();
+        const asked = session === undefined && open !== undefined && path.resolve(open) === path.resolve(request.projectPath);
+        return { kind: 'preview', ...(asked ? await keptFrames(appDataRoot, open) : { frames: [], snapshots: [] }) };
+      }
       case 'cancel':
         entering?.cancel();
         return { kind: 'state', state: { kind: 'off' } };
@@ -194,7 +204,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject'>, option
 
 const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set(['state', 'frame-move', 'frame-snapshot', 'frame-snapshots', 'frame-rename']);
 
-type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' }>;
+type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' | 'preview' }>;
 
 /** The reply for an operation that may have changed what the copy shows. */
 async function shown(appDataRoot: string, next: Session, page: string | undefined) {
@@ -235,7 +245,7 @@ async function operate(
       return saved(moveFrame(session, request.frame, request.at));
     case 'start-over': {
       const next = await startOver(appDataRoot, session, request.frameName);
-      return { next, reply: { kind: 'state', state: stateOf(next) } };
+      return shown(appDataRoot, next, request.page);
     }
     case 'frame-snapshot':
       // A frame removed while its picture was on the way is not brought back.

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { ShellView } from '../App';
 import { registerPanelMode } from '../../features/ai/panelModes';
 import { setInlineDefault } from '../../features/style/model/inlineDefault';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useLocale } from '../../lib/i18n/useTranslate';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { brush } from '../../ui/central/centralGeometry';
@@ -25,6 +26,7 @@ import { applyDesignRole, clearDesignRole } from './designRole';
 import { designView, isDesignModeActive, subscribeDesignView, updateDesignView, useDesignView } from './designStore';
 import { DesignBar } from './DesignBar';
 import { DesignCanvas } from './DesignCanvas';
+import { DesignOpeningCanvas } from './DesignOpeningCanvas';
 import { designWord, useDesignWords, type DesignWords } from './i18n/designWords';
 import './designMode.css';
 
@@ -80,20 +82,27 @@ function DesignModeGate({ app }: { readonly app: ShellView }) {
   // The preview's name follows the language: the catalog may load after the mode's look is applied.
   const roleName = words('mode.name');
   const on = view.session.kind === 'on';
+  const role = useCurrentRole();
   const holdReason = words('ai.hold');
   useEffect(() => {
     if (!on) {
       return undefined;
     }
-    applyDesignRole(roleName);
     // The agent cannot work on the copy (main refuses it): the AI panel offers nothing it would refuse.
     setAiHold(holdReason);
     return () => setAiHold(undefined);
-  }, [on, roleName, holdReason]);
+  }, [on, holdReason]);
+  // The mode's look holds for as long as the mode does: whatever ends the preview while the window is on the copy
+  // (publishing and pulling would come back with it) is answered by showing it again.
+  useEffect(() => {
+    if (on) {
+      applyDesignRole(roleName);
+    }
+  }, [on, roleName, role.id]);
   useReopenedPage(app, view.session);
   useUnselectedFrame(app.selectedId);
   if (view.session.kind !== 'on') {
-    return undefined;
+    return view.opening === undefined ? undefined : <DesignOpeningCanvas frames={view.opening.frames} />;
   }
   return (
     <>
@@ -129,7 +138,7 @@ function useSessionOnOpen(projectPath: string, latest: { readonly current: { rea
         // The canvas is up with every frame before the copy's dev server is: each shows its kept document.
         const kept = await designSession({ op: 'frame-snapshots' });
         const snapshots = new Map(kept.kind === 'snapshots' ? kept.snapshots.map((entry) => [entry.frame, entry.snapshot] as const) : []);
-        updateDesignView((view) => ({ ...view, snapshots }));
+        updateDesignView((view) => ({ ...view, snapshots, opening: undefined }));
         installState(reply);
         updateDesignView((view) => ({ ...view, phase: 'working' }));
         announceEntered(app, words, reply.state, notice);

@@ -36,23 +36,47 @@ const READ_POLL_MS = 20;
 const SETTLE_MS = 400;
 
 let queue: Promise<unknown> = Promise.resolve();
+/** Operations asked and not yet carried out. */
+let waiting = 0;
 
 /** Runs `work` after everything asked before it; a failure is told and leaves the queue running. */
 function enqueue(context: DesignOpsContext, work: () => Promise<void>): Promise<void> {
-  const run = queue.then(work).catch(async (error: unknown) => {
-    context.app().showToast(context.words()('toast.failed', { detail: cleanError(error) }), 'error');
-    // What the canvas showed ahead of main may be wrong: main's answer replaces it.
-    updateDesignView((view) => ({ ...view, switching: undefined }));
-    installState(await designSession({ op: 'state' }));
-  });
+  waiting += 1;
+  const run = queue
+    .then(work)
+    .catch(async (error: unknown) => {
+      context.app().showToast(context.words()('toast.failed', { detail: cleanError(error) }), 'error');
+      // What the canvas showed ahead of main may be wrong: main's answer replaces it.
+      updateDesignView((view) => ({ ...view, switching: undefined }));
+      installState(await designSession({ op: 'state' }));
+    })
+    .finally(() => {
+      waiting -= 1;
+    });
   queue = run.catch(() => undefined);
   return run;
 }
 
+/**
+ * Records what main answered. While later operations wait, the canvas already shows what they will make: the answer
+ * to an earlier one must not undo that (a frame just removed would come back), so it only says which frame is shown.
+ */
 export function installState(reply: DesignSessionReply): void {
-  if (reply.kind === 'state' || reply.kind === 'shown') {
-    updateDesignView((view) => ({ ...view, session: reply.state }));
+  if (reply.kind !== 'state' && reply.kind !== 'shown') {
+    return;
   }
+  updateDesignView((view) => ({ ...view, session: mergedState(view.session, reply.state, waiting > 1 ? 'ahead' : 'current') }));
+}
+
+function mergedState(shownNow: DesignSessionState, answered: DesignSessionState, canvas: 'ahead' | 'current'): DesignSessionState {
+  if (canvas === 'current' || shownNow.kind !== 'on' || answered.kind !== 'on') {
+    return answered;
+  }
+  const frames = shownNow.frames.map((frame) => {
+    const known = answered.frames.find((entry) => entry.id === frame.id);
+    return known === undefined ? frame : { ...frame, changedFiles: known.changedFiles };
+  });
+  return { ...answered, frames };
 }
 
 /** Changes the frames the canvas shows, ahead of main. */
@@ -76,7 +100,11 @@ async function pageRead(context: DesignOpsContext, source: string | undefined): 
     return;
   }
   const deadline = performance.now() + READ_WAIT_MS_MAX;
-  while (context.app().pageState?.source !== source && performance.now() < deadline) {
+  while (context.app().pageState?.source !== source) {
+    // Going on would let the panels edit the page of the frame that was left.
+    if (performance.now() >= deadline) {
+      throw new Error(context.words()('toast.frameUnread'));
+    }
     await new Promise((resolve) => window.setTimeout(resolve, READ_POLL_MS));
   }
 }
@@ -258,7 +286,12 @@ export function startOver(context: DesignOpsContext): void {
     await context.app().flushSave();
     await flushCaptures(SETTLE_MS);
     updateDesignView((view) => ({ ...view, switching: 'f1' }));
-    installState(await designSession({ op: 'start-over', frameName: context.words()('frame.original') }));
+    const reply = await designSession({ op: 'start-over', frameName: context.words()('frame.original'), page: openPagePath(context) });
+    if (reply.kind !== 'shown') {
+      throw new Error('Design mode: main did not start over');
+    }
+    installState(reply);
+    await pageRead(context, reply.pageSource);
     updateDesignView((view) => ({ ...view, switching: undefined, snapshots: new Map(), camera: undefined }));
     noteCanvasChange();
   });

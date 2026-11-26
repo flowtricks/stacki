@@ -18,6 +18,15 @@
 .dm-bar > * {
   pointer-events: auto;
 }
+/* The title bar's "View as" chip would end the mode's own preview, bringing publishing and pulling back over a copy
+   that can do neither; the bar below already names the mode, and Exit ends it. */
+body:has(.dm-bar) .view-as-chip {
+  display: none;
+}
+/* Toasts sit at the window's bottom centre, over the bar: while it is up they start above it, so Exit is never covered. */
+body:has(.dm-bar) .toast-stack {
+  bottom: 72px;
+}
 .dm-badge {
   display: inline-flex;
   align-items: center;
@@ -66,6 +75,11 @@
 .dm-button.is-primary:focus-visible {
   background: var(--accent);
   color: #fff;
+}
+.dm-status,
+.dm-status:hover {
+  background: var(--bg-panel);
+  color: var(--text-dim);
 }
 .dm-button.is-confirming {
   background: var(--bg-active);

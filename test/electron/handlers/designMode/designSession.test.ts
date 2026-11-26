@@ -252,7 +252,9 @@ test('while the fence is up, every file system write into the project fails befo
 test('a session: enter, edit, duplicate, switch, leave; the copy and its .env are gone, the project is untouched', async () => {
   const { project, appData } = scratch();
   const before = digest(project);
-  const sessions = createDesignSessions({ openProject: () => project }, { appDataRoot: appData });
+  const sent: { readonly channel: string; readonly payload: unknown }[] = [];
+  const send = (channel: string, payload: unknown) => void sent.push({ channel, payload });
+  const sessions = createDesignSessions({ openProject: () => project, send }, { appDataRoot: appData });
   observeDesignFence(sessions.observe);
   const ask = async (request: unknown) => parseDesignSessionReply(await sessions.answer(parseDesignSessionRequest(request)));
   assert.deepEqual(await ask({ op: 'enter', projectPath: path.join(project, 'elsewhere'), refusal: REFUSAL, frameName: 'Original' }), {
@@ -292,7 +294,17 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   const drawn = { ...snapshot, html: '<html><body>purple</body></html>' };
   assert.deepEqual(await ask({ op: 'frame-snapshot', frame: 'f2', snapshot: drawn }), { kind: 'kept' });
   assert.deepEqual(await ask({ op: 'frame-snapshot', frame: 'f7', snapshot: drawn }), { kind: 'kept' }, 'a frame that is gone is not made');
+  // Showing a frame announces what it rewrote: the watcher would take bytes the editor saved before for its own.
+  sent.length = 0;
   await ask({ op: 'frame-switch', frame: 'f1' });
+  assert.deepEqual(sent, [
+    { channel: 'fs:changed', payload: { files: [path.join(live, 'src/styles/global.css')] } },
+    { channel: 'css:changed', payload: {} },
+  ]);
+  sent.length = 0;
+  await ask({ op: 'frame-switch', frame: 'f1' });
+  await ask({ op: 'frame-rename', frame: 'f2', name: 'Purple' });
+  assert.deepEqual([...sent], [], 'nothing rewritten, nothing announced');
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: green; }\n');
   await ask({ op: 'frame-switch', frame: 'f2' });
   assert.equal(fs.readFileSync(path.join(live, 'src/styles/global.css'), 'utf8'), '.title { color: purple; }\n');
@@ -308,6 +320,11 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: { text: 'Rebuild it like this', images: [], names: [] } });
   assert.deepEqual(await ask({ op: 'take-handoff' }), { kind: 'handoff', handoff: undefined }, 'handed over once');
   assert.equal(digest(project), before);
+
+  // Before coming back, the kept frames can be drawn at once; another project's, or none, are never read.
+  const preview = await ask({ op: 'preview', projectPath: project });
+  assert.ok(preview.kind === 'preview' && preview.frames.length === 2 && preview.snapshots.length === 2);
+  assert.deepEqual(await ask({ op: 'preview', projectPath: path.join(project, 'elsewhere') }), { kind: 'preview', frames: [], snapshots: [] });
 
   // Coming back: the frames return from the draft, the shown one laid over the new copy.
   const again = await ask({ op: 'enter', projectPath: project, refusal: REFUSAL, frameName: 'Original' });
@@ -333,8 +350,10 @@ test('a session: enter, edit, duplicate, switch, leave; the copy and its .env ar
   assert.equal(fs.readFileSync(path.join(againLive, 'src/styles/global.css'), 'utf8'), '.title { color: green; }\n');
   assert.ok(!fs.existsSync(path.join(draftFolder(appData, project), 'f2.snapshot.json')), "a removed frame's document goes with it");
   await assert.rejects(ask({ op: 'frame-delete', frame: 'f1' }), /the last frame stays/);
+  sent.length = 0;
   const over = await ask({ op: 'start-over', frameName: 'Original' });
-  assert.ok(over.kind === 'state' && over.state.kind === 'on' && over.state.frames.length === 1 && over.state.frames[0]?.changedFiles === 0);
+  assert.equal(sent.at(0)?.channel, 'fs:changed');
+  assert.ok(over.kind === 'shown' && over.state.kind === 'on' && over.state.frames.length === 1 && over.state.frames[0]?.changedFiles === 0);
   await sessions.end(); // As the window leaves the copy.
   assert.equal(designFenceState().kind, 'off');
   assert.deepEqual(fs.readdirSync(sandboxesRoot(appData)), []);

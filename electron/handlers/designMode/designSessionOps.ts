@@ -43,6 +43,26 @@ function firstFrame(name: string): Frame {
   return { id: 'f1', name, at: defaultFramePlace(0), files: NO_FILES };
 }
 
+/**
+ * The frames kept for the project, read before a session begins: the canvas draws them at once, while the copy is
+ * made. Reads Stacki's own data folder only. `frames` is empty when nothing is kept.
+ */
+export async function keptFrames(appDataRoot: string, realRoot: string) {
+  const kept = readDraft({ appDataRoot, realRoot, base: realRoot });
+  if (kept.kind === 'none') {
+    return { frames: [], snapshots: [] };
+  }
+  const frames = kept.draft.frames.map((frame) => ({ id: frame.id, name: frame.name, at: frame.at, changedFiles: frame.files.size }));
+  const snapshots: { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] = [];
+  for (const frame of kept.draft.frames) {
+    const snapshot = await readSnapshot({ appDataRoot, realRoot, frame: frame.id });
+    if (snapshot !== undefined) {
+      snapshots.push({ frame: frame.id, snapshot });
+    }
+  }
+  return { frames, snapshots };
+}
+
 /** A new session on `sandbox`, with last time's frames laid over the copy when a draft was kept. */
 export async function beginSession(input: {
   readonly appDataRoot: string;
@@ -144,6 +164,31 @@ export async function switchFrame(session: Session, id: DesignFrameId): Promise<
   }
   await applyFrame({ base: session.sandbox.base, live: session.sandbox.live, from: activeFrame(session).files, to: target.files });
   return { ...session, active: target.id };
+}
+
+/**
+ * Tells the window which files a change of shown frame rewrote. The project watcher cannot be left to: it takes a
+ * file holding exactly the bytes the editor last saved for the editor's own save, and showing a frame again writes
+ * just those bytes, so the editor would go on editing the other frame's page.
+ */
+export function announceShown(live: string, rewritten: readonly string[], send: (channel: string, payload: unknown) => void): void {
+  if (rewritten.length === 0) {
+    return;
+  }
+  send('fs:changed', { files: rewritten.map((rel) => path.join(live, rel)) });
+  if (rewritten.some((rel) => /\.(astro|css)$/i.test(rel))) {
+    send('css:changed', {});
+  }
+  if (rewritten.some((rel) => /\.json$/i.test(rel))) {
+    send('cms:changed', {});
+  }
+}
+
+/** The files either frame changes: what showing one after the other may rewrite. */
+export function filesBetween(from: Session, to: Session): readonly string[] {
+  const before = activeFrame(from).files;
+  const after = activeFrame(to).files;
+  return before === after ? [] : [...new Set([...before.keys(), ...after.keys()])];
 }
 
 /**

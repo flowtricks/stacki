@@ -4,7 +4,7 @@
 // canvas's frames show, what is selected on the canvas, and what the window is doing about it, so the header
 // button, the bar and the canvas read one value. Framework-free; React reads it through `useDesignView`.
 import { useSyncExternalStore } from 'react';
-import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignSessionState } from '../../../shared/ipc/designSession';
+import { DESIGN_SESSION_LIMITS, type DesignFrameId, type DesignFrameView, type DesignSessionState } from '../../../shared/ipc/designSession';
 import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 
 export type DesignPhase = 'idle' | 'entering' | 'working' | 'leaving';
@@ -22,9 +22,15 @@ export interface DesignCamera {
   readonly zoom: number;
 }
 
+/** What the canvas shows from the click until the window is on the copy: nothing in it can be edited yet. */
+export interface DesignOpening {
+  readonly frames: readonly DesignFrameView[];
+}
+
 export interface DesignView {
   readonly session: DesignSessionState;
   readonly phase: DesignPhase;
+  readonly opening: DesignOpening | undefined;
   readonly snapshots: ReadonlyMap<DesignFrameId, DesignSnapshot>;
   readonly selection: DesignSelection;
   /** The frame the site's copy is being rewritten to; until it is read, the panels have nothing selected. */
@@ -41,6 +47,7 @@ const LISTENERS_MAX = 50;
 let view: DesignView = {
   session: { kind: 'off' },
   phase: 'idle',
+  opening: undefined,
   snapshots: new Map(),
   selection: { kind: 'none' },
   switching: undefined,

@@ -110,6 +110,8 @@ export type DesignSessionRequest =
   /** Stops a copy under way: the enter answers `cancelled` and leaves nothing behind. */
   | { readonly op: 'cancel' }
   | { readonly op: 'take-handoff' }
+  /** Before a session: the frames kept for the open project, so the canvas shows them while the copy is made. */
+  | { readonly op: 'preview'; readonly projectPath: string }
   | { readonly op: 'frame-duplicate'; readonly source: DesignFrameId; readonly name: string; readonly at: DesignPlace }
   /** `page`: the open page in the copy, whose text in the shown frame comes back. */
   | { readonly op: 'frame-switch'; readonly frame: DesignFrameId; readonly page: string | undefined }
@@ -119,7 +121,7 @@ export type DesignSessionRequest =
   | { readonly op: 'frame-snapshot'; readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }
   | { readonly op: 'frame-snapshots' }
   | { readonly op: 'changes' }
-  | { readonly op: 'start-over'; readonly frameName: string };
+  | { readonly op: 'start-over'; readonly frameName: string; readonly page: string | undefined };
 
 export type DesignSessionReply =
   | { readonly kind: 'state'; readonly state: DesignSessionState }
@@ -131,6 +133,12 @@ export type DesignSessionReply =
   /** After a switch or a delete: the session, and the asked page's text as the copy now holds it. */
   | { readonly kind: 'shown'; readonly state: DesignSessionState; readonly pageSource: string | undefined }
   | { readonly kind: 'kept' }
+  /** No kept frames: both lists are empty. */
+  | {
+      readonly kind: 'preview';
+      readonly frames: readonly DesignFrameView[];
+      readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[];
+    }
   | { readonly kind: 'snapshots'; readonly snapshots: readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] }
   | { readonly kind: 'changes'; readonly frames: readonly DesignFrameChanges[] };
 
@@ -238,6 +246,8 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
     case 'changes':
     case 'cancel':
       return { op };
+    case 'preview':
+      return { op, projectPath: pathText(value['projectPath']) };
     case 'enter':
       return {
         op,
@@ -261,7 +271,7 @@ export function parseDesignSessionRequest(input: unknown): DesignSessionRequest 
     case 'frame-snapshot':
       return { op, frame: parseDesignFrameId(value['frame']), snapshot: parseDesignSnapshot(value['snapshot']) };
     case 'start-over':
-      return { op, frameName: frameName(value['frameName']) };
+      return { op, frameName: frameName(value['frameName']), page: optionalPage(value['page']) };
     default:
       throw new Error(`Design session: unknown op ${JSON.stringify(op)}`);
   }
@@ -327,6 +337,13 @@ function boundedList(input: unknown, itemsMax: number, what: string): readonly u
   return input;
 }
 
+function frameSnapshots(input: unknown): readonly { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] {
+  return boundedList(input, DESIGN_SESSION_LIMITS.framesMax, 'Design snapshots').map((entry) => {
+    const item = record(entry);
+    return { frame: parseDesignFrameId(item['frame']), snapshot: parseDesignSnapshot(item['snapshot']) };
+  });
+}
+
 /** A `design:session` reply, parsed in the renderer before it is trusted. */
 export function parseDesignSessionReply(input: unknown): DesignSessionReply {
   const value = record(input);
@@ -356,13 +373,11 @@ export function parseDesignSessionReply(input: unknown): DesignSessionReply {
     case 'kept':
       return { kind };
     case 'snapshots':
-      return {
-        kind,
-        snapshots: boundedList(value['snapshots'], DESIGN_SESSION_LIMITS.framesMax, 'Design snapshots').map((entry) => {
-          const item = record(entry);
-          return { frame: parseDesignFrameId(item['frame']), snapshot: parseDesignSnapshot(item['snapshot']) };
-        }),
-      };
+      return { kind, snapshots: frameSnapshots(value['snapshots']) };
+    case 'preview': {
+      const frames = boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design preview').map(frameView);
+      return { kind, frames, snapshots: frameSnapshots(value['snapshots']) };
+    }
     case 'changes':
       return { kind, frames: boundedList(value['frames'], DESIGN_SESSION_LIMITS.framesMax, 'Design changes').map(frameChanges) };
     default:

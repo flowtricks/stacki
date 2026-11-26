@@ -5,7 +5,7 @@
 // same way. Both reloads clear undo history, which the person is told in a toast after each one. Everything
 // between works on the copy: what the canvas does is in designFrameOps.ts.
 import type { ShellView } from '../App';
-import type { DesignEnterRefusal, DesignSessionState } from '../../../shared/ipc/designSession';
+import { defaultFramePlace, type DesignEnterRefusal, type DesignFrameView, type DesignSessionState } from '../../../shared/ipc/designSession';
 import type { DesignSnapshot } from '../../../shared/ipc/designSnapshot';
 import { cleanError } from '../../lib/cleanError';
 import { holdWindow } from '../../ui/busyLock';
@@ -46,6 +46,13 @@ const REFUSAL_WORDS: Readonly<Record<DesignEnterRefusal, DesignWordKey>> = {
   cancelled: 'toast.cancelled',
 };
 
+const opening: { cancel: 'none' | 'asked' } = { cancel: 'none' };
+
+/** Read through a call: the answer changes while the opening canvas is drawn. */
+function cancelAsked(): boolean {
+  return opening.cancel === 'asked';
+}
+
 export async function enterDesignMode(app: DesignHostSource, words: DesignWords): Promise<void> {
   const page = app.currentPage;
   if (page === undefined || page.kind !== 'page' || page.path.includes('/.stacki/')) {
@@ -55,14 +62,21 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
   if (designView().phase !== 'idle') {
     return;
   }
-  updateDesignView((view) => ({ ...view, phase: 'entering' }));
+  // The canvas is up on the click itself; what it shows is filled in as it is read.
+  opening.cancel = 'none';
+  showOpening([{ id: 'f1', name: words('frame.original'), at: defaultFramePlace(0), changedFiles: 0 }]);
   const release = holdWindow();
   try {
     // What the editor still holds is saved first, so the copy is the project as the person sees it.
     await app.flushSave();
-    app.showToast(words('toast.copying'), 'info');
-    // The canvas as it is now, so the first frame is drawn before the copy's dev server is up.
-    const snapshot = await seedSnapshot();
+    // The frames kept from last time, or else the page as the editor shows it now.
+    const snapshot = await drawOpening(app.project.path);
+    // Cancelled before main had a copy to stop.
+    if (cancelAsked()) {
+      app.showToast(words('toast.cancelled'), 'info');
+      closeOpening();
+      return;
+    }
     const reply = await designSession({
       op: 'enter',
       projectPath: app.project.path,
@@ -77,7 +91,7 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
         named ? words('toast.tooLargeFolder', { folder: reply.folder ?? '' }) : words(REFUSAL_WORDS[reply.reason]),
         reply.reason === 'cancelled' ? 'info' : 'warning',
       );
-      updateDesignView((view) => ({ ...view, phase: 'idle' }));
+      closeOpening();
       return;
     }
     if (reply.kind !== 'entered') {
@@ -88,20 +102,40 @@ export async function enterDesignMode(app: DesignHostSource, words: DesignWords)
     await app.leaveProject(reply.liveRoot);
   } catch (error: unknown) {
     app.showToast(words('toast.failed', { detail: cleanError(error) }), 'error');
-    updateDesignView((view) => ({ ...view, phase: 'idle' }));
+    closeOpening();
   } finally {
     release();
   }
 }
 
-async function seedSnapshot(): Promise<DesignSnapshot | undefined> {
-  const result = await requestSnapshot();
-  return result.ok ? result.snapshot : undefined;
+function showOpening(frames: readonly DesignFrameView[]): void {
+  updateDesignView((view) => ({ ...view, phase: 'entering', opening: { frames }, snapshots: new Map(), camera: undefined }));
+}
+
+function closeOpening(): void {
+  updateDesignView((view) => ({ ...view, phase: 'idle', opening: undefined, snapshots: new Map(), camera: undefined }));
+}
+
+/**
+ * Draws the opening canvas: the kept frames when there are some, else the first frame from the live canvas. Returns
+ * the live canvas's picture, which a new session keeps as its first frame's.
+ */
+async function drawOpening(projectPath: string): Promise<DesignSnapshot | undefined> {
+  const [kept, live] = await Promise.all([designSession({ op: 'preview', projectPath }), requestSnapshot()]);
+  const snapshot = live.ok ? live.snapshot : undefined;
+  if (kept.kind === 'preview' && kept.frames.length > 0) {
+    const snapshots = new Map(kept.snapshots.map((entry) => [entry.frame, entry.snapshot] as const));
+    updateDesignView((view) => ({ ...view, opening: { frames: kept.frames }, snapshots, camera: undefined }));
+  } else if (snapshot !== undefined) {
+    updateDesignView((view) => ({ ...view, snapshots: new Map([['f1', snapshot]]), camera: undefined }));
+  }
+  return snapshot;
 }
 
 /** Stops a copy under way (the Modes menu row chosen again while it runs). */
 export async function cancelDesignMode(): Promise<void> {
   if (designView().phase === 'entering') {
+    opening.cancel = 'asked';
     await designSession({ op: 'cancel' });
   }
 }
