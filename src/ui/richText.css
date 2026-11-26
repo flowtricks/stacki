@@ -370,11 +370,11 @@
 /* The `+` beside an empty block of rich text a component holds: it sits in the content's start padding, so the words
    never move when it appears. A fill shows it, never a border. */
 .html-field-blocks .html-content {
-  padding-inline-start: 30px;
+  padding-inline-start: 34px;
 }
 /* The placeholder starts where the words and the caret do, clear of the `+`'s gutter. */
 .html-field-blocks .html-content[data-empty='true']::before {
-  inset-inline-start: 30px;
+  inset-inline-start: 34px;
 }
 .html-block-plus {
   position: absolute;
@@ -382,19 +382,25 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--radius);
-  background: var(--bg-active);
-  color: var(--text-dim);
+  /* Opaque, with its own shadow: on the canvas it sits over the page, which may be any colour, so a see-through fill
+     leaves a bare cross. */
+  background: #2a2a2a;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  color: var(--text);
   cursor: pointer;
 }
-.html-block-plus:hover,
-.html-block-plus[aria-expanded='true'] {
-  background: var(--bg-hover, var(--bg-active));
-  color: var(--text);
+/* Written on the element so they outweigh the base button's see-through hover and pressed fills. */
+button.html-block-plus:hover:not(:disabled) {
+  background: #363636;
+}
+button.html-block-plus:active:not(:disabled),
+button.html-block-plus[aria-expanded='true']:not(:disabled) {
+  background: #444444;
 }
 
 /* Rich text a component's content holds, in the Properties panel: the button fills the field's width as an input

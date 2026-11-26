@@ -9,11 +9,15 @@
 import { assert } from '../../shared/core/assert';
 import { pathsOf } from './frameRegions';
 import { ownClasses } from './frameMeasure';
+import { holdTextEditing, styleTextEditor } from './frameTextEditing';
 import type { RichBlockChoice } from '../../shared/properties/canvasText';
 
 export interface RichTextCallbacks {
   /** Where the `+` goes (the empty block's box in the frame), or nothing when the caret is not in an empty block. */
   readonly plus: (box: { readonly x: number; readonly y: number; readonly w: number; readonly h: number } | undefined) => void;
+  /** The content as HTML and where the caret's block is (element positions: a block, then a list item), said when
+   *  either changes, for whoever shows the node being typed. Nothing is saved by it. */
+  readonly draft: (html: string, caret: readonly number[]) => void;
   /** The instance's content as HTML, posted once when an edit is kept; undefined when nothing changed or it was cancelled. */
   readonly done: (html: string | undefined) => void;
 }
@@ -57,6 +61,10 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
   const attribute = container.getAttribute('contenteditable');
   container.setAttribute('contenteditable', 'true');
   container.setAttribute('data-avb-text-editor', '');
+  container.setAttribute('data-avb-text-blocks', place.kind);
+  styleTextEditor(undefined);
+  // Presses inside are the browser's from here: a caret, a word, a drag across blocks.
+  const release = holdTextEditing(container);
   document.execCommand('defaultParagraphSeparator', false, 'p');
   const controller = new AbortController();
   const listen = { capture: true, signal: controller.signal };
@@ -67,6 +75,7 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     }
     closed = true;
     controller.abort();
+    release();
     callbacks.plus(undefined);
     const html = action === 'apply' ? read() : undefined;
     const saved = html !== undefined && html !== startHTML;
@@ -105,9 +114,19 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
       container.setAttribute('contenteditable', attribute);
     }
     container.removeAttribute('data-avb-text-editor');
+    container.removeAttribute('data-avb-text-blocks');
     container.blur();
     callbacks.done(saved ? html : undefined);
   };
+  // Whether the latest press began in the editor: a drag is decided by where it began.
+  let pressed = false;
+  window.addEventListener(
+    'mousedown',
+    (event) => {
+      pressed = event.target instanceof Node && container.contains(event.target);
+    },
+    listen,
+  );
   window.addEventListener(
     'keydown',
     (event) => {
@@ -129,8 +148,27 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
     },
     listen,
   );
+  // What is typed, said once the browser has finished the change that raised it, and only when it differs.
+  let said = '';
+  let saying: ReturnType<typeof setTimeout> | undefined;
+  const say = () => {
+    saying = undefined;
+    if (closed) {
+      return;
+    }
+    const html = read();
+    const caret = place.kind === 'rich' ? caretPositions(container, original, place.richRoot) : [];
+    const next = `${caret.join('.')}\n${html}`;
+    if (next !== said) {
+      said = next;
+      callbacks.draft(html, caret);
+    }
+  };
   // The `+` belongs to rich text: a line of words has no blocks to choose.
-  const report = () => callbacks.plus(place.kind === 'rich' ? emptyBlockBox(container) : undefined);
+  const report = () => {
+    callbacks.plus(place.kind === 'rich' ? emptyBlockBox(container) : undefined);
+    saying ??= setTimeout(say, 0);
+  };
   document.addEventListener('selectionchange', report, { signal: controller.signal });
   container.addEventListener('input', report, { signal: controller.signal });
   // Leaving the frame saves, as a click elsewhere on the canvas does (the session's dismiss), unless the press that
@@ -160,8 +198,14 @@ export function openRichText(place: RichTextPlace, at: { readonly clientX: numbe
   return {
     finish,
     container,
-    /** Says again where the `+` goes, for a host that has rebuilt its catalog. */
-    replus: report,
+    /** Whether a click is the editor's: on it, or ending a press that began in it. A drag that leaves the block ends
+     *  with its click on whatever holds both ends, and dragging selected words out leaves them unselected. */
+    contains: (event: MouseEvent) => pressed || (event.target instanceof Node && container.contains(event.target)),
+    /** Says again where the `+` goes and what is typed, for a host that has rebuilt its catalog. */
+    replus: () => {
+      said = '';
+      report();
+    },
     hold: () => {
       held = true;
     },
@@ -188,13 +232,36 @@ function instanceBlock(element: Element, richRoot: string): Element | undefined 
   return undefined;
 }
 
+// Whether a child of the container is the instance's content, not something the component itself draws there: an
+// element the page gave the instance (a path under it), or anything the session made.
+function ownedBy(original: readonly Node[], richRoot: string): (node: Node) => boolean {
+  return (node) => !original.includes(node) || (node instanceof Element && pathsOf(node).some((path) => path.startsWith(`${richRoot}.`)));
+}
+
+// The caret's block as element positions among the content: the block, then the item when the block is a list. Empty
+// when the caret is in no block of the content.
+function caretPositions(container: Element, original: readonly Node[], richRoot: string): readonly number[] {
+  const anchor = window.getSelection()?.focusNode ?? undefined;
+  if (anchor === undefined || !container.contains(anchor)) {
+    return [];
+  }
+  const blocks = Array.from(container.children).filter(ownedBy(original, richRoot));
+  const index = blocks.findIndex((block) => block.contains(anchor));
+  const block = blocks[index];
+  if (block === undefined) {
+    return [];
+  }
+  const item = block.tagName === 'UL' || block.tagName === 'OL' ? Array.from(block.children).findIndex((child) => child.contains(anchor)) : -1;
+  return item < 0 ? [index] : [index, item];
+}
+
 /**
  * The instance's blocks as HTML, in order: an element the page gave the instance (a path under it), or anything the
  * session made (not among the children the container started with). What the component itself draws in the same
  * element is left out, so it is never written into the content.
  */
 export function readInstanceHTML(container: Element, original: readonly Node[], richRoot: string): string {
-  const own = (node: Node) => !original.includes(node) || (node instanceof Element && pathsOf(node).some((path) => path.startsWith(`${richRoot}.`)));
+  const own = ownedBy(original, richRoot);
   const parts: string[] = [];
   for (const node of Array.from(container.childNodes)) {
     if (node instanceof Element && own(node)) {

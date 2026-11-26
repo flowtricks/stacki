@@ -41,11 +41,17 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
     focus: () => focus, // The selected node's page path.
     editing: () => (active ? typing?.key : undefined),
     editingElement: () => (active ? typing?.element : undefined),
-    contains: (event: MouseEvent) => (rich ? event.target instanceof Node && rich.container.contains(event.target) : (active?.editor.contains(event) ?? false)),
+    contains: (event: MouseEvent) => (rich ? rich.contains(event) : (active?.editor.contains(event) ?? false)),
     dismiss: () => finish('apply'),
-    // A scroll or resize ends the edit, unless it is the open's own settling.
+    // A scroll or resize ends the plain text edit, unless it is the open's own settling. The block editor stays: its
+    // own typing moves the page (Enter near the bottom scrolls to the caret, a new block grows the frame), so only its
+    // `+` is placed again.
     dismissOnMovement: () => {
       assert(OPEN_SETTLE_MS > 0, 'The settle window is positive');
+      if (rich) {
+        rich.replus();
+        return;
+      }
       if (performance.now() - openedAtMs >= OPEN_SETTLE_MS) {
         finish('apply');
       }
@@ -162,6 +168,7 @@ function openCanvasRich(
 ) {
   const editor = openRichText(context.place, context.at, {
     plus: (rect) => post({ type: 'avb:rich-plus', session: context.session(), ...(rect ? { rect } : {}) }),
+    draft: (html, caret) => post({ type: 'avb:rich-draft', session: context.session(), key: context.target.key, html, caret }),
     done: (html) => {
       closed();
       if (html !== undefined) {
@@ -177,7 +184,8 @@ function openCanvasRich(
   // name tag hidden, the source cue) belong to its current session, as plain text editing has them.
   const announce = () => {
     const box = editor.container.getBoundingClientRect();
-    post({ type: 'avb:text-active', session: context.session(), key: context.target.key, rect: { x: box.left, y: box.top, w: box.width, h: box.height } });
+    const rect = { x: box.left, y: box.top, w: box.width, h: box.height };
+    post({ type: 'avb:text-active', session: context.session(), key: context.target.key, rect, blocks: true });
     editor.replus();
   };
   announce();

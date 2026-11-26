@@ -6694,6 +6694,13 @@ body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent
   outline-offset: -1px;
   opacity: 1;
 }
+/* The block editor draws its own ring in the page, which follows its blocks as they come and go. The app's boxes
+   for the picked and hovered node were measured before the typing and would sit off the words, so they step aside;
+   a parent component's outline stays. */
+body:has(#stacki-canvas-text-editor[data-blocks]) .node-outline.sel:not(.parent),
+body:has(#stacki-canvas-text-editor[data-blocks]) .node-outline.hover {
+  display: none;
+}
 /* Editing the words of a closed component: its owner keeps the resting look for the whole session (the faint thick outline and the
    light name tag), whatever the pointer does. Ordinary text, whose own tag goes while it is typed in, is not an owner. */
 body:has(#stacki-canvas-text-editor:not([data-shared])) .node-outline.sel.parent.text-owner {

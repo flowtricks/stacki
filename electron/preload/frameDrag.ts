@@ -24,7 +24,7 @@ import { parentPath } from './framePaths';
 import { activeScope, elementsWithPath, inScope, pathsOf, PATH_ATTR, regions, runsOf } from './frameRegions';
 import { rectsForPath } from './frameMeasure';
 import { scrollPageBy } from './frameScrollbar';
-import { isCanvasTextEditing } from './frameTextNative';
+import { isCanvasTextEditing } from './frameTextEditing';
 
 export const FRAME_DRAG_LIMITS = {
   /** Pixels the pointer travels before a press becomes a drag (the click guard's own distance, frameInteraction.ts). */

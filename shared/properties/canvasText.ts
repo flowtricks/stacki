@@ -161,6 +161,14 @@ export type CanvasTextEvent =
       readonly key: string;
       readonly value: string;
     }
+  /** What the block editor holds while it is open, and the caret's block as element positions; nothing is saved by it. */
+  | {
+      readonly type: 'avb:rich-draft';
+      readonly session: string;
+      readonly key: string;
+      readonly html: string;
+      readonly caret: readonly number[];
+    }
   /** The rich text a canvas edit left in a component instance, as HTML the host checks before writing it. */
   | { readonly type: 'avb:rich-save'; readonly session: string; readonly key: string; readonly html: string }
   /** Where the `+` of an empty block goes, in the frame's pixels; absent when the caret is not in one. */
@@ -316,13 +324,16 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         key: pathText(data['key']),
         value: canvasTextValue(data['value']),
       };
-    case 'avb:rich-save': {
-      const html = text(data['html']);
-      if (html.length > RICH_HTML_CHARS_MAX) {
-        throw new Error('Canvas rich text exceeds limit');
-      }
-      return { type: 'avb:rich-save', session: pathText(data['session']), key: pathText(data['key']), html };
-    }
+    case 'avb:rich-save':
+      return { type: 'avb:rich-save', session: pathText(data['session']), key: pathText(data['key']), html: richHTML(data['html']) };
+    case 'avb:rich-draft':
+      return {
+        type: 'avb:rich-draft',
+        session: pathText(data['session']),
+        key: pathText(data['key']),
+        html: richHTML(data['html']),
+        caret: richCaret(data['caret']),
+      };
     case 'avb:rich-plus':
       return {
         type: 'avb:rich-plus',
@@ -339,6 +350,25 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
     default:
       return undefined;
   }
+}
+
+function richHTML(input: unknown): string {
+  const html = text(input);
+  if (html.length > RICH_HTML_CHARS_MAX) {
+    throw new Error('Canvas rich text exceeds limit');
+  }
+  return html;
+}
+
+// A block, and an item of a list: no deeper.
+const RICH_CARET_DEPTH_MAX = 2;
+
+function richCaret(input: unknown): readonly number[] {
+  const positions = list(parseSegment)(input);
+  if (positions.length > RICH_CARET_DEPTH_MAX) {
+    throw new Error('Canvas rich text caret exceeds limit');
+  }
+  return positions;
 }
 
 function parseRunValues(input: unknown): readonly CanvasTextRunValue[] {

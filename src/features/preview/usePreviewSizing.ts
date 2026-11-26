@@ -10,11 +10,37 @@ import { panelDragPhase, setPanelDragPhase, subscribePanelDragPhase, usePanelDra
  *  query). `serial` counts the asks, so the same width asked again still applies. */
 export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
 
+/** The canvas pane's size, as measured. */
+export interface PaneSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** How long after a pick the pane may still move without ending it: the pick's own layout (the style panel moving to
+ *  Base, a toolbar that changes) settles inside it. */
+export const DESKTOP_PICK_SETTLE_MS = 400;
+
+/** The most a held pick's pane may differ, in pixels either way, and still be the same pane: rounding and a
+ *  scrollbar's jitter, not a resize. Measured from the size held, so many small steps add up. */
+export const DESKTOP_PICK_JITTER_PX = 4;
+
+/** Whether the pane is no longer the size a pick was held at. Nothing held, or a pane not measured, has not moved. */
+export function paneResized(held: PaneSize | undefined, pane: PaneSize): boolean {
+  if (held === undefined || pane.width === 0) {
+    return false;
+  }
+  if (Math.abs(pane.width - held.width) > DESKTOP_PICK_JITTER_PX) {
+    return true;
+  }
+  return Math.abs(pane.height - held.height) > DESKTOP_PICK_JITTER_PX;
+}
+
 /**
  * What an explicit pick of Desktop has left to do. `none` is the ordinary editing canvas: the pane's own width at
  * 100%, reflowing as the window and panels move. `asked` is a pick the canvas has not measured yet. A pick made
  * where filling would not show the desktop layout holds the canvas until the pane can: `narrow` draws the Desktop
  * width, framed and scaled to fit, as typing it would; `wide` (the pane reaches an `up` breakpoint) stops short of it.
+ * Either is one look: the next resize of the pane ends it (paneResized).
  */
 export type DesktopPick = 'none' | 'asked' | 'narrow' | 'wide';
 
@@ -22,9 +48,11 @@ export function usePreviewDimensions() {
   const [customWidth, setCustomWidth] = useState<number | undefined>(undefined);
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
   const [desktopPick, setDesktopPick] = useState<DesktopPick>('none');
+  // The pane a held pick is being looked at in, once the pick has settled; absent while it settles.
+  const [pickPane, setPickPane] = useState<PaneSize | undefined>(undefined);
   // The page and rendering the pick was made on: another one opens on the ordinary canvas.
   const pickViewRef = useRef<string | undefined>(undefined);
-  return { customWidth, setCustomWidth, customHeight, setCustomHeight, desktopPick, setDesktopPick, pickViewRef };
+  return { customWidth, setCustomWidth, customHeight, setCustomHeight, desktopPick, setDesktopPick, pickPane, setPickPane, pickViewRef };
 }
 export type PreviewDimensions = ReturnType<typeof usePreviewDimensions>;
 export type PreviewSizing = ReturnType<typeof usePreviewSizing>;
@@ -54,19 +82,24 @@ export function usePreviewSizing(
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  const room = { desktopFramePx: options.desktopFramePx, paneWidthPx: available.width, pick: dimensions.desktopPick };
+  // The frame that owns the pick reads a resized pane as the pick's end in the same render, so no frame is drawn
+  // rescaled in between. A second frame has a pane of its own and only reads what the owner decided.
+  const resized = options.deviceShortcuts && paneResized(dimensions.pickPane, available);
+  const pick: DesktopPick = resized ? 'none' : dimensions.desktopPick;
+  const room = { desktopFramePx: options.desktopFramePx, paneWidthPx: available.width, pick };
   const width = previewFrameWidth(device, customWidth, breakpoints, room);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   // Every explicit choice of a device goes through here: the buttons, their keys and Fit.
   const pickDevice = (next: PreviewDevice): void => {
     if (next === 'desktop') {
+      dimensions.setPickPane(undefined);
       dimensions.setDesktopPick('asked');
     }
     onDevice(next);
   };
   useDeviceShortcuts(breakpoints, options, pickDevice);
-  useDesktopPickOwner(device, dimensions, breakpoints, available.width, options);
+  useDesktopPickOwner(device, dimensions, breakpoints, available, options);
   useEffect(() => {
     if (device !== 'custom') {
       setCustomWidth(undefined);
@@ -130,7 +163,7 @@ export interface DesktopRoom {
  * width belongs to the custom device: read on any other, it drew one frame at the old custom
  * width after a device button was pressed, until the effect in usePreviewSizing cleared it.
  * Desktop fills the pane, at 100% and with no frame, unless a pick of it is held in a pane too narrow for the desktop
- * layout. Resizing alone never scales the page: it reflows, as in a browser window that size.
+ * layout. Resizing never scales the page: it ends a pick, and the page reflows, as in a browser window that size.
  */
 export function previewFrameWidth(
   device: PreviewDevice,
@@ -206,15 +239,15 @@ export function previewFillBounds(device: PreviewDevice, breakpoints: readonly R
 }
 
 // The frame that listens for the device keys keeps the pick: it stores where it stands in its own pane, drops it for
-// another device, and drops it when what the canvas shows changes. Opening a page is not choosing Desktop.
+// another device, a resize of that pane, or a change of what the canvas shows. Opening a page is not choosing Desktop.
 function useDesktopPickOwner(
   device: PreviewDevice,
   dimensions: PreviewDimensions,
   breakpoints: readonly ResolvedBreakpoint[],
-  paneWidthPx: number,
+  pane: PaneSize,
   options: PreviewSizingOptions,
 ): void {
-  const { desktopPick, setDesktopPick, pickViewRef } = dimensions;
+  const { desktopPick, setDesktopPick, pickPane, setPickPane, pickViewRef } = dimensions;
   const owns = options.deviceShortcuts;
   const viewKey = options.viewKey;
   useLayoutEffect(() => {
@@ -226,12 +259,32 @@ function useDesktopPickOwner(
     }
     pickViewRef.current = viewKey;
   }, [owns, viewKey, pickViewRef, setDesktopPick]);
-  const resolved = device === 'desktop' ? resolveDesktopPick(desktopPick, paneWidthPx, desktopRange(breakpoints)) : 'none';
+  const stands = device === 'desktop' ? resolveDesktopPick(desktopPick, pane.width, desktopRange(breakpoints)) : 'none';
+  const resolved: DesktopPick = paneResized(pickPane, pane) ? 'none' : stands;
+  const held = resolved === 'narrow' || resolved === 'wide';
   useLayoutEffect(() => {
-    if (owns && resolved !== desktopPick) {
+    if (!owns) {
+      return;
+    }
+    if (resolved !== desktopPick) {
       setDesktopPick(resolved);
     }
-  }, [owns, resolved, desktopPick, setDesktopPick]);
+    // A pick that is over holds no pane; `asked` has not been measured yet.
+    if (!held && resolved !== 'asked' && pickPane !== undefined) {
+      setPickPane(undefined);
+    }
+  }, [owns, resolved, held, desktopPick, setDesktopPick, pickPane, setPickPane]);
+  // Once the pick's own layout has settled, the pane as it then stands is the one the pick is held in.
+  const latest = useRef(pane);
+  latest.current = pane;
+  const settling = owns && held && pickPane === undefined;
+  useEffect(() => {
+    if (!settling) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setPickPane(latest.current), DESKTOP_PICK_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [settling, setPickPane]);
 }
 
 // Measures the canvas. During a side-panel drag the canvas follows the panel live, by CSS

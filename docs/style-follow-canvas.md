@@ -49,12 +49,14 @@ device key, Fit, the style panel's Base, and an app's `canvas.setDevice`. What t
 | is narrower | `narrow`: the project's Desktop width, framed and scaled to fit, as typing it would |
 | reaches an `up` breakpoint | `wide`: the page stops one pixel short of it, centred and unscaled |
 
-A held pick lasts while the pane stays outside the range on that side. As soon as the pane has the
-range it is over and does not come back, so shrinking afterwards reflows. Another device, another
-page and a reload end it too. It is not saved across restarts. The preview mode reads the pick and
-draws it in its own stage; only the canvas, which listens for the device keys, changes it. In the
-range, where the scrollbar's gutters would push the page below it, they give way first.
-
+A `narrow` or `wide` pick is one look. The next resize of the canvas pane, either way and whether or not it is now
+wide enough, ends it and the ordinary canvas is back: the app window, and a side panel dragged, opened or closed, since
+each resizes the pane. Not counted: a difference of up to `DESKTOP_PICK_JITTER_PX` from the size the pick is held at, and
+whatever moves the pane in the `DESKTOP_PICK_SETTLE_MS` after the pick (the layout the pick itself causes). Choosing
+Desktop again looks again. Another device, another page and a reload end it too. It is not saved across restarts. A
+typed width is not a pick: it stays, and is scaled to fit as the pane changes. The preview mode reads the pick and draws
+it in its own stage; only the canvas, which listens for the device keys, changes it. In the range, where the scrollbar's
+gutters would push the page below it, they give way first.
 ## Where a picked row puts the canvas
 
 `rowPlacement` answers, and it only keeps a width at which following picks that very row, so the
