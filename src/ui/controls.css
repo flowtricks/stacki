@@ -26,8 +26,9 @@ button {
    `:where()` keeps the exclusion from changing what this rule beats elsewhere.
    Nor on a primary button: its hover is the brighter accent (`button.primary`
    below), and a component class on it (`.apps-open.primary`) must never lose its
-   fill to this grey wash, whichever stylesheet the bundle puts first. */
-button:hover:not(:disabled):where(:not(.primary, .style-panel-host *, .style-panel-surface *)) {
+   fill to this grey wash, whichever stylesheet the bundle puts first. Nor on a colour swatch: its fill is the colour
+   (or the checkerboard under a transparent one), which must read the same under the pointer. */
+button:hover:not(:disabled):where(:not(.primary, .u-color-swatch, .style-panel-host *, .style-panel-surface *)) {
   background: var(--bg-active);
 }
 button:disabled {
