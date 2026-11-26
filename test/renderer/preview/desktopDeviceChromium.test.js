@@ -114,7 +114,8 @@ app.whenReady().then(async () => {
         // Desktop as the canvas opens on it, then chosen.
         output.modes.unchosen = await host(READ);
         await host('window.harness.setDevice("desktop")');
-        await sleep(400);
+        // Waits, bounded by frames, for what the next read checks: the page laid out at the Desktop width.
+        await host('new Promise((resolve) => { let frames = 0; const tick = () => { frames += 1; if (frames > 600 || document.querySelector(".frame-clip iframe").contentWindow.innerWidth === ${DESKTOP_WIDTH_PX}) { requestAnimationFrame(() => resolve(frames)); } else { requestAnimationFrame(tick); } }; requestAnimationFrame(tick); })');
       }
       output.modes[mode] = await host(READ);
       const image = await win.webContents.capturePage();
