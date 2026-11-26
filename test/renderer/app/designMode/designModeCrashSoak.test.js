@@ -64,6 +64,7 @@ async function orchestrate() {
     return;
   }
   const { ROOT, repoPath } = require('../../../helpers/sources.js');
+  const { pollUntil } = require('../../../helpers/waitFor.js');
   const failures = [];
   let checked = 0;
   const check = (what, condition, detail) => {
@@ -132,9 +133,15 @@ async function orchestrate() {
     check('the app was killed outright, mid session', crashed.signal === 'SIGKILL' && fs.existsSync(note), JSON.stringify(crashed));
     const kept = JSON.parse(fs.readFileSync(note, 'utf8'));
     const sandboxes = path.join(userData, 'design-sandboxes');
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
-    const orphans = processesNaming(kept.sandboxRoot);
-    console.log(`NOTE running in the copy before the crash ${kept.running.length}, still running 3 s after it ${orphans.length}`);
+    // Up to three seconds for what the app started to end with it: the number is a note, the checks come after the restart.
+    const { value: orphans } = await pollUntil({
+      read: () => processesNaming(kept.sandboxRoot),
+      until: (found) => found.length === 0,
+      what: 'the processes of the copy to end',
+      pollIntervalMs: 100,
+      pollCountMax: 30,
+    });
+    console.log(`NOTE running in the copy before the crash ${kept.running.length}, still running after up to 3 s ${orphans.length}`);
     check('the crash left the copy behind, which is what the next start must clean up', fs.readdirSync(sandboxes).length === 1);
     check('the project is byte-identical after the crash', treeDigest(project) === before);
     const after = await launch('after');

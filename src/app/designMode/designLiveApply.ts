@@ -25,14 +25,14 @@ export function applyLiveReport(document: Document, report: LiveReport): void {
     setOrRemove(target, 'style', element.style);
     setOrRemove(target, 'class', element.className);
   }
-  let variables = document.getElementById(VARIABLES_ID) ?? undefined;
-  if (variables === undefined && report.variables !== '') {
-    variables = document.createElement('style');
-    variables.id = VARIABLES_ID;
-    document.head.appendChild(variables);
+  let variablesElement = document.getElementById(VARIABLES_ID) ?? undefined;
+  if (variablesElement === undefined && report.variables !== '') {
+    variablesElement = document.createElement('style');
+    variablesElement.id = VARIABLES_ID;
+    document.head.appendChild(variablesElement);
   }
-  if (variables !== undefined) {
-    variables.textContent = report.variables;
+  if (variablesElement !== undefined) {
+    variablesElement.textContent = report.variables;
   }
 }
 

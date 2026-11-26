@@ -17,6 +17,12 @@ const path = require('node:path');
 const WAIT_MS_MAX = 12_000;
 const OPEN_WAIT_MS_MAX = 90_000;
 const POLL_MS = 100;
+/** Equal readings that count as settled: a second of no change, or longer where something must not happen. */
+const STEADY_POLLS = 10;
+const QUIET_POLLS = 15;
+const SETTLED_FRAME_POLLS = 25;
+const SELECT_PRESSES_MAX = 5;
+const STEADY_POLLS_MAX = 150;
 const CHECKS_MIN = 20;
 
 async function orchestrate() {
@@ -82,7 +88,7 @@ async function runInElectron({ window, project, options }) {
   const { app, nativeImage } = require('electron');
   const { createDriver } = require('../../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../../helpers/e2e/panelRecorder.js');
-  const { waitFor } = require('../../../helpers/waitFor.js');
+  const { waitFor, waitForSteady } = require('../../../helpers/waitFor.js');
   const { designFenceState } = require('#dist/electron/lib/designMode/designFence.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [], notes: {} };
@@ -96,6 +102,9 @@ async function runInElectron({ window, project, options }) {
   const shot = (name) => driver.screenshot(path.join(options.outDirectory, `${name}.png`)).catch(() => undefined);
   const until = (what, expression, test = Boolean, waitMsMax = WAIT_MS_MAX) =>
     waitFor({ what, read: () => driver.evaluate(expression).catch(() => undefined), until: test, pollIntervalMs: POLL_MS, pollCountMax: waitMsMax / POLL_MS });
+  /** Waits until what `read` answers stops changing, and answers it. */
+  const steady = (what, read, steadyPollCount = STEADY_POLLS) =>
+    waitForSteady({ what, read, until: () => true, pollIntervalMs: POLL_MS, steadyPollCount, pollCountMax: STEADY_POLLS_MAX });
   const only = process.env.DM_STEPS === undefined ? undefined : new RegExp(process.env.DM_STEPS);
   const run = async (what, act) => {
     if (only !== undefined && !only.test(what)) {
@@ -209,7 +218,6 @@ async function runInElectron({ window, project, options }) {
   );
   await reopened();
   await until('the card in the frame', inFrame('#card', 'rect.height'), (height) => height > 100, OPEN_WAIT_MS_MAX);
-  await driver.sleep(2_500);
 
   const picturesOf = (frameId) =>
     `(() => { const d = document.querySelector('.dm-tile[data-dm-tile="${frameId}"] .dm-document:not([style*="visibility: hidden"])')?.contentDocument; if (!d || !d.querySelector('#card')) return undefined; const all = [...d.querySelectorAll('img')]; return all.every((i) => i.complete) ? JSON.stringify({ images: all.map((i) => ({ id: i.id || i.src.slice(0, 40), width: i.naturalWidth, data: i.src.startsWith('data:') })), poster: d.querySelector('#poster-video').poster.startsWith('data:'), background: d.defaultView.getComputedStyle(d.querySelector('#background-picture')).backgroundImage.startsWith('url("data:') }) : undefined; })()`;
@@ -217,6 +225,16 @@ async function runInElectron({ window, project, options }) {
     const found = JSON.parse(text);
     return found.images.length >= 7 && found.images.every((image) => image.width > 0) && found.poster && found.background;
   };
+
+  // The frame's picture is taken again while the copy's page settles: wait until the same document holds still.
+  await steady(
+    'the frame\u2019s document to hold still',
+    () =>
+      driver.evaluate(
+        `(() => { const d = ${FRAME}; if (!d) return undefined; d.__dmSeen ??= Math.random(); return d.__dmSeen + ':' + d.documentElement.outerHTML.length; })()`,
+      ),
+    SETTLED_FRAME_POLLS,
+  );
 
   await run('the pictures show in the frame, in a duplicate too', async () => {
     const first = await until('the pictures', picturesOf('f1'));
@@ -228,7 +246,7 @@ async function runInElectron({ window, project, options }) {
     await driver.key('d', { modifiers: ['meta'] });
     const copy = await until('the copy\u2019s pictures', picturesOf('f2'));
     check('and in its duplicate', allDrawn(copy), copy);
-    await driver.sleep(1_500);
+    await steady('the duplicate to settle', () => driver.evaluate(picturesOf('f2')));
     await driver.key('Delete');
     await until('one frame again', `document.querySelectorAll('.dm-tile').length === 1`);
   });
@@ -246,9 +264,20 @@ async function runInElectron({ window, project, options }) {
       `(() => { const at = ${framePoint(selector, fx, fy)}; const plane = document.querySelector('.dm-plane'); if (!at || !plane) return false; const box = plane.getBoundingClientRect(); if (at.y > box.top + 60 && at.y < box.bottom - 220 && at.x > box.left + 20 && at.x < box.right - 20) return true; plane.dispatchEvent(new WheelEvent('wheel', { deltaX: at.x - (box.left + box.width / 2), deltaY: at.y - (box.top + box.height / 2), bubbles: true, cancelable: true })); return false; })()`,
     );
     await driver.settle();
-    const at = await until(`${selector} in the frame`, framePoint(selector, fx, fy));
-    await driver.pointerPress(at);
-    await until('the outline', `!!document.querySelector('[data-dm-outline="picked"]')`);
+    // A press that lands while the canvas is still showing another frame's version selects nothing: it is pressed
+    // again, within a bound, as the main soak does (designModeSoak.test.js selectOnCanvas).
+    for (let attempt = 1; ; attempt += 1) {
+      const at = await until(`${selector} in the frame`, framePoint(selector, fx, fy));
+      await driver.pointerPress(at);
+      const outlined = until('the outline', `!!document.querySelector('[data-dm-outline="picked"]')`, Boolean, 3_000);
+      if (attempt === SELECT_PRESSES_MAX) {
+        await outlined;
+        break;
+      }
+      if (await outlined.then(Boolean, () => false)) {
+        break;
+      }
+    }
     await driver.settle();
   };
   const handle = (name) => `document.querySelector('[data-dm-handle="${name}"]')`;
@@ -282,12 +311,13 @@ async function runInElectron({ window, project, options }) {
       throw new Error('the Size field chip was not found');
     }
     await driver.pointerPress(place);
-    await driver.sleep(800);
+    const option = `[...document.querySelectorAll('button, [role="option"], [role="menuitem"]')].find((b) => b.getBoundingClientRect().width > 0 && /(^|[^a-z0-9-])h3([^0-9]|$)/i.test((b.textContent || '').trim()))`;
+    await until('the h3 value', centre(option));
+    // The chooser opens in motion: the value is pointed at where it comes to rest.
+    const over = await steady('the chooser to hold still', () => driver.evaluate(centre(option)));
     report.notes.chooser = await driver.evaluate(
       `JSON.stringify([...document.querySelectorAll('button, [role="option"], [role="menuitem"]')].filter((b) => /(^|[^a-z])h3([^0-9]|$)/i.test(b.textContent || '')).map((b) => [b.className, b.textContent.trim().slice(0, 30)]).slice(0, 6))`,
     );
-    const option = `[...document.querySelectorAll('button, [role="option"], [role="menuitem"]')].find((b) => b.getBoundingClientRect().width > 0 && /(^|[^a-z0-9-])h3([^0-9]|$)/i.test((b.textContent || '').trim()))`;
-    const over = await until('the h3 value', centre(option));
     let nudge = 0;
     const hovered = await waitFor({
       what: 'the preview in the frame',
@@ -309,7 +339,7 @@ async function runInElectron({ window, project, options }) {
       () => undefined,
     );
     check('leaving the chooser puts the frame back exactly', (await size()) === rest, await size());
-    await driver.sleep(1_500);
+    await steady('the page file to hold still', () => pageNow(), QUIET_POLLS);
     check('and nothing was saved', pageNow() === file);
   });
 
@@ -333,7 +363,7 @@ async function runInElectron({ window, project, options }) {
     driver.contents.sendInputEvent({ type: 'mouseDown', x: at.x, y: at.y, button: 'left', clickCount: 1 });
     for (let step = 1; step <= 6; step += 1) {
       move({ x: at.x, y: at.y + Math.round((dragBy * step) / 6) }, 'held');
-      await driver.sleep(40);
+      await driver.evaluate('new Promise((drawn) => requestAnimationFrame(() => drawn(0)))');
     }
     // A hidden window delivers pointer moves on its own frames: the last one is repeated until the frame has it.
     await waitFor({
@@ -353,7 +383,11 @@ async function runInElectron({ window, project, options }) {
     await shot('02-resizing');
     driver.contents.sendInputEvent({ type: 'mouseUp', x: at.x, y: at.y + dragBy, button: 'left', clickCount: 1 });
     await waitFor({ what: 'the height written', read: cardLine, until: (line) => /height: [\d.]+rem/.test(line), pollIntervalMs: POLL_MS, pollCountMax: 150 });
-    await driver.sleep(2_500);
+    const drawnAndLive = async () => [
+      await driver.evaluate(inFrame('#card', 'rect.height')),
+      await driver.canvasEvaluate(`document.querySelector('#card').getBoundingClientRect().height`),
+    ];
+    await steady('the saved height in the frame and the live page', drawnAndLive);
     const after = await driver.evaluate(inFrame('#card', 'rect.height'));
     const live = await driver.canvasEvaluate(`document.querySelector('#card').getBoundingClientRect().height`);
     report.notes.shrink = { start, heldHeight, after, live, line: cardLine().trim() };
@@ -368,8 +402,17 @@ async function runInElectron({ window, project, options }) {
   await run('content that cannot be smaller stops the handle, and the width and side handle work', async () => {
     await driver.settle();
     const at = await until('the bottom handle', centre(handle('s')));
+    const taller = cardLine();
     await driver.drag(at, { x: at.x, y: 80 }, { steps: 10, label: 'as small as it goes' });
-    await driver.sleep(2_500);
+    const savedAndDrawn = async () => [cardLine(), await driver.evaluate(inFrame('#card', '[rect.width, rect.height]'))];
+    await waitFor({
+      what: 'the smallest height written',
+      read: cardLine,
+      until: (line) => line !== taller,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: STEADY_POLLS_MAX,
+    });
+    await steady('the smallest height to settle', savedAndDrawn);
     const smallest = await driver.evaluate(inFrame('#card', '({ height: rect.height, content: e.scrollHeight })'));
     const written = Number(/(?:^|[ ;"])height: ([\d.]+)rem/.exec(cardLine())?.[1]) * 16;
     check('the height written is the height drawn', Math.abs(written - smallest.height) < 2, `${written} vs ${smallest.height} ${cardLine()}`);
@@ -378,8 +421,10 @@ async function runInElectron({ window, project, options }) {
     await driver.settle();
     const side = await until('the side handle', centre(handle('e')));
     const zoom = (await driver.evaluate(framePoint('#card'))).zoom;
+    const wider = cardLine();
     await driver.drag(side, { x: side.x - Math.round(200 * zoom), y: side.y }, { steps: 8, label: 'narrower' });
-    await driver.sleep(2_500);
+    await waitFor({ what: 'the width written', read: cardLine, until: (line) => line !== wider, pollIntervalMs: POLL_MS, pollCountMax: STEADY_POLLS_MAX });
+    await steady('the narrower width to settle', savedAndDrawn);
     const narrower = await driver.evaluate(inFrame('#card', 'rect.width'));
     check('the right handle makes it narrower', Math.abs(width - narrower - 200) < 6, `${width} -> ${narrower} ${cardLine()}`);
   });
@@ -389,7 +434,7 @@ async function runInElectron({ window, project, options }) {
     const states = [];
     for (const selector of ['.dm-start-over', '.dm-send', '.dm-exit']) {
       move(await until(selector, centre(`document.querySelector('${selector}')`)));
-      await driver.sleep(300);
+      await steady(`${selector} hovered`, () => driver.evaluate(opaque), 3);
       states.push(...JSON.parse(await driver.evaluate(opaque)));
       await shot('04-hover' + selector.replace('.', '-'));
     }
@@ -426,8 +471,9 @@ async function runInElectron({ window, project, options }) {
       ['1', ['shift']],
     ]) {
       await driver.key(key, { modifiers });
-      await driver.sleep(300);
-      seen.push(await driver.evaluate(world));
+      // A key that changes nothing is for the check below to report, so the wait for a change does not throw.
+      await until(`the zoom after ${key}`, world, (value) => value !== seen.at(-1), 3_000).catch(() => undefined);
+      seen.push(await steady('the zoom to settle', () => driver.evaluate(world), 3));
     }
     check('the zoom keys zoom the canvas', seen.every((value, i) => i === 0 || value !== seen[i - 1]) && /scale\(1\)/.test(seen[4]), seen.join(' ; '));
   });
@@ -444,7 +490,9 @@ async function runInElectron({ window, project, options }) {
     const device = await driver.evaluate(`document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]').getBoundingClientRect().width`);
     await driver.evaluate(`document.activeElement?.blur(); 0`);
     await driver.key('4');
-    await driver.sleep(800);
+    await steady('the hidden preview to hold still', () =>
+      driver.evaluate(`document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]').getBoundingClientRect().width`),
+    );
     check(
       'a breakpoint key changes nothing hidden',
       (await driver.evaluate(`document.querySelector('.preview-frame-wrap iframe[aria-hidden="false"]').getBoundingClientRect().width`)) === device,
@@ -462,7 +510,8 @@ async function runInElectron({ window, project, options }) {
     await driver.evaluate(
       `document.querySelector('.structure-node') ? 0 : ([...document.querySelectorAll('.rail button')].find((b) => /navigator/i.test(b.getAttribute('aria-label') || ''))?.click(), 0)`,
     );
-    await driver.sleep(800);
+    await until('a component row', centre(`[...document.querySelectorAll('.structure-node')].find((n) => /Heading|Section/.test(n.textContent))`));
+    await driver.settle();
     await rightPress('a component row', `[...document.querySelectorAll('.structure-node')].find((n) => /Heading|Section/.test(n.textContent))`);
     const menu = await until('the element menu', `[...document.querySelectorAll('[role="menu"], .ctx-menu')].map((m) => m.textContent).join(' ') || undefined`);
     check('no Set component defaults', !/component defaults/i.test(menu), menu);
@@ -476,15 +525,21 @@ async function runInElectron({ window, project, options }) {
 
   await run('close stays reachable in a narrow window', async () => {
     const [width, height] = window.getContentSize();
+    const wide = await driver.evaluate('innerWidth');
     window.setContentSize(900, 700);
-    await driver.sleep(1_200);
+    // The window stops at the app's own narrowest, which is wider than asked for.
+    await until('a narrower window', 'innerWidth', (inner) => inner < wide);
+    await steady('the bar to settle', () =>
+      driver.evaluate(`JSON.stringify([innerWidth, document.querySelector('.dm-bar .dm-exit').getBoundingClientRect()])`),
+    );
     const exit = await driver.evaluate(
       `(() => { const e = document.querySelector('.dm-bar .dm-exit'); const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return r.left >= 0 && r.right <= innerWidth && !!hit && e.contains(hit); })()`,
     );
     check('close is whole and uncovered at 900 pixels', exit);
     await shot('09-narrow');
     window.setContentSize(width, height);
-    await driver.sleep(800);
+    await until('the window back', 'innerWidth', (inner) => inner === wide);
+    await driver.settle();
   });
 
   await run('Send to AI drafts one sentence and a picture of the whole page', async () => {
@@ -510,7 +565,7 @@ async function runInElectron({ window, project, options }) {
     );
     await reopened();
     await until('the picture in the draft', `document.querySelectorAll('.ai-composer img').length`, (count) => count >= 1);
-    await driver.sleep(1_500);
+    await steady('the draft to stay unsent', () => captured.length, QUIET_POLLS);
     check('nothing was sent by itself', captured.length === 0);
     await press('send', `[...document.querySelectorAll('.ai-composer button')].find((x) => /^send/i.test(x.getAttribute('aria-label') || '') && !x.disabled)`);
     await waitFor({ what: 'the prompt', read: () => captured.length, until: (count) => count === 1, pollIntervalMs: 100, pollCountMax: 150 });

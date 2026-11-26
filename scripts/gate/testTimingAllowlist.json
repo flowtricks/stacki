@@ -371,8 +371,8 @@
     {
       "file": "test/electron/documents/pageEdit.test.ts",
       "rule": "fixed-pause",
-      "count": 2,
-      "reason": "One bounded quiet-wait (40 polls of 50 ms until the watcher goes quiet) and one negative-space window (no read between two edits) that cannot be awaited.",
+      "count": 1,
+      "reason": "One negative-space window (no read between two edits) that cannot be awaited.",
       "added": "2026-11-19",
       "expires": "2027-05-18"
     },
