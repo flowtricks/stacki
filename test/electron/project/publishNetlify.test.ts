@@ -55,7 +55,8 @@ function site(context: TestContext, scenario: FakeNetlifyChanges = {}) {
 function signIn(context: TestContext, root: string): PublishingAccount {
   setToolPathHome(root);
   const account = new PublishingAccount();
-  account.netlifyTiming = { intervalMs: 5, checkTimeoutMs: 600, failuresMax: 3 };
+  // Long enough for Node to start on a loaded Windows runner: only the hanging check is meant to run out of time.
+  account.netlifyTiming = { intervalMs: 5, checkTimeoutMs: 5_000, failuresMax: 3 };
   context.after(() => {
     account.request(root, { ...request, action: 'cancel' });
   });

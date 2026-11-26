@@ -37,7 +37,7 @@ import {
 const REFUSAL = 'Not while you design';
 
 function scratch(): { readonly project: string; readonly appData: string; readonly root: string } {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-design-')));
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-design-')));
   const project = path.join(root, 'site');
   const write = (rel: string, text: string) => {
     fs.mkdirSync(path.dirname(path.join(project, rel)), { recursive: true });
@@ -57,6 +57,13 @@ function scratch(): { readonly project: string; readonly appData: string; readon
   const appData = path.join(root, 'userData');
   fs.mkdirSync(appData);
   return { project, appData, root };
+}
+
+/** Only the person may enter `directory`. Windows has no mode bits: the app data folder is the person's own there. */
+function assertPrivate(directory: string): void {
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(directory).mode & 0o777, 0o700);
+  }
 }
 
 /** Every file under `directory` and its bytes, as one string: equal strings mean an untouched tree. */
@@ -84,11 +91,11 @@ test('the sandbox is one private copy outside the project; the project is its or
   assert.ok(created.ok);
   const { sandbox } = created;
   assert.ok(sandbox.root.startsWith(sandboxesRoot(appData)));
-  assert.equal(fs.statSync(sandboxesRoot(appData)).mode & 0o777, 0o700);
-  assert.equal(fs.statSync(sandbox.root).mode & 0o777, 0o700);
+  assertPrivate(sandboxesRoot(appData));
+  assertPrivate(sandbox.root);
   assert.equal(fs.readFileSync(path.join(sandbox.live, '.env'), 'utf8'), 'SECRET=1\n');
   assert.ok(fs.existsSync(path.join(sandbox.live, 'node_modules/astro/package.json')));
-  assert.equal(sandbox.base, fs.realpathSync(project), 'the original is the project itself, never copied twice');
+  assert.equal(sandbox.base, fs.realpathSync.native(project), 'the original is the project itself, never copied twice');
   assert.ok(!fs.existsSync(path.join(sandbox.live, 'studio/node_modules')), "a nested app's dependencies are skipped");
   assert.ok(!fs.existsSync(path.join(sandbox.live, 'studio/dist')), 'and its build');
   assert.ok(fs.existsSync(path.join(sandbox.live, 'studio/src/index.ts')), 'its source is copied');
@@ -109,10 +116,10 @@ test('a project that links outside itself, or keeps its packages above it, is re
   assert.deepEqual(await createSandbox({ appDataRoot: hoisted.appData, realRoot: hoisted.project }), { ok: false, reason: 'outside-link' });
 
   const inside = scratch();
-  fs.symlinkSync('../styles', path.join(inside.project, 'src/pages/styles'));
+  fs.symlinkSync(path.join('..', 'styles'), path.join(inside.project, 'src/pages/styles'));
   const kept = await createSandbox({ appDataRoot: inside.appData, realRoot: inside.project });
   assert.ok(kept.ok);
-  assert.equal(fs.readlinkSync(path.join(kept.sandbox.live, 'src/pages/styles')), '../styles');
+  assert.equal(fs.readlinkSync(path.join(kept.sandbox.live, 'src/pages/styles')), path.join('..', 'styles'));
 });
 
 test('a sandbox a crash left behind is swept, with its .env; private folders are checked', async () => {
@@ -125,7 +132,7 @@ test('a sandbox a crash left behind is swept, with its .env; private folders are
   assert.equal(await sweepSandboxes(path.join(appData, 'never-made')), 0);
   const folder = path.join(appData, 'private');
   ensurePrivateDirectory(folder);
-  assert.equal(fs.statSync(folder).mode & 0o777, 0o700);
+  assertPrivate(folder);
 });
 
 test('frames: what live differs by is captured, applied both ways, and described as hunks', async () => {
@@ -166,7 +173,7 @@ test('drafts keep no secrets, notice a changed project, and refuse a kept path t
   });
   const text = fs.readFileSync(path.join(draftFolder(appData, project), 'draft.json'), 'utf8');
   assert.ok(!text.includes(Buffer.from('SECRET=2').toString('base64')));
-  assert.equal(fs.statSync(draftFolder(appData, project)).mode & 0o777, 0o700);
+  assertPrivate(draftFolder(appData, project));
   const read = readDraft({ appDataRoot: appData, realRoot: project, base: created.sandbox.base });
   assert.equal(read.kind, 'draft');
   assert.ok(read.kind === 'draft' && !read.stale && read.draft.frames[0]?.files.size === 1);

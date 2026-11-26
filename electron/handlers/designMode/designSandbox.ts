@@ -135,7 +135,7 @@ export async function createSandbox(input: {
   ensurePrivateDirectory(parent);
   const root = path.join(parent, randomUUID());
   ensurePrivateDirectory(root);
-  if (isPathWithin(realRoot, fs.realpathSync(root))) {
+  if (isPathWithin(realRoot, fs.realpathSync.native(root))) {
     throw new Error('Assertion failed: createSandbox: the sandbox is outside the project');
   }
   // The copy keeps the project's folder name, so the window's title and project menu name the person's site.

@@ -48,7 +48,7 @@ export const FAKE_SCENARIO: FakeNetlifyScenario = {
 };
 
 /** Text no part of Stacki may ever show: the fake prints it in every failure, where a real CLI could quote a request. */
-export const FAKE_SECRET = 'nfp_fake-secret-token';
+export const FAKE_SECRET = 'fake-netlify-secret-value';
 
 const PROGRAM = String.raw`#!/usr/bin/env node
 const fs = require('node:fs');

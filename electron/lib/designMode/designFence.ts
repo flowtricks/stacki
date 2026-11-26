@@ -160,15 +160,17 @@ export function raiseDesignFence(input: {
   if (state.kind !== 'off') {
     throw new Error('Assertion failed: raiseDesignFence: one Design mode session at a time');
   }
-  const sandboxRoot = fs.realpathSync(input.sandboxRoot);
-  const realRoot = fs.realpathSync(input.realRoot);
+  // The native call, as realTarget uses: on Windows only it expands a short name (RUNNER~1), and a root and a path
+  // under it spelled two ways would not compare.
+  const sandboxRoot = fs.realpathSync.native(input.sandboxRoot);
+  const realRoot = fs.realpathSync.native(input.realRoot);
   if (isPathWithin(realRoot, sandboxRoot)) {
     throw new Error('Assertion failed: raiseDesignFence: the sandbox is outside the project');
   }
   if (isPathWithin(sandboxRoot, realRoot)) {
     throw new Error('Assertion failed: raiseDesignFence: the project is outside the sandbox');
   }
-  state = { kind: 'on', sandboxRoot, realRoot, refusal: input.refusal, appDataRoot: fs.realpathSync(input.appDataRoot) };
+  state = { kind: 'on', sandboxRoot, realRoot, refusal: input.refusal, appDataRoot: fs.realpathSync.native(input.appDataRoot) };
 }
 
 export function lowerDesignFence(): void {

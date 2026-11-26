@@ -55,6 +55,13 @@ function snapshotOf(project, folders) {
   return files;
 }
 
+// Deleted, not emptied: Electron runs as plain Node when the name is set at all.
+function electronEnvironment() {
+  const environment = { ...process.env };
+  delete environment.ELECTRON_RUN_AS_NODE;
+  return environment;
+}
+
 (async () => {
   fs.mkdirSync(SHOTS, { recursive: true });
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-canvas-root-')));
@@ -71,7 +78,7 @@ function snapshotOf(project, folders) {
       `--user-data-dir=${path.join(root, 'user-data')}`,
       project,
     ],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+    env: electronEnvironment(),
   });
   const results = {};
   const shot = async (name) => {
