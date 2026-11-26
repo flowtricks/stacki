@@ -367,8 +367,6 @@ export const messages = {
   'ai.message.retryTitle': 'Tekrar sor',
   'ai.message.showLess': 'Daha az göster',
   'ai.message.showMore': 'Daha fazla göster',
-  'ai.modes.active': '{mode} açık',
-  'ai.modes.menu': 'Modlar',
   'ai.notice.cannotContinue': '{agent} önceki konuşmayı sürdüremedi, bu yüzden bu sohbet yeni bir konuşma başlatır.',
   'ai.notice.cannotFork': '{agent} önceki konuşmayı bir çatala taşıyamıyor, bu yüzden bu sohbet yeni bir konuşma başlatır.',
   'ai.notice.chatFull': 'Bu sohbet dolu; yeni mesajlar artık kaydedilmiyor. Yeni bir sohbet başlatın.',

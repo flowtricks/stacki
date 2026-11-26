@@ -349,8 +349,6 @@ export const messages = {
   'ai.message.retryTitle': '再問一次',
   'ai.message.showLess': '顯示較少',
   'ai.message.showMore': '顯示更多',
-  'ai.modes.active': '{mode}已開啟',
-  'ai.modes.menu': '模式',
   'ai.notice.cannotContinue': '{agent} 無法接續先前的對話，因此此對話將重新開始。',
   'ai.notice.cannotFork': '{agent} 無法將先前的對話帶入分叉，因此此對話將重新開始。',
   'ai.notice.chatFull': '此對話已滿；新訊息將不再儲存。請開始新對話。',

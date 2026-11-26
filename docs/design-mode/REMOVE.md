@@ -6,15 +6,15 @@ project.
 
 ## Switching it off without removing it
 
-Set `DESIGN_MODE_ENABLED` to `false` in `shared/designMode/designModeContract.ts`. The AI panel header's
-Modes menu then has no Design mode row (comment pins stay; with no mode registered the button is not drawn),
+Set `DESIGN_MODE_ENABLED` to `false` in `shared/designMode/designModeContract.ts`. The AI panel header
+then has no Design mode button (comment pins keep theirs; with no mode registered no mode button is drawn),
 the canvas frame installs no listener, and the dev server plugin has no hooks.
 
-## The Modes menu
+## The mode buttons
 
-Design mode shares the header's one Modes menu with comment pins. It registers its row from its own host
+Design mode has a button in the AI panel's header, beside comment pins' button, before "+". It registers it from its own host
 (`src/app/designMode/DesignModeHost.tsx`, with `registerPanelMode` from `src/features/ai/panelModes.ts`), and
-the menu, its registry and comment pins know nothing of it (the boundary test holds that). The registry keeps
+the header's buttons (`src/features/ai/sessions/ModeButtons.tsx`), their registry and comment pins know nothing of it (the boundary test holds that). The registry keeps
 one mode on at a time: turning Design mode on ends comment mode (an open pin is kept, saved when it has
 content), and turning comment pins on leaves Design mode (its frames are saved as a draft first).
 
@@ -61,7 +61,10 @@ content), and turning comment pins on leaves Design mode (its frames are saved a
      and the comment line above it.
 3. Run `npm run build:runtime` (the dev server's generated config is written again at its next start).
 
-Kept: the Modes menu and its registry (`src/features/ai/panelModes.ts`, `sessions/ModesMenu.tsx`), which
+Kept: the mode buttons and their registry (`src/features/ai/panelModes.ts`, `sessions/ModeButtons.tsx`), which
 belong to comment pins too. Nothing outside the list above changes.
+
+Left behind: the `brush` entry of `src/ui/central/centralGeometry.tsx` (Central's "brush, color"), which only
+Design mode draws (its header button and its bar). Delete that entry too, unless another icon has come to use it.
 
 Drafts already saved stay in the app's IndexedDB until its data is cleared; nothing reads them.

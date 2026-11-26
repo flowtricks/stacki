@@ -395,8 +395,10 @@
   min-width: 0;
 }
 
-/* The Modes button in the panel's header: on, it wears the accent. */
-.ai-modes-button.is-active {
+/* A mode's button in the panel's header: on, it wears the accent, hovered too. Why the hover selector: the ghost
+   button's own hover (`button.ghost:hover:not(:disabled)`) outweighs the class alone and would turn it grey. */
+.ai-header .ai-mode-button.is-active,
+.ai-header .ai-mode-button.is-active:hover:not(:disabled) {
   color: var(--accent);
   background: var(--accent-soft);
 }

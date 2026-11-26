@@ -1,4 +1,4 @@
-// Comment mode's entry in the AI panel's Modes menu (panelModes.ts). The Desktop shell registers it while its
+// Comment mode's button in the AI panel's header (panelModes.ts). The Desktop shell registers it while its
 // canvas host is mounted (src/app/shell/DesktopPins.tsx), so the mode is offered only where pins can be dropped.
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { bubbleText as centralBubbleText } from '../../../ui/central/centralGeometry';

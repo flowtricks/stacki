@@ -4,7 +4,7 @@ import { centralIcon } from '../../../ui/central/CentralIcon';
 import {
   add,
   arrowRotateCounterClockwise,
-  canvas,
+  brush,
   chevronDown,
   close,
   component,
@@ -29,7 +29,8 @@ import {
   expand,
 } from '../../../ui/central/centralGeometry';
 
-export const DesignModeIcon = centralIcon(canvas);
+/** Design mode's own mark (Central's `brush`): its header button and its bar. Only Design mode draws it. */
+export const DesignModeIcon = centralIcon(brush);
 export const MoveToolIcon = centralIcon(cursorClick);
 export const TextToolIcon = centralIcon(text);
 export const BoxToolIcon = centralIcon(square);

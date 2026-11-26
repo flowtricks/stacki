@@ -1,4 +1,4 @@
-// Comment pins: notes the person drops on elements of a page in comment mode (the AI panel's Modes menu),
+// Comment pins: notes the person drops on elements of a page in comment mode (a button in the AI panel's header),
 // each a small message of its own with words and images, sent to the open chat together with "Send all".
 // This file is the contract every side reads (docs/contracts.md, "Comment pins"): the board the renderer
 // keeps and the main process stores, the brief a send carries on `ai:prompt`, what the transcript keeps of

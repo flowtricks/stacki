@@ -1,7 +1,7 @@
 // Design mode (experimental; docs/design-mode/REMOVE.md lists how to take it out): where it meets the app.
 //
 // The app mounts this once (src/app/shell/AppShell.tsx, one marked line). While mounted it registers the "Design
-// mode" row of the AI panel header's Modes menu (src/features/ai/panelModes.ts), which turns every other mode off
+// mode" button of the AI panel header (src/features/ai/panelModes.ts), which turns every other mode off
 // when this one goes on and this one off when another does. While Design mode is on, this
 // covers the editor (everything but the AI panel) with the design workspace and keeps the editor from acting:
 // the window is held (src/ui/busyLock.ts), so the menu's Undo, Redo, Paste, Insert and Reload do nothing to the
@@ -77,7 +77,7 @@ export type DesignHostSource = Pick<
   'project' | 'devUrl' | 'pageUrlPath' | 'currentPage' | 'pageState' | 'scan' | 'leftTab' | 'setLeftTab' | 'selectedId' | 'setSelectedId' | 'showToast'
 >;
 
-/** Where Design mode sits in the Modes menu: after comment pins (10). */
+/** Where Design mode's header button sits: after comment pins (10), before "+". */
 const MODES_MENU_ORDER = 20;
 
 function pageOf(app: DesignHostSource, words: DesignWords): DesignPage | undefined {
@@ -169,7 +169,7 @@ function DesignModeGate({ app }: { readonly app: DesignHostSource }) {
   const { locale } = useLocale();
   const latest = useRef({ app, words });
   latest.current = { app, words };
-  // The Modes menu's row, registered again when the language changes so its name and the button follow it.
+  // The header button, registered again when the language changes so its name follows it.
   useEffect(() => {
     if (!DESIGN_MODE_ENABLED) {
       return undefined;

@@ -1,5 +1,5 @@
 // Goal: Design mode never writes to the project. In the real app, every design gesture runs on a copy of the
-// fixture site (entering from the AI panel header's Modes menu, beside comment pins, each turning the other off;
+// fixture site (entering from the AI panel header's Design mode button, beside comment pins', each turning the other off;
 // the editor's insert, panel and preview chords doing nothing meanwhile; click, deep and double-click selection; reorder
 // by drag; Cmd-drag free placement; arrow nudges; duplicate, hide, delete; menu Undo and Redo; a style typed in the
 // inspector; a resize handle; typing text; a prop switched through a real dev server render; unlink; reset element;
@@ -138,8 +138,7 @@ const framePoint = (index, finder) => `(() => {
 const byText = (text, tag = '*') =>
   `(doc) => [...doc.querySelectorAll(${JSON.stringify(tag)})].find((e) => (e.textContent || '').trim() === ${JSON.stringify(text)})`;
 const frameDocument = (index) => `[...document.querySelectorAll('.dm-frame-iframe:not(.dm-frame-peek)')][${index}].contentDocument`;
-const MENU_ROWS = `[...document.querySelectorAll('[role^="menuitem"]')].filter((e) => e.getClientRects().length > 0)`;
-const modeRow = (name) => `${MENU_ROWS}.findLast((r) => ${name}.test(r.textContent || ''))`;
+const modeButton = (name) => `[...document.querySelectorAll('.ai-header .ai-mode-button')].find((b) => ${name}.test(b.getAttribute('aria-label') || ''))`;
 const centre = (selector) =>
   `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return undefined; const r = e.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`;
 
@@ -167,14 +166,12 @@ async function runInElectron({ window, project, options }) {
     });
   const point = async (what, expression) => until(what, expression, (value) => value !== undefined && value !== null);
   const count = (expression) => driver.evaluate(expression);
-  /** Opens the AI panel header's Modes menu and picks the row matching `name`. */
+  /** Turns on the mode whose header button is named `name`. */
   const pickMode = async (name) => {
-    await until('the Modes button', `!!document.querySelector('.ai-modes-button')`);
-    // A menu just chosen from is still closing: a click on the button in the same moment is taken as part of it.
+    await until(`the ${name.source} button`, `!!${modeButton(name)}`);
     await driver.settle();
-    await driver.evaluate(`document.querySelector('.ai-modes-button').click()`);
-    await until(`the ${name.source} row`, `!!${modeRow(name)}`);
-    await driver.evaluate(`${modeRow(name)}.click()`);
+    await driver.evaluate(`${modeButton(name)}.click()`);
+    await until(`the ${name.source} button pressed`, `${modeButton(name)}?.getAttribute('aria-pressed') === 'true'`);
   };
   const run = async (what, act) => {
     try {
@@ -231,7 +228,7 @@ async function runInElectron({ window, project, options }) {
   });
 
   try {
-    await run('enter from the Modes menu', async () => {
+    await run('enter from the mode buttons', async () => {
       const ai = await driver.evaluate(
         `[...document.querySelectorAll('.rail button')].find((b) => /AI/.test(b.getAttribute('aria-label') || '')) ? true : false`,
       );
@@ -239,11 +236,15 @@ async function runInElectron({ window, project, options }) {
       await driver.evaluate(
         `document.querySelector('.ai-header') || [...document.querySelectorAll('.rail button')].find((b) => /AI/.test(b.getAttribute('aria-label') || '')).click()`,
       );
-      await until('the Modes button', `!!document.querySelector('.ai-modes-button')`);
-      await driver.evaluate(`document.querySelector('.ai-modes-button').click()`);
-      await until('both modes listed', `!!${modeRow(/design mode/i)} && !!${modeRow(/comment pins/i)}`);
-      await shot('01-modes-menu');
-      await driver.evaluate(`${modeRow(/comment pins/i)}.click()`);
+      await until('both mode buttons', `!!${modeButton(/design mode/i)} && !!${modeButton(/comment pins/i)}`);
+      check(
+        'comment pins come before Design mode, and both before "+"',
+        await count(
+          `(() => { const b = [...document.querySelector('.ai-header').querySelectorAll('button')]; const c = b.indexOf(${modeButton(/comment pins/i)}); const d = b.indexOf(${modeButton(/design mode/i)}); return c >= 0 && c + 1 === d && /new chat/i.test(b[d + 1]?.getAttribute('aria-label') || ''); })()`,
+        ),
+      );
+      await shot('01-mode-buttons');
+      await pickMode(/comment pins/i);
       await until('comment mode on', `!!document.querySelector('.ai-pin-bar-button')`);
       await pickMode(/design mode/i);
       await until('comment mode off once Design mode is on', `!!document.querySelector('.dm-root') && !document.querySelector('.ai-pin-bar-button')`);
@@ -280,7 +281,7 @@ async function runInElectron({ window, project, options }) {
           `${modifiers.join('+')}+${key} is kept from the editor`,
           await count(
             // No insert palette, no interactive preview, and the left panel still shows the chat.
-            `!document.querySelector('.insert-overlay') && !document.querySelector('iframe[title="Site preview (interactive)"]') && !!document.querySelector('.ai-modes-button') && !!document.querySelector('.dm-root')`,
+            `!document.querySelector('.insert-overlay') && !document.querySelector('iframe[title="Site preview (interactive)"]') && !!document.querySelector('.ai-mode-button') && !!document.querySelector('.dm-root')`,
           ),
         );
       }

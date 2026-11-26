@@ -2724,15 +2724,16 @@ in jsdom).
 
 ## Comment pins
 
-Comment mode (the AI panel header's Modes menu, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
+Comment mode (a button in the AI panel's header, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
 pins, each a small message of its own, and "Send all" sends the included ones to the chat open in the panel. Desktop
 only: the shell's host (`src/app/shell/DesktopPins.tsx`) registers the mode, so Studio and the demo never offer it.
 
-**Modes menu.** `registerPanelMode({ id, order, label, tooltip, icon, isActive, setActive, subscribe })` adds a row
-and returns its removal; the header's button (`sessions/ModesMenu.tsx`) lists whatever is registered, shows the one
-that is on (pressed, accent) and is not drawn when nothing is registered. Turning one mode on turns the others off
+**Mode buttons.** `registerPanelMode({ id, order, label, icon, isActive, setActive, subscribe })` adds a mode and
+returns its removal; the header (`sessions/ModeButtons.tsx`) draws one icon button per registered mode, in `order`,
+right before "+", its tooltip and accessible name the mode's `label`, pressed (`aria-pressed`, accent) while it is
+on; clicking it again turns the mode off. A mode that is not registered has no button. Turning one mode on turns the others off
 (`setPanelMode`). At most `PANEL_MODES_MAX` (8). Comment pins register `comment-pins` at order 10
-(`pins/commentMode.tsx`); another mode registers from its own file and removing that file leaves the menu working.
+(`pins/commentMode.tsx`); another mode registers from its own file and removing that file removes only its button.
 
 **Contract** (`shared/properties/ai/commentPinBrief.ts` under the chat model, `commentPins.ts` above it). A pin is
 `{ id, number, createdAt, updatedAt, comment, images, anchor, place, included, delivery }`: `anchor` is the canvas
